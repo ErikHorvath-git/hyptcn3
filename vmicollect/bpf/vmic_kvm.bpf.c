@@ -52,6 +52,13 @@ char LICENSE[] SEC("license") = "GPL";
 /* Su registrovane pre BPF_PROG_TYPE_UNSPEC, cize dostupne kazdemu typu
    programu. bpf_task_from_vpid() vracia zapocitanu referenciu - verifikator
    trva na tom, aby ju kazda cesta programu vratila cez bpf_task_release(). */
+/* task_struct necitame - je to pre nas nepriehladny handle. Napriek tomu tu
+   musi stat definicia, nie iba deklaracia: libbpf porovnava BTF externu s BTF
+   jadra a forward deklaracia (BTF_KIND_FWD) sa s plnou strukturou jadra
+   (BTF_KIND_STRUCT) nezhoduje - nacitanie by skoncilo hlaskou
+   "func_proto incompatible with vmlinux". Druh a meno musia sediet, obsah nie. */
+struct task_struct { char __opaque; };
+
 extern struct task_struct *bpf_task_from_vpid(__s32 vpid) __ksym;
 extern void bpf_task_release(struct task_struct *p) __ksym;
 extern void bpf_rcu_read_lock(void) __ksym;
@@ -128,6 +135,29 @@ static __always_inline __u64 kvm_from_fd(__u64 fdarr, __u32 i,
     return kvm;
 }
 
+/* Kontext prehladavania tabulky deskriptorov pre bpf_loop(). */
+struct fd_scan {
+    __u64 fdarr;
+    __u64 kvm;
+    __u32 max_fds;
+};
+
+/* Jeden krok prehladavania. Navrat 1 = koniec cyklu, 0 = pokracuj.
+   koff si berieme z mapy tu a nie cez ukazovatel v kontexte: verifikator
+   tak nemusi nic predpokladat o tom, co v kontexte lezi. */
+static long fd_scan_step(__u32 i, void *ctx)
+{
+    struct fd_scan *s = ctx;
+    __u32 zero = 0;
+    const struct vmic_bpf_koff *k = bpf_map_lookup_elem(&koff, &zero);
+
+    if (!k || i >= s->max_fds) return 1;
+
+    __u64 kvm = kvm_from_fd(s->fdarr, i, k);
+    if (kvm) { s->kvm = kvm; return 1; }
+    return 0;
+}
+
 /*
  * Najde v procese deskriptor anonymneho inode "kvm-vm" a vrati z neho
  * struct kvm. Bezat to MUSI pod bpf_rcu_read_lock().
@@ -164,12 +194,12 @@ static __always_inline __u64 find_kvm(__u64 task, __u32 fd_hint,
 
     if (max_fds > VMIC_BPF_MAX_FDS) max_fds = VMIC_BPF_MAX_FDS;
 
-    for (__u32 i = 0; i < VMIC_BPF_MAX_FDS; i++) {
-        if (i >= max_fds) break;
-
-        __u64 kvm = kvm_from_fd(fdarr, i, k);
-        if (kvm) return kvm;
-    }
+    /* Prehladanie cez bpf_loop(): telo cyklu overi verifikator RAZ, nie
+       tisickrat. Rucny cyklus do 1024 s ~8 vetvami na iteraciu prekroci
+       limit zlozitosti skokov (8192) a jadro program odmietne s -E2BIG. */
+    struct fd_scan s = { .fdarr = fdarr, .max_fds = max_fds, .kvm = 0 };
+    bpf_loop(VMIC_BPF_MAX_FDS, fd_scan_step, &s, 0);
+    if (s.kvm) return s.kvm;
 
     *err = VMIC_BPF_E_NOKVM;
     return 0;
@@ -188,6 +218,91 @@ static __always_inline __u64 find_kvm(__u64 task, __u32 fd_hint,
  * generation: ked sa medzitym zmenila, tabulka je nekonzistentna a cyklus
  * radsej preskocime, nez by sme citali podla neplatnych HVA.
  */
+/* Kontext prechodu hash tabulky memslotov pre bpf_loop(). */
+struct slot_scan {
+    __u64 hash;      /* adresa id_hash v strukture kvm_memslots */
+    __u64 shift;     /* o kolko posunut uzol spat na zaciatok slotu */
+    __u64 total;     /* spolu stranok */
+    __u64 maxg;      /* najvyssi gfn + 1 */
+    __u32 buckets;
+    __u32 n;         /* kolko slotov uz je zapisanych */
+    __u32 skipped;
+    __u32 trunc;
+};
+
+/* Jeden bucket hash tabulky. Mapy si vyhladavame znovu, aby v kontexte
+   necestoval ziadny ukazovatel - verifikator tak nema co predpokladat. */
+static long slot_scan_bucket(__u32 b, void *ctx)
+{
+    struct slot_scan *sc = ctx;
+    __u32 zero = 0;
+    const struct vmic_bpf_koff *k = bpf_map_lookup_elem(&koff, &zero);
+    struct vmic_bpf_vminfo *info  = bpf_map_lookup_elem(&slots, &zero);
+
+    if (!k || !info) return 1;
+    if (b >= sc->buckets) return 1;
+
+    __u64 node = 0;
+    if (RDK(&node, 8, sc->hash + (__u64)b * 8 + k->hlist_head_first)) return 0;
+
+    for (__u32 c = 0; c <= VMIC_BPF_MAX_CHAIN; c++) {
+        if (!node) break;
+        /* Prilis dlhy retazec by znamenal, ze sme cast slotov nevideli -
+           a tie by sa v snimke tvarili ako diera plna nul. Radsej to
+           nahlas: nedokoncena mapa pamate je horsia nez preskoceny cyklus. */
+        if (c == VMIC_BPF_MAX_CHAIN) { sc->trunc = 1; break; }
+
+        __u64 slot = node - sc->shift;
+        __u64 base = 0, np = 0, ua = 0;
+        __u32 fl = 0;
+        /* id je v jadre `short` - citat 4 bajty by za nim zobralo aj
+           susedne as_id a cislo slotu by bolo nezmyselne */
+        __s16 id = 0;
+        long bad = 0;
+
+        bad |= RDK(&base, 8, slot + k->slot_base_gfn);
+        bad |= RDK(&np,   8, slot + k->slot_npages);
+        bad |= RDK(&ua,   8, slot + k->slot_userspace_addr);
+        bad |= RDK(&fl,   4, slot + k->slot_flags);
+        bad |= RDK(&id,   2, slot + k->slot_id);
+
+        /* dalsi clanok retazca este predtym, nez uzol opustime */
+        if (RDK(&node, 8, node + k->hlist_node_next)) node = 0;
+        if (bad) continue;
+
+        /* Poistka proti smetiam: keby sme trafili uvolneny slot, cisla
+           nedavaju zmysel a je lepsie ich zahodit, nez podla nich citat
+           cudziu pamat. 2^34 stranok = 64 TiB. */
+        if (!np || np > (1ULL << 34) || base > (1ULL << 52)) continue;
+        if (base + np < base) continue;
+
+        if (sc->maxg < base + np) sc->maxg = base + np;
+
+        /* Slot, ktory sa cez adresny priestor VMM precitat neda: prave sa
+           prekresluje (INVALID), je cely v guest_memfd (GMEM_ONLY), alebo
+           proste nema HVA. Patri do diery. */
+        if (!ua || (ua & (VMIC_BPF_PAGE_SIZE - 1)) ||
+            (fl & (VMIC_BPF_MEMSLOT_INVALID |
+                   VMIC_BPF_MEMSLOT_GMEM_ONLY))) {
+            sc->skipped++;
+            continue;
+        }
+
+        __u32 n = sc->n;
+        if (n >= VMIC_BPF_MAX_SLOTS) { sc->trunc = 1; continue; }
+
+        struct vmic_bpf_slot *s = &info->slots[n];
+        s->base_gfn       = base;
+        s->npages         = np;
+        s->userspace_addr = ua;
+        s->flags          = fl;
+        s->id             = id;
+        sc->n = n + 1;
+        sc->total += np;
+    }
+    return 0;
+}
+
 static __always_inline __s32 walk_slots(__u64 kvm, __u32 as_id,
                                         const struct vmic_bpf_koff *k,
                                         struct vmic_bpf_vminfo *info)
@@ -212,70 +327,17 @@ static __always_inline __s32 walk_slots(__u64 kvm, __u32 as_id,
     const __u64 shift = (__u64)k->slot_id_node +
                         (__u64)node_idx * k->slot_id_node_stride;
 
-    __u32 n = 0, skipped = 0, trunc = 0;
-    __u64 total = 0, maxg = 0;
+    struct slot_scan sc = {
+        .hash = hash, .shift = shift, .buckets = buckets,
+        .n = 0, .skipped = 0, .trunc = 0, .total = 0, .maxg = 0,
+    };
+    /* Aj tu cez bpf_loop(): 128 bucketov krat retazec az 8 uzlov krat
+       pat citani na uzol je pre verifikator rucne rozbalenych stotisic
+       instrukcii (limit 1e6). S bpf_loop() sa telo overi raz. */
+    bpf_loop(VMIC_BPF_MAX_BUCKETS, slot_scan_bucket, &sc, 0);
 
-    for (__u32 b = 0; b < VMIC_BPF_MAX_BUCKETS; b++) {
-        if (b >= buckets) break;
-
-        __u64 node = 0;
-        if (RDK(&node, 8, hash + (__u64)b * 8 + k->hlist_head_first)) continue;
-
-        for (__u32 c = 0; c <= VMIC_BPF_MAX_CHAIN; c++) {
-            if (!node) break;
-            /* Prilis dlhy retazec by znamenal, ze sme cast slotov
-               nevideli - a tie by sa v snimke tvarili ako diera plna nul.
-               Radsej to nahlas: nedokoncena mapa pamate je horsia nez
-               preskoceny cyklus. */
-            if (c == VMIC_BPF_MAX_CHAIN) { trunc = 1; break; }
-
-            __u64 slot = node - shift;
-            __u64 base = 0, np = 0, ua = 0;
-            __u32 fl = 0;
-            /* id je v jadre `short` - citat 4 bajty by za nim zobralo aj
-               susedne as_id a cislo slotu by bolo nezmyselne */
-            __s16 id = 0;
-            long bad = 0;
-
-            bad |= RDK(&base, 8, slot + k->slot_base_gfn);
-            bad |= RDK(&np,   8, slot + k->slot_npages);
-            bad |= RDK(&ua,   8, slot + k->slot_userspace_addr);
-            bad |= RDK(&fl,   4, slot + k->slot_flags);
-            bad |= RDK(&id,   2, slot + k->slot_id);
-
-            /* dalsi clanok retazca este predtym, nez uzol opustime */
-            if (RDK(&node, 8, node + k->hlist_node_next)) node = 0;
-            if (bad) continue;
-
-            /* Poistka proti smetiam: keby sme trafili uvolneny slot,
-               cisla nedavaju zmysel a je lepsie ich zahodit, nez podla
-               nich citat cudziu pamat. 2^34 stranok = 64 TiB. */
-            if (!np || np > (1ULL << 34) || base > (1ULL << 52)) continue;
-            if (base + np < base) continue;
-
-            if (maxg < base + np) maxg = base + np;
-
-            /* Slot, ktory sa cez adresny priestor VMM precitat neda:
-               prave sa prekresluje (INVALID), je cely v guest_memfd
-               (GMEM_ONLY), alebo proste nema HVA. Patri do diery. */
-            if (!ua || (ua & (VMIC_BPF_PAGE_SIZE - 1)) ||
-                (fl & (VMIC_BPF_MEMSLOT_INVALID |
-                       VMIC_BPF_MEMSLOT_GMEM_ONLY))) {
-                skipped++;
-                continue;
-            }
-            if (n >= VMIC_BPF_MAX_SLOTS) { trunc = 1; continue; }
-
-            struct vmic_bpf_slot *s = &info->slots[n];
-            s->base_gfn       = base;
-            s->npages         = np;
-            s->userspace_addr = ua;
-            s->flags          = fl;
-            s->id             = id;
-            n++;
-            total += np;
-        }
-    }
+    __u32 n = sc.n, skipped = sc.skipped, trunc = sc.trunc;
+    __u64 total = sc.total, maxg = sc.maxg;
 
     if (RDK(&gen_after, 8, ms + k->ms_generation) || gen_after != gen_before)
         return VMIC_BPF_E_RACE;
@@ -375,6 +437,45 @@ int vmic_probe(struct vmic_bpf_probe_ctx *ctx)
  * povedat aj to, kde diera konci, takze sa nemusi hadat po strankach.
  */
 
+/* Kontext kopirovania po strankach pre bpf_loop(). */
+struct page_copy {
+    __u64 hva;
+    __u32 pid;
+    __u32 served;
+    __u32 ok;
+    __u32 first;
+};
+
+/* Jedna stranka zalozneho kopirovania. task si beriem znovu v kazdom kroku:
+   zapocitana referencia z nadradenej funkcie sa do callbacku preniest neda
+   a acquire/release stoji zlomok toho, co samotne citanie stranky - navyse
+   sem sa vobec nepride, kym velke kopirovanie prejde. */
+static long page_copy_step(__u32 i, void *ctx)
+{
+    struct page_copy *pc = ctx;
+    __u32 zero = 0;
+
+    if (i >= pc->served) return 1;
+
+    __u32 off = i << VMIC_BPF_PAGE_SHIFT;
+    if (off > VMIC_BPF_MAX_CHUNK - VMIC_BPF_PAGE_SIZE) return 1;
+
+    __u8 *buf = bpf_map_lookup_elem(&pages, &zero);
+    if (!buf) return 1;
+
+    struct task_struct *task = bpf_task_from_vpid((__s32)pc->pid);
+    if (!task) return 1;
+
+    long r = bpf_copy_from_user_task(buf + off, VMIC_BPF_PAGE_SIZE,
+                                     (const void *)(unsigned long)(pc->hva + off),
+                                     task, 0);
+    bpf_task_release(task);
+
+    if (r == 0) pc->ok++;
+    else if (pc->first == pc->served) pc->first = i;
+    return 0;
+}
+
 SEC("syscall")
 int vmic_read(struct vmic_bpf_read_ctx *ctx)
 {
@@ -472,19 +573,16 @@ int vmic_read(struct vmic_bpf_read_ctx *ctx)
         __u32 ok = 0, first = served;
 
         ctx->fallback = 1;
-        for (__u32 i = 0; i < VMIC_BPF_MAX_PAGES; i++) {
-            if (i >= served) break;
+        struct page_copy pc = {
+            .hva = hva, .pid = ctx->pid, .served = served,
+            .ok = 0, .first = served,
+        };
+        /* Rucny cyklus cez 512 stranok verifikator nerozbali - vetvenia v
+           tele mu rozmnozia stavy nad limit 1e6 instrukcii. */
+        bpf_loop(VMIC_BPF_MAX_PAGES, page_copy_step, &pc, 0);
+        ok    = pc.ok;
+        first = pc.first;
 
-            __u32 off = i << VMIC_BPF_PAGE_SHIFT;
-            if (off > VMIC_BPF_MAX_CHUNK - VMIC_BPF_PAGE_SIZE) break;
-
-            if (bpf_copy_from_user_task(buf + off, VMIC_BPF_PAGE_SIZE,
-                                        (const void *)(unsigned long)(hva + off),
-                                        task, 0) == 0)
-                ok++;
-            else if (first == served)
-                first = i;
-        }
         ctx->copied     = ok;
         ctx->first_fail = first;
     }
