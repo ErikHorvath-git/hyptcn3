@@ -1,0 +1,16 @@
+# zostavene artefakty
+vmicollect/build/
+*.o
+*.so
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
+
+# pamatove snimky - velke, do gitu nepatria
+data/raw/
+*.vmicd
+*.raw
+*.raw.gz
+
+# profil jadra hosta sa verzionuje zvlast (viz profiles/*/README.md)
