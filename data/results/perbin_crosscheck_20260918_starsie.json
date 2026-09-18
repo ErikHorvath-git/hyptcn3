@@ -1,0 +1,200 @@
+{
+ "schema": "hyptcn3/vysledok-hlavicka/1",
+ "schema_dat": "hyptcn3/perbin-crosscheck/1",
+ "commit": "104af34354afea26e73ee222d5511bd1a8f405ff",
+ "commit_dirty": true,
+ "date": "2026-09-18T19:09:30Z",
+ "host": "Fedora Linux 43, jadro 7.1.13-100.fc43.x86_64, hostname fedora",
+ "guest": "snimky pamate libvirt domeny hyptcn-guest (Debian 12, jadro 6.1.0-42-cloud-amd64). Domena pri vypocte nebezala - pocitalo sa zo suborov so snimkami.",
+ "command": "/usr/bin/python3 -m features crosscheck --snapshot /var/tmp/vmic-delta --memslots data/results/2026-09-18_zmrazeny_host/probe.json --label snimky z prveho behu 2026-09-18T14:31, zozbierane pred K13 --out data/results/perbin_crosscheck_20260918_starsie.json",
+ "n": 6,
+ "n_poznamka": "n = pocet snimok, nad ktorymi krizova kontrola bezala. Nejde o opakovane meranie casu, cisla nemaju rozptyl.",
+ "values": {
+  "schema": "hyptcn3/perbin-crosscheck/1",
+  "pripad": "snimky z prveho behu 2026-09-18T14:31, zozbierane pred K13",
+  "bin_bytes": 16777216,
+  "snapshot_arg": "/var/tmp/vmic-delta",
+  "c_arg": null,
+  "memslots": {
+   "source": "probe.json:values.memslot_ranges",
+   "count": 10,
+   "pages_total": 528417,
+   "bytes_total": 2164396032,
+   "ranges": [
+    {
+     "gpa": 0,
+     "size": 655360
+    },
+    {
+     "gpa": 786432,
+     "size": 45056
+    },
+    {
+     "gpa": 831488,
+     "size": 12288
+    },
+    {
+     "gpa": 843776,
+     "size": 106496
+    },
+    {
+     "gpa": 950272,
+     "size": 32768
+    },
+    {
+     "gpa": 983040,
+     "size": 65536
+    },
+    {
+     "gpa": 1048576,
+     "size": 2146435072
+    },
+    {
+     "gpa": 4211081216,
+     "size": 16777216
+    },
+    {
+     "gpa": 4276092928,
+     "size": 4096
+    },
+    {
+     "gpa": 4294705152,
+     "size": 262144
+    }
+   ]
+  },
+  "snimok": 6,
+  "snimok_s_vystupom_c": 0,
+  "vsetky_invarianty_ok": true,
+  "vsetky_porovnania_ok": null,
+  "snimky": [
+   {
+    "snapshot": "hyptcn-guest_000000_20260918T143118834Z",
+    "seq": 0,
+    "full": true,
+    "bins_total": 131,
+    "invariant": {
+     "sidecar": "hyptcn-guest_000000_20260918T143118834Z.json",
+     "pages_changed_sidecar": 70582,
+     "pages_changed_referencia": 70582,
+     "pages_total_sidecar": 528417,
+     "pages_total_referencia": 528417,
+     "pages_changed_zhoda": true,
+     "pages_total_zhoda": true,
+     "zhoda": true
+    },
+    "porovnanie": null,
+    "c_vystup": {
+     "dostupny": false,
+     "dovod": "vystup C nebol zadany"
+    }
+   },
+   {
+    "snapshot": "hyptcn-guest_000001_20260918T143123834Z",
+    "seq": 1,
+    "full": false,
+    "bins_total": 131,
+    "invariant": {
+     "sidecar": "hyptcn-guest_000001_20260918T143123834Z.json",
+     "pages_changed_sidecar": 301,
+     "pages_changed_referencia": 301,
+     "pages_total_sidecar": 528417,
+     "pages_total_referencia": 528417,
+     "pages_changed_zhoda": true,
+     "pages_total_zhoda": true,
+     "zhoda": true
+    },
+    "porovnanie": null,
+    "c_vystup": {
+     "dostupny": false,
+     "dovod": "vystup C nebol zadany"
+    }
+   },
+   {
+    "snapshot": "hyptcn-guest_000002_20260918T143128834Z",
+    "seq": 2,
+    "full": false,
+    "bins_total": 131,
+    "invariant": {
+     "sidecar": "hyptcn-guest_000002_20260918T143128834Z.json",
+     "pages_changed_sidecar": 271,
+     "pages_changed_referencia": 271,
+     "pages_total_sidecar": 528417,
+     "pages_total_referencia": 528417,
+     "pages_changed_zhoda": true,
+     "pages_total_zhoda": true,
+     "zhoda": true
+    },
+    "porovnanie": null,
+    "c_vystup": {
+     "dostupny": false,
+     "dovod": "vystup C nebol zadany"
+    }
+   },
+   {
+    "snapshot": "hyptcn-guest_000003_20260918T143133834Z",
+    "seq": 3,
+    "full": false,
+    "bins_total": 131,
+    "invariant": {
+     "sidecar": "hyptcn-guest_000003_20260918T143133834Z.json",
+     "pages_changed_sidecar": 278,
+     "pages_changed_referencia": 278,
+     "pages_total_sidecar": 528417,
+     "pages_total_referencia": 528417,
+     "pages_changed_zhoda": true,
+     "pages_total_zhoda": true,
+     "zhoda": true
+    },
+    "porovnanie": null,
+    "c_vystup": {
+     "dostupny": false,
+     "dovod": "vystup C nebol zadany"
+    }
+   },
+   {
+    "snapshot": "hyptcn-guest_000004_20260918T143138834Z",
+    "seq": 4,
+    "full": false,
+    "bins_total": 131,
+    "invariant": {
+     "sidecar": "hyptcn-guest_000004_20260918T143138834Z.json",
+     "pages_changed_sidecar": 326,
+     "pages_changed_referencia": 326,
+     "pages_total_sidecar": 528417,
+     "pages_total_referencia": 528417,
+     "pages_changed_zhoda": true,
+     "pages_total_zhoda": true,
+     "zhoda": true
+    },
+    "porovnanie": null,
+    "c_vystup": {
+     "dostupny": false,
+     "dovod": "vystup C nebol zadany"
+    }
+   },
+   {
+    "snapshot": "hyptcn-guest_000005_20260918T143143834Z",
+    "seq": 5,
+    "full": false,
+    "bins_total": 131,
+    "invariant": {
+     "sidecar": "hyptcn-guest_000005_20260918T143143834Z.json",
+     "pages_changed_sidecar": 314,
+     "pages_changed_referencia": 314,
+     "pages_total_sidecar": 528417,
+     "pages_total_referencia": 528417,
+     "pages_changed_zhoda": true,
+     "pages_total_zhoda": true,
+     "zhoda": true
+    },
+    "porovnanie": null,
+    "c_vystup": {
+     "dostupny": false,
+     "dovod": "vystup C nebol zadany"
+    }
+   }
+  ],
+  "poznamka": "Per-bin vektor z C modulu sa k tymto snimkam nenasiel, porovnanie sa teda NEROBILO - overene boli iba invarianty referencie proti sidecarom zberaca. Dovod pri prvej snimke: vystup C nebol zadany"
+ }
+}

@@ -615,3 +615,91 @@ Rozdiel v počte modulov (47 → 51) nie je nezhodou merania: medzičasom si sam
 pozemnej pravdy (`ss -tulpn`) zaviedol do hosťa diagnostické moduly `inet_diag`, `tcp_diag`,
 `udp_diag` a `raw_diag`. Podrobne v `profiles/debian12-6.1.0-42-cloud-amd64/README.md`.
 Rekonštrukcia sa v oboch prípadoch zhodovala s tým, čo hlásil hosť v čase snímky.
+
+
+---
+
+## 2026-09-18 — per-bin príznakový vektor v module (fáza F2)
+
+Modul od tejto zmeny počíta príznakový vektor sám, v C, a zapisuje ho do JSON sidecaru
+(blok `features`, schéma `hyptcn3/perbin/1`). Dôvod, prečo v module a nie skriptom potom:
+cieľová veta zadania hovorí o module „schopnom generovať per-bin feature vektory", takže
+offline post-processing by ju nesplnil.
+
+Rozhodnutia potvrdené používateľom pred implementáciou: **binuje sa iba nad memslotmi**,
+veľkosť binu **16 MiB**.
+
+### Koľko binov vzniklo a prečo
+
+VM má 2,02 GiB RAM rozprestretých v 4 GiB fyzickom priestore (10 memslotov).
+
+| spôsob | počet binov |
+|---|---|
+| naivne cez `max_paddr` (4 GiB / 16 MiB) | 256, z toho ~126 trvale prázdnych |
+| naivne cez veľkosť RAM (2,02 GiB / 16 MiB) | ~129 |
+| **skutočnosť (iba nad memslotmi)** | **131** |
+
+Biny 0–127 pokrývajú RAM `0x0–0xa0000` a `0xc0000–0x80000000`, ďalej existujú bin 251
+(`0xfb000000`), bin 254 (`0xfee00000`, jediná stránka) a bin 255 (`0xfffc0000–0x100000000`).
+Bin 128 neexistuje, lebo RAM končí presne na 2 GiB. Bin 0 má 4064 stránok, nie 4096 — chýba
+mu VGA diera. Bin, ktorý neprotína žiadny memslot, nevzniká vôbec; nevypĺňa sa nulami.
+
+### Invariant je vynútený v kóde, nie iba v teste
+
+`vmic_features_finish()` porovná súčet `pages_total` a `pages_changed` cez biny s počítadlami
+writera. Pri nezhode sa vypíše chyba a blok `features` sa do sidecaru **nezapíše** — radšej
+chýbajúci vektor než vektor, ktorému sa nedá veriť. `pages_total` sa pritom počíta z geometrie
+oblastí, nie z toho, koľko stránok pritieklo, takže porovnanie nie je tautológia.
+
+### Krížová kontrola C proti Pythonu
+
+Nezávislá Python referencia (`features/perbin.py`) číta `.vmicd` a počíta ten istý vektor.
+Porovnanie 6 snímok × 131 binov × 8 polí = **6288 polí, 0 rozdielov** po zaokrúhlení na
+6 desatinných miest, ktoré C vypisuje. Celočíselné polia sedia presne; najväčší rozdiel
+v desatinných je 5·10⁻⁷, teda polovica posledného vypísaného miesta — zaokrúhlenie výpisu,
+nie rozdiel vo vzorci. Artefakt: `data/results/perbin_crosscheck_20260918.json`.
+
+### Čo výpočet stojí
+
+Tri behy po 6 cyklov, perióda 5 s, tá istá VM:
+
+| variant | plná snímka | delta cyklus (medián z 5) |
+|---|---|---|
+| bez príznakov | 952,0 ms | 550,4 ms |
+| príznaky bez entropie | 989,4 ms | 589,2 ms |
+| príznaky vrátane entropie | 1408,8 ms | 596,8 ms |
+
+`compute_ms` (modul si ho meria sám): plná snímka 483,8 ms s entropiou, 52,8 ms bez nej;
+delta cyklus 52,6 / 51,0 ms. Základ (test nulovej stránky + počítadlá cez všetkých 528 417
+stránok) stojí ~51–53 ms bez ohľadu na to, koľko sa zmenilo. Entropia stojí ~3,5 µs na
+**zmenenú** stránku — v delta cykle (~200 stránok) ~1,6 ms, v plnej snímke ~431 ms.
+Preto je entropia samostatný prepínač; východzie nastavenie je zapnuté a cena je tu zapísaná.
+
+Rozdiel `capture_ms` medzi variantmi (46,4 ms) pochádza z troch behov oddelených v čase,
+takže obsahuje aj kolísanie záťaže. Nezávislejším údajom je `compute_ms`, ktorý meria
+samotný výpočet.
+
+### Latencia snímka → vektor
+
+Meria sa od začiatku cyklu zberu po zavretie sidecaru s blokom `features` na disku
+(cez `inotify close_write`), teda vrátane zápisu sidecaru, ktorý `total_ms` neobsahuje.
+Poradie variantov striedané, `writer=delta`, `hash=none`.
+
+| variant | n | medián | p95 | min–max |
+|---|---|---|---|---|
+| príznaky zapnuté, perióda 5 s, delta | 24 | 605.2 ms | 617.9 ms | 594.7–630.3 ms |
+| príznaky vypnuté, perióda 5 s, delta | 24 | 554.5 ms | 558.7 ms | 542.6–563.7 ms |
+| príznaky zapnuté, perióda 2 s, delta | 12 | 604.3 ms | 612.6 ms | 596.4–618.7 ms |
+| príznaky zapnuté, perióda 2 s, **plná snímka** | 1 | 1588.0 ms | — | — |
+
+**Falzifikovateľné kritérium použiteľnosti: p95 latencie cyklu < perióda zberu.**
+Pri perióde 2 s je p95 delta cyklu 612.6 ms, teda kritérium platí s rezervou ~3×.
+Plná snímka pri perióde 2 s trvá 1588 ms — stále pod periódou, ale rezerva je
+malá a pri väčšej VM by nemusela stačiť. Preto sa plná snímka v zbere korpusu plánuje mimo
+meraného okna. Vo všetkých šiestich behoch bolo 0 zmeškaných slotov a 0 chýb.
+
+Toto je prvé z dvoch čísel, ktoré dávajú slovu „real-time" v názve práce obsah. Druhé
+(snímka → skóre modelu) zatiaľ zmerané nie je a nesmie sa tvrdiť.
+
+Artefakty: `data/results/perbin_c_20260918/`, `data/results/latency_vector_20260918.json`,
+`data/results/perbin_crosscheck_20260918.json`.

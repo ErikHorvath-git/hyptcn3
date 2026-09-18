@@ -104,6 +104,10 @@ F("output",   "sidecar",          T_BOOL,      sidecar,          NULL, "zapisova
 F("output",   "delta_page_size",  T_U32,       delta_page_size,  NULL, "granularita porovnavania (mocnina 2)"),
 F("output",   "delta_full_every", T_U64,       delta_full_every, NULL, "kazdych N snimok plna zaloha"),
 
+F("features", "enable",           T_BOOL,      feat_enable,      NULL, "pocitat per-bin priznakovy vektor do sidecaru"),
+F("features", "bin_bytes",        T_U64,       feat_bin_bytes,   NULL, "velkost binu (mocnina 2, >= delta_page_size)"),
+F("features", "entropy",          T_BOOL,      feat_entropy,     NULL, "Shannonova entropia zmenenych stranok (0-8 b/B)"),
+
 F("retention","max_snapshots",    T_U64,       max_snapshots,    NULL, "0 = nemazat"),
 F("retention","max_bytes",        T_U64,       max_bytes,        NULL, "0 = nemazat"),
 F("retention","max_age_s",        T_DOUBLE,    max_age_s,        NULL, "0 = nemazat"),
@@ -153,6 +157,12 @@ void vmic_config_defaults(vmic_config_t *cfg)
     cfg->delta_page_size  = 4096;
     cfg->delta_full_every = 20;
 
+    /* Vektor je vychodzo ZAPNUTY aj s entropiou: neuplny vektor by sa
+       neskor tazko rozoznaval od uplneho, a cena je zmerana (MERANIA.md). */
+    cfg->feat_enable    = true;
+    cfg->feat_bin_bytes = 16u << 20;
+    cfg->feat_entropy   = true;
+
     cfg->hooks_strict = false;
     cfg->log_level    = VMIC_LOG_INFO;
     cfg->log_json     = false;
@@ -161,6 +171,12 @@ void vmic_config_defaults(vmic_config_t *cfg)
 /* ------------------------------------------------------------------ */
 /* Pomocne parsery hodnot                                              */
 /* ------------------------------------------------------------------ */
+
+/* index binu je posun, takze velkost binu musi byt mocnina 2 */
+static bool is_pow2_u64(uint64_t v)
+{
+    return v && (v & (v - 1)) == 0;
+}
 
 static char *trim(char *s)
 {
@@ -330,6 +346,13 @@ static const field_t *find_field(const char *section, const char *key)
 
 static int apply_field(vmic_config_t *cfg, const field_t *f, const char *value)
 {
+    /* Poznacime si, ze o tomto poli rozhodol pouzivatel, nie vychodzia
+       hodnota. Bez toho sa neda odlisit "chcem priznaky" od "priznaky su
+       zapnute, lebo tak su nastavene od vyroby" - a varovanie o nesulade
+       s writerom by potom padalo pri kazdom beznom spusteni. */
+    if (strcmp(f->section, "features") == 0 && strcmp(f->key, "enable") == 0)
+        cfg->feat_enable_explicit = true;
+
     void *slot = (char *)cfg + f->offset;
 
     switch (f->type) {
@@ -442,7 +465,7 @@ int vmic_config_set(vmic_config_t *cfg, const char *assignment)
     char *key     = trim(dot + 1);
     const field_t *f = find_field(section, key);
     if (!f) {
-        LOGE("neznamy parameter '%s.%s' (zoznam: vmicollect config --help-keys)",
+        LOGE("neznamy parameter '%s.%s' (zoznam: vmicollect config --keys)",
              section, key);
         return -1;
     }
@@ -600,6 +623,19 @@ int vmic_config_validate(vmic_config_t *cfg, bool need_target)
     if (cfg->delta_full_every < 1) {
         LOGE("output.delta_full_every musi byt aspon 1"); bad++;
     }
+    if (cfg->feat_enable) {
+        /* Index binu je gpa >> log2(bin_bytes), takze mocnina 2 nie je
+           kozmetika - bez nej by index nebol posun a biny by sa medzi
+           snimkami mohli rozist. */
+        if (!is_pow2_u64(cfg->feat_bin_bytes)) {
+            LOGE("features.bin_bytes musi byt mocnina 2"); bad++;
+        } else if (page_size_ok && cfg->feat_bin_bytes < cfg->delta_page_size) {
+            LOGE("features.bin_bytes (%" PRIu64 ") nesmie byt mensie ako "
+                 "output.delta_page_size (%u)",
+                 cfg->feat_bin_bytes, cfg->delta_page_size);
+            bad++;
+        }
+    }
     if (!cfg->dir[0]) {
         LOGE("output.dir nesmie byt prazdny"); bad++;
     }
@@ -648,6 +684,17 @@ int vmic_config_validate(vmic_config_t *cfg, bool need_target)
             bad++;
         }
     }
+    /*
+     * Vektor sa vezie na porovnavani stranok, ktore robi jedine delta
+     * writer. Pri 'raw' by sa musela pamat hashovat este raz - to sa tu
+     * nerobi, a preto sa o tom povie, nez sa niekto zacne cudovat, kde
+     * je v sidecari blok "features".
+     */
+    if (cfg->feat_enable && cfg->feat_enable_explicit &&
+        strcmp(cfg->writer, "delta") != 0)
+        LOGW("features.enable je zapnute, ale writer je '%s' - per-bin "
+             "vektor pocita iba writer 'delta'", cfg->writer);
+
     if (cfg->region_count && !backend_is_random_access(cfg)) {
         LOGE("capture.regions su podporovane iba pri backende s nahodnym "
              "pristupom (ebpf / file)");

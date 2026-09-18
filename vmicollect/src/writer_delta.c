@@ -39,6 +39,7 @@
 #define _GNU_SOURCE
 #include "vmic.h"
 #include "internal.h"
+#include "perbin.h"
 #include "log.h"
 #include "util.h"
 
@@ -77,6 +78,19 @@ typedef struct {
     bool      full;
     bool      active;
     bool      hashing;
+
+    /* --- per-bin priznakovy vektor (perbin.c) --------------------- */
+    vmic_features_t feat;
+    bool      feat_on;     /* pocitame ho v tejto snimke?            */
+    /*
+     * Priznak "zmenila sa" pre stranky prave spracovavaneho bloku.
+     * Priznaky sa pocitaju az druhym prechodom cez blok, nie v tej istej
+     * slucke ako zapis: iba tak sa da cas vypoctu zmerat samostatne
+     * (compute_ms v sidecari) bez volania hodin na kazdu stranku. Blok
+     * ma vychodzo 1 MiB, takze pri druhom prechode je este v keske.
+     */
+    uint8_t  *chg;
+    size_t    chg_cap;
 } delta_priv_t;
 
 /* ------------------------------------------------------------------ */
@@ -234,6 +248,22 @@ static int delta_begin(vmic_writer_t *w, vmic_snapshot_t *s)
     p->mem_size      = 0;
     p->active        = true;
     p->hashing       = (cfg->hash == VMIC_HASH_SHA256);
+
+    /*
+     * Priznaky su volitelne a ich zlyhanie NESMIE zhodit zber - snimka je
+     * podstatnejsia nez vektor. Ked sa nedaju pocitat, povie sa to nahlas
+     * a sidecar blok "features" jednoducho nebude mat; ticho doplneny
+     * prazdny vektor by bol horsi, lebo by sa tvaril ako meranie.
+     */
+    p->feat_on = false;
+    if (cfg->feat_enable) {
+        if (vmic_features_begin(&p->feat, cfg, rlist, rcount,
+                                p->page_size, sig) == VMIC_OK)
+            p->feat_on = true;
+        else
+            LOGW("delta: per-bin priznaky sa nedaju pocitat - sidecar ich "
+                 "mat nebude");
+    }
     return VMIC_OK;
 }
 
@@ -267,6 +297,17 @@ static int delta_feed(vmic_writer_t *w, uint64_t paddr,
         LOGE("delta: nedostatok pamate pre tabulku hashov");
         return VMIC_ERR;
     }
+    if (p->feat_on && count > p->chg_cap) {
+        uint8_t *n = realloc(p->chg, count);
+        if (!n) {
+            LOGW("delta: nedostatok pamate na priznaky - vektor tejto "
+                 "snimky nevznikne");
+            p->feat_on = false;
+        } else {
+            p->chg     = n;
+            p->chg_cap = count;
+        }
+    }
 
     uint8_t rec[8];
     for (size_t i = 0; i < count; i++) {
@@ -277,6 +318,7 @@ static int delta_feed(vmic_writer_t *w, uint64_t paddr,
 
         bool changed = (h != p->hash[idx]);
         p->hash[idx] = h;
+        if (p->feat_on) p->chg[i] = changed ? 1u : 0u;
         if (!changed) continue;
 
         put_u64(rec, idx);
@@ -287,6 +329,14 @@ static int delta_feed(vmic_writer_t *w, uint64_t paddr,
             return VMIC_ERR;
         }
         p->pages_written++;
+    }
+
+    if (p->feat_on) {
+        double t0 = vmic_now_mono();
+        for (size_t i = 0; i < count; i++)
+            vmic_features_page(&p->feat, paddr + (uint64_t)i * ps,
+                               buf + i * (size_t)ps, p->chg[i] != 0);
+        p->feat.compute_ms += (vmic_now_mono() - t0) * 1000.0;
     }
     return VMIC_OK;
 }
@@ -340,6 +390,20 @@ static int delta_finish(vmic_writer_t *w, vmic_snapshot_t *s)
     s->is_full       = p->full;
     s->pages_total   = p->pages_seen;
     s->pages_changed = p->pages_written;
+
+    /*
+     * Vektor pripneme k snimke az ked sedi s pocitadlami writera. Nezhoda
+     * znamena chybu v mape binov, a vektor, ktoreho sucet nesedi so
+     * snimkou, by tichu chybu preniesol az do trenovacich dat.
+     */
+    if (p->feat_on) {
+        if (vmic_features_finish(&p->feat, p->pages_seen,
+                                 p->pages_written) == VMIC_OK)
+            s->features = &p->feat;
+        else
+            LOGE("delta: per-bin vektor nesedi so snimkou - do sidecaru "
+                 "nejde");
+    }
     s->bytes_logical = p->mem_size;
     int64_t on_disk = vmic_file_disk_usage(p->final);
     s->bytes_on_disk = on_disk > 0 ? (uint64_t)on_disk : 0;
@@ -375,6 +439,8 @@ static void delta_destroy(vmic_writer_t *w)
     delta_priv_t *p = (delta_priv_t *)w->priv;
     if (!p) return;
     if (p->fd >= 0) close(p->fd);
+    vmic_features_release(&p->feat);
+    free(p->chg);
     free(p->hash);
     free(p);
     w->priv = NULL;

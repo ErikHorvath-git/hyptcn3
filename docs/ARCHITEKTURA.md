@@ -567,6 +567,91 @@ má `"full": false`, `"pages_changed": 324`, `"changed_ratio": 0.000613`,
 
 ---
 
+
+### 6.1 Blok `features` — per-bin príznakový vektor
+
+Od fázy F2 modul do sidecaru pripisuje blok `features` (schéma `hyptcn3/perbin/1`).
+Počíta ho `src/perbin.c`, napojený na delta writer — ten už každú stránku hashuje, takže
+rozhodnutie „zmenila sa" tam existuje a per-bin počty sú takmer zadarmo. Raw writer vektor
+nepočíta.
+
+Binuje sa **iba nad memslotmi**; bin, ktorý neprotína žiadny memslot, nevzniká. Index binu
+je `gpa >> log2(bin_bytes)`, teda viazaný na fyzickú adresu, nie na poradie — zostáva rovnaký
+medzi snímkami aj keď sa počet memslotov zmení. Pole `regions` je v bloku preto, aby sa vlastnosť „biny sú iba nad memslotmi" dala overiť
+zo samotnej archivovanej snímky, bez prístupu k bežiacej VM. Sú to **efektívne oblasti zberu**
+odvodené z memslotov, so zlúčenými susedmi — pri doméne `hyptcn-guest` dáva 10 memslotov
+5 oblastí. Nevolajú sa „memslots" práve preto, aby sidecar netvrdil viac, než v ňom je.
+
+Reálna ukážka (skrátená na tri biny), súbor
+`hyptcn-guest_000003_20260918T190343784Z.json`:
+
+```json
+{
+  "schema": "hyptcn3/perbin/1",
+  "bin_bytes": 16777216,
+  "page_size": 4096,
+  "entropy": true,
+  "compute_ms": 52.801,
+  "bins_total": 131,
+  "regions": [ {"gpa": 0, "bytes": 655360}, ... 5 položiek ... ],
+  "bins": [
+    {
+      "bin": 0,
+      "gpa": 0,
+      "pages_total": 4064,
+      "pages_changed": 0,
+      "changed_ratio": 0.0,
+      "zero_ratio": 0.145177,
+      "entropy_mean": 0.0,
+      "has_changed": 0
+    },
+    {
+      "bin": 1,
+      "gpa": 16777216,
+      "pages_total": 4096,
+      "pages_changed": 40,
+      "changed_ratio": 0.009766,
+      "zero_ratio": 0.196777,
+      "entropy_mean": 1.429049,
+      "has_changed": 1
+    },
+    {
+      "bin": 2,
+      "gpa": 33554432,
+      "pages_total": 4096,
+      "pages_changed": 15,
+      "changed_ratio": 0.003662,
+      "zero_ratio": 0.125244,
+      "entropy_mean": 2.279149,
+      "has_changed": 1
+    }
+  ]
+}
+```
+
+| pole | význam |
+|---|---|
+| `pages_total` | stránky binu podložené memslotmi — menovateľ pomerov |
+| `pages_changed` | z nich zmenené oproti predchádzajúcej snímke |
+| `changed_ratio` | `pages_changed / pages_total` |
+| `zero_ratio` | podiel úplne nulových stránok zo všetkých podložených |
+| `entropy_mean` | priemerná Shannonova entropia (bity/bajt, 0–8) **zmenených** stránok |
+| `has_changed` | samostatný príznak 0/1 |
+
+`has_changed` existuje preto, aby sa „bin sa nezmenil" dalo odlíšiť od „entropia vyšla 0".
+Ticho doplnená nula by z týchto dvoch rôznych stavov spravila jeden. Keď je
+`[features].entropy` vypnutá, kľúč `entropy_mean` v binoch **vôbec nie je** — chýbajúci kľúč
+je poctivejší než nula, ktorá by sa dala prečítať ako meranie.
+
+**Invariant, ktorý modul kontroluje sám:** súčet `pages_changed` cez biny sa musí rovnať
+`output.pages_changed` a súčet `pages_total` počtu podložených stránok. Pri nezhode sa blok
+do sidecaru nezapíše a vypíše sa chyba. Kontrolu robí `vmic_features_finish()`.
+
+Obmedzenia vektora (kolinearita na plnej snímke, cena výpočtu, závislosť počtu binov na
+veľkosti VM) sú v `docs/LIMITACIE.md`, položka L13.
+
+---
+
 ## 7. Rozhranie `guestparse`
 
 Balík má dve rozhrania — Python API a CLI — a obe stoja na tom istom objekte `GuestView`.
@@ -855,6 +940,7 @@ a `-o sekcia.kluc=hodnota` z príkazového riadku prebíja súbor.
 | `[output]` | `dir`, `writer`, `name_template`, `sparse`, `post_compress`, `hash`, `sidecar`, `delta_page_size`, `delta_full_every` |
 | `[retention]` | `max_snapshots`, `max_bytes`, `max_age_s` |
 | `[hooks]` | `load` (až 16×), `strict` |
+| `[features]` | `enable`, `bin_bytes` (16 MiB), `entropy` — per-bin vektor, viď 6.1 |
 | `[log]` | `level`, `file`, `json` |
 
 Validácia je prísna a hlási zmysluplne — napríklad pri pokuse nastaviť

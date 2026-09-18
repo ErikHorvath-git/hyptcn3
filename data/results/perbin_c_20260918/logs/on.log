@@ -1,0 +1,14 @@
+2026-09-18T19:03:27.489Z WARN  libbpf: Error in bpf_create_map_xattr(pages): -EINVAL. Retrying without BTF.
+2026-09-18T19:03:28.782Z INFO  ebpf: 'hyptcn-guest' (pid 1353046): 10 memslotov, 2.02 GiB pamate, max GPA 0x100000000
+2026-09-18T19:03:28.783Z WARN  ebpf: 4.00 KiB pamate hosta nie je anonymna (/dev/zero (deleted)) - citanie stranky, ktorej sa host este nedotkol, ju hostitelovi NAOZAJ alokuje
+2026-09-18T19:03:28.783Z WARN  ebpf: pri takejto VM zbieraj radsej konkretne oblasti (capture.regions), nech nenafuknes jej pamat na plnu velkost
+2026-09-18T19:03:28.783Z INFO  VM 'hyptcn-guest' [ebpf/kvm]: RAM 2.02 GiB, max_paddr 0x100000000, vCPU 2, strankovanie n/a
+2026-09-18T19:03:28.783Z INFO  zbierane oblasti: 5, spolu 2.02 GiB
+2026-09-18T19:03:28.783Z INFO  zacinam zber: perioda 5.000 s, writer 'delta', vystup '/var/tmp/perbin_c/on'
+2026-09-18T19:03:30.381Z INFO  #0 PLNA   482.22 MiB/4.00 GiB  stranky 123208/528417 (23.32 %)  pauza 0.0 ms  citanie 1408.8 ms  spolu 1597.1 ms
+2026-09-18T19:03:34.383Z INFO  #1 delta  740.00 KiB/4.00 GiB  stranky 184/528417 (0.03 %)  pauza 0.0 ms  citanie 591.2 ms  spolu 599.0 ms
+2026-09-18T19:03:39.403Z INFO  #2 delta  728.00 KiB/4.00 GiB  stranky 181/528417 (0.03 %)  pauza 0.0 ms  citanie 612.0 ms  spolu 619.2 ms
+2026-09-18T19:03:44.382Z INFO  #3 delta  972.00 KiB/4.00 GiB  stranky 242/528417 (0.05 %)  pauza 0.0 ms  citanie 596.4 ms  spolu 598.6 ms
+2026-09-18T19:03:49.385Z INFO  #4 delta  912.00 KiB/4.00 GiB  stranky 227/528417 (0.04 %)  pauza 0.0 ms  citanie 598.4 ms  spolu 601.1 ms
+2026-09-18T19:03:54.388Z INFO  #5 delta  904.00 KiB/4.00 GiB  stranky 225/528417 (0.04 %)  pauza 0.0 ms  citanie 596.8 ms  spolu 604.2 ms
+2026-09-18T19:03:54.388Z INFO  koniec: 6 snimok, 0 chyb, 0 zmeskanych slotov, najvacsie meskanie 0.000 s, spolu 486.38 MiB

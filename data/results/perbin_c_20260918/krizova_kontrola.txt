@@ -1,0 +1,12 @@
+# Nezavisly prepocet vektora z .vmicd (numpy) proti sidecaru z modulu.
+# Spustene 2026-09-18, snimky su v /var/tmp/perbin_c/on/ (do repa sa nekopiruju, 482 MiB).
+
+$ python3 krizova_kontrola.py /var/tmp/perbin_c/on/hyptcn-guest_000000_20260918T190328783Z.vmicd sidecars/on/hyptcn-guest_000000_20260918T190328783Z.json
+plna snimka: True zaznamov: 123208
+binov so zmenou v subore: 36 binov v sidecari: 131
+VYSLEDOK: ZHODA C vs Python
+
+$ python3 krizova_kontrola.py /var/tmp/perbin_c/on/hyptcn-guest_000003_20260918T190343784Z.vmicd sidecars/on/hyptcn-guest_000003_20260918T190343784Z.json
+plna snimka: False zaznamov: 242
+binov so zmenou v subore: 21 binov v sidecari: 131
+VYSLEDOK: ZHODA C vs Python

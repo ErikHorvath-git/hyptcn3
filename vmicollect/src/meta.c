@@ -136,7 +136,61 @@ int vmic_meta_write(const vmic_snapshot_t *s, char *out_path, size_t n)
     fprintf(f, "    \"sha256_covers_file\": %s,\n",
             s->hash_covers_file ? "true" : "false");
     fprintf(f, "    \"sha256\": "); json_str(f, hex);
-    fprintf(f, "\n  }\n}\n");
+    fprintf(f, "\n  }");
+
+    /* --- per-bin priznakovy vektor ------------------------------- */
+    /*
+     * Blok je tu iba vtedy, ked vektor naozaj vznikol a presiel kontrolou
+     * invariantu (pozri perbin.c). Jeho chybanie je teda informacia, nie
+     * detail formatu - nikdy sa nedopisuje prazdny alebo nulovy vektor.
+     *
+     * `entropy_mean` sa vypisuje iba pri zapnutej entropii. Ked je
+     * [features].entropy vypnuta, kluc v objekte binu NIE JE - nula by sa
+     * nedala odlisit od naozaj nulovej entropie. To, ze sa bin nezmenil,
+     * hovori `has_changed`; entropy_mean je vtedy 0 a je to definovane.
+     */
+    if (s->features && s->features->bins_total) {
+        const vmic_features_t *ft = s->features;
+        fprintf(f, ",\n  \"features\": {\n");
+        fprintf(f, "    \"schema\": \"hyptcn3/perbin/1\",\n");
+        fprintf(f, "    \"bin_bytes\": %" PRIu64 ",\n", ft->bin_bytes);
+        fprintf(f, "    \"page_size\": %u,\n", ft->page_size);
+        fprintf(f, "    \"entropy\": %s,\n", ft->entropy ? "true" : "false");
+        fprintf(f, "    \"compute_ms\": %.3f,\n", ft->compute_ms);
+        fprintf(f, "    \"bins_total\": %zu,\n", ft->bins_total);
+        /* Oblasti, nad ktorymi biny vznikli. Bez nich sa z ulozenej snimky
+           neda overit, ze bin nesiaha do diery vo fyzickom priestore.
+           Nevolaju sa "memslots" zamerne: su to EFEKTIVNE oblasti zberu
+           odvodene z memslotov, pricom susediace su zlucene - pri tejto VM
+           10 memslotov dava 5 oblasti. Nazvat ich memslotmi by znamenalo
+           tvrdit o sidecari nieco, co v nom nie je. */
+        fprintf(f, "    \"regions\": [");
+        for (size_t i = 0; i < ft->region_count; i++)
+            fprintf(f, "%s{\"gpa\": %" PRIu64 ", \"bytes\": %" PRIu64 "}",
+                    i ? ", " : "", ft->regions[i].start, ft->regions[i].size);
+        fprintf(f, "],\n");
+        fprintf(f, "    \"bins\": [\n");
+        for (size_t i = 0; i < ft->bins_total; i++) {
+            const vmic_bin_t *b = &ft->bins[i];
+            double denom = (double)b->pages_total;
+            fprintf(f, "      {\"bin\": %" PRIu64 ", \"gpa\": %" PRIu64
+                       ", \"pages_total\": %" PRIu64
+                       ", \"pages_changed\": %" PRIu64
+                       ", \"changed_ratio\": %.6f, \"zero_ratio\": %.6f",
+                    b->bin, b->gpa, b->pages_total, b->pages_changed,
+                    denom > 0.0 ? (double)b->pages_changed / denom : 0.0,
+                    denom > 0.0 ? (double)b->pages_zero / denom : 0.0);
+            if (ft->entropy)
+                fprintf(f, ", \"entropy_mean\": %.6f",
+                        b->pages_changed
+                            ? b->entropy_sum / (double)b->pages_changed : 0.0);
+            fprintf(f, ", \"has_changed\": %d}%s\n",
+                    b->pages_changed ? 1 : 0,
+                    (i + 1 < ft->bins_total) ? "," : "");
+        }
+        fprintf(f, "    ]\n  }");
+    }
+    fprintf(f, "\n}\n");
 
     int err = ferror(f);
     if (fclose(f) != 0 || err) {

@@ -94,7 +94,7 @@ BIN := $(BUILD)/vmicollect
 # prepise iba ked sa obsah zmenil - takze zbytocny preklad nesposobuje.
 CONFIG_STAMP := $(BUILD)/.config
 
-.PHONY: all bpf hooks test test-holes check debug install uninstall clean help FORCE
+.PHONY: all bpf hooks test test-holes test-perbin check debug install uninstall clean help FORCE
 
 all: $(BIN)
 ifneq ($(EBPF),1)
@@ -140,7 +140,7 @@ $(BUILD)/example_hook.so: hooks/example_hook.c include/vmic.h | $(BUILD)
 	$(CC) $(CFLAGS) -fPIC -shared -o $@ $<
 	@echo "hotovo -> $@"
 
-test: $(BIN) test-holes
+test: $(BIN) test-holes test-perbin
 	$(BIN) selftest $(BUILD)/selftest
 
 # Regresny test na spravne preskakovanie dier vo fyzickom priestore.
@@ -151,6 +151,15 @@ test-holes: $(BUILD)/hole_test
 	$(BUILD)/hole_test
 
 $(BUILD)/hole_test: tests/hole_test.c $(TEST_OBJ) $(EMBED_OBJ) | $(BUILD)
+	$(CC) $(CFLAGS) -o $@ $< $(TEST_OBJ) $(EMBED_OBJ) $(LDFLAGS) $(LDLIBS)
+
+# Regresny test per-bin priznakoveho vektora (biny iba nad podlozenymi
+# rozsahmi, invariant suctov, entropia, determinizmus). Rovnako ako
+# hole_test sa linkuje proti skutocnym .o suborom modulu.
+test-perbin: $(BUILD)/perbin_test
+	$(BUILD)/perbin_test $(BUILD)/perbintest
+
+$(BUILD)/perbin_test: tests/perbin_test.c $(TEST_OBJ) $(EMBED_OBJ) | $(BUILD)
 	$(CC) $(CFLAGS) -o $@ $< $(TEST_OBJ) $(EMBED_OBJ) $(LDFLAGS) $(LDLIBS)
 
 # Kontrolny preklad, ktory NEPOTREBUJE ziadne extra balicky:
@@ -165,6 +174,8 @@ check:
 	$(BIN) selftest $(BUILD)/checktest
 	$(MAKE) OPT="-O1 -g3 -D_FORTIFY_SOURCE=3 -fstack-protector-all" \
 	        SAN="-fsanitize=undefined -fsanitize-undefined-trap-on-error" test-holes
+	$(MAKE) OPT="-O1 -g3 -D_FORTIFY_SOURCE=3 -fstack-protector-all" \
+	        SAN="-fsanitize=undefined -fsanitize-undefined-trap-on-error" test-perbin
 	@echo "check: PRESLO"
 
 # Plna diagnostika. Vyzaduje:  sudo dnf install libasan libubsan

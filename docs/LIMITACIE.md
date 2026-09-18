@@ -523,6 +523,41 @@ without BTF.` Mapa sa vytvorí aj bez BTF a zber funguje, ale príčina nebola z
 
 ---
 
+## L13 — Príznakový vektor: čo o ňom treba vedieť pred tým, než sa naň natrénuje model
+
+**Na plnej snímke sú `changed_ratio` a `zero_ratio` kolineárne.** Delta writer porovnáva
+stránky proti tabuľke hashov, ktorá je na začiatku reťazca nulová, takže „zmenená" tam
+znamená „nenulová" a platí presne `changed_ratio = 1 − zero_ratio` (overené na sidecari
+seq 0: 0,854823 + 0,145177 = 1,000000 na všetkých binoch). Riadok plnej snímky má teda iný
+význam než riadky delta snímok. `features/windows.py` to rieši voľbou, čo s plnými snímkami
+robiť, a východzie správanie je zdokumentované — ale kto pridá nový príznak alebo nový
+model, musí o tom vedieť.
+
+**Formulácia do textu práce:** „Prvá snímka reťazca je referenčná; príznaky odvodené od zmeny
+majú v nej definíciu, ktorá sa líši od nasledujúcich snímok, preto sa v sekvenciách
+spracúvajú osobitne."
+
+**Výpočet príznakov predlžuje cyklus.** Základ stojí ~51–53 ms na cyklus bez ohľadu na
+množstvo zmien (prejde sa všetkých 528 417 stránok), entropia ďalších ~3,5 µs na zmenenú
+stránku. Na plnej snímke to je ~431 ms navyše. Čísla sú v `docs/MERANIA.md`, záznam
+z 2026-09-18 (fáza F2).
+
+**Formulácia do textu práce:** „Extrakcia príznakov je súčasťou cyklu zberu a jej cena je
+zmeraná; pri perióde 2 s zostáva p95 latencie cyklu pod periódou s rezervou približne
+trojnásobku."
+
+**Počet binov je viazaný na geometriu konkrétnej VM.** Pri 2,02 GiB VM vzniká 131 binov;
+pri inej veľkosti pamäte alebo inom rozložení memslotov ich bude iný počet. Model, ktorý by
+bral biny ako pevný počet vstupov, by bol použiteľný len na VM rovnakej veľkosti. Ako sa
+s tým naloží, je otvorené rozhodnutie fázy F3 a nesmie sa „vyriešiť" tichým doplnením núl
+do pevnej dĺžky.
+
+**Vektor sa meral iba na jednej doméne.** Geometria s inou veľkosťou binu (1 MiB) je overená
+testom nad synteticky deravým obrazom, nie nad druhou skutočnou VM. Správanie pri hotplugu
+pamäte za behu je v kóde ošetrené podpisom oblastí, ale nebolo odskúšané behom.
+
+---
+
 ## Ako sa tento zoznam udržiava
 
 Limitácia sa z tohto súboru neodstraňuje, kým nezmizne z kódu. Keď sa odstráni, pridá sa

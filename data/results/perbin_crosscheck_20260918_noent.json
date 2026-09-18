@@ -1,0 +1,331 @@
+{
+ "schema": "hyptcn3/vysledok-hlavicka/1",
+ "schema_dat": "hyptcn3/perbin-crosscheck/1",
+ "commit": "104af34354afea26e73ee222d5511bd1a8f405ff",
+ "commit_dirty": true,
+ "date": "2026-09-18T19:08:21Z",
+ "host": "Fedora Linux 43, jadro 7.1.13-100.fc43.x86_64, hostname fedora",
+ "guest": "snimky pamate libvirt domeny hyptcn-guest (Debian 12, jadro 6.1.0-42-cloud-amd64). Domena pri vypocte nebezala - pocitalo sa zo suborov so snimkami.",
+ "command": "/usr/bin/python3 -m features crosscheck --snapshot /var/tmp/perbin_c/noent --memslots data/results/2026-09-18_zmrazeny_host/probe.json --c data/results/perbin_c_20260918/sidecars/noent --label beh vmicollect 2026-09-18T19:0x, [features] noent; vektor C sa berie z kopie v repe --out data/results/perbin_crosscheck_20260918_noent.json",
+ "n": 6,
+ "n_poznamka": "n = pocet snimok, nad ktorymi krizova kontrola bezala. Nejde o opakovane meranie casu, cisla nemaju rozptyl.",
+ "values": {
+  "schema": "hyptcn3/perbin-crosscheck/1",
+  "pripad": "beh vmicollect 2026-09-18T19:0x, [features] noent; vektor C sa berie z kopie v repe",
+  "bin_bytes": 16777216,
+  "snapshot_arg": "/var/tmp/perbin_c/noent",
+  "c_arg": "/home/eh/Desktop/hyptcn3/data/results/perbin_c_20260918/sidecars/noent",
+  "memslots": {
+   "source": "probe.json:values.memslot_ranges",
+   "count": 10,
+   "pages_total": 528417,
+   "bytes_total": 2164396032,
+   "ranges": [
+    {
+     "gpa": 0,
+     "size": 655360
+    },
+    {
+     "gpa": 786432,
+     "size": 45056
+    },
+    {
+     "gpa": 831488,
+     "size": 12288
+    },
+    {
+     "gpa": 843776,
+     "size": 106496
+    },
+    {
+     "gpa": 950272,
+     "size": 32768
+    },
+    {
+     "gpa": 983040,
+     "size": 65536
+    },
+    {
+     "gpa": 1048576,
+     "size": 2146435072
+    },
+    {
+     "gpa": 4211081216,
+     "size": 16777216
+    },
+    {
+     "gpa": 4276092928,
+     "size": 4096
+    },
+    {
+     "gpa": 4294705152,
+     "size": 262144
+    }
+   ]
+  },
+  "snimok": 6,
+  "snimok_s_vystupom_c": 6,
+  "vsetky_invarianty_ok": true,
+  "vsetky_porovnania_ok": true,
+  "snimky": [
+   {
+    "snapshot": "hyptcn-guest_000000_20260918T190301849Z",
+    "seq": 0,
+    "full": true,
+    "bins_total": 131,
+    "invariant": {
+     "sidecar": "hyptcn-guest_000000_20260918T190301849Z.json",
+     "pages_changed_sidecar": 123214,
+     "pages_changed_referencia": 123214,
+     "pages_total_sidecar": 528417,
+     "pages_total_referencia": 528417,
+     "pages_changed_zhoda": true,
+     "pages_total_zhoda": true,
+     "zhoda": true
+    },
+    "porovnanie": {
+     "tolerancia": 5e-07,
+     "tolerancia_pozn": "celociselne polia sa porovnavaju presne; tolerancia plati iba pre changed_ratio, zero_ratio a entropy_mean",
+     "binov_referencia": 131,
+     "binov_c": 131,
+     "hlavicka_rozdiely": [],
+     "biny_iba_v_referencii": [],
+     "biny_iba_v_c": [],
+     "rozdielov": 0,
+     "rozdiely": [],
+     "max_abs_rozdiel": {
+      "changed_ratio": 4.84374999998316e-07,
+      "zero_ratio": 4.84374999998316e-07
+     },
+     "mimo_tlacenej_presnosti": 0,
+     "mimo_tlacenej_presnosti_priklady": [],
+     "mimo_tlacenej_presnosti_pozn": "pocet poli, kde sa referencia zaokruhlena na 6 desatinnych miest nerovna hodnote vytlacenej C. Nula znamena, ze obe implementacie sedia na vsetky miesta, ktore su v subore.",
+     "zhoda": true,
+     "neporovnane_polia": [
+      "entropy_mean"
+     ],
+     "neporovnane_dovod": "C mal [features].entropy vypnutu, takze entropy_mean v jeho vystupe nie je; zhoda vo zvysnych poliach o entropii nehovori nic"
+    },
+    "c_vystup": {
+     "dostupny": true,
+     "zdroj": "hyptcn-guest_000000_20260918T190301849Z.json:features"
+    }
+   },
+   {
+    "snapshot": "hyptcn-guest_000001_20260918T190306849Z",
+    "seq": 1,
+    "full": false,
+    "bins_total": 131,
+    "invariant": {
+     "sidecar": "hyptcn-guest_000001_20260918T190306849Z.json",
+     "pages_changed_sidecar": 210,
+     "pages_changed_referencia": 210,
+     "pages_total_sidecar": 528417,
+     "pages_total_referencia": 528417,
+     "pages_changed_zhoda": true,
+     "pages_total_zhoda": true,
+     "zhoda": true
+    },
+    "porovnanie": {
+     "tolerancia": 5e-07,
+     "tolerancia_pozn": "celociselne polia sa porovnavaju presne; tolerancia plati iba pre changed_ratio, zero_ratio a entropy_mean",
+     "binov_referencia": 131,
+     "binov_c": 131,
+     "hlavicka_rozdiely": [],
+     "biny_iba_v_referencii": [],
+     "biny_iba_v_c": [],
+     "rozdielov": 0,
+     "rozdiely": [],
+     "max_abs_rozdiel": {
+      "changed_ratio": 4.531250000000195e-07,
+      "zero_ratio": 4.84374999998316e-07
+     },
+     "mimo_tlacenej_presnosti": 0,
+     "mimo_tlacenej_presnosti_priklady": [],
+     "mimo_tlacenej_presnosti_pozn": "pocet poli, kde sa referencia zaokruhlena na 6 desatinnych miest nerovna hodnote vytlacenej C. Nula znamena, ze obe implementacie sedia na vsetky miesta, ktore su v subore.",
+     "zhoda": true,
+     "neporovnane_polia": [
+      "entropy_mean"
+     ],
+     "neporovnane_dovod": "C mal [features].entropy vypnutu, takze entropy_mean v jeho vystupe nie je; zhoda vo zvysnych poliach o entropii nehovori nic"
+    },
+    "c_vystup": {
+     "dostupny": true,
+     "zdroj": "hyptcn-guest_000001_20260918T190306849Z.json:features"
+    }
+   },
+   {
+    "snapshot": "hyptcn-guest_000002_20260918T190311849Z",
+    "seq": 2,
+    "full": false,
+    "bins_total": 131,
+    "invariant": {
+     "sidecar": "hyptcn-guest_000002_20260918T190311849Z.json",
+     "pages_changed_sidecar": 188,
+     "pages_changed_referencia": 188,
+     "pages_total_sidecar": 528417,
+     "pages_total_referencia": 528417,
+     "pages_changed_zhoda": true,
+     "pages_total_zhoda": true,
+     "zhoda": true
+    },
+    "porovnanie": {
+     "tolerancia": 5e-07,
+     "tolerancia_pozn": "celociselne polia sa porovnavaju presne; tolerancia plati iba pre changed_ratio, zero_ratio a entropy_mean",
+     "binov_referencia": 131,
+     "binov_c": 131,
+     "hlavicka_rozdiely": [],
+     "biny_iba_v_referencii": [],
+     "biny_iba_v_c": [],
+     "rozdielov": 0,
+     "rozdiely": [],
+     "max_abs_rozdiel": {
+      "changed_ratio": 4.843750000000507e-07,
+      "zero_ratio": 4.84374999998316e-07
+     },
+     "mimo_tlacenej_presnosti": 0,
+     "mimo_tlacenej_presnosti_priklady": [],
+     "mimo_tlacenej_presnosti_pozn": "pocet poli, kde sa referencia zaokruhlena na 6 desatinnych miest nerovna hodnote vytlacenej C. Nula znamena, ze obe implementacie sedia na vsetky miesta, ktore su v subore.",
+     "zhoda": true,
+     "neporovnane_polia": [
+      "entropy_mean"
+     ],
+     "neporovnane_dovod": "C mal [features].entropy vypnutu, takze entropy_mean v jeho vystupe nie je; zhoda vo zvysnych poliach o entropii nehovori nic"
+    },
+    "c_vystup": {
+     "dostupny": true,
+     "zdroj": "hyptcn-guest_000002_20260918T190311849Z.json:features"
+    }
+   },
+   {
+    "snapshot": "hyptcn-guest_000003_20260918T190316849Z",
+    "seq": 3,
+    "full": false,
+    "bins_total": 131,
+    "invariant": {
+     "sidecar": "hyptcn-guest_000003_20260918T190316849Z.json",
+     "pages_changed_sidecar": 177,
+     "pages_changed_referencia": 177,
+     "pages_total_sidecar": 528417,
+     "pages_total_referencia": 528417,
+     "pages_changed_zhoda": true,
+     "pages_total_zhoda": true,
+     "zhoda": true
+    },
+    "porovnanie": {
+     "tolerancia": 5e-07,
+     "tolerancia_pozn": "celociselne polia sa porovnavaju presne; tolerancia plati iba pre changed_ratio, zero_ratio a entropy_mean",
+     "binov_referencia": 131,
+     "binov_c": 131,
+     "hlavicka_rozdiely": [],
+     "biny_iba_v_referencii": [],
+     "biny_iba_v_c": [],
+     "rozdielov": 0,
+     "rozdiely": [],
+     "max_abs_rozdiel": {
+      "changed_ratio": 4.999999999996327e-07,
+      "zero_ratio": 4.84374999998316e-07
+     },
+     "mimo_tlacenej_presnosti": 0,
+     "mimo_tlacenej_presnosti_priklady": [],
+     "mimo_tlacenej_presnosti_pozn": "pocet poli, kde sa referencia zaokruhlena na 6 desatinnych miest nerovna hodnote vytlacenej C. Nula znamena, ze obe implementacie sedia na vsetky miesta, ktore su v subore.",
+     "zhoda": true,
+     "neporovnane_polia": [
+      "entropy_mean"
+     ],
+     "neporovnane_dovod": "C mal [features].entropy vypnutu, takze entropy_mean v jeho vystupe nie je; zhoda vo zvysnych poliach o entropii nehovori nic"
+    },
+    "c_vystup": {
+     "dostupny": true,
+     "zdroj": "hyptcn-guest_000003_20260918T190316849Z.json:features"
+    }
+   },
+   {
+    "snapshot": "hyptcn-guest_000004_20260918T190321849Z",
+    "seq": 4,
+    "full": false,
+    "bins_total": 131,
+    "invariant": {
+     "sidecar": "hyptcn-guest_000004_20260918T190321849Z.json",
+     "pages_changed_sidecar": 172,
+     "pages_changed_referencia": 172,
+     "pages_total_sidecar": 528417,
+     "pages_total_referencia": 528417,
+     "pages_changed_zhoda": true,
+     "pages_total_zhoda": true,
+     "zhoda": true
+    },
+    "porovnanie": {
+     "tolerancia": 5e-07,
+     "tolerancia_pozn": "celociselne polia sa porovnavaju presne; tolerancia plati iba pre changed_ratio, zero_ratio a entropy_mean",
+     "binov_referencia": 131,
+     "binov_c": 131,
+     "hlavicka_rozdiely": [],
+     "biny_iba_v_referencii": [],
+     "biny_iba_v_c": [],
+     "rozdielov": 0,
+     "rozdiely": [],
+     "max_abs_rozdiel": {
+      "changed_ratio": 4.2187499999998823e-07,
+      "zero_ratio": 4.84374999998316e-07
+     },
+     "mimo_tlacenej_presnosti": 0,
+     "mimo_tlacenej_presnosti_priklady": [],
+     "mimo_tlacenej_presnosti_pozn": "pocet poli, kde sa referencia zaokruhlena na 6 desatinnych miest nerovna hodnote vytlacenej C. Nula znamena, ze obe implementacie sedia na vsetky miesta, ktore su v subore.",
+     "zhoda": true,
+     "neporovnane_polia": [
+      "entropy_mean"
+     ],
+     "neporovnane_dovod": "C mal [features].entropy vypnutu, takze entropy_mean v jeho vystupe nie je; zhoda vo zvysnych poliach o entropii nehovori nic"
+    },
+    "c_vystup": {
+     "dostupny": true,
+     "zdroj": "hyptcn-guest_000004_20260918T190321849Z.json:features"
+    }
+   },
+   {
+    "snapshot": "hyptcn-guest_000005_20260918T190326849Z",
+    "seq": 5,
+    "full": false,
+    "bins_total": 131,
+    "invariant": {
+     "sidecar": "hyptcn-guest_000005_20260918T190326849Z.json",
+     "pages_changed_sidecar": 172,
+     "pages_changed_referencia": 172,
+     "pages_total_sidecar": 528417,
+     "pages_total_referencia": 528417,
+     "pages_changed_zhoda": true,
+     "pages_total_zhoda": true,
+     "zhoda": true
+    },
+    "porovnanie": {
+     "tolerancia": 5e-07,
+     "tolerancia_pozn": "celociselne polia sa porovnavaju presne; tolerancia plati iba pre changed_ratio, zero_ratio a entropy_mean",
+     "binov_referencia": 131,
+     "binov_c": 131,
+     "hlavicka_rozdiely": [],
+     "biny_iba_v_referencii": [],
+     "biny_iba_v_c": [],
+     "rozdielov": 0,
+     "rozdiely": [],
+     "max_abs_rozdiel": {
+      "changed_ratio": 4.999999999996327e-07,
+      "zero_ratio": 4.84374999998316e-07
+     },
+     "mimo_tlacenej_presnosti": 0,
+     "mimo_tlacenej_presnosti_priklady": [],
+     "mimo_tlacenej_presnosti_pozn": "pocet poli, kde sa referencia zaokruhlena na 6 desatinnych miest nerovna hodnote vytlacenej C. Nula znamena, ze obe implementacie sedia na vsetky miesta, ktore su v subore.",
+     "zhoda": true,
+     "neporovnane_polia": [
+      "entropy_mean"
+     ],
+     "neporovnane_dovod": "C mal [features].entropy vypnutu, takze entropy_mean v jeho vystupe nie je; zhoda vo zvysnych poliach o entropii nehovori nic"
+    },
+    "c_vystup": {
+     "dostupny": true,
+     "zdroj": "hyptcn-guest_000005_20260918T190326849Z.json:features"
+    }
+   }
+  ]
+ }
+}

@@ -127,6 +127,17 @@ typedef struct {
     uint32_t       delta_page_size;
     uint64_t       delta_full_every;  /* kazdych N snimok plna zaloha */
 
+    /* ---- [features] : per-bin priznakovy vektor ------------------- */
+    /* Pocita ho delta writer pocas porovnavania stranok (perbin.c) a
+       zapisuje sa do JSON sidecaru. Bez neho by vektor musel vzniknut az
+       offline z .vmicd suborov - a zadanie ziada modul, ktory priznaky
+       generuje sam.                                                    */
+    bool     feat_enable;
+
+    bool     feat_enable_explicit;  /* nastavil to pouzivatel? */
+    uint64_t feat_bin_bytes;          /* mocnina 2, >= delta_page_size  */
+    bool     feat_entropy;            /* Shannonova entropia zmenenych  */
+
     /* ---- [retention] : co mazeme (0 = vypnute) ------------------- */
     uint64_t max_snapshots;
     uint64_t max_bytes;
@@ -190,6 +201,51 @@ typedef struct {
 } vmic_stats_t;
 
 /* ------------------------------------------------------------------ */
+/* Per-bin priznakovy vektor (perbin.c)                              */
+/* ------------------------------------------------------------------ */
+/*
+ * Pamat sa deli na biny pevnej velkosti ([features].bin_bytes) a z kazdeho
+ * sa pocita niekolko cisel, ktore su vstupom pre sekvencny model.
+ *
+ * BINUJE SA IBA NAD ROZSAHMI, KTORE SU NAOZAJ PODLOZENE (memsloty). Bin,
+ * ktory neprotina ziadny z nich, v poli `bins` NEEXISTUJE - nevznika ako
+ * nulovy riadok. Dovod: fyzicky priestor x86 je deravy (VGA diera, PCI
+ * hole pod 4 GiB), takze pri 2 GiB VM s max_paddr 4 GiB by bola polovica
+ * binov trvale nulova a model by sa ucil na vypln.
+ *
+ * Index binu je viazany na FYZICKU ADRESU (gpa >> log2(bin_bytes)), nie
+ * na poradie v poli - zostava teda rovnaky medzi snimkami aj vtedy, ked
+ * sa pocet memslotov zmeni.
+ */
+typedef struct {
+    uint64_t bin;            /* index binu = gpa >> log2(bin_bytes)     */
+    uint64_t gpa;            /* zaciatocna fyzicka adresa binu          */
+    uint64_t pages_total;    /* stranky binu podlozene memslotmi        */
+    uint64_t pages_changed;  /* z nich zmenene oproti minulej snimke    */
+    uint64_t pages_zero;     /* z podlozenych stranok uplne nulove      */
+    /* Sucet entropii ZMENENYCH stranok; priemer sa pocita az pri zapise,
+       aby sa tu nedrzala hodnota, ktora pri pages_changed == 0 nie je
+       definovana. */
+    double   entropy_sum;
+} vmic_bin_t;
+
+typedef struct {
+    uint64_t    bin_bytes;
+    uint32_t    page_size;
+    bool        entropy;     /* bola entropia naozaj pocitana?          */
+    size_t      bins_total;  /* pocet binov s aspon jednou podlozenou   */
+    vmic_bin_t *bins;
+    double      compute_ms;  /* cena vypoctu priznakov v tejto snimke   */
+    /* Oblasti, nad ktorymi biny vznikli - teda memsloty, ak sa oblasti
+       nezadali rucne. Drzia sa tu preto, aby sa dali zapisat do sidecaru:
+       bez nich sa z archivovanej snimky uz neda overit tvrdenie "biny su
+       iba nad memslotmi" a citatel by musel verit dokumentacii. */
+    const vmic_region_t *regions;
+    size_t      region_count;
+    void       *priv;        /* vnutorny stav perbin.c               */
+} vmic_features_t;
+
+/* ------------------------------------------------------------------ */
 /* Zaznam o jednej snimke - dostane ho writer, sidecar aj kazdy hook   */
 /* ------------------------------------------------------------------ */
 
@@ -230,6 +286,11 @@ typedef struct {
        false = pokryva iba zozbierane oblasti (nesuvisle [capture].regions),
        takze sa neda porovnat s hashom suboru na disku */
     bool     hash_covers_file;
+
+    /* Per-bin vektor tejto snimky, alebo NULL ked sa nepocital (vypnuty,
+       iny writer nez delta, alebo nepresiel kontrolou invariantu). Ukazuje
+       do stavu writera a zije po celu dobu cyklu - rovnako ako `regions`. */
+    const vmic_features_t *features;
 
     vmic_stats_t          stats;
     const vmic_vminfo_t  *vm;
