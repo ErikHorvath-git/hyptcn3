@@ -14,3 +14,6 @@ data/raw/
 *.raw.gz
 
 # profil jadra hosta sa verzionuje zvlast (viz profiles/*/README.md)
+
+# vystup prikladoveho hook pluginu z testovacieho behu, nie vysledok merania
+vmicollect-index.csv

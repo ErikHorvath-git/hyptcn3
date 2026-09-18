@@ -1,2 +1,0 @@
-seq,timestamp_unix,path,bytes_on_disk,pause_ms,capture_ms,total_ms,pages_changed,pages_total
-0,1789748224.036,/tmp/claude-1000/-home-eh-Desktop-hypTcn002/d34bc88b-1a0f-45be-9238-dfb5f9e4dcc3/scratchpad/hooktest/out/mem.img_000000_20260918T161704036Z.raw,16777216,0.000,5.732,55.334,0,0
