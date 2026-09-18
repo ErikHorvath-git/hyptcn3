@@ -1,0 +1,44 @@
+# vypis journalu hosta za cas behu 'run' (cykly #0-#11, 16:32:17-16:33:12 UTC)
+# prikaz: ssh -o BatchMode=yes root@192.168.122.100 'journalctl --since "2026-09-18 16:32:10" --until "2026-09-18 16:33:15" --no-pager -o short-iso'
+
+2026-09-18T16:32:36+0000 localhost sshd[2154]: Accepted publickey for root from 192.168.122.1 port 54988 ssh2: ED25519 SHA256:uXrM4LXtPbdXbG4JFr7BsyxpQZ7RiY5Cmjbnq/olZgI
+2026-09-18T16:32:36+0000 localhost sshd[2154]: pam_unix(sshd:session): session opened for user root(uid=0) by (uid=0)
+2026-09-18T16:32:36+0000 localhost systemd[1]: Created slice user-0.slice - User Slice of UID 0.
+2026-09-18T16:32:36+0000 localhost systemd[1]: Starting user-runtime-dir@0.service - User Runtime Directory /run/user/0...
+2026-09-18T16:32:36+0000 localhost systemd-logind[379]: New session 141 of user root.
+2026-09-18T16:32:36+0000 localhost systemd[1]: Finished user-runtime-dir@0.service - User Runtime Directory /run/user/0.
+2026-09-18T16:32:36+0000 localhost systemd[1]: Starting user@0.service - User Manager for UID 0...
+2026-09-18T16:32:36+0000 localhost (systemd)[2157]: pam_unix(systemd-user:session): session opened for user root(uid=0) by (uid=0)
+2026-09-18T16:32:36+0000 localhost systemd[2157]: Queued start job for default target default.target.
+2026-09-18T16:32:36+0000 localhost systemd[2157]: Reached target paths.target - Paths.
+2026-09-18T16:32:36+0000 localhost systemd[2157]: Reached target sockets.target - Sockets.
+2026-09-18T16:32:36+0000 localhost systemd[2157]: Reached target timers.target - Timers.
+2026-09-18T16:32:36+0000 localhost systemd[2157]: Reached target basic.target - Basic System.
+2026-09-18T16:32:36+0000 localhost systemd[2157]: Reached target default.target - Main User Target.
+2026-09-18T16:32:36+0000 localhost systemd[2157]: Startup finished in 34ms.
+2026-09-18T16:32:36+0000 localhost systemd[1]: Started user@0.service - User Manager for UID 0.
+2026-09-18T16:32:36+0000 localhost systemd[1]: Started session-141.scope - Session 141 of User root.
+2026-09-18T16:32:36+0000 localhost sshd[2154]: pam_env(sshd:session): deprecated reading of user environment enabled
+2026-09-18T16:32:36+0000 localhost sshd[2154]: Received disconnect from 192.168.122.1 port 54988:11: disconnected by user
+2026-09-18T16:32:36+0000 localhost sshd[2154]: Disconnected from user root 192.168.122.1 port 54988
+2026-09-18T16:32:36+0000 localhost sshd[2154]: pam_unix(sshd:session): session closed for user root
+2026-09-18T16:32:36+0000 localhost systemd[1]: session-141.scope: Deactivated successfully.
+2026-09-18T16:32:36+0000 localhost systemd-logind[379]: Session 141 logged out. Waiting for processes to exit.
+2026-09-18T16:32:36+0000 localhost systemd-logind[379]: Removed session 141.
+2026-09-18T16:32:46+0000 localhost systemd[1]: Stopping user@0.service - User Manager for UID 0...
+2026-09-18T16:32:46+0000 localhost systemd[2157]: Activating special unit exit.target...
+2026-09-18T16:32:46+0000 localhost systemd[2157]: Stopped target default.target - Main User Target.
+2026-09-18T16:32:46+0000 localhost systemd[2157]: Stopped target basic.target - Basic System.
+2026-09-18T16:32:46+0000 localhost systemd[2157]: Stopped target paths.target - Paths.
+2026-09-18T16:32:46+0000 localhost systemd[2157]: Stopped target sockets.target - Sockets.
+2026-09-18T16:32:46+0000 localhost systemd[2157]: Reached target shutdown.target - Shutdown.
+2026-09-18T16:32:46+0000 localhost systemd[2157]: Stopped target timers.target - Timers.
+2026-09-18T16:32:46+0000 localhost systemd[2157]: Finished systemd-exit.service - Exit the Session.
+2026-09-18T16:32:46+0000 localhost systemd[2157]: Reached target exit.target - Exit the Session.
+2026-09-18T16:32:46+0000 localhost systemd[1]: user@0.service: Deactivated successfully.
+2026-09-18T16:32:46+0000 localhost systemd[1]: Stopped user@0.service - User Manager for UID 0.
+2026-09-18T16:32:46+0000 localhost systemd[1]: Stopping user-runtime-dir@0.service - User Runtime Directory /run/user/0...
+2026-09-18T16:32:46+0000 localhost systemd[1]: run-user-0.mount: Deactivated successfully.
+2026-09-18T16:32:46+0000 localhost systemd[1]: user-runtime-dir@0.service: Deactivated successfully.
+2026-09-18T16:32:46+0000 localhost systemd[1]: Stopped user-runtime-dir@0.service - User Runtime Directory /run/user/0.
+2026-09-18T16:32:46+0000 localhost systemd[1]: Removed slice user-0.slice - User Slice of UID 0.

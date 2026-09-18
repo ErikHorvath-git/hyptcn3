@@ -1,0 +1,154 @@
+{
+ "schema": "hyptcn3/snapshots/1",
+ "date": "2026-09-18",
+ "commit": "178ce4fd83e7c504e02fb06a5756de3e79255007",
+ "popis": "Zoznam pamatovych snimok z behu 2026-09-18. Samotne .vmicd a .raw subory su mimo gitu (stovky MiB az 4 GiB riedky subor), zostavaju v /var/tmp. Tento subor drzi ich identitu, aby sa dalo overit, ze sidecar patri k snimke.",
+ "command": "sha256sum <snimka> a porovnanie s output.sha256 z prislusneho sidecaru",
+ "n": 9,
+ "values": {
+  "snimky": [
+   {
+    "run": "vmic-test",
+    "id": "hyptcn-guest_000000_20260918T143014076Z",
+    "path": "/var/tmp/vmic-test/hyptcn-guest_000000_20260918T143014076Z.raw",
+    "writer": "raw",
+    "full": true,
+    "bytes_logical": 2164396032,
+    "bytes_on_disk": 322043904,
+    "sha256_v_sidecari": "b71b9578e8d71056f9b2a98de0c4888ef7750688db57f64d1fd107cf6a135d44",
+    "velkost_na_disku_teraz": 322043904,
+    "stav": "sha256 sedi"
+   },
+   {
+    "run": "vmic-delta",
+    "id": "hyptcn-guest_000000_20260918T143118834Z",
+    "path": "/var/tmp/vmic-delta/hyptcn-guest_000000_20260918T143118834Z.vmicd",
+    "writer": "delta",
+    "full": true,
+    "bytes_logical": 4294967296,
+    "bytes_on_disk": 289669120,
+    "sha256_v_sidecari": "9a708315d0cd39c44702061384e4b6e59e84fc43facbd02a6d042c9d598a691f",
+    "velkost_na_disku_teraz": 289669120,
+    "stav": "sha256 sedi"
+   },
+   {
+    "run": "vmic-delta",
+    "id": "hyptcn-guest_000001_20260918T143123834Z",
+    "path": "/var/tmp/vmic-delta/hyptcn-guest_000001_20260918T143123834Z.vmicd",
+    "writer": "delta",
+    "full": false,
+    "bytes_logical": 4294967296,
+    "bytes_on_disk": 1236992,
+    "sha256_v_sidecari": "e79117ff40f489b026475dd46f0e55413cca1e71913592f179b43579cbcc441f",
+    "velkost_na_disku_teraz": 1236992,
+    "stav": "sha256 sedi"
+   },
+   {
+    "run": "vmic-delta",
+    "id": "hyptcn-guest_000002_20260918T143128834Z",
+    "path": "/var/tmp/vmic-delta/hyptcn-guest_000002_20260918T143128834Z.vmicd",
+    "writer": "delta",
+    "full": false,
+    "bytes_logical": 4294967296,
+    "bytes_on_disk": 1114112,
+    "sha256_v_sidecari": "06e32c0cabd1b26428fcb1a3da8bc4e40f7c5dc40d2664c2fbe7037f2afdf4bc",
+    "velkost_na_disku_teraz": 1114112,
+    "stav": "sha256 sedi"
+   },
+   {
+    "run": "vmic-delta",
+    "id": "hyptcn-guest_000003_20260918T143133834Z",
+    "path": "/var/tmp/vmic-delta/hyptcn-guest_000003_20260918T143133834Z.vmicd",
+    "writer": "delta",
+    "full": false,
+    "bytes_logical": 4294967296,
+    "bytes_on_disk": 1142784,
+    "sha256_v_sidecari": "874c140d5b9228abec6a2635bcd5679ac6be32d155ff4d3a0375932d59c917fa",
+    "velkost_na_disku_teraz": 1142784,
+    "stav": "sha256 sedi"
+   },
+   {
+    "run": "vmic-delta",
+    "id": "hyptcn-guest_000004_20260918T143138834Z",
+    "path": "/var/tmp/vmic-delta/hyptcn-guest_000004_20260918T143138834Z.vmicd",
+    "writer": "delta",
+    "full": false,
+    "bytes_logical": 4294967296,
+    "bytes_on_disk": 1339392,
+    "sha256_v_sidecari": "52bcd1481e12ea05e5e5b4ad3b0631a8c4160b4c877f503c2d280526b60a6b8d",
+    "velkost_na_disku_teraz": 1339392,
+    "stav": "sha256 sedi"
+   },
+   {
+    "run": "vmic-delta",
+    "id": "hyptcn-guest_000005_20260918T143143834Z",
+    "path": "/var/tmp/vmic-delta/hyptcn-guest_000005_20260918T143143834Z.vmicd",
+    "writer": "delta",
+    "full": false,
+    "bytes_logical": 4294967296,
+    "bytes_on_disk": 1290240,
+    "sha256_v_sidecari": "59e0ff74d86e0fc3d264c38b982e94d616d929e46aa535e49fb85640b29b599a",
+    "velkost_na_disku_teraz": 1290240,
+    "stav": "sha256 sedi"
+   },
+   {
+    "run": "vmic-nohash",
+    "id": "hyptcn-guest_000000_20260918T144319070Z",
+    "path": "/var/tmp/vmic-nohash/hyptcn-guest_000000_20260918T144319070Z.raw",
+    "writer": "raw",
+    "full": true,
+    "bytes_logical": 2164396032,
+    "bytes_on_disk": 517079040,
+    "sha256_v_sidecari": "",
+    "stav": "sidecar nema sha256 (bezalo sa s output.hash=none)",
+    "velkost_na_disku_teraz": 517079040
+   },
+   {
+    "run": "vmic-val",
+    "id": "hyptcn-guest_000000_20260918T143954722Z",
+    "path": "/var/tmp/vmic-val/hyptcn-guest_000000_20260918T143954722Z.vmicd",
+    "writer": "delta",
+    "full": true,
+    "bytes_logical": 4294967296,
+    "bytes_on_disk": 485752832,
+    "sha256_v_sidecari": "38c5dd7e7b7d89d5535fb8cd7842b14a4dac9e3967c843411d2977c3cb94a50c",
+    "velkost_na_disku_teraz": 485752832,
+    "stav": "sha256 sedi"
+   }
+  ]
+ },
+ "host": {
+  "os": "Fedora release 43 (Forty Three)",
+  "kernel": "7.1.13-100.fc43.x86_64",
+  "arch": "x86_64",
+  "cpus": 16,
+  "ram_bytes": 16355631104,
+  "clang": "clang version 21.1.8 (Fedora 21.1.8-6.fc43)",
+  "gcc": "gcc (GCC) 15.3.1 20260722 (Red Hat 15.3.1-1)",
+  "libbpf": "1.6.1",
+  "bpftool": "bpftool v7.6.0",
+  "qemu": "QEMU emulator version 10.1.5 (qemu-10.1.5-1.fc43)",
+  "libvirt": "11.6.0",
+  "libvirt_uri": "qemu:///session",
+  "libvirt_uri_poznamka": "session rezim - proces QEMU bezi pod uctom pouzivatela, nie pod rootom"
+ },
+ "guest": {
+  "domain": "hyptcn-guest",
+  "qemu_pid": 1353046,
+  "qemu_pid_poznamka": "zhoduje sa s vm.vmid vo vsetkych sidecaroch tohto behu, teda merania pochadzaju z tejto instancie domeny",
+  "os": "Debian GNU/Linux 12 (bookworm)",
+  "debian_version": "12.13",
+  "kernel": "6.1.0-42-cloud-amd64",
+  "vcpu": 2,
+  "ram_bytes_domena": 2147483648,
+  "ram_bytes_meminfo": 2075680768,
+  "disk": "/home/eh/vms/hyptcn-guest.qcow2",
+  "backing_image": "/home/eh/vms/debian-12-base.qcow2",
+  "backing_image_bytes": 349634560,
+  "backing_image_virtual_bytes": 3221225472
+ },
+ "provenance_note": {
+  "host": "prevzate z env.json v tom istom behu",
+  "guest": "prevzate z env.json v tom istom behu"
+ }
+}

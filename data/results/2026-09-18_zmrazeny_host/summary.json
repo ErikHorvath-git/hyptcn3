@@ -1,0 +1,625 @@
+{
+  "schema": "hyptcn3/summary/1",
+  "commit": "178ce4fd83e7c504e02fb06a5756de3e79255007",
+  "date": "2026-09-18",
+  "host": "Fedora Linux 43, jadro 7.1.13-100.fc43.x86_64, Intel i7-12650H, 16 CPU, 16 355 631 104 B RAM (detaily v env.json)",
+  "guest": "libvirt domena hyptcn-guest, Debian 12.13, jadro 6.1.0-42-cloud-amd64, 2 vCPU, 2 GiB; zmrazeny stav - bez agenta hyptcn_guest_ag, unattended-upgrades zamaskovane (doklad: logs/host_cistota.txt)",
+  "command": "scripts/root_run.sh probe|once|run|validate, binarka vmicollect/build/vmicollect zostavena z tohto repa (sha256 v env.json)",
+  "n": {
+    "probe": 1,
+    "once_raw_hash_sha256": 3,
+    "once_raw_hash_none": 3,
+    "run_delta_plnych": 1,
+    "run_delta_prirastkovych": 11,
+    "validacnych_sedeni": 1
+  },
+  "values": {
+    "probe": {
+      "popis": "vmicollect probe -v; cely vystup je v probe.json",
+      "subor": "probe.json",
+      "memslots": 10,
+      "ram_bytes": 2164396032,
+      "max_paddr": 4294967296,
+      "vcpus": 2,
+      "vmid": 1353046,
+      "backend": "ebpf/kvm",
+      "test_citania_mib_s": 1436,
+      "poznamka_test_citania": "test citania v probe je jedno kratke citanie 16,6 MB, nie priepustnost plnej snimky"
+    },
+    "once_raw_hash_sha256": {
+      "behy": [
+        {
+          "subor": "once_raw_sha256_1.json",
+          "exit_code": 0,
+          "zmeskane_sloty": 2,
+          "chybne_cykly": 0,
+          "binarka_sha256": "5cdb296364b5803355e8d7b534e7e0e2ce6acd9484032dc3b7a45270a0431738"
+        },
+        {
+          "subor": "once_raw_sha256_2.json",
+          "exit_code": 0,
+          "zmeskane_sloty": 2,
+          "chybne_cykly": 0,
+          "binarka_sha256": "5cdb296364b5803355e8d7b534e7e0e2ce6acd9484032dc3b7a45270a0431738"
+        },
+        {
+          "subor": "once_raw_sha256_3.json",
+          "exit_code": 0,
+          "zmeskane_sloty": 2,
+          "chybne_cykly": 0,
+          "binarka_sha256": "5cdb296364b5803355e8d7b534e7e0e2ce6acd9484032dc3b7a45270a0431738"
+        }
+      ],
+      "zmeskane_sloty": {
+        "min": 2,
+        "max": 2,
+        "median": 2,
+        "n": 3,
+        "hodnoty": [
+          2,
+          2,
+          2
+        ]
+      },
+      "popis": "vmicollect once, writer=raw, output.hash=sha256 (vychodzie); 3 opakovani",
+      "subory": [
+        "sidecars/once_raw_sha256_1/hyptcn-guest_000000_20260918T163046321Z.json",
+        "sidecars/once_raw_sha256_2/hyptcn-guest_000000_20260918T163103283Z.json",
+        "sidecars/once_raw_sha256_3/hyptcn-guest_000000_20260918T163120598Z.json"
+      ],
+      "capture_ms": {
+        "min": 390.293,
+        "max": 431.593,
+        "median": 415.651,
+        "n": 3,
+        "hodnoty": [
+          390.293,
+          415.651,
+          431.593
+        ]
+      },
+      "write_ms": {
+        "min": 12957.628,
+        "max": 13899.581,
+        "median": 13323.473,
+        "n": 3,
+        "hodnoty": [
+          12957.628,
+          13323.473,
+          13899.581
+        ]
+      },
+      "total_ms": {
+        "min": 13389.233,
+        "max": 14315.244,
+        "median": 13713.777,
+        "n": 3,
+        "hodnoty": [
+          13389.233,
+          13713.777,
+          14315.244
+        ]
+      },
+      "read_mib_s": {
+        "min": 4782.59,
+        "max": 5288.67,
+        "median": 4966.01,
+        "n": 3,
+        "hodnoty": [
+          4782.59,
+          4966.01,
+          5288.67
+        ]
+      },
+      "bytes_logical": [
+        2164396032
+      ],
+      "bytes_on_disk": [
+        538050560
+      ],
+      "read_errors": [
+        0
+      ],
+      "paused": [
+        false
+      ],
+      "pause_ms": [
+        0.0
+      ]
+    },
+    "once_raw_hash_none": {
+      "behy": [
+        {
+          "subor": "once_raw_none_1.json",
+          "exit_code": 0,
+          "zmeskane_sloty": 0,
+          "chybne_cykly": 0,
+          "binarka_sha256": "5cdb296364b5803355e8d7b534e7e0e2ce6acd9484032dc3b7a45270a0431738"
+        },
+        {
+          "subor": "once_raw_none_2.json",
+          "exit_code": 0,
+          "zmeskane_sloty": 0,
+          "chybne_cykly": 0,
+          "binarka_sha256": "5cdb296364b5803355e8d7b534e7e0e2ce6acd9484032dc3b7a45270a0431738"
+        },
+        {
+          "subor": "once_raw_none_3.json",
+          "exit_code": 0,
+          "zmeskane_sloty": 0,
+          "chybne_cykly": 0,
+          "binarka_sha256": "5cdb296364b5803355e8d7b534e7e0e2ce6acd9484032dc3b7a45270a0431738"
+        }
+      ],
+      "zmeskane_sloty": {
+        "min": 0,
+        "max": 0,
+        "median": 0,
+        "n": 3,
+        "hodnoty": [
+          0,
+          0,
+          0
+        ]
+      },
+      "popis": "vmicollect once, writer=raw, output.hash=none; 3 opakovani",
+      "subory": [
+        "sidecars/once_raw_none_1/hyptcn-guest_000000_20260918T163138595Z.json",
+        "sidecars/once_raw_none_2/hyptcn-guest_000000_20260918T163142720Z.json",
+        "sidecars/once_raw_none_3/hyptcn-guest_000000_20260918T163146781Z.json"
+      ],
+      "capture_ms": {
+        "min": 389.464,
+        "max": 399.556,
+        "median": 393.908,
+        "n": 3,
+        "hodnoty": [
+          389.464,
+          393.908,
+          399.556
+        ]
+      },
+      "write_ms": {
+        "min": 211.919,
+        "max": 215.556,
+        "median": 213.183,
+        "n": 3,
+        "hodnoty": [
+          211.919,
+          213.183,
+          215.556
+        ]
+      },
+      "total_ms": {
+        "min": 602.66,
+        "max": 611.488,
+        "median": 609.476,
+        "n": 3,
+        "hodnoty": [
+          602.66,
+          609.476,
+          611.488
+        ]
+      },
+      "read_mib_s": {
+        "min": 5166.06,
+        "max": 5299.92,
+        "median": 5240.12,
+        "n": 3,
+        "hodnoty": [
+          5166.06,
+          5240.12,
+          5299.92
+        ]
+      },
+      "bytes_logical": [
+        2164396032
+      ],
+      "bytes_on_disk": [
+        538050560
+      ],
+      "read_errors": [
+        0
+      ],
+      "paused": [
+        false
+      ],
+      "pause_ms": [
+        0.0
+      ]
+    },
+    "run_delta_perioda_5s": {
+      "popis": "vmicollect run, writer=delta, perioda 5 s, 12 cyklov; cyklus #0 je plna snimka, cykly #1-#11 su prirastkove",
+      "subor_behu": "run_delta_5s.json",
+      "perioda_s": 5,
+      "cyklov_ziadanych": 12,
+      "summary_z_behu": {
+        "cycles_done": 12,
+        "cycles_failed": 0,
+        "cycles_skipped": 0,
+        "worst_lateness_s": 0.0
+      },
+      "plna_snimka_cyklus_0": {
+        "capture_ms": 922.03,
+        "write_ms": 1638.706,
+        "total_ms": 2560.808,
+        "pages_changed": 123845,
+        "pages_total": 528417,
+        "changed_ratio": 0.23437,
+        "bytes_on_disk": 508260352,
+        "poznamka": "changed_ratio plnej snimky je podiel stranok, ktore writer zapisal, nie miera zmeny medzi snimkami"
+      },
+      "prirastkove_snimky_bez_sedenia_ssh": {
+        "popis": "cykly #1-#3 a #8-#11; v hostovi v tomto case nebola ziadna prihlasovacia relacia (doklad: logs/host_journal_pocas_run.txt)",
+        "cykly": [
+          1,
+          2,
+          3,
+          8,
+          9,
+          10,
+          11
+        ],
+        "pages_changed": {
+          "min": 212,
+          "max": 265,
+          "median": 245,
+          "n": 7,
+          "hodnoty": [
+            212,
+            243,
+            245,
+            245,
+            249,
+            263,
+            265
+          ]
+        },
+        "changed_ratio": {
+          "min": 0.000401,
+          "max": 0.000501,
+          "median": 0.000464,
+          "n": 7,
+          "hodnoty": [
+            0.000401,
+            0.00046,
+            0.000464,
+            0.000464,
+            0.000471,
+            0.000498,
+            0.000501
+          ]
+        },
+        "bytes_on_disk": {
+          "min": 872448,
+          "max": 1089536,
+          "median": 1007616,
+          "n": 7,
+          "hodnoty": [
+            872448,
+            999424,
+            1007616,
+            1007616,
+            1024000,
+            1081344,
+            1089536
+          ]
+        }
+      },
+      "prirastkove_snimky_pocas_sedenia_ssh": {
+        "popis": "cykly #4-#7 (16:32:37-16:32:52 UTC); o 16:32:36 sa do hosta prihlasil a odhlasil ssh (sshd[2154], relacia 141) a o 16:32:46 sa ukoncoval user@0.service - tieto cykly teda nemeraju necinnu VM",
+        "cykly": [
+          4,
+          5,
+          6,
+          7
+        ],
+        "pages_changed": {
+          "min": 1163,
+          "max": 3482,
+          "median": 2135.5,
+          "n": 4,
+          "hodnoty": [
+            1163,
+            2111,
+            2160,
+            3482
+          ]
+        },
+        "changed_ratio": {
+          "min": 0.002201,
+          "max": 0.006589,
+          "median": 0.0040415,
+          "n": 4,
+          "hodnoty": [
+            0.002201,
+            0.003995,
+            0.004088,
+            0.006589
+          ]
+        },
+        "bytes_on_disk": {
+          "min": 4775936,
+          "max": 14290944,
+          "median": 8767488.0,
+          "n": 4,
+          "hodnoty": [
+            4775936,
+            8667136,
+            8867840,
+            14290944
+          ]
+        }
+      },
+      "prirastkove_snimky_vsetky": {
+        "capture_ms": {
+          "min": 542.966,
+          "max": 579.087,
+          "median": 553.517,
+          "n": 11,
+          "hodnoty": [
+            542.966,
+            546.618,
+            546.663,
+            550.285,
+            552.922,
+            553.517,
+            557.04,
+            559.828,
+            561.33,
+            562.467,
+            579.087
+          ]
+        },
+        "write_ms": {
+          "min": 9.528,
+          "max": 50.404,
+          "median": 11.291,
+          "n": 11,
+          "hodnoty": [
+            9.528,
+            9.945,
+            10.093,
+            10.332,
+            10.365,
+            11.291,
+            11.467,
+            23.803,
+            33.82,
+            35.561,
+            50.404
+          ]
+        },
+        "total_ms": {
+          "min": 552.582,
+          "max": 629.558,
+          "median": 564.516,
+          "n": 11,
+          "hodnoty": [
+            552.582,
+            556.903,
+            557.217,
+            560.483,
+            563.947,
+            564.516,
+            568.457,
+            585.232,
+            595.499,
+            596.631,
+            629.558
+          ]
+        },
+        "read_mib_s": {
+          "min": 3564.45,
+          "max": 3801.58,
+          "median": 3729.12,
+          "n": 11,
+          "hodnoty": [
+            3564.45,
+            3669.77,
+            3677.21,
+            3687.07,
+            3705.53,
+            3729.12,
+            3733.13,
+            3751.02,
+            3775.87,
+            3776.19,
+            3801.58
+          ]
+        },
+        "pages_changed": {
+          "min": 212,
+          "max": 3482,
+          "median": 263,
+          "n": 11,
+          "hodnoty": [
+            212,
+            243,
+            245,
+            245,
+            249,
+            263,
+            265,
+            1163,
+            2111,
+            2160,
+            3482
+          ]
+        },
+        "changed_ratio": {
+          "min": 0.000401,
+          "max": 0.006589,
+          "median": 0.000498,
+          "n": 11,
+          "hodnoty": [
+            0.000401,
+            0.00046,
+            0.000464,
+            0.000464,
+            0.000471,
+            0.000498,
+            0.000501,
+            0.002201,
+            0.003995,
+            0.004088,
+            0.006589
+          ]
+        },
+        "bytes_on_disk": {
+          "min": 872448,
+          "max": 14290944,
+          "median": 1081344,
+          "n": 11,
+          "hodnoty": [
+            872448,
+            999424,
+            1007616,
+            1007616,
+            1024000,
+            1081344,
+            1089536,
+            4775936,
+            8667136,
+            8867840,
+            14290944
+          ]
+        },
+        "pages_total": [
+          528417
+        ],
+        "read_errors": [
+          0
+        ],
+        "subory": [
+          "sidecars/run_delta/hyptcn-guest_000001_20260918T163222165Z.json",
+          "sidecars/run_delta/hyptcn-guest_000002_20260918T163227165Z.json",
+          "sidecars/run_delta/hyptcn-guest_000003_20260918T163232165Z.json",
+          "sidecars/run_delta/hyptcn-guest_000004_20260918T163237165Z.json",
+          "sidecars/run_delta/hyptcn-guest_000005_20260918T163242165Z.json",
+          "sidecars/run_delta/hyptcn-guest_000006_20260918T163247165Z.json",
+          "sidecars/run_delta/hyptcn-guest_000007_20260918T163252165Z.json",
+          "sidecars/run_delta/hyptcn-guest_000008_20260918T163257165Z.json",
+          "sidecars/run_delta/hyptcn-guest_000009_20260918T163302165Z.json",
+          "sidecars/run_delta/hyptcn-guest_000010_20260918T163307165Z.json",
+          "sidecars/run_delta/hyptcn-guest_000011_20260918T163312165Z.json"
+        ],
+        "casove_znacky": [
+          "2026-09-18T16:32:22.165Z",
+          "2026-09-18T16:32:27.165Z",
+          "2026-09-18T16:32:32.165Z",
+          "2026-09-18T16:32:37.165Z",
+          "2026-09-18T16:32:42.165Z",
+          "2026-09-18T16:32:47.165Z",
+          "2026-09-18T16:32:52.165Z",
+          "2026-09-18T16:32:57.165Z",
+          "2026-09-18T16:33:02.165Z",
+          "2026-09-18T16:33:07.165Z",
+          "2026-09-18T16:33:12.165Z"
+        ]
+      }
+    },
+    "validacia_voci_pozemnej_prave": {
+      "popis": "guestparse validate nad plnou delta snimkou zo sedenia data/sessions/20260918_validate2",
+      "subory": [
+        "validate2.json",
+        "validate2_ss_vsetky.json"
+      ],
+      "snimka": "hyptcn-guest_000000_20260918T163335374Z.vmicd",
+      "procesy": {
+        "ps_before": 83,
+        "ps_after": 83,
+        "stable": 81,
+        "stable_name_identical": 77,
+        "snapshot": 81,
+        "found": 81,
+        "missing": 0,
+        "false_positive": 0,
+        "name_mismatch": 0,
+        "recall_percent": 100.0,
+        "name_match_rules": {
+          "exact": 63,
+          "worker": 15,
+          "truncated": 3
+        },
+        "duplicate_pids": [],
+        "missing_list": [],
+        "false_positive_list": [],
+        "name_mismatch_list": []
+      },
+      "moduly": {
+        "ground_truth": 51,
+        "snapshot": 51,
+        "matched": 51,
+        "missing": 0,
+        "extra": 0,
+        "missing_list": [],
+        "extra_list": []
+      },
+      "sokety_voci_ss_tulpn": {
+        "ground_truth": 10,
+        "snapshot_tcp_udp": 12,
+        "snapshot_other_protocols": {
+          "RAW": 1
+        },
+        "matched": 10,
+        "missing": 0,
+        "extra": 2,
+        "ground_truth_unparsed": 0,
+        "missing_list": [],
+        "extra_list": [
+          {
+            "proto": "UDP",
+            "saddr": "0.0.0.0",
+            "sport": 0,
+            "daddr": "0.0.0.0",
+            "dport": 0
+          },
+          {
+            "proto": "UDP",
+            "saddr": "192.168.122.100",
+            "sport": 34087,
+            "daddr": "192.168.122.1",
+            "dport": 53
+          }
+        ]
+      },
+      "sokety_voci_ss_tuanp": {
+        "ground_truth": 12,
+        "snapshot_tcp_udp": 12,
+        "snapshot_other_protocols": {
+          "RAW": 1
+        },
+        "matched": 11,
+        "missing": 1,
+        "extra": 1,
+        "ground_truth_unparsed": 0,
+        "missing_list": [
+          {
+            "proto": "TCP",
+            "saddr": "192.168.122.100",
+            "sport": 22,
+            "daddr": "192.168.122.1",
+            "dport": 52106
+          }
+        ],
+        "extra_list": [
+          {
+            "proto": "UDP",
+            "saddr": "0.0.0.0",
+            "sport": 0,
+            "daddr": "0.0.0.0",
+            "dport": 0
+          }
+        ]
+      },
+      "kontroly": {
+        "syscall_hooks": 0,
+        "syscall_entries_checked": 451,
+        "process_cross_view_findings": 0,
+        "module_findings": 0,
+        "inconclusive": []
+      }
+    }
+  }
+}

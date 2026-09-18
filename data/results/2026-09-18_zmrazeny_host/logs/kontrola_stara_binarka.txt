@@ -1,0 +1,20 @@
+# KONTROLNY BEH: stara binarka zo scratchpadu (sha256 c53ce6ee...) na ZMRAZENOM hostovi
+# ucel: oddelit vplyv binarky od vplyvu stavu hosta na write_ms pri hash=sha256
+# binarka: /tmp/claude-1000/-home-eh-Desktop-hypTcn002/d34bc88b-1a0f-45be-9238-dfb5f9e4dcc3/scratchpad/vmic-exp/build/vmicollect
+c53ce6eec7670286ff00bc0b2005fe23779c42ab38284bfb48e36a2f7cb45583  /tmp/claude-1000/-home-eh-Desktop-hypTcn002/d34bc88b-1a0f-45be-9238-dfb5f9e4dcc3/scratchpad/vmic-exp/build/vmicollect
+=== beh 1 16:39:38Z
+2026-09-18T16:39:38.906Z WARN  libbpf: extern (func ksym) 'bpf_task_from_vpid': func_proto [33] incompatible with vmlinux [45837]
+2026-09-18T16:39:38.906Z ERROR ebpf: BPF program sa nepodarilo nacitat do jadra: Invalid argument
+rc=3
+=== beh 2 16:39:38Z
+2026-09-18T16:39:38.968Z WARN  libbpf: extern (func ksym) 'bpf_task_from_vpid': func_proto [33] incompatible with vmlinux [45837]
+2026-09-18T16:39:38.968Z ERROR ebpf: BPF program sa nepodarilo nacitat do jadra: Invalid argument
+rc=3
+0	/var/tmp/vmic-frozen/stara_binarka_1
+
+# ZAVER KONTROLNEHO BEHU
+# Oba pokusy skoncili kodom 3: BPF program starej binarky sa do jadra hostitela
+# nenacital (kfunc bpf_task_from_vpid ma nezlucitelny prototyp s BTF jadra).
+# Stara binarka sa teda dnes spustit neda a rozdiel write_ms medzi prvym behom
+# a touto sadou sa nedal rozdelit na vplyv binarky a vplyv stavu hosta.
+# Ziadna snimka nevznikla, sidecar neexistuje.

@@ -1,0 +1,43 @@
+{
+ "schema": "hyptcn3/once/1",
+ "date": "2026-09-18T16:31:34Z",
+ "date_unix": 1789749094,
+ "commit": "178ce4fd83e7c504e02fb06a5756de3e79255007",
+ "commit_dirty": true,
+ "domain": "hyptcn-guest",
+ "libvirt_uri": "qemu:///session",
+ "command": "/home/eh/Desktop/hyptcn3/vmicollect/build/vmicollect once -o vm.domain=hyptcn-guest -o output.writer=raw -o output.hash=sha256 -o output.dir=/var/tmp/vmic-frozen/once_raw_sha256_3",
+ "binary": {
+  "path": "/home/eh/Desktop/hyptcn3/vmicollect/build/vmicollect",
+  "version": "vmicollect 1.0.0",
+  "sha256": "5cdb296364b5803355e8d7b534e7e0e2ce6acd9484032dc3b7a45270a0431738"
+ },
+ "host": {
+  "hostname": "fedora",
+  "kernel": "7.1.13-100.fc43.x86_64",
+  "cpus": 16
+ },
+ "exit_code": 0,
+ "snapshot_dir": "/var/tmp/vmic-frozen/once_raw_sha256_3",
+ "params": {
+  "writer": "raw",
+  "hash": "sha256",
+  "interval_s": 5.0,
+  "max_cycles": 6,
+  "delta_full_every": null
+ },
+ "summary": {
+  "cycles_done": 1,
+  "cycles_failed": 0,
+  "cycles_skipped": 2,
+  "worst_lateness_s": 0.0
+ },
+ "stdout": "",
+ "stderr": "2026-09-18T16:31:19.325Z WARN  libbpf: Error in bpf_create_map_xattr(pages): -EINVAL. Retrying without BTF.\n2026-09-18T16:31:20.597Z INFO  ebpf: 'hyptcn-guest' (pid 1353046): 10 memslotov, 2.02 GiB pamate, max GPA 0x100000000\n2026-09-18T16:31:20.598Z WARN  ebpf: 4.00 KiB pamate hosta nie je anonymna (/dev/zero (deleted)) - citanie stranky, ktorej sa host este nedotkol, ju hostitelovi NAOZAJ alokuje\n2026-09-18T16:31:20.598Z WARN  ebpf: pri takejto VM zbieraj radsej konkretne oblasti (capture.regions), nech nenafuknes jej pamat na plnu velkost\n2026-09-18T16:31:20.598Z INFO  VM 'hyptcn-guest' [ebpf/kvm]: RAM 2.02 GiB, max_paddr 0x100000000, vCPU 2, strankovanie n/a\n2026-09-18T16:31:20.598Z INFO  zbierane oblasti: 5, spolu 2.02 GiB\n2026-09-18T16:31:20.598Z INFO  zacinam zber: perioda 5.000 s, writer 'raw', vystup '/var/tmp/vmic-frozen/once_raw_sha256_3'\n2026-09-18T16:31:34.914Z INFO  #0  2.02 GiB (513.12 MiB na disku)  pauza 0.0 ms  citanie 415.7 ms  4966 MiB/s  spolu 14315.2 ms\n2026-09-18T16:31:34.914Z WARN  planovac: cyklus 0 trval 14.316 s (perioda 5.000 s) - zahadzujem 2 slotov\n2026-09-18T16:31:34.914Z INFO  koniec: 1 snimok, 0 chyb, 2 zmeskanych slotov, najvacsie meskanie 0.000 s, spolu 513.12 MiB\n",
+ "guest": "libvirt domena hyptcn-guest, Debian 12.13, jadro 6.1.0-42-cloud-amd64",
+ "n": 1,
+ "provenance_note": {
+  "guest": "prevzate z env.json; domena v artefakte ('hyptcn-guest') sa zhoduje",
+  "n": "pocet dokoncenych cyklov zberu (summary.cycles_done)"
+ }
+}

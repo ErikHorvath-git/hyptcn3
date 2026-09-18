@@ -1,0 +1,50 @@
+{
+  "schema": "vmicollect/1",
+  "version": "1.0.0",
+  "seq": 0,
+  "id": "hyptcn-guest_000000_20260918T143118834Z",
+  "path": "/var/tmp/vmic-delta/hyptcn-guest_000000_20260918T143118834Z.vmicd",
+  "timestamp": "2026-09-18T14:31:18.834Z",
+  "timestamp_unix": 1789741878.834,
+  "vm": {
+    "domain": "hyptcn-guest",
+    "backend": "ebpf/kvm",
+    "vmid": 1353046,
+    "memsize": 2164396032,
+    "max_paddr": 4294967296,
+    "num_vcpus": 2,
+    "address_width": 0,
+    "page_mode": "n/a"
+  },
+  "capture": {
+    "regions": [],
+    "chunk_size": 1048576,
+    "paused": false,
+    "pause_ms": 0.000,
+    "pause_exceeded": false,
+    "capture_ms": 766.413,
+    "write_ms": 2851.551,
+    "total_ms": 3618.142
+  },
+  "stats": {
+    "bytes_requested": 2164396032,
+    "bytes_read": 2164396032,
+    "chunks": 2067,
+    "read_errors": 0,
+    "filled_zero": 0,
+    "read_mib_s": 2693.23
+  },
+  "output": {
+    "writer": "delta",
+    "full": true,
+    "chain_id": 1789741878834,
+    "bytes_logical": 4294967296,
+    "bytes_on_disk": 289669120,
+    "pages_total": 528417,
+    "pages_changed": 70582,
+    "page_size": 4096,
+    "changed_ratio": 0.133573,
+    "sha256_covers_file": true,
+    "sha256": "9a708315d0cd39c44702061384e4b6e59e84fc43facbd02a6d042c9d598a691f"
+  }
+}

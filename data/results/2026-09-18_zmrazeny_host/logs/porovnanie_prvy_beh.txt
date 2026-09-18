@@ -1,0 +1,28 @@
+# tabulku vyrobil porovnanie_prvy_beh.py zo summary.json oboch sad
+
+velicina                                     | PRVY BEH (kontaminovany)         | ZMRAZENY HOST
+-------------------------------------------- | -------------------------------- | ----------------------------------------
+once raw hash=none: capture_ms               | 554.305 (n=1)                    | 389.5-399.6 (n=3)
+once raw hash=none: write_ms                 | 194.153 (n=1)                    | 211.9-215.6 (n=3)
+once raw hash=none: total_ms                 | 748.48 (n=1)                     | 602.7-611.5 (n=3)
+once raw hash=sha256: capture_ms             | 430.579 (n=1)                    | 390.3-431.6 (n=3)
+once raw hash=sha256: write_ms               | 41774.078 (n=1)                  | 12958-13900 (n=3)
+once raw hash=sha256: total_ms               | 42204.67 (n=1)                   | 13389-14315 (n=3)
+pomer total_ms sha256/none (medianov)        | 56.4                             | 22.5
+zmeskane sloty once sha256 / none            | 8 / 0 (n=1 kazde)                | [2, 2, 2] / [0, 0, 0] (n=3 kazde)
+bytes_logical raw snimky                     | 2164396032                       | 2164396032
+bytes_on_disk raw sha256 / none              | 322043904 / 517079040            | 538050560 / 538050560
+delta capture_ms (perioda 5 s)               | 547.8-563.6 (n=5)                | 543.0-579.1 (n=11)
+delta total_ms                               | 566.6-584.7 (n=5)                | 552.6-629.6 (n=11)
+delta pages_changed                          | 271-326 (n=5)                    | 212-3482 (n=11)
+  z toho bez ssh relacie v hostovi           | -                                | 212-265 (n=7)
+delta changed_ratio                          | 0.000513-0.000617 (n=5)          | 0.000401-0.006589 (n=11)
+  z toho bez ssh relacie v hostovi           | -                                | 0.000401-0.000501 (n=7)
+pages_total                                  | 528417                           | 528417
+procesy: stabilna mnozina / najdene          | 80 / 80                          | 81 / 81
+procesy: chybajuce / falosne / zle meno      | 0 / 0 / 0                        | 0 / 0 / 0
+moduly: snimka / lsmod / sediace             | 47 / 47 / 47                     | 51 / 51 / 51
+sokety voci ss -tulpn: sediace/chyb/navyse   | 10 sedelo, 13 zo snimky          | 10 / 0 / 2
+sokety voci ss -tuanp: sediace/chyb/navyse   | nemerane (vystup ss nebol ulozeny) | 11 / 1 / 1
+probe: memsloty / vCPU                       | 10 / 2                           | 10 / 2
+probe: test citania MiB/s                    | 2297                             | 1436

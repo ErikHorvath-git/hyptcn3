@@ -1,0 +1,273 @@
+{
+ "schema": "hyptcn3/optim/1",
+ "commit": "178ce4fd83e7c504e02fb06a5756de3e79255007",
+ "commit_poznamka": "zmeny vo writer_raw.c a sha256.c boli v case merania necommitnute; binarka PRED sha256=5cdb296364b5803355e8d7b534e7e0e2ce6acd9484032dc3b7a45270a0431738, binarka PO sha256=96967e38d32f829fd3507601fbd5956838e643a67924271f25bef7941a1ae92d",
+ "date": "2026-09-18",
+ "host": {
+  "os": "Fedora release 43 (Forty Three)",
+  "kernel": "7.1.13-100.fc43.x86_64",
+  "cpu": "12th Gen Intel(R) Core(TM) i7-12650H",
+  "cpu_sha_ni": true,
+  "nproc": 16,
+  "vystup_fs": "/var/tmp (ext4 na /dev/nvme0n1p3)"
+ },
+ "guest": {
+  "domena": "hyptcn-guest",
+  "libvirt": "qemu:///session",
+  "qemu_pid": 1353046,
+  "kernel": "6.1.0-42-cloud-amd64",
+  "stav": "zmrazeny, in-guest agent nebezi (pgrep hyptcn prazdne)",
+  "memslotov": 10,
+  "zbierane_oblasti": 5,
+  "memsize_b": 2164396032,
+  "max_paddr_b": 4294967296,
+  "raw_subor_b": 4294967296,
+  "bytes_logical_b": 2164396032
+ },
+ "command": "sudo vmicollect once -o vm.domain=hyptcn-guest -o output.writer=raw -o output.dir=/var/tmp/optim-work [-o output.hash=none]  ;  sudo vmicollect run ... -o schedule.interval_s=5 -o schedule.max_cycles=3",
+ "n": 3,
+ "poznamka_metodika": "Kazdy variant 3x 'once' (median a rozsah) a 1x 'run' s periodou 5 s a 3 cyklami (zmeskane sloty). Page cache sa medzi behmi nezahadzovala, snimky sa po kazdom behu mazali. PO oprave sa cas hashu preklopil z write_ms do capture_ms - hash sa pocita vo feed(), ktory je vnutri merania capture. Cisty cas citania pamate je preto len variant output.hash=none.",
+ "values": {
+  "pred": {
+   "once_sha256": {
+    "behy": [
+     {
+      "rep": 1,
+      "capture_ms": 381.2,
+      "write_ms": 12983.7,
+      "total_ms": 13364.9
+     },
+     {
+      "rep": 2,
+      "capture_ms": 388.5,
+      "write_ms": 12894.9,
+      "total_ms": 13283.4
+     },
+     {
+      "rep": 3,
+      "capture_ms": 388.1,
+      "write_ms": 13091.2,
+      "total_ms": 13479.4
+     }
+    ],
+    "capture_ms_median": 388.1,
+    "capture_ms_min": 381.2,
+    "capture_ms_max": 388.5,
+    "write_ms_median": 12983.7,
+    "write_ms_min": 12894.9,
+    "write_ms_max": 13091.2,
+    "total_ms_median": 13364.9,
+    "total_ms_min": 13283.4,
+    "total_ms_max": 13479.4
+   },
+   "once_none": {
+    "behy": [
+     {
+      "rep": 1,
+      "capture_ms": 379.9,
+      "write_ms": 206.8,
+      "total_ms": 586.7
+     },
+     {
+      "rep": 2,
+      "capture_ms": 387.4,
+      "write_ms": 202.4,
+      "total_ms": 589.9
+     },
+     {
+      "rep": 3,
+      "capture_ms": 402.4,
+      "write_ms": 208.7,
+      "total_ms": 611.0
+     }
+    ],
+    "capture_ms_median": 387.4,
+    "capture_ms_min": 379.9,
+    "capture_ms_max": 402.4,
+    "write_ms_median": 206.8,
+    "write_ms_min": 202.4,
+    "write_ms_max": 208.7,
+    "total_ms_median": 589.9,
+    "total_ms_min": 586.7,
+    "total_ms_max": 611.0
+   },
+   "run_sha256": {
+    "snimok": 3,
+    "chyb": 0,
+    "zmeskane_sloty": 8,
+    "cyklus_ms": [
+     14643.0,
+     14678.2,
+     21223.6
+    ]
+   },
+   "run_none": {
+    "snimok": 3,
+    "chyb": 0,
+    "zmeskane_sloty": 4,
+    "cyklus_ms": [
+     10177.1,
+     10640.5,
+     642.4
+    ]
+   }
+  },
+  "po": {
+   "once_sha256": {
+    "behy": [
+     {
+      "rep": 1,
+      "capture_ms": 2288.4,
+      "write_ms": 200.6,
+      "total_ms": 2489.0
+     },
+     {
+      "rep": 2,
+      "capture_ms": 2287.9,
+      "write_ms": 193.1,
+      "total_ms": 2480.9
+     },
+     {
+      "rep": 3,
+      "capture_ms": 2284.4,
+      "write_ms": 196.2,
+      "total_ms": 2480.6
+     }
+    ],
+    "capture_ms_median": 2287.9,
+    "capture_ms_min": 2284.4,
+    "capture_ms_max": 2288.4,
+    "write_ms_median": 196.2,
+    "write_ms_min": 193.1,
+    "write_ms_max": 200.6,
+    "total_ms_median": 2480.9,
+    "total_ms_min": 2480.6,
+    "total_ms_max": 2489.0
+   },
+   "once_sha256_skalar": {
+    "behy": [
+     {
+      "rep": 1,
+      "capture_ms": 11935.1,
+      "write_ms": 191.7,
+      "total_ms": 12126.8
+     },
+     {
+      "rep": 2,
+      "capture_ms": 11900.5,
+      "write_ms": 207.8,
+      "total_ms": 12108.4
+     },
+     {
+      "rep": 3,
+      "capture_ms": 11853.9,
+      "write_ms": 217.7,
+      "total_ms": 12071.6
+     }
+    ],
+    "capture_ms_median": 11900.5,
+    "capture_ms_min": 11853.9,
+    "capture_ms_max": 11935.1,
+    "write_ms_median": 207.8,
+    "write_ms_min": 191.7,
+    "write_ms_max": 217.7,
+    "total_ms_median": 12108.4,
+    "total_ms_min": 12071.6,
+    "total_ms_max": 12126.8
+   },
+   "once_none": {
+    "behy": [
+     {
+      "rep": 1,
+      "capture_ms": 382.5,
+      "write_ms": 214.5,
+      "total_ms": 597.0
+     },
+     {
+      "rep": 2,
+      "capture_ms": 380.7,
+      "write_ms": 195.1,
+      "total_ms": 575.8
+     },
+     {
+      "rep": 3,
+      "capture_ms": 379.7,
+      "write_ms": 198.0,
+      "total_ms": 577.7
+     }
+    ],
+    "capture_ms_median": 380.7,
+    "capture_ms_min": 379.7,
+    "capture_ms_max": 382.5,
+    "write_ms_median": 198.0,
+    "write_ms_min": 195.1,
+    "write_ms_max": 214.5,
+    "total_ms_median": 577.7,
+    "total_ms_min": 575.8,
+    "total_ms_max": 597.0
+   },
+   "run_sha256": {
+    "snimok": 3,
+    "chyb": 0,
+    "zmeskane_sloty": 0,
+    "cyklus_ms": [
+     2499.3,
+     3200.0,
+     3535.5
+    ]
+   },
+   "run_sha256_skalar": {
+    "snimok": 3,
+    "chyb": 0,
+    "zmeskane_sloty": 6,
+    "cyklus_ms": [
+     12063.7,
+     12090.1,
+     12072.8
+    ]
+   },
+   "run_none": {
+    "snimok": 3,
+    "chyb": 0,
+    "zmeskane_sloty": 0,
+    "cyklus_ms": [
+     599.4,
+     565.8,
+     1172.6
+    ]
+   },
+   "once_hash_zo_suboru_pause_true": {
+    "popis": "capture.pause=true -> priebezny hash sa vypina, hashuje sa hotovy subor",
+    "capture_ms": 379.6,
+    "write_ms": 3073.1,
+    "total_ms": 3452.7
+   }
+  },
+  "sha256_priepustnost_mib_s": {
+   "popis": "mikrobenchmark 1 GiB cez vmic_sha256_update, 3 opakovania",
+   "shani": [
+    2150.7,
+    2176.8,
+    2146.3
+   ],
+   "shani_median": 2150.7,
+   "skalar": [
+    357.3,
+    357.6,
+    357.3
+   ],
+   "skalar_median": 357.3,
+   "zrychlenie": 6.0
+  },
+  "overenie": {
+   "make_test": "PRESLO (selftest raw SHA-256 OK aj s VMIC_SHA256_SCALAR=1)",
+   "make_check": "PRESLO (-fsanitize=undefined -fsanitize-undefined-trap-on-error)",
+   "verify_nova_raw_snimka": "1 v poriadku, 0 chybnych, 0 preskocenych",
+   "verify_stara_vmic_val": "1 v poriadku, 0 chybnych, 0 preskocenych",
+   "verify_stara_vmic_delta": "6 v poriadku, 0 chybnych, 0 preskocenych",
+   "porovnanie_so_sha256sum": "223 suborov (hranicne aj nahodne dlzky), 0 nezhod, obe vetvy"
+  }
+ },
+ "poznamka_run": "Varianty 'run' isli za sebou v jednom skripte a ovplyvnuje ich spatny zapis na disk z predchadzajuceho behu (kazdy beh zapise 3 x ~513 MiB). Preto ma napr. pred/run_none prve dva cykly 10.2 a 10.6 s, hoci to iste meranie cez 'once' ma 0.59 s. Porovnatelne cisla su varianty 'once' (n=3, uzke rozsahy); z 'run' sa berie iba pocet zmeskanych slotov ako ilustracia dopadu na periodu 5 s.",
+ "poznamka_capture_ms": "POZOR pre dalsie merania: po oprave je hash sucastou feed(), a feed() je vnutri casu, ktory sa vykazuje ako capture.capture_ms a stats.read_mib_s. Pri output.hash=sha256 je teda capture_ms = citanie + zapis + hash (2287.9 ms) a read_mib_s (898 MiB/s) uz nie je rychlost citania pamate. Rychlost citania sa meria s output.hash=none (capture_ms 380.7 ms, 5472 MiB/s)."
+}

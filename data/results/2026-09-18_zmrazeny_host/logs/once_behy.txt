@@ -1,0 +1,105 @@
+=== once_raw_sha256_1  start 2026-09-18T16:30:44Z  binarka sha256=5cdb296364b5803355e8d7b534e7e0e2ce6acd9484032dc3b7a45270a0431738
+>> /home/eh/Desktop/hyptcn3/vmicollect/build/vmicollect once -o vm.domain=hyptcn-guest -o output.writer=raw -o output.hash=sha256 -o output.dir=/var/tmp/vmic-frozen/once_raw_sha256_1
+2026-09-18T16:30:45.090Z WARN  libbpf: Error in bpf_create_map_xattr(pages): -EINVAL. Retrying without BTF.
+2026-09-18T16:30:46.320Z INFO  ebpf: 'hyptcn-guest' (pid 1353046): 10 memslotov, 2.02 GiB pamate, max GPA 0x100000000
+2026-09-18T16:30:46.321Z WARN  ebpf: 4.00 KiB pamate hosta nie je anonymna (/dev/zero (deleted)) - citanie stranky, ktorej sa host este nedotkol, ju hostitelovi NAOZAJ alokuje
+2026-09-18T16:30:46.321Z WARN  ebpf: pri takejto VM zbieraj radsej konkretne oblasti (capture.regions), nech nenafuknes jej pamat na plnu velkost
+2026-09-18T16:30:46.321Z INFO  VM 'hyptcn-guest' [ebpf/kvm]: RAM 2.02 GiB, max_paddr 0x100000000, vCPU 2, strankovanie n/a
+2026-09-18T16:30:46.321Z INFO  zbierane oblasti: 5, spolu 2.02 GiB
+2026-09-18T16:30:46.321Z INFO  zacinam zber: perioda 5.000 s, writer 'raw', vystup '/var/tmp/vmic-frozen/once_raw_sha256_1'
+2026-09-18T16:30:59.710Z INFO  #0  2.02 GiB (513.12 MiB na disku)  pauza 0.0 ms  citanie 431.6 ms  4783 MiB/s  spolu 13389.2 ms
+2026-09-18T16:30:59.710Z WARN  planovac: cyklus 0 trval 13.390 s (perioda 5.000 s) - zahadzujem 2 slotov
+2026-09-18T16:30:59.710Z INFO  koniec: 1 snimok, 0 chyb, 2 zmeskanych slotov, najvacsie meskanie 0.000 s, spolu 513.12 MiB
+
+snimky: /var/tmp/vmic-frozen/once_raw_sha256_1
+zapisane: /home/eh/Desktop/hyptcn3/data/results/once_20260918T163045Z.json
+=== once_raw_sha256_1  koniec rc=0 2026-09-18T16:30:59Z
+4.1G	/var/tmp/vmic-frozen/once_raw_sha256_1
+514M	/var/tmp/vmic-frozen/once_raw_sha256_1
+=== once_raw_sha256_2  start 2026-09-18T16:31:01Z  binarka sha256=5cdb296364b5803355e8d7b534e7e0e2ce6acd9484032dc3b7a45270a0431738
+>> /home/eh/Desktop/hyptcn3/vmicollect/build/vmicollect once -o vm.domain=hyptcn-guest -o output.writer=raw -o output.hash=sha256 -o output.dir=/var/tmp/vmic-frozen/once_raw_sha256_2
+2026-09-18T16:31:02.068Z WARN  libbpf: Error in bpf_create_map_xattr(pages): -EINVAL. Retrying without BTF.
+2026-09-18T16:31:03.282Z INFO  ebpf: 'hyptcn-guest' (pid 1353046): 10 memslotov, 2.02 GiB pamate, max GPA 0x100000000
+2026-09-18T16:31:03.283Z WARN  ebpf: 4.00 KiB pamate hosta nie je anonymna (/dev/zero (deleted)) - citanie stranky, ktorej sa host este nedotkol, ju hostitelovi NAOZAJ alokuje
+2026-09-18T16:31:03.283Z WARN  ebpf: pri takejto VM zbieraj radsej konkretne oblasti (capture.regions), nech nenafuknes jej pamat na plnu velkost
+2026-09-18T16:31:03.283Z INFO  VM 'hyptcn-guest' [ebpf/kvm]: RAM 2.02 GiB, max_paddr 0x100000000, vCPU 2, strankovanie n/a
+2026-09-18T16:31:03.283Z INFO  zbierane oblasti: 5, spolu 2.02 GiB
+2026-09-18T16:31:03.283Z INFO  zacinam zber: perioda 5.000 s, writer 'raw', vystup '/var/tmp/vmic-frozen/once_raw_sha256_2'
+2026-09-18T16:31:16.997Z INFO  #0  2.02 GiB (513.12 MiB na disku)  pauza 0.0 ms  citanie 390.3 ms  5289 MiB/s  spolu 13713.8 ms
+2026-09-18T16:31:16.997Z WARN  planovac: cyklus 0 trval 13.714 s (perioda 5.000 s) - zahadzujem 2 slotov
+2026-09-18T16:31:16.997Z INFO  koniec: 1 snimok, 0 chyb, 2 zmeskanych slotov, najvacsie meskanie 0.000 s, spolu 513.12 MiB
+
+snimky: /var/tmp/vmic-frozen/once_raw_sha256_2
+zapisane: /home/eh/Desktop/hyptcn3/data/results/once_20260918T163101Z.json
+=== once_raw_sha256_2  koniec rc=0 2026-09-18T16:31:17Z
+4.1G	/var/tmp/vmic-frozen/once_raw_sha256_2
+514M	/var/tmp/vmic-frozen/once_raw_sha256_2
+=== once_raw_sha256_3  start 2026-09-18T16:31:19Z  binarka sha256=5cdb296364b5803355e8d7b534e7e0e2ce6acd9484032dc3b7a45270a0431738
+>> /home/eh/Desktop/hyptcn3/vmicollect/build/vmicollect once -o vm.domain=hyptcn-guest -o output.writer=raw -o output.hash=sha256 -o output.dir=/var/tmp/vmic-frozen/once_raw_sha256_3
+2026-09-18T16:31:19.325Z WARN  libbpf: Error in bpf_create_map_xattr(pages): -EINVAL. Retrying without BTF.
+2026-09-18T16:31:20.597Z INFO  ebpf: 'hyptcn-guest' (pid 1353046): 10 memslotov, 2.02 GiB pamate, max GPA 0x100000000
+2026-09-18T16:31:20.598Z WARN  ebpf: 4.00 KiB pamate hosta nie je anonymna (/dev/zero (deleted)) - citanie stranky, ktorej sa host este nedotkol, ju hostitelovi NAOZAJ alokuje
+2026-09-18T16:31:20.598Z WARN  ebpf: pri takejto VM zbieraj radsej konkretne oblasti (capture.regions), nech nenafuknes jej pamat na plnu velkost
+2026-09-18T16:31:20.598Z INFO  VM 'hyptcn-guest' [ebpf/kvm]: RAM 2.02 GiB, max_paddr 0x100000000, vCPU 2, strankovanie n/a
+2026-09-18T16:31:20.598Z INFO  zbierane oblasti: 5, spolu 2.02 GiB
+2026-09-18T16:31:20.598Z INFO  zacinam zber: perioda 5.000 s, writer 'raw', vystup '/var/tmp/vmic-frozen/once_raw_sha256_3'
+2026-09-18T16:31:34.914Z INFO  #0  2.02 GiB (513.12 MiB na disku)  pauza 0.0 ms  citanie 415.7 ms  4966 MiB/s  spolu 14315.2 ms
+2026-09-18T16:31:34.914Z WARN  planovac: cyklus 0 trval 14.316 s (perioda 5.000 s) - zahadzujem 2 slotov
+2026-09-18T16:31:34.914Z INFO  koniec: 1 snimok, 0 chyb, 2 zmeskanych slotov, najvacsie meskanie 0.000 s, spolu 513.12 MiB
+
+snimky: /var/tmp/vmic-frozen/once_raw_sha256_3
+zapisane: /home/eh/Desktop/hyptcn3/data/results/once_20260918T163119Z.json
+=== once_raw_sha256_3  koniec rc=0 2026-09-18T16:31:34Z
+4.1G	/var/tmp/vmic-frozen/once_raw_sha256_3
+514M	/var/tmp/vmic-frozen/once_raw_sha256_3
+=== once_raw_none_1  start 2026-09-18T16:31:37Z  binarka sha256=5cdb296364b5803355e8d7b534e7e0e2ce6acd9484032dc3b7a45270a0431738
+>> /home/eh/Desktop/hyptcn3/vmicollect/build/vmicollect once -o vm.domain=hyptcn-guest -o output.writer=raw -o output.hash=none -o output.dir=/var/tmp/vmic-frozen/once_raw_none_1
+2026-09-18T16:31:37.377Z WARN  libbpf: Error in bpf_create_map_xattr(pages): -EINVAL. Retrying without BTF.
+2026-09-18T16:31:38.593Z INFO  ebpf: 'hyptcn-guest' (pid 1353046): 10 memslotov, 2.02 GiB pamate, max GPA 0x100000000
+2026-09-18T16:31:38.595Z WARN  ebpf: 4.00 KiB pamate hosta nie je anonymna (/dev/zero (deleted)) - citanie stranky, ktorej sa host este nedotkol, ju hostitelovi NAOZAJ alokuje
+2026-09-18T16:31:38.595Z WARN  ebpf: pri takejto VM zbieraj radsej konkretne oblasti (capture.regions), nech nenafuknes jej pamat na plnu velkost
+2026-09-18T16:31:38.595Z INFO  VM 'hyptcn-guest' [ebpf/kvm]: RAM 2.02 GiB, max_paddr 0x100000000, vCPU 2, strankovanie n/a
+2026-09-18T16:31:38.595Z INFO  zbierane oblasti: 5, spolu 2.02 GiB
+2026-09-18T16:31:38.595Z INFO  zacinam zber: perioda 5.000 s, writer 'raw', vystup '/var/tmp/vmic-frozen/once_raw_none_1'
+2026-09-18T16:31:39.204Z INFO  #0  2.02 GiB (513.12 MiB na disku)  pauza 0.0 ms  citanie 393.9 ms  5240 MiB/s  spolu 609.5 ms
+2026-09-18T16:31:39.204Z INFO  koniec: 1 snimok, 0 chyb, 0 zmeskanych slotov, najvacsie meskanie 0.000 s, spolu 513.12 MiB
+
+snimky: /var/tmp/vmic-frozen/once_raw_none_1
+zapisane: /home/eh/Desktop/hyptcn3/data/results/once_20260918T163137Z.json
+=== once_raw_none_1  koniec rc=0 2026-09-18T16:31:39Z
+4.1G	/var/tmp/vmic-frozen/once_raw_none_1
+514M	/var/tmp/vmic-frozen/once_raw_none_1
+=== once_raw_none_2  start 2026-09-18T16:31:41Z  binarka sha256=5cdb296364b5803355e8d7b534e7e0e2ce6acd9484032dc3b7a45270a0431738
+>> /home/eh/Desktop/hyptcn3/vmicollect/build/vmicollect once -o vm.domain=hyptcn-guest -o output.writer=raw -o output.hash=none -o output.dir=/var/tmp/vmic-frozen/once_raw_none_2
+2026-09-18T16:31:41.524Z WARN  libbpf: Error in bpf_create_map_xattr(pages): -EINVAL. Retrying without BTF.
+2026-09-18T16:31:42.719Z INFO  ebpf: 'hyptcn-guest' (pid 1353046): 10 memslotov, 2.02 GiB pamate, max GPA 0x100000000
+2026-09-18T16:31:42.720Z WARN  ebpf: 4.00 KiB pamate hosta nie je anonymna (/dev/zero (deleted)) - citanie stranky, ktorej sa host este nedotkol, ju hostitelovi NAOZAJ alokuje
+2026-09-18T16:31:42.720Z WARN  ebpf: pri takejto VM zbieraj radsej konkretne oblasti (capture.regions), nech nenafuknes jej pamat na plnu velkost
+2026-09-18T16:31:42.720Z INFO  VM 'hyptcn-guest' [ebpf/kvm]: RAM 2.02 GiB, max_paddr 0x100000000, vCPU 2, strankovanie n/a
+2026-09-18T16:31:42.720Z INFO  zbierane oblasti: 5, spolu 2.02 GiB
+2026-09-18T16:31:42.720Z INFO  zacinam zber: perioda 5.000 s, writer 'raw', vystup '/var/tmp/vmic-frozen/once_raw_none_2'
+2026-09-18T16:31:43.323Z INFO  #0  2.02 GiB (513.12 MiB na disku)  pauza 0.0 ms  citanie 389.5 ms  5300 MiB/s  spolu 602.7 ms
+2026-09-18T16:31:43.323Z INFO  koniec: 1 snimok, 0 chyb, 0 zmeskanych slotov, najvacsie meskanie 0.000 s, spolu 513.12 MiB
+
+snimky: /var/tmp/vmic-frozen/once_raw_none_2
+zapisane: /home/eh/Desktop/hyptcn3/data/results/once_20260918T163141Z.json
+=== once_raw_none_2  koniec rc=0 2026-09-18T16:31:43Z
+4.1G	/var/tmp/vmic-frozen/once_raw_none_2
+514M	/var/tmp/vmic-frozen/once_raw_none_2
+=== once_raw_none_3  start 2026-09-18T16:31:45Z  binarka sha256=5cdb296364b5803355e8d7b534e7e0e2ce6acd9484032dc3b7a45270a0431738
+>> /home/eh/Desktop/hyptcn3/vmicollect/build/vmicollect once -o vm.domain=hyptcn-guest -o output.writer=raw -o output.hash=none -o output.dir=/var/tmp/vmic-frozen/once_raw_none_3
+2026-09-18T16:31:45.563Z WARN  libbpf: Error in bpf_create_map_xattr(pages): -EINVAL. Retrying without BTF.
+2026-09-18T16:31:46.780Z INFO  ebpf: 'hyptcn-guest' (pid 1353046): 10 memslotov, 2.02 GiB pamate, max GPA 0x100000000
+2026-09-18T16:31:46.781Z WARN  ebpf: 4.00 KiB pamate hosta nie je anonymna (/dev/zero (deleted)) - citanie stranky, ktorej sa host este nedotkol, ju hostitelovi NAOZAJ alokuje
+2026-09-18T16:31:46.781Z WARN  ebpf: pri takejto VM zbieraj radsej konkretne oblasti (capture.regions), nech nenafuknes jej pamat na plnu velkost
+2026-09-18T16:31:46.781Z INFO  VM 'hyptcn-guest' [ebpf/kvm]: RAM 2.02 GiB, max_paddr 0x100000000, vCPU 2, strankovanie n/a
+2026-09-18T16:31:46.781Z INFO  zbierane oblasti: 5, spolu 2.02 GiB
+2026-09-18T16:31:46.781Z INFO  zacinam zber: perioda 5.000 s, writer 'raw', vystup '/var/tmp/vmic-frozen/once_raw_none_3'
+2026-09-18T16:31:47.393Z INFO  #0  2.02 GiB (513.12 MiB na disku)  pauza 0.0 ms  citanie 399.6 ms  5166 MiB/s  spolu 611.5 ms
+2026-09-18T16:31:47.393Z INFO  koniec: 1 snimok, 0 chyb, 0 zmeskanych slotov, najvacsie meskanie 0.000 s, spolu 513.12 MiB
+
+snimky: /var/tmp/vmic-frozen/once_raw_none_3
+zapisane: /home/eh/Desktop/hyptcn3/data/results/once_20260918T163145Z.json
+=== once_raw_none_3  koniec rc=0 2026-09-18T16:31:47Z
+4.1G	/var/tmp/vmic-frozen/once_raw_none_3
+514M	/var/tmp/vmic-frozen/once_raw_none_3

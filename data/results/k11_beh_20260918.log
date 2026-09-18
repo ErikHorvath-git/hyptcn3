@@ -1,0 +1,82 @@
+# beh K11/K09, hostitel Fedora 43, jadro 7.1.13-100.fc43.x86_64, 2026-09-18T16:04:21Z
+# python3 Python 3.14.7, pytest pytest 8.3.5
+
+$ python3 -m pytest guestparse/tests -q
+.................................................                        [100%]
+49 passed in 1.47s
+
+$ python3 -m guestparse checks --snapshot /var/tmp/vmic-val --profile profiles/debian12-6.1.0-42-cloud-amd64
+sys_call_table         451 poloziek v [0xffffffff96000000, 0xffffffff96e01ef2), nalezov: 0
+procesy krizovo        tasks 82 vs. children/sibling 82, nalezov: 0
+moduly krizovo         modules 47 vs. module_kset 47 (z 105 kobjektov), nalezov: 0
+nalezov spolu: 0 (z toho hookov v tabulke volani: 0)
+exit=0
+
+$ python3 -m guestparse checks --snapshot /var/tmp/vmic-delta --profile profiles/debian12-6.1.0-42-cloud-amd64
+sys_call_table         451 poloziek v [0xffffffff96000000, 0xffffffff96e01ef2), nalezov: 0
+procesy krizovo        tasks 76 vs. children/sibling 76, nalezov: 0
+moduly krizovo         modules 47 vs. module_kset 47 (z 105 kobjektov), nalezov: 0
+nalezov spolu: 0 (z toho hookov v tabulke volani: 0)
+exit=0
+
+$ python3 -m guestparse checks --snapshot data/sessions/20260918T154914Z_validate/snap --profile profiles/debian12-6.1.0-42-cloud-amd64
+sys_call_table         451 poloziek v [0xffffffff96000000, 0xffffffff96e01ef2), nalezov: 0
+procesy krizovo        tasks 80 vs. children/sibling 80, nalezov: 0
+moduly krizovo         modules 51 vs. module_kset 51 (z 109 kobjektov), nalezov: 0
+nalezov spolu: 0 (z toho hookov v tabulke volani: 0)
+exit=0
+
+$ python3 -m guestparse validate --snapshot /var/tmp/vmic-val --profile profiles/debian12-6.1.0-42-cloud-amd64 --ps-before <scratchpad>/ps_before.txt --ps-after <scratchpad>/ps_after.txt --out data/results/validate_20260918_vmic-val.json
+zapisane: data/results/validate_20260918_vmic-val.json
+procesy: ps pred 84, ps po 82, stabilnych 80 (z toho 77 s doslovne rovnakym menom), zo snimky 82
+         najdenych 80/80, chybajucich 0, falosnych 0, nezhoda mien 0
+         pravidla zhody mien: {'exact': 64, 'worker': 13, 'truncated': 3}
+moduly:  neporovnane (bez --lsmod nie je s cim porovnat), zo snimky 47
+sokety:  neporovnane (bez --ss nie je s cim porovnat), zo snimky 13
+kontroly: {'syscall_hooks': 0, 'syscall_entries_checked': 451, 'process_cross_view_findings': 0, 'module_findings': 0, 'inconclusive': []}
+exit=0
+
+$ python3 -m guestparse validate --snapshot data/sessions/20260918T154914Z_validate/snap --profile profiles/debian12-6.1.0-42-cloud-amd64 --ps-before data/sessions/20260918T154914Z_validate/ps_before.txt --ps-after data/sessions/20260918T154914Z_validate/ps_after.txt --lsmod data/sessions/20260918T154914Z_validate/lsmod_before.txt --ss data/sessions/20260918T154914Z_validate/ss_before.txt --out data/results/validate_20260918T154914Z_ssbefore.json
+zapisane: data/results/validate_20260918T154914Z_ssbefore.json
+procesy: ps pred 82, ps po 82, stabilnych 80 (z toho 79 s doslovne rovnakym menom), zo snimky 80
+         najdenych 80/80, chybajucich 0, falosnych 0, nezhoda mien 0
+         pravidla zhody mien: {'exact': 62, 'worker': 15, 'truncated': 3}
+moduly:  sediacich 51, chybajucich 0, navyse 0
+sokety:  sediacich 11, chybajucich 1, navyse 1 (ine protokoly zo snimky: {'RAW': 1})
+kontroly: {'syscall_hooks': 0, 'syscall_entries_checked': 451, 'process_cross_view_findings': 0, 'module_findings': 0, 'inconclusive': []}
+exit=0
+
+$ python3 -m guestparse validate --snapshot data/sessions/20260918T154914Z_validate/snap --profile profiles/debian12-6.1.0-42-cloud-amd64 --ps-before data/sessions/20260918T154914Z_validate/ps_before.txt --ps-after data/sessions/20260918T154914Z_validate/ps_after.txt --lsmod data/sessions/20260918T154914Z_validate/lsmod_after.txt --ss data/sessions/20260918T154914Z_validate/ss_after.txt --out data/results/validate_20260918T154914Z_ssafter.json
+zapisane: data/results/validate_20260918T154914Z_ssafter.json
+procesy: ps pred 82, ps po 82, stabilnych 80 (z toho 79 s doslovne rovnakym menom), zo snimky 80
+         najdenych 80/80, chybajucich 0, falosnych 0, nezhoda mien 0
+         pravidla zhody mien: {'exact': 62, 'worker': 15, 'truncated': 3}
+moduly:  sediacich 51, chybajucich 0, navyse 0
+sokety:  sediacich 10, chybajucich 2, navyse 2 (ine protokoly zo snimky: {'RAW': 1})
+kontroly: {'syscall_hooks': 0, 'syscall_entries_checked': 451, 'process_cross_view_findings': 0, 'module_findings': 0, 'inconclusive': []}
+exit=0
+
+$ python3 -m pytest guestparse/tests/test_injection.py -v   # injekcia do KOPIE snimky, nie realny rootkit
+cachedir: .pytest_cache
+rootdir: /home/eh/Desktop/hyptcn3
+plugins: anyio-4.13.0
+collecting ... collected 3 items
+
+guestparse/tests/test_injection.py::test_kopia_bez_zasahu_nema_nalezy PASSED [ 33%]
+guestparse/tests/test_injection.py::test_injikovany_hook_sa_najde PASSED [ 66%]
+guestparse/tests/test_injection.py::test_original_snimka_je_len_na_citanie PASSED [100%]
+
+============================== 3 passed in 1.13s ===============================
+
+$ python3 -m guestparse checks --snapshot <KOPIA /var/tmp/vmic-delta s prepisanou polozkou 59>  --profile profiles/debian12-6.1.0-42-cloud-amd64
+sys_call_table         451 poloziek v [0xffffffff96000000, 0xffffffff96e01ef2), nalezov: 1
+procesy krizovo        tasks 76 vs. children/sibling 76, nalezov: 0
+moduly krizovo         modules 47 vs. module_kset 47 (z 105 kobjektov), nalezov: 0
+nalezov spolu: 1 (z toho hookov v tabulke volani: 1)
+  {'check': 'syscall_table', 'table': 'sys_call_table', 'index': 59, 'value': 18446744072635813888, 'nearest_symbol': None, 'symbol_offset': None, 'in_module_area': True, 'note': 'polozka ukazuje mimo [_stext, _etext)'}
+exit=1
+
+# doplneny test neuzavretej kontroly, 2026-09-18T16:09:26Z
+$ python3 -m pytest guestparse/tests -q
+..................................................                       [100%]
+50 passed in 1.45s

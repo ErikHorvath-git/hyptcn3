@@ -1,0 +1,1501 @@
+{
+ "schema": "hyptcn3/optim/1",
+ "commit": "178ce4fd83e7c504e02fb06a5756de3e79255007",
+ "commit_poznamka": "zmeny vo writer_raw.c a sha256.c boli v case merania necommitnute; binarka PRED sha256=5cdb296364b5803355e8d7b534e7e0e2ce6acd9484032dc3b7a45270a0431738, binarka PO sha256=96967e38d32f829fd3507601fbd5956838e643a67924271f25bef7941a1ae92d",
+ "date": "2026-09-18",
+ "host": {
+  "os": "Fedora release 43 (Forty Three)",
+  "kernel": "7.1.13-100.fc43.x86_64",
+  "cpu": "12th Gen Intel(R) Core(TM) i7-12650H",
+  "cpu_sha_ni": true,
+  "nproc": 16,
+  "vystup_fs": "/var/tmp (ext4 na /dev/nvme0n1p3)"
+ },
+ "guest": {
+  "domena": "hyptcn-guest",
+  "libvirt": "qemu:///session",
+  "qemu_pid": 1353046,
+  "kernel": "6.1.0-42-cloud-amd64",
+  "stav": "zmrazeny, in-guest agent nebezi (pgrep hyptcn prazdne)",
+  "memslotov": 10,
+  "zbierane_oblasti": 5,
+  "memsize_b": 2164396032,
+  "max_paddr_b": 4294967296,
+  "raw_subor_b": 4294967296,
+  "bytes_logical_b": 2164396032
+ },
+ "command": "sudo vmicollect once -o vm.domain=hyptcn-guest -o output.writer=raw -o output.dir=/var/tmp/optim-work [-o output.hash=none]  ;  sudo vmicollect run ... -o schedule.interval_s=5 -o schedule.max_cycles=3",
+ "n": 3,
+ "popis": "Surove artefakty k optim_hash_20260918.json: vsetky sidecary a logy behov PRED a PO opravou. Zhrnutie a mediany su v optim_hash_20260918.json.",
+ "values": {
+  "sidecars": {
+   "pred/once_none_1.json": {
+    "schema": "vmicollect/1",
+    "version": "1.0.0",
+    "seq": 0,
+    "id": "hyptcn-guest_000000_20260918T163303195Z",
+    "path": "/var/tmp/optim-work/hyptcn-guest_000000_20260918T163303195Z.raw",
+    "timestamp": "2026-09-18T16:33:03.195Z",
+    "timestamp_unix": 1789749183.195,
+    "vm": {
+     "domain": "hyptcn-guest",
+     "backend": "ebpf/kvm",
+     "vmid": 1353046,
+     "memsize": 2164396032,
+     "max_paddr": 4294967296,
+     "num_vcpus": 2,
+     "address_width": 0,
+     "page_mode": "n/a"
+    },
+    "capture": {
+     "regions": [],
+     "chunk_size": 1048576,
+     "paused": false,
+     "pause_ms": 0.0,
+     "pause_exceeded": false,
+     "capture_ms": 379.92,
+     "write_ms": 206.798,
+     "total_ms": 586.729
+    },
+    "stats": {
+     "bytes_requested": 2164396032,
+     "bytes_read": 2164396032,
+     "chunks": 2067,
+     "read_errors": 0,
+     "filled_zero": 0,
+     "read_mib_s": 5433.07
+    },
+    "output": {
+     "writer": "raw",
+     "full": true,
+     "bytes_logical": 2164396032,
+     "bytes_on_disk": 538050560,
+     "sha256_covers_file": true,
+     "sha256": ""
+    }
+   },
+   "pred/once_none_2.json": {
+    "schema": "vmicollect/1",
+    "version": "1.0.0",
+    "seq": 0,
+    "id": "hyptcn-guest_000000_20260918T163320057Z",
+    "path": "/var/tmp/optim-work/hyptcn-guest_000000_20260918T163320057Z.raw",
+    "timestamp": "2026-09-18T16:33:20.057Z",
+    "timestamp_unix": 1789749200.057,
+    "vm": {
+     "domain": "hyptcn-guest",
+     "backend": "ebpf/kvm",
+     "vmid": 1353046,
+     "memsize": 2164396032,
+     "max_paddr": 4294967296,
+     "num_vcpus": 2,
+     "address_width": 0,
+     "page_mode": "n/a"
+    },
+    "capture": {
+     "regions": [],
+     "chunk_size": 1048576,
+     "paused": false,
+     "pause_ms": 0.0,
+     "pause_exceeded": false,
+     "capture_ms": 387.438,
+     "write_ms": 202.44,
+     "total_ms": 589.889
+    },
+    "stats": {
+     "bytes_requested": 2164396032,
+     "bytes_read": 2164396032,
+     "chunks": 2067,
+     "read_errors": 0,
+     "filled_zero": 0,
+     "read_mib_s": 5327.64
+    },
+    "output": {
+     "writer": "raw",
+     "full": true,
+     "bytes_logical": 2164396032,
+     "bytes_on_disk": 538050560,
+     "sha256_covers_file": true,
+     "sha256": ""
+    }
+   },
+   "pred/once_none_3.json": {
+    "schema": "vmicollect/1",
+    "version": "1.0.0",
+    "seq": 0,
+    "id": "hyptcn-guest_000000_20260918T163337120Z",
+    "path": "/var/tmp/optim-work/hyptcn-guest_000000_20260918T163337120Z.raw",
+    "timestamp": "2026-09-18T16:33:37.120Z",
+    "timestamp_unix": 1789749217.12,
+    "vm": {
+     "domain": "hyptcn-guest",
+     "backend": "ebpf/kvm",
+     "vmid": 1353046,
+     "memsize": 2164396032,
+     "max_paddr": 4294967296,
+     "num_vcpus": 2,
+     "address_width": 0,
+     "page_mode": "n/a"
+    },
+    "capture": {
+     "regions": [],
+     "chunk_size": 1048576,
+     "paused": false,
+     "pause_ms": 0.0,
+     "pause_exceeded": false,
+     "capture_ms": 402.357,
+     "write_ms": 208.654,
+     "total_ms": 611.024
+    },
+    "stats": {
+     "bytes_requested": 2164396032,
+     "bytes_read": 2164396032,
+     "chunks": 2067,
+     "read_errors": 0,
+     "filled_zero": 0,
+     "read_mib_s": 5130.09
+    },
+    "output": {
+     "writer": "raw",
+     "full": true,
+     "bytes_logical": 2164396032,
+     "bytes_on_disk": 538050560,
+     "sha256_covers_file": true,
+     "sha256": ""
+    }
+   },
+   "pred/once_sha256_1.json": {
+    "schema": "vmicollect/1",
+    "version": "1.0.0",
+    "seq": 0,
+    "id": "hyptcn-guest_000000_20260918T163248257Z",
+    "path": "/var/tmp/optim-work/hyptcn-guest_000000_20260918T163248257Z.raw",
+    "timestamp": "2026-09-18T16:32:48.257Z",
+    "timestamp_unix": 1789749168.257,
+    "vm": {
+     "domain": "hyptcn-guest",
+     "backend": "ebpf/kvm",
+     "vmid": 1353046,
+     "memsize": 2164396032,
+     "max_paddr": 4294967296,
+     "num_vcpus": 2,
+     "address_width": 0,
+     "page_mode": "n/a"
+    },
+    "capture": {
+     "regions": [],
+     "chunk_size": 1048576,
+     "paused": false,
+     "pause_ms": 0.0,
+     "pause_exceeded": false,
+     "capture_ms": 381.151,
+     "write_ms": 12983.704,
+     "total_ms": 13364.865
+    },
+    "stats": {
+     "bytes_requested": 2164396032,
+     "bytes_read": 2164396032,
+     "chunks": 2067,
+     "read_errors": 0,
+     "filled_zero": 0,
+     "read_mib_s": 5415.52
+    },
+    "output": {
+     "writer": "raw",
+     "full": true,
+     "bytes_logical": 2164396032,
+     "bytes_on_disk": 538050560,
+     "sha256_covers_file": true,
+     "sha256": "fa6ddb887f6452900b5bac60363c57cea5f5ba066fec821d6a6b7a9cf381a151"
+    }
+   },
+   "pred/once_sha256_2.json": {
+    "schema": "vmicollect/1",
+    "version": "1.0.0",
+    "seq": 0,
+    "id": "hyptcn-guest_000000_20260918T163305176Z",
+    "path": "/var/tmp/optim-work/hyptcn-guest_000000_20260918T163305176Z.raw",
+    "timestamp": "2026-09-18T16:33:05.176Z",
+    "timestamp_unix": 1789749185.176,
+    "vm": {
+     "domain": "hyptcn-guest",
+     "backend": "ebpf/kvm",
+     "vmid": 1353046,
+     "memsize": 2164396032,
+     "max_paddr": 4294967296,
+     "num_vcpus": 2,
+     "address_width": 0,
+     "page_mode": "n/a"
+    },
+    "capture": {
+     "regions": [],
+     "chunk_size": 1048576,
+     "paused": false,
+     "pause_ms": 0.0,
+     "pause_exceeded": false,
+     "capture_ms": 388.522,
+     "write_ms": 12894.9,
+     "total_ms": 13283.435
+    },
+    "stats": {
+     "bytes_requested": 2164396032,
+     "bytes_read": 2164396032,
+     "chunks": 2067,
+     "read_errors": 0,
+     "filled_zero": 0,
+     "read_mib_s": 5312.77
+    },
+    "output": {
+     "writer": "raw",
+     "full": true,
+     "bytes_logical": 2164396032,
+     "bytes_on_disk": 538050560,
+     "sha256_covers_file": true,
+     "sha256": "5581acf51a3cbe8e30696f636ef8741b469244049417463cbbef98994ff57a20"
+    }
+   },
+   "pred/once_sha256_3.json": {
+    "schema": "vmicollect/1",
+    "version": "1.0.0",
+    "seq": 0,
+    "id": "hyptcn-guest_000000_20260918T163322036Z",
+    "path": "/var/tmp/optim-work/hyptcn-guest_000000_20260918T163322036Z.raw",
+    "timestamp": "2026-09-18T16:33:22.036Z",
+    "timestamp_unix": 1789749202.036,
+    "vm": {
+     "domain": "hyptcn-guest",
+     "backend": "ebpf/kvm",
+     "vmid": 1353046,
+     "memsize": 2164396032,
+     "max_paddr": 4294967296,
+     "num_vcpus": 2,
+     "address_width": 0,
+     "page_mode": "n/a"
+    },
+    "capture": {
+     "regions": [],
+     "chunk_size": 1048576,
+     "paused": false,
+     "pause_ms": 0.0,
+     "pause_exceeded": false,
+     "capture_ms": 388.131,
+     "write_ms": 13091.214,
+     "total_ms": 13479.357
+    },
+    "stats": {
+     "bytes_requested": 2164396032,
+     "bytes_read": 2164396032,
+     "chunks": 2067,
+     "read_errors": 0,
+     "filled_zero": 0,
+     "read_mib_s": 5318.13
+    },
+    "output": {
+     "writer": "raw",
+     "full": true,
+     "bytes_logical": 2164396032,
+     "bytes_on_disk": 538050560,
+     "sha256_covers_file": true,
+     "sha256": "42a01e8d31725bdedf80e4d772f33b9ac2a1c30cfa325d16ea6012220dc52de5"
+    }
+   },
+   "pred/run_none_sidecars/hyptcn-guest_000000_20260918T163432237Z.json": {
+    "schema": "vmicollect/1",
+    "version": "1.0.0",
+    "seq": 0,
+    "id": "hyptcn-guest_000000_20260918T163432237Z",
+    "path": "/var/tmp/optim-work/hyptcn-guest_000000_20260918T163432237Z.raw",
+    "timestamp": "2026-09-18T16:34:32.237Z",
+    "timestamp_unix": 1789749272.237,
+    "vm": {
+     "domain": "hyptcn-guest",
+     "backend": "ebpf/kvm",
+     "vmid": 1353046,
+     "memsize": 2164396032,
+     "max_paddr": 4294967296,
+     "num_vcpus": 2,
+     "address_width": 0,
+     "page_mode": "n/a"
+    },
+    "capture": {
+     "regions": [],
+     "chunk_size": 1048576,
+     "paused": false,
+     "pause_ms": 0.0,
+     "pause_exceeded": false,
+     "capture_ms": 440.286,
+     "write_ms": 9736.77,
+     "total_ms": 10177.074
+    },
+    "stats": {
+     "bytes_requested": 2164396032,
+     "bytes_read": 2164396032,
+     "chunks": 2067,
+     "read_errors": 0,
+     "filled_zero": 0,
+     "read_mib_s": 4688.16
+    },
+    "output": {
+     "writer": "raw",
+     "full": true,
+     "bytes_logical": 2164396032,
+     "bytes_on_disk": 538050560,
+     "sha256_covers_file": true,
+     "sha256": ""
+    }
+   },
+   "pred/run_none_sidecars/hyptcn-guest_000001_20260918T163447237Z.json": {
+    "schema": "vmicollect/1",
+    "version": "1.0.0",
+    "seq": 1,
+    "id": "hyptcn-guest_000001_20260918T163447237Z",
+    "path": "/var/tmp/optim-work/hyptcn-guest_000001_20260918T163447237Z.raw",
+    "timestamp": "2026-09-18T16:34:47.237Z",
+    "timestamp_unix": 1789749287.237,
+    "vm": {
+     "domain": "hyptcn-guest",
+     "backend": "ebpf/kvm",
+     "vmid": 1353046,
+     "memsize": 2164396032,
+     "max_paddr": 4294967296,
+     "num_vcpus": 2,
+     "address_width": 0,
+     "page_mode": "n/a"
+    },
+    "capture": {
+     "regions": [],
+     "chunk_size": 1048576,
+     "paused": false,
+     "pause_ms": 0.0,
+     "pause_exceeded": false,
+     "capture_ms": 414.895,
+     "write_ms": 10225.575,
+     "total_ms": 10640.492
+    },
+    "stats": {
+     "bytes_requested": 2164396032,
+     "bytes_read": 2164396032,
+     "chunks": 2067,
+     "read_errors": 0,
+     "filled_zero": 0,
+     "read_mib_s": 4975.06
+    },
+    "output": {
+     "writer": "raw",
+     "full": true,
+     "bytes_logical": 2164396032,
+     "bytes_on_disk": 537001984,
+     "sha256_covers_file": true,
+     "sha256": ""
+    }
+   },
+   "pred/run_none_sidecars/hyptcn-guest_000002_20260918T163502237Z.json": {
+    "schema": "vmicollect/1",
+    "version": "1.0.0",
+    "seq": 2,
+    "id": "hyptcn-guest_000002_20260918T163502237Z",
+    "path": "/var/tmp/optim-work/hyptcn-guest_000002_20260918T163502237Z.raw",
+    "timestamp": "2026-09-18T16:35:02.237Z",
+    "timestamp_unix": 1789749302.237,
+    "vm": {
+     "domain": "hyptcn-guest",
+     "backend": "ebpf/kvm",
+     "vmid": 1353046,
+     "memsize": 2164396032,
+     "max_paddr": 4294967296,
+     "num_vcpus": 2,
+     "address_width": 0,
+     "page_mode": "n/a"
+    },
+    "capture": {
+     "regions": [],
+     "chunk_size": 1048576,
+     "paused": false,
+     "pause_ms": 0.0,
+     "pause_exceeded": false,
+     "capture_ms": 420.357,
+     "write_ms": 222.065,
+     "total_ms": 642.445
+    },
+    "stats": {
+     "bytes_requested": 2164396032,
+     "bytes_read": 2164396032,
+     "chunks": 2067,
+     "read_errors": 0,
+     "filled_zero": 0,
+     "read_mib_s": 4910.41
+    },
+    "output": {
+     "writer": "raw",
+     "full": true,
+     "bytes_logical": 2164396032,
+     "bytes_on_disk": 537001984,
+     "sha256_covers_file": true,
+     "sha256": ""
+    }
+   },
+   "pred/run_sha256_sidecars/hyptcn-guest_000000_20260918T163339094Z.json": {
+    "schema": "vmicollect/1",
+    "version": "1.0.0",
+    "seq": 0,
+    "id": "hyptcn-guest_000000_20260918T163339094Z",
+    "path": "/var/tmp/optim-work/hyptcn-guest_000000_20260918T163339094Z.raw",
+    "timestamp": "2026-09-18T16:33:39.094Z",
+    "timestamp_unix": 1789749219.094,
+    "vm": {
+     "domain": "hyptcn-guest",
+     "backend": "ebpf/kvm",
+     "vmid": 1353046,
+     "memsize": 2164396032,
+     "max_paddr": 4294967296,
+     "num_vcpus": 2,
+     "address_width": 0,
+     "page_mode": "n/a"
+    },
+    "capture": {
+     "regions": [],
+     "chunk_size": 1048576,
+     "paused": false,
+     "pause_ms": 0.0,
+     "pause_exceeded": false,
+     "capture_ms": 412.388,
+     "write_ms": 14230.611,
+     "total_ms": 14643.012
+    },
+    "stats": {
+     "bytes_requested": 2164396032,
+     "bytes_read": 2164396032,
+     "chunks": 2067,
+     "read_errors": 0,
+     "filled_zero": 0,
+     "read_mib_s": 5005.31
+    },
+    "output": {
+     "writer": "raw",
+     "full": true,
+     "bytes_logical": 2164396032,
+     "bytes_on_disk": 538050560,
+     "sha256_covers_file": true,
+     "sha256": "9f165d0aeec247102313262eb2d2f995afebb1c2f3bad702daeac2ecace63a81"
+    }
+   },
+   "pred/run_sha256_sidecars/hyptcn-guest_000001_20260918T163354094Z.json": {
+    "schema": "vmicollect/1",
+    "version": "1.0.0",
+    "seq": 1,
+    "id": "hyptcn-guest_000001_20260918T163354094Z",
+    "path": "/var/tmp/optim-work/hyptcn-guest_000001_20260918T163354094Z.raw",
+    "timestamp": "2026-09-18T16:33:54.094Z",
+    "timestamp_unix": 1789749234.094,
+    "vm": {
+     "domain": "hyptcn-guest",
+     "backend": "ebpf/kvm",
+     "vmid": 1353046,
+     "memsize": 2164396032,
+     "max_paddr": 4294967296,
+     "num_vcpus": 2,
+     "address_width": 0,
+     "page_mode": "n/a"
+    },
+    "capture": {
+     "regions": [],
+     "chunk_size": 1048576,
+     "paused": false,
+     "pause_ms": 0.0,
+     "pause_exceeded": false,
+     "capture_ms": 438.911,
+     "write_ms": 14239.289,
+     "total_ms": 14678.222
+    },
+    "stats": {
+     "bytes_requested": 2164396032,
+     "bytes_read": 2164396032,
+     "chunks": 2067,
+     "read_errors": 0,
+     "filled_zero": 0,
+     "read_mib_s": 4702.84
+    },
+    "output": {
+     "writer": "raw",
+     "full": true,
+     "bytes_logical": 2164396032,
+     "bytes_on_disk": 538050560,
+     "sha256_covers_file": true,
+     "sha256": "a472bb9ad7b425a6817cd32e368e6bcae7c3cb2f3c156352588c198760fd0a25"
+    }
+   },
+   "pred/run_sha256_sidecars/hyptcn-guest_000002_20260918T163409094Z.json": {
+    "schema": "vmicollect/1",
+    "version": "1.0.0",
+    "seq": 2,
+    "id": "hyptcn-guest_000002_20260918T163409094Z",
+    "path": "/var/tmp/optim-work/hyptcn-guest_000002_20260918T163409094Z.raw",
+    "timestamp": "2026-09-18T16:34:09.094Z",
+    "timestamp_unix": 1789749249.094,
+    "vm": {
+     "domain": "hyptcn-guest",
+     "backend": "ebpf/kvm",
+     "vmid": 1353046,
+     "memsize": 2164396032,
+     "max_paddr": 4294967296,
+     "num_vcpus": 2,
+     "address_width": 0,
+     "page_mode": "n/a"
+    },
+    "capture": {
+     "regions": [],
+     "chunk_size": 1048576,
+     "paused": false,
+     "pause_ms": 0.0,
+     "pause_exceeded": false,
+     "capture_ms": 568.136,
+     "write_ms": 20655.465,
+     "total_ms": 21223.624
+    },
+    "stats": {
+     "bytes_requested": 2164396032,
+     "bytes_read": 2164396032,
+     "chunks": 2067,
+     "read_errors": 0,
+     "filled_zero": 0,
+     "read_mib_s": 3633.16
+    },
+    "output": {
+     "writer": "raw",
+     "full": true,
+     "bytes_logical": 2164396032,
+     "bytes_on_disk": 538050560,
+     "sha256_covers_file": true,
+     "sha256": "596dab0e83d32a7a618400a76b6fedbb8c263a49db21a29a1276206b55dde0c5"
+    }
+   },
+   "po/once_none_1.json": {
+    "schema": "vmicollect/1",
+    "version": "1.0.0",
+    "seq": 0,
+    "id": "hyptcn-guest_000000_20260918T164455071Z",
+    "path": "/var/tmp/optim-work/hyptcn-guest_000000_20260918T164455071Z.raw",
+    "timestamp": "2026-09-18T16:44:55.071Z",
+    "timestamp_unix": 1789749895.071,
+    "vm": {
+     "domain": "hyptcn-guest",
+     "backend": "ebpf/kvm",
+     "vmid": 1353046,
+     "memsize": 2164396032,
+     "max_paddr": 4294967296,
+     "num_vcpus": 2,
+     "address_width": 0,
+     "page_mode": "n/a"
+    },
+    "capture": {
+     "regions": [],
+     "chunk_size": 1048576,
+     "paused": false,
+     "pause_ms": 0.0,
+     "pause_exceeded": false,
+     "capture_ms": 382.52,
+     "write_ms": 214.483,
+     "total_ms": 597.014
+    },
+    "stats": {
+     "bytes_requested": 2164396032,
+     "bytes_read": 2164396032,
+     "chunks": 2067,
+     "read_errors": 0,
+     "filled_zero": 0,
+     "read_mib_s": 5396.14
+    },
+    "output": {
+     "writer": "raw",
+     "full": true,
+     "bytes_logical": 2164396032,
+     "bytes_on_disk": 537001984,
+     "sha256_covers_file": true,
+     "sha256": ""
+    }
+   },
+   "po/once_none_2.json": {
+    "schema": "vmicollect/1",
+    "version": "1.0.0",
+    "seq": 0,
+    "id": "hyptcn-guest_000000_20260918T164514335Z",
+    "path": "/var/tmp/optim-work/hyptcn-guest_000000_20260918T164514335Z.raw",
+    "timestamp": "2026-09-18T16:45:14.335Z",
+    "timestamp_unix": 1789749914.335,
+    "vm": {
+     "domain": "hyptcn-guest",
+     "backend": "ebpf/kvm",
+     "vmid": 1353046,
+     "memsize": 2164396032,
+     "max_paddr": 4294967296,
+     "num_vcpus": 2,
+     "address_width": 0,
+     "page_mode": "n/a"
+    },
+    "capture": {
+     "regions": [],
+     "chunk_size": 1048576,
+     "paused": false,
+     "pause_ms": 0.0,
+     "pause_exceeded": false,
+     "capture_ms": 380.674,
+     "write_ms": 195.075,
+     "total_ms": 575.762
+    },
+    "stats": {
+     "bytes_requested": 2164396032,
+     "bytes_read": 2164396032,
+     "chunks": 2067,
+     "read_errors": 0,
+     "filled_zero": 0,
+     "read_mib_s": 5422.29
+    },
+    "output": {
+     "writer": "raw",
+     "full": true,
+     "bytes_logical": 2164396032,
+     "bytes_on_disk": 537001984,
+     "sha256_covers_file": true,
+     "sha256": ""
+    }
+   },
+   "po/once_none_3.json": {
+    "schema": "vmicollect/1",
+    "version": "1.0.0",
+    "seq": 0,
+    "id": "hyptcn-guest_000000_20260918T164533480Z",
+    "path": "/var/tmp/optim-work/hyptcn-guest_000000_20260918T164533480Z.raw",
+    "timestamp": "2026-09-18T16:45:33.480Z",
+    "timestamp_unix": 1789749933.48,
+    "vm": {
+     "domain": "hyptcn-guest",
+     "backend": "ebpf/kvm",
+     "vmid": 1353046,
+     "memsize": 2164396032,
+     "max_paddr": 4294967296,
+     "num_vcpus": 2,
+     "address_width": 0,
+     "page_mode": "n/a"
+    },
+    "capture": {
+     "regions": [],
+     "chunk_size": 1048576,
+     "paused": false,
+     "pause_ms": 0.0,
+     "pause_exceeded": false,
+     "capture_ms": 379.726,
+     "write_ms": 197.988,
+     "total_ms": 577.726
+    },
+    "stats": {
+     "bytes_requested": 2164396032,
+     "bytes_read": 2164396032,
+     "chunks": 2067,
+     "read_errors": 0,
+     "filled_zero": 0,
+     "read_mib_s": 5435.84
+    },
+    "output": {
+     "writer": "raw",
+     "full": true,
+     "bytes_logical": 2164396032,
+     "bytes_on_disk": 537001984,
+     "sha256_covers_file": true,
+     "sha256": ""
+    }
+   },
+   "po/once_sha256_1.json": {
+    "schema": "vmicollect/1",
+    "version": "1.0.0",
+    "seq": 0,
+    "id": "hyptcn-guest_000000_20260918T164437760Z",
+    "path": "/var/tmp/optim-work/hyptcn-guest_000000_20260918T164437760Z.raw",
+    "timestamp": "2026-09-18T16:44:37.760Z",
+    "timestamp_unix": 1789749877.76,
+    "vm": {
+     "domain": "hyptcn-guest",
+     "backend": "ebpf/kvm",
+     "vmid": 1353046,
+     "memsize": 2164396032,
+     "max_paddr": 4294967296,
+     "num_vcpus": 2,
+     "address_width": 0,
+     "page_mode": "n/a"
+    },
+    "capture": {
+     "regions": [],
+     "chunk_size": 1048576,
+     "paused": false,
+     "pause_ms": 0.0,
+     "pause_exceeded": false,
+     "capture_ms": 2288.421,
+     "write_ms": 200.551,
+     "total_ms": 2488.984
+    },
+    "stats": {
+     "bytes_requested": 2164396032,
+     "bytes_read": 2164396032,
+     "chunks": 2067,
+     "read_errors": 0,
+     "filled_zero": 0,
+     "read_mib_s": 901.99
+    },
+    "output": {
+     "writer": "raw",
+     "full": true,
+     "bytes_logical": 2164396032,
+     "bytes_on_disk": 537001984,
+     "sha256_covers_file": true,
+     "sha256": "bf768d2514a647e123cf288feb7bf9f4140fd8d20b4ae0b905918f403edbba34"
+    }
+   },
+   "po/once_sha256_2.json": {
+    "schema": "vmicollect/1",
+    "version": "1.0.0",
+    "seq": 0,
+    "id": "hyptcn-guest_000000_20260918T164457028Z",
+    "path": "/var/tmp/optim-work/hyptcn-guest_000000_20260918T164457028Z.raw",
+    "timestamp": "2026-09-18T16:44:57.028Z",
+    "timestamp_unix": 1789749897.028,
+    "vm": {
+     "domain": "hyptcn-guest",
+     "backend": "ebpf/kvm",
+     "vmid": 1353046,
+     "memsize": 2164396032,
+     "max_paddr": 4294967296,
+     "num_vcpus": 2,
+     "address_width": 0,
+     "page_mode": "n/a"
+    },
+    "capture": {
+     "regions": [],
+     "chunk_size": 1048576,
+     "paused": false,
+     "pause_ms": 0.0,
+     "pause_exceeded": false,
+     "capture_ms": 2287.869,
+     "write_ms": 193.057,
+     "total_ms": 2480.938
+    },
+    "stats": {
+     "bytes_requested": 2164396032,
+     "bytes_read": 2164396032,
+     "chunks": 2067,
+     "read_errors": 0,
+     "filled_zero": 0,
+     "read_mib_s": 902.21
+    },
+    "output": {
+     "writer": "raw",
+     "full": true,
+     "bytes_logical": 2164396032,
+     "bytes_on_disk": 537001984,
+     "sha256_covers_file": true,
+     "sha256": "9035161250e77c5c09258043b919bf945f3e34640358781e222b1b3598222149"
+    }
+   },
+   "po/once_sha256_3.json": {
+    "schema": "vmicollect/1",
+    "version": "1.0.0",
+    "seq": 0,
+    "id": "hyptcn-guest_000000_20260918T164516248Z",
+    "path": "/var/tmp/optim-work/hyptcn-guest_000000_20260918T164516248Z.raw",
+    "timestamp": "2026-09-18T16:45:16.248Z",
+    "timestamp_unix": 1789749916.248,
+    "vm": {
+     "domain": "hyptcn-guest",
+     "backend": "ebpf/kvm",
+     "vmid": 1353046,
+     "memsize": 2164396032,
+     "max_paddr": 4294967296,
+     "num_vcpus": 2,
+     "address_width": 0,
+     "page_mode": "n/a"
+    },
+    "capture": {
+     "regions": [],
+     "chunk_size": 1048576,
+     "paused": false,
+     "pause_ms": 0.0,
+     "pause_exceeded": false,
+     "capture_ms": 2284.414,
+     "write_ms": 196.219,
+     "total_ms": 2480.648
+    },
+    "stats": {
+     "bytes_requested": 2164396032,
+     "bytes_read": 2164396032,
+     "chunks": 2067,
+     "read_errors": 0,
+     "filled_zero": 0,
+     "read_mib_s": 903.57
+    },
+    "output": {
+     "writer": "raw",
+     "full": true,
+     "bytes_logical": 2164396032,
+     "bytes_on_disk": 537001984,
+     "sha256_covers_file": true,
+     "sha256": "34def0fb2f9315766cb32e6335e280fc6dee776ffadea388c3837e75024bccc1"
+    }
+   },
+   "po/once_sha256_skalar_1.json": {
+    "schema": "vmicollect/1",
+    "version": "1.0.0",
+    "seq": 0,
+    "id": "hyptcn-guest_000000_20260918T164441607Z",
+    "path": "/var/tmp/optim-work/hyptcn-guest_000000_20260918T164441607Z.raw",
+    "timestamp": "2026-09-18T16:44:41.607Z",
+    "timestamp_unix": 1789749881.607,
+    "vm": {
+     "domain": "hyptcn-guest",
+     "backend": "ebpf/kvm",
+     "vmid": 1353046,
+     "memsize": 2164396032,
+     "max_paddr": 4294967296,
+     "num_vcpus": 2,
+     "address_width": 0,
+     "page_mode": "n/a"
+    },
+    "capture": {
+     "regions": [],
+     "chunk_size": 1048576,
+     "paused": false,
+     "pause_ms": 0.0,
+     "pause_exceeded": false,
+     "capture_ms": 11935.073,
+     "write_ms": 191.703,
+     "total_ms": 12126.788
+    },
+    "stats": {
+     "bytes_requested": 2164396032,
+     "bytes_read": 2164396032,
+     "chunks": 2067,
+     "read_errors": 0,
+     "filled_zero": 0,
+     "read_mib_s": 172.95
+    },
+    "output": {
+     "writer": "raw",
+     "full": true,
+     "bytes_logical": 2164396032,
+     "bytes_on_disk": 537001984,
+     "sha256_covers_file": true,
+     "sha256": "670b14aedbf8fcbae796d1add76a3d9b9d2eb6ecda879c86099f01593c8ac594"
+    }
+   },
+   "po/once_sha256_skalar_2.json": {
+    "schema": "vmicollect/1",
+    "version": "1.0.0",
+    "seq": 0,
+    "id": "hyptcn-guest_000000_20260918T164500880Z",
+    "path": "/var/tmp/optim-work/hyptcn-guest_000000_20260918T164500880Z.raw",
+    "timestamp": "2026-09-18T16:45:00.880Z",
+    "timestamp_unix": 1789749900.88,
+    "vm": {
+     "domain": "hyptcn-guest",
+     "backend": "ebpf/kvm",
+     "vmid": 1353046,
+     "memsize": 2164396032,
+     "max_paddr": 4294967296,
+     "num_vcpus": 2,
+     "address_width": 0,
+     "page_mode": "n/a"
+    },
+    "capture": {
+     "regions": [],
+     "chunk_size": 1048576,
+     "paused": false,
+     "pause_ms": 0.0,
+     "pause_exceeded": false,
+     "capture_ms": 11900.541,
+     "write_ms": 207.81,
+     "total_ms": 12108.371
+    },
+    "stats": {
+     "bytes_requested": 2164396032,
+     "bytes_read": 2164396032,
+     "chunks": 2067,
+     "read_errors": 0,
+     "filled_zero": 0,
+     "read_mib_s": 173.45
+    },
+    "output": {
+     "writer": "raw",
+     "full": true,
+     "bytes_logical": 2164396032,
+     "bytes_on_disk": 537001984,
+     "sha256_covers_file": true,
+     "sha256": "af19cd3d4e2dda6c64bd8fe57d0b61c93274eec18c9e85ec2690db07dccfb4cf"
+    }
+   },
+   "po/once_sha256_skalar_3.json": {
+    "schema": "vmicollect/1",
+    "version": "1.0.0",
+    "seq": 0,
+    "id": "hyptcn-guest_000000_20260918T164520056Z",
+    "path": "/var/tmp/optim-work/hyptcn-guest_000000_20260918T164520056Z.raw",
+    "timestamp": "2026-09-18T16:45:20.056Z",
+    "timestamp_unix": 1789749920.056,
+    "vm": {
+     "domain": "hyptcn-guest",
+     "backend": "ebpf/kvm",
+     "vmid": 1353046,
+     "memsize": 2164396032,
+     "max_paddr": 4294967296,
+     "num_vcpus": 2,
+     "address_width": 0,
+     "page_mode": "n/a"
+    },
+    "capture": {
+     "regions": [],
+     "chunk_size": 1048576,
+     "paused": false,
+     "pause_ms": 0.0,
+     "pause_exceeded": false,
+     "capture_ms": 11853.861,
+     "write_ms": 217.749,
+     "total_ms": 12071.621
+    },
+    "stats": {
+     "bytes_requested": 2164396032,
+     "bytes_read": 2164396032,
+     "chunks": 2067,
+     "read_errors": 0,
+     "filled_zero": 0,
+     "read_mib_s": 174.13
+    },
+    "output": {
+     "writer": "raw",
+     "full": true,
+     "bytes_logical": 2164396032,
+     "bytes_on_disk": 537001984,
+     "sha256_covers_file": true,
+     "sha256": "c6c7819624a5970bc3ba4fe5b59edef918aa688358f6063566e7c44474ad2e75"
+    }
+   },
+   "po/pause_fallback.json": {
+    "schema": "vmicollect/1",
+    "version": "1.0.0",
+    "seq": 0,
+    "id": "hyptcn-guest_000000_20260918T164741498Z",
+    "path": "/var/tmp/optim-pause/hyptcn-guest_000000_20260918T164741498Z.raw",
+    "timestamp": "2026-09-18T16:47:41.498Z",
+    "timestamp_unix": 1789750061.498,
+    "vm": {
+     "domain": "hyptcn-guest",
+     "backend": "ebpf/kvm",
+     "vmid": 1353046,
+     "memsize": 2164396032,
+     "max_paddr": 4294967296,
+     "num_vcpus": 2,
+     "address_width": 0,
+     "page_mode": "n/a"
+    },
+    "capture": {
+     "regions": [],
+     "chunk_size": 1048576,
+     "paused": false,
+     "pause_ms": 0.0,
+     "pause_exceeded": false,
+     "capture_ms": 379.613,
+     "write_ms": 3073.05,
+     "total_ms": 3452.678
+    },
+    "stats": {
+     "bytes_requested": 2164396032,
+     "bytes_read": 2164396032,
+     "chunks": 2067,
+     "read_errors": 0,
+     "filled_zero": 0,
+     "read_mib_s": 5437.46
+    },
+    "output": {
+     "writer": "raw",
+     "full": true,
+     "bytes_logical": 2164396032,
+     "bytes_on_disk": 537001984,
+     "sha256_covers_file": true,
+     "sha256": "aefbd3455e3ad216406149211a83661342177fa35b49d359566b228235c5716c"
+    }
+   },
+   "po/verify_snapshot.json": {
+    "schema": "vmicollect/1",
+    "version": "1.0.0",
+    "seq": 0,
+    "id": "hyptcn-guest_000000_20260918T164646410Z",
+    "path": "/var/tmp/optim-work/hyptcn-guest_000000_20260918T164646410Z.raw",
+    "timestamp": "2026-09-18T16:46:46.410Z",
+    "timestamp_unix": 1789750006.41,
+    "vm": {
+     "domain": "hyptcn-guest",
+     "backend": "ebpf/kvm",
+     "vmid": 1353046,
+     "memsize": 2164396032,
+     "max_paddr": 4294967296,
+     "num_vcpus": 2,
+     "address_width": 0,
+     "page_mode": "n/a"
+    },
+    "capture": {
+     "regions": [],
+     "chunk_size": 1048576,
+     "paused": false,
+     "pause_ms": 0.0,
+     "pause_exceeded": false,
+     "capture_ms": 2289.013,
+     "write_ms": 199.873,
+     "total_ms": 2488.898
+    },
+    "stats": {
+     "bytes_requested": 2164396032,
+     "bytes_read": 2164396032,
+     "chunks": 2067,
+     "read_errors": 0,
+     "filled_zero": 0,
+     "read_mib_s": 901.76
+    },
+    "output": {
+     "writer": "raw",
+     "full": true,
+     "bytes_logical": 2164396032,
+     "bytes_on_disk": 537001984,
+     "sha256_covers_file": true,
+     "sha256": "9da8553bee049e99a37cc95c76970efed7c864b42a4bedf949dcff1fc26a7932"
+    }
+   },
+   "po/run_none_sidecars/hyptcn-guest_000000_20260918T164633848Z.json": {
+    "schema": "vmicollect/1",
+    "version": "1.0.0",
+    "seq": 0,
+    "id": "hyptcn-guest_000000_20260918T164633848Z",
+    "path": "/var/tmp/optim-work/hyptcn-guest_000000_20260918T164633848Z.raw",
+    "timestamp": "2026-09-18T16:46:33.848Z",
+    "timestamp_unix": 1789749993.848,
+    "vm": {
+     "domain": "hyptcn-guest",
+     "backend": "ebpf/kvm",
+     "vmid": 1353046,
+     "memsize": 2164396032,
+     "max_paddr": 4294967296,
+     "num_vcpus": 2,
+     "address_width": 0,
+     "page_mode": "n/a"
+    },
+    "capture": {
+     "regions": [],
+     "chunk_size": 1048576,
+     "paused": false,
+     "pause_ms": 0.0,
+     "pause_exceeded": false,
+     "capture_ms": 377.217,
+     "write_ms": 222.128,
+     "total_ms": 599.356
+    },
+    "stats": {
+     "bytes_requested": 2164396032,
+     "bytes_read": 2164396032,
+     "chunks": 2067,
+     "read_errors": 0,
+     "filled_zero": 0,
+     "read_mib_s": 5472.0
+    },
+    "output": {
+     "writer": "raw",
+     "full": true,
+     "bytes_logical": 2164396032,
+     "bytes_on_disk": 537001984,
+     "sha256_covers_file": true,
+     "sha256": ""
+    }
+   },
+   "po/run_none_sidecars/hyptcn-guest_000001_20260918T164638848Z.json": {
+    "schema": "vmicollect/1",
+    "version": "1.0.0",
+    "seq": 1,
+    "id": "hyptcn-guest_000001_20260918T164638848Z",
+    "path": "/var/tmp/optim-work/hyptcn-guest_000001_20260918T164638848Z.raw",
+    "timestamp": "2026-09-18T16:46:38.848Z",
+    "timestamp_unix": 1789749998.848,
+    "vm": {
+     "domain": "hyptcn-guest",
+     "backend": "ebpf/kvm",
+     "vmid": 1353046,
+     "memsize": 2164396032,
+     "max_paddr": 4294967296,
+     "num_vcpus": 2,
+     "address_width": 0,
+     "page_mode": "n/a"
+    },
+    "capture": {
+     "regions": [],
+     "chunk_size": 1048576,
+     "paused": false,
+     "pause_ms": 0.0,
+     "pause_exceeded": false,
+     "capture_ms": 373.537,
+     "write_ms": 192.156,
+     "total_ms": 565.763
+    },
+    "stats": {
+     "bytes_requested": 2164396032,
+     "bytes_read": 2164396032,
+     "chunks": 2067,
+     "read_errors": 0,
+     "filled_zero": 0,
+     "read_mib_s": 5525.91
+    },
+    "output": {
+     "writer": "raw",
+     "full": true,
+     "bytes_logical": 2164396032,
+     "bytes_on_disk": 537001984,
+     "sha256_covers_file": true,
+     "sha256": ""
+    }
+   },
+   "po/run_none_sidecars/hyptcn-guest_000002_20260918T164643849Z.json": {
+    "schema": "vmicollect/1",
+    "version": "1.0.0",
+    "seq": 2,
+    "id": "hyptcn-guest_000002_20260918T164643849Z",
+    "path": "/var/tmp/optim-work/hyptcn-guest_000002_20260918T164643849Z.raw",
+    "timestamp": "2026-09-18T16:46:43.849Z",
+    "timestamp_unix": 1789750003.849,
+    "vm": {
+     "domain": "hyptcn-guest",
+     "backend": "ebpf/kvm",
+     "vmid": 1353046,
+     "memsize": 2164396032,
+     "max_paddr": 4294967296,
+     "num_vcpus": 2,
+     "address_width": 0,
+     "page_mode": "n/a"
+    },
+    "capture": {
+     "regions": [],
+     "chunk_size": 1048576,
+     "paused": false,
+     "pause_ms": 0.0,
+     "pause_exceeded": false,
+     "capture_ms": 369.784,
+     "write_ms": 802.751,
+     "total_ms": 1172.627
+    },
+    "stats": {
+     "bytes_requested": 2164396032,
+     "bytes_read": 2164396032,
+     "chunks": 2067,
+     "read_errors": 0,
+     "filled_zero": 0,
+     "read_mib_s": 5581.98
+    },
+    "output": {
+     "writer": "raw",
+     "full": true,
+     "bytes_logical": 2164396032,
+     "bytes_on_disk": 537001984,
+     "sha256_covers_file": true,
+     "sha256": ""
+    }
+   },
+   "po/run_sha256_sidecars/hyptcn-guest_000000_20260918T164535397Z.json": {
+    "schema": "vmicollect/1",
+    "version": "1.0.0",
+    "seq": 0,
+    "id": "hyptcn-guest_000000_20260918T164535397Z",
+    "path": "/var/tmp/optim-work/hyptcn-guest_000000_20260918T164535397Z.raw",
+    "timestamp": "2026-09-18T16:45:35.397Z",
+    "timestamp_unix": 1789749935.397,
+    "vm": {
+     "domain": "hyptcn-guest",
+     "backend": "ebpf/kvm",
+     "vmid": 1353046,
+     "memsize": 2164396032,
+     "max_paddr": 4294967296,
+     "num_vcpus": 2,
+     "address_width": 0,
+     "page_mode": "n/a"
+    },
+    "capture": {
+     "regions": [],
+     "chunk_size": 1048576,
+     "paused": false,
+     "pause_ms": 0.0,
+     "pause_exceeded": false,
+     "capture_ms": 2298.137,
+     "write_ms": 201.175,
+     "total_ms": 2499.323
+    },
+    "stats": {
+     "bytes_requested": 2164396032,
+     "bytes_read": 2164396032,
+     "chunks": 2067,
+     "read_errors": 0,
+     "filled_zero": 0,
+     "read_mib_s": 898.17
+    },
+    "output": {
+     "writer": "raw",
+     "full": true,
+     "bytes_logical": 2164396032,
+     "bytes_on_disk": 537001984,
+     "sha256_covers_file": true,
+     "sha256": "a739191d8dff862efb27454a7cd83ef72ed7e9d330f1a27bec37c314098231e8"
+    }
+   },
+   "po/run_sha256_sidecars/hyptcn-guest_000001_20260918T164540397Z.json": {
+    "schema": "vmicollect/1",
+    "version": "1.0.0",
+    "seq": 1,
+    "id": "hyptcn-guest_000001_20260918T164540397Z",
+    "path": "/var/tmp/optim-work/hyptcn-guest_000001_20260918T164540397Z.raw",
+    "timestamp": "2026-09-18T16:45:40.397Z",
+    "timestamp_unix": 1789749940.397,
+    "vm": {
+     "domain": "hyptcn-guest",
+     "backend": "ebpf/kvm",
+     "vmid": 1353046,
+     "memsize": 2164396032,
+     "max_paddr": 4294967296,
+     "num_vcpus": 2,
+     "address_width": 0,
+     "page_mode": "n/a"
+    },
+    "capture": {
+     "regions": [],
+     "chunk_size": 1048576,
+     "paused": false,
+     "pause_ms": 0.0,
+     "pause_exceeded": false,
+     "capture_ms": 2293.695,
+     "write_ms": 906.224,
+     "total_ms": 3199.984
+    },
+    "stats": {
+     "bytes_requested": 2164396032,
+     "bytes_read": 2164396032,
+     "chunks": 2067,
+     "read_errors": 0,
+     "filled_zero": 0,
+     "read_mib_s": 899.91
+    },
+    "output": {
+     "writer": "raw",
+     "full": true,
+     "bytes_logical": 2164396032,
+     "bytes_on_disk": 537001984,
+     "sha256_covers_file": true,
+     "sha256": "fcb0ecbec30e3e71ada3f24c24d623ffadc381fa878aeea6a386ca159dc710f8"
+    }
+   },
+   "po/run_sha256_sidecars/hyptcn-guest_000002_20260918T164545397Z.json": {
+    "schema": "vmicollect/1",
+    "version": "1.0.0",
+    "seq": 2,
+    "id": "hyptcn-guest_000002_20260918T164545397Z",
+    "path": "/var/tmp/optim-work/hyptcn-guest_000002_20260918T164545397Z.raw",
+    "timestamp": "2026-09-18T16:45:45.397Z",
+    "timestamp_unix": 1789749945.397,
+    "vm": {
+     "domain": "hyptcn-guest",
+     "backend": "ebpf/kvm",
+     "vmid": 1353046,
+     "memsize": 2164396032,
+     "max_paddr": 4294967296,
+     "num_vcpus": 2,
+     "address_width": 0,
+     "page_mode": "n/a"
+    },
+    "capture": {
+     "regions": [],
+     "chunk_size": 1048576,
+     "paused": false,
+     "pause_ms": 0.0,
+     "pause_exceeded": false,
+     "capture_ms": 2293.24,
+     "write_ms": 1242.2,
+     "total_ms": 3535.511
+    },
+    "stats": {
+     "bytes_requested": 2164396032,
+     "bytes_read": 2164396032,
+     "chunks": 2067,
+     "read_errors": 0,
+     "filled_zero": 0,
+     "read_mib_s": 900.09
+    },
+    "output": {
+     "writer": "raw",
+     "full": true,
+     "bytes_logical": 2164396032,
+     "bytes_on_disk": 537001984,
+     "sha256_covers_file": true,
+     "sha256": "8d18ca171022f3c8262a7da7ccd719346136e998e0a5911a2fa27cffb4d2c8a5"
+    }
+   },
+   "po/run_sha256_skalar_sidecars/hyptcn-guest_000000_20260918T164550351Z.json": {
+    "schema": "vmicollect/1",
+    "version": "1.0.0",
+    "seq": 0,
+    "id": "hyptcn-guest_000000_20260918T164550351Z",
+    "path": "/var/tmp/optim-work/hyptcn-guest_000000_20260918T164550351Z.raw",
+    "timestamp": "2026-09-18T16:45:50.351Z",
+    "timestamp_unix": 1789749950.351,
+    "vm": {
+     "domain": "hyptcn-guest",
+     "backend": "ebpf/kvm",
+     "vmid": 1353046,
+     "memsize": 2164396032,
+     "max_paddr": 4294967296,
+     "num_vcpus": 2,
+     "address_width": 0,
+     "page_mode": "n/a"
+    },
+    "capture": {
+     "regions": [],
+     "chunk_size": 1048576,
+     "paused": false,
+     "pause_ms": 0.0,
+     "pause_exceeded": false,
+     "capture_ms": 11870.396,
+     "write_ms": 193.275,
+     "total_ms": 12063.685
+    },
+    "stats": {
+     "bytes_requested": 2164396032,
+     "bytes_read": 2164396032,
+     "chunks": 2067,
+     "read_errors": 0,
+     "filled_zero": 0,
+     "read_mib_s": 173.89
+    },
+    "output": {
+     "writer": "raw",
+     "full": true,
+     "bytes_logical": 2164396032,
+     "bytes_on_disk": 537001984,
+     "sha256_covers_file": true,
+     "sha256": "3b3101009eb68322ecaf5df01551848379f91afe302013d8c849a349239fc1ea"
+    }
+   },
+   "po/run_sha256_skalar_sidecars/hyptcn-guest_000001_20260918T164605351Z.json": {
+    "schema": "vmicollect/1",
+    "version": "1.0.0",
+    "seq": 1,
+    "id": "hyptcn-guest_000001_20260918T164605351Z",
+    "path": "/var/tmp/optim-work/hyptcn-guest_000001_20260918T164605351Z.raw",
+    "timestamp": "2026-09-18T16:46:05.351Z",
+    "timestamp_unix": 1789749965.351,
+    "vm": {
+     "domain": "hyptcn-guest",
+     "backend": "ebpf/kvm",
+     "vmid": 1353046,
+     "memsize": 2164396032,
+     "max_paddr": 4294967296,
+     "num_vcpus": 2,
+     "address_width": 0,
+     "page_mode": "n/a"
+    },
+    "capture": {
+     "regions": [],
+     "chunk_size": 1048576,
+     "paused": false,
+     "pause_ms": 0.0,
+     "pause_exceeded": false,
+     "capture_ms": 11892.128,
+     "write_ms": 197.911,
+     "total_ms": 12090.118
+    },
+    "stats": {
+     "bytes_requested": 2164396032,
+     "bytes_read": 2164396032,
+     "chunks": 2067,
+     "read_errors": 0,
+     "filled_zero": 0,
+     "read_mib_s": 173.57
+    },
+    "output": {
+     "writer": "raw",
+     "full": true,
+     "bytes_logical": 2164396032,
+     "bytes_on_disk": 537001984,
+     "sha256_covers_file": true,
+     "sha256": "07eeeb168105369bf00fae727656e1c33781f9002b28eb169e76e79d04992a09"
+    }
+   },
+   "po/run_sha256_skalar_sidecars/hyptcn-guest_000002_20260918T164620351Z.json": {
+    "schema": "vmicollect/1",
+    "version": "1.0.0",
+    "seq": 2,
+    "id": "hyptcn-guest_000002_20260918T164620351Z",
+    "path": "/var/tmp/optim-work/hyptcn-guest_000002_20260918T164620351Z.raw",
+    "timestamp": "2026-09-18T16:46:20.351Z",
+    "timestamp_unix": 1789749980.351,
+    "vm": {
+     "domain": "hyptcn-guest",
+     "backend": "ebpf/kvm",
+     "vmid": 1353046,
+     "memsize": 2164396032,
+     "max_paddr": 4294967296,
+     "num_vcpus": 2,
+     "address_width": 0,
+     "page_mode": "n/a"
+    },
+    "capture": {
+     "regions": [],
+     "chunk_size": 1048576,
+     "paused": false,
+     "pause_ms": 0.0,
+     "pause_exceeded": false,
+     "capture_ms": 11881.611,
+     "write_ms": 191.127,
+     "total_ms": 12072.809
+    },
+    "stats": {
+     "bytes_requested": 2164396032,
+     "bytes_read": 2164396032,
+     "chunks": 2067,
+     "read_errors": 0,
+     "filled_zero": 0,
+     "read_mib_s": 173.72
+    },
+    "output": {
+     "writer": "raw",
+     "full": true,
+     "bytes_logical": 2164396032,
+     "bytes_on_disk": 537001984,
+     "sha256_covers_file": true,
+     "sha256": "11de6ca59f7a30b212b70dcf341fdbd04b59b7827c0f3d6c3f1231380ae38c4b"
+    }
+   }
+  },
+  "logy": {
+   "verify_stara_vmic-delta.txt": "OK         /var/tmp/vmic-delta/hyptcn-guest_000000_20260918T143118834Z.vmicd\nOK         /var/tmp/vmic-delta/hyptcn-guest_000001_20260918T143123834Z.vmicd\nOK         /var/tmp/vmic-delta/hyptcn-guest_000002_20260918T143128834Z.vmicd\nOK         /var/tmp/vmic-delta/hyptcn-guest_000003_20260918T143133834Z.vmicd\nOK         /var/tmp/vmic-delta/hyptcn-guest_000004_20260918T143138834Z.vmicd\nOK         /var/tmp/vmic-delta/hyptcn-guest_000005_20260918T143143834Z.vmicd\n\nspolu: 6 v poriadku, 0 chybnych, 0 preskocenych\n",
+   "verify_stara_vmic-val.txt": "OK         /var/tmp/vmic-val/hyptcn-guest_000000_20260918T143954722Z.vmicd\n\nspolu: 1 v poriadku, 0 chybnych, 0 preskocenych\n",
+   "pred/once_none_1.log": "2026-09-18T16:33:02.006Z WARN  libbpf: Error in bpf_create_map_xattr(pages): -EINVAL. Retrying without BTF.\n2026-09-18T16:33:03.193Z INFO  ebpf: 'hyptcn-guest' (pid 1353046): 10 memslotov, 2.02 GiB pamate, max GPA 0x100000000\n2026-09-18T16:33:03.195Z WARN  ebpf: 4.00 KiB pamate hosta nie je anonymna (/dev/zero (deleted)) - citanie stranky, ktorej sa host este nedotkol, ju hostitelovi NAOZAJ alokuje\n2026-09-18T16:33:03.195Z WARN  ebpf: pri takejto VM zbieraj radsej konkretne oblasti (capture.regions), nech nenafuknes jej pamat na plnu velkost\n2026-09-18T16:33:03.195Z INFO  VM 'hyptcn-guest' [ebpf/kvm]: RAM 2.02 GiB, max_paddr 0x100000000, vCPU 2, strankovanie n/a\n2026-09-18T16:33:03.195Z INFO  zbierane oblasti: 5, spolu 2.02 GiB\n2026-09-18T16:33:03.195Z INFO  zacinam zber: perioda 5.000 s, writer 'raw', vystup '/var/tmp/optim-work'\n2026-09-18T16:33:03.781Z INFO  #0  2.02 GiB (513.12 MiB na disku)  pauza 0.0 ms  citanie 379.9 ms  5433 MiB/s  spolu 586.7 ms\n2026-09-18T16:33:03.781Z INFO  koniec: 1 snimok, 0 chyb, 0 zmeskanych slotov, najvacsie meskanie 0.000 s, spolu 513.12 MiB\n",
+   "pred/once_none_2.log": "2026-09-18T16:33:18.874Z WARN  libbpf: Error in bpf_create_map_xattr(pages): -EINVAL. Retrying without BTF.\n2026-09-18T16:33:20.056Z INFO  ebpf: 'hyptcn-guest' (pid 1353046): 10 memslotov, 2.02 GiB pamate, max GPA 0x100000000\n2026-09-18T16:33:20.057Z WARN  ebpf: 4.00 KiB pamate hosta nie je anonymna (/dev/zero (deleted)) - citanie stranky, ktorej sa host este nedotkol, ju hostitelovi NAOZAJ alokuje\n2026-09-18T16:33:20.057Z WARN  ebpf: pri takejto VM zbieraj radsej konkretne oblasti (capture.regions), nech nenafuknes jej pamat na plnu velkost\n2026-09-18T16:33:20.057Z INFO  VM 'hyptcn-guest' [ebpf/kvm]: RAM 2.02 GiB, max_paddr 0x100000000, vCPU 2, strankovanie n/a\n2026-09-18T16:33:20.057Z INFO  zbierane oblasti: 5, spolu 2.02 GiB\n2026-09-18T16:33:20.057Z INFO  zacinam zber: perioda 5.000 s, writer 'raw', vystup '/var/tmp/optim-work'\n2026-09-18T16:33:20.647Z INFO  #0  2.02 GiB (513.12 MiB na disku)  pauza 0.0 ms  citanie 387.4 ms  5328 MiB/s  spolu 589.9 ms\n2026-09-18T16:33:20.647Z INFO  koniec: 1 snimok, 0 chyb, 0 zmeskanych slotov, najvacsie meskanie 0.000 s, spolu 513.12 MiB\n",
+   "pred/once_none_3.log": "2026-09-18T16:33:35.908Z WARN  libbpf: Error in bpf_create_map_xattr(pages): -EINVAL. Retrying without BTF.\n2026-09-18T16:33:37.119Z INFO  ebpf: 'hyptcn-guest' (pid 1353046): 10 memslotov, 2.02 GiB pamate, max GPA 0x100000000\n2026-09-18T16:33:37.120Z WARN  ebpf: 4.00 KiB pamate hosta nie je anonymna (/dev/zero (deleted)) - citanie stranky, ktorej sa host este nedotkol, ju hostitelovi NAOZAJ alokuje\n2026-09-18T16:33:37.120Z WARN  ebpf: pri takejto VM zbieraj radsej konkretne oblasti (capture.regions), nech nenafuknes jej pamat na plnu velkost\n2026-09-18T16:33:37.120Z INFO  VM 'hyptcn-guest' [ebpf/kvm]: RAM 2.02 GiB, max_paddr 0x100000000, vCPU 2, strankovanie n/a\n2026-09-18T16:33:37.120Z INFO  zbierane oblasti: 5, spolu 2.02 GiB\n2026-09-18T16:33:37.120Z INFO  zacinam zber: perioda 5.000 s, writer 'raw', vystup '/var/tmp/optim-work'\n2026-09-18T16:33:37.731Z INFO  #0  2.02 GiB (513.12 MiB na disku)  pauza 0.0 ms  citanie 402.4 ms  5130 MiB/s  spolu 611.0 ms\n2026-09-18T16:33:37.731Z INFO  koniec: 1 snimok, 0 chyb, 0 zmeskanych slotov, najvacsie meskanie 0.000 s, spolu 513.12 MiB\n",
+   "pred/once_sha256_1.log": "2026-09-18T16:32:47.043Z WARN  libbpf: Error in bpf_create_map_xattr(pages): -EINVAL. Retrying without BTF.\n2026-09-18T16:32:48.256Z INFO  ebpf: 'hyptcn-guest' (pid 1353046): 10 memslotov, 2.02 GiB pamate, max GPA 0x100000000\n2026-09-18T16:32:48.257Z WARN  ebpf: 4.00 KiB pamate hosta nie je anonymna (/dev/zero (deleted)) - citanie stranky, ktorej sa host este nedotkol, ju hostitelovi NAOZAJ alokuje\n2026-09-18T16:32:48.257Z WARN  ebpf: pri takejto VM zbieraj radsej konkretne oblasti (capture.regions), nech nenafuknes jej pamat na plnu velkost\n2026-09-18T16:32:48.257Z INFO  VM 'hyptcn-guest' [ebpf/kvm]: RAM 2.02 GiB, max_paddr 0x100000000, vCPU 2, strankovanie n/a\n2026-09-18T16:32:48.257Z INFO  zbierane oblasti: 5, spolu 2.02 GiB\n2026-09-18T16:32:48.257Z INFO  zacinam zber: perioda 5.000 s, writer 'raw', vystup '/var/tmp/optim-work'\n2026-09-18T16:33:01.622Z INFO  #0  2.02 GiB (513.12 MiB na disku)  pauza 0.0 ms  citanie 381.2 ms  5416 MiB/s  spolu 13364.9 ms\n2026-09-18T16:33:01.622Z WARN  planovac: cyklus 0 trval 13.365 s (perioda 5.000 s) - zahadzujem 2 slotov\n2026-09-18T16:33:01.622Z INFO  koniec: 1 snimok, 0 chyb, 2 zmeskanych slotov, najvacsie meskanie 0.000 s, spolu 513.12 MiB\n",
+   "pred/once_sha256_2.log": "2026-09-18T16:33:03.994Z WARN  libbpf: Error in bpf_create_map_xattr(pages): -EINVAL. Retrying without BTF.\n2026-09-18T16:33:05.175Z INFO  ebpf: 'hyptcn-guest' (pid 1353046): 10 memslotov, 2.02 GiB pamate, max GPA 0x100000000\n2026-09-18T16:33:05.176Z WARN  ebpf: 4.00 KiB pamate hosta nie je anonymna (/dev/zero (deleted)) - citanie stranky, ktorej sa host este nedotkol, ju hostitelovi NAOZAJ alokuje\n2026-09-18T16:33:05.176Z WARN  ebpf: pri takejto VM zbieraj radsej konkretne oblasti (capture.regions), nech nenafuknes jej pamat na plnu velkost\n2026-09-18T16:33:05.176Z INFO  VM 'hyptcn-guest' [ebpf/kvm]: RAM 2.02 GiB, max_paddr 0x100000000, vCPU 2, strankovanie n/a\n2026-09-18T16:33:05.176Z INFO  zbierane oblasti: 5, spolu 2.02 GiB\n2026-09-18T16:33:05.176Z INFO  zacinam zber: perioda 5.000 s, writer 'raw', vystup '/var/tmp/optim-work'\n2026-09-18T16:33:18.460Z INFO  #0  2.02 GiB (513.12 MiB na disku)  pauza 0.0 ms  citanie 388.5 ms  5313 MiB/s  spolu 13283.4 ms\n2026-09-18T16:33:18.460Z WARN  planovac: cyklus 0 trval 13.284 s (perioda 5.000 s) - zahadzujem 2 slotov\n2026-09-18T16:33:18.460Z INFO  koniec: 1 snimok, 0 chyb, 2 zmeskanych slotov, najvacsie meskanie 0.000 s, spolu 513.12 MiB\n",
+   "pred/once_sha256_3.log": "2026-09-18T16:33:20.862Z WARN  libbpf: Error in bpf_create_map_xattr(pages): -EINVAL. Retrying without BTF.\n2026-09-18T16:33:22.035Z INFO  ebpf: 'hyptcn-guest' (pid 1353046): 10 memslotov, 2.02 GiB pamate, max GPA 0x100000000\n2026-09-18T16:33:22.036Z WARN  ebpf: 4.00 KiB pamate hosta nie je anonymna (/dev/zero (deleted)) - citanie stranky, ktorej sa host este nedotkol, ju hostitelovi NAOZAJ alokuje\n2026-09-18T16:33:22.036Z WARN  ebpf: pri takejto VM zbieraj radsej konkretne oblasti (capture.regions), nech nenafuknes jej pamat na plnu velkost\n2026-09-18T16:33:22.036Z INFO  VM 'hyptcn-guest' [ebpf/kvm]: RAM 2.02 GiB, max_paddr 0x100000000, vCPU 2, strankovanie n/a\n2026-09-18T16:33:22.036Z INFO  zbierane oblasti: 5, spolu 2.02 GiB\n2026-09-18T16:33:22.036Z INFO  zacinam zber: perioda 5.000 s, writer 'raw', vystup '/var/tmp/optim-work'\n2026-09-18T16:33:35.516Z INFO  #0  2.02 GiB (513.12 MiB na disku)  pauza 0.0 ms  citanie 388.1 ms  5318 MiB/s  spolu 13479.4 ms\n2026-09-18T16:33:35.516Z WARN  planovac: cyklus 0 trval 13.480 s (perioda 5.000 s) - zahadzujem 2 slotov\n2026-09-18T16:33:35.516Z INFO  koniec: 1 snimok, 0 chyb, 2 zmeskanych slotov, najvacsie meskanie 0.000 s, spolu 513.12 MiB\n",
+   "pred/run_none.log": "2026-09-18T16:34:31.037Z WARN  libbpf: Error in bpf_create_map_xattr(pages): -EINVAL. Retrying without BTF.\n2026-09-18T16:34:32.235Z INFO  ebpf: 'hyptcn-guest' (pid 1353046): 10 memslotov, 2.02 GiB pamate, max GPA 0x100000000\n2026-09-18T16:34:32.237Z WARN  ebpf: 4.00 KiB pamate hosta nie je anonymna (/dev/zero (deleted)) - citanie stranky, ktorej sa host este nedotkol, ju hostitelovi NAOZAJ alokuje\n2026-09-18T16:34:32.237Z WARN  ebpf: pri takejto VM zbieraj radsej konkretne oblasti (capture.regions), nech nenafuknes jej pamat na plnu velkost\n2026-09-18T16:34:32.237Z INFO  VM 'hyptcn-guest' [ebpf/kvm]: RAM 2.02 GiB, max_paddr 0x100000000, vCPU 2, strankovanie n/a\n2026-09-18T16:34:32.237Z INFO  zbierane oblasti: 5, spolu 2.02 GiB\n2026-09-18T16:34:32.237Z INFO  zacinam zber: perioda 5.000 s, writer 'raw', vystup '/var/tmp/optim-work'\n2026-09-18T16:34:42.414Z INFO  #0  2.02 GiB (513.12 MiB na disku)  pauza 0.0 ms  citanie 440.3 ms  4688 MiB/s  spolu 10177.1 ms\n2026-09-18T16:34:42.414Z WARN  planovac: cyklus 0 trval 10.177 s (perioda 5.000 s) - zahadzujem 2 slotov\n2026-09-18T16:34:57.877Z INFO  #1  2.02 GiB (512.12 MiB na disku)  pauza 0.0 ms  citanie 414.9 ms  4975 MiB/s  spolu 10640.5 ms\n2026-09-18T16:34:57.877Z WARN  planovac: cyklus 1 trval 10.641 s (perioda 5.000 s) - zahadzujem 2 slotov\n2026-09-18T16:35:02.879Z INFO  #2  2.02 GiB (512.12 MiB na disku)  pauza 0.0 ms  citanie 420.4 ms  4910 MiB/s  spolu 642.4 ms\n2026-09-18T16:35:02.879Z INFO  koniec: 3 snimok, 0 chyb, 4 zmeskanych slotov, najvacsie meskanie 0.000 s, spolu 1.50 GiB\n",
+   "pred/run_sha256.log": "2026-09-18T16:33:37.923Z WARN  libbpf: Error in bpf_create_map_xattr(pages): -EINVAL. Retrying without BTF.\n2026-09-18T16:33:39.093Z INFO  ebpf: 'hyptcn-guest' (pid 1353046): 10 memslotov, 2.02 GiB pamate, max GPA 0x100000000\n2026-09-18T16:33:39.094Z WARN  ebpf: 4.00 KiB pamate hosta nie je anonymna (/dev/zero (deleted)) - citanie stranky, ktorej sa host este nedotkol, ju hostitelovi NAOZAJ alokuje\n2026-09-18T16:33:39.094Z WARN  ebpf: pri takejto VM zbieraj radsej konkretne oblasti (capture.regions), nech nenafuknes jej pamat na plnu velkost\n2026-09-18T16:33:39.094Z INFO  VM 'hyptcn-guest' [ebpf/kvm]: RAM 2.02 GiB, max_paddr 0x100000000, vCPU 2, strankovanie n/a\n2026-09-18T16:33:39.094Z INFO  zbierane oblasti: 5, spolu 2.02 GiB\n2026-09-18T16:33:39.094Z INFO  zacinam zber: perioda 5.000 s, writer 'raw', vystup '/var/tmp/optim-work'\n2026-09-18T16:33:53.737Z INFO  #0  2.02 GiB (513.12 MiB na disku)  pauza 0.0 ms  citanie 412.4 ms  5005 MiB/s  spolu 14643.0 ms\n2026-09-18T16:33:53.737Z WARN  planovac: cyklus 0 trval 14.643 s (perioda 5.000 s) - zahadzujem 2 slotov\n2026-09-18T16:34:08.778Z INFO  #1  2.02 GiB (513.12 MiB na disku)  pauza 0.0 ms  citanie 438.9 ms  4703 MiB/s  spolu 14678.2 ms\n2026-09-18T16:34:08.778Z WARN  planovac: cyklus 1 trval 14.684 s (perioda 5.000 s) - zahadzujem 2 slotov\n2026-09-18T16:34:30.318Z INFO  #2  2.02 GiB (513.12 MiB na disku)  pauza 0.0 ms  citanie 568.1 ms  3633 MiB/s  spolu 21223.6 ms\n2026-09-18T16:34:30.318Z WARN  planovac: cyklus 2 trval 21.224 s (perioda 5.000 s) - zahadzujem 4 slotov\n2026-09-18T16:34:30.318Z INFO  koniec: 3 snimok, 0 chyb, 8 zmeskanych slotov, najvacsie meskanie 0.000 s, spolu 1.50 GiB\n",
+   "po/once_none_1.log": "2026-09-18T16:44:53.955Z WARN  libbpf: Error in bpf_create_map_xattr(pages): -EINVAL. Retrying without BTF.\n2026-09-18T16:44:55.069Z INFO  ebpf: 'hyptcn-guest' (pid 1353046): 10 memslotov, 2.02 GiB pamate, max GPA 0x100000000\n2026-09-18T16:44:55.071Z WARN  ebpf: 4.00 KiB pamate hosta nie je anonymna (/dev/zero (deleted)) - citanie stranky, ktorej sa host este nedotkol, ju hostitelovi NAOZAJ alokuje\n2026-09-18T16:44:55.071Z WARN  ebpf: pri takejto VM zbieraj radsej konkretne oblasti (capture.regions), nech nenafuknes jej pamat na plnu velkost\n2026-09-18T16:44:55.071Z INFO  VM 'hyptcn-guest' [ebpf/kvm]: RAM 2.02 GiB, max_paddr 0x100000000, vCPU 2, strankovanie n/a\n2026-09-18T16:44:55.071Z INFO  zbierane oblasti: 5, spolu 2.02 GiB\n2026-09-18T16:44:55.071Z INFO  zacinam zber: perioda 5.000 s, writer 'raw', vystup '/var/tmp/optim-work'\n2026-09-18T16:44:55.668Z INFO  #0  2.02 GiB (512.12 MiB na disku)  pauza 0.0 ms  citanie 382.5 ms  5396 MiB/s  spolu 597.0 ms\n2026-09-18T16:44:55.668Z INFO  koniec: 1 snimok, 0 chyb, 0 zmeskanych slotov, najvacsie meskanie 0.000 s, spolu 512.12 MiB\n",
+   "po/once_none_2.log": "2026-09-18T16:45:13.218Z WARN  libbpf: Error in bpf_create_map_xattr(pages): -EINVAL. Retrying without BTF.\n2026-09-18T16:45:14.334Z INFO  ebpf: 'hyptcn-guest' (pid 1353046): 10 memslotov, 2.02 GiB pamate, max GPA 0x100000000\n2026-09-18T16:45:14.335Z WARN  ebpf: 4.00 KiB pamate hosta nie je anonymna (/dev/zero (deleted)) - citanie stranky, ktorej sa host este nedotkol, ju hostitelovi NAOZAJ alokuje\n2026-09-18T16:45:14.335Z WARN  ebpf: pri takejto VM zbieraj radsej konkretne oblasti (capture.regions), nech nenafuknes jej pamat na plnu velkost\n2026-09-18T16:45:14.335Z INFO  VM 'hyptcn-guest' [ebpf/kvm]: RAM 2.02 GiB, max_paddr 0x100000000, vCPU 2, strankovanie n/a\n2026-09-18T16:45:14.335Z INFO  zbierane oblasti: 5, spolu 2.02 GiB\n2026-09-18T16:45:14.335Z INFO  zacinam zber: perioda 5.000 s, writer 'raw', vystup '/var/tmp/optim-work'\n2026-09-18T16:45:14.911Z INFO  #0  2.02 GiB (512.12 MiB na disku)  pauza 0.0 ms  citanie 380.7 ms  5422 MiB/s  spolu 575.8 ms\n2026-09-18T16:45:14.911Z INFO  koniec: 1 snimok, 0 chyb, 0 zmeskanych slotov, najvacsie meskanie 0.000 s, spolu 512.12 MiB\n",
+   "po/once_none_3.log": "2026-09-18T16:45:32.353Z WARN  libbpf: Error in bpf_create_map_xattr(pages): -EINVAL. Retrying without BTF.\n2026-09-18T16:45:33.479Z INFO  ebpf: 'hyptcn-guest' (pid 1353046): 10 memslotov, 2.02 GiB pamate, max GPA 0x100000000\n2026-09-18T16:45:33.480Z WARN  ebpf: 4.00 KiB pamate hosta nie je anonymna (/dev/zero (deleted)) - citanie stranky, ktorej sa host este nedotkol, ju hostitelovi NAOZAJ alokuje\n2026-09-18T16:45:33.480Z WARN  ebpf: pri takejto VM zbieraj radsej konkretne oblasti (capture.regions), nech nenafuknes jej pamat na plnu velkost\n2026-09-18T16:45:33.480Z INFO  VM 'hyptcn-guest' [ebpf/kvm]: RAM 2.02 GiB, max_paddr 0x100000000, vCPU 2, strankovanie n/a\n2026-09-18T16:45:33.480Z INFO  zbierane oblasti: 5, spolu 2.02 GiB\n2026-09-18T16:45:33.480Z INFO  zacinam zber: perioda 5.000 s, writer 'raw', vystup '/var/tmp/optim-work'\n2026-09-18T16:45:34.058Z INFO  #0  2.02 GiB (512.12 MiB na disku)  pauza 0.0 ms  citanie 379.7 ms  5436 MiB/s  spolu 577.7 ms\n2026-09-18T16:45:34.058Z INFO  koniec: 1 snimok, 0 chyb, 0 zmeskanych slotov, najvacsie meskanie 0.000 s, spolu 512.12 MiB\n",
+   "po/once_sha256_1.log": "2026-09-18T16:44:36.641Z WARN  libbpf: Error in bpf_create_map_xattr(pages): -EINVAL. Retrying without BTF.\n2026-09-18T16:44:37.759Z INFO  ebpf: 'hyptcn-guest' (pid 1353046): 10 memslotov, 2.02 GiB pamate, max GPA 0x100000000\n2026-09-18T16:44:37.760Z WARN  ebpf: 4.00 KiB pamate hosta nie je anonymna (/dev/zero (deleted)) - citanie stranky, ktorej sa host este nedotkol, ju hostitelovi NAOZAJ alokuje\n2026-09-18T16:44:37.760Z WARN  ebpf: pri takejto VM zbieraj radsej konkretne oblasti (capture.regions), nech nenafuknes jej pamat na plnu velkost\n2026-09-18T16:44:37.760Z INFO  VM 'hyptcn-guest' [ebpf/kvm]: RAM 2.02 GiB, max_paddr 0x100000000, vCPU 2, strankovanie n/a\n2026-09-18T16:44:37.760Z INFO  zbierane oblasti: 5, spolu 2.02 GiB\n2026-09-18T16:44:37.760Z INFO  zacinam zber: perioda 5.000 s, writer 'raw', vystup '/var/tmp/optim-work'\n2026-09-18T16:44:40.249Z INFO  #0  2.02 GiB (512.12 MiB na disku)  pauza 0.0 ms  citanie 2288.4 ms  902 MiB/s  spolu 2489.0 ms\n2026-09-18T16:44:40.249Z INFO  koniec: 1 snimok, 0 chyb, 0 zmeskanych slotov, najvacsie meskanie 0.000 s, spolu 512.12 MiB\n",
+   "po/once_sha256_2.log": "2026-09-18T16:44:55.909Z WARN  libbpf: Error in bpf_create_map_xattr(pages): -EINVAL. Retrying without BTF.\n2026-09-18T16:44:57.027Z INFO  ebpf: 'hyptcn-guest' (pid 1353046): 10 memslotov, 2.02 GiB pamate, max GPA 0x100000000\n2026-09-18T16:44:57.028Z WARN  ebpf: 4.00 KiB pamate hosta nie je anonymna (/dev/zero (deleted)) - citanie stranky, ktorej sa host este nedotkol, ju hostitelovi NAOZAJ alokuje\n2026-09-18T16:44:57.028Z WARN  ebpf: pri takejto VM zbieraj radsej konkretne oblasti (capture.regions), nech nenafuknes jej pamat na plnu velkost\n2026-09-18T16:44:57.028Z INFO  VM 'hyptcn-guest' [ebpf/kvm]: RAM 2.02 GiB, max_paddr 0x100000000, vCPU 2, strankovanie n/a\n2026-09-18T16:44:57.028Z INFO  zbierane oblasti: 5, spolu 2.02 GiB\n2026-09-18T16:44:57.028Z INFO  zacinam zber: perioda 5.000 s, writer 'raw', vystup '/var/tmp/optim-work'\n2026-09-18T16:44:59.509Z INFO  #0  2.02 GiB (512.12 MiB na disku)  pauza 0.0 ms  citanie 2287.9 ms  902 MiB/s  spolu 2480.9 ms\n2026-09-18T16:44:59.509Z INFO  koniec: 1 snimok, 0 chyb, 0 zmeskanych slotov, najvacsie meskanie 0.000 s, spolu 512.12 MiB\n",
+   "po/once_sha256_3.log": "2026-09-18T16:45:15.125Z WARN  libbpf: Error in bpf_create_map_xattr(pages): -EINVAL. Retrying without BTF.\n2026-09-18T16:45:16.247Z INFO  ebpf: 'hyptcn-guest' (pid 1353046): 10 memslotov, 2.02 GiB pamate, max GPA 0x100000000\n2026-09-18T16:45:16.248Z WARN  ebpf: 4.00 KiB pamate hosta nie je anonymna (/dev/zero (deleted)) - citanie stranky, ktorej sa host este nedotkol, ju hostitelovi NAOZAJ alokuje\n2026-09-18T16:45:16.248Z WARN  ebpf: pri takejto VM zbieraj radsej konkretne oblasti (capture.regions), nech nenafuknes jej pamat na plnu velkost\n2026-09-18T16:45:16.248Z INFO  VM 'hyptcn-guest' [ebpf/kvm]: RAM 2.02 GiB, max_paddr 0x100000000, vCPU 2, strankovanie n/a\n2026-09-18T16:45:16.248Z INFO  zbierane oblasti: 5, spolu 2.02 GiB\n2026-09-18T16:45:16.248Z INFO  zacinam zber: perioda 5.000 s, writer 'raw', vystup '/var/tmp/optim-work'\n2026-09-18T16:45:18.729Z INFO  #0  2.02 GiB (512.12 MiB na disku)  pauza 0.0 ms  citanie 2284.4 ms  904 MiB/s  spolu 2480.6 ms\n2026-09-18T16:45:18.729Z INFO  koniec: 1 snimok, 0 chyb, 0 zmeskanych slotov, najvacsie meskanie 0.000 s, spolu 512.12 MiB\n",
+   "po/once_sha256_skalar_1.log": "2026-09-18T16:44:40.479Z WARN  libbpf: Error in bpf_create_map_xattr(pages): -EINVAL. Retrying without BTF.\n2026-09-18T16:44:41.606Z INFO  ebpf: 'hyptcn-guest' (pid 1353046): 10 memslotov, 2.02 GiB pamate, max GPA 0x100000000\n2026-09-18T16:44:41.607Z WARN  ebpf: 4.00 KiB pamate hosta nie je anonymna (/dev/zero (deleted)) - citanie stranky, ktorej sa host este nedotkol, ju hostitelovi NAOZAJ alokuje\n2026-09-18T16:44:41.607Z WARN  ebpf: pri takejto VM zbieraj radsej konkretne oblasti (capture.regions), nech nenafuknes jej pamat na plnu velkost\n2026-09-18T16:44:41.607Z INFO  VM 'hyptcn-guest' [ebpf/kvm]: RAM 2.02 GiB, max_paddr 0x100000000, vCPU 2, strankovanie n/a\n2026-09-18T16:44:41.607Z INFO  zbierane oblasti: 5, spolu 2.02 GiB\n2026-09-18T16:44:41.607Z INFO  zacinam zber: perioda 5.000 s, writer 'raw', vystup '/var/tmp/optim-work'\n2026-09-18T16:44:53.734Z INFO  #0  2.02 GiB (512.12 MiB na disku)  pauza 0.0 ms  citanie 11935.1 ms  173 MiB/s  spolu 12126.8 ms\n2026-09-18T16:44:53.734Z WARN  planovac: cyklus 0 trval 12.127 s (perioda 5.000 s) - zahadzujem 2 slotov\n2026-09-18T16:44:53.734Z INFO  koniec: 1 snimok, 0 chyb, 2 zmeskanych slotov, najvacsie meskanie 0.000 s, spolu 512.12 MiB\n",
+   "po/once_sha256_skalar_2.log": "2026-09-18T16:44:59.752Z WARN  libbpf: Error in bpf_create_map_xattr(pages): -EINVAL. Retrying without BTF.\n2026-09-18T16:45:00.879Z INFO  ebpf: 'hyptcn-guest' (pid 1353046): 10 memslotov, 2.02 GiB pamate, max GPA 0x100000000\n2026-09-18T16:45:00.880Z WARN  ebpf: 4.00 KiB pamate hosta nie je anonymna (/dev/zero (deleted)) - citanie stranky, ktorej sa host este nedotkol, ju hostitelovi NAOZAJ alokuje\n2026-09-18T16:45:00.880Z WARN  ebpf: pri takejto VM zbieraj radsej konkretne oblasti (capture.regions), nech nenafuknes jej pamat na plnu velkost\n2026-09-18T16:45:00.880Z INFO  VM 'hyptcn-guest' [ebpf/kvm]: RAM 2.02 GiB, max_paddr 0x100000000, vCPU 2, strankovanie n/a\n2026-09-18T16:45:00.880Z INFO  zbierane oblasti: 5, spolu 2.02 GiB\n2026-09-18T16:45:00.880Z INFO  zacinam zber: perioda 5.000 s, writer 'raw', vystup '/var/tmp/optim-work'\n2026-09-18T16:45:12.989Z INFO  #0  2.02 GiB (512.12 MiB na disku)  pauza 0.0 ms  citanie 11900.5 ms  173 MiB/s  spolu 12108.4 ms\n2026-09-18T16:45:12.989Z WARN  planovac: cyklus 0 trval 12.108 s (perioda 5.000 s) - zahadzujem 2 slotov\n2026-09-18T16:45:12.989Z INFO  koniec: 1 snimok, 0 chyb, 2 zmeskanych slotov, najvacsie meskanie 0.000 s, spolu 512.12 MiB\n",
+   "po/once_sha256_skalar_3.log": "2026-09-18T16:45:18.934Z WARN  libbpf: Error in bpf_create_map_xattr(pages): -EINVAL. Retrying without BTF.\n2026-09-18T16:45:20.054Z INFO  ebpf: 'hyptcn-guest' (pid 1353046): 10 memslotov, 2.02 GiB pamate, max GPA 0x100000000\n2026-09-18T16:45:20.056Z WARN  ebpf: 4.00 KiB pamate hosta nie je anonymna (/dev/zero (deleted)) - citanie stranky, ktorej sa host este nedotkol, ju hostitelovi NAOZAJ alokuje\n2026-09-18T16:45:20.056Z WARN  ebpf: pri takejto VM zbieraj radsej konkretne oblasti (capture.regions), nech nenafuknes jej pamat na plnu velkost\n2026-09-18T16:45:20.056Z INFO  VM 'hyptcn-guest' [ebpf/kvm]: RAM 2.02 GiB, max_paddr 0x100000000, vCPU 2, strankovanie n/a\n2026-09-18T16:45:20.056Z INFO  zbierane oblasti: 5, spolu 2.02 GiB\n2026-09-18T16:45:20.056Z INFO  zacinam zber: perioda 5.000 s, writer 'raw', vystup '/var/tmp/optim-work'\n2026-09-18T16:45:32.127Z INFO  #0  2.02 GiB (512.12 MiB na disku)  pauza 0.0 ms  citanie 11853.9 ms  174 MiB/s  spolu 12071.6 ms\n2026-09-18T16:45:32.127Z WARN  planovac: cyklus 0 trval 12.072 s (perioda 5.000 s) - zahadzujem 2 slotov\n2026-09-18T16:45:32.127Z INFO  koniec: 1 snimok, 0 chyb, 2 zmeskanych slotov, najvacsie meskanie 0.000 s, spolu 512.12 MiB\n",
+   "po/pause_fallback.log": "2026-09-18T16:47:40.371Z DEBUG ebpf: BTF vfs: task.files +3456, files.fdt +32, fdt.max_fds +0, fdt.fd +8, file.private_data +24, file.f_path +64, path.dentry +8, dentry.d_name +32, qstr.name +8, hlist.first +0, hlist.next +0\n2026-09-18T16:47:40.371Z DEBUG ebpf: BTF kvm: memslots +4360 (2 x 8 B), online_vcpus +4440, userspace_pid +6864 | memslots: generation +0, id_hash +40 (128), node_idx +1064 | slot: id_node +0 (16 B), base_gfn +176, npages +184, userspace_addr +248, flags +256, id +260\n2026-09-18T16:47:40.371Z DEBUG libbpf: loading object 'vmic_kvm' from buffer\n2026-09-18T16:47:40.371Z DEBUG libbpf: elf: section(2) .text, size 2464, link 0, flags 6, type=1\n2026-09-18T16:47:40.371Z DEBUG libbpf: sec '.text': found program 'fd_scan_step' at insn offset 45 (360 bytes), code size 87 insns (696 bytes)\n2026-09-18T16:47:40.371Z DEBUG libbpf: sec '.text': found program 'slot_scan_bucket' at insn offset 132 (1056 bytes), code size 176 insns (1408 bytes)\n2026-09-18T16:47:40.371Z DEBUG libbpf: sec '.text': found program 'page_copy_step' at insn offset 0 (0 bytes), code size 45 insns (360 bytes)\n2026-09-18T16:47:40.371Z DEBUG libbpf: elf: section(3) .rel.text, size 96, link 28, flags 40, type=9\n2026-09-18T16:47:40.371Z DEBUG libbpf: elf: section(4) syscall, size 3880, link 0, flags 6, type=1\n2026-09-18T16:47:40.371Z DEBUG libbpf: sec 'syscall': found program 'vmic_probe' at insn offset 0 (0 bytes), code size 344 insns (2752 bytes)\n2026-09-18T16:47:40.371Z DEBUG libbpf: sec 'syscall': found program 'vmic_read' at insn offset 344 (2752 bytes), code size 141 insns (1128 bytes)\n2026-09-18T16:47:40.371Z DEBUG libbpf: elf: section(5) .relsyscall, size 240, link 28, flags 40, type=9\n2026-09-18T16:47:40.371Z DEBUG libbpf: elf: section(6) license, size 4, link 0, flags 3, type=1\n2026-09-18T16:47:40.371Z DEBUG libbpf: license of vmic_kvm is GPL\n2026-09-18T16:47:40.371Z DEBUG libbpf: elf: section(7) .maps, size 104, link 0, flags 3, type=1\n2026-09-18T16:47:40.371Z DEBUG libbpf: elf: section(18) .BTF, size 10457, link 0, flags 0, type=1\n2026-09-18T16:47:40.371Z DEBUG libbpf: elf: section(20) .BTF.ext, size 4832, link 0, flags 0, type=1\n2026-09-18T16:47:40.371Z DEBUG libbpf: elf: section(28) .symtab, size 624, link 1, flags 0, type=2\n2026-09-18T16:47:40.372Z DEBUG libbpf: looking for externs among 26 symbols...\n2026-09-18T16:47:40.372Z DEBUG libbpf: collected 4 externs total\n2026-09-18T16:47:40.372Z DEBUG libbpf: extern (ksym) #0: symbol 20, name bpf_rcu_read_lock\n2026-09-18T16:47:40.372Z DEBUG libbpf: extern (ksym) #1: symbol 21, name bpf_rcu_read_unlock\n2026-09-18T16:47:40.372Z DEBUG libbpf: extern (ksym) #2: symbol 19, name bpf_task_from_vpid\n2026-09-18T16:47:40.372Z DEBUG libbpf: extern (ksym) #3: symbol 22, name bpf_task_release\n2026-09-18T16:47:40.372Z DEBUG libbpf: map 'koff': at sec_idx 7, offset 0.\n2026-09-18T16:47:40.372Z DEBUG libbpf: map 'koff': found type = 2.\n2026-09-18T16:47:40.372Z DEBUG libbpf: map 'koff': found key [8], sz = 4.\n2026-09-18T16:47:40.372Z DEBUG libbpf: map 'koff': found value [11], sz = 112.\n2026-09-18T16:47:40.372Z DEBUG libbpf: map 'koff': found max_entries = 1.\n2026-09-18T16:47:40.372Z DEBUG libbpf: map 'slots': at sec_idx 7, offset 32.\n2026-09-18T16:47:40.372Z DEBUG libbpf: map 'slots': found type = 2.\n2026-09-18T16:47:40.372Z DEBUG libbpf: map 'slots': found key [8], sz = 4.\n2026-09-18T16:47:40.372Z DEBUG libbpf: map 'slots': found value [15], sz = 2096.\n2026-09-18T16:47:40.372Z DEBUG libbpf: map 'slots': found max_entries = 1.\n2026-09-18T16:47:40.372Z DEBUG libbpf: map 'pages': at sec_idx 7, offset 64.\n2026-09-18T16:47:40.372Z DEBUG libbpf: map 'pages': found type = 2.\n2026-09-18T16:47:40.372Z DEBUG libbpf: map 'pages': found key [8], sz = 4.\n2026-09-18T16:47:40.372Z DEBUG libbpf: map 'pages': found value_size = 2097152.\n2026-09-18T16:47:40.372Z DEBUG libbpf: map 'pages': found max_entries = 1.\n2026-09-18T16:47:40.372Z DEBUG libbpf: map 'pages': found map_flags = 0x400.\n2026-09-18T16:47:40.372Z DEBUG libbpf: sec '.rel.text': collecting relocation for section(2) '.text'\n2026-09-18T16:47:40.372Z DEBUG libbpf: sec '.rel.text': relo #0: insn #12 against 'pages'\n2026-09-18T16:47:40.372Z DEBUG libbpf: prog 'page_copy_step': found map 2 (pages, sec 7, off 64) for insn #12\n2026-09-18T16:47:40.372Z DEBUG libbpf: sec '.rel.text': relo #1: insn #18 against 'bpf_task_from_vpid'\n2026-09-18T16:47:40.372Z DEBUG libbpf: prog 'page_copy_step': found extern #2 'bpf_task_from_vpid' (sym 19) for insn #18\n2026-09-18T16:47:40.372Z DEBUG libbpf: sec '.rel.text': relo #2: insn #32 against 'bpf_task_release'\n2026-09-18T16:47:40.372Z DEBUG libbpf: prog 'page_copy_step': found extern #3 'bpf_task_release' (sym 22) for insn #32\n2026-09-18T16:47:40.372Z DEBUG libbpf: sec '.rel.text': relo #3: insn #51 against 'koff'\n2026-09-18T16:47:40.372Z DEBUG libbpf: prog 'fd_scan_step': found map 0 (koff, sec 7, off 0) for insn #6\n2026-09-18T16:47:40.372Z DEBUG libbpf: sec '.rel.text': relo #4: insn #138 against 'koff'\n2026-09-18T16:47:40.372Z DEBUG libbpf: prog 'slot_scan_bucket': found map 0 (koff, sec 7, off 0) for insn #6\n2026-09-18T16:47:40.372Z DEBUG libbpf: sec '.rel.text': relo #5: insn #143 against 'slots'\n2026-09-18T16:47:40.372Z DEBUG libbpf: prog 'slot_scan_bucket': found map 1 (slots, sec 7, off 32) for insn #11\n2026-09-18T16:47:40.372Z DEBUG libbpf: sec '.relsyscall': collecting relocation for section(4) 'syscall'\n2026-09-18T16:47:40.372Z DEBUG libbpf: sec '.relsyscall': relo #0: insn #5 against 'koff'\n2026-09-18T16:47:40.372Z DEBUG libbpf: prog 'vmic_probe': found map 0 (koff, sec 7, off 0) for insn #5\n2026-09-18T16:47:40.372Z DEBUG libbpf: sec '.relsyscall': relo #1: insn #10 against 'slots'\n2026-09-18T16:47:40.372Z DEBUG libbpf: prog 'vmic_probe': found map 1 (slots, sec 7, off 32) for insn #10\n2026-09-18T16:47:40.372Z DEBUG libbpf: sec '.relsyscall': relo #2: insn #38 against 'bpf_task_from_vpid'\n2026-09-18T16:47:40.372Z DEBUG libbpf: prog 'vmic_probe': found extern #2 'bpf_task_from_vpid' (sym 19) for insn #38\n2026-09-18T16:47:40.372Z DEBUG libbpf: sec '.relsyscall': relo #3: insn #45 against 'bpf_rcu_read_lock'\n2026-09-18T16:47:40.372Z DEBUG libbpf: prog 'vmic_probe': found extern #0 'bpf_rcu_read_lock' (sym 20) for insn #45\n2026-09-18T16:47:40.372Z DEBUG libbpf: sec '.relsyscall': relo #4: insn #171 against '.text'\n2026-09-18T16:47:40.372Z DEBUG libbpf: sec '.relsyscall': relo #5: insn #182 against 'bpf_rcu_read_unlock'\n2026-09-18T16:47:40.372Z DEBUG libbpf: prog 'vmic_probe': found extern #1 'bpf_rcu_read_unlock' (sym 21) for insn #182\n2026-09-18T16:47:40.372Z DEBUG libbpf: sec '.relsyscall': relo #6: insn #184 against 'bpf_task_release'\n2026-09-18T16:47:40.372Z DEBUG libbpf: prog 'vmic_probe': found extern #3 'bpf_task_release' (sym 22) for insn #184\n2026-09-18T16:47:40.372Z DEBUG libbpf: sec '.relsyscall': relo #7: insn #260 against '.text'\n2026-09-18T16:47:40.372Z DEBUG libbpf: sec '.relsyscall': relo #8: insn #316 against 'bpf_rcu_read_unlock'\n2026-09-18T16:47:40.372Z DEBUG libbpf: prog 'vmic_probe': found extern #1 'bpf_rcu_read_unlock' (sym 21) for insn #316\n2026-09-18T16:47:40.372Z DEBUG libbpf: sec '.relsyscall': relo #9: insn #318 against 'bpf_task_release'\n2026-09-18T16:47:40.372Z DEBUG libbpf: prog 'vmic_probe': found extern #3 'bpf_task_release' (sym 22) for insn #318\n2026-09-18T16:47:40.372Z DEBUG libbpf: sec '.relsyscall': relo #10: insn #349 against 'slots'\n2026-09-18T16:47:40.372Z DEBUG libbpf: prog 'vmic_read': found map 1 (slots, sec 7, off 32) for insn #5\n2026-09-18T16:47:40.372Z DEBUG libbpf: sec '.relsyscall': relo #11: insn #354 against 'pages'\n2026-09-18T16:47:40.372Z DEBUG libbpf: prog 'vmic_read': found map 2 (pages, sec 7, off 64) for insn #10\n2026-09-18T16:47:40.372Z DEBUG libbpf: sec '.relsyscall': relo #12: insn #433 against 'bpf_task_from_vpid'\n2026-09-18T16:47:40.372Z DEBUG libbpf: prog 'vmic_read': found extern #2 'bpf_task_from_vpid' (sym 19) for insn #89\n2026-09-18T16:47:40.372Z DEBUG libbpf: sec '.relsyscall': relo #13: insn #456 against '.text'\n2026-09-18T16:47:40.372Z DEBUG libbpf: sec '.relsyscall': relo #14: insn #465 against 'bpf_task_release'\n2026-09-18T16:47:40.372Z DEBUG libbpf: prog 'vmic_read': found extern #3 'bpf_task_release' (sym 22) for insn #121\n2026-09-18T16:47:40.372Z DEBUG libbpf: object 'vmic_kvm': failed (-95) to create BPF token from '/sys/fs/bpf', skipping optional step...\n2026-09-18T16:47:40.375Z DEBUG libbpf: loaded kernel BTF from '/sys/kernel/btf/vmlinux'\n2026-09-18T16:47:40.375Z DEBUG libbpf: extern (func ksym) 'bpf_rcu_read_lock': resolved to vmlinux [87586]\n2026-09-18T16:47:40.375Z DEBUG libbpf: extern (func ksym) 'bpf_rcu_read_unlock': resolved to vmlinux [87587]\n2026-09-18T16:47:40.375Z DEBUG libbpf: extern (func ksym) 'bpf_task_from_vpid': resolved to vmlinux [87932]\n2026-09-18T16:47:40.375Z DEBUG libbpf: extern (func ksym) 'bpf_task_release': resolved to vmlinux [87935]\n2026-09-18T16:47:40.375Z DEBUG libbpf: prog 'vmic_probe': added 87 insns from sub-prog 'fd_scan_step'\n2026-09-18T16:47:40.375Z DEBUG libbpf: prog 'vmic_probe': insn #171 relocated, imm 172 points to subprog 'fd_scan_step' (now at 344 offset)\n2026-09-18T16:47:40.375Z DEBUG libbpf: prog 'vmic_probe': added 176 insns from sub-prog 'slot_scan_bucket'\n2026-09-18T16:47:40.375Z DEBUG libbpf: prog 'vmic_probe': insn #260 relocated, imm 170 points to subprog 'slot_scan_bucket' (now at 431 offset)\n2026-09-18T16:47:40.375Z DEBUG libbpf: prog 'vmic_read': added 45 insns from sub-prog 'page_copy_step'\n2026-09-18T16:47:40.375Z DEBUG libbpf: prog 'vmic_read': insn #112 relocated, imm 28 points to subprog 'page_copy_step' (now at 141 offset)\n2026-09-18T16:47:40.376Z DEBUG libbpf: map 'koff': created successfully, fd=3\n2026-09-18T16:47:40.376Z DEBUG libbpf: map 'slots': created successfully, fd=4\n2026-09-18T16:47:40.376Z WARN  libbpf: Error in bpf_create_map_xattr(pages): -EINVAL. Retrying without BTF.\n2026-09-18T16:47:40.376Z DEBUG libbpf: map 'pages': created successfully, fd=5\n2026-09-18T16:47:41.496Z INFO  ebpf: 'hyptcn-guest' (pid 1353046): 10 memslotov, 2.02 GiB pamate, max GPA 0x100000000\n2026-09-18T16:47:41.496Z DEBUG    slot  0: GPA 0x000000000000-0x00000009ffff  HVA 0x7f832a000000  flags 0x0\n2026-09-18T16:47:41.496Z DEBUG    slot  8: GPA 0x000000100000-0x00007fffffff  HVA 0x7f832a100000  flags 0x0\n2026-09-18T16:47:41.496Z DEBUG    slot 32765: GPA 0x0000fee00000-0x0000fee00fff  HVA 0x7f83ae9b6000  flags 0x0\n2026-09-18T16:47:41.496Z DEBUG    slot  3: GPA 0x0000000c0000-0x0000000cafff  HVA 0x7f832a0c0000  flags 0x0\n2026-09-18T16:47:41.496Z DEBUG    slot  6: GPA 0x0000000e8000-0x0000000effff  HVA 0x7f832a0e8000  flags 0x0\n2026-09-18T16:47:41.496Z DEBUG    slot  1: GPA 0x0000fffc0000-0x0000ffffffff  HVA 0x7f8328600000  flags 0x2\n2026-09-18T16:47:41.496Z DEBUG    slot  4: GPA 0x0000000cb000-0x0000000cdfff  HVA 0x7f832a0cb000  flags 0x0\n2026-09-18T16:47:41.496Z DEBUG    slot  7: GPA 0x0000000f0000-0x0000000fffff  HVA 0x7f832a0f0000  flags 0x0\n2026-09-18T16:47:41.496Z DEBUG    slot  2: GPA 0x0000fb000000-0x0000fbffffff  HVA 0x7f831ac00000  flags 0x1\n2026-09-18T16:47:41.496Z DEBUG    slot  5: GPA 0x0000000ce000-0x0000000e7fff  HVA 0x7f832a0ce000  flags 0x0\n2026-09-18T16:47:41.498Z WARN  ebpf: 4.00 KiB pamate hosta nie je anonymna (/dev/zero (deleted)) - citanie stranky, ktorej sa host este nedotkol, ju hostitelovi NAOZAJ alokuje\n2026-09-18T16:47:41.498Z WARN  ebpf: pri takejto VM zbieraj radsej konkretne oblasti (capture.regions), nech nenafuknes jej pamat na plnu velkost\n2026-09-18T16:47:41.498Z WARN  ebpf: capture.pause sa ignoruje - eBPF vie citat, nie riadit hypervizor; snimka bude 'ziva' (stranky su z roznych okamihov)\n2026-09-18T16:47:41.498Z INFO  VM 'hyptcn-guest' [ebpf/kvm]: RAM 2.02 GiB, max_paddr 0x100000000, vCPU 2, strankovanie n/a\n2026-09-18T16:47:41.498Z INFO  zbierane oblasti: 5, spolu 2.02 GiB\n2026-09-18T16:47:41.498Z DEBUG   [0] 0x0 + 0xa0000\n2026-09-18T16:47:41.498Z DEBUG   [1] 0xc0000 + 0x7ff40000\n2026-09-18T16:47:41.498Z DEBUG   [2] 0xfb000000 + 0x1000000\n2026-09-18T16:47:41.498Z DEBUG   [3] 0xfee00000 + 0x1000\n2026-09-18T16:47:41.498Z DEBUG   [4] 0xfffc0000 + 0x40000\n2026-09-18T16:47:41.498Z INFO  zacinam zber: perioda 5.000 s, writer 'raw', vystup '/var/tmp/optim-pause'\n2026-09-18T16:47:41.498Z WARN  capture.pause je zapnute, ale backend 'ebpf' VM zastavit nevie - snimka bude 'ziva' (stranky su z roznych okamihov)\n2026-09-18T16:47:44.950Z INFO  #0  2.02 GiB (512.12 MiB na disku)  pauza 0.0 ms  citanie 379.6 ms  5437 MiB/s  spolu 3452.7 ms\n2026-09-18T16:47:44.950Z INFO  koniec: 1 snimok, 0 chyb, 0 zmeskanych slotov, najvacsie meskanie 0.000 s, spolu 512.12 MiB\n",
+   "po/run_none.log": "2026-09-18T16:46:32.726Z WARN  libbpf: Error in bpf_create_map_xattr(pages): -EINVAL. Retrying without BTF.\n2026-09-18T16:46:33.847Z INFO  ebpf: 'hyptcn-guest' (pid 1353046): 10 memslotov, 2.02 GiB pamate, max GPA 0x100000000\n2026-09-18T16:46:33.848Z WARN  ebpf: 4.00 KiB pamate hosta nie je anonymna (/dev/zero (deleted)) - citanie stranky, ktorej sa host este nedotkol, ju hostitelovi NAOZAJ alokuje\n2026-09-18T16:46:33.848Z WARN  ebpf: pri takejto VM zbieraj radsej konkretne oblasti (capture.regions), nech nenafuknes jej pamat na plnu velkost\n2026-09-18T16:46:33.848Z INFO  VM 'hyptcn-guest' [ebpf/kvm]: RAM 2.02 GiB, max_paddr 0x100000000, vCPU 2, strankovanie n/a\n2026-09-18T16:46:33.848Z INFO  zbierane oblasti: 5, spolu 2.02 GiB\n2026-09-18T16:46:33.848Z INFO  zacinam zber: perioda 5.000 s, writer 'raw', vystup '/var/tmp/optim-work'\n2026-09-18T16:46:34.448Z INFO  #0  2.02 GiB (512.12 MiB na disku)  pauza 0.0 ms  citanie 377.2 ms  5472 MiB/s  spolu 599.4 ms\n2026-09-18T16:46:39.414Z INFO  #1  2.02 GiB (512.12 MiB na disku)  pauza 0.0 ms  citanie 373.5 ms  5526 MiB/s  spolu 565.8 ms\n2026-09-18T16:46:45.021Z INFO  #2  2.02 GiB (512.12 MiB na disku)  pauza 0.0 ms  citanie 369.8 ms  5582 MiB/s  spolu 1172.6 ms\n2026-09-18T16:46:45.021Z INFO  koniec: 3 snimok, 0 chyb, 0 zmeskanych slotov, najvacsie meskanie 0.000 s, spolu 1.50 GiB\n",
+   "po/run_sha256.log": "2026-09-18T16:45:34.272Z WARN  libbpf: Error in bpf_create_map_xattr(pages): -EINVAL. Retrying without BTF.\n2026-09-18T16:45:35.396Z INFO  ebpf: 'hyptcn-guest' (pid 1353046): 10 memslotov, 2.02 GiB pamate, max GPA 0x100000000\n2026-09-18T16:45:35.397Z WARN  ebpf: 4.00 KiB pamate hosta nie je anonymna (/dev/zero (deleted)) - citanie stranky, ktorej sa host este nedotkol, ju hostitelovi NAOZAJ alokuje\n2026-09-18T16:45:35.397Z WARN  ebpf: pri takejto VM zbieraj radsej konkretne oblasti (capture.regions), nech nenafuknes jej pamat na plnu velkost\n2026-09-18T16:45:35.397Z INFO  VM 'hyptcn-guest' [ebpf/kvm]: RAM 2.02 GiB, max_paddr 0x100000000, vCPU 2, strankovanie n/a\n2026-09-18T16:45:35.397Z INFO  zbierane oblasti: 5, spolu 2.02 GiB\n2026-09-18T16:45:35.397Z INFO  zacinam zber: perioda 5.000 s, writer 'raw', vystup '/var/tmp/optim-work'\n2026-09-18T16:45:37.896Z INFO  #0  2.02 GiB (512.12 MiB na disku)  pauza 0.0 ms  citanie 2298.1 ms  898 MiB/s  spolu 2499.3 ms\n2026-09-18T16:45:43.597Z INFO  #1  2.02 GiB (512.12 MiB na disku)  pauza 0.0 ms  citanie 2293.7 ms  900 MiB/s  spolu 3200.0 ms\n2026-09-18T16:45:48.933Z INFO  #2  2.02 GiB (512.12 MiB na disku)  pauza 0.0 ms  citanie 2293.2 ms  900 MiB/s  spolu 3535.5 ms\n2026-09-18T16:45:48.933Z INFO  koniec: 3 snimok, 0 chyb, 0 zmeskanych slotov, najvacsie meskanie 0.000 s, spolu 1.50 GiB\n",
+   "po/run_sha256_skalar.log": "2026-09-18T16:45:49.231Z WARN  libbpf: Error in bpf_create_map_xattr(pages): -EINVAL. Retrying without BTF.\n2026-09-18T16:45:50.349Z INFO  ebpf: 'hyptcn-guest' (pid 1353046): 10 memslotov, 2.02 GiB pamate, max GPA 0x100000000\n2026-09-18T16:45:50.351Z WARN  ebpf: 4.00 KiB pamate hosta nie je anonymna (/dev/zero (deleted)) - citanie stranky, ktorej sa host este nedotkol, ju hostitelovi NAOZAJ alokuje\n2026-09-18T16:45:50.351Z WARN  ebpf: pri takejto VM zbieraj radsej konkretne oblasti (capture.regions), nech nenafuknes jej pamat na plnu velkost\n2026-09-18T16:45:50.351Z INFO  VM 'hyptcn-guest' [ebpf/kvm]: RAM 2.02 GiB, max_paddr 0x100000000, vCPU 2, strankovanie n/a\n2026-09-18T16:45:50.351Z INFO  zbierane oblasti: 5, spolu 2.02 GiB\n2026-09-18T16:45:50.351Z INFO  zacinam zber: perioda 5.000 s, writer 'raw', vystup '/var/tmp/optim-work'\n2026-09-18T16:46:02.415Z INFO  #0  2.02 GiB (512.12 MiB na disku)  pauza 0.0 ms  citanie 11870.4 ms  174 MiB/s  spolu 12063.7 ms\n2026-09-18T16:46:02.415Z WARN  planovac: cyklus 0 trval 12.064 s (perioda 5.000 s) - zahadzujem 2 slotov\n2026-09-18T16:46:17.441Z INFO  #1  2.02 GiB (512.12 MiB na disku)  pauza 0.0 ms  citanie 11892.1 ms  174 MiB/s  spolu 12090.1 ms\n2026-09-18T16:46:17.441Z WARN  planovac: cyklus 1 trval 12.090 s (perioda 5.000 s) - zahadzujem 2 slotov\n2026-09-18T16:46:32.424Z INFO  #2  2.02 GiB (512.12 MiB na disku)  pauza 0.0 ms  citanie 11881.6 ms  174 MiB/s  spolu 12072.8 ms\n2026-09-18T16:46:32.424Z WARN  planovac: cyklus 2 trval 12.073 s (perioda 5.000 s) - zahadzujem 2 slotov\n2026-09-18T16:46:32.424Z INFO  koniec: 3 snimok, 0 chyb, 6 zmeskanych slotov, najvacsie meskanie 0.000 s, spolu 1.50 GiB\n",
+   "po/verify_nova.txt": "OK         /var/tmp/optim-work/hyptcn-guest_000000_20260918T164646410Z.raw\n\nspolu: 1 v poriadku, 0 chybnych, 0 preskocenych\n",
+   "po/verify_snapshot.log": "2026-09-18T16:46:45.269Z WARN  libbpf: Error in bpf_create_map_xattr(pages): -EINVAL. Retrying without BTF.\n2026-09-18T16:46:46.408Z INFO  ebpf: 'hyptcn-guest' (pid 1353046): 10 memslotov, 2.02 GiB pamate, max GPA 0x100000000\n2026-09-18T16:46:46.410Z WARN  ebpf: 4.00 KiB pamate hosta nie je anonymna (/dev/zero (deleted)) - citanie stranky, ktorej sa host este nedotkol, ju hostitelovi NAOZAJ alokuje\n2026-09-18T16:46:46.410Z WARN  ebpf: pri takejto VM zbieraj radsej konkretne oblasti (capture.regions), nech nenafuknes jej pamat na plnu velkost\n2026-09-18T16:46:46.410Z INFO  VM 'hyptcn-guest' [ebpf/kvm]: RAM 2.02 GiB, max_paddr 0x100000000, vCPU 2, strankovanie n/a\n2026-09-18T16:46:46.410Z INFO  zbierane oblasti: 5, spolu 2.02 GiB\n2026-09-18T16:46:46.410Z INFO  zacinam zber: perioda 5.000 s, writer 'raw', vystup '/var/tmp/optim-work'\n2026-09-18T16:46:48.899Z INFO  #0  2.02 GiB (512.12 MiB na disku)  pauza 0.0 ms  citanie 2289.0 ms  902 MiB/s  spolu 2488.9 ms\n2026-09-18T16:46:48.899Z INFO  koniec: 1 snimok, 0 chyb, 0 zmeskanych slotov, najvacsie meskanie 0.000 s, spolu 512.12 MiB\n"
+  }
+ }
+}

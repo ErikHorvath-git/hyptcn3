@@ -1,0 +1,88 @@
+{
+  "schema": "hyptcn3/vysledok-hlavicka/1",
+  "schema_dat": "hyptcn3/guestparse-validate/1",
+  "commit": "178ce4fd83e7c504e02fb06a5756de3e79255007",
+  "commit_dirty": true,
+  "commit_poznamka": "Hlavicka uvadza HEAD repozitara v case vzniku suboru. HEAD sa od 2026-09-18T15:21:48Z nezmenil a subory vznikli neskor (16:04-16:08Z). POZOR: adresar guestparse/ je v tomto commite nesledovany (git ls-files guestparse = 0 suborov), takze commit NEURCUJE kod, ktory subor vyrobil - urcuje len stav repa okolo neho.",
+  "date": "2026-09-18T16:04:26Z",
+  "date_zdroj": "kluc values.generated v subore",
+  "host": "Fedora release 43 (Forty Three), jadro 7.1.13-100.fc43.x86_64, hostname fedora (odpis z uname -r / /etc/fedora-release na tomto stroji 2026-09-18)",
+  "guest": "snimka pamate libvirt domeny hyptcn-guest; jadro zo stringu linux_banner v snimke: Linux version 6.1.0-42-cloud-amd64 ... Debian 6.1.159-1 (2025-12-30). Domena pri analyze nebezala - analyzoval sa subor so snimkou.",
+  "command": "python3 -m guestparse validate --snapshot /var/tmp/vmic-val --profile profiles/debian12-6.1.0-42-cloud-amd64 --ps-before /tmp/claude-1000/-home-eh-Desktop-hypTcn002/d34bc88b-1a0f-45be-9238-dfb5f9e4dcc3/scratchpad/ps_before.txt --ps-after /tmp/claude-1000/-home-eh-Desktop-hypTcn002/d34bc88b-1a0f-45be-9238-dfb5f9e4dcc3/scratchpad/ps_after.txt --out data/results/validate_20260918_vmic-val.json",
+  "snapshot": "/var/tmp/vmic-val",
+  "n": 1,
+  "n_poznamka": "1 = jedno spustenie prikazu nad jednym rekonstruovanym stavom pamate. Nejde o opakovane meranie, cisla v 'values' preto nemaju rozptyl ani interval spolahlivosti.",
+  "binarka_sha256": null,
+  "binarka_poznamka": "Analyzu robi python3 -m guestparse, nie zostavena binarka; hash binarky sa neuvadza. Verzia pouziteho interpretera sa spatne spolahlivo zistit neda, preto null.",
+  "overenie": "prikaz zopakovany 2026-09-18T16:37:47Z s --out do scratchpadu (povodny subor sa neprepisal); novy vystup sa s 'values' zhoduje az na kluc 'generated' (casova znacka behu)",
+  "values": {
+    "schema": "hyptcn3/guestparse-validate/1",
+    "generated": "2026-09-18T16:04:26Z",
+    "snapshot": {
+      "path": "/var/tmp/vmic-val",
+      "files": [
+        "hyptcn-guest_000000_20260918T143954722Z.vmicd"
+      ],
+      "pages_present": 118360,
+      "kernel": "Linux version 6.1.0-42-cloud-amd64 (debian-kernel@lists.debian.org) (gcc-12 (Debian 12.2.0-14+deb12u1) 12.2.0, GNU ld (GNU Binutils for Debian) 2.40) #1 SMP PREEMPT_DYNAMIC Debian 6.1.159-1 (2025-12-30)",
+      "ktext_shift": -2097152
+    },
+    "profile": "/home/eh/Desktop/hyptcn3/profiles/debian12-6.1.0-42-cloud-amd64",
+    "ground_truth": {
+      "ps_before": {
+        "path": "/tmp/claude-1000/-home-eh-Desktop-hypTcn002/d34bc88b-1a0f-45be-9238-dfb5f9e4dcc3/scratchpad/ps_before.txt",
+        "mtime": "2026-09-18T14:39:53Z"
+      },
+      "ps_after": {
+        "path": "/tmp/claude-1000/-home-eh-Desktop-hypTcn002/d34bc88b-1a0f-45be-9238-dfb5f9e4dcc3/scratchpad/ps_after.txt",
+        "mtime": "2026-09-18T14:40:01Z"
+      }
+    },
+    "traversal": {
+      "processes_truncated": false,
+      "processes_stop_reason": null,
+      "modules_truncated": false,
+      "modules_stop_reason": null,
+      "sockets_truncated": false,
+      "sockets_skipped_tasks": 0
+    },
+    "processes": {
+      "ps_before": 84,
+      "ps_after": 82,
+      "stable": 80,
+      "stable_name_identical": 77,
+      "snapshot": 82,
+      "found": 80,
+      "missing": 0,
+      "false_positive": 0,
+      "name_mismatch": 0,
+      "recall_percent": 100.0,
+      "name_match_rules": {
+        "exact": 64,
+        "worker": 13,
+        "truncated": 3
+      },
+      "duplicate_pids": [],
+      "missing_list": [],
+      "false_positive_list": [],
+      "name_mismatch_list": []
+    },
+    "checks": {
+      "syscall_hooks": 0,
+      "syscall_entries_checked": 451,
+      "process_cross_view_findings": 0,
+      "module_findings": 0,
+      "inconclusive": []
+    },
+    "modules": {
+      "compared": false,
+      "reason": "bez --lsmod nie je s cim porovnat",
+      "snapshot": 47
+    },
+    "sockets": {
+      "compared": false,
+      "reason": "bez --ss nie je s cim porovnat",
+      "snapshot": 13
+    }
+  }
+}

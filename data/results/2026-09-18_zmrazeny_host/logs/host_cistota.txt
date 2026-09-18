@@ -1,0 +1,24 @@
+# kontrola cistoty hosta pred meranim
+# prikaz: ssh -o BatchMode=yes root@192.168.122.100 '<nizsie>'
+# datum (UTC): 2026-09-18T16:30:07Z
+
+$ pgrep -a hyptcn
+(navratovy kod: 1)
+
+$ systemctl is-enabled unattended-upgrades
+masked
+(navratovy kod: 1)
+
+$ uname -r
+6.1.0-42-cloud-amd64
+
+$ ps -e --no-headers | wc -l
+84
+
+$ lsmod | tail -n +2 | wc -l
+51
+
+$ systemctl is-active unattended-upgrades; uptime; cat /proc/uptime
+inactive
+ 16:30:08 up  2:06,  0 user,  load average: 0.00, 0.00, 0.00
+7560.49 15091.11

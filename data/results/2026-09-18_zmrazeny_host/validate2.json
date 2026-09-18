@@ -1,0 +1,118 @@
+{
+ "schema": "hyptcn3/guestparse-validate/1",
+ "generated": "2026-09-18T16:33:44Z",
+ "snapshot": {
+  "path": "/home/eh/Desktop/hyptcn3/data/sessions/20260918_validate2/snap/hyptcn-guest_000000_20260918T163335374Z.vmicd",
+  "files": [
+   "hyptcn-guest_000000_20260918T163335374Z.vmicd"
+  ],
+  "pages_present": 123815,
+  "kernel": "Linux version 6.1.0-42-cloud-amd64 (debian-kernel@lists.debian.org) (gcc-12 (Debian 12.2.0-14+deb12u1) 12.2.0, GNU ld (GNU Binutils for Debian) 2.40) #1 SMP PREEMPT_DYNAMIC Debian 6.1.159-1 (2025-12-30)",
+  "ktext_shift": -2097152
+ },
+ "profile": "/home/eh/Desktop/hyptcn3/profiles/debian12-6.1.0-42-cloud-amd64",
+ "ground_truth": {
+  "ps_before": {
+   "path": "/home/eh/Desktop/hyptcn3/data/sessions/20260918_validate2/ps_before.txt",
+   "mtime": "2026-09-18T16:33:32Z"
+  },
+  "ps_after": {
+   "path": "/home/eh/Desktop/hyptcn3/data/sessions/20260918_validate2/ps_after.txt",
+   "mtime": "2026-09-18T16:33:38Z"
+  },
+  "lsmod": {
+   "path": "/home/eh/Desktop/hyptcn3/data/sessions/20260918_validate2/lsmod_before.txt",
+   "mtime": "2026-09-18T16:33:33Z"
+  },
+  "ss": {
+   "path": "/home/eh/Desktop/hyptcn3/data/sessions/20260918_validate2/ss_listen_before.txt",
+   "mtime": "2026-09-18T16:33:33Z"
+  }
+ },
+ "traversal": {
+  "processes_truncated": false,
+  "processes_stop_reason": null,
+  "modules_truncated": false,
+  "modules_stop_reason": null,
+  "sockets_truncated": false,
+  "sockets_skipped_tasks": 0
+ },
+ "processes": {
+  "ps_before": 83,
+  "ps_after": 83,
+  "stable": 81,
+  "stable_name_identical": 77,
+  "snapshot": 81,
+  "found": 81,
+  "missing": 0,
+  "false_positive": 0,
+  "name_mismatch": 0,
+  "recall_percent": 100.0,
+  "name_match_rules": {
+   "exact": 63,
+   "worker": 15,
+   "truncated": 3
+  },
+  "duplicate_pids": [],
+  "missing_list": [],
+  "false_positive_list": [],
+  "name_mismatch_list": []
+ },
+ "checks": {
+  "syscall_hooks": 0,
+  "syscall_entries_checked": 451,
+  "process_cross_view_findings": 0,
+  "module_findings": 0,
+  "inconclusive": []
+ },
+ "modules": {
+  "ground_truth": 51,
+  "snapshot": 51,
+  "matched": 51,
+  "missing": 0,
+  "extra": 0,
+  "missing_list": [],
+  "extra_list": []
+ },
+ "sockets": {
+  "ground_truth": 10,
+  "snapshot_tcp_udp": 12,
+  "snapshot_other_protocols": {
+   "RAW": 1
+  },
+  "matched": 10,
+  "missing": 0,
+  "extra": 2,
+  "ground_truth_unparsed": 0,
+  "missing_list": [],
+  "extra_list": [
+   {
+    "proto": "UDP",
+    "saddr": "0.0.0.0",
+    "sport": 0,
+    "daddr": "0.0.0.0",
+    "dport": 0
+   },
+   {
+    "proto": "UDP",
+    "saddr": "192.168.122.100",
+    "sport": 34087,
+    "daddr": "192.168.122.1",
+    "dport": 53
+   }
+  ]
+ },
+ "command": "python3 -m guestparse validate --snapshot data/sessions/20260918_validate2/snap --profile profiles/debian12-6.1.0-42-cloud-amd64 --ps-before data/sessions/20260918_validate2/ps_before.txt --ps-after data/sessions/20260918_validate2/ps_after.txt --lsmod data/sessions/20260918_validate2/lsmod_before.txt --ss data/sessions/20260918_validate2/ss_listen_before.txt --out data/results/2026-09-18_zmrazeny_host/validate2.json",
+ "provenance_note": {
+  "command": "prikaz doplneny dodatocne a OVERENY reprodukciou 2026-09-18: opatovny beh dal zhodne hodnoty v processes, modules, sockets, checks aj traversal",
+  "commit": "doplnene dodatocne z HEAD repozitara; artefakt sam commit neuvadzal",
+  "host": "prevzate z env.json v tom istom behu",
+  "guest": "prevzate z env.json v tom istom behu",
+  "n": "artefakt je z jedineho behu; pocet opakovani v nom zaznamenany nebol"
+ },
+ "commit": "178ce4fd83e7c504e02fb06a5756de3e79255007",
+ "date": "2026-09-18T16:33:44Z",
+ "host": "Fedora Linux 43, jadro 7.1.13-100.fc43.x86_64",
+ "guest": "libvirt domena hyptcn-guest, Debian 12.13, jadro 6.1.0-42-cloud-amd64",
+ "n": 1
+}

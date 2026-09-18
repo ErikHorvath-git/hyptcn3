@@ -1,0 +1,266 @@
+{
+  "schema": "hyptcn3/summary/1",
+  "date": "2026-09-18",
+  "commit": "178ce4fd83e7c504e02fb06a5756de3e79255007",
+  "host": "Fedora 43, jadro 7.1.13-100.fc43.x86_64, 16 CPU (detaily v env.json)",
+  "guest": "libvirt domena hyptcn-guest, Debian 12, jadro 6.1.0-42-cloud-amd64, 2 vCPU, 2 GiB (detaily v env.json)",
+  "command": "vmicollect once/run nad bezacou domenou hyptcn-guest; binarka zo scratchpadu (viz env.json), nie z tohto repa",
+  "n": 9,
+  "poznamka": "Polozky s 'zdroj' = 'sidecar' su vytiahnute zo sidecarov v tomto adresari. Polozky s 'zdroj' = 'MERANIA_2026-09-18.md' pochadzaju zo stdout behu alebo z behu parsera a v sidecaroch NIE SU - do repa sa dostali iba ako text, nie ako strojovy vystup.",
+  "values": {
+    "plna_snimka": {
+      "popis": "vsetky snimky s output.full=true (raw aj prva plna delta)",
+      "zdroj": "sidecar",
+      "subory": [
+        "sidecars/vmic-test/hyptcn-guest_000000_20260918T143014076Z.json",
+        "sidecars/vmic-delta/hyptcn-guest_000000_20260918T143118834Z.json",
+        "sidecars/vmic-nohash/hyptcn-guest_000000_20260918T144319070Z.json",
+        "sidecars/vmic-val/hyptcn-guest_000000_20260918T143954722Z.json"
+      ],
+      "capture_ms": {
+        "min": 430.579,
+        "max": 947.443,
+        "median": 660.3589999999999,
+        "n": 4,
+        "hodnoty": [
+          430.579,
+          554.305,
+          766.413,
+          947.443
+        ]
+      },
+      "read_mib_s": {
+        "min": 2178.63,
+        "max": 4793.85,
+        "median": 3208.525,
+        "n": 4,
+        "hodnoty": [
+          2178.63,
+          2693.23,
+          3723.82,
+          4793.85
+        ]
+      },
+      "total_ms": {
+        "min": 748.48,
+        "max": 42204.67,
+        "median": 5056.496,
+        "n": 4,
+        "hodnoty": [
+          748.48,
+          3618.142,
+          6494.85,
+          42204.67
+        ]
+      },
+      "read_errors": [
+        0
+      ],
+      "paused": [
+        false
+      ],
+      "pause_ms": [
+        0.0
+      ]
+    },
+    "delta_snimka": {
+      "popis": "prirastkove snimky z behu run, writer=delta, perioda 5 s, 6 cyklov (cyklus #0 je plna snimka a je zapocitany v plna_snimka)",
+      "zdroj": "sidecar",
+      "subory": [
+        "sidecars/vmic-delta/hyptcn-guest_000001_20260918T143123834Z.json",
+        "sidecars/vmic-delta/hyptcn-guest_000002_20260918T143128834Z.json",
+        "sidecars/vmic-delta/hyptcn-guest_000003_20260918T143133834Z.json",
+        "sidecars/vmic-delta/hyptcn-guest_000004_20260918T143138834Z.json",
+        "sidecars/vmic-delta/hyptcn-guest_000005_20260918T143143834Z.json"
+      ],
+      "perioda_s": 5,
+      "capture_ms": {
+        "min": 547.835,
+        "max": 563.586,
+        "median": 562.029,
+        "n": 5,
+        "hodnoty": [
+          547.835,
+          552.472,
+          562.029,
+          563.373,
+          563.586
+        ]
+      },
+      "total_ms": {
+        "min": 566.567,
+        "max": 584.713,
+        "median": 582.679,
+        "n": 5,
+        "hodnoty": [
+          566.567,
+          571.956,
+          582.679,
+          583.426,
+          584.713
+        ]
+      },
+      "read_mib_s": {
+        "min": 3662.49,
+        "max": 3767.8,
+        "median": 3672.64,
+        "n": 5,
+        "hodnoty": [
+          3662.49,
+          3663.88,
+          3672.64,
+          3736.17,
+          3767.8
+        ]
+      },
+      "pages_changed": {
+        "min": 271,
+        "max": 326,
+        "median": 301,
+        "n": 5,
+        "hodnoty": [
+          271,
+          278,
+          301,
+          314,
+          326
+        ]
+      },
+      "changed_ratio": {
+        "min": 0.000513,
+        "max": 0.000617,
+        "median": 0.00057,
+        "n": 5,
+        "hodnoty": [
+          0.000513,
+          0.000526,
+          0.00057,
+          0.000594,
+          0.000617
+        ]
+      },
+      "bytes_on_disk": {
+        "min": 1114112,
+        "max": 1339392,
+        "median": 1236992,
+        "n": 5,
+        "hodnoty": [
+          1114112,
+          1142784,
+          1236992,
+          1290240,
+          1339392
+        ]
+      },
+      "pages_total": [
+        528417
+      ],
+      "read_errors": [
+        0
+      ]
+    },
+    "changed_ratio_plnych_snimok": {
+      "popis": "changed_ratio prvej (plnej) snimky retazca - podiel stranok, ktore writer skutocne zapisal; nie je to miera zmeny medzi snimkami",
+      "zdroj": "sidecar",
+      "hodnoty": {
+        "hyptcn-guest_000000_20260918T143118834Z": 0.133573,
+        "hyptcn-guest_000000_20260918T143954722Z": 0.22399
+      }
+    },
+    "hash_experiment": {
+      "popis": "ten isty prikaz (once, writer=raw) s output.hash=sha256 a s output.hash=none; SHA-256 sa v predvolenom rezime pocita nad celym 4 GiB riedkym suborom vratane dier",
+      "zdroj": "sidecar",
+      "sha256": {
+        "subor": "sidecars/vmic-test/hyptcn-guest_000000_20260918T143014076Z.json",
+        "capture_ms": 430.579,
+        "write_ms": 41774.078,
+        "total_ms": 42204.67,
+        "read_mib_s": 4793.85,
+        "bytes_on_disk": 322043904
+      },
+      "none": {
+        "subor": "sidecars/vmic-nohash/hyptcn-guest_000000_20260918T144319070Z.json",
+        "capture_ms": 554.305,
+        "write_ms": 194.153,
+        "total_ms": 748.48,
+        "read_mib_s": 3723.82,
+        "bytes_on_disk": 517079040
+      },
+      "pomer_total_ms": 56.4
+    },
+    "zmeskane_sloty": {
+      "popis": "pocet zahodenych slotov planovaca; v sidecari nie je ziadne take pole, cislo pochadza zo stdout prislusneho behu",
+      "zdroj": "MERANIA_2026-09-18.md",
+      "run_delta_perioda_5s": 0,
+      "once_raw_hash_sha256": 8,
+      "once_raw_hash_none": 0,
+      "najvacsie_meskanie_s_run_delta": 0.0
+    },
+    "rekonstrukcia_objektov": {
+      "popis": "vystup parsera vmi_parse.py nad snimkou sidecars/vmic-val/hyptcn-guest_000000_20260918T143954722Z.json; parser este nie je v repe (krok K07), preto sa jeho vystup nedal ulozit ako JSON",
+      "zdroj": "MERANIA_2026-09-18.md",
+      "procesy": {
+        "ps_pred": 84,
+        "ps_po": 82,
+        "stabilna_mnozina": 80,
+        "rekonstruovanych_zo_snimky": 82,
+        "najdenych_zo_stabilnej_mnoziny": 80,
+        "chybajuce": 0,
+        "falosne": 0,
+        "nezhoda_mien": 0,
+        "pozemna_prava": [
+          "ground_truth/ps_before.txt",
+          "ground_truth/ps_after.txt"
+        ],
+        "prepocet_z_pozemnej_pravdy": {
+          "zdroj": "tento skript nad ground_truth/ps_*.txt, 2026-09-18",
+          "ps_pred_riadkov": 84,
+          "ps_po_riadkov": 82,
+          "prienik_podla_pid": 80,
+          "prienik_podla_pid_a_mena": 77,
+          "poznamka": "stabilna mnozina 80 je prienik podla PID; prienik podla dvojice (pid, meno) je o 3 mensi, lebo trom vlaknam kworker sa medzi oboma behmi ps zmenil nazov podla prave vykonavanej prace (napr. kworker/1:0-events -> kworker/1:0-mm_percpu_wq)"
+        }
+      },
+      "moduly": {
+        "rekonstruovanych": 47,
+        "lsmod_v_case_snimky": 47,
+        "zhoda": "47 / 47 vratane poradia zavadzania",
+        "pozemna_prava": "vystup lsmod nebol ulozeny do suboru"
+      },
+      "sokety": {
+        "rekonstruovanych": 13,
+        "pocuvajucich_zhodnych_so_ss": 10,
+        "pocuvajucich_v_ss": 10,
+        "poznamka": "IPv6 adresy sa citaju ako IPv4 polia a protokol IPv6 soketov sa neurci (chyba skc_v6_daddr a tcpv6_prot/udpv6_prot) - krok K10",
+        "pozemna_prava": "vystup ss -tulpn nebol ulozeny do suboru"
+      },
+      "preklad_adries": {
+        "posun_kaslr": "-0x200000",
+        "page_offset_base": "0xffff99c940000000",
+        "krizova_kontrola": {
+          "linux_banner": "0x16f1f560",
+          "init_task": "0x1781aa40"
+        }
+      }
+    },
+    "probe": {
+      "popis": "vmicollect probe -v nad bezacou domenou; vystup nebol ulozeny do suboru",
+      "zdroj": "MERANIA_2026-09-18.md",
+      "memslotov": 10,
+      "pamat_gib": 2.02,
+      "max_gpa": "0x100000000",
+      "vcpu": 2,
+      "test_citania_mib_s": 2297
+    },
+    "snimky": {
+      "popis": "identita samotnych .vmicd/.raw suborov (su mimo gitu, zostavaju v /var/tmp) a vysledok porovnania ich sha256 so sidecarom",
+      "zdroj": "snapshots.json"
+    }
+  },
+  "chyba_v_datach": [
+    "Pocet zmeskanych slotov nie je v ziadnom sidecari - schema vmicollect/1 take pole nema. Do repa sa dostal iba ako cislo z MERANIA_2026-09-18.md.",
+    "Vystup prikazov lsmod a ss -tulpn (pozemna prava k modulom a soketom) nebol ulozeny; ulozena je iba pozemna prava k procesom (ps_before/ps_after).",
+    "Vystup vmicollect probe nebol ulozeny ako subor.",
+    "Vystup parsera (procesy, moduly, sokety) nebol ulozeny ako JSON, lebo parser v case merania este nebol v repe."
+  ]
+}

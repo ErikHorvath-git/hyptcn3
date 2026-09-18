@@ -1,0 +1,5 @@
+# Korenovy .gitignore vylucuje '*.vmicd', lebo tak sa volaju pamatove snimky
+# (stovky MiB, do gitu nepatria). Tu lezi jedina vynimka: mala snimka
+# (110 kB) vyrezana z realnej snimky, bez ktorej by sa injekcny test detektora
+# hookov v cerstvom klone vobec nespustil. Odkial pochadza, hovori README.md.
+!mini.vmicd

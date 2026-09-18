@@ -1,0 +1,58 @@
+{
+  "schema": "hyptcn3/validate/1",
+  "date": "2026-09-18T16:33:38Z",
+  "date_unix": 1789749218,
+  "commit": "178ce4fd83e7c504e02fb06a5756de3e79255007",
+  "commit_dirty": true,
+  "domain": "hyptcn-guest",
+  "libvirt_uri": "qemu:///session",
+  "command": "/home/eh/Desktop/hyptcn3/vmicollect/build/vmicollect once -o vm.domain=hyptcn-guest -o output.writer=delta -o output.hash=sha256 -o output.dir=/home/eh/Desktop/hyptcn3/data/sessions/20260918_validate2/snap",
+  "binary": {
+    "path": "/home/eh/Desktop/hyptcn3/vmicollect/build/vmicollect",
+    "version": "vmicollect 1.0.0",
+    "sha256": "5cdb296364b5803355e8d7b534e7e0e2ce6acd9484032dc3b7a45270a0431738"
+  },
+  "host": {
+    "hostname": "fedora",
+    "kernel": "7.1.13-100.fc43.x86_64",
+    "cpus": 16
+  },
+  "exit_code": 0,
+  "session_dir": "/home/eh/Desktop/hyptcn3/data/sessions/20260918_validate2",
+  "snapshot_dir": "/home/eh/Desktop/hyptcn3/data/sessions/20260918_validate2/snap",
+  "guest_exec_mode": "ssh",
+  "guest": {
+    "kernel": "6.1.0-42-cloud-amd64",
+    "proc_uptime": "7770.92 15510.96"
+  },
+  "ground_truth": {
+    "before": [
+      "ps_before.txt",
+      "ps_full_before.txt",
+      "lsmod_before.txt",
+      "ss_before.txt",
+      "ss_listen_before.txt"
+    ],
+    "after": [
+      "ps_after.txt",
+      "ps_full_after.txt",
+      "lsmod_after.txt",
+      "ss_after.txt",
+      "ss_listen_after.txt"
+    ],
+    "failed_commands": 0
+  },
+  "timing": {
+    "gt_before_start": 1789749212.708503390,
+    "gt_before_end": 1789749213.625041206,
+    "snapshot_start": 1789749213.626336692,
+    "snapshot_end": 1789749218.075530742,
+    "gt_after_end": 1789749218.957901594,
+    "gt_before_s": 0.9165377616882324,
+    "snapshot_s": 4.449193954467773,
+    "gt_after_s": 0.8823709487915039,
+    "total_s": 6.249398231506348
+  },
+  "stdout": "",
+  "stderr": "2026-09-18T16:33:33.662Z WARN  libbpf: Error in bpf_create_map_xattr(pages): -EINVAL. Retrying without BTF.\n2026-09-18T16:33:35.373Z INFO  ebpf: 'hyptcn-guest' (pid 1353046): 10 memslotov, 2.02 GiB pamate, max GPA 0x100000000\n2026-09-18T16:33:35.374Z WARN  ebpf: 4.00 KiB pamate hosta nie je anonymna (/dev/zero (deleted)) - citanie stranky, ktorej sa host este nedotkol, ju hostitelovi NAOZAJ alokuje\n2026-09-18T16:33:35.374Z WARN  ebpf: pri takejto VM zbieraj radsej konkretne oblasti (capture.regions), nech nenafuknes jej pamat na plnu velkost\n2026-09-18T16:33:35.374Z INFO  VM 'hyptcn-guest' [ebpf/kvm]: RAM 2.02 GiB, max_paddr 0x100000000, vCPU 2, strankovanie n/a\n2026-09-18T16:33:35.374Z INFO  zbierane oblasti: 5, spolu 2.02 GiB\n2026-09-18T16:33:35.374Z INFO  zacinam zber: perioda 5.000 s, writer 'delta', vystup '/home/eh/Desktop/hyptcn3/data/sessions/20260918_validate2/snap'\n2026-09-18T16:33:38.073Z INFO  #0 PLNA   484.60 MiB/4.00 GiB  stranky 123815/528417 (23.43 %)  pauza 0.0 ms  citanie 974.4 ms  spolu 2699.1 ms\n2026-09-18T16:33:38.073Z INFO  koniec: 1 snimok, 0 chyb, 0 zmeskanych slotov, najvacsie meskanie 0.000 s, spolu 484.60 MiB\n"
+}

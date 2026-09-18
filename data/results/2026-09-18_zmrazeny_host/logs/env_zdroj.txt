@@ -1,0 +1,18 @@
+host.uname_r: 7.1.13-100.fc43.x86_64
+host.os: Fedora Linux 43 (Workstation Edition)
+host.cpu_model: 12th Gen Intel(R) Core(TM) i7-12650H
+host.cpus: 16
+host.ram_bytes: 16355631104
+host.qemu: QEMU emulator version 10.1.5 (qemu-10.1.5-1.fc43)
+host.libvirt: 11.6.0
+guest.uname_r: 6.1.0-42-cloud-amd64
+guest.os: Debian GNU/Linux 12 (bookworm)
+guest.debian_version: 12.13
+guest.ram_bytes_meminfo: 2075680768
+guest.vcpu: 2
+guest.qemu_pid: 1353046
+bin.sha256: 5cdb296364b5803355e8d7b534e7e0e2ce6acd9484032dc3b7a45270a0431738
+bin.bpf_sha256: 353af42e6f24c546d72607fe7a73561edcd38fbf05bcaa80869aee0ef3443ccb
+bin.version: vmicollect 1.0.0
+commit: 178ce4fd83e7c504e02fb06a5756de3e79255007
+git_dirty: 8 neverzionovanych/zmenenych poloziek

@@ -1,0 +1,45 @@
+{
+  "schema": "vmicollect/1",
+  "version": "1.0.0",
+  "seq": 0,
+  "id": "hyptcn-guest_000000_20260918T163103283Z",
+  "path": "/var/tmp/vmic-frozen/once_raw_sha256_2/hyptcn-guest_000000_20260918T163103283Z.raw",
+  "timestamp": "2026-09-18T16:31:03.283Z",
+  "timestamp_unix": 1789749063.283,
+  "vm": {
+    "domain": "hyptcn-guest",
+    "backend": "ebpf/kvm",
+    "vmid": 1353046,
+    "memsize": 2164396032,
+    "max_paddr": 4294967296,
+    "num_vcpus": 2,
+    "address_width": 0,
+    "page_mode": "n/a"
+  },
+  "capture": {
+    "regions": [],
+    "chunk_size": 1048576,
+    "paused": false,
+    "pause_ms": 0.000,
+    "pause_exceeded": false,
+    "capture_ms": 390.293,
+    "write_ms": 13323.473,
+    "total_ms": 13713.777
+  },
+  "stats": {
+    "bytes_requested": 2164396032,
+    "bytes_read": 2164396032,
+    "chunks": 2067,
+    "read_errors": 0,
+    "filled_zero": 0,
+    "read_mib_s": 5288.67
+  },
+  "output": {
+    "writer": "raw",
+    "full": true,
+    "bytes_logical": 2164396032,
+    "bytes_on_disk": 538050560,
+    "sha256_covers_file": true,
+    "sha256": "d4bc1fc429236a2bb9c63375eed7a55dadd0264d77223316c19076de880b775f"
+  }
+}

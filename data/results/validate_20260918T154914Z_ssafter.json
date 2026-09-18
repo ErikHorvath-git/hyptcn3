@@ -1,0 +1,138 @@
+{
+  "schema": "hyptcn3/vysledok-hlavicka/1",
+  "schema_dat": "hyptcn3/guestparse-validate/1",
+  "commit": "178ce4fd83e7c504e02fb06a5756de3e79255007",
+  "commit_dirty": true,
+  "commit_poznamka": "Hlavicka uvadza HEAD repozitara v case vzniku suboru. HEAD sa od 2026-09-18T15:21:48Z nezmenil a subory vznikli neskor (16:04-16:08Z). POZOR: adresar guestparse/ je v tomto commite nesledovany (git ls-files guestparse = 0 suborov), takze commit NEURCUJE kod, ktory subor vyrobil - urcuje len stav repa okolo neho.",
+  "date": "2026-09-18T16:04:28Z",
+  "date_zdroj": "kluc values.generated v subore",
+  "host": "Fedora release 43 (Forty Three), jadro 7.1.13-100.fc43.x86_64, hostname fedora (odpis z uname -r / /etc/fedora-release na tomto stroji 2026-09-18)",
+  "guest": "snimka pamate libvirt domeny hyptcn-guest; jadro zo stringu linux_banner v snimke: Linux version 6.1.0-42-cloud-amd64 ... Debian 6.1.159-1 (2025-12-30). Domena pri analyze nebezala - analyzoval sa subor so snimkou.",
+  "command": "python3 -m guestparse validate --snapshot data/sessions/20260918T154914Z_validate/snap --profile profiles/debian12-6.1.0-42-cloud-amd64 --ps-before data/sessions/20260918T154914Z_validate/ps_before.txt --ps-after data/sessions/20260918T154914Z_validate/ps_after.txt --lsmod data/sessions/20260918T154914Z_validate/lsmod_after.txt --ss data/sessions/20260918T154914Z_validate/ss_after.txt --out data/results/validate_20260918T154914Z_ssafter.json",
+  "snapshot": "data/sessions/20260918T154914Z_validate/snap",
+  "n": 1,
+  "n_poznamka": "1 = jedno spustenie prikazu nad jednym rekonstruovanym stavom pamate. Nejde o opakovane meranie, cisla v 'values' preto nemaju rozptyl ani interval spolahlivosti.",
+  "binarka_sha256": null,
+  "binarka_poznamka": "Analyzu robi python3 -m guestparse, nie zostavena binarka; hash binarky sa neuvadza. Verzia pouziteho interpretera sa spatne spolahlivo zistit neda, preto null.",
+  "overenie": "prikaz zopakovany 2026-09-18T16:37:48Z s --out do scratchpadu (povodny subor sa neprepisal); novy vystup sa s 'values' zhoduje az na kluc 'generated' (casova znacka behu)",
+  "values": {
+    "schema": "hyptcn3/guestparse-validate/1",
+    "generated": "2026-09-18T16:04:28Z",
+    "snapshot": {
+      "path": "/home/eh/Desktop/hyptcn3/data/sessions/20260918T154914Z_validate/snap",
+      "files": [
+        "hyptcn-guest_000000_20260918T154916673Z.vmicd"
+      ],
+      "pages_present": 124005,
+      "kernel": "Linux version 6.1.0-42-cloud-amd64 (debian-kernel@lists.debian.org) (gcc-12 (Debian 12.2.0-14+deb12u1) 12.2.0, GNU ld (GNU Binutils for Debian) 2.40) #1 SMP PREEMPT_DYNAMIC Debian 6.1.159-1 (2025-12-30)",
+      "ktext_shift": -2097152
+    },
+    "profile": "/home/eh/Desktop/hyptcn3/profiles/debian12-6.1.0-42-cloud-amd64",
+    "ground_truth": {
+      "ps_before": {
+        "path": "/home/eh/Desktop/hyptcn3/data/sessions/20260918T154914Z_validate/ps_before.txt",
+        "mtime": "2026-09-18T15:49:14Z"
+      },
+      "ps_after": {
+        "path": "/home/eh/Desktop/hyptcn3/data/sessions/20260918T154914Z_validate/ps_after.txt",
+        "mtime": "2026-09-18T15:49:19Z"
+      },
+      "lsmod": {
+        "path": "/home/eh/Desktop/hyptcn3/data/sessions/20260918T154914Z_validate/lsmod_after.txt",
+        "mtime": "2026-09-18T15:49:19Z"
+      },
+      "ss": {
+        "path": "/home/eh/Desktop/hyptcn3/data/sessions/20260918T154914Z_validate/ss_after.txt",
+        "mtime": "2026-09-18T15:49:20Z"
+      }
+    },
+    "traversal": {
+      "processes_truncated": false,
+      "processes_stop_reason": null,
+      "modules_truncated": false,
+      "modules_stop_reason": null,
+      "sockets_truncated": false,
+      "sockets_skipped_tasks": 0
+    },
+    "processes": {
+      "ps_before": 82,
+      "ps_after": 82,
+      "stable": 80,
+      "stable_name_identical": 79,
+      "snapshot": 80,
+      "found": 80,
+      "missing": 0,
+      "false_positive": 0,
+      "name_mismatch": 0,
+      "recall_percent": 100.0,
+      "name_match_rules": {
+        "exact": 62,
+        "worker": 15,
+        "truncated": 3
+      },
+      "duplicate_pids": [],
+      "missing_list": [],
+      "false_positive_list": [],
+      "name_mismatch_list": []
+    },
+    "checks": {
+      "syscall_hooks": 0,
+      "syscall_entries_checked": 451,
+      "process_cross_view_findings": 0,
+      "module_findings": 0,
+      "inconclusive": []
+    },
+    "modules": {
+      "ground_truth": 51,
+      "snapshot": 51,
+      "matched": 51,
+      "missing": 0,
+      "extra": 0,
+      "missing_list": [],
+      "extra_list": []
+    },
+    "sockets": {
+      "ground_truth": 12,
+      "snapshot_tcp_udp": 12,
+      "snapshot_other_protocols": {
+        "RAW": 1
+      },
+      "matched": 10,
+      "missing": 2,
+      "extra": 2,
+      "ground_truth_unparsed": 0,
+      "missing_list": [
+        {
+          "proto": "TCP",
+          "saddr": "192.168.122.100",
+          "sport": 22,
+          "daddr": "192.168.122.1",
+          "dport": 46882
+        },
+        {
+          "proto": "UDP",
+          "saddr": "192.168.122.100",
+          "sport": 57006,
+          "daddr": "192.168.122.1",
+          "dport": 53
+        }
+      ],
+      "extra_list": [
+        {
+          "proto": "UDP",
+          "saddr": "0.0.0.0",
+          "sport": 0,
+          "daddr": "0.0.0.0",
+          "dport": 0
+        },
+        {
+          "proto": "UDP",
+          "saddr": "192.168.122.100",
+          "sport": 53027,
+          "daddr": "192.168.122.1",
+          "dport": 53
+        }
+      ]
+    }
+  }
+}

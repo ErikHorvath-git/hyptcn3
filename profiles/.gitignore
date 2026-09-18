@@ -1,0 +1,5 @@
+# Korenovy .gitignore vylucuje '*.raw', lebo tak sa volaju surove pamatove
+# snimky (stovky MiB, do gitu nepatria). Binarne BTF hosta ma tu istu priponu,
+# ale je to profil jadra - bez neho parser nevie offsety poli a repo by
+# obsahovalo iba odvodeny vypis. Preto sa tu vynimka vracia spat.
+!btf.raw
