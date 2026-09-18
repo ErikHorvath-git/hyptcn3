@@ -8,16 +8,17 @@
 # cislo v thesis/ ukazovalo znackou na konkretny JSON v data/results/, a tu znacku
 # aj rozvinie a porovna s textom. Cislo, ktore sa v JSON nenachadza, je nalez.
 #
-# Pat kontrol:
+# Sest kontrol:
 #   A  zakazane cisla z hypTcn002 (riadok so slovom RETRAKCIA sa preskakuje)
 #   B  cislo bez znacky zdroja (iba .md pod thesis/)
 #   C  znacka {{res:subor.json:kluc}} - existencia suboru, kluca a zhoda hodnoty
 #   D  zakazane slova
 #   E  hlavicka {commit, date, host, guest, command, n, values} v data/results/*.json
+#   F  aktualnost docs/PRIRUCKA.md (volanie scripts/check_prirucka.sh)
 #
 # Pouzitie:
-#   scripts/check_claims.sh                  # vychodzi rozsah (nizsie) + kontrola E
-#   scripts/check_claims.sh thesis/09.md ... # konkretne subory alebo adresare (bez E)
+#   scripts/check_claims.sh                  # vychodzi rozsah (nizsie) + kontroly E a F
+#   scripts/check_claims.sh thesis/09.md ... # konkretne subory alebo adresare (bez E a F)
 #   scripts/check_claims.sh --json-hlavicky  # iba kontrola E
 #
 # Navratovy kod: 0 = ciste, 1 = nalezy, 2 = chyba pouzitia.
@@ -425,6 +426,36 @@ check_file() {
   esac
 }
 
+# ------------------------------------------- F: aktualnost docs/PRIRUCKA.md
+# Prirucka je generovana z kodu (scripts/gen_prirucka.py). Samotne porovnanie
+# robi scripts/check_prirucka.sh - potrebuje zostavenu binarku, teda prekladac,
+# co je iny druh zavislosti nez zvysok tohto skriptu, preto bezi zvlast.
+# Kontrola sa robi iba vo vychodzom rozsahu; pri zadanych cestach nie.
+#
+# CHYBAJUCI ALEBO NESPUSTITELNY SKRIPT JE NALEZ, NIE TICHY NAVRAT. Predtym tu
+# stalo '[ -x "$skript" ] || return 0': ked by check_prirucka.sh stratil priznak
+# spustitelnosti (alebo ho niekto zmazal), kontrola prirucky by zmizla a tento
+# skript by hlasil cisto. Kontrola, ktora sa da vypnut tak, ze o tom nikto
+# nevie, nie je kontrola.
+check_prirucka() {
+  local skript="$SCRIPT_DIR/check_prirucka.sh"
+  if [ ! -f "$skript" ]; then
+    note "scripts/check_prirucka.sh" "1" "PRIRUCKA" \
+      "kontrola aktualnosti docs/PRIRUCKA.md chyba: skript neexistuje"
+    return 0
+  fi
+  if [ ! -x "$skript" ]; then
+    note "scripts/check_prirucka.sh" "1" "PRIRUCKA" \
+      "kontrola aktualnosti docs/PRIRUCKA.md sa nespustila: skript nie je spustitelny (chmod +x)"
+    return 0
+  fi
+  local vystup rc
+  vystup="$("$skript" 2>&1)"
+  rc=$?
+  [ "$rc" -eq 0 ] && return 0
+  note "docs/PRIRUCKA.md" "1" "PRIRUCKA" "$(printf '%s' "$vystup" | head -1)"
+}
+
 # ------------------------------------------------- E: hlavicky JSON vysledkov
 check_json_headers() {
   [ -d "$RESULTS_DIR" ] || { echo "check_claims.sh: $RESULTS_DIR neexistuje, kontrola hlaviciek sa preskakuje" >&2; return 0; }
@@ -553,7 +584,10 @@ for f in "${FILES[@]}"; do
   check_file "$f"
 done
 
-[ "$DEFAULT_SCOPE" -eq 1 ] && check_json_headers
+if [ "$DEFAULT_SCOPE" -eq 1 ]; then
+  check_json_headers
+  check_prirucka
+fi
 
 # Vynimky nie su ticho: co sa vynalo, sa vypise aj pri cistom behu.
 if [ -s "$EXEMPT_LOG" ]; then

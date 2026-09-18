@@ -184,7 +184,8 @@ def _slots_from_doc(doc, path):
     Poznane tvary, v poradi ako sa skusaju:
       1. values.memslot_ranges  - vystup `vmicollect probe -v` (gpa_start,
          size_bytes); toto je dnes JEDINY zdroj, ktory skutocne memsloty ma
-      2. features.memslots      - miesto, kam ich ma zapisat C modul (K13);
+      2. features.regions       - kam ich zapisuje C modul (starsie snimky
+                                  maju ten isty zoznam pod menom features.memslots);
          podporovane dopredu, aby sa referencia nemusela menit
       3. memslots               - holy zoznam (rucne pripraveny subor)
       4. capture.regions        - konfiguracia zberu zo sidecaru. NIE su to
@@ -212,9 +213,15 @@ def _slots_from_doc(doc, path):
                 "%s:values.memslot_ranges" % os.path.basename(path))
 
     feats = doc.get("features") if isinstance(doc.get("features"), dict) else {}
-    if isinstance(feats.get("memslots"), list) and feats["memslots"]:
-        return (pairs(feats["memslots"], "gpa", "size"),
-                "%s:features.memslots" % os.path.basename(path))
+    # C modul zapisuje oblasti pod klucom "regions" - su to EFEKTIVNE oblasti
+    # zberu odvodene z memslotov, so zlucenymi susedmi (pri hyptcn-guest dava
+    # 10 memslotov 5 oblasti). Meno "memslots" nesie starsi sidecar z 2026-09-18,
+    # kym sa kluc nepremenoval; citame preto obe.
+    for kluc in ("regions", "memslots"):
+        if isinstance(feats.get(kluc), list) and feats[kluc]:
+            velkost = "bytes" if "bytes" in feats[kluc][0] else "size"
+            return (pairs(feats[kluc], "gpa", velkost),
+                    "%s:features.%s" % (os.path.basename(path), kluc))
 
     if isinstance(doc.get("memslots"), list) and doc["memslots"]:
         it = doc["memslots"][0]
@@ -240,7 +247,7 @@ def load_memslots(path):
         raise FeatureError(
             "%s: nie su v nom rozsahy memslotov. Cakane kluce: "
             "values.memslot_ranges (vystup 'vmicollect probe -v'), "
-            "features.memslots (sidecar z C modulu), memslots, alebo "
+            "features.regions alebo features.memslots (sidecar z C modulu), memslots, alebo "
             "neprazdne capture.regions." % path)
     return Memslots(ranges, source)
 

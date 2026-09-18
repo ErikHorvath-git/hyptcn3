@@ -255,6 +255,7 @@ host_json()
 meta_json()
 {
     local command="$1"
+    local n="${2:-1}"
     jq -n --arg schema "hyptcn3/$SUB/1" \
           --arg date "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
           --argjson date_unix "$(date +%s)" \
@@ -267,12 +268,25 @@ meta_json()
           --arg bin_version "$(bin_version)" \
           --arg bin_sha256 "$(bin_sha)" \
           --argjson host "$(host_json)" \
+          --argjson guest "$(guest_json)" \
+          --argjson n "$n" \
           '{schema:$schema,date:$date,date_unix:$date_unix,
             commit:$commit,commit_dirty:$commit_dirty,
             domain:$domain,libvirt_uri:$uri,
-            command:$command,
+            command:$command,n:$n,
             binary:{path:$bin_path,version:$bin_version,sha256:$bin_sha256},
-            host:$host}'
+            host:$host,guest:$guest}'
+}
+
+# Popis hosta do hlavicky vysledku. HONESTY.md kap. 4 ziada kluc `guest` v kazdom
+# artefakte; ked sa do hosta prave nedostaneme, zapise sa aspon domena a 'unknown' -
+# chybajuci kluc by znamenal, ze sa artefakt neda priradit k stroju.
+guest_json()
+{
+    local kern
+    kern=$("$GUEST_EXEC" -m "$GMODE" -d "$DOMAIN" -c "$URI" 'uname -r' </dev/null 2>/dev/null)
+    jq -n --arg domain "$DOMAIN" --arg kernel "${kern:-unknown}" \
+          '{domain:$domain,kernel:$kernel}'
 }
 
 guest_env_json()
