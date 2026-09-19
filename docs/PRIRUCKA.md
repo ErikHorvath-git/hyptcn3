@@ -247,7 +247,7 @@ Každý typ faktu má jeden dokument, ktorý ho vlastní; keď si odporujú, pla
 
 | dokument | čo vlastní | riadkov |
 |---|---|---|
-| `docs/ARCHITEKTURA.md` | rozhrania, formát `.vmicd` a sidecaru, tok dát podrobne | 1047 |
+| `docs/ARCHITEKTURA.md` | rozhrania, formát `.vmicd` a sidecaru, tok dát podrobne | 1149 |
 | `docs/MERANIA.md` | log meraní: čo, kedy, akým príkazom a s akým výsledkom | 803 |
 | `docs/LIMITACIE.md` | L1 až L17: čo systém nevie a čo z toho plynie pre text | 851 |
 | `docs/kontroly.md` | kontroly podozrivých vzorcov a validačný príkaz | 219 |

@@ -87,7 +87,109 @@ do ktorých sa dopĺňajú testy a kontroly.
 Súčet zdrojového kódu zberača (hlavičky, C, BPF, hook, test): 7828 riadkov.
 Balík `guestparse` bez testov: 2296 riadkov, s testami 3815 riadkov.
 
----
+### 1.2 Prečo „hypervisor modul“
+
+**Pôvod tohto riešenia — najprv to podstatné.** Prístup cez eBPF **nevznikol v tejto práci**.
+Zberač `vmicollect` vrátane oboch programov BPF vstúpil do repozitára ako prevzatý celok
+(`git log --diff-filter=A -- vmicollect/bpf/vmic_kvm.bpf.c` → `6b9053d`, „prevzatý stav, bez
+zmien“) a jeho autorstvo nie je známe (`HONESTY.md`, P9; časť 12 tohto dokumentu). Čo sa
+v tejto práci urobilo: prevzatý program sa **overil** proti bežiacemu jadru — a nenačítal sa;
+štyri príčiny sa našli a opravili (nezhoda BTF pri `bpf_task_from_vpid` a trikrát limit
+verifikátora, riešené cez `bpf_loop()`) a až potom sa dalo merať. Odseky nižšie preto nie sú
+obhajobou vlastnej voľby, ale posúdením, či prevzatý prístup zodpovedá zadaniu a kde má hranice.
+
+**Kde beží ktorá časť.** Zadanie žiada „modul postavený na open-source hypervízore“
+(`zadanie-zp_105826.pdf`, Anotácia); formu nepredpisuje. Na tomto hostiteľovi je KVM zavedený
+ako jadrový modul (`lsmod | grep '^kvm'` vypíše `kvm` a `kvm_intel`); pri `CONFIG_KVM=y` by
+nevypísal nič a kód s tým počíta (komentár pri `btf__parse_split`). Zberač je delený rovnako:
+`pick_vm` a `resolve_offsets` (`backend_ebpf.c`) nájdu proces VMM a offsety z BTF, v jadre bežia
+`vmic_probe` a `vmic_read` (`vmicollect/bpf/vmic_kvm.bpf.c`). To, že bežia v jadre, samo osebe
+nedokazuje nič — v jadre beží každý program BPF. Nosné je, **čo** čítajú: `struct kvm`
+z deskriptora `kvm-vm` a jej tabuľku memslotov, teda mapu GPA ↔ HVA.
+
+**Prečo nestačí `process_vm_readv`.** Bajty by `process_vm_readv()` z adresného priestoru QEMU
+prečítal, zvonka sa však nedá zistiť, **ktorá časť toho priestoru je ktorá fyzická adresa
+hosťa**; bez mapy z memslotov by zberač hádal z `/proc/<pid>/maps` (`vmicollect/README.md`,
+časť „Preco eBPF…“). Zásluhy poctivo: kopíruje sa cez `bpf_copy_from_user_task()`, teda
+`access_process_vm()` — to isté, čo `process_vm_readv()`. V kopírovaní bajtov sú si obe cesty
+rovnocenné; prínosom eBPF je výhradne tá mapa.
+
+**Prečo nie modul `.ko`.** Dva z bežne uvádzaných dôvodov na tomto stroji neplatia a uvádzať
+ich by bolo nepoctivé: podpis sa nevynucuje (`CONFIG_MODULE_SIG_FORCE is not set`,
+`/sys/module/module/parameters/sig_enforce` = `N`) a jadro je už teraz označené ako zmenené
+(`cat /proc/sys/kernel/tainted` → 12288, kvôli modulom `nvidia*`). Obstoja dva iné: `.ko` sa
+viaže na konkrétne jadro (modul s iným `vermagic`, než vypíše `modinfo kvm | grep vermagic`,
+sa nezavedie), kým program BPF berie offsety z BTF; a chyba v `.ko` zhodí hostiteľa aj so
+všetkými virtuálnymi strojmi, kým program BPF musí prejsť verifikátorom jadra.
+
+**Alternatívne cesty k mape memslotov.** Prvé tri riadky sú prevzaté z `vmicollect/README.md`
+(časť „Preco eBPF…“), štvrtý je doplnený a posledný preformulovaný. Nie sú to merania.
+
+| cesta | čo si pýta |
+|---|---|
+| LibVMI + KVM legacy | patchnuté QEMU |
+| LibVMI + KVMi | jadro s KVMi a socket |
+| `virsh dump` | libvirt, a vždy celý obraz naraz |
+| samotný VMM (QMP, libvirt) | bežiaci a spolupracujúci management stack |
+| eBPF (toto riešenie) | root na tom istom stroji a jadro s BTF |
+
+Mapu neposkytuje **modul `kvm`**; QEMU ju pozná, lebo ju samo zapísalo cez
+`KVM_SET_USER_MEMORY_REGION` (tvrdenie o rozhraní KVM, v tomto repozitári sa overiť nedá).
+Cesta cez VMM je odmietnutá preto, že je to jeho pohľad na seba samého: potrebuje spolupracujúci
+management stack a vypovedá o tom, čo si VMM myslí. Overené nebolo, v akej podobe je mapa cez
+QMP vôbec dostupná — `info mtree -f` vypisuje rozsahy GPA a mená regiónov, nie adresy
+v procese VMM.
+
+**Čo BTF rieši a čo nie.** Z BTF sa čítajú **offsety**; mená typov a polí sú natvrdo v `KFIELDS`
+v `backend_ebpf.c` — 27 položiek nad 12 typmi (`grep -c 'KF("' vmicollect/src/backend_ebpf.c`).
+Rieši teda **presun** poľa, nie premenovanie ani zmenu spôsobu uloženia. Nejde o hypotetickú
+hrozbu do budúcna: `KFIELDS` už dnes číta `kvm_memslots.id_hash` a `node_idx`, teda usporiadanie
+zavedené prechodom KVM na hash tabuľku — na to, aby sa prechod prispôsobil, nestačili nové
+offsety, musel sa napísať nový prechod. Rozpor nekončí tichým čítaním smetí: `resolve_offsets`
+chýbajúce pole vypíše menom a vráti `VMIC_FATAL`.
+
+**Čím to nie je.** Nie je to modul jadra ani patch hypervízora. Nezachytáva udalosti VM:
+v zdrojovom kóde nie je iná programová sekcia než `SEC("syscall")` a v preloženom objekte nie je
+ani jedna sekcia typu `kprobe`, `tracepoint` či `fentry` (`readelf -S vmicollect/build/vmic_kvm.bpf.o`),
+takže programy nie sú zavesené na nič a spúšťa ich zberač (`run_prog`) v termíne plánovača.
+A nie je to pamäťová forenzika v obvyklom zmysle — hoci hranica je tenšia, než sa zdá: Volatility
+cez vrstvu adresného priestoru LibVMI vie čítať aj bežiaci virtuálny stroj zvonka. Rozdiel je
+v tom, že zber je tu periodický a inkrementálny (`sched.c`, `writer_delta.c`) a výstupom je
+časový rad, nie jedna analýza obrazu. Ústupok: rekonštrukcia objektov zo snímky (`guestparse`)
+je tá istá disciplína ako pamäťová forenzika, len nad iným zdrojom.
+
+**Čo si to pýta a čo to stojí.** Hypervízor ani jadro hostiteľa sa nemenia, prostredie však
+požiadavky má: root (`CAP_BPF` a `CAP_PERFMON`; hláška v `load_bpf`), jadro s BPF a preložené
+s `CONFIG_DEBUG_INFO_BTF` — bez neho `resolve_offsets` `/sys/kernel/btf/vmlinux` neotvorí, ohlási
+chýbajúcu voľbu a vráti `VMIC_FATAL`. V hosťovi nebeží bezpečnostný agent; `qemu-guest-agent`
+beží, ale na orchestráciu a pozemnú pravdu (`HONESTY.md`, P6), a parser potrebuje profil jadra
+hosťa (`docs/LIMITACIE.md`, L3). Neinvazívnosť má výnimku: číta sa cez adresný priestor VMM,
+takže pri non-anonymnom podložení (shmem, `memfd`, `hugetlbfs`) sa nedotknutá stránka jej
+prečítaním na hostiteľovi reálne alokuje (L2). Rozhranie je pozorovacie, nie riadiace:
+`vmic_backend_ebpf` má `.pause = NULL` a snímka je živá (L1).
+
+**FORMULÁCIA DO TEXTU PRÁCE.**
+
+> Hypervízor KVM je na použitom hostiteľovi zavedený ako jadrový modul a nástroj použitý v tejto
+> práci je delený rovnako: používateľská časť nájde proces virtualizačného monitora a deskriptor
+> virtuálneho stroja, samotné čítanie robia dva programy eBPF v jadre hostiteľa. Podstatné nie je,
+> že bežia v jadre — tam beží každý program eBPF —, ale že čítajú vnútorné dátové štruktúry práve
+> modulu `kvm`, totiž tabuľku memslotov s mapovaním fyzických adries hosťa na virtuálne adresy
+> procesu monitora. Táto mapa je dôvodom, prečo nestačí prečítať pamäť monitora volaním
+> `process_vm_readv`: bajty by sa tým získať dali, zvonka sa však nedá zistiť, ktorá časť
+> adresného priestoru monitora zodpovedá ktorej fyzickej adrese hosťa. V kopírovaní bajtov sú si
+> obe cesty rovnocenné, pretože program eBPF používa ten istý mechanizmus prístupu do pamäte
+> cudzieho procesu; prínosom je mapa prečítaná z jadra. Samotný prístup cez eBPF nie je
+> výsledkom tejto práce — zberač bol prevzatý a jeho autorstvo nie je známe; prácou je jeho
+> overenie proti bežiacemu jadru, odstránenie štyroch príčin, pre ktoré sa program nenačítal,
+> a posúdenie hraníc tohto prístupu. Proti vlastnému modulu jadra hovorí, že by sa viazal na
+> konkrétnu verziu jadra a že jeho chyba by zhodila hostiteľa aj so všetkými virtuálnymi strojmi.
+> Čím riešenie nie je: nie je to zavedený modul jadra ani patch hypervízora a nezachytáva udalosti
+> virtuálneho stroja, pretože programy nie sú zavesené na žiadnu udalosť a spúšťa ich zberač
+> v naplánovanom termíne. Ide o rozhranie pozorovacie, nie riadiace: zastaviť virtuálny stroj
+> neumožňuje, a preto je snímka pamäte živá. Cenou je závislosť od vnútorného rozloženia štruktúr
+> modulu `kvm`, požiadavka na roota a na jadro preložené s ladiacimi informáciami BTF a to, že pri
+> non-anonymne podloženej pamäti hosťa čítanie nedotknutej stránky ju na hostiteľovi alokuje.
 
 ## 2. Vrstvy zberača
 
