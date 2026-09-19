@@ -53,6 +53,11 @@ class GuestView:
     PTE_PRESENT = 1 << 0
     PTE_PSE = 1 << 7
 
+    # Mena urovni tabuliek stranok x86_64 - kvoli hlaske, ktora povie, KDE
+    # prechod skoncil. "zlyhalo to" bez urovne sa nedalo odlisit od chybajucej
+    # stranky v snimke.
+    PGT_LEVELS = ("PGD", "PUD", "PMD", "PTE")
+
     def __init__(self, img, prof):
         self.img = img
         self.p = prof
@@ -173,30 +178,82 @@ class GuestView:
         sym = self.p.addr("init_top_pgt")
         return self.ktext_pa(sym) if sym is not None else None
 
-    def walk_pa(self, va):
+    def _page_present(self, pa):
+        """
+        Je stranka s touto fyzickou adresou naozaj v snimke?
+
+        Retazec .vmicd cita nezozbieranu stranku ako nulovu (tak ju zberac
+        nasiel). Bez tejto otazky sa "polozka tabuliek je prazdna" neda
+        odlisit od "tu stranku sme nezbierali" - a prave na tomto rozdiele
+        stoji diagnoza profilu z ineho bootu.
+        """
+        if pa is None or pa < 0:
+            return False
+        idx = getattr(self.img, "index", None)
+        if idx is not None:                      # .vmicd: mapa zozbieranych stranok
+            return (pa // self.img.page_size) in idx
+        size = (getattr(self.img, "size", 0)
+                or getattr(self.img, "memsize", 0) or 0)
+        if size:                                 # raw obraz: vsetko do velkosti
+            return pa < size
+        # Obal, ktory sa na pritomnost spytat neda (napr. Recorder v
+        # tests/data/make_mini.py): nepredstieraj, ze stranka chyba - z
+        # "neviem" by inak vznikla diagnoza.
+        return True
+
+    def walk_pa_detail(self, va):
         """
         Preklad virtualnej adresy hosta prechodom tabuliek stranok
         (4 urovne, x86_64). Pokryva aj oblasti, ktore linearne mapovane nie su -
         moduly a vmalloc.
 
-        Vracia None, ked stranka nie je pritomna. Velke stranky (1 GiB, 2 MiB)
-        sa rozpoznaju podla bitu PSE.
+        Vracia {'pa', 'level', 'index', 'reason', 'reason_code'}; 'pa' je None,
+        ked sa prechod nedokoncil. Velke stranky (1 GiB, 2 MiB) sa rozpoznaju
+        podla bitu PSE.
+
+        Kody dovodov (na nich stoji diagnoza, nie na samotnom None):
+          bez_korena     - nepozname posun jadra alebo init_top_pgt
+          chyba_tabulka  - tabulku na tej urovni snimka neobsahuje (nic to
+                           nehovori o profile, iba o tom, co sa zozbieralo)
+          chyba_polozka  - tabulka V SNIMKE JE, ale polozka pre tuto adresu
+                           v nej nie je pritomna, teda jadro tuto virtualnu
+                           adresu nemapuje
         """
+        out = {"pa": None, "level": None, "index": None,
+               "reason": None, "reason_code": None}
         table = self._pgt_root()
         if table is None:
-            return None
+            out["reason_code"] = "bez_korena"
+            out["reason"] = ("neznamy posun jadra alebo profil nema "
+                             "init_top_pgt")
+            return out
         # bity 47:39 / 38:30 / 29:21 / 20:12
         for level, shift in enumerate((39, 30, 21, 12)):
             idx = (va >> shift) & 0x1FF
-            ent = self.u64(table + idx * 8)
-            if ent is None or not (ent & self.PTE_PRESENT):
-                return None
+            name = self.PGT_LEVELS[level]
+            ent = self.u64(table + idx * 8) if self._page_present(table) else None
+            if ent is None:
+                out.update(level=name, index=idx, reason_code="chyba_tabulka",
+                           reason="tabulka %s na 0x%x nie je v snimke"
+                                  % (name, table))
+                return out
+            if not (ent & self.PTE_PRESENT):
+                out.update(level=name, index=idx, reason_code="chyba_polozka",
+                           reason="polozka %s[%d] nie je pritomna"
+                                  % (name, idx))
+                return out
             phys = ent & 0x000FFFFFFFFFF000
             if level in (1, 2) and (ent & self.PTE_PSE):
                 size = 1 << shift
-                return phys + (va & (size - 1))
+                out["pa"] = phys + (va & (size - 1))
+                return out
             table = phys
-        return table + (va & 0xFFF)
+        out["pa"] = table + (va & 0xFFF)
+        return out
+
+    def walk_pa(self, va):
+        """Prechod tabuliek stranok; iba fyzicka adresa, bez dovodu."""
+        return self.walk_pa_detail(va)["pa"]
 
     def to_pa(self, va):
         """
@@ -545,6 +602,11 @@ class GuestView:
                 "btf": self.p.btf_path,
                 "symbols": len(self.p.sym),
                 "structs": sorted(self.p.off),
+                # z boot.json (zapisuje scripts/get_profile.sh); starsi profil
+                # ho nema a vtedy su hodnoty None - nedopisuju sa odhadom
+                "boot_id": getattr(self.p, "meta", {}).get("boot_id"),
+                "captured": getattr(self.p, "meta", {}).get("captured"),
+                "guest_kernel": getattr(self.p, "meta", {}).get("guest_kernel"),
             },
             "resolved": self.ktext_shift is not None,
             "resolve_problem": self.resolve_problem(),
@@ -554,6 +616,9 @@ class GuestView:
             "ktext_shift": self.ktext_shift,
             "page_offset_base": self.page_offset_base,
             "translation_check": self.translation_check(),
+            # None alebo text diagnozy; nesulad profilu je chyba vstupu,
+            # nie neuzavreta kontrola (viz navratove kody v cli.py)
+            "profile_mismatch": self.profile_boot_mismatch(),
         }
         return out
 
@@ -561,6 +626,10 @@ class GuestView:
         """
         Krizova kontrola: linearny vypocet vs. prechod tabuliek stranok.
         Zhoda je jediny dokaz, ze posun nie je nahoda.
+
+        Kazdy riadok nesie aj to, PRECO prechod zlyhal (uroven, index, kod
+        dovodu) a ci je stranka linearneho vysledku vobec v snimke - z toho
+        sa sklada diagnoza v profile_boot_mismatch().
         """
         rows = []
         for name in symbols:
@@ -568,15 +637,105 @@ class GuestView:
             if va is None:
                 continue
             lin = self.ktext_pa(va)
-            walk = self.walk_pa(va)
+            d = self.walk_pa_detail(va)
             rows.append({
                 "symbol": name,
                 "va": va,
                 "linear_pa": lin,
-                "walk_pa": walk,
-                "match": lin is not None and lin == walk,
+                "linear_page_present": self._page_present(lin),
+                "walk_pa": d["pa"],
+                "walk_level": d["level"],
+                "walk_index": d["index"],
+                "walk_reason": d["reason"],
+                "walk_reason_code": d["reason_code"],
+                "match": lin is not None and lin == d["pa"],
             })
         return rows
+
+    # ------------------------------------------------- diagnoza: iny boot
+
+    def _linear_confirmed(self, name, lin):
+        """
+        Da sa symbol na linearne vypocitanej adrese naozaj precitat a je tam
+        to, co tam byt ma? Diagnoza nizsie smie stat iba na symbole, o ktorom
+        to vieme - inak by "adresa sa neprelozila" mohol byt hocijaky
+        nemapovany kus pamate.
+        """
+        if lin is None:
+            return False
+        if name == "linux_banner":
+            return (self.banner_pa is not None and lin == self.banner_pa
+                    and self._page_present(lin))
+        if name == "init_task":
+            # comm lezi az hlboko v strukture - pytame sa na stranku, z ktorej
+            # sa NAOZAJ cita, nie na tu so zaciatkom init_task (v malom vyreze
+            # snimky to nemusi byt ta ista stranka)
+            off = self.p.member("task_struct", "comm")
+            if off is None or not self._page_present(lin + off):
+                return False
+            comm = self.img.read(lin + off, 16) if self._ok(lin + off, 16) else None
+            return bool(comm) and comm.split(b"\0")[0] == b"swapper/0"
+        return False
+
+    def profile_boot_mismatch(self, symbols=("init_task", "linux_banner")):
+        """
+        Diagnoza: kallsyms v profile je z INEHO STARTU jadra, nez je snimka.
+
+        Ako sa to pozna. Adresy symbolov randomizuje KASLR pri kazdom starte,
+        ale posuva ich vsetky rovnako - preto sken banneru posun dopocita a
+        linearny vypocet (PA = VA - __START_KERNEL_map + posun) sedi aj so
+        starym profilom. Tabulky stranok su vsak indexovane SKUTOCNYMI
+        virtualnymi adresami tohto startu, takze stara VA v nich nie je.
+
+        Podmienka je preto: symbol sa na linearne vypocitanej adrese precitat
+        DA a obsah sedi (init_task.comm == "swapper/0", resp. banner na
+        najdenej adrese), ale prechod tabuliek stranok pre jeho virtualnu
+        adresu skoncil na NEPRITOMNEJ polozke v tabulke, ktora v snimke je.
+        S profilom z toho isteho bootu tato dvojica nastat nemoze.
+
+        Vracia None (nic tomu nenasvedcuje) alebo text diagnozy.
+        """
+        if self.ktext_shift is None:
+            return None                       # inu pricinu hlasi resolve_problem
+        for name in symbols:
+            va = self.p.addr(name)
+            if va is None:
+                continue
+            lin = self.ktext_pa(va)
+            d = self.walk_pa_detail(va)
+            if d["pa"] is not None:
+                return None                   # prechod presiel - profil sedi
+            if d["reason_code"] != "chyba_polozka":
+                continue                      # tabulku nemame: nedokazuje nic
+            if not self._linear_confirmed(name, lin):
+                continue
+            return self._mismatch_text(name, va, lin, d)
+        return None
+
+    def _mismatch_text(self, name, va, lin, d):
+        """Hlaska diagnozy: co sa stalo, preco to tak je a co s tym."""
+        riadky = [
+            "NESULAD PROFILU: kallsyms je z ineho startu jadra (KASLR), nez je "
+            "snimka.",
+            "  symbol %s: linearne sa cita z 0x%x (obsah sedi), ale prechod "
+            "tabuliek stranok" % (name, lin),
+            "  pre VA 0x%x skoncil na urovni %s, %s."
+            % (va, d["level"], d["reason"]),
+            "  Tabulky stranok su indexovane virtualnymi adresami TOHTO startu; "
+            "adresy v kallsyms.txt",
+            "  su z ineho. Offsety poli z BTF reboot prezivaju, adresy symbolov "
+            "nie.",
+        ]
+        popis = self.p.describe() if hasattr(self.p, "describe") else None
+        if popis:
+            riadky.append("  %s" % popis)
+        riadky.append(
+            "  Obnov profil: scripts/get_profile.sh -f root@<host-hosta> "
+            "(alebo -t agent <domena>).")
+        riadky.append(
+            "  Snimka z ineho bootu potrebuje profil z TOHO bootu - stary "
+            "profil sa uz neda dopocitat.")
+        return "\n".join(riadky)
 
     # -------------------------------------------------------------- utility
 

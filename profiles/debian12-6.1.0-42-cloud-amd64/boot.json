@@ -1,0 +1,13 @@
+{
+  "boot_id": "82b778a3-89f8-4b04-b518-5db8ebeb4ab4",
+  "boot_time": "2026-09-19 10:30:31",
+  "captured": "2026-09-19T13:19:15+02:00",
+  "guest_kernel": "6.1.0-42-cloud-amd64",
+  "guest": "debian 12 (x86_64)",
+  "target": "root@192.168.122.100",
+  "transport": "ssh",
+  "init_task": "0xffffffffb221aa40",
+  "linux_banner": "0xffffffffb191f560",
+  "kallsyms_lines": 98695,
+  "btf_bytes": 4104445
+}

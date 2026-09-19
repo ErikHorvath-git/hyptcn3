@@ -1,0 +1,105 @@
+{
+  "schema": "hyptcn3/guestparse-validate/1",
+  "generated": "2026-09-19T12:01:54Z",
+  "snapshot": {
+    "path": "/home/eh/Desktop/hyptcn3/data/sessions/20260919T120148Z_validate/snap",
+    "files": [
+      "hyptcn-guest_000000_20260919T120151323Z.vmicd"
+    ],
+    "pages_present": 88614,
+    "kernel": "Linux version 6.1.0-42-cloud-amd64 (debian-kernel@lists.debian.org) (gcc-12 (Debian 12.2.0-14+deb12u1) 12.2.0, GNU ld (GNU Binutils for Debian) 2.40) #1 SMP PREEMPT_DYNAMIC Debian 6.1.159-1 (2025-12-30)",
+    "ktext_shift": -706740224
+  },
+  "profile": "/home/eh/Desktop/hyptcn3/profiles/debian12-6.1.0-42-cloud-amd64",
+  "ground_truth": {
+    "ps_before": {
+      "path": "/home/eh/Desktop/hyptcn3/data/sessions/20260919T120148Z_validate/ps_before.txt",
+      "mtime": "2026-09-19T12:01:49Z"
+    },
+    "ps_after": {
+      "path": "/home/eh/Desktop/hyptcn3/data/sessions/20260919T120148Z_validate/ps_after.txt",
+      "mtime": "2026-09-19T12:01:53Z"
+    },
+    "lsmod": {
+      "path": "/home/eh/Desktop/hyptcn3/data/sessions/20260919T120148Z_validate/lsmod_after.txt",
+      "mtime": "2026-09-19T12:01:53Z"
+    },
+    "ss": {
+      "path": "/home/eh/Desktop/hyptcn3/data/sessions/20260919T120148Z_validate/ss_listen_before.txt",
+      "mtime": "2026-09-19T12:01:50Z"
+    }
+  },
+  "traversal": {
+    "processes_truncated": false,
+    "processes_stop_reason": null,
+    "modules_truncated": false,
+    "modules_stop_reason": null,
+    "sockets_truncated": false,
+    "sockets_skipped_tasks": 0
+  },
+  "processes": {
+    "ps_before": 80,
+    "ps_after": 80,
+    "stable": 78,
+    "stable_name_identical": 75,
+    "snapshot": 78,
+    "found": 78,
+    "missing": 0,
+    "false_positive": 0,
+    "name_mismatch": 0,
+    "recall_percent": 100.0,
+    "name_match_rules": {
+      "exact": 63,
+      "worker": 12,
+      "truncated": 3
+    },
+    "duplicate_pids": [],
+    "missing_list": [],
+    "false_positive_list": [],
+    "name_mismatch_list": []
+  },
+  "checks": {
+    "syscall_hooks": 0,
+    "syscall_entries_checked": 451,
+    "process_cross_view_findings": 0,
+    "module_findings": 0,
+    "inconclusive": []
+  },
+  "modules": {
+    "ground_truth": 50,
+    "snapshot": 50,
+    "matched": 50,
+    "missing": 0,
+    "extra": 0,
+    "missing_list": [],
+    "extra_list": []
+  },
+  "sockets": {
+    "ground_truth": 10,
+    "snapshot_tcp_udp": 12,
+    "snapshot_other_protocols": {
+      "RAW": 1
+    },
+    "matched": 10,
+    "missing": 0,
+    "extra": 2,
+    "ground_truth_unparsed": 0,
+    "missing_list": [],
+    "extra_list": [
+      {
+        "proto": "UDP",
+        "saddr": "0.0.0.0",
+        "sport": 0,
+        "daddr": "0.0.0.0",
+        "dport": 0
+      },
+      {
+        "proto": "UDP",
+        "saddr": "192.168.122.100",
+        "sport": 55497,
+        "daddr": "192.168.122.1",
+        "dport": 53
+      }
+    ]
+  }
+}

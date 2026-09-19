@@ -14,8 +14,7 @@ import torch
 from features.snapshot import MENA
 from tcn.baselines import BagOfFrames, skryte_pre_parametre
 from tcn.model import TCN, pocet_parametrov, recepcne_pole, skontroluj_rf
-from tcn.train import (beh, okna_zo_session, priprav, split_chronologicky,
-                       syn_sessions)
+from tcn.train import beh, priprav, split_chronologicky, syn_sessions
 
 F = len(MENA)
 
@@ -65,7 +64,7 @@ def test_rf_kratsie_nez_okno_je_chyba():
 
 def test_maly_pocet_parametrov():
     n = pocet_parametrov(TCN(F, 2))
-    assert n == 5330, n                  # radovo tisice, nie miliony
+    assert n == 5394, n                  # radovo tisice, nie miliony
 
 
 def test_gru_ma_porovnatelny_pocet_parametrov():
@@ -89,22 +88,36 @@ def test_split_nemiesa_sessions():
     assert all(d["triedy"][i] == "idle" for i in [d["benigna"]])
 
 
-def test_okna_bez_predchodcu_sa_vynechaju():
-    """Riadok s ma_predchodcu=0 nesmie zostat v datach."""
+def test_okna_bez_predchodcu_a_s_plnou_snimkou_sa_vynechaju():
+    """Riadok s ma_predchodcu=0 ani s je_plna=1 nesmie zostat v datach.
+
+    V syntetickom sedeni je prva snimka oboje naraz, rovnako ako v realnom
+    retazci, takze obidva pocty su rovne poctu sedeni.
+    """
     s = syn_sessions(0)
     d = priprav(s, dlzka=16)
-    assert d["okien_bez_predchodcu"] == len(s)    # prva snimka kazdej session
-    i = MENA.index("ma_predchodcu")
-    # po normalizacii je stlpec nemeneny (je v nenormalizovanych), takze 1.0
-    assert (d["X_train"][:, :, i] == 1.0).all()
-    assert (d["X_test"][:, :, i] == 1.0).all()
+    assert d["okien_bez_predchodcu"] == len(s)
+    assert d["okien_s_plnou_snimkou"] == len(s)
+    # po normalizacii su oba stlpce nemenene (su v nenormalizovanych)
+    assert (d["X_train"][:, :, MENA.index("ma_predchodcu")] == 1.0).all()
+    assert (d["X_test"][:, :, MENA.index("ma_predchodcu")] == 1.0).all()
+    assert (d["X_train"][:, :, MENA.index("je_plna")] == 0.0).all()
+    assert (d["X_test"][:, :, MENA.index("je_plna")] == 0.0).all()
 
 
-def test_okna_neprekrocia_session():
-    X = np.arange(40 * F, dtype=np.float64).reshape(40, F)
-    W = okna_zo_session(X, 16)
-    assert W.shape == (25, 16, F)
-    assert okna_zo_session(X[:10], 16).shape == (0, 16, F)
+def test_okna_vyroba_features_windows():
+    """Okna sklada features/windows.py, nie tcn/train.py.
+
+    Kontroluje sa dosledok: zo sedenia dlheho 40 snimok, ktoreho prvy riadok
+    je plna snimka bez predchodcu, vznikne pri dlzke 16 presne 24 okien
+    (25 kandidatov minus jedno vynechane), a ziadne nepresahuje sedenie.
+    """
+    s = syn_sessions(0, na_triedu=2, dlzka=40)
+    d = priprav(s, dlzka=16, podiel=0.5)
+    na_sedenie = 40 - 16 + 1 - 1
+    assert len(d["y_train"]) == na_sedenie * len(d["train_sessions"])
+    assert len(d["y_test"]) == na_sedenie * len(d["test_sessions"])
+    assert d["X_train"].shape[1:] == (16, F)
 
 
 def test_bag_of_frames_nevidi_poradie():

@@ -6,10 +6,31 @@ train.py - data, split, normalizacia a trening. Spusta cely beh:
 
 VSTUPNE DATA
 ------------
-Jedna session = jeden .npz zo `python3 -m features session --out <subor>`:
-kluce `matica` (T x 21), `mena` (kontrakt z features/snapshot.py) a `snimky`.
+Jedno sedenie = jeden .npz zo `python3 -m features session --out <subor>`:
+kluce `matica` (T x 22), `mena` (kontrakt z features/snapshot.py) a `snimky`.
 Vedla nich `labely.json`: {meno_session: trieda}. Nic ine sa necita - vektor
 sa tu uz nepocita, aby v jednom datasete neboli cisla z dvoch implementacii.
+
+BEZ VZORIEK SA DETEKCIA NEMERIA
+-------------------------------
+Na tomto stroji nie su ziadne realne malverove vzorky, takze z tohto modulu
+nemoze vyjst cislo o detekcii malveru. Rezimy v syn_sessions() su vzorce
+(hodnota, poradie, sum), nie spravanie skodliveho kodu, a ich ulohou je overit
+MECHANIKU: ze okna neprekrocia hranice sedenia, ze split nemiesa sedenia, ze
+je beh deterministicky a ze sa siet na trivialnej ulohe vobec nauci. Presnost,
+F1 ani AUC z takeho behu nie su vysledkom prace (HONESTY.md P4) a ulozeny JSON
+ma preto `synteticke_data: true` a `guest: null`.
+
+Co sa bez vzoriek zistit NEDA: ci model odlisi malver od benigneho softveru,
+ake su falosne poplachy a uniky v prevadzke, ci sa priznaky prenesu na inu VM
+a ktora cast vektora (pamatova alebo objektova) k rozhodnutiu prispieva.
+
+OKNA SKLADA features/windows.py
+-------------------------------
+Tento modul si okna NEROBI sam. Posuvne okno je pat riadkov, ale hranice, cez
+ktore okno prekrocit nesmie (ine sedenie, diera v seq, prilis dlha casova
+medzera, plna snimka, snimka bez predchodcu), su cely modul - a duplikovat ich
+znamena mat dve definicie toho isteho a jednu z nich raz opravit.
 
 CHRONOLOGICKY A SESSION-DISJUNKTNY SPLIT
 ----------------------------------------
@@ -24,18 +45,17 @@ chronologicky sa to potom zoradit neda.
 
 NORMALIZACIA
 ------------
-mu/sd fituje features/normalize.py IBA na benignych TRENOVACICH sessions.
-Normalizator je pisany na per-bin vektory (B binov x F priznakov), snimkovy
-vektor je jeden riadok - ide don ako B=1. Preto `biny=(0,)` a `bin_bytes=1`
-(manifest ziada kladnu mocninu dvojky, 1 je neutralna). `ma_predchodcu` sa
-nenormalizuje, je to indikator 0/1 ako `has_changed`.
+mu/sd fituje features/normalize.py IBA na benignych TRENOVACICH sedeniach a
+iba z riadkov, ktore sa aj do okien dostanu. `ma_predchodcu` a `je_plna` sa
+nenormalizuju - su to indikatory 0/1 o tom, co ten riadok je.
 
-PRVA SNIMKA RETAZCA
--------------------
+RIADKY, KTORE DO OKNA NEPATRIA
+------------------------------
 V riadku s `ma_predchodcu` = 0 su proc_new, proc_gone a mod_delta nuly, ktore
-nie su meranim. Z dvoch ciest, ktore kontrakt pripusta, je zvolena tato: okno
-s takym riadkom sa VYNECHA a pocet vynechanych je vo vysledku
-(`okien_bez_predchodcu`). Priznak vo vektore zostava - pri skorovani v
+nie su meranim; v riadku s `je_plna` = 1 maju priznaky 1 az 7 iny fyzikalny
+vyznam nez v delta riadkoch (hlavicka features/snapshot.py). Okno, ktore taky
+riadok obsahuje, nevznikne, a pocty su vo vysledku (`okien_bez_predchodcu`,
+`okien_s_plnou_snimkou`). Priznaky vo vektore zostavaju - pri skorovani v
 prevadzke sa prva snimka zahodit neda a tam musi byt vidiet, ktory riadok to je.
 """
 
@@ -52,7 +72,9 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from features.normalize import Normalizer                   # noqa: E402
 from features.snapshot import MENA                          # noqa: E402
-from features.windows import DLZKA_OKNA, KROK, Snimka       # noqa: E402
+from features.windows import (DLZKA_OKNA, DOVOD_PLNA,       # noqa: E402
+                              DOVOD_PREDCHODCA, okna,
+                              snimky_z_matice)
 from tcn import eval as ev                                  # noqa: E402
 from tcn.baselines import (GRU, BagOfFrames, LogRegPriemer,  # noqa: E402
                            skryte_pre_parametre)
@@ -127,17 +149,11 @@ def syn_sessions(seed=0, na_triedu=4, dlzka=40, triedy=("idle", "cpu_burn"),
                     X[:, 0] += ti * (1.0 + np.sin(t / 3.0))
             X[:, MENA.index("ma_predchodcu")] = 1.0
             X[0, MENA.index("ma_predchodcu")] = 0.0     # prva snimka retazca
+            X[:, MENA.index("je_plna")] = 0.0
+            X[0, MENA.index("je_plna")] = 1.0           # prva je vzdy plna
             out.append({"meno": "202601%02dT000000Z_%s_%d" % (i + 1, trieda, i),
                         "trieda": trieda, "matica": X})
     return out
-
-
-def okna_zo_session(matica, dlzka, krok=KROK):
-    """(T, F) -> (N, L, F) posuvnym oknom; okna nikdy neprekrocia session."""
-    T = matica.shape[0]
-    zac = range(0, T - dlzka + 1, krok)
-    return np.stack([matica[i:i + dlzka] for i in zac]) if T >= dlzka \
-        else np.zeros((0, dlzka, matica.shape[1]))
 
 
 def split_chronologicky(sessions, podiel=0.6):
@@ -168,48 +184,42 @@ def priprav(sessions, dlzka=DLZKA_OKNA, podiel=0.6, benigna=BENIGNA):
     tr_mena, te_mena = split_chronologicky(sessions, podiel)
     labely = {s["meno"]: s["trieda"] for s in sessions}
 
-    # Normalizacia: fit iba na benignych trenovacich sessions. Snimkovy vektor
-    # ide do normalizatora ako jeden "bin" (tvar (1, F)).
-    snimky = [Snimka(s["meno"], i, "", 0.0, (0,), r[None, :], 1, priznaky=MENA)
-              for s in sessions for i, r in enumerate(s["matica"])]
+    snimky = [sn for s in sessions
+              for sn in snimky_z_matice(s["meno"], s["matica"], MENA)]
+
+    # Normalizacia: fit iba na benignych trenovacich sedeniach a iba z
+    # riadkov, ktore sa aj do okien dostanu. Riadok plnej snimky ma v
+    # priznakoch 1 az 7 iny vyznam, takze by mu/sd posunul.
     fit_mena = [m for m in tr_mena if labely[m] == benigna]
     if not fit_mena:
-        raise ValueError("medzi trenovacimi sessions nie je ziadna benigna "
+        raise ValueError("medzi trenovacimi sedeniami nie je ziadne benigne "
                          "(%r); mu/sd sa nema na com fitnut" % benigna)
-    norm = Normalizer(priznaky=MENA, nenormalizovane=("ma_predchodcu",),
-                      podmienene={})
-    norm.fit(snimky, sessions_fit=fit_mena, labely=labely,
+    norm = Normalizer(priznaky=MENA,
+                      nenormalizovane=("ma_predchodcu", "je_plna"))
+    norm.fit([sn for sn in snimky if not sn.dovody()],
+             sessions_fit=fit_mena, labely=labely,
              benigna_trieda=benigna, dlzka_okna=dlzka)
 
-    idx_pred = MENA.index("ma_predchodcu")
-    casti, vynechane = {}, 0
+    vsetky = okna(snimky, dlzka=dlzka)
+    casti = {}
     for cast, mena in (("train", tr_mena), ("test", te_mena)):
-        X, y = [], []
-        for s in sessions:
-            if s["meno"] not in mena:
-                continue
-            W = okna_zo_session(s["matica"], dlzka)
-            plne = (W[:, :, idx_pred] == 1).all(axis=1) if len(W) else \
-                np.zeros(0, dtype=bool)
-            vynechane += int((~plne).sum())
-            W = W[plne]
-            if len(W):
-                X.append(W)
-                y.extend([triedy.index(s["trieda"])] * len(W))
-        if not X:
+        o = vsetky.vyber_sessions(mena)
+        if not len(o):
             raise ValueError("cast %s nema ani jedno okno" % cast)
-        Xc = np.concatenate(X)
-        # transform caka os binov; (N, L, F) -> (N, L, 1, F) a spat
-        casti[cast] = (norm.transform(Xc[:, :, None, :])[:, :, 0, :],
-                       np.asarray(y, dtype=np.int64))
+        y = [triedy.index(labely[m["session"]]) for m in o.meta]
+        casti[cast] = (norm.transform(o).X, np.asarray(y, dtype=np.int64))
 
+    pocty = vsetky.pocty_vynechanych()
     return {
         "triedy": triedy, "benigna": triedy.index(benigna),
         "train_sessions": tr_mena, "test_sessions": te_mena,
         "fit_sessions": fit_mena,
         "X_train": casti["train"][0], "y_train": casti["train"][1],
         "X_test": casti["test"][0], "y_test": casti["test"][1],
-        "dlzka_okna": dlzka, "okien_bez_predchodcu": vynechane,
+        "dlzka_okna": dlzka,
+        "okien_bez_predchodcu": pocty.get(DOVOD_PREDCHODCA, 0),
+        "okien_s_plnou_snimkou": pocty.get(DOVOD_PLNA, 0),
+        "kratke_useky": list(vsetky.preskocene),
         "konstantne_priznaky": list(norm.manifest.konstantne),
     }
 

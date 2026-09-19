@@ -25,9 +25,16 @@
 #
 # VYCHODZI ROZSAH zodpovedá prvej vete HONESTY.md ("thesis/, docs/, README.md,
 # komentare v zdrojakoch"): thesis/, docs/, README.md v koreni, vmicollect/README.md
-# a komentare v zdrojakoch (cely vmicollect/ okrem build/, guestparse/, scripts/).
+# a komentare v zdrojakoch (cely vmicollect/ okrem build/, guestparse/, scripts/,
+# features/, tcn/).
 # Predtym to bolo iba thesis/ a docs/, takze korenovy README.md - subor
 # s hlavnymi namerannymi cislami - sa nekontroloval nikdy.
+#
+# PRECO AJ features/ A tcn/: prave v nich stoji upozornenie "model nie je
+# natrenovany" (tcn/score.py, tcn/__init__.py, features/PERBIN.md). Su to
+# komentare o tom, co cislo znamena - teda presne ten druh textu, ktory tato
+# kontrola strazi. Do 2026-09-19 boli oba adresare mimo rozsahu, takze zakazane
+# cislo ani zakazane slovo v nich nikto nehladal.
 #
 # Co sa v zdrojaku kontroluje: iba text komentarov (// /* */ #), nie kod. Cislo
 # v kode je konstanta, nie tvrdenie; hodnota 0.86 v algoritme nie je metrika
@@ -545,7 +552,7 @@ if [ "${#ARGS[@]}" -gt 0 ]; then
   TARGETS=("${ARGS[@]}")
 else
   DEFAULT_SCOPE=1
-  for t in thesis docs README.md vmicollect guestparse scripts; do
+  for t in thesis docs README.md vmicollect guestparse scripts features tcn; do
     [ -e "$REPO_DIR/$t" ] && TARGETS+=("$REPO_DIR/$t")
   done
 fi

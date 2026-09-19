@@ -204,6 +204,11 @@ def _c_features_for(cpath, snap_id):
 
 
 def cmd_crosscheck(args):
+    # Bez --c beru vektor z C zo sidecarov vedla snimok - su to tie iste subory,
+    # ktore zapisal zberac. Prikaz sa tak da spustit tak, ako ho uvadza prirucka:
+    # 'features crosscheck --snapshot <adresar>'.
+    if not args.c:
+        args.c = args.snapshot
     slots = _memslots(args, args.snapshot)
     heads = _chain_parts(args.snapshot)
     snimky = []
@@ -409,6 +414,8 @@ def build_parser():
         sp.add_argument("--memslots", default=None,
                         help="JSON s rozsahmi memslotov (napr. vystup "
                              "'vmicollect probe -v')")
+        sp.add_argument("--sidecar", default=None,
+                        help="sidecar .json snimky (vychodzie: vedla .vmicd)")
         sp.add_argument("--bin-bytes", default=DEFAULT_BIN_BYTES,
                         type=parse_size, dest="bin_bytes",
                         help="velkost binu v bajtoch, mocnina dvojky "
@@ -416,8 +423,6 @@ def build_parser():
 
     p = sub.add_parser("perbin", help="spocitaj vektor jednej snimky")
     common(p)
-    p.add_argument("--sidecar", default=None,
-                   help="sidecar .json snimky (vychodzie: vedla .vmicd)")
     p.add_argument("--until-seq", default=None, type=int, dest="until_seq",
                    help="stav po tejto casti retazca (vychodzie: posledna)")
     p.add_argument("--json", action="store_true", help="cisty JSON na stdout")

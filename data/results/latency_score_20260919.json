@@ -1,0 +1,263 @@
+{
+ "schema": "hyptcn3/vysledok-hlavicka/1",
+ "schema_dat": "hyptcn3/latencia-skore/1",
+ "commit": "da8ad2ec5c60520afff814109dc081b8faf123e7",
+ "commit_dirty": true,
+ "commit_poznamka": "pracovny strom bol pri merani zmeneny: tcn/score.py a tcn/tests/test_score.py este neboli v gite a v repozitari paralelne pracovali ine zmeny (features/, docs/, scenarios/). Cisla preto patria pracovnemu stromu nad da8ad2e, nie samotnemu commitu.",
+ "date": "2026-09-19T12:45:00Z",
+ "host": "Fedora Linux 43 (Workstation Edition), jadro 7.1.13-100.fc43.x86_64, hostname fedora, Python 3.14.7, torch 2.11.0+cu130 (CPU)",
+ "guest": "libvirt domena hyptcn-guest (Debian 12, jadro 6.1.0-42-cloud-amd64) pocas merania BEZALA, ale necitala sa - meralo sa nad ulozenou snimkou z 2026-09-19T00:41:26Z. Zber dnes nebezal.",
+ "command": "python3 -m tcn.score --snapshots data/sessions/20260919T004123Z_validate/snap --profile profiles/debian12-6.1.0-42-cloud-amd64 --dlzka 1 --json <vystup>  (11 behov, prvy je zahrievaci a zahadzuje sa)",
+ "n": 10,
+ "n_poznamka": "n = pocet meranych behov skorovania nad tou istou ulozenou snimkou; zahrievaci beh sa nepocita. Cas dopredneho behu modelu ma vlastne n = 100 (values.model_ms).",
+ "values": {
+  "schema": "hyptcn3/latencia-skore/1",
+  "model_natrenovany": false,
+  "model_poznamka": "Model NIE JE natrenovany: korpus neexistuje, lebo na tomto stroji nie su realne malverove vzorky. Vahy su nahodne inicializovane seedom 0. Skore v tomto subore NIE JE detekcia a nesmie sa uviest ako vysledok (HONESTY.md P4, P7). Merala sa cesta a jej cas, nie kvalita rozhodnutia - ziadna kvalita rozhodnutia tu nie je.",
+  "co_sa_meria": "cas od okamihu, ked skorovaci proces uvidi sidecar hotovej snimky, po okamih, ked ma vypocitane skore: vektor_ms (vypocet priznakoveho vektora cez features/snapshot.py nad zrekonstruovanou snimkou) + model_ms (dopredny beh TCN nad oknom) = spracovanie_ms. Meria sa vo vnutri procesu hodinami time.monotonic()/time.time().",
+  "co_sa_NEMERALO": "cela ziva latencia snimka -> skore, teda od zaciatku cyklu zberu (sidecar.timestamp_unix) po vypisane skore nad plnym oknom 16 delta snimok. Dovod: dnes sa podla rozhodnutia pouzivatela nezbieralo (na stroji nie su realne malverove vzorky) a zber potrebuje roota, ktory v tejto relacii nebol k dispozicii. Toto cislo je preto UNVERIFIED (HONESTY.md P5). Ziska sa behom: sudo -A vmicollect/build/vmicollect run -o vm.domain=hyptcn-guest -o vm.backend=ebpf -o output.writer=delta -o output.dir=<dir> -o schedule.interval_s=5 -o schedule.max_cycles=20 -o features.enable=on -o features.entropy=true  a paralelne python3 -m tcn.score --snapshots <dir> --profile profiles/debian12-6.1.0-42-cloud-amd64 --cakaj 60 --json <vystup>; latencia je potom zaznamy[].latencia_od_snimky_ms.",
+  "nastavenie": {
+   "snimka": "data/sessions/20260919T004123Z_validate/snap",
+   "snimka_druh": "jedna PLNA snimka (writer delta, prva v retazci), 2,02 GiB VM, sidecar ma blok features",
+   "profil": "profiles/debian12-6.1.0-42-cloud-amd64",
+   "dlzka_okna": 1,
+   "dlzka_okna_preco": "vychodzia dlzka okna je 16 snimok (features/windows.py). Okno dlzky 1 je pouzite preto, ze v repozitari je jedina snimka s blokom features a retazec 16 snimok dnes nevznikol. Na cas spracovania JEDNEJ snimky to nema vplyv (okno je iba buffer), na cas modelu ano - preto je model zmerany aj pri dlzke 16, samostatne.",
+   "opakovani": 11,
+   "zahrievaci_beh": "prvy beh sa zahadzuje: prve citanie .vmicd ide z disku, dalsie z page cache",
+   "prikaz_model": "python3 -c \"import json,time; from features.snapshot import vektor_snimky; from tcn.score import model_bez_treningu, skore, suhrn; v,_,_ = vektor_snimky('data/sessions/20260919T004123Z_validate/snap','profiles/debian12-6.1.0-42-cloud-amd64',0,None); out={}\\nfor L in (1,16): m=model_bez_treningu(L); okno=[v]*L; skore(m,okno); z=[]\\n for _ in range(100): t0=time.monotonic(); s=skore(m,okno); z.append({'ms':(time.monotonic()-t0)*1000})\\n out['okno_%d'%L]=suhrn(z,'ms'); out['skore_okno_%d'%L]=s\\nprint(json.dumps(out))\"",
+   "zataz_hostitela": "loadavg hostitela bol pocas merania 2,7-3,4 (v repozitari paralelne bezali ine ulohy). Namerane casy su preto horny odhad, nie najlepsi dosiahnutelny cas."
+  },
+  "vektor_ms": {
+   "n": 10,
+   "median": 661.794,
+   "p95": 709.266,
+   "min": 625.181,
+   "max": 709.266
+  },
+  "model_ms_prvy_v_procese": {
+   "n": 10,
+   "median": 1.728,
+   "p95": 2.352,
+   "min": 1.552,
+   "max": 2.352
+  },
+  "spracovanie_ms": {
+   "n": 10,
+   "median": 663.601,
+   "p95": 711.094,
+   "min": 626.747,
+   "max": 711.094
+  },
+  "proces_ms": {
+   "n": 10,
+   "median": 1669.599,
+   "p95": 1739.008,
+   "min": 1620.022,
+   "max": 1739.008
+  },
+  "proces_ms_poznamka": "cely proces vratane startu Pythonu a importu torchu (~1 s). Skorovaci proces bezi dlhodobo, takze sa tento cas plati raz; do latencie snimky nepatri a je tu len pre uplnost.",
+  "model_ms": {
+   "co": "dopredny beh TCN, 100 opakovani v jednom procese, vstupom je okno zlozene z kopii toho isteho realneho vektora - na cas vypoctu obsah okna vplyv nema (konvolucia ma pevny rozsah), na skore ano a skore sa nevyhodnocuje",
+   "okno_1": {
+    "n": 100,
+    "median": 0.486,
+    "p95": 0.789,
+    "min": 0.287,
+    "max": 1.689
+   },
+   "okno_16": {
+    "n": 100,
+    "median": 0.301,
+    "p95": 0.64,
+    "min": 0.279,
+    "max": 0.858
+   },
+   "poznamka": "prvy dopredny beh v procese je drahsi (median 1.728 ms v tabulke model_ms_prvy_v_procese) kvuli inicializacii torchu; ustaleny cas je desatiny milisekundy"
+  },
+  "kriterium_p95_pod_periodou": [
+   {
+    "co": "p95 casu snimka -> skore (jedna plna snimka, okno dlzky 1, bez zberu) < perioda zberu",
+    "perioda_ms": 2000.0,
+    "p95_ms": 711.094,
+    "n": 10,
+    "plati": true
+   },
+   {
+    "co": "p95 casu snimka -> skore (jedna plna snimka, okno dlzky 1, bez zberu) < perioda zberu",
+    "perioda_ms": 5000.0,
+    "p95_ms": 711.094,
+    "n": 10,
+    "plati": true
+   }
+  ],
+  "kriterium_poznamka": "Kriterium je vyhodnotene IBA pre zmeranu cast (spracovanie jednej plnej snimky bez sucasne bezuceho zberu). Pre zivy zber plati, ze k tomuto casu treba pripocitat latenciu snimka -> vektor zo zberaca (median 604 ms pri delta snimke a perioode 2 s, data/results/latency_vector_20260918.json) a pocitat s tym, ze zberac a skorovanie bezia naraz. Sucet tychto dvoch cisel nie je meranie a ako meranie sa uvadzat nesmie.",
+  "skore_ukazka": {
+   "hodnota": [
+    0.66303,
+    0.33697
+   ],
+   "poznamka": "vystup softmaxu NENATRENOVANEHO modelu nad jednou snimkou. Vo vsetkych behoch je rovnaky, lebo seed aj vstup su rovnake. Nehovori nic o stave VM."
+  },
+  "prostredie": {
+   "hostitel_loadavg_po": "3.24 2.74 1.84 2/2286 241922",
+   "host": "6.1.0-42-cloud-amd64, loadavg 0.00 0.00 0.00, procesov=84",
+   "poznamka": "do hosta sa siahlo iba raz po merani (ssh, uname a loadavg); meralo sa nad ulozenou snimkou, takze zataz hosta na vysledok vplyv nema"
+  },
+  "behy": [
+   {
+    "beh": 0,
+    "zahrievaci": true,
+    "vektor_ms": 699.329,
+    "model_ms": 1.677,
+    "spracovanie_ms": 701.024,
+    "skore": [
+     0.66303,
+     0.33697
+    ],
+    "poznamky": [],
+    "proces_ms": 1828.985,
+    "navratovy_kod": 0
+   },
+   {
+    "beh": 1,
+    "zahrievaci": false,
+    "vektor_ms": 634.389,
+    "model_ms": 1.68,
+    "spracovanie_ms": 636.083,
+    "skore": [
+     0.66303,
+     0.33697
+    ],
+    "poznamky": [],
+    "proces_ms": 1620.022,
+    "navratovy_kod": 0
+   },
+   {
+    "beh": 2,
+    "zahrievaci": false,
+    "vektor_ms": 656.29,
+    "model_ms": 1.809,
+    "spracovanie_ms": 658.128,
+    "skore": [
+     0.66303,
+     0.33697
+    ],
+    "poznamky": [],
+    "proces_ms": 1661.041,
+    "navratovy_kod": 0
+   },
+   {
+    "beh": 3,
+    "zahrievaci": false,
+    "vektor_ms": 629.989,
+    "model_ms": 1.758,
+    "spracovanie_ms": 631.762,
+    "skore": [
+     0.66303,
+     0.33697
+    ],
+    "poznamky": [],
+    "proces_ms": 1636.8,
+    "navratovy_kod": 0
+   },
+   {
+    "beh": 4,
+    "zahrievaci": false,
+    "vektor_ms": 709.266,
+    "model_ms": 1.81,
+    "spracovanie_ms": 711.094,
+    "skore": [
+     0.66303,
+     0.33697
+    ],
+    "poznamky": [],
+    "proces_ms": 1739.008,
+    "navratovy_kod": 0
+   },
+   {
+    "beh": 5,
+    "zahrievaci": false,
+    "vektor_ms": 625.181,
+    "model_ms": 1.552,
+    "spracovanie_ms": 626.747,
+    "skore": [
+     0.66303,
+     0.33697
+    ],
+    "poznamky": [],
+    "proces_ms": 1653.308,
+    "navratovy_kod": 0
+   },
+   {
+    "beh": 6,
+    "zahrievaci": false,
+    "vektor_ms": 695.58,
+    "model_ms": 1.697,
+    "spracovanie_ms": 697.294,
+    "skore": [
+     0.66303,
+     0.33697
+    ],
+    "poznamky": [],
+    "proces_ms": 1717.799,
+    "navratovy_kod": 0
+   },
+   {
+    "beh": 7,
+    "zahrievaci": false,
+    "vektor_ms": 677.008,
+    "model_ms": 2.352,
+    "spracovanie_ms": 679.384,
+    "skore": [
+     0.66303,
+     0.33697
+    ],
+    "poznamky": [],
+    "proces_ms": 1714.64,
+    "navratovy_kod": 0
+   },
+   {
+    "beh": 8,
+    "zahrievaci": false,
+    "vektor_ms": 661.371,
+    "model_ms": 1.892,
+    "spracovanie_ms": 663.279,
+    "skore": [
+     0.66303,
+     0.33697
+    ],
+    "poznamky": [],
+    "proces_ms": 1678.158,
+    "navratovy_kod": 0
+   },
+   {
+    "beh": 9,
+    "zahrievaci": false,
+    "vektor_ms": 662.217,
+    "model_ms": 1.69,
+    "spracovanie_ms": 663.923,
+    "skore": [
+     0.66303,
+     0.33697
+    ],
+    "poznamky": [],
+    "proces_ms": 1681.329,
+    "navratovy_kod": 0
+   },
+   {
+    "beh": 10,
+    "zahrievaci": false,
+    "vektor_ms": 674.67,
+    "model_ms": 1.626,
+    "spracovanie_ms": 676.311,
+    "skore": [
+     0.66303,
+     0.33697
+    ],
+    "poznamky": [],
+    "proces_ms": 1650.073,
+    "navratovy_kod": 0
+   }
+  ]
+ }
+}

@@ -19,7 +19,7 @@ CO SA DOSADZUJE
   velkost obrazu v selftest            vmicollect/src/main.c
   polia sidecaru                       sidecar vyrobeny PRI GENEROVANI prave
                                        prelozenou binarkou (backend 'file')
-  pocet testov                         pytest --collect-only -q
+  pocet testov                         pytest -q (prejdene a preskocene)
   namerane cisla                       data/results/**/*.json (vzdy s n)
   commity merani                       git log --oneline nad SHA z artefaktov
   prostredie merani                    hlavicky a env.json ulozenych artefaktov
@@ -44,8 +44,10 @@ CO SA NEDOSADZUJE
 -----------------
 Datum behu generatora ani zive verzie balikov hostitela. Keby v subore boli,
 prirucka by sa rozchadzala sama so sebou po kazdom upgrade stroja a kontrola
-aktualnosti by bola trvale cervena. Datumy a prostredie v texte su udaje
-z artefaktov, teda z toho, na com sa naozaj meralo.
+aktualnosti by bola trvale cervena. Datumy a prostredie merani v texte su udaje
+z artefaktov, teda z toho, na com sa naozaj meralo; datum stavu v hlavicke je
+novsi z dvojice "posledny artefakt" a "posledny commit, ktory sa dotkol kodu",
+lebo kod sa meni aj vtedy, ked nove meranie nepribudlo.
 
 Z rovnakeho dovodu sa neuvadza HEAD repozitara: HEAD sa meni kazdym commitom
 vratane toho, ktory prirucku prida. Uvadzaju sa commity, z ktorych pochadzaju
@@ -215,8 +217,11 @@ ADRESARE = [
      "guestparse/view.py", None),
     ("features/", "per-bin príznakový vektor (referencia), okná, normalizácia",
      "features/perbin.py", None),
+    ("tcn/", "model (Temporal Convolutional Network), baseliny, tréning "
+     "a skórovanie snímok; model natrénovaný nie je a skóre nie je detekcia",
+     "tcn/score.py", None),
     ("profiles/", "profil jadra hosťa: symboly a offsety polí štruktúr",
-     "profiles/*/README.md", "jeden adresár na verziu jadra hosťa"),
+     "profiles/*/README.md", "jeden adresár na boot hosťa — pozri L17"),
     ("scripts/", "root behy, príkazy v hosťovi, kontroly tvrdení",
      "scripts/root_run.sh", None),
     ("data/", "výsledkové JSONy z meraní (`data/results/`) a pozemná pravda "
@@ -248,9 +253,14 @@ def strom():
     subory = [r for r in vystup.splitlines() if r]
     riadky = []
     for adresar, popis, start, velkost in ADRESARE:
-        moje = [s for s in subory if s.startswith(adresar)]
+        # Iba subory, ktore na disku naozaj su. 'git ls-files --cached' vypise
+        # aj subor, ktory je v indexe, ale z pracovneho stromu bol zmazany
+        # (scripts/collect_corpus.sh po 2026-09-19). Riadky sa citaju zo suborov,
+        # takze zmazany subor do poctu riadkov nikdy nesiel - a keby sa pocital
+        # do poctu suborov, tabulka by tvrdila "9 suborov" nad ôsmimi.
+        moje = [s for s in subory if s.startswith(adresar) and (REPO / s).is_file()]
         if not moje:
-            raise Chyba("v gite nie je ziadny subor pod %s" % adresar)
+            raise Chyba("v gite nie je ziadny existujuci subor pod %s" % adresar)
         if "*" in start:
             najdene = sorted(glob.glob(str(REPO / start)))
             if not najdene:
@@ -488,14 +498,28 @@ def limitacie_nadpisy():
     Pocet je slaby dokaz: kto prepise nadpis L7 na opacne tvrdenie, pocet
     nezmeni a kontrola mlci. Znenie taku zmenu ukaze hned - prirucka sa
     rozide s docs/LIMITACIE.md a check_prirucka.sh to ohlasi.
+
+    Vyriesena limitacia sa zo zoznamu nevypusta (v docs/LIMITACIE.md tiez
+    zostava), ale nesie znacku VYRIESENE - inak by prirucka tvrdila, ze plati
+    nieco, co uz neplati.
     """
     riadky = []
     for cislo_, znenie in _limitacie():
         # z 'L7 — Confidential VM ...' ostane samotne tvrdenie; cislo uz je
         # v tucnom prefixe a opakovat ho by ubralo miesto zneniu
         _, oddelovac, zvysok = znenie.partition("—")
-        riadky.append("- **L%d** — %s"
-                      % (cislo_, _skrat((zvysok if oddelovac else znenie).strip())))
+        text = (zvysok if oddelovac else znenie).strip()
+        # Nadpis vyriesenej limitacie konci znackou '— VYRIESENE <datum>'.
+        # Skratenie na LIMITACIA_ZNAKOV ju odrezalo, takze prirucka vypisovala
+        # vyriesenu limitaciu medzi platnymi. Znacka sa preto odoberie pred
+        # skratenim a pripoji sa az za skrateny text - skratit sa smie tvrdenie,
+        # nie to, ci vobec plati.
+        m = re.search(r"\s*[—-]\s*(VYRIEŠENÉ\b.*)$", text)
+        znacka = ""
+        if m:
+            znacka = " — **%s**" % m.group(1).strip()
+            text = text[:m.start()].strip()
+        riadky.append("- **L%d** — %s%s" % (cislo_, _skrat(text), znacka))
     return "\n".join(riadky)
 
 
@@ -607,17 +631,41 @@ def sidecar():
 
 
 def pocet_testov():
-    text = spusti([sys.executable, "-m", "pytest", "--collect-only", "-q"])
-    m = re.search(r"(\d+) tests? collected", text)
-    if not m:
-        raise Chyba("z vystupu 'pytest --collect-only -q' sa necita pocet testov")
+    """Kolko testov PRESLO a kolko sa preskocilo - nie kolko sa ich zozbieralo.
+
+    Zozbierany pocet ('213 tests collected') znel v prirucke ako vysledok,
+    hoci preskoceny test nie je presiel - pravidlo, ktore si repozitar drzi
+    na inych miestach (guestparse/README.md, conftest.py). Preto sa pytest
+    naozaj spusti a cita sa jeho zaverecny riadok.
+
+    Rozdelenie na prejdene a preskocene zavisi od toho, ktore vstupy su na
+    stroji k dispozicii (realna snimka hosta, vystup selftestu). Sucet od
+    stroja nezavisi, preto sa uvadza aj on - a z dvojice je hned vidiet,
+    kolko z neho naozaj bezalo.
+    """
+    text = spusti([sys.executable, "-m", "pytest", "-q"], timeout=900)
+    zaver = [r for r in text.splitlines() if " passed" in r or " failed" in r]
+    if not zaver:
+        raise Chyba("z vystupu 'pytest -q' sa necita zaverecny riadok")
+    presli = re.search(r"(\d+) passed", zaver[-1])
+    if not presli:
+        raise Chyba("v zaverecnom riadku pytestu nie je pocet prejdenych testov")
+    preskocene = re.search(r"(\d+) skipped", zaver[-1])
+    npresli = int(presli.group(1))
+    npreskocene = int(preskocene.group(1)) if preskocene else 0
     ctesty = sorted(p.stem for p in (REPO / "vmicollect" / "tests").glob("*.c"))
     if not ctesty:
         raise Chyba("vmicollect/tests/ neobsahuje ziadny .c test")
-    return "%s v `pytest` a %d v C (%s)" % (
-        m.group(1),
-        len(ctesty),
-        ", ".join("`%s`" % t for t in ctesty),
+    return (
+        "%d prešlých a %d preskočených v `pytest` (spolu %d zozbieraných; "
+        "preskočený test nie je prešiel) a %d v C (%s)"
+        % (
+            npresli,
+            npreskocene,
+            npresli + npreskocene,
+            len(ctesty),
+            ", ".join("`%s`" % t for t in ctesty),
+        )
     )
 
 
@@ -856,10 +904,42 @@ def datumy_merani():
     return ", ".join(_datumy())
 
 
+# Adresare, v ktorych zmena znamena zmenu KODU (nie prozy dokumentov). Datum
+# stavu sa berie aj z nich, inak by hlavicka prirucky tvrdila datum posledneho
+# MERANIA aj vtedy, ked sa kod odvtedy zmenil.
+KOD_CESTY = ("vmicollect", "guestparse", "features", "tcn", "scripts")
+
+
+def _datum_kodu():
+    """Datum posledneho commitu, ktory sa dotkol kodu - z historie git.
+
+    PRECO Z HISTORIE A NIE Z mtime SUBOROV: mtime nastavi kazdy `git checkout`
+    na cas klonovania, takze v cerstvom klone by hlavicka tvrdila dnesok a
+    kontrola aktualnosti by bola trvale cervena.
+
+    PRECO NIE HEAD: commit, ktory prida pregenerovanu prirucku, by posunul
+    datum a prirucka by bola zastarana hned po tom, ako ju niekto ulozil.
+    Preto sa pozera iba na commity, ktore sa dotkli KOD_CESTY - commit so
+    samotnymi dokumentmi datum nehybe a kontrola sa ustali.
+
+    Je to spodna hranica: neulozene zmeny v pracovnom strome (z ktoreho
+    generator cita napovedu a konfiguraciu) v historii este nie su.
+    """
+    out = spusti(["git", "log", "-1", "--format=%cs", "--"]
+                 + list(KOD_CESTY)).strip()
+    if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", out):
+        raise Chyba("z 'git log' sa necita datum poslednej zmeny kodu")
+    return out
+
+
 def datum_stavu():
-    """Datum najnovsieho pouziteho artefaktu. Nie datum behu generatora: ten by
-    sa menil pri kazdom spusteni a kontrola aktualnosti by bola trvale cervena."""
-    return _datumy()[-1]
+    """Novsi z dvojice: posledny pouzity artefakt a posledna zmena kodu.
+
+    Nie datum behu generatora: ten by sa menil pri kazdom spusteni a kontrola
+    aktualnosti by bola trvale cervena. Samotny artefakt ale nestaci - hlavicka
+    hovori o stave KODU a artefaktov, a kod sa meni aj bez noveho merania.
+    """
+    return max(_datumy()[-1], _datum_kodu())
 
 
 # ------------------------------------------------------------ 7. commity

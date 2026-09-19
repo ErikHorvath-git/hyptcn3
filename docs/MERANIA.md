@@ -703,3 +703,101 @@ Toto je prvé z dvoch čísel, ktoré dávajú slovu „real-time" v názve prá
 
 Artefakty: `data/results/perbin_c_20260918/`, `data/results/latency_vector_20260918.json`,
 `data/results/perbin_crosscheck_20260918.json`.
+
+---
+
+## 2026-09-19 — profil jadra hosťa je viazaný na konkrétny boot (KASLR)
+
+- **Dáta:** snímka `data/raw/20260919T110155Z_once/` (mimo gitu; sprievodný záznam behu je
+  `data/results/once_20260919T110155Z.json`). **Vlastný výsledkový JSON tento záznam nemá**
+  — nešlo o meranie veličiny, ale o krížovú kontrolu, ktorej celý výstup je nižšie doslovne.
+  Čísla pochádzajú z výpisov príkazov uvedených pri nich, spustených na hostiteľovi
+  2026-09-19.
+- **Commit repa:** `da8ad2ec5c60520afff814109dc081b8faf123e7`, pracovný strom zmenený
+  (docs/, scripts/, tcn/, features/)
+- **Binárka:** `vmicollect/build/vmicollect` 1.0.0,
+  sha256 začína `25f1d3e61905574a55f00880c455f56eddb4ea81` (celý je v
+  `data/results/once_20260919T110155Z.json`, kľúč `binary.sha256`)
+
+### Čo sa stalo
+
+Doména `hyptcn-guest` bola 2026-09-18 vypnutá a 2026-09-19 nanovo naštartovaná. Profil
+v repozitári (`profiles/debian12-6.1.0-42-cloud-amd64/`) pochádza z **včerajšieho** bootu.
+Adresy symbolov v `kallsyms` sú randomizované KASLR-om pri každom štarte; offsety polí
+štruktúr z BTF sú naopak viazané na verziu jadra, a tie reštart prežijú.
+
+```sh
+$ grep -E ' (init_task|linux_banner)$' profiles/debian12-6.1.0-42-cloud-amd64/kallsyms.txt
+ffffffff9711f560 D linux_banner
+ffffffff97a1aa40 D init_task
+$ grep -E ' (init_task|linux_banner)$' <kallsyms z dnešného bootu>
+ffffffffb191f560 D linux_banner
+ffffffffb221aa40 D init_task
+```
+
+### Starý profil nad dnešnou snímkou
+
+```
+$ python3 -m guestparse info --snapshot data/raw/20260919T110155Z_once \
+      --profile profiles/debian12-6.1.0-42-cloud-amd64
+banner PA:     0x771f560 (kandidat 3)
+posun jadra:   -0xfa00000
+krizova kontrola prekladu (linearne vs. tabulky stranok):
+  linux_banner   0x771f560      != 0x0            NEZHODA
+  init_task      0x801aa40      != 0x0            NEZHODA
+$ python3 -m guestparse ps --snapshot ... --profile profiles/debian12-6.1.0-42-cloud-amd64
+spolu: 78 procesov, NEUPLNE
+$ python3 -m guestparse lsmod --snapshot ... --profile profiles/debian12-6.1.0-42-cloud-amd64
+spolu: 47 modulov, NEUPLNE
+```
+
+Posun jadra sa **našiel** — skenuje sa banner v pamäti, a ten sa nájde bez ohľadu na to,
+z ktorého bootu je `kallsyms`. Časť nástroja preto beží ďalej a vyzerá funkčne. Krížová
+kontrola prekladu adries však zlyhala: prechod tabuľkami stránok vrátil pre obe adresy
+`0x0`, lebo tabuľky sú indexované skutočnými virtuálnymi adresami tohto bootu, nie starými
+zo súboru `kallsyms`. Prechod padol na úrovni PMD s kódom `chyba_polozka`, teda tabuľka
+v snímke je, ale položka pre tú adresu v nej prítomná nie je: `PMD[184]` pre `linux_banner`
+a `PMD[189]` pre `init_task` (overené cez `GuestView.walk_pa_detail` nad tou istou snímkou
+a profilom obnoveným z commitu `da8ad2e`).
+Prechod zoznamu procesov sa neuzavrel — výpis je označený `NEUPLNE`.
+
+### Čerstvý profil z toho istého bootu
+
+```
+$ python3 -m guestparse info --snapshot data/raw/20260919T110155Z_once --profile <profil z dnešného bootu>
+banner PA:     0x771f560 (kandidat 3)
+posun jadra:   -0x2a200000
+krizova kontrola prekladu (linearne vs. tabulky stranok):
+  linux_banner   0x771f560      == 0x771f560      zhoda
+  init_task      0x801aa40      == 0x801aa40      zhoda
+$ python3 -m guestparse ps    --snapshot ... --profile <profil z dnešného bootu>
+spolu: 78 procesov
+$ python3 -m guestparse lsmod --snapshot ... --profile <profil z dnešného bootu>
+spolu: 47 modulov
+```
+
+Krížová kontrola sedí na bit a obidva výpisy sú úplné. (Orchestrátor dostal v ten istý deň
+nad inou snímkou toho istého bootu 80 úplných procesov a 47 z 47 modulov proti `lsmod`
+v hosťovi; počet procesov sa medzi snímkami líši, pretože sa líši v hosťovi. Tu uvedené
+čísla sú z behov nad snímkou `20260919T110155Z_once`.)
+
+### Čo z toho platí
+
+1. Nástroj **neklamal**: výsledok so starým profilom označil `NEUPLNE` a krížová kontrola
+   spadla. Zlyhanie bolo tiché len v tom zmysle, že návratový kód bol nula a text
+   `NEUPLNE` sa dal prehliadnuť.
+2. `profiles/` nie je jeden profil na verziu jadra, ako tvrdila `docs/PRIRUCKA.md`
+   (kapitola 5, štvrtý stĺpec) — pre `kallsyms` je to jeden profil **na boot**.
+   Za platnosť BTF ručí verzia jadra, za platnosť adries zo `kallsyms` nič.
+3. Každé meranie, ktoré používa `guestparse`, musí byť z toho istého bootu ako profil,
+   alebo musí mať uloženú krížovú kontrolu ako dôkaz, že profil k snímke sedí.
+   Zapísané ako obmedzenie L17 v `docs/LIMITACIE.md`.
+
+### Doplnok k tomuto záznamu (ten istý deň)
+
+Profil v `profiles/debian12-6.1.0-42-cloud-amd64/` bol 2026-09-19 odobratý nanovo
+z dnešného bootu, takže k hosťovi sedí a krížová kontrola nad snímkou
+`20260919T110155Z_once` dáva `zhoda` pre obe kontrolné adresy. Behy zo stĺpca „starý
+profil“ vyššie sa preto z repozitára už zopakovať nedajú — `kallsyms` z predchádzajúceho
+bootu zostáva iba v histórii gitu. Adresy oboch verzií sú uvedené vyššie, takže sa dá
+overiť, čo sa zmenilo.

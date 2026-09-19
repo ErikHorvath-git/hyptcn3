@@ -1,21 +1,21 @@
 {
   "schema": "hyptcn3/guestparse-mini/1",
-  "generated": "2026-09-18T18:35:42+02:00",
+  "generated": "2026-09-19T13:15:24+02:00",
   "generator": "guestparse/tests/data/make_mini.py",
   "source": [
     {
-      "path": "/var/tmp/vmic-val/hyptcn-guest_000000_20260918T143954722Z.vmicd",
-      "bytes": 485749504,
-      "sha256": "38c5dd7e7b7d89d5535fb8cd7842b14a4dac9e3967c843411d2977c3cb94a50c"
+      "path": "data/raw/20260919T111417Z_once/hyptcn-guest_000000_20260919T111419066Z.vmicd",
+      "bytes": 368662384,
+      "sha256": "d6069336d422446ec80745353f69eb8499a9215bd36a25ad9e2da4314277849e"
     }
   ],
   "source_header": {
     "version": 1,
     "page_size": 4096,
-    "chain_id": 1789742394722,
+    "chain_id": 1789816459066,
     "seq": 0,
     "memsize": 4294967296,
-    "records": 118360,
+    "records": 89830,
     "full": true,
     "region_sig": 16506533176011441496
   },
@@ -27,13 +27,13 @@
     "file": "mini.vmicd",
     "pages": 27,
     "bytes": 110872,
-    "sha256": "4bdbd3c47ec838794bd703e792648a67a5d60d66ef0aa13d4047326e0cf3e1e9"
+    "sha256": "a1356050132e0e320a260192078c97bb845a8dce53b8d1cb83241ce2377cf1a9"
   },
   "observed": {
-    "ktext_shift": -2097152,
-    "page_offset_base": 18446631688374059008,
+    "ktext_shift": -706740224,
+    "page_offset_base": 18446618609124900864,
     "banner": "Linux version 6.1.0-42-cloud-amd64 (debian-kernel@lists.debian.org) (gcc-12 (Debian 12.2.0-14+deb12u1) 12.2.0, GNU ld (GNU Binutils for Debian) 2.40) #1 SMP PREEMPT_DYNAMIC Debian 6.1.159-1 (2025-12-30)",
-    "banner_pa": 384955744,
+    "banner_pa": 124908896,
     "processes": [
       {
         "pid": 1,
@@ -71,8 +71,8 @@
         "kernel_thread": true
       },
       {
-        "pid": 10,
-        "comm": "mm_percpu_wq",
+        "pid": 9,
+        "comm": "kworker/u4:0",
         "kernel_thread": true
       }
     ],
@@ -89,10 +89,10 @@
       }
     ],
     "pages_by_step": {
-      "resolve": 7,
+      "resolve": 5,
       "info": 3,
-      "processes": 9,
-      "modules": 6,
+      "processes": 10,
+      "modules": 7,
       "syscall_tables": 2
     }
   }

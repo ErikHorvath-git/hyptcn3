@@ -28,6 +28,10 @@ repozitárom. Priznaná limitácia je silnejšia pozícia než zamlčaná: recen
 | [L10](#l10--kontroly-integrity-majú-pomenované-slepé-miesta) | Kontroly integrity majú pomenované slepé miesta |
 | [L11](#l11--jeden-výstupný-adresár-na-jeden-zberač) | Jeden výstupný adresár na jeden zberač |
 | [L12](#l12--čo-ešte-nie-je-zmerané) | Čo ešte nie je zmerané |
+| [L13](#l13--príznakový-vektor-čo-o-ňom-treba-vedieť-pred-tým-než-sa-naň-natrénuje-model) | Príznakový vektor: čo o ňom treba vedieť pred tréningom |
+| [L14](#l14--procesy-moduly-a-sokety-do-príznakového-vektora-nevstupujú--vyriešené-2026-09-19) | Procesy, moduly a sokety do príznakového vektora nevstupujú — VYRIEŠENÉ |
+| [L15](#l15--časové-rozlíšenie-proces-kratší-než-perióda-zberu-je-neviditeľný) | Časové rozlíšenie: proces kratší než perióda zberu je neviditeľný |
+| [L16](#l16--presnosť-detekcie-malvéru-nebola-meraná-a-v-tejto-verzii-sa-merať-nedá) | Presnosť detekcie malvéru nebola meraná a merať sa nedá |
 
 ---
 
@@ -499,13 +503,27 @@ nevznikne artefakt v `data/results/`.
 
 | Veličina | Stav | Čo na ňu treba |
 |---|---|---|
-| latencia snímka → príznakový vektor | `UNVERIFIED` | príznakový priestor zatiaľ neexistuje |
-| latencia snímka → skóre modelu | `UNVERIFIED` | model ani skórovací komponent zatiaľ neexistujú |
+| živá latencia snímka → skóre modelu | `UNVERIFIED` | meranie počas bežiaceho zberu: `tcn/score.py` pripojený na beh `vmicollect run`, latencia od konca cyklu po vypočítané skóre, medián a p95 z aspoň 12 cyklov |
 | vplyv zberu na výkon vnútri hosťa | `UNVERIFIED` | benchmark s pevne daným objemom práce v hosťovi, schéma A/B/A, medián a IQR z aspoň 12 opakovaní |
 | vplyv zberu na hostiteľa | `UNVERIFIED` | meranie spotreby CPU a pamäte procesu zberača počas behu |
 | dlhý beh s retenciou | `UNVERIFIED` | beh rádovo v hodinách: zmeškané sloty, rast obsadeného miesta, správanie pri reštarte domény |
 | správanie pri periódach iných než 2 s a 5 s | `UNVERIFIED` | sweep periódy a veľkosti bloku |
-| presnosť detekcie voči reálnym malvérovým vzorkám | **nebude zmeraná** | vzorky nie sú dostupné; nahrádza sa syntetickými scenármi správania (`HONESTY.md`, P4) |
+| presnosť detekcie voči reálnym malvérovým vzorkám | **nebude zmeraná** | vzorky nie sú dostupné; nenahrádza sa ničím — podrobne v [L16](#l16--presnosť-detekcie-malvéru-nebola-meraná-a-v-tejto-verzii-sa-merať-nedá) |
+
+**Čo z tejto tabuľky medzičasom odišlo.** Latencia snímka → príznakový vektor tu stála
+so stavom `UNVERIFIED` a s dôvodom „príznakový priestor zatiaľ neexistuje“. Oboje už
+neplatí: `features/` existuje a latencia je zmeraná 2026-09-18 (`scripts/measure_latency.sh`,
+artefakt `data/results/latency_vector_20260918.json`, rozpis v `docs/MERANIA.md`).
+Riadok bol preto 2026-09-19 z tabuľky odstránený.
+
+**Prečo je živá latencia snímka → skóre ďalej `UNVERIFIED`, hoci skórovanie existuje.**
+Model aj skórovací komponent hotové sú (`tcn/model.py`, `tcn/score.py`) — dôvod, ktorý tu
+stál („model ani skórovací komponent zatiaľ neexistujú“), bol nepravdivý a 2026-09-19 sa
+opravil. Nezmerané je niečo iné: skórovanie sa zatiaľ meralo len nad **uloženou** snímkou,
+mimo behu zberu (`data/results/latency_score_20260919.json`, kľúč `co_sa_NEMERALO` to
+hovorí aj v samotnom artefakte). Kým sa `tcn/score.py` neodmeria pripojený na bežiaci
+`vmicollect run`, číslo pre živú cestu nie je. Druhá vec, ktorá z toho čísla nevyplýva:
+model nie je natrénovaný, takže by šlo o čas cesty, nie o kvalitu rozhodnutia (L16).
 
 Ďalšia nedoriešená vec, ktorá patrí do priznaných: pri načítaní BPF programu sa objavuje
 nefatálne hlásenie `libbpf: Error in bpf_create_map_xattr(pages): -EINVAL. Retrying
@@ -513,8 +531,10 @@ without BTF.` Mapa sa vytvorí aj bez BTF a zber funguje, ale príčina nebola z
 
 **Formulácia do textu práce.**
 
-> Práca neuvádza latenciu od zosnímania pamäte po príznakový vektor ani po skóre modelu,
-> vplyv zberu na výkon hosťa, vplyv na hostiteľa, ani správanie pri dlhodobom behu.
+> Práca uvádza latenciu od zosnímania pamäte po príznakový vektor, ale neuvádza latenciu
+> po skóre modelu meranú počas bežiaceho zberu — zmerané je len spracovanie nad uloženou
+> snímkou. Neuvádza ani vplyv zberu na výkon hosťa, vplyv na hostiteľa a správanie pri
+> dlhodobom behu.
 > Nejde o vynechanie: tieto veličiny neboli v rámci tejto práce namerané, a formulácie
 > typu „minimálny vplyv na virtuálny stroj“ alebo „spracovanie v reálnom čase“ by preto
 > boli tvrdením bez podkladu. Tam, kde je to potrebné, sa namiesto nich uvádza konkrétna
@@ -563,12 +583,13 @@ pamäte za behu je v kóde ošetrené podpisom oblastí, ale nebolo odskúšané
 **Stav.** Toto obmedzenie už neplatí. Zo zoznamu sa neodstraňuje: priznané obmedzenie,
 ktoré zmizne bez stopy, vyzerá, ako by nikdy nebolo. Pôvodné znenie je zachované nižšie.
 
-**Čím sa vyriešilo.** Modul `features/snapshot.py` (pridaný 2026-09-19; commit sa tu
-neuvádza, lebo zmena v čase písania tohto záznamu ešte nebola zapísaná do histórie)
-skladá z jednej snímky **jeden vektor pevnej dĺžky**: dvadsať príznakov plus pole
-`ma_predchodcu`. Pamäťová časť (príznaky 1–8) je agregát bloku `features` zo sidecaru
-snímky, ktorý počíta modul `vmicollect`; objektová časť (príznaky 9–20) sa číta cez
-`guestparse` nad **tou istou** snímkou:
+**Čím sa vyriešilo.** Modul `features/snapshot.py` (pridaný 2026-09-19 commitom
+`da8ad2e`) skladá z jednej snímky **jeden vektor pevnej dĺžky**: dvadsať príznakov plus
+dve polia o samotnom riadku, `ma_predchodcu` a `je_plna` — spolu **22 stĺpcov** (`MENA`
+vo `features/snapshot.py`). Pamäťová časť (príznaky 1–8) je agregát bloku `features` zo
+sidecaru snímky, ktorý počíta modul `vmicollect`; objektová časť (príznaky 9–20) sa číta
+cez `guestparse` nad **tou istou** snímkou. Pole `je_plna` pribudlo až po commite
+`da8ad2e` a v čase písania tohto záznamu v histórii ešte nie je:
 
 | Príznaky | Čo v nich je | Veta zadania |
 |---|---|---|
@@ -577,6 +598,7 @@ snímky, ktorý počíta modul `vmicollect`; objektová časť (príznaky 9–20
 | 14–15 | `mod_total`, `mod_delta` | analýza načítaných modulov |
 | 16–18 | `sock_total`, `sock_listen`, `sock_estab` | monitorovanie sieťových spojení |
 | 19–20 | `chk_syscall_hooks`, `chk_crossview` | detekcia podozrivých vzorcov v pamäti |
+| 21–22 | `ma_predchodcu`, `je_plna` | nie sú príznaky zo zadania: hovoria, čím riadok je |
 
 Príkaz: `python3 -m features session --snapshot <adresár> --profile <profil> --out <súbor.npz> [--csv <súbor.csv>]`.
 Mená príznakov sa ukladajú spolu s maticou, takže poradie stĺpcov sa dá spätne overiť.
@@ -588,16 +610,22 @@ z otvoreného rozhodnutia vo `features/windows.py`. Cenou je strata informácie 
 **ktorá** oblasť pamäte sa menila; per-bin vektor kvôli tomu nezaniká, zostáva
 v `features/perbin.py` a v sidecari.
 
-**Prvá snímka reťazca.** Príznaky `proc_new`, `proc_gone` a `mod_delta` potrebujú
-predchádzajúcu snímku. Zvolená cesta: riadok sa nevynecháva, ale nesie `ma_predchodcu` = 0
-a tieto tri príznaky sú v ňom nula. Je to tá istá dohoda ako `has_changed` v `perbin.py` —
-nula, vedľa ktorej stojí príznak hovoriaci, že sa nemerala. Ticho doplnená nula je v tomto
-projekte zakázaná (`HONESTY.md`); kto maticu spracúva, musí `ma_predchodcu` čítať.
+**Prvá snímka reťazca a plná snímka.** Príznaky `proc_new`, `proc_gone` a `mod_delta`
+potrebujú predchádzajúcu snímku. Zvolená cesta: riadok sa nevynecháva, ale nesie
+`ma_predchodcu` = 0 a tieto tri príznaky sú v ňom nula. Je to tá istá dohoda ako
+`has_changed` v `perbin.py` — nula, vedľa ktorej stojí príznak hovoriaci, že sa nemerala.
+Druhé pole, `je_plna`, hovorí o inom: v plnej snímke zapíše delta writer všetky nenulové
+stránky, takže príznaky 1–7 opisujú celý obsah pamäte, nie jej zmenu, a `mem_changed_ratio`
+vyjde presne `1 − mem_zero_ratio`. Je to rovnaké číslo s iným významom a `ma_predchodcu`
+to nepokrýva. Ticho doplnená nula aj ticho iný význam sú v tomto projekte zakázané
+(`HONESTY.md`); kto maticu spracúva, musí čítať obe polia.
 
-**Overenie.** `features/tests/test_snapshot.py` (13 testov, všetky prešli 2026-09-19
+**Overenie.** `features/tests/test_snapshot.py` (15 testov, všetky prešli 2026-09-19
 aj s `FEATURES_REQUIRE_REAL=1`) kontroluje dĺžku vektora, mená príznakov, ručne spočítanú
-pamäťovú agregáciu, `ma_predchodcu` = 0 na prvej snímke, zhodu `proc_new` a `proc_gone`
-s ručne spočítaným rozdielom množín PID medzi dvoma snímkami a determinizmus. Nad
+pamäťovú agregáciu, `ma_predchodcu` = 0 na prvej snímke, `je_plna` proti hlavičkám
+reťazca `.vmicd` (nie proti poradiu v reťazci) aj doplnkovosť zmeny a nulového podielu
+v plnej snímke, zhodu `proc_new` a `proc_gone` s ručne spočítaným rozdielom množín PID
+medzi dvoma snímkami a determinizmus. Nad
 `guestparse/tests/data/mini.vmicd` sa navyše overuje, že bez sidecaru s blokom `features`
 skončí výpočet chybou a pamäťová časť sa **nedopočítava** inou cestou.
 
@@ -643,6 +671,175 @@ rekonštruujú a validujú, ale do vstupu modelu nevstupujú."
 ako ďalšie zložky časového kroku. Je to návrhové rozhodnutie fázy F3, nie oprava chyby —
 a súvisí s otvorenou otázkou vo `features/windows.py`, ako spraviť model nezávislým
 od počtu binov.
+
+---
+
+## L15 — Časové rozlíšenie: proces kratší než perióda zberu je neviditeľný
+
+**Fakt.** Metóda je snímková: vidí len to, čo v hosťovi existuje v okamihu snímky. Proces,
+ktorý vznikne a zanikne medzi dvoma snímkami, nezanechá v rekonštruovanom zozname procesov
+žiadnu stopu. Príznaky `proc_new`, `proc_gone` a `mod_delta` sa preto pri perióde 5 s
+nepohli z nuly ani v sedení, ktoré bolo pripravené práve na ich rozhýbanie.
+
+**Overenie.** Sedenie `data/raw/20260919T011815Z_fork_storm`: v hosťovi 10 sekúnd bežalo
+vetvenie procesov, ktoré podľa vlastného súhrnu vytvorilo a pozbieralo 8320 detí v 416
+dávkach (`labels.json`, kľúč `scenar.suhrn`); zber bežal s periódou 5 s a urobil 2 snímky.
+
+```sh
+python3 -m features session \
+  --snapshot data/raw/20260919T011815Z_fork_storm/snap \
+  --profile profiles/debian12-6.1.0-42-cloud-amd64 \
+  --out /tmp/fork_storm.npz --csv /tmp/fork_storm.csv
+```
+
+Objektová časť oboch riadkov výsledného CSV (beh 2026-09-19):
+
+```
+snimka                                   proc_total proc_new proc_gone mod_delta ma_predchodcu
+hyptcn-guest_000000_20260919T011817285Z  81         0        0         0         0
+hyptcn-guest_000001_20260919T011822285Z  81         0        0         0         1
+```
+
+V prvom riadku je nula dohodou, nie meraním (`ma_predchodcu` = 0, pozri L14). V druhom
+riadku je to meranie: medzi dvoma snímkami vzdialenými 5 sekúnd sa množina PID v hosťovi
+nezmenila ani o jeden prvok, hoci v tom intervale v ňom vzniklo a zaniklo rádovo tisíce
+procesov.
+
+**Čo z toho plynie.** Nie je to chyba implementácie a nedá sa to odstrániť lepším
+parsovaním. Horná hranica toho, čo periodická introspekcia pamäte zachytí v zozname
+objektov, je daná periódou zberu. Správanie kratšie než perióda je pozorovateľné len
+nepriamo, cez stopu v obsahu pamäte (zmenené stránky, entropia) — v tom istom sedení
+`mem_changed_ratio` medzi snímkami kleslo z 0,2647 na 0,0137, takže pamäťová časť vektora
+rozdiel vidí, objektová nie. Kratšia perióda hranicu posunie, neodstráni ju, a zvýši
+záťaž zberu.
+
+**Formulácia do textu práce.**
+
+> Časové rozlíšenie metódy je ohraničené periódou zberu. Proces, ktorý vznikne a zanikne
+> medzi dvoma snímkami, sa v rekonštruovanom zozname objektov hosťa neobjaví: v overovacom
+> sedení s periódou 5 sekúnd, počas ktorého v hosťovi vzniklo a zaniklo 8320 procesov,
+> zostali príznaky odvodené od zmeny zoznamu procesov na nule, kým príznaky odvodené
+> od obsahu pamäte sa medzi snímkami zmenili. Krátkodobé správanie je pre túto vrstvu
+> pozorovateľné len cez stopu v pamäti, nie cez zoznam objektov.
+
+**Čo by to odstránilo.** Nič v rozsahu tejto práce. Zachytenie vzniku procesu nezávisle
+od periódy vyžaduje udalostný zdroj (hook na `execve` alebo na plánovač), teda inú vrstvu
+než periodické čítanie pamäte — a hook je v tejto práci notifikačný (L9).
+
+---
+
+## L16 — Presnosť detekcie malvéru nebola meraná a v tejto verzii sa merať nedá
+
+**Fakt.** Na stroji, na ktorom táto práca vznikla, nie sú žiadne reálne malvérové vzorky.
+Bez nich sa nedá zmerať, ako dobre model odlíši malvér od bežnej záťaže. Zber korpusu ani
+tréning detekčného modelu sa preto v tejto verzii nerobia. Vetva zberu korpusu
+(`scenarios/`, `scripts/collect_corpus.sh`) bola z pracovného stromu odstránená; v histórii
+zostáva, commit `da8ad2e`.
+
+**Čo to znamená pre zadanie.** Bod zadania „vyhodnotenie presnosti detekcie malvérových
+vzorcov" je **nesplnený**. Dôvod nie je v implementácii: cesta dát od pamäte virtuálneho
+stroja cez príznakový vektor po skóre modelu je zostavená a overená (L14,
+`docs/PRIRUCKA.md`). Chýba vstup — vzorky. Bod sa dá splniť až v izolovanom prostredí
+s prístupom k vzorkám; vtedy sa nemení kód, dopĺňajú sa dáta a označenia.
+
+**Prečo sa syntetické scenáre nepoužili na tréning.** Šesť scenárov správania (`cpu_burn`,
+`mass_file_rewrite`, `proc_scan`, `anon_exec`, `fork_storm`, `idle`) bolo napísaných
+a odskúšaných; dve sedenia z nich sú v `data/raw/`. Na tréning sa **vedome** nepoužili.
+Model natrénovaný na nich by nebol detektorom malvéru, ale klasifikátorom šiestich
+skriptov, ktoré napísal autor práce — rozlišoval by presne tie vzorce, ktoré doňho autor
+vložil. Číslo z takého vyhodnotenia by v texte znelo ako presnosť detekcie, hoci by meralo
+zhodu s vlastným generátorom. Je to tá istá chyba, pre ktorú bola predchádzajúca iterácia
+projektu retrahovaná (`HONESTY.md`, kapitola 2): tam číslo vzniklo z rozdielu medzi
+vyťaženým a nečinným strojom, tu by vzniklo z rozdielu medzi šiestimi skriptami.
+
+**Overenie.** V pracovnom strome nie je vetva zberu a v `data/results/` nie je žiadna
+detekčná metrika nad snímkami hosťa:
+
+```sh
+$ ls scenarios scripts/collect_corpus.sh
+ls: cannot access 'scenarios': No such file or directory
+ls: cannot access 'scripts/collect_corpus.sh': No such file or directory
+$ ls data/raw/*/labels.json | wc -l
+2
+```
+
+Dva súbory metriky obsahujú a **nie sú výsledkom detekcie**:
+`data/results/smoke/tcn_syn_20260919_hodnota.json` a
+`data/results/smoke/tcn_syn_20260919_poradie.json`. Od 2026-09-19 sú v podadresári
+`smoke/`, aby to, čo sú, bolo vidieť už z cesty; `provenance_note` v oboch to hovorí aj
+v samotnom súbore. Sú to výstupy
+`python3 -m tcn.train --syn`, teda beh nad dátami, ktoré vyrobil generátor v `tcn/`
+(`guest` je v nich `null`, `fit_sessions` sú `20260101T000000Z_idle_0`
+a `20260102T000000Z_idle_1` — dátumy, ktoré nikdy neboli). Metriky v nich sú `1.0`, lebo
+generátor vyrába triedy, ktoré sú oddeliteľné; overujú, že cesta dát a tréning bežia,
+nič viac. Do textu práce nepatria a ak sa tam objavia, je to nález.
+
+**Formulácia do textu práce (do abstraktu aj do záveru).**
+
+> Presnosť detekcie voči reálnym malvérovým vzorkám nebola v tejto práci meraná, pretože
+> vzorky neboli k dispozícii; pripravené syntetické scenáre správania sa na tréning
+> vedome nepoužili, lebo model natrénovaný na nich by klasifikoval vlastné scenáre,
+> nie malvér.
+
+**Čo by to odstránilo.** Korpus reálnych vzoriek v izolovanom prostredí, s označením na
+úrovni vzorky aj procesu, so splitom disjunktným na úrovni vzorky a s kontrolou confoundu
+podľa `HONESTY.md` (P8). Dovtedy zostáva bod nesplnený a text práce to musí uviesť
+na každom mieste, kde by inak vznikol dojem, že detekcia bola vyhodnotená.
+
+---
+
+## L17 — Profil jadra hosťa platí pre jeden boot, nie pre verziu jadra
+
+**Fakt.** Profil v `profiles/` má dve časti a každá starne inak. Offsety polí štruktúr
+z BTF sú viazané na verziu jadra a reštart hosťa prežijú. Adresy symbolov v `kallsyms`
+nie — jadro ich pri každom štarte posúva (KASLR), takže profil odobratý pri jednom boote
+neplatí pre snímku z iného bootu toho istého jadra.
+
+**Overenie.** Doména `hyptcn-guest` bola 2026-09-18 vypnutá a 2026-09-19 naštartovaná;
+`init_task` sa presunul z `0xffffffff97a1aa40` na `0xffffffffb221aa40`. Starý profil nad
+dnešnou snímkou: posun jadra sa našiel (skenuje sa banner v pamäti), ale krížová kontrola
+prekladu adries vrátila pre obe kontrolné adresy `0x0` a výpisy procesov aj modulov boli
+označené `NEUPLNE`. Čerstvý profil z toho istého bootu: krížová kontrola sedí na bit,
+výpisy úplné. Celý výstup oboch behov je v `docs/MERANIA.md`, záznam z 2026-09-19.
+Profil v `profiles/` bol v ten istý deň odobratý nanovo, takže dnes k hosťovi sedí;
+obmedzenie tým nezmizlo — platí pri každom ďalšom reštarte.
+
+**Čo to znamená pre prácu.** Nástroj chybu nezakrýva a od 2026-09-19 sa už nedá ani
+prehliadnuť. Krížová kontrola prekladu adries sa nerobí iba v `info`: diagnózu
+`GuestView.profile_boot_mismatch()` volá `guestparse/cli.py` pred výkonom **každého**
+podpríkazu. Pri nesúlade vypíše hlásenie `NESULAD PROFILU` (pomenuje KASLR, symbol,
+úroveň tabuliek stránok a položku, na ktorej prechod skončil) a skončí návratovým kódom
+**5** (`EXIT_PROFILE_MISMATCH`) — pre `info`, `ps`, `lsmod`, `ss`, `checks` aj `validate`.
+Kód 5 prebíja aj nález (1), aj neuzavretosť (4): nález zo zlého profilu nálezom nie je.
+`validate` sa pritom nespustí vôbec a výstupný JSON nezapíše, aby po sebe nenechal
+výsledok z profilu, ktorý k snímke nepatrí. Čítacie podpríkazy výpis aj tak vypíšu
+a označia ho `NEUPLNE`. Drží to `guestparse/tests/test_profile_boot.py` (nesúlad si
+vyrobí kópiou profilu s posunutými adresami jadra). Uložiť k výsledku aj výpis
+`python3 -m guestparse info` je stále užitočný záznam, podmienkou platnosti výsledku
+už ale nie je: nesúlad zastaví samotný podpríkaz.
+
+**Formulácia do textu práce.**
+
+> Profil jadra hosťa, ktorý preklenuje semantic gap, sa skladá z offsetov polí štruktúr
+> a z adries symbolov. Prvé sú viazané na verziu jadra, druhé na konkrétny štart systému,
+> pretože jadro adresy pri každom štarte randomizuje. Rekonštrukcia objektov hosťa preto
+> vyžaduje profil odobratý z toho istého behu hosťa, z ktorého pochádza snímka; pri profile
+> z iného behu prechod tabuľkami stránok zlyhá, nástroj príčinu pomenuje, výpis označí ako
+> neúplný a skončí vyhradeným návratovým kódom.
+> Rovnaká závislosť platí pre LibVMI aj Volatility.
+
+**Čo by to odstránilo.** Odvodiť zo samotnej snímky, kde v tomto štarte leží obraz jadra
+vo virtuálnom priestore, a týmto rozdielom prepočítať virtuálne adresy zo `kallsyms`.
+Sken banneru dáva dnes len rozdiel medzi virtuálnou adresou z profilu a fyzickou adresou
+v snímke; s ním sedí lineárne čítanie aj so starým profilom, ale prechod tabuliek stránok
+nie — tie sú indexované skutočnými virtuálnymi adresami tohto štartu, takže adresy
+v oblasti modulov a vo `vmalloc` zostávajú nedostupné. Prepočet hotový nie je a je
+v súboroch `guestparse/`, teda mimo správy tohto dokumentu.
+
+Hlásenie nesúladu hotové **je** (2026-09-19, návratový kód 5 a pomenovaná príčina), takže
+táto časť sa už medzi otvorené veci nepočíta. Zostáva samotná závislosť na boote: profil
+sa musí po reštarte hosťa odobrať nanovo (`scripts/get_profile.sh -f <cieľ>`), existujúci
+sa neprepíše bez `-f`.
 
 ---
 

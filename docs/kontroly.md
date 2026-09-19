@@ -195,9 +195,16 @@ Artefakty: `data/results/validate_20260918T154914Z_ssbefore.json`,
 
 ## Návratové kódy
 
-`checks` končí kódom **1**, keď niečo našiel, a **0**, keď nenašiel nič. Príkaz sa dá
-zaradiť do skriptu a „našiel som hook" sa nesmie stratiť v úspešnom návratovom kóde.
-`validate` končí 0, keď prebehol; čísla nezhody sú výsledok, nie chyba behu.
+`checks` končí kódom **1**, keď niečo našiel, **0**, keď nenašiel nič a všetky kontroly
+sa uzavreli, a **4**, keď nenašiel nič, ale aspoň jedna kontrola sa neuzavrela. Príkaz sa
+dá zaradiť do skriptu a „našiel som hook" sa nesmie stratiť v úspešnom návratovom kóde.
+
+`validate` končí 0, keď prebehol; čísla nezhody sú výsledok, nie chyba behu. Jedna výnimka:
+keď je profil z iného štartu jadra než snímka (KASLR, `docs/LIMITACIE.md`, L17), `validate`
+sa **vôbec nespustí**, skončí kódom **5** a súbor `--out` nezapíše — porovnanie s pozemnou
+pravdou nad profilom, ktorý k snímke nepatrí, nie je nezhoda, ale chyba vstupu, a nesmie po
+sebe nechať výsledok v `data/results`. To isté zisťovanie beží pred každým podpríkazom;
+čítacie podpríkazy výpis vypíšu, označia ho `NEUPLNE` a takisto skončia kódom 5.
 
 ## Čo z tohto NIE JE dokázané
 

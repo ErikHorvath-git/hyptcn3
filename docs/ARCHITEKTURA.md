@@ -731,8 +731,11 @@ Návratové kódy:
 | 2 | chyba: snímka sa nedá otvoriť (aj rozbitý reťazec), profil sa nedá načítať, posun jadra sa nenašiel |
 | 3 | podpríkaz nie je implementovaný |
 | 4 | `checks`: nič sa nenašlo, ale aspoň jedna kontrola sa neuzavrela — nula z neuzavretej kontroly nie je dôkaz čistoty |
+| 5 | nesúlad profilu: `kallsyms` je z iného štartu jadra (KASLR) než snímka. Platí pre všetky podpríkazy a prebíja 1 aj 4 — nález zo zlého profilu nálezom nie je. Čítacie podpríkazy výpis vypíšu a označia `NEUPLNE`, `validate` sa nespustí a JSON nezapíše |
 
 Výpisy nižšie sú zo snímky domény `hyptcn-guest` zozbieranej 2026-09-18 o 15:49:16 UTC.
+Sú to doslovné prepisy vtedajších behov a nemenia sa; profil sa po reštarte hosťa
+2026-09-19 odoberal nanovo, takže dnešný má iný počet symbolov aj iné adresy (L17).
 Spoločné parametre:
 
 ```sh
@@ -859,7 +862,7 @@ Jeden cyklus, kompletne:
  8. guestparse.image.open_image(): overenie reťazca, index stránok
       │  (index → súbor, offset); obsah sa nekopíruje, chýbajúca stránka = nulová
       ▼
- 9. guestparse.profile.Profile: kallsyms (92716 symbolov) + offsety polí z BTF
+ 9. guestparse.profile.Profile: kallsyms (92698 symbolov v dnešnom profile) + offsety z BTF
       ▼
 10. guestparse.view.GuestView.resolve(): sken banneru → kandidáti na posun jadra
       │  → overenie init_task.comm == "swapper/0" → ktext_shift, page_offset_base
@@ -910,7 +913,9 @@ Výsledok pre meranú snímku: posun `-0x200000`, `banner PA = 0x16f1f560`,
 vetvy je `MODULES_VADDR`: nad ňou lineárny vzťah neplatí a výpočet by ticho vrátil cudziu
 stránku. `walk_pa()` rozpoznáva veľké stránky podľa bitu PSE. Správnosť sa kontroluje
 krížovo — `info` porovná lineárny výpočet a prechod tabuliek pre `linux_banner`
-a `init_task`; v meranej snímke obe sedia (výpis v časti 7.2).
+a `init_task`; v meranej snímke obe sedia (výpis v časti 7.2). Z tej istej dvojice stavia
+`GuestView.profile_boot_mismatch()` diagnózu „profil je z iného štartu jadra"; volá sa
+pred **každým** podpríkazom a pri nesúlade končí príkaz kódom 5 (L17).
 
 **Miesto 3 — rekonštrukcia objektov (`view.py`, `checks.py`).** Offsety polí sa berú z BTF
 hosťa, nie z hlavičkových súborov: rozloženie štruktúr závisí od konfigurácie jadra

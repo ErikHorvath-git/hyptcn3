@@ -1,45 +1,35 @@
 """
-Z-score normalizacia per-bin priznakov s ulozenym manifestom.
+Z-score normalizacia snimkovych priznakov s ulozenym manifestom.
 
 PRAVIDLO, kvoli ktoremu modul vznikol: mu a sd sa fituju IBA na benignych
-TRENOVACICH sessions. Nikdy na testovacich a nikdy na sessions so scenarom.
+TRENOVACICH sedeniach. Nikdy na testovacich a nikdy na sedeniach so scenarom.
 V predchadzajucej iteracii (hypTcn002) sa statistiky pri skorovani pocitali
 znova z prave videnych dat, takze model v prevadzke dostaval iny rozsah nez
 pri treningu. Tu je fit artefakt: ulozi sa do manifestu (features/manifest.py)
 spolu s poradim priznakov a jeho hashom, a pri nacitani sa overuje.
 
-CO SA NORMALIZUJE
------------------
-  changed_ratio   ano
-  zero_ratio      ano
-  entropy_mean    ano, ale mu/sd sa fituju iba na binoch s has_changed == 1
-  has_changed     NIE
+TVAR
+----
+Posledna os je priznak, vsetko pred nou je cokolvek (snimky, okna). Mu a sd su
+jedna dvojica na priznak. Do 2026-09-19 vedel modul aj rezim `bin_priznak`,
+teda mu/sd zvlast na kazdy bin nad per-bin vektorom (..., B, F) - ta vetva sa
+zmazala spolu s per-bin oknami vo features/windows.py, lebo do modelu ide
+snimkovy vektor z features/snapshot.py, v ktorom su biny uz agregovane.
+Manifest (features/manifest.py) rezim aj tak ma; zapisuje sa don `priznak`.
 
-Zdovodnenie kazdeho riadku je v hlavicke features/manifest.py (konstanty
-PRIZNAKY, NENORMALIZOVANE, PODMIENENE). V skratke: has_changed je indikator
-0/1, ktoreho jedina uloha je odlisit "bin sa nezmenil" od "entropia vysla 0";
-z-score by tento vyznam zmazal. entropy_mean je definovana ako priemer cez
-zmenene stranky, takze v bine bez zmeny nejde o meranie - nuly z takych binov
-do mu/sd nevstupuju, ale transformaciou prejdu (a model ma vedla nich
-has_changed, ktory povie preco).
+CO SA NENORMALIZUJE
+-------------------
+Zoznam dava volajuci. Pre kontrakt z features/snapshot.py su to `ma_predchodcu`
+a `je_plna`: su to indikatory 0/1, ktorych jedina uloha je povedat, co ten
+riadok je. Z-score by tento vyznam zmazal - preto prejdu nezmenene (mu=0,
+sd=1) a v manifeste je menom vidiet, ktore to boli.
 
 FIT SA ROBI NAD SNIMKAMI, NIE NAD OKNAMI
 ----------------------------------------
 Okna sa pri kroku 1 prekryvaju, takze ta ista snimka je v L oknach. Keby sa
-mu/sd pocitali nad oknami, snimky zo stredu session by mali az L-nasobnu vahu
+mu/sd pocitali nad oknami, snimky zo stredu sedenia by mali az L-nasobnu vahu
 oproti snimkam na kraji. Fit preto berie zoznam snimok (jedna snimka = jeden
 casovy krok, zapocitana raz) a transform sa aplikuje na okna.
-
-REZIMY FITU
------------
-  "priznak"      jedna dvojica mu/sd na priznak (spolocna cez vsetky biny).
-                 Vychodzi. Manifest zostava pouzitelny aj pri VM s inym poctom
-                 binov, lebo statistika nie je viazana na konkretny bin.
-  "bin_priznak"  mu/sd zvlast na kazdy bin. Zachyti, ze bin s kodom jadra sa
-                 spravaja inak nez bin s halda-pamatou, ale manifest tym
-                 pribije na jedno rozlozenie memslotov a bin s malym poctom
-                 vzoriek da nestabilne sd. Pouzitelne iba ked su vsetky VM
-                 rovnake.
 
 Povod: modul vznikol pre tuto pracu, nie je prevzaty.
 """
@@ -50,14 +40,18 @@ import subprocess
 
 import numpy as np
 
-from .manifest import (NENORMALIZOVANE, PODMIENENE, PRIZNAKY, Manifest,
-                       ManifestError)
+from .manifest import Manifest, ManifestError
 from .windows import Okna
 
 # Pod touto hodnotou sa sd povazuje za nulove. Nedeli sa nim - priznak sa
 # oznaci za konstantny, sd sa nastavi na 1.0 a meno ide do manifestu, aby bolo
 # vidiet, ktory priznak vo fitovacej mnozine nekolisal.
 EPS_SD = 1e-12
+
+# Manifest je spolocny s per-bin priznakovym priestorom a pole bin_bytes v nom
+# je povinne (musi byt kladna mocnina dvojky). Snimkovy vektor ziadne biny
+# nema, preto sa zapisuje neutralna 1. Nie je to velkost niecoho nameraneho.
+BIN_BYTES_MANIFEST = 1
 
 
 class NormalizeError(Exception):
@@ -89,21 +83,15 @@ class Normalizer:
     dat, co je presne ta chyba, ktoru ma tento modul zastavit.
     """
 
-    def __init__(self, priznaky=PRIZNAKY, rezim="priznak",
-                 nenormalizovane=NENORMALIZOVANE, podmienene=None):
+    def __init__(self, priznaky, nenormalizovane=()):
         self.priznaky = tuple(priznaky)
         if len(set(self.priznaky)) != len(self.priznaky):
             raise NormalizeError("poradie priznakov obsahuje duplicitu")
-        self.rezim = rezim
-        if self.rezim not in ("priznak", "bin_priznak"):
-            raise NormalizeError("neznamy rezim %r" % (rezim,))
-        self.nenormalizovane = tuple(n for n in nenormalizovane
-                                     if n in self.priznaky)
-        self.podmienene = dict(PODMIENENE if podmienene is None else podmienene)
-        for meno, hradlo in self.podmienene.items():
-            if meno in self.priznaky and hradlo not in self.priznaky:
-                raise NormalizeError("hradlo %r pre priznak %r nie je v poradi"
-                                     % (hradlo, meno))
+        nezname = [n for n in nenormalizovane if n not in self.priznaky]
+        if nezname:
+            raise NormalizeError("nenormalizovany priznak %s nie je v poradi"
+                                 % (", ".join(nezname),))
+        self.nenormalizovane = tuple(nenormalizovane)
         self._mu = None
         self._sd = None
         self._manifest = None
@@ -111,29 +99,29 @@ class Normalizer:
     # -- fit ---------------------------------------------------------------
 
     def fit(self, snimky, sessions_fit, labely=None, benigna_trieda="idle",
-            bin_bytes=None, dlzka_okna=None, poznamka=""):
-        """Spocita mu/sd zo snimok uvedenych sessions.
+            dlzka_okna=None, poznamka=""):
+        """Spocita mu/sd zo snimok uvedenych sedeni.
 
         sessions_fit je povinny a explicitny zoznam. Nie je to otravna
         formalita: "fitni na vsetkom, co si dostal" je presne ten prikaz,
-        ktorym sa do statistik dostane testovacia session.
+        ktorym sa do statistik dostane testovacie sedenie.
 
-        labely (session -> trieda) su volitelne; ked sa daju, kazda fitovacia
-        session musi mat triedu benigna_trieda, inak je to chyba. Ked sa
+        labely (session -> trieda) su volitelne; ked sa daju, kazde fitovacie
+        sedenie musi mat triedu benigna_trieda, inak je to chyba. Ked sa
         nedaju, do manifestu ide poznamka, ze labely neboli overene - aby sa
         pri audite vedelo, ze tuto kontrolu nikto neurobil.
         """
         if isinstance(snimky, Okna):
             raise NormalizeError(
                 "fit berie zoznam snimok, nie okna: pri kroku 1 sa okna "
-                "prekryvaju a snimky zo stredu session by dostali vacsiu vahu")
+                "prekryvaju a snimky zo stredu sedenia by dostali vacsiu vahu")
         snimky = list(snimky)
         if not snimky:
             raise NormalizeError("fit dostal prazdny zoznam snimok")
         if sessions_fit is None:
             raise NormalizeError(
                 "sessions_fit je povinny; fit sa robi iba na benignych "
-                "trenovacich sessions a ich zoznam musi byt v manifeste")
+                "trenovacich sedeniach a ich zoznam musi byt v manifeste")
         sessions_fit = tuple(dict.fromkeys(sessions_fit))
         if not sessions_fit:
             raise NormalizeError("sessions_fit je prazdny")
@@ -151,108 +139,55 @@ class Normalizer:
             zle = [s for s in sessions_fit if labely[s] != benigna_trieda]
             if zle:
                 raise NormalizeError(
-                    "fit smie bezat iba na benignych sessions (%r); tieto ju "
+                    "fit smie bezat iba na benignych sedeniach (%r); tieto ju "
                     "nemaju: %s" % (benigna_trieda,
                                     ", ".join("%s=%s" % (s, labely[s]) for s in zle)))
 
         vybrane = [s for s in snimky if s.session in sessions_fit]
         if not vybrane:
-            raise NormalizeError("po vybere sessions nezostala ziadna snimka")
-
-        biny = vybrane[0].biny
-        bb = vybrane[0].bin_bytes
+            raise NormalizeError("po vybere sedeni nezostala ziadna snimka")
         for s in vybrane:
             if tuple(s.priznaky) != self.priznaky:
                 raise NormalizeError(
                     "snimka %s/%d ma poradie priznakov %r, normalizator ma %r"
                     % (s.session, s.seq, list(s.priznaky), list(self.priznaky)))
-            if s.biny != biny:
-                raise NormalizeError(
-                    "snimka %s/%d ma inu mnozinu binov nez prva fitovacia "
-                    "snimka (%d vs %d)" % (s.session, s.seq, len(s.biny),
-                                           len(biny)))
-            if s.bin_bytes != bb:
-                raise NormalizeError("snimka %s/%d ma bin_bytes %d, prva %d"
-                                     % (s.session, s.seq, s.bin_bytes, bb))
-        if bin_bytes is not None and int(bin_bytes) != bb:
-            raise NormalizeError("bin_bytes zo snimok (%d) nesedi so zadanym (%d)"
-                                 % (bb, int(bin_bytes)))
 
-        # S ma tvar (T, B, F): T casovych krokov, kazdy zapocitany raz
+        # S ma tvar (T, F): T casovych krokov, kazdy zapocitany raz
         S = np.stack([s.x for s in vybrane], axis=0)
         f = len(self.priznaky)
-        if self.rezim == "priznak":
-            mu = np.zeros(f, dtype=np.float64)
-            sd = np.ones(f, dtype=np.float64)
-        else:
-            mu = np.zeros((len(biny), f), dtype=np.float64)
-            sd = np.ones((len(biny), f), dtype=np.float64)
+        mu = np.zeros(f, dtype=np.float64)
+        sd = np.ones(f, dtype=np.float64)
         konstantne = []
-
         for i, meno in enumerate(self.priznaky):
             if meno in self.nenormalizovane:
                 # mu=0, sd=1 -> hodnota prejde nezmenena; v manifeste je to
                 # aj tak napisane menom v 'nenormalizovane'
                 continue
-            hodnoty = S[:, :, i]
-            hradlo = self.podmienene.get(meno)
-            maska = None
-            if hradlo is not None:
-                hi = self.priznaky.index(hradlo)
-                maska = S[:, :, hi] > 0.5
-                if not maska.any():
-                    raise NormalizeError(
-                        "priznak %r sa fituje iba tam, kde %r == 1, ale vo "
-                        "fitovacej mnozine taka hodnota nie je; nahradna "
-                        "statistika by nebola meranim"
-                        % (meno, hradlo))
-            if self.rezim == "priznak":
-                vzorka = hodnoty[maska] if maska is not None else hodnoty.ravel()
-                m = float(vzorka.mean())
-                s_ = float(vzorka.std(ddof=0))
-                if s_ <= EPS_SD:
-                    konstantne.append(meno)
-                    s_ = 1.0
-                mu[i] = m
-                sd[i] = s_
-            else:
-                for b in range(len(biny)):
-                    st = hodnoty[:, b]
-                    if maska is not None:
-                        st = st[maska[:, b]]
-                    if st.size == 0:
-                        raise NormalizeError(
-                            "bin %d nema ani jednu vzorku priznaku %r s "
-                            "hradlom %r == 1" % (biny[b], meno, hradlo))
-                    m = float(st.mean())
-                    s_ = float(st.std(ddof=0))
-                    if s_ <= EPS_SD:
-                        konstantne.append("bin%d/%s" % (biny[b], meno))
-                        s_ = 1.0
-                    mu[b, i] = m
-                    sd[b, i] = s_
+            m = float(S[:, i].mean())
+            s_ = float(S[:, i].std(ddof=0))
+            if s_ <= EPS_SD:
+                konstantne.append(meno)
+                s_ = 1.0
+            mu[i] = m
+            sd[i] = s_
 
         self._mu = mu
         self._sd = sd
         pozn = poznamka
         if labely is None:
-            dovetok = ("labely fitovacich sessions neboli pri fite overene "
+            dovetok = ("labely fitovacich sedeni neboli pri fite overene "
                        "(volajuci ich nedodal)")
             pozn = (pozn + "; " + dovetok) if pozn else dovetok
         self._manifest = Manifest(
             priznaky=self.priznaky,
             nenormalizovane=self.nenormalizovane,
-            rezim=self.rezim,
+            rezim="priznak",
             mu=mu.tolist(),
             sd=sd.tolist(),
-            bin_bytes=bb,
-            biny=biny if self.rezim == "bin_priznak" else None,
+            bin_bytes=BIN_BYTES_MANIFEST,
             konstantne=konstantne,
-            podmienene={k: v for k, v in self.podmienene.items()
-                        if k in self.priznaky},
             sessions=sessions_fit,
             n_snimok=len(vybrane),
-            n_binov=len(biny),
             dlzka_okna=dlzka_okna,
             commit=_commit(),
             date=datetime.date.today().isoformat(),
@@ -276,7 +211,7 @@ class Normalizer:
         return self._manifest
 
     def transform(self, data):
-        """Normalizuje okna (Okna) alebo pole s poslednymi osami (..., B, F).
+        """Normalizuje okna (Okna) alebo pole s poslednou osou priznakov.
 
         Pred fitom (alebo pred nacitanim manifestu) vyhodi NotFittedError.
         """
@@ -286,31 +221,16 @@ class Normalizer:
                 "spracovavanych dat je zakazane - to je train/serve skew, "
                 "kvoli ktoremu tento modul vznikol")
         if isinstance(data, Okna):
-            self._skontroluj_okna(data)
+            self._manifest.overit(priznaky=data.priznaky)
             X = np.asarray(data.X, dtype=np.float64)
-            Y = self._aplikuj(X)
-            return Okna(Y, data.meta, data.priznaky, data.biny, data.bin_bytes,
-                        data.dlzka, data.krok, data.preskocene)
+            return Okna((X - self._mu) / self._sd, data.meta, data.priznaky,
+                        data.dlzka, data.krok, data.preskocene, data.vynechane)
         X = np.asarray(data, dtype=np.float64)
-        if X.ndim < 2 or X.shape[-1] != len(self.priznaky):
+        if X.ndim < 1 or X.shape[-1] != len(self.priznaky):
             raise NormalizeError(
                 "pole ma tvar %r, posledna os ma byt %d priznakov"
                 % (X.shape, len(self.priznaky)))
-        return self._aplikuj(X)
-
-    def _aplikuj(self, X):
-        if self.rezim == "priznak":
-            return (X - self._mu) / self._sd
-        if X.shape[-2] != self._mu.shape[0]:
-            raise NormalizeError(
-                "pole ma %d binov, manifest fitnuty na %d; v rezime "
-                "bin_priznak su mu/sd viazane na konkretne biny"
-                % (X.shape[-2], self._mu.shape[0]))
         return (X - self._mu) / self._sd
-
-    def _skontroluj_okna(self, okna):
-        self._manifest.overit(priznaky=okna.priznaky, biny=okna.biny,
-                              bin_bytes=okna.bin_bytes)
 
     # -- ulozenie a nacitanie ---------------------------------------------
 
@@ -320,38 +240,25 @@ class Normalizer:
     @classmethod
     def from_manifest(cls, manifest):
         """Postavi normalizator z uz overeneho manifestu."""
-        n = cls(priznaky=manifest.priznaky, rezim=manifest.rezim,
-                nenormalizovane=manifest.nenormalizovane,
-                podmienene=manifest.podmienene)
+        n = cls(priznaky=manifest.priznaky,
+                nenormalizovane=manifest.nenormalizovane)
         n._mu = np.asarray(manifest.mu, dtype=np.float64)
         n._sd = np.asarray(manifest.sd, dtype=np.float64)
         n._manifest = manifest
         return n
 
     @classmethod
-    def load(cls, cesta, priznaky=None, biny=None, bin_bytes=None):
+    def load(cls, cesta, priznaky=None):
         """Nacita manifest a hned ho porovna s tym, co caka volajuci.
 
-        Kontroluje sa schema, hash poradia priznakov a - ked su zadane -
-        poradie priznakov, biny a velkost binu. Nesedici manifest je vynimka,
-        nie varovanie: model by inak dostal ine cisla, nez na akych sa ucil.
+        Kontroluje sa schema, hash poradia priznakov a - ked je zadane -
+        poradie priznakov. Nesediaci manifest je vynimka, nie varovanie: model
+        by inak dostal ine cisla, nez na akych sa ucil.
         """
         m = Manifest.load(cesta)
-        m.overit(priznaky=priznaky, biny=biny, bin_bytes=bin_bytes)
+        m.overit(priznaky=priznaky)
         return cls.from_manifest(m)
 
 
-def snimky_zo_sessions(sessions):
-    """Spoji snimky z viacerych sessions do jedneho zoznamu.
-
-    Samostatna funkcia preto, aby bolo na jednom mieste vidiet, ze sa snimky
-    iba spajaju - hranice sessions drzi windows.segmenty, nie toto.
-    """
-    out = []
-    for s in sessions:
-        out.extend(s)
-    return out
-
-
 __all__ = ["Normalizer", "NormalizeError", "NotFittedError", "EPS_SD",
-           "snimky_zo_sessions", "Manifest", "ManifestError"]
+           "BIN_BYTES_MANIFEST", "Manifest", "ManifestError"]

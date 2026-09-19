@@ -14,8 +14,10 @@ Program číta pamäť bežiaceho virtuálneho stroja zvonku, z hostiteľa, a pe
 ukladá snímky. Druhý program zo snímky poskladá zoznam procesov, modulov jadra a sieťových
 spojení tak, ako ich v tej chvíli videl hosťovaný systém. Z každej snímky sa počíta krátky
 číselný vektor o tom, kde a ako sa pamäť oproti predchádzajúcej zmenila; vektory idú za
-sebou do okien a tie majú byť vstupom modelu (Temporal Convolutional Network), ktorý
-hotový nie je. Vnútri sledovaného stroja pritom nebeží nič, čo by sa dalo vypnúť.
+sebou do okien a okno je vstupom modelu (Temporal Convolutional Network), ktorý z neho
+vypočíta jedno číslo. Model je implementovaný a napojený, ale **natrénovaný nie je** —
+korpus neexistuje, takže to číslo nie je detekcia. Vnútri sledovaného stroja pritom nebeží
+nič, čo by sa dalo vypnúť.
 
 ## 2. Čo treba mať
 
@@ -43,11 +45,18 @@ python3 -m pytest -q      # testy parsera a príznakov
 Skripty pracujú s doménou `hyptcn-guest`; inú zadáš prepínačom `-d/--domain` alebo
 premennou `VMIC_DOMAIN`. Profil jadra hosťa (symboly z `kallsyms`, offsety polí štruktúr
 z BTF) **pre túto doménu už v repozitári je** — priznaná vstupná závislosť, rovnako ako
-profil pri LibVMI alebo Volatility. Prvý riadok nižšie preto preskoč: `get_profile.sh`
-je iba pre iného hosťa alebo inú verziu jadra, existujúci profil neprepíše a skončí kódom 1.
+profil pri LibVMI alebo Volatility.
+
+**Pozor na boot.** Adresy v `kallsyms` sú randomizované pri každom štarte hosťa (KASLR),
+takže profil platí pre ten boot, v ktorom vznikol; offsety polí z BTF platia pre verziu
+jadra a reštart prežijú. **Po každom reštarte hosťa treba profil odobrať nanovo** —
+existujúci `get_profile.sh` bez `-f` neprepíše. Nesúlad sa neprehliadne: zisťuje sa pred
+každým podpríkazom, nástroj vypíše `NESULAD PROFILU` aj s príčinou (KASLR, symbol, úroveň
+tabuliek stránok a položka), výpisy označí `NEUPLNE` a skončí kódom 5; `validate` sa ani
+nespustí a JSON nezapíše. Raz sa to už stalo, celý výstup je v `docs/MERANIA.md` (L17).
 
 ```bash
-scripts/get_profile.sh root@192.168.122.100     # iba pre iného hosťa
+scripts/get_profile.sh -f root@192.168.122.100  # po reštarte hosťa; -f prepíše starý profil
 sudo scripts/root_run.sh probe                  # vidno doménu a jej memsloty?
 sudo scripts/root_run.sh run -w delta -i 5 -N 6 # šesť cyklov, perióda 5 s
 python3 -m guestparse ps --snapshot data/raw/<stamp>_run --profile @@PROFIL@@
@@ -56,14 +65,14 @@ python3 -m features perbin --snapshot data/raw/<stamp>_run
 
 `sudo` sa na heslo spýta interaktívne; root treba iba na tie dva riadky, teda na samotné
 čítanie pamäte. Tretí príkaz zapíše snímky do `data/raw/<stamp>_run/` (mimo gitu) a súhrn
-behu do `data/results/run_<stamp>.json`. Jedna snímka je súbor `.vmicd`: vlastný formát
-zberača — hlavička, zoznam rozsahov fyzických adries a ich obsah, celý alebo iba zmenené
-stránky. `--snapshot` berie taký súbor aj celý adresár s reťazcom snímok.
+behu do `data/results/run_<stamp>.json`. Jedna snímka je súbor `.vmicd`: hlavička, rozsahy
+fyzických adries a ich obsah, celý alebo iba zmenené stránky. `--snapshot` berie taký
+súbor aj celý adresár s reťazcom snímok.
 
 Merania sa nespúšťajú ručne, ale cez `scripts/root_run.sh probe|once|run|validate`, ktorý
-do každého výstupu zapíše commit, dátum, presný príkaz a SHA-256 binárky. Pozor na rozdiel:
-v tabuľke v kapitole 6 stojí pri `probe`, že nič nezapisuje — platí to o binárke, ale
-`scripts/root_run.sh probe` okolo nej zapíše `data/results/probe_<stamp>.json`.
+do každého výstupu zapíše commit, dátum, presný príkaz a SHA-256 binárky. „`probe` nič
+nezapisuje“ v kapitole 6 platí o binárke; skript okolo nej `data/results/probe_<stamp>.json`
+zapíše.
 
 ## 5. Čo je kde
 
@@ -80,44 +89,50 @@ pamäť bežiacej VM
 snímka .vmicd  +  sidecar .json (metadáta snímky vedľa nej)
   ├─► guestparse ──► procesy, moduly, sokety hosťa
   └─► perbin.c   ──► per-bin vektor (zapísaný do sidecaru)
-                       │  features/windows.py
+                       │  features/snapshot.py + features/windows.py
                        ▼
-                     okná (okno, čas, bin, príznak) pre model
+                     okná (okno, čas, bin, príznak)
+                       │  tcn/model.py — TCN
+                       ▼
+                     skóre: jedno číslo na okno
+                     tcn/score.py nad bežiacim zberom, tcn/train.py nad uloženými
+                     oknami; model NIE JE natrénovaný, skóre NIE JE detekcia
 ```
 
-**1. Čítanie pamäte** — `vmicollect/src/backend_ebpf.c`, spoločná slučka
-`vmicollect/src/backend.c`. KVM drží pamäť hosťa ako zoznam blokov; jeden blok sa volá
-**memslot** a hovorí, ktorý rozsah fyzických adries hosťa leží na ktorej adrese
-v procese QEMU. Zberač číta iba memsloty — priestor medzi nimi je diera bez pamäte,
-nie nuly. Virtuálny stroj sa pritom nezastavuje.
+**1. Čítanie pamäte** — `vmicollect/src/backend_ebpf.c`, slučka `vmicollect/src/backend.c`.
+KVM drží pamäť hosťa ako zoznam blokov; blok sa volá **memslot** a hovorí, ktorý rozsah
+fyzických adries hosťa leží na ktorej adrese v procese QEMU. Zberač číta iba memsloty —
+priestor medzi nimi je diera bez pamäte, nie nuly. VM sa pritom nezastavuje.
 
 **2. Zápis snímky** — `vmicollect/src/writer_raw.c` uloží celú pamäť,
-`vmicollect/src/writer_delta.c` iba stránky zmenené od predchádzajúcej snímky
-(porovnáva sa ich hash). Plná je prvá snímka reťazca a potom každá N-tá podľa
-`output.delta_full_every` (východzie @@FULL_EVERY@@); plná snímka je referencia pre
-delty za ňou. Pri zapnutom `output.sidecar` (východzie `@@SIDECAR_KLUC@@`) vzniká
-vedľa každej snímky sidecar `.json` s metadátami; robí ho `vmicollect/src/meta.c`.
+`vmicollect/src/writer_delta.c` iba stránky zmenené od predchádzajúcej (porovnáva sa ich
+hash). Plná je prvá snímka reťazca a potom každá N-tá podľa `output.delta_full_every`
+(východzie @@FULL_EVERY@@) a je referenciou pre delty za ňou. Pri `output.sidecar`
+(východzie `@@SIDECAR_KLUC@@`) vzniká vedľa snímky sidecar `.json`; robí ho `meta.c`.
 
 **3. Rekonštrukcia objektov hosťa** — `guestparse/view.py`. V snímke sú iba bajty; že na
-určitej adrese začína zoznam procesov a že meno procesu leží istý počet bajtov od jeho
-začiatku, v nej nie je. Tejto medzere medzi bajtmi a významom sa hovorí **semantic gap**
-a preklenie ju profil jadra hosťa z `profiles/`. Výsledok sa porovnáva s **pozemnou
-pravdou**: zoznamom procesov, modulov a soketov odobratým zvnútra hosťa príkazmi `ps`,
-`lsmod` a `ss` tesne pred snímkou a po nej (`python3 -m guestparse validate`).
+istej adrese začína zoznam procesov a meno procesu leží istý počet bajtov od jeho začiatku,
+v nej nie je. Tejto medzere sa hovorí **semantic gap** a preklenie ju profil jadra hosťa
+z `profiles/`. Výsledok sa porovnáva s **pozemnou pravdou** odobratou zvnútra hosťa
+príkazmi `ps`, `lsmod` a `ss` tesne pred snímkou a po nej (`python3 -m guestparse validate`).
 
 **4. Príznaky** — `vmicollect/src/perbin.c`, referencia `features/perbin.py`.
-**Per-bin vektor**: pamäť sa podľa fyzickej adresy rozdelí na rovnako veľké bloky
-(biny, východzie @@BIN@@) a za každý bin sa uloží podiel zmenených stránok, podiel
-nulových stránok, priemerná entropia zmenených stránok a príznak, či sa bin vôbec
-zmenil. Index binu je adresa delená veľkosťou binu, takže bin číslo 5 je v každej
-snímke ten istý kus pamäte; bin bez memslotu nevzniká. To isté číslo počíta C aj
-Python a `features crosscheck` ich porovnáva.
+**Per-bin vektor**: pamäť sa podľa fyzickej adresy rozdelí na rovnako veľké bloky (biny,
+východzie @@BIN@@) a za každý bin sa uloží podiel zmenených stránok, podiel nulových
+stránok, priemerná entropia zmenených stránok a príznak, či sa bin zmenil. Index binu je
+adresa delená veľkosťou binu, takže ten istý bin je v každej snímke ten istý kus pamäte;
+bin bez memslotu nevzniká. To isté počíta C aj Python a `features crosscheck` ich porovná.
 
-**5. Okná a normalizácia** — `features/windows.py` skladá po sebe idúce vektory do
-poľa tvaru `(okno, čas, bin, príznak)`. `features/normalize.py` každý príznak preškáluje
-na nulový priemer a jednotkovú odchýlku (z-score); priemer a odchýlku počíta iba zo
-záznamov bez škodlivého správania a uloží ich do manifestu, aby na testovacích dátach
-platili tie isté hodnoty. Podrobnosti sú v `features/PERBIN.md`.
+**5. Okná a normalizácia** — `features/windows.py` skladá po sebe idúce vektory do poľa
+tvaru `(okno, čas, bin, príznak)`. `features/normalize.py` preškáluje každý príznak na
+z-score; priemer a odchýlku počíta iba zo záznamov bez škodlivého správania a uloží ich do
+manifestu, aby na testovacích dátach platili tie isté. Podrobnosti v `features/PERBIN.md`.
+
+**6. Model a skóre** — `tcn/model.py` (kauzálne dilatované konvolúcie, reziduálne bloky),
+baseliny `tcn/baselines.py`, metriky `tcn/eval.py`. Okno vojde, jedno číslo vyjde.
+`tcn/train.py` beží nad uloženými oknami, `tcn/score.py` nad adresárom, do ktorého píše
+`vmicollect run`. **Model natrénovaný nie je** — váhy sú náhodné, korpus neexistuje
+(`docs/LIMITACIE.md`, L16), takže číslo hovorí len to, že cesta beží ako celok.
 
 **Príkazy zberača**
 
@@ -153,9 +168,7 @@ Stabilná množina procesov sú tie, ktoré boli v `ps` pred snímkou aj po nej.
 je vidieť aj nenaviazaný UDP soket a dopyt na DNS.
 
 Staršie číslo pre cyklus so zapnutým kontrolným súčtom už neplatí: SHA-256 sa vtedy
-počítal až v `finish()` nad hotovým riedkym súborom vrátane dier, dnes sa počíta priebežne
-v `feed()` nad tým, čo sa naozaj zapisuje. Vetva s inštrukciami SHA-NI je k tomu prídavok,
-nie príčina — v prevzatom stave už bola (`docs/MERANIA.md`).
+počítal v `finish()` nad celým riedkym súborom, dnes v `feed()` (`docs/MERANIA.md`).
 
 Prostredie, na ktorom merania bežali (z artefaktov, nie z tohto stroja dnes):
 
@@ -167,11 +180,14 @@ Commity, z ktorých merania pochádzajú:
 
 ## 8. Čo nefunguje a čo ešte nie je
 
-Model ani skórovanie neexistujú, takže latencia snímka → skóre meraná nie je a slovo
-„real-time“ v názve práce znamená periodický zber s meraným časom cyklu. Presnosť voči
-malvérovým vzorkám sa merať nebude: vzorky nie sú k dispozícii, nahrádzajú sa syntetickými
-scenármi. Pri načítaní BPF programu sa objaví nefatálne `@@LIBBPF@@` — zber funguje,
-príčina zistená nebola.
+Skórovanie (`tcn/score.py`) beží, model natrénovaný nie je, takže jeho výstup nie je
+detekcia. Živá latencia snímka → skóre, teda meraná počas zberu, meraná nie je; odmerané
+je len spracovanie nad uloženou snímkou (`data/results/latency_score_20260919.json`).
+Slovo „real-time“ v názve práce preto znamená periodický zber s meraným časom cyklu.
+Presnosť voči malvérovým vzorkám sa merať nebude: vzorky nie sú k dispozícii
+a **nenahrádzajú sa ničím** — napísané syntetické scenáre sa na tréning vedome nepoužili,
+lebo model natrénovaný na nich by klasifikoval scenáre autora, nie malvér (L16). Pri
+načítaní BPF programu sa objaví nefatálne `@@LIBBPF@@` — zber funguje, príčina neznáma.
 
 Ostatné obmedzenia vlastní `docs/LIMITACIE.md` (@@LIMITACIE@@); prerozprávať ich tu by
 znamenalo držať dve znenia toho istého. Nadpisy sú preto dosadené z neho, skrátené:
@@ -197,13 +213,11 @@ scripts/check_prirucka.sh           # ohlási, že sa príručka s kódom roziš
 ```
 
 **Čo na tomto súbore drží kontrola.** Generátor dosadí z kódu strom adresárov a počty
-riadkov, príkazy, prepínače a podpríkazy z `--help`, konfiguračné kľúče aj ich východzie
-hodnoty, veľkosť obrazu v selfteste, polia sidecaru (vyrobí si preň čerstvý sidecar práve
-preloženou binárkou), počet testov a znenia nadpisov limitácií. Z uložených artefaktov iba
-to, čo sa bez merania zistiť nedá: namerané čísla s `n`, commity a prostredie meraní,
-hlásenie libbpf. Próza medzi nimi je ručná a overuje sa pri nej jediné: že každá cesta
-k súboru v texte existuje. Vecne zlú vetu bez čísla kontrola nezachytí, preto číslo patrí
-do generovanej časti, nie do prózy.
+riadkov, príkazy, prepínače a podpríkazy z `--help`, konfiguračné kľúče a ich východzie
+hodnoty, veľkosť obrazu v selfteste, polia sidecaru (z čerstvého sidecaru vyrobeného práve
+preloženou binárkou), počet testov a znenia nadpisov limitácií; z artefaktov len to, čo sa
+bez merania zistiť nedá. Próza je ručná a overuje sa pri nej jediné: že každá cesta
+k súboru v texte existuje — vecne zlú vetu bez čísla kontrola nezachytí.
 
 `scripts/check_prirucka.sh` si volá aj `scripts/check_claims.sh`, takže zastaraná príručka je
 nález ako každý iný; kód si najprv preloží, aby videla zmenu v zdrojáku, nie v starej binárke.

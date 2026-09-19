@@ -10,6 +10,7 @@ struktur zavisi od konfiguracie jadra (CONFIG_*), nie iba od verzie. Cislo
 opisane zo zdrojakov by pri inom .config ticho ukazovalo na ine pole.
 """
 
+import json
 import os
 import re
 
@@ -25,7 +26,25 @@ WANTED = (
     "sock_common",
 )
 
+# Strojovo citatelne udaje o tom, z KTOREHO startu hosta je profil.
+# Zapisuje ho scripts/get_profile.sh; profil odobraty skor ho nema.
+META = "boot.json"
+
 _BTF_CACHE = {}
+
+
+def load_meta(directory):
+    """
+    Udaje o bootu z <profil>/boot.json: boot_id hosta, datum odberu, verzia
+    jadra. Chybajuci alebo pokazeny subor nie je chyba profilu - starsie
+    profily ho nemaju - ale vtedy sa o bootu nic netvrdi.
+    """
+    try:
+        with open(os.path.join(directory, META)) as fh:
+            data = json.load(fh)
+    except (OSError, ValueError):
+        return {}
+    return data if isinstance(data, dict) else {}
 
 
 class ProfileError(Exception):
@@ -49,6 +68,8 @@ class Profile:
     def __init__(self, kallsyms_path, btf_path, wanted=WANTED):
         self.kallsyms_path = kallsyms_path
         self.btf_path = btf_path
+        self.dir = os.path.dirname(os.path.abspath(kallsyms_path))
+        self.meta = load_meta(self.dir)
         self.sym = {}
         with open(kallsyms_path) as fh:
             for ln in fh:
@@ -88,6 +109,19 @@ class Profile:
                 "%s: chyba btf.txt (vypis 'bpftool btf dump file <vmlinux> "
                 "format raw')" % directory)
         return cls(ks, btf, wanted)
+
+    def describe(self):
+        """
+        Jedna veta o povode profilu do hlasok. Ked boot.json chyba, povie sa
+        to - "neznamy boot" je informacia, dohadovat sa nic nebude.
+        """
+        boot = self.meta.get("boot_id")
+        kedy = self.meta.get("captured")
+        if boot:
+            return ("profil %s je z bootu %s (odobraty %s)"
+                    % (self.dir, boot, kedy or "bez datumu"))
+        return ("profil %s nema boot.json - z ktoreho startu hosta je, "
+                "zistit neviem" % self.dir)
 
     def addr(self, name):
         return self.sym.get(name)

@@ -34,6 +34,18 @@ NAVRATOVE KODY:
      (summary.inconclusive nie je prazdny). Nula z neuzavretej kontroly nie
      je dokaz cistoty, preto sa nesmie hlasit ako 0. Ked su nalezy aj
      neuzavrete kontroly naraz, vyhrava kod 1 - nalez je silnejsia sprava.
+  5  NESULAD PROFILU: kallsyms v profile je z ineho startu jadra (KASLR), nez
+     je snimka - typicky preto, ze hosta medzitym niekto restartoval a profil
+     v repe je z predchadzajuceho bootu. Diagnozu stanovi
+     GuestView.profile_boot_mismatch(): symbol sa linearne precitat DA, ale
+     prechod tabuliek stranok pre jeho VA konci na nepritomnej polozke.
+     PRECO VLASTNY KOD a preco nie 4: nie je to neuzavreta kontrola ("neviem"),
+     je to CHYBA VSTUPU - nastroju sa dal profil, ktory k snimke nepatri.
+     Preto prebija aj nalez (1), aj neuzavretost (4): nalez zo zleho profilu
+     nalezom nie je. Plati pre vsetky podprikazy: pri citacich (`info`, `ps`,
+     `lsmod`, `ss`, `checks`) sa vysledok aj tak vypise (je oznaceny ako
+     NEUPLNY) a diagnoza ide na stderr; `validate` sa nespusti vobec, lebo
+     by po sebe nechal subor v data/results.
 """
 
 import argparse
@@ -47,6 +59,7 @@ EXIT_FINDINGS = 1
 EXIT_ERROR = 2
 EXIT_NOT_IMPLEMENTED = 3
 EXIT_INCONCLUSIVE = 4
+EXIT_PROFILE_MISMATCH = 5
 
 
 def _add_common(sp):
@@ -158,6 +171,14 @@ def _print_info(res):
           % (pr["symbols"], ", ".join(pr["structs"])))
     print("               %s" % pr["kallsyms"])
     print("               %s" % pr["btf"])
+    if pr.get("boot_id"):
+        print("profil z bootu %s, odobraty %s"
+              % (pr["boot_id"], pr.get("captured") or "bez datumu"))
+        print("               porovnaj s hostom: "
+              "cat /proc/sys/kernel/random/boot_id")
+    else:
+        print("profil z bootu ? (profil nema boot.json - obnov ho cez "
+              "scripts/get_profile.sh)")
     if not res["resolved"]:
         print("posun jadra:   NENAJDENY - %s" % res["resolve_problem"])
         return
@@ -176,6 +197,11 @@ def _print_info(res):
                  "==" if r["match"] else "!=",
                  r["walk_pa"] or 0,
                  "zhoda" if r["match"] else "NEZHODA"))
+        if not r["match"] and r["walk_reason"]:
+            print("  %-14s prechod skoncil na %s: %s"
+                  % ("", r["walk_level"] or "?", r["walk_reason"]))
+    if res.get("profile_mismatch"):
+        print(res["profile_mismatch"])
 
 
 def _print_checks(res):
@@ -280,13 +306,28 @@ def main(argv=None):
         return EXIT_ERROR
 
     try:
+        # Nesulad profilu s bootom snimky sa zistuje raz, pred vykonom prikazu:
+        # tyka sa vsetkeho, co z profilu cita adresy, nie iba `info`.
+        mismatch = view.profile_boot_mismatch()
+
+        def final(rc):
+            """Chyba vstupu prebija kazdy iny kod - viz navratove kody vyssie."""
+            return EXIT_PROFILE_MISMATCH if mismatch else rc
+
         if args.cmd == "info":
             res = view.info()
             if args.json:
                 print(json.dumps(res, indent=2))
+                if mismatch:
+                    sys.stderr.write("%s\n" % mismatch)
             else:
                 _print_info(res)
-            return EXIT_OK if res["resolved"] else EXIT_ERROR
+            if not res["resolved"]:
+                return EXIT_ERROR
+            return final(EXIT_OK)
+
+        if mismatch:
+            sys.stderr.write("%s\n" % mismatch)
 
         if view.ktext_shift is None:
             sys.stderr.write("chyba: posun jadra sa nenasiel - %s\n"
@@ -297,17 +338,25 @@ def main(argv=None):
             res = view.processes()
             _warn(res)
             print(json.dumps(res, indent=2)) if args.json else _print_ps(res)
-            return EXIT_OK
+            return final(EXIT_OK)
         if args.cmd == "lsmod":
             res = view.modules()
             _warn(res)
             print(json.dumps(res, indent=2)) if args.json else _print_lsmod(res)
-            return EXIT_OK
+            return final(EXIT_OK)
         if args.cmd == "ss":
             res = view.sockets()
             _warn(res)
             print(json.dumps(res, indent=2)) if args.json else _print_ss(res)
-            return EXIT_OK
+            return final(EXIT_OK)
+
+        # `validate` po sebe necha subor v data/results - vysledok z profilu,
+        # ktory k snimke nepatri, sa preto nevyraba vobec. Citacie podprikazy
+        # vyssie vypisu, co videli, a nesulad hlasia na stderr.
+        if args.cmd == "validate" and mismatch:
+            sys.stderr.write("porovnanie s pozemnou pravdou sa nespustilo a "
+                             "%s sa nezapisal\n" % args.out)
+            return EXIT_PROFILE_MISMATCH
 
         res = _external(args.cmd, args, view)
         if res is None:
@@ -317,13 +366,13 @@ def main(argv=None):
                 json.dump(res, fh, indent=2)
             sys.stderr.write("zapisane: %s\n" % args.out)
             print(json.dumps(res, indent=2)) if args.json else _print_validate(res)
-            return EXIT_OK
+            return final(EXIT_OK)
         if args.cmd == "checks":
             print(json.dumps(res, indent=2)) if args.json else _print_checks(res)
-            return checks_exit_code(res)
+            return final(checks_exit_code(res))
         if args.json:
             print(json.dumps(res, indent=2))
-        return EXIT_OK
+        return final(EXIT_OK)
     finally:
         img.close()
 

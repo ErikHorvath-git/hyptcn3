@@ -20,8 +20,9 @@ per-bin vektor kvoli tomu nezanika, zostava v perbin.py a v sidecari.
 
 KONTRAKT VEKTORA (dohodnuty, nemeni sa bez dohody)
 ---------------------------------------------------
-Dlzka je MENA - dvadsat priznakov plus pole `ma_predchodcu`. Poradie je dane
-poradim v MENA a uklada sa spolu s datami, aby sa dalo overit.
+Dlzka je MENA - dvadsat priznakov plus dve polia o tom, co riadok vobec je:
+`ma_predchodcu` a `je_plna`. Poradie je dane poradim v MENA a uklada sa spolu
+s datami, aby sa dalo overit.
 
   Pamat (agregat z bloku "features" v sidecari, ktory pocita C modul):
      1  mem_changed_ratio   sucet pages_changed / sucet pages_total
@@ -38,6 +39,10 @@ poradim v MENA a uklada sa spolu s datami, aby sa dalo overit.
     13 proc_gone      14 mod_total    15 mod_delta     16 sock_total
     17 sock_listen    18 sock_estab   19 chk_syscall_hooks
     20 chk_crossview
+
+  O riadku samotnom:
+    21 ma_predchodcu  0/1 - bola pred touto snimkou ina?
+    22 je_plna        0/1 - je to plna snimka, alebo delta?
 
 PAMATOVA CAST SA NEDOPOCITAVA INAK
 -----------------------------------
@@ -62,8 +67,22 @@ nie NaN: matica ide do normalizacie a do okien a NaN by sa cez ne rozliezol;
 dovod, preco sa riadok nezahadzuje: pamatova cast prvej snimky namerana je
 a zahodit ju by znamenalo zahodit aj ju.
 
-KTO TO POUZIVA, MUSI `ma_predchodcu` CITAT. Okno, ktore obsahuje riadok
-s ma_predchodcu = 0, ma v troch priznakoch nulu, ktora nie je meranim.
+PLNA SNIMKA MA INY FYZIKALNY VYZNAM
+-----------------------------------
+V plnej snimke nie je voci comu pocitat zmenu: delta writer do nej zapise
+vsetky NENULOVE stranky (vmicollect/src/writer_delta.c), takze pages_changed
+je pocet nenulovych stranok. Priznaky 1 az 7 preto opisuju cely obsah pamate,
+nie jej zmenu, a mem_changed_ratio vyjde presne 1 - mem_zero_ratio. Je to
+rovnake cislo s inym vyznamom nez v delta riadku a `ma_predchodcu` to
+NEPOKRYVA - to sa tyka iba priznakov 12, 13 a 15.
+
+Riadok preto nesie vlastny priznak `je_plna`. Dnes je plna snimka prva v
+retazci, ale pri output.delta_full_every pride aj uprostred sedenia, takze
+poradim sa spolahnut neda. Okno, ktore taky riadok obsahuje, sa v
+features/windows.py NEPOSKLADA vobec (nie je to rez - riadok je plnohodnotny
+casovy krok a vyhodit ho by znamenalo okno bez jedneho kroku).
+
+KTO TO POUZIVA, MUSI `ma_predchodcu` A `je_plna` CITAT.
 """
 
 import json
@@ -89,7 +108,7 @@ MENA = (
     "mod_total", "mod_delta",
     "sock_total", "sock_listen", "sock_estab",
     "chk_syscall_hooks", "chk_crossview",
-    "ma_predchodcu",
+    "ma_predchodcu", "je_plna",
 )
 
 # Nalezy, ktore su krizovou nezrovnalostou (objekt vidi jeden pohlad a druhy
@@ -269,6 +288,9 @@ def vektor_snimky(snapshot, profil, seq=None, predch=None):
     `predch` je `stav` z predchadzajucej snimky, alebo None pri prvej.
     """
     heads = _chain_parts(snapshot, until_seq=seq)
+    # 'full' je z hlavicky .vmicd suboru tejto snimky, nie z poradia v
+    # retazci: pri output.delta_full_every je plna snimka aj uprostred.
+    je_plna = 1 if heads[-1]["full"] else 0
     pamat = pamat_zo_sidecaru(sidecar_cesta(heads[-1]["path"]))
 
     view, img = build_view(snapshot, profil, until_seq=seq)
@@ -292,7 +314,7 @@ def vektor_snimky(snapshot, profil, seq=None, predch=None):
         obj["mod_total"], mod_delta,
         obj["sock_total"], obj["sock_listen"], obj["sock_estab"],
         obj["chk_syscall_hooks"], obj["chk_crossview"],
-        ma_predchodcu,
+        ma_predchodcu, je_plna,
     ]
     if len(vektor) != len(MENA):
         raise FeatureError("vektor ma %d cisel, kontrakt ma %d"

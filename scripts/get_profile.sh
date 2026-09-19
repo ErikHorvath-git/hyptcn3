@@ -15,6 +15,14 @@
 # nezamaskovane adresy v /proc/kallsyms (root alebo kernel.kptr_restrict=0) -
 # inak su vsetky adresy nulove a profil je na nic; skript to kontroluje.
 #
+# PROFIL JE VIAZANY NA JEDEN START HOSTA. Adresy v kallsyms randomizuje KASLR
+# pri kazdom bootne; offsety poli z BTF su viazane na verziu jadra a reboot
+# prezivaju. Preto sa do profilu zapisuje aj boot_id hosta a datum odberu
+# (boot.json): nesulad sa da zistit porovnanim s
+# /proc/sys/kernel/random/boot_id bezaceho hosta, nie az tym, ze prechod
+# tabuliek stranok zlyha. Po kazdom restarte hosta spusti tento skript znova
+# s prepinacom -f.
+#
 set -euo pipefail
 
 SELF_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -186,13 +194,20 @@ GUEST_ARCH="$(echo "$IDENT"  | sed -n 4p | tr -d '\r')"
 NAME="${GUEST_ID}${GUEST_VER}-${GUEST_REL}"
 OUT="$OUT_ROOT/$NAME"
 if [ -e "$OUT" ] && [ "$FORCE" -eq 0 ]; then
-    die "profil '$OUT' uz existuje (prepis prepinacom -f)"
+    die "profil '$OUT' uz existuje (prepis prepinacom -f; po restarte hosta je
+     prepis nutny, adresy v kallsyms su z predchadzajuceho bootu)"
 fi
 mkdir -p "$OUT"
 
 DATE_ISO="$(date -Iseconds)"
 HOST_KERNEL="$(uname -r)"
 BPFTOOL_VER="$(bpftool version 2>&1 | head -1)"
+
+# boot_id sa meni s kazdym startom hosta - je to jediny udaj, podla ktoreho sa
+# da nesulad zistit porovnanim (bez neho ho ukaze az zlyhany prechod tabuliek).
+BOOT_ID="$(guest_exec 'cat /proc/sys/kernel/random/boot_id' | tr -d "\r\n")"
+[ -n "$BOOT_ID" ] || die "nepodarilo sa precitat /proc/sys/kernel/random/boot_id hosta"
+BOOT_TIME="$(guest_exec 'uptime -s' | tr -d "\r\n")"
 
 # ------------------------------------------------------------------ zber
 
@@ -231,9 +246,32 @@ KALLSYMS_LINES="$(wc -l < "$OUT/kallsyms.txt")"
 BTF_LINES="$(wc -l < "$OUT/btf.txt")"
 BTF_BYTES="$(stat -c %s "$OUT/btf.raw")"
 
-# ------------------------------------------------------------------ README
+# ------------------------------------------------------------------ boot.json
 
 sym_addr() { awk -v s="$1" '$3 == s { print "0x" $1; exit }' "$OUT/kallsyms.txt"; }
+
+# Strojovo citatelny povod profilu. Cita ho guestparse (profile.load_meta) a
+# vypisuje ho 'guestparse info', aby sa profil z ineho bootu dal odhalit
+# porovnanim s hostom, nie az zlyhanim prechodu tabuliek stranok.
+cat > "$OUT/boot.json" <<EOF
+{
+  "boot_id": "$BOOT_ID",
+  "boot_time": "$BOOT_TIME",
+  "captured": "$DATE_ISO",
+  "guest_kernel": "$GUEST_REL",
+  "guest": "$GUEST_ID $GUEST_VER ($GUEST_ARCH)",
+  "target": "$TARGET",
+  "transport": "$MODE",
+  "init_task": "$(sym_addr init_task)",
+  "linux_banner": "$(sym_addr linux_banner)",
+  "kallsyms_lines": $KALLSYMS_LINES,
+  "btf_bytes": $BTF_BYTES
+}
+EOF
+python3 -c 'import json,sys; json.load(open(sys.argv[1]))' "$OUT/boot.json" \
+    || die "boot.json nie je platny JSON"
+
+# ------------------------------------------------------------------ README
 
 {
     cat <<EOF
@@ -247,6 +285,8 @@ Tento adresár vygeneroval \`scripts/get_profile.sh\` dňa $DATE_ISO.
 |---|---|
 | cieľ | \`$TARGET\` |
 | prenos | $MODE |
+| **boot_id hosťa** | \`$BOOT_ID\` |
+| **hosť naštartovaný** | $BOOT_TIME |
 | jadro hosťa | \`$GUEST_REL\` |
 | \`/proc/version\` hosťa | \`$BANNER_VER\` |
 | jadro hostiteľa | \`$HOST_KERNEL\` |
@@ -277,9 +317,10 @@ bpftool btf dump file btf.raw format raw                  > btf.txt
 
 | súbor | riadkov / bajtov | obsah |
 |---|---|---|
-| \`kallsyms.txt\` | $KALLSYMS_LINES riadkov | adresy symbolov bežiaceho jadra hosťa |
-| \`btf.raw\` | $BTF_BYTES B | binárne BTF z \`/sys/kernel/btf/vmlinux\` |
+| \`kallsyms.txt\` | $KALLSYMS_LINES riadkov | adresy symbolov bežiaceho jadra hosťa – **platia iba pre boot \`$BOOT_ID\`** |
+| \`btf.raw\` | $BTF_BYTES B | binárne BTF z \`/sys/kernel/btf/vmlinux\` – viazané na verziu jadra, nie na boot |
 | \`btf.txt\` | $BTF_LINES riadkov | výpis BTF, z neho parser číta offsety polí |
+| \`boot.json\` | – | \`boot_id\`, dátum odberu a verzia jadra; číta ho \`guestparse\` a vypisuje v \`info\` |
 
 ## Kľúčové symboly, ktoré parser číta
 
@@ -301,8 +342,7 @@ EOF
 | \`_etext\` | $(sym_addr _etext) | horná hranica textu jadra |
 | \`sys_call_table\` | $(sym_addr sys_call_table) | tabuľka, ktorej integrita sa kontroluje |
 
-Adresy sú z jedného konkrétneho štartu jadra (KASLR ich pri každom štarte posunie).
-Parser z nich používa iba rozdiely voči \`linux_banner\`, ktorý nájde v snímke.
+Tieto adresy platia **iba pre boot \`$BOOT_ID\`** (hosť naštartovaný $BOOT_TIME).
 
 ## Poctivo o tom, čo to znamená
 
@@ -312,17 +352,65 @@ hosťa“: adresy symbolov a offsety polí pochádzajú z bežiaceho hosťa a bo
 odobraté raz, mimo behu zberu. Samotný zber snímok ani parsovanie už do hosťa
 nesiahajú.
 
-## Čo sa stane po reštarte hosťa
+## Profil je viazaný na jeden štart hosťa
 
-- Reštart **toho istého jadra**: KASLR zvolí iný posun, absolútne adresy v
-  \`kallsyms.txt\` prestanú sedieť s pamäťou. Parser posun dopočíta z polohy
-  \`linux_banner\` v snímke, takže rozdiely medzi symbolmi zostávajú platné.
-  Toto je vlastnosť kódu, nie zmeraný výsledok – po reštarte treba validáciu
-  zopakovať.
-- Reštart do **iného jadra** (napr. po \`unattended-upgrades\`): profil prestane
-  sedieť úplne – iné adresy aj iné offsety polí. Treba spustiť
-  \`scripts/get_profile.sh\` znova, vznikne nový adresár podľa novej verzie
-  jadra a validácia sa musí zopakovať.
+| časť profilu | na čo je viazaná | prežije reštart? |
+|---|---|---|
+| \`kallsyms.txt\` (adresy symbolov) | konkrétny **štart** jadra – KASLR posunie obraz jadra pri každom bootnutí | **nie** |
+| \`btf.raw\`, \`btf.txt\` (offsety polí štruktúr) | **verziu a konfiguráciu** jadra | áno |
+| \`boot.json\` | zapisuje \`boot_id\` a dátum odberu, aby sa nesúlad dal zistiť porovnaním | – |
+
+Preto po každom reštarte hosťa:
+
+\`\`\`sh
+scripts/get_profile.sh -f $TARGET     # -f: prepíše profil z predchádzajúceho bootu
+\`\`\`
+
+Rýchla kontrola bez spúšťania parsera – \`boot_id\` v \`boot.json\` sa musí
+zhodovať s hosťom:
+
+\`\`\`sh
+python3 -c 'import json;print(json.load(open("boot.json"))["boot_id"])'
+ssh $TARGET cat /proc/sys/kernel/random/boot_id
+\`\`\`
+
+Reštart do **inej verzie jadra** (napr. po \`unattended-upgrades\`) je iný prípad:
+prestanú sedieť aj offsety polí. Vznikne nový adresár podľa novej verzie jadra
+a validácia sa musí zopakovať celá.
+
+## Čo sa stane, keď sa použije profil z iného bootu
+
+Zmerané 2026-09-19 na snímke z aktuálneho bootu a profile z predchádzajúceho:
+
+- posun jadra sa **nájde** – sken banneru ho nakalibruje, takže časť výstupu
+  vyzerá normálne;
+- krížová kontrola prekladu adries **zlyhá**: lineárny výpočet dá adresu, na
+  ktorej symbol naozaj je, ale prechod tabuliek stránok pre jeho virtuálnu
+  adresu skončí na neprítomnej položke – tabuľky sú indexované skutočnými
+  virtuálnymi adresami tohto bootu, nie tými zo starého \`kallsyms.txt\`;
+- prechod zoznamu procesov sa **neuzavrie** (hlavička zoznamu má starú adresu),
+  výsledok je označený \`NEUPLNE\`.
+
+\`guestparse\` to pomenuje priamo: vypíše \`NESULAD PROFILU\`, povie, na ktorej
+úrovni tabuliek prechod skončil, a skončí **návratovým kódom 5** (chyba vstupu,
+nie neuzavretá kontrola). Platí to pre \`info\` aj pre \`ps\`, \`lsmod\`, \`ss\`,
+\`checks\` a \`validate\`.
+
+Bez hosťa a bez druhej snímky to overuje test
+\`guestparse/tests/test_profile_boot.py\`: profil z iného bootu sa v ňom vyrobí
+posunutím všetkých adries jadra o konštantu – presne to robí KASLR pri štarte.
+
+## Staršie snímky
+
+V repozitári je **jeden adresár na verziu jadra hosťa a v ňom profil
+z posledného štartu** – staré profily sa neodkladajú. Dôsledok treba povedať
+nahlas: snímka odobratá pred reštartom hosťa sa s týmto profilom už rozobrať
+nedá a profil, ktorý k nej patril, sa spätne nevyrobí (KASLR posun toho bootu
+už nikde nie je). Snímka z iného bootu preto potrebuje profil odobratý počas
+toho bootu; ak sa nezachoval, je použiteľná len na to, čo profil nepotrebuje
+(veľkosť, kontrolné súčty, reťazec \`.vmicd\`). Testovacia snímka
+\`guestparse/tests/data/mini.vmicd\` sa z tohto dôvodu vyrába znova vždy spolu
+s profilom.
 EOF
 } > "$OUT/README.md"
 

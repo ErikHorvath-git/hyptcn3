@@ -555,6 +555,27 @@ do_validate()
         || die "zapis $out zlyhal"
     [ -s "$out" ] || die "$out vysiel prazdny - JSON sa neposkladal"
 
+    # Porovnanie rekonstrukcie s pozemnou pravdou. Robi sa TU, lebo podprikaz sa
+    # vola 'validate' - odobrat pozemnu pravdu a porovnanie nechat na pouzivatela
+    # by znamenalo, ze meno prikazu slubuje viac, nez prikaz spravi.
+    # Bezi pod povodnym pouzivatelom: parser root nepotrebuje.
+    # Vlastnictvo vraciame UZ TERAZ: porovnanie bezi pod pouzivatelom a do
+    # adresara, ktory este patri rootovi, by nezapisalo.
+    give_back "$dir"
+
+    prof="${VMIC_PROFILE:-$(ls -d "$REPO"/profiles/*/ 2>/dev/null | head -1)}"
+    if [ -n "$prof" ] && [ -d "$prof" ]; then
+        printf '>> porovnanie so pozemnou pravdou\n' >&2
+        ( cd "$REPO" && as_user python3 -m guestparse validate \
+            --snapshot "$snapdir" --profile "$prof" \
+            --ps-before "$dir/ps_before.txt" --ps-after "$dir/ps_after.txt" \
+            --lsmod "$dir/lsmod_after.txt" --ss "$dir/ss_listen_before.txt" \
+            --out "$dir/porovnanie.json" >&2 ) || \
+            printf 'porovnanie neprebehlo (navratovy kod %d) - pozemna prava aj snimka su ulozene\n' "$?" >&2
+    else
+        printf 'porovnanie sa nespustilo: v %s/profiles/ nie je ziadny profil\n' "$REPO" >&2
+    fi
+
     ( cd "$dir" && find . -type f ! -name SHA256SUMS -print0 | sort -z \
         | xargs -0 sha256sum >SHA256SUMS ) 2>/dev/null
 

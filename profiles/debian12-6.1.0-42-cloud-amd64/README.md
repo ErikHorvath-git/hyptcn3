@@ -1,201 +1,121 @@
-# Profil jadra hosťa: Debian 12, `6.1.0-42-cloud-amd64` (x86_64)
+# Profil jadra hosťa: debian 12, 6.1.0-42-cloud-amd64 (x86_64)
 
-Profil je vstup parsera `guestparse` – hovorí mu, kde v pamäti hosťa hľadať
-(adresy symbolov) a ako sú poskladané štruktúry jadra (offsety polí).
-Bez neho sa zo snímky nedá prečítať nič viac než bajty.
+Tento adresár vygeneroval `scripts/get_profile.sh` dňa 2026-09-19T13:19:15+02:00.
 
 ## Pôvod
 
 | položka | hodnota |
 |---|---|
-| hosť | libvirt doména `hyptcn-guest` (QEMU/KVM, `qemu:///session`), 2 vCPU, 2 GiB |
-| distribúcia | Debian GNU/Linux 12 (bookworm) |
+| cieľ | `root@192.168.122.100` |
+| prenos | ssh |
+| **boot_id hosťa** | `82b778a3-89f8-4b04-b518-5db8ebeb4ab4` |
+| **hosť naštartovaný** | 2026-09-19 10:30:31 |
 | jadro hosťa | `6.1.0-42-cloud-amd64` |
-| `/proc/version` | `Linux version 6.1.0-42-cloud-amd64 (debian-kernel@lists.debian.org) (gcc-12 (Debian 12.2.0-14+deb12u1) 12.2.0, GNU ld (GNU Binutils for Debian) 2.40) #1 SMP PREEMPT_DYNAMIC Debian 6.1.159-1 (2025-12-30)` |
-| odobraté | 2026-09-18, `kallsyms.txt` a `btf.raw` o 16:34, `btf.txt` o 16:35 (miestny čas, +02:00) |
-| kanál | `ssh -o BatchMode=yes root@192.168.122.100` (v hosťovi `kernel.kptr_restrict = 0`) |
-| výpis BTF urobený na | hostiteľovi (Fedora 43, jadro `7.1.13-100.fc43.x86_64`), `bpftool v7.6.0` |
+| `/proc/version` hosťa | `Linux version 6.1.0-42-cloud-amd64 (debian-kernel@lists.debian.org) (gcc-12 (Debian 12.2.0-14+deb12u1) 12.2.0, GNU ld (GNU Binutils for Debian) 2.40) #1 SMP PREEMPT_DYNAMIC Debian 6.1.159-1 (2025-12-30)` |
+| jadro hostiteľa | `7.1.13-100.fc43.x86_64` |
+| bpftool na hostiteľovi | bpftool v7.6.0 |
 
-Príkazy, ktorými sa profil získava:
+Príkazy, ktorými súbory vznikli:
 
 ```
-ssh -o BatchMode=yes root@192.168.122.100 cat /proc/kallsyms          > kallsyms.txt
-ssh -o BatchMode=yes root@192.168.122.100 cat /sys/kernel/btf/vmlinux > btf.raw
-bpftool btf dump file btf.raw format raw                              > btf.txt
+ssh -o BatchMode=yes root@192.168.122.100 cat /proc/kallsyms            > kallsyms.txt
+ssh -o BatchMode=yes root@192.168.122.100 cat /sys/kernel/btf/vmlinux   > btf.raw
+bpftool btf dump file btf.raw format raw                  > btf.txt
 ```
-
-Samotný odber o 16:34 urobil skorší krok tejto práce a jeho príkazový riadok
-nebol zapísaný. Tieto tri príkazy sú overené spätne: o 17:37 zopakované nad tým
-istým hosťom dali bajt po bajte rovnaké `btf.raw` aj `btf.txt` a rovnakú množinu
-symbolov vmlinux (podrobne v časti „Overenie“ nižšie). Preto sa uvádzajú ako
-príkazy, ktorými sa tento profil reprodukuje.
-
-Výpis BTF sa robí **na hostiteľovi**, nie v hosťovi: Debian cloud image `bpftool`
-nemá a do hosťa sa kvôli profilu nič neinštaluje. Z hosťa sa berie iba obsah
-dvoch súborov.
-
-Tieto tri príkazy sú zabalené v `scripts/get_profile.sh` (ten vie okrem `ssh`
-použiť aj `qemu-guest-agent`, keď v hosťovi nie je SSH).
 
 ## Súbory
 
-| súbor | veľkosť | obsah |
+| súbor | riadkov / bajtov | obsah |
 |---|---|---|
-| `kallsyms.txt` | 4 231 263 B, 98 713 riadkov | kópia `/proc/kallsyms` hosťa – adresy symbolov |
-| `btf.raw` | 4 104 445 B | kópia `/sys/kernel/btf/vmlinux` hosťa – binárne BTF |
-| `btf.txt` | 9 049 370 B, 223 941 riadkov | výpis BTF (`bpftool ... format raw`), z neho sa čítajú offsety polí |
-
-SHA-256:
-
-```
-2dd95254496d2adedfb44f31048e0cf711cc9a98ca6088febd78d40b8dac5847  kallsyms.txt
-7d68818a28c8089b929918b10d7cc2da82b7ee169330d97d44dbd9a199f77ac3  btf.raw
-5d296517137d1435f7084655798ee67d30b642cb62f532376249d3d8698c92c8  btf.txt
-```
-
-`btf.txt` je odvodený súbor – dá sa kedykoľvek vyrobiť z `btf.raw` jedným
-príkazom. V repe je preto, aby sa parser dal spustiť aj tam, kde `bpftool` nie je.
-Ak by 8,6 MiB v histórii repozitára prekážalo, `btf.txt` je jediný z týchto troch
-súborov, ktorý sa dá vypustiť bez straty informácie; `btf.raw` a `kallsyms.txt`
-vypustiť nemožno, tie sa už nedajú znova získať inak než z hosťa (a po reštarte
-hosťa by vyšli iné, viď nižšie).
-
-Koreňový `.gitignore` vylučuje `*.raw`, čo by ticho vynechalo aj `btf.raw`.
-Preto je v `profiles/.gitignore` výnimka `!btf.raw`.
+| `kallsyms.txt` | 98695 riadkov | adresy symbolov bežiaceho jadra hosťa – **platia iba pre boot `82b778a3-89f8-4b04-b518-5db8ebeb4ab4`** |
+| `btf.raw` | 4104445 B | binárne BTF z `/sys/kernel/btf/vmlinux` – viazané na verziu jadra, nie na boot |
+| `btf.txt` | 223941 riadkov | výpis BTF, z neho parser číta offsety polí |
+| `boot.json` | – | `boot_id`, dátum odberu a verzia jadra; číta ho `guestparse` a vypisuje v `info` |
 
 ## Kľúčové symboly, ktoré parser číta
 
-Adresy sú z `kallsyms.txt` v tomto adresári.
-
-| symbol | adresa | na čo ju parser potrebuje |
+| symbol | adresa | na čo |
 |---|---|---|
-| `linux_banner` | `0xffffffff9711f560` | kotva na určenie posunu obrazu jadra: reťazec sa nájde skenovaním snímky a z rozdielu voči tejto adrese vyjde posun (KASLR) |
-| `init_task` | `0xffffffff97a1aa40` | začiatok zoznamu procesov (`init_task.tasks`) a kontrola posunu (`comm == "swapper/0"`) |
-| `modules` | `0xffffffff97b273a0` | hlavička zoznamu načítaných modulov |
-| `page_offset_base` | `0xffffffff97395ce0` | odtiaľ sa **z pamäte** prečíta začiatok priameho mapovania (pri KASLR je iný pri každom štarte) |
-| `init_top_pgt` | `0xffffffff97a10000` | koreň tabuliek stránok jadra – nutný pre oblasť modulov (`0xffffffffc0000000+`), ktorá lineárne mapovaná nie je |
-| `socket_file_ops` | `0xffffffff970f6920` | deskriptor je socket vtedy, keď `file->f_op` ukazuje sem |
-| `tcp_prot` | `0xffffffff97bed8a0` | protokol socketu podľa `skc_prot`, nie podľa heuristiky |
-| `udp_prot` | `0xffffffff97bee060` | to isté pre UDP |
-| `tcpv6_prot` | `0xffffffff97bf4a20` | to isté pre TCP nad IPv6 (bez toho sa protokol IPv6 socketov reportuje ako „?“) |
-| `udpv6_prot` | `0xffffffff97bf3ec0` | to isté pre UDP nad IPv6 |
-| `_stext` | `0xffffffff96000000` | dolná hranica textu jadra pre kontrolu `sys_call_table` |
-| `_etext` | `0xffffffff96e01ef2` | horná hranica textu jadra |
-| `sys_call_table` | `0xffffffff97000360` | tabuľka, ktorej integrita sa kontroluje (handler mimo `[_stext, _etext)`) |
+| `linux_banner` | 0xffffffffb191f560 | kotva pre určenie posunu obrazu jadra (KASLR) |
+| `init_task` | 0xffffffffb221aa40 | začiatok zoznamu procesov, kontrola posunu (`comm == swapper/0`) |
+| `modules` | 0xffffffffb23273a0 | hlavička zoznamu načítaných modulov |
+| `page_offset_base` | 0xffffffffb1b95ce0 | odtiaľ sa číta začiatok priameho mapovania |
+| `init_top_pgt` | 0xffffffffb2210000 | koreň tabuliek stránok pre oblasti mimo lineárnych vetiev |
+| `socket_file_ops` | 0xffffffffb18f6920 | rozpoznanie deskriptora, ktorý je socket |
+| `tcp_prot` | 0xffffffffb23ed8a0 | určenie protokolu podľa `skc_prot` |
+| `udp_prot` | 0xffffffffb23ee060 | to isté pre UDP |
+| `tcpv6_prot` | 0xffffffffb23f4a20 | to isté pre TCP nad IPv6 |
+| `udpv6_prot` | 0xffffffffb23f3ec0 | to isté pre UDP nad IPv6 |
+| `_stext` | 0xffffffffb0800000 | dolná hranica textu jadra |
+| `_etext` | 0xffffffffb1601ef2 | horná hranica textu jadra |
+| `sys_call_table` | 0xffffffffb1800360 | tabuľka, ktorej integrita sa kontroluje |
 
-Z `btf.txt` sa čítajú offsety polí. Pre toto jadro napríklad
-`task_struct.tasks = 2192`, `task_struct.comm = 2976`, `task_struct.pid = 2416`,
-`module.list = 8`, `module.name = 24` (overené behom parsera, viď nižšie).
-Offsety nie sú v kóde zadrátované – berú sa z BTF toho jadra, ktoré v hosťovi beží.
+Tieto adresy platia **iba pre boot `82b778a3-89f8-4b04-b518-5db8ebeb4ab4`** (hosť naštartovaný 2026-09-19 10:30:31).
 
-## Poctivo o tom, čo tento adresár znamená
+## Poctivo o tom, čo to znamená
 
-Profil je **jednorazová vstupná závislosť získaná z hosťa** – presne ako profil
-pri LibVMI alebo pri Volatility. Nejde teda o rekonštrukciu „bez akejkoľvek
-znalosti hosťa“: adresy aj offsety pochádzajú z bežiaceho hosťa a boli odobraté
-raz, mimo behu zberu. Rozsah tejto závislosti je ale ohraničený:
+Profil je **jednorazová vstupná závislosť získaná z hosťa** – rovnako ako profil
+pri LibVMI alebo Volatility. Nejde teda o rekonštrukciu „bez akejkoľvek znalosti
+hosťa“: adresy symbolov a offsety polí pochádzajú z bežiaceho hosťa a boli
+odobraté raz, mimo behu zberu. Samotný zber snímok ani parsovanie už do hosťa
+nesiahajú.
 
-- profil sa berie **raz na verziu jadra**, nie pri každej snímke;
-- samotný zber snímok (`vmicollect`) ani parsovanie do hosťa nesiahajú;
-- v hosťovi nemá bežať žiadny bezpečnostný agent – `ssh` aj `qemu-guest-agent`
-  sa používajú iba na odobratie profilu a na pozemnú pravdu pri validácii,
-  a to je v práci priznané.
+## Profil je viazaný na jeden štart hosťa
 
-**Výhrada k času odberu tohto profilu.** Keď sa profil o 16:34 bral, v hosťovi
-ešte bežal bezpečnostný agent staršieho projektu `hypTcn002`
-(`hyptcn-guest-agent.service`, proces `hyptcn_guest_ag`, pid 376); zastavený bol
-až o 15:29:20Z, teda takmer hodinu po odbere. Časová os a doklad zo žurnálu hosťa
-sú v `docs/MERANIA.md`. Na obsah profilu to nemá vplyv, čo je overené opakovaným
-odberom **po** zastavení agenta (2026-09-18, 16:33Z a 16:42Z):
+| časť profilu | na čo je viazaná | prežije reštart? |
+|---|---|---|
+| `kallsyms.txt` (adresy symbolov) | konkrétny **štart** jadra – KASLR posunie obraz jadra pri každom bootnutí | **nie** |
+| `btf.raw`, `btf.txt` (offsety polí štruktúr) | **verziu a konfiguráciu** jadra | áno |
+| `boot.json` | zapisuje `boot_id` a dátum odberu, aby sa nesúlad dal zistiť porovnaním | – |
+
+Preto po každom reštarte hosťa:
 
 ```sh
-ssh -o BatchMode=yes root@192.168.122.100 cat /sys/kernel/btf/vmlinux > btf_now.raw
-cmp profiles/debian12-6.1.0-42-cloud-amd64/btf.raw btf_now.raw   # bez rozdielu, rc=0
-# sha256 oboch: 7d68818a28c8089b929918b10d7cc2da82b7ee169330d97d44dbd9a199f77ac3
-
-grep -vc ']$' profiles/debian12-6.1.0-42-cloud-amd64/kallsyms.txt   # 87143
-grep -vc ']$' kallsyms_now.txt                                      # 87143
+scripts/get_profile.sh -f root@192.168.122.100     # -f: prepíše profil z predchádzajúceho bootu
 ```
 
-`btf.raw` je teda bajt po bajte zhodný (a `btf.txt` je z neho odvodený jedným
-príkazom `bpftool`), `kallsyms.txt` má rovnakú množinu symbolov vmlinux
-a všetkých 13 kľúčových symbolov z tabuľky vyššie má rovnaké adresy. Menia sa
-iba dynamické symboly modulov a JIT-ovaných BPF programov, z ktorých parser
-nečíta nič.
-
-## Čo sa stane po reštarte hosťa
-
-- **Reštart toho istého jadra.** KASLR zvolí iný posun, takže absolútne adresy
-  v `kallsyms.txt` už nebudú sedieť s pamäťou. Parser posun dopočítava z polohy
-  `linux_banner` nájdenej v snímke a používa iba rozdiely medzi symbolmi, ktoré
-  sa v rámci rovnakého obrazu jadra nemenia. Toto je vlastnosť kódu, nie zmeraný
-  výsledok – po reštarte treba validáciu zopakovať a výsledok zapísať.
-- **Reštart do iného jadra** (v hosťovi je v `/lib/modules` už aj `6.1.0-43`).
-  Profil prestane sedieť úplne: iné adresy aj iné offsety polí. Parser v lepšom
-  prípade nenájde banner a skončí, v horšom prečíta nezmysly. Vtedy treba
-  spustiť `scripts/get_profile.sh <cieľ>`, ktorý vyrobí nový adresár
-  `profiles/debian12-<nová verzia>/`, a **zopakovať celú validáciu** – čísla
-  namerané so starým profilom pre nové jadro neplatia.
-
-Preto je hosť na čas meraní zmrazený (`unattended-upgrades` zamaskované, jadro
-pinnuté) a verzia jadra sa zapisuje do každého záznamu merania.
-
-## Overenie tohto profilu (2026-09-18)
-
-1. **Reprodukovateľnosť odberu.** `scripts/get_profile.sh` spustený o 17:37
-   (`ssh`) a 17:38 (`qemu-guest-agent`) nad tým istým hosťom dal:
-   - `btf.raw` a `btf.txt` **bajt po bajte zhodné** so súbormi v tomto adresári
-     (`cmp` bez rozdielu);
-   - `kallsyms.txt` s **identickou množinou symbolov vmlinux** (87 143 riadkov
-     bez prípony `[modul]`, `diff` prázdny) a s identickými adresami všetkých
-     13 kľúčových symbolov z tabuľky vyššie;
-   - navyše riadky symbolov diagnostických modulov a rozdiel v symboloch
-     JIT-ovaných BPF programov. Rozpis nižšie **nie je** z tohto behu, ale
-     z opakovaného odberu o 16:33Z (príkaz za týmto zoznamom): navyše 128
-     riadkov symbolov **štyroch** diagnostických modulov (`inet_diag` 80,
-     `udp_diag` 19, `tcp_diag` 17, `raw_diag` 12) a rozdiel v 40 riadkoch so
-     symbolmi JIT-ovaných BPF programov (29 zaniklo, 11 pribudlo; sú to
-     programy systemd – `sd_fw_ingress`, `sd_fw_egress`, `sd_devices`).
-     Symboly modulov a JIT-ovaných BPF programov sú dynamické; parser z nich
-     nečíta nič.
-   - Oba prenosy (`ssh` aj `qemu-guest-agent`) dali navzájom bajt po bajte
-     zhodné súbory.
-
-   Skoršia verzia tohto súboru tu uvádzala 116 riadkov a menovala iba tri
-   diagnostické moduly – vynechala `raw_diag` (12 riadkov), a tvrdila, že hosť
-   dnes hlási 50 modulov. Obidve čísla sú opravené podľa behu z 2026-09-18,
-   16:33Z:
+Rýchla kontrola bez spúšťania parsera – `boot_id` v `boot.json` sa musí
+zhodovať s hosťom:
 
 ```sh
-ssh -o BatchMode=yes root@192.168.122.100 cat /proc/kallsyms > kallsyms_now.txt
-diff <(sort profiles/debian12-6.1.0-42-cloud-amd64/kallsyms.txt) <(sort kallsyms_now.txt) \
-  | grep '^>' | grep -oP '\[[a-z0-9_]+\]$' | sort | uniq -c | sort -rn
-#      80 [inet_diag]
-#      19 [udp_diag]
-#      17 [tcp_diag]
-#      12 [raw_diag]
-#      11 [bpf]
-
-ssh -o BatchMode=yes root@192.168.122.100 'lsmod | tail -n +2 | wc -l'
-# 51
-ssh -o BatchMode=yes root@192.168.122.100 'lsmod | grep -c diag'
-# 4
+python3 -c 'import json;print(json.load(open("boot.json"))["boot_id"])'
+ssh root@192.168.122.100 cat /proc/sys/kernel/random/boot_id
 ```
 
-   Hosť teda hlási **51** modulov, nie 50: profil pozná 47 a k nim pribudli
-   štyri diagnostické moduly (47 + 4 = 51). Do hosťa ich zaviedol až príkaz
-   `ss`, ktorým sa brala pozemná pravda – v `kallsyms.txt` v tomto adresári
-   (odber o 16:34 miestneho času) nie je ani jeden ich symbol. Tých istých 51
-   modulov je uložených aj v repe, v pozemnej pravde validačnej relácie:
-   `data/sessions/20260918T154914Z_validate/lsmod_before.txt` (51 riadkov,
-   z toho 4 diagnostické).
-2. **Použiteľnosť profilu z repa.** Prototyp parsera spustený s **týmito**
-   súbormi nad snímkou `/var/tmp/vmic-val/hyptcn-guest_000000_20260918T143954722Z.vmicd`:
-   posun obrazu jadra `-0x200000`, `page_offset_base = 0xffff99c940000000`,
-   82 procesov, 47 modulov, krížová kontrola prekladu adries
-   (lineárny výpočet vs. prechod tabuliek stránok) `linux_banner`
-   `0x16f1f560 = 0x16f1f560` a `init_task` `0x1781aa40 = 0x1781aa40`.
-   Celé spustenie trvalo 0,6 s.
+Reštart do **inej verzie jadra** (napr. po `unattended-upgrades`) je iný prípad:
+prestanú sedieť aj offsety polí. Vznikne nový adresár podľa novej verzie jadra
+a validácia sa musí zopakovať celá.
 
-Porovnanie zoznamu procesov a modulov s pozemnou pravdou z hosťa sem nepatrí –
-to je predmet validačného kroku a jeho výsledok je v `data/results/`.
+## Čo sa stane, keď sa použije profil z iného bootu
+
+Zmerané 2026-09-19 na snímke z aktuálneho bootu a profile z predchádzajúceho:
+
+- posun jadra sa **nájde** – sken banneru ho nakalibruje, takže časť výstupu
+  vyzerá normálne;
+- krížová kontrola prekladu adries **zlyhá**: lineárny výpočet dá adresu, na
+  ktorej symbol naozaj je, ale prechod tabuliek stránok pre jeho virtuálnu
+  adresu skončí na neprítomnej položke – tabuľky sú indexované skutočnými
+  virtuálnymi adresami tohto bootu, nie tými zo starého `kallsyms.txt`;
+- prechod zoznamu procesov sa **neuzavrie** (hlavička zoznamu má starú adresu),
+  výsledok je označený `NEUPLNE`.
+
+`guestparse` to pomenuje priamo: vypíše `NESULAD PROFILU`, povie, na ktorej
+úrovni tabuliek prechod skončil, a skončí **návratovým kódom 5** (chyba vstupu,
+nie neuzavretá kontrola). Platí to pre `info` aj pre `ps`, `lsmod`, `ss`,
+`checks` a `validate`.
+
+Bez hosťa a bez druhej snímky to overuje test
+`guestparse/tests/test_profile_boot.py`: profil z iného bootu sa v ňom vyrobí
+posunutím všetkých adries jadra o konštantu – presne to robí KASLR pri štarte.
+
+## Staršie snímky
+
+V repozitári je **jeden adresár na verziu jadra hosťa a v ňom profil
+z posledného štartu** – staré profily sa neodkladajú. Dôsledok treba povedať
+nahlas: snímka odobratá pred reštartom hosťa sa s týmto profilom už rozobrať
+nedá a profil, ktorý k nej patril, sa spätne nevyrobí (KASLR posun toho bootu
+už nikde nie je). Snímka z iného bootu preto potrebuje profil odobratý počas
+toho bootu; ak sa nezachoval, je použiteľná len na to, čo profil nepotrebuje
+(veľkosť, kontrolné súčty, reťazec `.vmicd`). Testovacia snímka
+`guestparse/tests/data/mini.vmicd` sa z tohto dôvodu vyrába znova vždy spolu
+s profilom.

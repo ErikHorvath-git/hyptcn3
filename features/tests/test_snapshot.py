@@ -70,10 +70,10 @@ def test_entropia_rozdelenia_kraje():
 
 
 def test_mena_su_kontrakt():
-    """Dvadsat priznakov + priznak o predchodcovi, mena sa neopakuju."""
-    assert len(MENA) == 21
-    assert len(set(MENA)) == 21
-    assert MENA[-1] == "ma_predchodcu"
+    """Dvadsat priznakov + dva priznaky o riadku, mena sa neopakuju."""
+    assert len(MENA) == 22
+    assert len(set(MENA)) == 22
+    assert MENA[-2:] == ("ma_predchodcu", "je_plna")
     assert MENA[:8] == ("mem_changed_ratio", "mem_bins_active",
                         "mem_changed_max", "mem_changed_p95",
                         "mem_changed_spread", "mem_entropy_mean",
@@ -216,6 +216,40 @@ def test_prva_snimka_nema_predchodcu(vysledok):
         assert vysledok["matica"][0][MENA.index(meno)] == 0.0
     for riadok in vysledok["matica"][1:]:
         assert riadok[i] == 1.0
+
+
+def test_je_plna_sedi_s_hlavickami_retazca(realny, vysledok):
+    """Priznak je_plna sa berie z hlavicky .vmicd, nie z poradia v retazci.
+
+    Pri output.delta_full_every pride plna snimka aj uprostred sedenia, takze
+    "prva v retazci" by bolo zle kriterium.
+    """
+    i = MENA.index("je_plna")
+    plne = [1.0 if h["full"] else 0.0 for h in _chain_parts(realny)]
+    assert [r[i] for r in vysledok["matica"]] == plne
+    assert plne[0] == 1.0
+
+
+def test_v_plnej_snimke_je_zmena_doplnkom_nuloveho_podielu(vysledok):
+    """Dokaz, preco plna snimka potrebuje vlastny priznak.
+
+    Delta writer zapise do plnej snimky vsetky NENULOVE stranky, takze
+    pages_changed je ich pocet a mem_changed_ratio vyjde presne
+    1 - mem_zero_ratio. V delta riadku take nieco neplati - a ked by sa obe
+    dostali do jedneho okna, model by dostal dve rozne veliciny v jednom
+    stlpci.
+    """
+    i_plna = MENA.index("je_plna")
+    i_zmena = MENA.index("mem_changed_ratio")
+    i_nula = MENA.index("mem_zero_ratio")
+    plne = [r for r in vysledok["matica"] if r[i_plna] == 1.0]
+    delty = [r for r in vysledok["matica"] if r[i_plna] == 0.0]
+    assert plne, "retazec nema plnu snimku"
+    for r in plne:
+        assert r[i_zmena] + r[i_nula] == pytest.approx(1.0, abs=1e-9)
+    assert delty, "retazec nema delta snimku"
+    for r in delty:
+        assert r[i_zmena] + r[i_nula] != pytest.approx(1.0, abs=1e-6)
 
 
 def test_proc_new_a_gone_sedia_na_rucny_rozdiel(realny, vysledok):

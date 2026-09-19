@@ -66,6 +66,11 @@ class Recorder:
         self.page_size = img.page_size
         self.memsize = img.memsize
         self.paths = img.paths
+        # Mapa zozbieranych stranok sa podava dalej: parser sa jej pyta, ci
+        # stranka v snimke JE (rozlisenie "prazdna polozka" vs. "nezbierali
+        # sme to"). Citanie cez nu neprechadza, takze vyber stranok to
+        # nerozsiruje.
+        self.index = getattr(img, "index", None)
 
     def read(self, pa, n):
         if pa is not None and pa >= 0 and n > 0:

@@ -1,11 +1,11 @@
 {
-  "command": "python3 -m tcn.train --syn --rezim poradie --out data/results/tcn_syn_20260919_poradie.json",
+  "command": "python3 -m tcn.train --syn --rezim poradie --out data/results/smoke/tcn_syn_20260919_poradie.json",
   "commit": "29bd0babc1ffa5d2e54645aa7714d46fef13ccfb",
   "date": "2026-09-19",
   "guest": null,
   "host": "fedora",
   "n": 96,
-  "provenance_note": "beh nad syntetickymi datami; guest je null, lebo ziadna snimka hosta v nom nie je",
+  "provenance_note": "beh nad syntetickymi datami; guest je null, lebo ziadna snimka hosta v nom nie je. NIE JE TO DETEKCIA: metriky v tomto subore su vysledkom behu nad datami, ktore vyrobil generator v tcn/train.py (--syn), nie nad snimkami pamate hosta. Triedy su oddelitelne uz z konstrukcie generatora, preto su vsetky metriky 1.0. Subor overuje, ze cesta dat a trening bezia - nic viac. Do textu prace nepatri; ak sa tam objavi, je to nalez (HONESTY.md P4). Presunute do data/results/smoke/ 2026-09-19 prave preto, aby to bolo vidiet z cesty.",
   "values": {
     "dlzka_okna": 16,
     "fit_sessions": [
