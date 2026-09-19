@@ -1,0 +1,42 @@
+{
+  "schema": "hyptcn3/once/1",
+  "date": "2026-09-19T00:44:35Z",
+  "date_unix": 1789778675,
+  "commit": "07bbd47a6841555c89a157553482c83395fa8e33",
+  "commit_dirty": true,
+  "domain": "hyptcn-guest",
+  "libvirt_uri": "qemu:///session",
+  "command": "/home/eh/Desktop/hyptcn3/vmicollect/build/vmicollect once -o vm.domain=hyptcn-guest -o output.writer=delta -o output.hash=sha256 -o output.dir=/home/eh/Desktop/hyptcn3/data/raw/estabtest",
+  "n": 1,
+  "binary": {
+    "path": "/home/eh/Desktop/hyptcn3/vmicollect/build/vmicollect",
+    "version": "vmicollect 1.0.0",
+    "sha256": "25f1d3e61905574a55f00880c455f56eddb4ea811cac7375129b4b8030ddd129"
+  },
+  "host": {
+    "hostname": "fedora",
+    "kernel": "7.1.13-100.fc43.x86_64",
+    "cpus": 16
+  },
+  "guest": {
+    "domain": "hyptcn-guest",
+    "kernel": "6.1.0-42-cloud-amd64"
+  },
+  "exit_code": 0,
+  "snapshot_dir": "/home/eh/Desktop/hyptcn3/data/raw/estabtest",
+  "params": {
+    "writer": "delta",
+    "hash": "sha256",
+    "interval_s": 5.0,
+    "max_cycles": 6,
+    "delta_full_every": null
+  },
+  "summary": {
+    "cycles_done": 1,
+    "cycles_failed": 0,
+    "cycles_skipped": 0,
+    "worst_lateness_s": 0.000
+  },
+  "stdout": "",
+  "stderr": "2026-09-19T00:44:30.742Z WARN  libbpf: Error in bpf_create_map_xattr(pages): -EINVAL. Retrying without BTF.\n2026-09-19T00:44:32.075Z INFO  ebpf: 'hyptcn-guest' (pid 1353046): 10 memslotov, 2.02 GiB pamate, max GPA 0x100000000\n2026-09-19T00:44:32.076Z WARN  ebpf: 4.00 KiB pamate hosta nie je anonymna (/dev/zero (deleted)) - citanie stranky, ktorej sa host este nedotkol, ju hostitelovi NAOZAJ alokuje\n2026-09-19T00:44:32.076Z WARN  ebpf: pri takejto VM zbieraj radsej konkretne oblasti (capture.regions), nech nenafuknes jej pamat na plnu velkost\n2026-09-19T00:44:32.076Z INFO  VM 'hyptcn-guest' [ebpf/kvm]: RAM 2.02 GiB, max_paddr 0x100000000, vCPU 2, strankovanie n/a\n2026-09-19T00:44:32.076Z INFO  zbierane oblasti: 5, spolu 2.02 GiB\n2026-09-19T00:44:32.076Z INFO  zacinam zber: perioda 5.000 s, writer 'delta', vystup '/home/eh/Desktop/hyptcn3/data/raw/estabtest'\n2026-09-19T00:44:35.100Z INFO  #0 PLNA   548.46 MiB/4.00 GiB  stranky 140131/528417 (26.52 %)  pauza 0.0 ms  citanie 1696.5 ms  spolu 3023.4 ms\n2026-09-19T00:44:35.100Z INFO  koniec: 1 snimok, 0 chyb, 0 zmeskanych slotov, najvacsie meskanie 0.000 s, spolu 548.46 MiB\n"
+}

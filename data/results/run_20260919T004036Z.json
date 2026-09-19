@@ -1,0 +1,42 @@
+{
+  "schema": "hyptcn3/run/1",
+  "date": "2026-09-19T00:41:03Z",
+  "date_unix": 1789778463,
+  "commit": "07bbd47a6841555c89a157553482c83395fa8e33",
+  "commit_dirty": true,
+  "domain": "hyptcn-guest",
+  "libvirt_uri": "qemu:///session",
+  "command": "/home/eh/Desktop/hyptcn3/vmicollect/build/vmicollect run -o vm.domain=hyptcn-guest -o output.writer=delta -o output.hash=sha256 -o output.dir=/home/eh/Desktop/hyptcn3/data/raw/20260919T004036Z_run -o schedule.interval_s=5 -o schedule.max_cycles=6",
+  "n": 1,
+  "binary": {
+    "path": "/home/eh/Desktop/hyptcn3/vmicollect/build/vmicollect",
+    "version": "vmicollect 1.0.0",
+    "sha256": "25f1d3e61905574a55f00880c455f56eddb4ea811cac7375129b4b8030ddd129"
+  },
+  "host": {
+    "hostname": "fedora",
+    "kernel": "7.1.13-100.fc43.x86_64",
+    "cpus": 16
+  },
+  "guest": {
+    "domain": "hyptcn-guest",
+    "kernel": "6.1.0-42-cloud-amd64"
+  },
+  "exit_code": 0,
+  "snapshot_dir": "/home/eh/Desktop/hyptcn3/data/raw/20260919T004036Z_run",
+  "params": {
+    "writer": "delta",
+    "hash": "sha256",
+    "interval_s": 5,
+    "max_cycles": 6,
+    "delta_full_every": null
+  },
+  "summary": {
+    "cycles_done": 6,
+    "cycles_failed": 0,
+    "cycles_skipped": 0,
+    "worst_lateness_s": 0.000
+  },
+  "stdout": "",
+  "stderr": "2026-09-19T00:40:36.261Z WARN  libbpf: Error in bpf_create_map_xattr(pages): -EINVAL. Retrying without BTF.\n2026-09-19T00:40:37.552Z INFO  ebpf: 'hyptcn-guest' (pid 1353046): 10 memslotov, 2.02 GiB pamate, max GPA 0x100000000\n2026-09-19T00:40:37.553Z WARN  ebpf: 4.00 KiB pamate hosta nie je anonymna (/dev/zero (deleted)) - citanie stranky, ktorej sa host este nedotkol, ju hostitelovi NAOZAJ alokuje\n2026-09-19T00:40:37.553Z WARN  ebpf: pri takejto VM zbieraj radsej konkretne oblasti (capture.regions), nech nenafuknes jej pamat na plnu velkost\n2026-09-19T00:40:37.553Z INFO  VM 'hyptcn-guest' [ebpf/kvm]: RAM 2.02 GiB, max_paddr 0x100000000, vCPU 2, strankovanie n/a\n2026-09-19T00:40:37.553Z INFO  zbierane oblasti: 5, spolu 2.02 GiB\n2026-09-19T00:40:37.553Z INFO  zacinam zber: perioda 5.000 s, writer 'delta', vystup '/home/eh/Desktop/hyptcn3/data/raw/20260919T004036Z_run'\n2026-09-19T00:40:39.901Z INFO  #0 PLNA   548.56 MiB/4.00 GiB  stranky 140157/528417 (26.52 %)  pauza 0.0 ms  citanie 1886.8 ms  spolu 2348.0 ms\n2026-09-19T00:40:43.325Z INFO  #1 delta  10.75 MiB/4.00 GiB  stranky 2745/528417 (0.52 %)  pauza 0.0 ms  citanie 756.1 ms  spolu 771.0 ms\n2026-09-19T00:40:48.200Z INFO  #2 delta  1.34 MiB/4.00 GiB  stranky 343/528417 (0.06 %)  pauza 0.0 ms  citanie 642.2 ms  spolu 646.4 ms\n2026-09-19T00:40:53.190Z INFO  #3 delta  1.80 MiB/4.00 GiB  stranky 460/528417 (0.09 %)  pauza 0.0 ms  citanie 627.3 ms  spolu 636.2 ms\n2026-09-19T00:40:58.230Z INFO  #4 delta  1.07 MiB/4.00 GiB  stranky 272/528417 (0.05 %)  pauza 0.0 ms  citanie 670.4 ms  spolu 676.9 ms\n2026-09-19T00:41:03.205Z INFO  #5 delta  944.00 KiB/4.00 GiB  stranky 235/528417 (0.04 %)  pauza 0.0 ms  citanie 643.1 ms  spolu 651.7 ms\n2026-09-19T00:41:03.205Z INFO  koniec: 6 snimok, 0 chyb, 0 zmeskanych slotov, najvacsie meskanie 0.000 s, spolu 564.44 MiB\n"
+}

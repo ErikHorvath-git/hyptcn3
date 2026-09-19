@@ -558,6 +558,36 @@ pamäte za behu je v kóde ošetrené podpisom oblastí, ale nebolo odskúšané
 
 ---
 
+## L14 — Procesy, moduly a sokety do príznakového vektora nevstupujú
+
+Zadanie žiada „extrakciu príznakov z RAM vrátane procesných informácií, analýzy načítaných
+modulov, monitorovania sieťových spojení, detekcie podozrivých vzorcov v pamäti
+a štatistických charakteristík pamäťových oblastí". Tieto dve časti sú dnes v repozitári
+oddelené a nestretávajú sa:
+
+- `guestparse` rekonštruuje **procesy, moduly a sokety** a porovnáva ich s pozemnou pravdou.
+  Výstup je zoznam objektov, nie vektor čísel, a nikam ďalej nejde.
+- `perbin.c` počíta **príznakový vektor**, ktorý má na bin štyri hodnoty plus príznak:
+  `pages_changed`, `changed_ratio`, `zero_ratio`, `entropy_mean`, `has_changed`. Sú to
+  výhradne štatistiky pamäťových blokov. Ani jedno číslo o procesoch, moduloch ani
+  spojeniach v ňom nie je.
+
+Model, ktorý na tento vektor nadviaže, teda o procesoch hosťa nevie nič. Veta zo zadania
+je splnená v časti „extrakcia", nie v časti „príznaky pre model".
+
+**Formulácia do textu práce:** „Rekonštrukcia objektov hosťa a príznakový vektor pre model
+sú v tejto verzii dva oddelené výstupy. Príznakový vektor obsahuje štatistické
+charakteristiky pamäťových oblastí; procesné, modulové a sieťové informácie sa
+rekonštruujú a validujú, ale do vstupu modelu nevstupujú."
+
+**Čo by to znamenalo odstrániť:** doplniť per-proces alebo agregované príznaky
+(počet procesov, počet jadrových vlákien, počet a stav soketov, zmeny v zozname modulov)
+ako ďalšie zložky časového kroku. Je to návrhové rozhodnutie fázy F3, nie oprava chyby —
+a súvisí s otvorenou otázkou vo `features/windows.py`, ako spraviť model nezávislým
+od počtu binov.
+
+---
+
 ## Ako sa tento zoznam udržiava
 
 Limitácia sa z tohto súboru neodstraňuje, kým nezmizne z kódu. Keď sa odstráni, pridá sa

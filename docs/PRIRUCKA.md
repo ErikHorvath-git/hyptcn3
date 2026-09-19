@@ -203,7 +203,7 @@ malvérovým vzorkám sa merať nebude: vzorky nie sú k dispozícii, nahrádzaj
 scenármi. Pri načítaní BPF programu sa objaví nefatálne `libbpf: Error in bpf_create_map_xattr(pages): -EINVAL. Retrying without BTF.` — zber funguje,
 príčina zistená nebola.
 
-Ostatné obmedzenia vlastní `docs/LIMITACIE.md` (L1 až L13); prerozprávať ich tu by
+Ostatné obmedzenia vlastní `docs/LIMITACIE.md` (L1 až L14); prerozprávať ich tu by
 znamenalo držať dve znenia toho istého. Nadpisy sú preto dosadené z neho, skrátené:
 
 - **L1** — Živá snímka: VM sa nezastavuje
@@ -219,6 +219,7 @@ znamenalo držať dve znenia toho istého. Nadpisy sú preto dosadené z neho, s
 - **L11** — Jeden výstupný adresár na jeden zberač
 - **L12** — Čo ešte nie je zmerané
 - **L13** — Príznakový vektor: čo o ňom treba vedieť pred tým, než sa na…
+- **L14** — Procesy, moduly a sokety do príznakového vektora nevstupujú
 
 ## 9. Kam ďalej
 
@@ -228,7 +229,7 @@ Každý typ faktu má jeden dokument, ktorý ho vlastní; keď si odporujú, pla
 |---|---|---|
 | `docs/ARCHITEKTURA.md` | rozhrania, formát `.vmicd` a sidecaru, tok dát podrobne | 1042 |
 | `docs/MERANIA.md` | log meraní: čo, kedy, akým príkazom a s akým výsledkom | 705 |
-| `docs/LIMITACIE.md` | L1 až L13: čo systém nevie a čo z toho plynie pre text | 566 |
+| `docs/LIMITACIE.md` | L1 až L14: čo systém nevie a čo z toho plynie pre text | 596 |
 | `docs/kontroly.md` | kontroly podozrivých vzorcov a validačný príkaz | 212 |
 | `HONESTY.md` | pravidlá pre čísla a slová v texte práce | 269 |
 | `README.md` | rozcestník repozitára a pôvod prevzatého kódu | 46 |
