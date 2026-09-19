@@ -558,7 +558,65 @@ pamäte za behu je v kóde ošetrené podpisom oblastí, ale nebolo odskúšané
 
 ---
 
-## L14 — Procesy, moduly a sokety do príznakového vektora nevstupujú
+## L14 — Procesy, moduly a sokety do príznakového vektora nevstupujú — VYRIEŠENÉ 2026-09-19
+
+**Stav.** Toto obmedzenie už neplatí. Zo zoznamu sa neodstraňuje: priznané obmedzenie,
+ktoré zmizne bez stopy, vyzerá, ako by nikdy nebolo. Pôvodné znenie je zachované nižšie.
+
+**Čím sa vyriešilo.** Modul `features/snapshot.py` (pridaný 2026-09-19; commit sa tu
+neuvádza, lebo zmena v čase písania tohto záznamu ešte nebola zapísaná do histórie)
+skladá z jednej snímky **jeden vektor pevnej dĺžky**: dvadsať príznakov plus pole
+`ma_predchodcu`. Pamäťová časť (príznaky 1–8) je agregát bloku `features` zo sidecaru
+snímky, ktorý počíta modul `vmicollect`; objektová časť (príznaky 9–20) sa číta cez
+`guestparse` nad **tou istou** snímkou:
+
+| Príznaky | Čo v nich je | Veta zadania |
+|---|---|---|
+| 1–8 | `mem_changed_ratio`, `mem_bins_active`, `mem_changed_max`, `mem_changed_p95`, `mem_changed_spread`, `mem_entropy_mean`, `mem_entropy_max`, `mem_zero_ratio` | štatistické charakteristiky pamäťových oblastí |
+| 9–13 | `proc_total`, `proc_user`, `proc_kernel`, `proc_new`, `proc_gone` | procesné informácie |
+| 14–15 | `mod_total`, `mod_delta` | analýza načítaných modulov |
+| 16–18 | `sock_total`, `sock_listen`, `sock_estab` | monitorovanie sieťových spojení |
+| 19–20 | `chk_syscall_hooks`, `chk_crossview` | detekcia podozrivých vzorcov v pamäti |
+
+Príkaz: `python3 -m features session --snapshot <adresár> --profile <profil> --out <súbor.npz> [--csv <súbor.csv>]`.
+Mená príznakov sa ukladajú spolu s maticou, takže poradie stĺpcov sa dá spätne overiť.
+
+**Prečo pevná dĺžka a nie biny ako kanály.** Počet binov závisí od veľkosti a rozloženia
+memslotov virtuálneho stroja (pri doméne `hyptcn-guest` ich je 131). Biny ako kanály by
+model priviazali na jednu veľkosť pamäte, preto sa cez biny agreguje — je to cesta (a)
+z otvoreného rozhodnutia vo `features/windows.py`. Cenou je strata informácie o tom,
+**ktorá** oblasť pamäte sa menila; per-bin vektor kvôli tomu nezaniká, zostáva
+v `features/perbin.py` a v sidecari.
+
+**Prvá snímka reťazca.** Príznaky `proc_new`, `proc_gone` a `mod_delta` potrebujú
+predchádzajúcu snímku. Zvolená cesta: riadok sa nevynecháva, ale nesie `ma_predchodcu` = 0
+a tieto tri príznaky sú v ňom nula. Je to tá istá dohoda ako `has_changed` v `perbin.py` —
+nula, vedľa ktorej stojí príznak hovoriaci, že sa nemerala. Ticho doplnená nula je v tomto
+projekte zakázaná (`HONESTY.md`); kto maticu spracúva, musí `ma_predchodcu` čítať.
+
+**Overenie.** `features/tests/test_snapshot.py` (13 testov, všetky prešli 2026-09-19
+aj s `FEATURES_REQUIRE_REAL=1`) kontroluje dĺžku vektora, mená príznakov, ručne spočítanú
+pamäťovú agregáciu, `ma_predchodcu` = 0 na prvej snímke, zhodu `proc_new` a `proc_gone`
+s ručne spočítaným rozdielom množín PID medzi dvoma snímkami a determinizmus. Nad
+`guestparse/tests/data/mini.vmicd` sa navyše overuje, že bez sidecaru s blokom `features`
+skončí výpočet chybou a pamäťová časť sa **nedopočítava** inou cestou.
+
+**Čo to stojí.** Spracovanie jednej snímky (rekonštrukcia objektov hosťa + agregácia
+sidecaru) trvalo medián 0,383 s, rozsah 0,373–0,580 s; n = 18, tri prechody reťazca
+šiestich snímok z `data/raw/20260919T004036Z_run`, teplá vyrovnávacia pamäť stránok
+hostiteľa. Pri perióde zberu 5 s to je zlomok periódy, takže spracovanie stíha. Merané
+na reťazci šiestich častí; ako cena rastie pri dlhšom reťazci, merané nebolo.
+
+**Formulácia do textu práce:** „Rekonštrukcia objektov hosťa a štatistiky pamäťových
+oblastí vstupujú do jedného príznakového vektora pevnej dĺžky, jeden vektor na snímku.
+Pamäťová časť je agregátom per-bin vektora, ktorý počíta modul zberu; objektová časť
+pochádza z rekonštrukcie zoznamu procesov, načítaných modulov, sieťových soketov
+a kontrol integrity nad tou istou snímkou. Príznaky, ktoré potrebujú predchádzajúcu
+snímku, sú v prvom časovom kroku označené príznakom `ma_predchodcu` = 0."
+
+---
+
+### Pôvodné znenie (2026-09-18), ponechané ako záznam
 
 Zadanie žiada „extrakciu príznakov z RAM vrátane procesných informácií, analýzy načítaných
 modulov, monitorovania sieťových spojení, detekcie podozrivých vzorcov v pamäti

@@ -8,8 +8,12 @@ Kontrakt (na tento sa spoliehaju ostatne casti prace):
   python3 -m features crosscheck --snapshot <cesta> --c <sidecar|adresar>
                                  [--memslots <json>] [--bin-bytes N]
                                  [--out <json>]
+  python3 -m features session    --snapshot <adresar> --profile <profil>
+                                 [--out <subor.npz>] [--csv <subor.csv>]
 
 --snapshot prijima adresar s retazcom .vmicd alebo jeden .vmicd (plnu snimku).
+`session` navyse potrebuje --profile (adresar s kallsyms.txt a btf.txt), lebo
+objektova cast vektora sa cita cez guestparse.
 --memslots je subor s rozsahmi memslotov; bez neho sa skusi sidecar snimky a
 ked ani ten rozsahy nema, prikaz skonci chybou. NEHADA sa - vypln namiesto
 memslotov by dala vektor, ktory vyzera spravne a nie je (viz perbin.py).
@@ -24,6 +28,7 @@ NAVRATOVE KODY:
 """
 
 import argparse
+import csv
 import datetime
 import json
 import os
@@ -326,6 +331,68 @@ def _print_crosscheck(values):
                 print("      biny iba v C: %s" % por["biny_iba_v_c"])
 
 
+# ----------------------------------------------------------------- session
+
+
+def cmd_session(args):
+    """
+    Cely retazec snimok -> matica (cas x dlzka MENA) + mena priznakov.
+
+    Mena sa ukladaju spolu s maticou zamerne: bez nich je stlpec cislo a
+    poradie priznakov sa neda spatne overit.
+    """
+    from .snapshot import MENA, SCHEMA, retazec
+
+    res = retazec(args.snapshot, args.profile)
+    mena, matica = res["mena"], res["matica"]
+
+    if args.out:
+        import numpy as np
+        os.makedirs(os.path.dirname(os.path.abspath(args.out)), exist_ok=True)
+        np.savez(
+            args.out,
+            schema=SCHEMA,
+            matica=np.array(matica, dtype=np.float64),
+            mena=np.array(mena),
+            snimky=np.array(res["snimky"]),
+            trvanie_s=np.array(res["trvanie_s"], dtype=np.float64),
+            # Poznamka je text; prazdny retazec znamena "prechody sa uzavreli".
+            poznamky=np.array(["; ".join(p) for p in res["poznamky"]]),
+        )
+        # np.savez si priponu .npz doplni samo; vypis musi ukazovat na subor,
+        # ktory naozaj vznikol, nie na to, co bolo zadane
+        print("zapisane: %s" % (args.out if args.out.endswith(".npz")
+                                else args.out + ".npz"))
+
+    if args.csv:
+        os.makedirs(os.path.dirname(os.path.abspath(args.csv)), exist_ok=True)
+        with open(args.csv, "w", encoding="utf-8", newline="") as fh:
+            w = csv.writer(fh)
+            w.writerow(["snimka"] + mena + ["poznamky"])
+            for sid, riadok, pozn in zip(res["snimky"], matica,
+                                         res["poznamky"]):
+                w.writerow([sid] + ["%.6f" % x for x in riadok]
+                           + ["; ".join(pozn)])
+        print("zapisane: %s" % args.csv)
+
+    print("snimok          : %d" % len(matica))
+    print("priznakov       : %d (vratane ma_predchodcu)" % len(mena))
+    print("cas na snimku   : %s"
+          % ", ".join("%.3f s" % t for t in res["trvanie_s"]))
+    for sid, riadok, pozn in zip(res["snimky"], matica, res["poznamky"]):
+        print("%s ma_predchodcu=%d proc_total=%d mod_total=%d sock_total=%d"
+              % (sid, riadok[mena.index("ma_predchodcu")],
+                 riadok[mena.index("proc_total")],
+                 riadok[mena.index("mod_total")],
+                 riadok[mena.index("sock_total")]))
+        for p in pozn:
+            print("    poznamka: %s" % p)
+    if matica and matica[0][mena.index("ma_predchodcu")] == 0:
+        print("prva snimka nema predchodcu: proc_new, proc_gone a mod_delta "
+              "su v jej riadku nula, ktora nie je meranim (ma_predchodcu=0)")
+    return EXIT_OK
+
+
 # ------------------------------------------------------------------- main
 
 
@@ -371,6 +438,17 @@ def build_parser():
                    dest="ulozit_vektory",
                    help="zapisat do vysledku aj cely vektor referencie")
     p.set_defaults(func=cmd_crosscheck)
+
+    p = sub.add_parser("session",
+                       help="pamat aj objekty hosta do jedneho vektora "
+                            "na snimku")
+    p.add_argument("--snapshot", required=True,
+                   help="adresar s retazcom .vmicd")
+    p.add_argument("--profile", required=True,
+                   help="adresar s kallsyms.txt a btf.txt")
+    p.add_argument("--out", default=None, help="kam zapisat .npz")
+    p.add_argument("--csv", default=None, help="kam zapisat citatelny .csv")
+    p.set_defaults(func=cmd_session)
     return ap
 
 

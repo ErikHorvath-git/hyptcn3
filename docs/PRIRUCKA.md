@@ -31,7 +31,7 @@ python3 -m pytest -q      # testy parsera a príznakov
 ```
 
 `make test` prejde celú cestu zberu nad syntetickým obrazom veľkosti
-16 MiB, ktorý si sám vyrobí. Testov je 166 v `pytest` a 2 v C (`hole_test`, `perbin_test`).
+16 MiB, ktorý si sám vyrobí. Testov je 193 v `pytest` a 2 v C (`hole_test`, `perbin_test`).
 
 ## 4. Ako vznikne snímka
 
@@ -66,9 +66,9 @@ v tabuľke v kapitole 6 stojí pri `probe`, že nič nezapisuje — platí to o 
 |---|---|---|---|
 | `vmicollect/` | zberač snímok pamäte VM: C a eBPF nad QEMU/KVM | `vmicollect/src/collector.c` | 31 / 9 167 |
 | `guestparse/` | rekonštrukcia procesov, modulov a soketov zo snímky | `guestparse/view.py` | 25 / 4 264 |
-| `features/` | per-bin príznakový vektor (referencia), okná, normalizácia | `features/perbin.py` | 15 / 3 475 |
+| `features/` | per-bin príznakový vektor (referencia), okná, normalizácia | `features/perbin.py` | 17 / 4 129 |
 | `profiles/` | profil jadra hosťa: symboly a offsety polí štruktúr | `profiles/debian12-6.1.0-42-cloud-amd64/README.md` | jeden adresár na verziu jadra hosťa |
-| `scripts/` | root behy, príkazy v hosťovi, kontroly tvrdení | `scripts/root_run.sh` | 8 / 3 711 |
+| `scripts/` | root behy, príkazy v hosťovi, kontroly tvrdení | `scripts/root_run.sh` | 9 / 4 019 |
 | `data/` | výsledkové JSONy z meraní (`data/results/`) a pozemná pravda odobratá v hosťovi (`data/sessions/`); samotné snímky `.vmicd` sú mimo gitu (`data/raw/`) | `data/results/2026-09-18_zmrazeny_host/README.md` | rastie s každým meraním, nepočíta sa |
 
 ## 6. Ako to funguje
@@ -135,7 +135,7 @@ platili tie isté hodnoty. Podrobnosti sú v `features/PERBIN.md`.
 Prepínače: `-c, --config F` konfiguracny subor (INI), `-o, --set K=V` prebi jeden parameter (da sa opakovat), `-v, --verbose` log na urovni DEBUG, `-q, --quiet` log iba ERROR.
 
 Podpríkazy `python3 -m guestparse`: `ps` zoznam procesov z init_task.tasks, `lsmod` zoznam nacitanych modulov, `ss` sietove spojenia (IPv4 aj IPv6), `info` profil, posun jadra a krizova kontrola prekladu adries, `checks` kontroly podozrivych vzorcov, `validate` porovnanie s pozemnou pravdou z hosta.
-Podpríkazy `python3 -m features`: `perbin` spocitaj vektor jednej snimky, `crosscheck` porovnaj referenciu s vektorom z C modulu.
+Podpríkazy `python3 -m features`: `perbin` spocitaj vektor jednej snimky, `crosscheck` porovnaj referenciu s vektorom z C modulu, `session` pamat aj objekty hosta do jedneho vektora na snimku.
 
 **Konfiguračné kľúče** (`vmicollect config --keys`, prebijú sa cez `-o sekcia.kluc=hodnota`):
 
@@ -219,7 +219,7 @@ znamenalo držať dve znenia toho istého. Nadpisy sú preto dosadené z neho, s
 - **L11** — Jeden výstupný adresár na jeden zberač
 - **L12** — Čo ešte nie je zmerané
 - **L13** — Príznakový vektor: čo o ňom treba vedieť pred tým, než sa na…
-- **L14** — Procesy, moduly a sokety do príznakového vektora nevstupujú
+- **L14** — Procesy, moduly a sokety do príznakového vektora nevstupujú…
 
 ## 9. Kam ďalej
 
@@ -229,7 +229,7 @@ Každý typ faktu má jeden dokument, ktorý ho vlastní; keď si odporujú, pla
 |---|---|---|
 | `docs/ARCHITEKTURA.md` | rozhrania, formát `.vmicd` a sidecaru, tok dát podrobne | 1042 |
 | `docs/MERANIA.md` | log meraní: čo, kedy, akým príkazom a s akým výsledkom | 705 |
-| `docs/LIMITACIE.md` | L1 až L14: čo systém nevie a čo z toho plynie pre text | 596 |
+| `docs/LIMITACIE.md` | L1 až L14: čo systém nevie a čo z toho plynie pre text | 654 |
 | `docs/kontroly.md` | kontroly podozrivých vzorcov a validačný príkaz | 212 |
 | `HONESTY.md` | pravidlá pre čísla a slová v texte práce | 269 |
 | `README.md` | rozcestník repozitára a pôvod prevzatého kódu | 46 |

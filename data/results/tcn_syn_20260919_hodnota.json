@@ -1,0 +1,231 @@
+{
+  "command": "python3 -m tcn.train --syn --rezim hodnota --out data/results/tcn_syn_20260919_hodnota.json",
+  "commit": "29bd0babc1ffa5d2e54645aa7714d46fef13ccfb",
+  "date": "2026-09-19",
+  "guest": null,
+  "host": "fedora",
+  "n": 96,
+  "provenance_note": "beh nad syntetickymi datami; guest je null, lebo ziadna snimka hosta v nom nie je",
+  "values": {
+    "dlzka_okna": 16,
+    "fit_sessions": [
+      "20260101T000000Z_idle_0",
+      "20260102T000000Z_idle_1"
+    ],
+    "konstantne_priznaky": [],
+    "modely": {
+      "bag_of_frames": {
+        "binarne": {
+          "auc": 1.0,
+          "f1": 1.0,
+          "n": 96,
+          "n_nebenignych": 48,
+          "precision": 1.0,
+          "presnost": 1.0,
+          "recall": 1.0
+        },
+        "viactriedne": {
+          "confusion": [
+            [
+              48,
+              0
+            ],
+            [
+              0,
+              48
+            ]
+          ],
+          "f1_macro": 1.0,
+          "f1_macro_nad_triedami": [
+            "cpu_burn",
+            "idle"
+          ],
+          "na_triedu": {
+            "cpu_burn": {
+              "f1": 1.0,
+              "n": 48,
+              "precision": 1.0,
+              "recall": 1.0
+            },
+            "idle": {
+              "f1": 1.0,
+              "n": 48,
+              "precision": 1.0,
+              "recall": 1.0
+            }
+          },
+          "poradie_tried": [
+            "cpu_burn",
+            "idle"
+          ],
+          "presnost": 1.0
+        }
+      },
+      "gru": {
+        "binarne": {
+          "auc": 1.0,
+          "f1": 1.0,
+          "n": 96,
+          "n_nebenignych": 48,
+          "precision": 1.0,
+          "presnost": 1.0,
+          "recall": 1.0
+        },
+        "parametrov": 5346,
+        "skryty_rozmer": 32,
+        "viactriedne": {
+          "confusion": [
+            [
+              48,
+              0
+            ],
+            [
+              0,
+              48
+            ]
+          ],
+          "f1_macro": 1.0,
+          "f1_macro_nad_triedami": [
+            "cpu_burn",
+            "idle"
+          ],
+          "na_triedu": {
+            "cpu_burn": {
+              "f1": 1.0,
+              "n": 48,
+              "precision": 1.0,
+              "recall": 1.0
+            },
+            "idle": {
+              "f1": 1.0,
+              "n": 48,
+              "precision": 1.0,
+              "recall": 1.0
+            }
+          },
+          "poradie_tried": [
+            "cpu_burn",
+            "idle"
+          ],
+          "presnost": 1.0
+        }
+      },
+      "logreg_priemer": {
+        "binarne": {
+          "auc": 1.0,
+          "f1": 1.0,
+          "n": 96,
+          "n_nebenignych": 48,
+          "precision": 1.0,
+          "presnost": 1.0,
+          "recall": 1.0
+        },
+        "viactriedne": {
+          "confusion": [
+            [
+              48,
+              0
+            ],
+            [
+              0,
+              48
+            ]
+          ],
+          "f1_macro": 1.0,
+          "f1_macro_nad_triedami": [
+            "cpu_burn",
+            "idle"
+          ],
+          "na_triedu": {
+            "cpu_burn": {
+              "f1": 1.0,
+              "n": 48,
+              "precision": 1.0,
+              "recall": 1.0
+            },
+            "idle": {
+              "f1": 1.0,
+              "n": 48,
+              "precision": 1.0,
+              "recall": 1.0
+            }
+          },
+          "poradie_tried": [
+            "cpu_burn",
+            "idle"
+          ],
+          "presnost": 1.0
+        }
+      },
+      "tcn": {
+        "binarne": {
+          "auc": 1.0,
+          "f1": 1.0,
+          "n": 96,
+          "n_nebenignych": 48,
+          "precision": 1.0,
+          "presnost": 1.0,
+          "recall": 1.0
+        },
+        "parametrov": 5330,
+        "recepcne_pole": 29,
+        "viactriedne": {
+          "confusion": [
+            [
+              48,
+              0
+            ],
+            [
+              0,
+              48
+            ]
+          ],
+          "f1_macro": 1.0,
+          "f1_macro_nad_triedami": [
+            "cpu_burn",
+            "idle"
+          ],
+          "na_triedu": {
+            "cpu_burn": {
+              "f1": 1.0,
+              "n": 48,
+              "precision": 1.0,
+              "recall": 1.0
+            },
+            "idle": {
+              "f1": 1.0,
+              "n": 48,
+              "precision": 1.0,
+              "recall": 1.0
+            }
+          },
+          "poradie_tried": [
+            "cpu_burn",
+            "idle"
+          ],
+          "presnost": 1.0
+        }
+      }
+    },
+    "okien_bez_predchodcu": 8,
+    "okien_test": 96,
+    "okien_train": 96,
+    "synteticke_data": true,
+    "test_sessions": [
+      "20260103T000000Z_cpu_burn_2",
+      "20260103T000000Z_idle_2",
+      "20260104T000000Z_cpu_burn_3",
+      "20260104T000000Z_idle_3"
+    ],
+    "train_sessions": [
+      "20260101T000000Z_cpu_burn_0",
+      "20260101T000000Z_idle_0",
+      "20260102T000000Z_cpu_burn_1",
+      "20260102T000000Z_idle_1"
+    ],
+    "triedy": [
+      "cpu_burn",
+      "idle"
+    ]
+  }
+}

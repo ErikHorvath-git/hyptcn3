@@ -1,0 +1,42 @@
+{
+  "schema": "hyptcn3/run/1",
+  "date": "2026-09-19T01:18:23Z",
+  "date_unix": 1789780703,
+  "commit": "29bd0babc1ffa5d2e54645aa7714d46fef13ccfb",
+  "commit_dirty": true,
+  "domain": "hyptcn-guest",
+  "libvirt_uri": "qemu:///session",
+  "command": "/home/eh/Desktop/hyptcn3/vmicollect/build/vmicollect run -o vm.domain=hyptcn-guest -o output.writer=delta -o output.hash=sha256 -o output.dir=/home/eh/Desktop/hyptcn3/data/raw/20260919T011815Z_fork_storm/snap -o output.delta_full_every=3 -o schedule.interval_s=5 -o schedule.max_cycles=2",
+  "n": 1,
+  "binary": {
+    "path": "/home/eh/Desktop/hyptcn3/vmicollect/build/vmicollect",
+    "version": "vmicollect 1.0.0",
+    "sha256": "25f1d3e61905574a55f00880c455f56eddb4ea811cac7375129b4b8030ddd129"
+  },
+  "host": {
+    "hostname": "fedora",
+    "kernel": "7.1.13-100.fc43.x86_64",
+    "cpus": 16
+  },
+  "guest": {
+    "domain": "hyptcn-guest",
+    "kernel": "6.1.0-42-cloud-amd64"
+  },
+  "exit_code": 0,
+  "snapshot_dir": "/home/eh/Desktop/hyptcn3/data/raw/20260919T011815Z_fork_storm/snap",
+  "params": {
+    "writer": "delta",
+    "hash": "sha256",
+    "interval_s": 5,
+    "max_cycles": 2,
+    "delta_full_every": 3
+  },
+  "summary": {
+    "cycles_done": 2,
+    "cycles_failed": 0,
+    "cycles_skipped": 0,
+    "worst_lateness_s": 0.000
+  },
+  "stdout": "",
+  "stderr": "2026-09-19T01:18:16.012Z WARN  libbpf: Error in bpf_create_map_xattr(pages): -EINVAL. Retrying without BTF.\n2026-09-19T01:18:17.283Z INFO  ebpf: 'hyptcn-guest' (pid 1353046): 10 memslotov, 2.02 GiB pamate, max GPA 0x100000000\n2026-09-19T01:18:17.285Z WARN  ebpf: 4.00 KiB pamate hosta nie je anonymna (/dev/zero (deleted)) - citanie stranky, ktorej sa host este nedotkol, ju hostitelovi NAOZAJ alokuje\n2026-09-19T01:18:17.285Z WARN  ebpf: pri takejto VM zbieraj radsej konkretne oblasti (capture.regions), nech nenafuknes jej pamat na plnu velkost\n2026-09-19T01:18:17.285Z INFO  VM 'hyptcn-guest' [ebpf/kvm]: RAM 2.02 GiB, max_paddr 0x100000000, vCPU 2, strankovanie n/a\n2026-09-19T01:18:17.285Z INFO  zbierane oblasti: 5, spolu 2.02 GiB\n2026-09-19T01:18:17.285Z INFO  zacinam zber: perioda 5.000 s, writer 'delta', vystup '/home/eh/Desktop/hyptcn3/data/raw/20260919T011815Z_fork_storm/snap'\n2026-09-19T01:18:21.499Z INFO  #0 PLNA   547.45 MiB/4.00 GiB  stranky 139874/528417 (26.47 %)  pauza 0.0 ms  citanie 1548.5 ms  spolu 4214.0 ms\n2026-09-19T01:18:23.039Z INFO  #1 delta  28.42 MiB/4.00 GiB  stranky 7260/528417 (1.37 %)  pauza 0.0 ms  citanie 686.7 ms  spolu 754.7 ms\n2026-09-19T01:18:23.039Z INFO  koniec: 2 snimok, 0 chyb, 0 zmeskanych slotov, najvacsie meskanie 0.000 s, spolu 575.87 MiB\n"
+}
