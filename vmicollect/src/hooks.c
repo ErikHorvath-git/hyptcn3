@@ -14,6 +14,16 @@
  *     int  vmic_hook_snapshot(void *st, const vmic_snapshot_t *snap);
  *     void vmic_hook_fini(void *st);
  *
+ * a moze exportovat stvrtu:
+ *
+ *     int  vmic_hook_alarm(void *st, const vmic_alarm_t *alarm);
+ *
+ * ALARMY (blok A6): detektor (ktorykolvek plugin) vyhlasi alarm volanim
+ * api->alarm(). Zberac ho zapise do alarm.json / alarms.jsonl, oznac retazec
+ * markerom HOLD a posle ho vsetkym pluginom cez vmic_hook_alarm - tam patri
+ * reakcia (libvirt, notifikacia, A7). Priklad detektora je
+ * hooks/alarm_hook.c (prah na pocet zmenenych stranok).
+ *
  * Preco dlopen a nie proste callback v kode? Lebo takto mozes menit
  * spracovanie snimok bez toho, aby si prekladal (a znovu spustal) zberac.
  * Presne sem neskor zavesis parsovanie struktur a extrakciu priznakov.
@@ -29,7 +39,9 @@
 #include "log.h"
 
 #include <dlfcn.h>
+#include <inttypes.h>
 #include <stdarg.h>
+#include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -37,6 +49,7 @@
 typedef struct {
     void                  *handle;
     vmic_hook_snapshot_fn  on_snapshot;
+    vmic_hook_alarm_fn     on_alarm;   /* volitelny (dlsym)             */
     vmic_hook_fini_fn      fini;
     void                  *state;
     char                   path[VMIC_PATH_MAX];
@@ -59,6 +72,14 @@ static void hook_log(int level, const char *fmt, ...)
     va_end(ap);
 }
 
+/* vstupna brana alarmov z pluginov: api dostane tento pointer, z neho sa
+ * cez container_of vrati vmic_hooks_t */
+static int hook_alarm(const vmic_hook_api_t *api, const vmic_alarm_t *a)
+{
+    vmic_hooks_t *h = (vmic_hooks_t *)((char *)api - offsetof(vmic_hooks_t, api));
+    return vmic_alarm_raise(h, a);
+}
+
 vmic_hooks_t *vmic_hooks_load(const vmic_config_t *cfg)
 {
     if (!cfg->hook_count) return NULL;
@@ -72,6 +93,7 @@ vmic_hooks_t *vmic_hooks_load(const vmic_config_t *cfg)
     h->api.abi  = VMIC_HOOK_ABI;
     h->api.cfg  = cfg;
     h->api.log  = hook_log;
+    h->api.alarm = hook_alarm;
 
     for (size_t i = 0; i < cfg->hook_count; i++) {
         const char *path = cfg->hook_path[i];
@@ -88,9 +110,10 @@ vmic_hooks_t *vmic_hooks_load(const vmic_config_t *cfg)
         }
 
         dlerror();   /* vycistit stary chybovy stav */
-        vmic_hook_init_fn     init = (vmic_hook_init_fn)    dlsym(lib, "vmic_hook_init");
-        vmic_hook_snapshot_fn snap = (vmic_hook_snapshot_fn)dlsym(lib, "vmic_hook_snapshot");
-        vmic_hook_fini_fn     fini = (vmic_hook_fini_fn)    dlsym(lib, "vmic_hook_fini");
+        vmic_hook_init_fn     init  = (vmic_hook_init_fn)    dlsym(lib, "vmic_hook_init");
+        vmic_hook_snapshot_fn snap  = (vmic_hook_snapshot_fn)dlsym(lib, "vmic_hook_snapshot");
+        vmic_hook_alarm_fn    alarm = (vmic_hook_alarm_fn)   dlsym(lib, "vmic_hook_alarm");
+        vmic_hook_fini_fn     fini  = (vmic_hook_fini_fn)    dlsym(lib, "vmic_hook_fini");
 
         if (!snap) {
             LOGE("hooks: '%s' neexportuje vmic_hook_snapshot()", path);
@@ -103,6 +126,7 @@ vmic_hooks_t *vmic_hooks_load(const vmic_config_t *cfg)
         memset(slot, 0, sizeof(*slot));
         slot->handle      = lib;
         slot->on_snapshot = snap;
+        slot->on_alarm    = alarm;
         slot->fini        = fini;
         snprintf(slot->path, sizeof(slot->path), "%s", path);
 
@@ -157,4 +181,55 @@ void vmic_hooks_unload(vmic_hooks_t *h)
         if (h->item[i].handle) dlclose(h->item[i].handle);
     }
     free(h);
+}
+
+/* ------------------------------------------------------------------ */
+/* Alarmy: zapis + HOLD + notifikacia pluginov                         */
+/* ------------------------------------------------------------------ */
+
+int vmic_alarm_raise(vmic_hooks_t *h, const vmic_alarm_t *a)
+{
+    if (!h || !a) return VMIC_ERR;
+
+    vmic_alarm_t al = *a;
+    if (!al.ts_unix_ms) {
+        struct timespec ts;
+        clock_gettime(CLOCK_REALTIME, &ts);
+        al.ts_unix_ms = (uint64_t)ts.tv_sec * 1000ull + ts.tv_nsec / 1000000ull;
+    }
+
+    /* 1. forenzny material: oznacz retazec, do ktoreho alarm patri.
+       Flight recorder drzi cely retazec aj s deltami okolo udalosti. */
+    char entry[64];
+    if (al.chain_id) {
+        snprintf(entry, sizeof(entry), "%" PRIu64, al.chain_id);
+        vmic_hold_mark(h->api.cfg->dir, entry);
+    }
+
+    /* 2. zapis alarm.json (posledny) + alarms.jsonl (historia) */
+    if (vmic_alarm_write(h->api.cfg->dir, &al) != VMIC_OK)
+        LOGW("hooks: alarm sa nepodarilo zapisat do %s", h->api.cfg->dir);
+
+    LOGW("alarm: zdroj=%s seq=%" PRIu64 " score=%.6g retazec=%" PRIu64,
+         al.zdroj[0] ? al.zdroj : "?", al.seq, al.score, al.chain_id);
+
+    /* 3. notifikacia: vsetky pluginy s vmic_hook_alarm() */
+    int rc = VMIC_OK;
+    for (size_t i = 0; i < h->count; i++) {
+        loaded_t *it = &h->item[i];
+        if (it->disabled || !it->on_alarm) continue;
+
+        int r = it->on_alarm(it->state, &al);
+        if (r == 0) continue;
+        if (h->strict) {
+            LOGE("hooks: '%s': vmic_hook_alarm vratil %d - striktny rezim, "
+                 "zber ma skoncit", it->path, r);
+            rc = VMIC_FATAL;
+        } else {
+            LOGW("hooks: '%s': vmic_hook_alarm vratil %d - vypinam ho",
+                 it->path, r);
+            it->disabled = true;
+        }
+    }
+    return rc;
 }

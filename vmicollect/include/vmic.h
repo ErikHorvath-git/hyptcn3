@@ -429,24 +429,66 @@ int vmic_sched_run(const vmic_config_t *cfg,
 /* VRSTVA 4: HOOKS (dlopen plugin)                                     */
 /* ------------------------------------------------------------------ */
 
-#define VMIC_HOOK_ABI 1u
+#define VMIC_HOOK_ABI 2u
+
+/* Alarm: co vyhlasi detektor (plugin) a co dostanu vsetky hooky.
+ *
+ * Vyhlasuje ho plugin cez api->alarm() - zberac alarm zapise do
+ * alarm.json (posledny) a alarms.jsonl (historia) vo vystupnom adresari
+ * a oznac retazec s chain_id markerom HOLD (flight recorder, A5).
+ *
+ * top_bins su indexy binov (gpa >> log2(bin_bytes)) - tie iste indexy,
+ * ktore su v sidecari a v per-bin oknach (features/windows.py).
+ * `invariants` je kratky textovy stav invariantov, ktory spocital ten,
+ * kto alarm vyhlasuje (napr. "syscall_hooks=1 process_cross_view=0").
+ */
+#define VMIC_ALARM_TOPBINS 8
+
+typedef struct {
+    uint64_t ts_unix_ms;                /* CLOCK_REALTIME, ms            */
+    uint64_t seq;                       /* snimka, pri ktorej vznikol    */
+    uint64_t chain_id;                  /* retazec na HOLD (0 = neznama) */
+    char     zdroj[32];                 /* napr. "invariant", "prediktor" */
+    double   score;                     /* skore anomálie; 0 = n/a       */
+    uint64_t top_bins[VMIC_ALARM_TOPBINS];
+    size_t   top_bins_n;
+    char     invariants[128];           /* stav invariantov              */
+} vmic_alarm_t;
+
+typedef struct vmic_hook_api vmic_hook_api_t;   /* dopredna deklaracia */
 
 /* Sluzby, ktore modul poskytuje pluginu. */
-typedef struct {
+struct vmic_hook_api {
     unsigned abi;
     const vmic_config_t *cfg;
     void (*log)(int level, const char *fmt, ...);
-} vmic_hook_api_t;
+    /* Vyhlas alarm. Nezrusi zber; vratit sa MUSI hned (zapis alarmu je
+       kratky, tazke veci - reakcia, notifikacia - patria do vmic_hook_alarm
+       druheho pluginu, alebo von z procesu). Vrati VMIC_OK, alebo
+       VMIC_FATAL, ked notifikacny plugin v striktnom rezime zlyhal - tu
+       hodnotu ma volatci plugin vratit zo svojho vmic_hook_snapshot(),
+       aby zberac vedel, ze ma skoncit. */
+    int  (*alarm)(const struct vmic_hook_api *api, const vmic_alarm_t *a);
+};
 
 /*
- * Plugin (.so) musi exportovat tieto tri symboly. Pozri hooks/example_hook.c
+ * Plugin (.so) MUSI exportovat tieto tri symboly. Pozri hooks/example_hook.c
  *
  *   int  vmic_hook_init(const vmic_hook_api_t *api, const char *args, void **st);
  *   int  vmic_hook_snapshot(void *st, const vmic_snapshot_t *snap);
  *   void vmic_hook_fini(void *st);
+ *
+ * a MOZE exportovat stvrty:
+ *
+ *   int  vmic_hook_alarm(void *st, const vmic_alarm_t *alarm);
+ *
+ * ktory dostane kazdy vyhlaseny alarm (od hociktoreho pluginu). Vratit
+ * nulu = ok; nenula v nestriktnom rezime plugin vypne, v striktnom ukonci
+ * zber (rovnako ako vmic_hook_snapshot).
  */
 typedef int  (*vmic_hook_init_fn)(const vmic_hook_api_t *, const char *, void **);
 typedef int  (*vmic_hook_snapshot_fn)(void *, const vmic_snapshot_t *);
+typedef int  (*vmic_hook_alarm_fn)(void *, const vmic_alarm_t *);
 typedef void (*vmic_hook_fini_fn)(void *);
 
 /* Zmluva pluginu - tieto tri funkcie musis v svojom .so definovat.
@@ -454,12 +496,18 @@ typedef void (*vmic_hook_fini_fn)(void *);
 int  vmic_hook_init(const vmic_hook_api_t *api, const char *args, void **state);
 int  vmic_hook_snapshot(void *state, const vmic_snapshot_t *snap);
 void vmic_hook_fini(void *state);
+int  vmic_hook_alarm(void *state, const vmic_alarm_t *alarm);
 
 typedef struct vmic_hooks vmic_hooks_t;
 
 vmic_hooks_t *vmic_hooks_load(const vmic_config_t *cfg);
 int           vmic_hooks_fire(vmic_hooks_t *h, const vmic_snapshot_t *snap);
 void          vmic_hooks_unload(vmic_hooks_t *h);
+
+/* Spracuje alarm: notifikuje hooky, zapise alarm.json + alarms.jsonl a
+   oznac retazec markerom HOLD. Vola sa z api->alarm. Vrati VMIC_OK, alebo
+   VMIC_FATAL, ked notifikacny plugin v striktnom rezime zlyhal. */
+int vmic_alarm_raise(vmic_hooks_t *h, const vmic_alarm_t *a);
 
 /* ------------------------------------------------------------------ */
 /* Zberac - spaja vsetky styri vrstvy                                  */
@@ -502,6 +550,10 @@ void vmic_backend_print_list(void *stream);
 /* Sidecar metadata - meta.c */
 int vmic_meta_write(const vmic_snapshot_t *snap, char *out_path, size_t n);
 
+/* Alarm - meta.c: prepise alarm.json (posledny alarm) a dopise riadok do
+   alarms.jsonl (historia) vo vystupnom adresari. */
+int vmic_alarm_write(const char *dir, const vmic_alarm_t *a);
+
 /* Retencia - retention.c
    `protect_chain` je id retazca, do ktoreho sa PRAVE zapisuje; nikdy sa
    nezmaze. 0 = nechranit nic (napr. pri raw writeri). */
@@ -509,6 +561,9 @@ int vmic_meta_write(const vmic_snapshot_t *snap, char *out_path, size_t n);
  * (flight recorder - oznaci sa retazec spred alarmu a prezije upratovanie).
  * Format zaznamov je zdokumentovany v src/retention.c. */
 #define VMIC_HOLD_MARKER "HOLD"
+
+/* Dopise jeden zaznam do markera HOLD (vrati VMIC_OK/VMIC_ERR). */
+int vmic_hold_mark(const char *dir, const char *entry);
 
 int vmic_retention_apply(const vmic_config_t *cfg, uint64_t protect_chain);
 

@@ -200,3 +200,69 @@ int vmic_meta_write(const vmic_snapshot_t *s, char *out_path, size_t n)
     if (out_path) snprintf(out_path, n, "%s", path);
     return VMIC_OK;
 }
+
+/* ------------------------------------------------------------------ */
+/* Alarm (blok A6): alarm.json = posledny, alarms.jsonl = historia     */
+/* ------------------------------------------------------------------ */
+
+/* Kompaktny jedno-riadkovy JSON objekt alarmu (bez konca riadku). */
+static void alarm_fprint(FILE *f, const vmic_alarm_t *a)
+{
+    struct timespec ts = {
+        (time_t)(a->ts_unix_ms / 1000ull),
+        (long)(a->ts_unix_ms % 1000ull) * 1000000L,
+    };
+    char iso[48];
+    vmic_ts_iso(iso, sizeof(iso), &ts);
+
+    fprintf(f, "{\"schema\": \"hyptcn3/alarm/1\", ");
+    fprintf(f, "\"timestamp\": "); json_str(f, iso);
+    fprintf(f, ", \"timestamp_unix_ms\": %" PRIu64, a->ts_unix_ms);
+    fprintf(f, ", \"seq\": %" PRIu64, a->seq);
+    fprintf(f, ", \"chain_id\": %" PRIu64, a->chain_id);
+    fprintf(f, ", \"zdroj\": "); json_str(f, a->zdroj);
+    fprintf(f, ", \"score\": %.6g", a->score);
+    fprintf(f, ", \"top_bins\": [");
+    for (size_t i = 0; i < a->top_bins_n && i < VMIC_ALARM_TOPBINS; i++)
+        fprintf(f, "%s%" PRIu64, i ? ", " : "", a->top_bins[i]);
+    fprintf(f, "], \"invariants\": ");
+    json_str(f, a->invariants);
+    fprintf(f, "}");
+}
+
+int vmic_alarm_write(const char *dir, const vmic_alarm_t *a)
+{
+    char path[VMIC_PATH_MAX];
+
+    /* posledny alarm - prehliadne ho clovek aj skript bez prehladavania */
+    if (vmic_join(path, sizeof(path), dir, "alarm.json") != 0) return VMIC_ERR;
+    FILE *f = fopen(path, "we");
+    if (!f) {
+        LOGE("alarm: nedaji sa vytvorit '%s': %s", path, strerror(errno));
+        return VMIC_ERR;
+    }
+    alarm_fprint(f, a);
+    fputc('\n', f);
+    int err = ferror(f);
+    if (fclose(f) != 0 || err) {
+        LOGE("alarm: zapis '%s' zlyhal", path);
+        return VMIC_ERR;
+    }
+
+    /* historia - kazdy alarm jeden riadok, append je atomicky dost na to,
+       aby sa riadky nemiesali */
+    if (vmic_join(path, sizeof(path), dir, "alarms.jsonl") != 0) return VMIC_ERR;
+    f = fopen(path, "ae");
+    if (!f) {
+        LOGE("alarm: nedaji sa dopisat do '%s': %s", path, strerror(errno));
+        return VMIC_ERR;
+    }
+    alarm_fprint(f, a);
+    fputc('\n', f);
+    err = ferror(f);
+    if (fclose(f) != 0 || err) {
+        LOGE("alarm: zapis '%s' zlyhal", path);
+        return VMIC_ERR;
+    }
+    return VMIC_OK;
+}

@@ -334,6 +334,30 @@ sudo ./build/vmicollect run -c my.conf -o hooks.load=./build/example_hook.so:/tm
 Hook bezi **synchronne** v hlavnej slucke. Ked bude trvat dlhsie ako perioda,
 zberac zacne zmeskavat sloty - nieco narocne daj do fronty a spracuj mimo.
 
+### 2. Alarm (detekcia + reakcia)
+
+Detektor je hook, ktory zavola `api->alarm()`; zberac alarm:
+
+1. zapise do `alarm.json` (posledny alarm: cas, skore, top biny, stav
+   invariantov) a dopise riadok do `alarms.jsonl` (historia),
+2. oznac retazec alarmu markerom `HOLD` (flight recorder - forenzny material
+   prezije retenciu),
+3. posle ho kazdemu pluginu cez volitelne `vmic_hook_alarm()` - tam patri
+   reakcia (libvirt, notifikacia).
+
+Priklad detektora aj prijimaca je [`hooks/alarm_hook.c`](hooks/alarm_hook.c)
+(prah na pocet zmenenych stranok; NIE JE to detekcia anomálie, je to priklad
+kontraktu):
+
+```sh
+make hooks
+sudo ./build/vmicollect run -o output.writer=delta \
+     -o hooks.load=./build/alarm_hook.so:/tmp/alarms.csv,100
+```
+
+Schemu alarmu hlada Python (`hyptcn3/alarm/1`) - format drzi
+`src/meta.c` (`vmic_alarm_write`).
+
 ### 2. Vlastny backend alebo writer
 
 1. skopiruj `src/backend_file.c` (najkratsi vzor)

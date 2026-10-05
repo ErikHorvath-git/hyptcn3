@@ -94,7 +94,7 @@ BIN := $(BUILD)/vmicollect
 # prepise iba ked sa obsah zmenil - takze zbytocny preklad nesposobuje.
 CONFIG_STAMP := $(BUILD)/.config
 
-.PHONY: all bpf hooks test test-holes test-perbin test-retention check debug install uninstall clean help FORCE
+.PHONY: all bpf hooks test test-holes test-perbin test-retention test-alarm check debug install uninstall clean help FORCE
 
 all: $(BIN)
 ifneq ($(EBPF),1)
@@ -134,13 +134,19 @@ $(BPF_EMBED): $(BPF_OBJ)
 
 # Plugin sa linkuje ako zdielana kniznica; nepotrebuje nic zo zberaca,
 # staci mu hlavicka include/vmic.h.
-hooks: $(BUILD)/example_hook.so
+hooks: $(BUILD)/example_hook.so $(BUILD)/alarm_hook.so
 
 $(BUILD)/example_hook.so: hooks/example_hook.c include/vmic.h | $(BUILD)
 	$(CC) $(CFLAGS) -fPIC -shared -o $@ $<
 	@echo "hotovo -> $@"
 
-test: $(BIN) test-holes test-perbin test-retention
+# Priklad detektora pre alarmove rozhranie (blok A6): prah na pocet
+# zmenenych stranok -> api->alarm(), prijima aj alarmy inych pluginov.
+$(BUILD)/alarm_hook.so: hooks/alarm_hook.c include/vmic.h | $(BUILD)
+	$(CC) $(CFLAGS) -fPIC -shared -o $@ $<
+	@echo "hotovo -> $@"
+
+test: $(BIN) test-holes test-perbin test-retention test-alarm
 	$(BIN) selftest $(BUILD)/selftest
 
 # Regresny test na spravne preskakovanie dier vo fyzickom priestore.
@@ -168,6 +174,14 @@ test-retention: $(BUILD)/retention_test
 	$(BUILD)/retention_test
 
 $(BUILD)/retention_test: tests/retention_test.c $(TEST_OBJ) $(EMBED_OBJ) | $(BUILD)
+	$(CC) $(CFLAGS) -o $@ $< $(TEST_OBJ) $(EMBED_OBJ) $(LDFLAGS) $(LDLIBS)
+
+# Regresny test alarmoveho rozhrania (blok A6): alarm.json + alarms.jsonl
+# + HOLD + notifikacia vmic_hook_alarm, end-to-end cez hooks.c/meta.c.
+test-alarm: $(BUILD)/alarm_test $(BUILD)/alarm_hook.so
+	$(BUILD)/alarm_test $(BUILD)/alarm_hook.so
+
+$(BUILD)/alarm_test: tests/alarm_test.c $(TEST_OBJ) $(EMBED_OBJ) | $(BUILD)
 	$(CC) $(CFLAGS) -o $@ $< $(TEST_OBJ) $(EMBED_OBJ) $(LDFLAGS) $(LDLIBS)
 
 # Kontrolny preklad, ktory NEPOTREBUJE ziadne extra balicky:

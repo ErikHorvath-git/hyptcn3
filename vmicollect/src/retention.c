@@ -69,6 +69,29 @@ typedef struct {
     char     name[VMIC_PATH_MAX];
 } hold_t;
 
+/* Dopise jeden zaznam do markera HOLD. Zaznam nesmie obsahovat novy
+ * riadok (je to jeden riadok suboru). */
+int vmic_hold_mark(const char *dir, const char *entry)
+{
+    if (!entry || !entry[0] || strchr(entry, '\n') || strchr(entry, '\r'))
+        return VMIC_ERR;
+    char path[VMIC_PATH_MAX];
+    if (vmic_join(path, sizeof(path), dir, VMIC_HOLD_MARKER) != 0)
+        return VMIC_ERR;
+    FILE *f = fopen(path, "a");
+    if (!f) {
+        LOGW("hold: nedaji sa otvorit %s: %s", path, strerror(errno));
+        return VMIC_ERR;
+    }
+    int rc = fprintf(f, "%s\n", entry) < 0 ? VMIC_ERR : VMIC_OK;
+    if (rc == VMIC_OK)
+        LOGI("hold: oznaceny %s v %s", entry, path);
+    else
+        LOGW("hold: zapis do %s zlyhal: %s", path, strerror(errno));
+    fclose(f);
+    return rc;
+}
+
 static bool ends_with(const char *s, const char *suf)
 {
     size_t ls = strlen(s), lf = strlen(suf);
