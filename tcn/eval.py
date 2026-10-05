@@ -46,6 +46,80 @@ def _commit():
         return None
 
 
+# ------------------------------------------------------------------ detekcia
+# (blok H): FAR/h, cas-do-detekcie a agregacia per technika/rodina. Vsetky
+# funkcie pracuju so SKORE z prediktora (chyba predikcie) + prah z kalibracie;
+# nic sa tu nepocita zo stitkov skryto - stitky sluzia len na rozdelit behov
+# na benigne/skodlive pri merani.
+
+
+def far_h(skore_benigne, prah, perioda_s=5.0):
+    """FAR za hodinu: podiel benígnych okien nad prahom x okna za hodinu.
+
+    Vstup: skore benígnych okien (z behov bez skodlivej aktivity - najlepsie
+    z ODLOZENEJ casti, ktoru kalibracia nevidela). Vystup: dict s cislami,
+    nie jednym cislom - n, hodin, nad prahom, far/h.
+    """
+    s = np.asarray(skore_benigne, dtype=np.float64)
+    if not len(s):
+        return {"n": 0, "far_h": None,
+                "poznamka": "ziadne benigne okna na meranie FAR"}
+    nad = int(np.sum(s >= prah))
+    hodiny = len(s) * float(perioda_s) / 3600.0
+    return {"n": int(len(s)), "hodiny": hodiny,
+            "nad_prahom": nad,
+            "far_h": (nad / hodiny) if hodiny > 0 else None,
+            "prah": float(prah), "perioda_s": float(perioda_s)}
+
+
+def cas_do_detekcie(skore, prah, k=3, n=5, perioda_s=5.0, t0_s=0.0):
+    """Prvy cas, ked k z n poslednych okien je nad prahom (alarm).
+
+    Vstup: skore okien jedneho behu v poradi casu. Vracia dict s
+    detegovany: bool, cas_s (od t0 po START alarmoveho okna) a index okna.
+    Beh bez alarmu => detegovany False - detekcia sa nad nim nepocita.
+    """
+    s = np.asarray(skore, dtype=np.float64)
+    nad = s >= prah
+    for i in range(len(s) - n + 1):
+        if int(np.sum(nad[i:i + n])) >= k:
+            return {"detegovany": True,
+                    "cas_s": float(t0_s + i * perioda_s),
+                    "okno": int(i), "k_z_n": [k, n]}
+    return {"detegovany": False, "cas_s": None, "okno": None, "k_z_n": [k, n]}
+
+
+def detekcia_per_technika(behy, prah, k=3, n=5, perioda_s=5.0):
+    """Detekcia a cas-do-detekcie PER technika/rodina, nie jedno cislo.
+
+    `behy` je zoznam {label, skore, t0_s} - skore je pole okien behu.
+    Vracia dict: label -> {n_behov, detegovanych, ttd_median, ttd_zoznam}.
+    Behy bez alarmu sa rataju ako nedetegovane - priemer sa nad nimi
+    NEVYMYSLA.
+    """
+    out = {}
+    for b in behy:
+        lab = b["label"]
+        r = cas_do_detekcie(b["skore"], prah, k, n, perioda_s,
+                            t0_s=b.get("t0_s", 0.0))
+        slot = out.setdefault(lab, {"n_behov": 0, "detegovanych": 0,
+                                    "ttd_s": []})
+        slot["n_behov"] += 1
+        if r["detegovany"]:
+            slot["detegovanych"] += 1
+            slot["ttd_s"].append(r["cas_s"])
+    for lab, slot in out.items():
+        slot["detekcia_podiel"] = slot["detegovanych"] / slot["n_behov"]
+        if slot["ttd_s"]:
+            slot["ttd_median_s"] = float(np.median(slot["ttd_s"]))
+            slot["ttd_min_s"] = float(np.min(slot["ttd_s"]))
+        else:
+            slot["ttd_median_s"] = None
+            slot["ttd_min_s"] = None
+        slot["k_z_n"] = [k, n]
+    return out
+
+
 def vyhodnot(y_true, proba, triedy, benigna):
     """Binarne aj viactriedne metriky z jednych pravdepodobnosti."""
     y_true = np.asarray(y_true)
