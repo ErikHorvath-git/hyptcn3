@@ -1,6 +1,6 @@
 # Príručka k hyptcn3
 
-Vstupný dokument repozitára; stav kódu a artefaktov k 2026-09-19. Súbor je
+Vstupný dokument repozitára; stav kódu a artefaktov k 2026-10-05. Súbor je
 generovaný a needituje sa ručne — ako, hovorí kapitola 10.
 
 ## 1. Čo to je
@@ -33,7 +33,7 @@ python3 -m pytest -q      # testy parsera a príznakov
 ```
 
 `make test` prejde celú cestu zberu nad syntetickým obrazom veľkosti
-16 MiB, ktorý si sám vyrobí. Testov je 192 prešlých a 21 preskočených v `pytest` (spolu 213 zozbieraných; preskočený test nie je prešiel) a 2 v C (`hole_test`, `perbin_test`).
+16 MiB, ktorý si sám vyrobí. Testov je 220 prešlých a 24 preskočených v `pytest` (spolu 244 zozbieraných; preskočený test nie je prešiel) a 4 v C (`alarm_test`, `hole_test`, `perbin_test`, `retention_test`).
 
 ## 4. Ako vznikne snímka
 
@@ -43,12 +43,11 @@ z BTF) **pre túto doménu už v repozitári je** — priznaná vstupná závisl
 profil pri LibVMI alebo Volatility.
 
 **Pozor na boot.** Adresy v `kallsyms` sú randomizované pri každom štarte hosťa (KASLR),
-takže profil platí pre ten boot, v ktorom vznikol; offsety polí z BTF platia pre verziu
-jadra a reštart prežijú. **Po každom reštarte hosťa treba profil odobrať nanovo** —
-existujúci `get_profile.sh` bez `-f` neprepíše. Nesúlad sa neprehliadne: zisťuje sa pred
-každým podpríkazom, nástroj vypíše `NESULAD PROFILU` aj s príčinou (KASLR, symbol, úroveň
-tabuliek stránok a položka), výpisy označí `NEUPLNE` a skončí kódom 5; `validate` sa ani
-nespustí a JSON nezapíše. Raz sa to už stalo, celý výstup je v `docs/MERANIA.md` (L17).
+takže profil platí pre ten boot, v ktorom vznikol; offsety polí z BTF reštart prežijú.
+Nesúlad sa neprehliadne a od bloku A2 sa aj sám opraví: pred každým podpríkazom sa zisťuje
+a pri nesúlade sa profil **preukotví** (posun medzi bootmi sa zmeria z tabuliek stránok
+snímky, kotvy `init_task` + `linux_banner`). Až keď preukotvenie nejde (FGKASLR, chýbajúce
+stranky), nástroj vypíše `NESULAD PROFILU`, výpisy označí `NEUPLNE` a skončí kódom 5.
 
 ```bash
 scripts/get_profile.sh -f root@192.168.122.100  # po reštarte hosťa; -f prepíše starý profil
@@ -73,9 +72,9 @@ zapíše.
 
 | adresár | čo rieši | kde začať čítať | súborov spolu / riadkov v `.c .h .py .sh .md` |
 |---|---|---|---|
-| `vmicollect/` | zberač snímok pamäte VM: C a eBPF nad QEMU/KVM | `vmicollect/src/collector.c` | 31 / 9 167 |
-| `guestparse/` | rekonštrukcia procesov, modulov a soketov zo snímky | `guestparse/view.py` | 26 / 4 732 |
-| `features/` | per-bin príznakový vektor (referencia), okná, normalizácia | `features/perbin.py` | 17 / 3 951 |
+| `vmicollect/` | zberač snímok pamäte VM: C a eBPF nad QEMU/KVM | `vmicollect/src/collector.c` | 34 / 10 109 |
+| `guestparse/` | rekonštrukcia procesov, modulov a soketov zo snímky | `guestparse/view.py` | 28 / 5 590 |
+| `features/` | per-bin príznakový vektor (referencia), okná, normalizácia | `features/perbin.py` | 18 / 4 335 |
 | `tcn/` | model (Temporal Convolutional Network), baseliny, tréning a skórovanie snímok; model natrénovaný nie je a skóre nie je detekcia | `tcn/score.py` | 9 / 1 263 |
 | `profiles/` | profil jadra hosťa: symboly a offsety polí štruktúr | `profiles/debian12-6.1.0-42-cloud-amd64/README.md` | jeden adresár na boot hosťa — pozri L17 |
 | `scripts/` | root behy, príkazy v hosťovi, kontroly tvrdení | `scripts/root_run.sh` | 8 / 3 907 |
@@ -143,6 +142,7 @@ baseliny `tcn/baselines.py`, metriky `tcn/eval.py`. Okno vojde, jedno číslo vy
 | `once` | jedna snimka a koniec |
 | `probe` | pripoj sa a vypis parametre VM (nic nezapisuje) |
 | `restore` | poskladaj plny obraz z delta retazca — `--dir D --out F [--chain ID] [--until SEQ]` |
+| `hold` | <dir> <id>... oznac retazce markerom HOLD (retencia ich nezmaže) — `<id> = chain_id (delta zber) alebo meno suboru` |
 | `verify [adresar]` | over kontrolne sucty snimok podla .json |
 | `config` | vypis efektivnu konfiguraciu; s `--keys` vypis vsetky nastavitelne parametre |
 | `backends` | zoznam dostupnych backendov |
@@ -150,7 +150,7 @@ baseliny `tcn/baselines.py`, metriky `tcn/eval.py`. Okno vojde, jedno číslo vy
 
 Prepínače: `-c, --config F` konfiguracny subor (INI), `-o, --set K=V` prebi jeden parameter (da sa opakovat), `-v, --verbose` log na urovni DEBUG, `-q, --quiet` log iba ERROR.
 
-Podpríkazy `python3 -m guestparse`: `ps` zoznam procesov z init_task.tasks, `lsmod` zoznam nacitanych modulov, `ss` sietove spojenia (IPv4 aj IPv6), `info` profil, posun jadra a krizova kontrola prekladu adries, `checks` kontroly podozrivych vzorcov, `validate` porovnanie s pozemnou pravdou z hosta.
+Podpríkazy `python3 -m guestparse`: `ps` zoznam procesov z init_task.tasks, `lsmod` zoznam nacitanych modulov, `ss` sietove spojenia (IPv4 aj IPv6), `info` profil, posun jadra a krizova kontrola prekladu adries, `checks` kontroly podozrivych vzorcov, `validate` porovnanie s pozemnou pravdou z hosta, `textbaseline` baseline textu jadra z cistej snimky (kontrola (d); — `zapise text_baseline.json do profilu)`.
 Podpríkazy `python3 -m features`: `perbin` spocitaj vektor jednej snimky, `crosscheck` porovnaj referenciu s vektorom z C modulu, `session` pamat aj objekty hosta do jedneho vektora na snimku.
 
 **Konfiguračné kľúče** (`vmicollect config --keys`, prebijú sa cez `-o sekcia.kluc=hodnota`):
@@ -239,7 +239,7 @@ znamenalo držať dve znenia toho istého. Nadpisy sú preto dosadené z neho, s
 - **L14** — Procesy, moduly a sokety do príznakového vektora nevstupujú — **VYRIEŠENÉ 2026-09-19**
 - **L15** — Časové rozlíšenie: proces kratší než perióda zberu je nevidi…
 - **L16** — Presnosť detekcie malvéru nebola meraná a v tejto verzii sa…
-- **L17** — Profil jadra hosťa platí pre jeden boot, nie pre verziu jadr…
+- **L17** — Profil jadra hosťa platí pre jeden boot, nie pre verziu jadr… — **VYRIEŠENÉ 2026-10-05 (preukotvenie, blok A2)**
 
 ## 9. Kam ďalej
 
@@ -249,12 +249,12 @@ Každý typ faktu má jeden dokument, ktorý ho vlastní; keď si odporujú, pla
 |---|---|---|
 | `docs/ARCHITEKTURA.md` | rozhrania, formát `.vmicd` a sidecaru, tok dát podrobne | 1149 |
 | `docs/MERANIA.md` | log meraní: čo, kedy, akým príkazom a s akým výsledkom | 803 |
-| `docs/LIMITACIE.md` | L1 až L17: čo systém nevie a čo z toho plynie pre text | 851 |
-| `docs/kontroly.md` | kontroly podozrivých vzorcov a validačný príkaz | 219 |
+| `docs/LIMITACIE.md` | L1 až L17: čo systém nevie a čo z toho plynie pre text | 854 |
+| `docs/kontroly.md` | kontroly podozrivých vzorcov a validačný príkaz | 248 |
 | `HONESTY.md` | pravidlá pre čísla a slová v texte práce | 269 |
 | `README.md` | rozcestník repozitára a pôvod prevzatého kódu | 46 |
-| `vmicollect/README.md` | zberač zvnútra: vrstvy, hooky, formáty | 420 |
-| `guestparse/README.md` | parser zvnútra: preklad adries, prechod zoznamami | 140 |
+| `vmicollect/README.md` | zberač zvnútra: vrstvy, hooky, formáty | 460 |
+| `guestparse/README.md` | parser zvnútra: preklad adries, prechod zoznamami | 144 |
 | `features/PERBIN.md` | definícia príznakov a ich kontrakt | 163 |
 
 ## 10. Ako sa táto príručka udržiava

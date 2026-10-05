@@ -71,6 +71,10 @@ class Profile:
         self.dir = os.path.dirname(os.path.abspath(kallsyms_path))
         self.meta = load_meta(self.dir)
         self.sym = {}
+        # Absolutne symboly (typ 'A'/'a' v kallsyms - napr. percpu offsety).
+        # Tie sa pri preukotveni (KASLR, metoda shift()) NESMU posuvat:
+        # nie su to adresy, su to hodnoty.
+        self.abs = set()
         with open(kallsyms_path) as fh:
             for ln in fh:
                 p = ln.split()
@@ -82,6 +86,8 @@ class Profile:
                     except ValueError:
                         continue
                     self.sym.setdefault(p[2], addr)
+                    if p[1] in ("A", "a"):
+                        self.abs.add(p[2])
         if not self.sym:
             raise ProfileError("%s: ziadne symboly" % kallsyms_path)
         if not any(v for v in self.sym.values()):
@@ -89,6 +95,26 @@ class Profile:
                 "%s: vsetky adresy su nulove (kallsyms citany bez roota)"
                 % kallsyms_path)
         self.off = btf_offsets(btf_path, set(wanted))
+
+    def shift(self, delta, lo, hi):
+        """
+        Preukotvenie profilu na iny boot (blok A2): vsetky symboly obrazu
+        jadra v rozsahu [lo, hi) sa posunu o `delta` - KASLR posuva cely
+        obraz jadra rovnako, takze jeden posun staci pre vsetky symboly
+        naraz (bez FGKASLR).
+
+        NEposuvaju sa: absolutne symboly (typy A/a - su to hodnoty, nie
+        adresy) a symboly mimo rozsah (oblast modulov, fixmap, vsyscall) -
+        tie sa randomizuju inak alebo vobec.
+        """
+        for name, addr in list(self.sym.items()):
+            if name in self.abs or not (lo <= addr < hi):
+                continue
+            self.sym[name] = addr + delta
+        # checks.py si drzi zoradene pole adries v cache na profile -
+        # po posune by vracalo stare adresy
+        if hasattr(self, "_checks_symtab"):
+            del self._checks_symtab
 
     @classmethod
     def from_dir(cls, directory, wanted=WANTED):

@@ -788,7 +788,7 @@ na každom mieste, kde by inak vznikol dojem, že detekcia bola vyhodnotená.
 
 ---
 
-## L17 — Profil jadra hosťa platí pre jeden boot, nie pre verziu jadra
+## L17 — Profil jadra hosťa platí pre jeden boot, nie pre verziu jadra — VYRIEŠENÉ 2026-10-05 (preukotvenie, blok A2)
 
 **Fakt.** Profil v `profiles/` má dve časti a každá starne inak. Offsety polí štruktúr
 z BTF sú viazané na verziu jadra a reštart hosťa prežijú. Adresy symbolov v `kallsyms`
@@ -801,45 +801,48 @@ dnešnou snímkou: posun jadra sa našiel (skenuje sa banner v pamäti), ale kr�
 prekladu adries vrátila pre obe kontrolné adresy `0x0` a výpisy procesov aj modulov boli
 označené `NEUPLNE`. Čerstvý profil z toho istého bootu: krížová kontrola sedí na bit,
 výpisy úplné. Celý výstup oboch behov je v `docs/MERANIA.md`, záznam z 2026-09-19.
-Profil v `profiles/` bol v ten istý deň odobratý nanovo, takže dnes k hosťovi sedí;
-obmedzenie tým nezmizlo — platí pri každom ďalšom reštarte.
 
-**Čo to znamená pre prácu.** Nástroj chybu nezakrýva a od 2026-09-19 sa už nedá ani
-prehliadnuť. Krížová kontrola prekladu adries sa nerobí iba v `info`: diagnózu
-`GuestView.profile_boot_mismatch()` volá `guestparse/cli.py` pred výkonom **každého**
-podpríkazu. Pri nesúlade vypíše hlásenie `NESULAD PROFILU` (pomenuje KASLR, symbol,
-úroveň tabuliek stránok a položku, na ktorej prechod skončil) a skončí návratovým kódom
-**5** (`EXIT_PROFILE_MISMATCH`) — pre `info`, `ps`, `lsmod`, `ss`, `checks` aj `validate`.
+**Vyriešené 2026-10-05 (blok A2, commit `??`).** Namiesto pádu s kódom 5 sa profil
+preukotví. Posun medzi bootom profilu a bootom snimky sa **meria z tabuliek stránok**:
+pre známu fyzickú adresu `init_task` (overenú obsahom `comm == "swapper/0"` pri skene
+banneru) sa spätne nájde virtuálna adresa, ktorá ju mapuje, a rozdiel voči adrese
+v profile sa aplikuje na všetky symboly obrazu jadra. Druhá kotva (`linux_banner`) musí
+s tým istým posunom sedieť, inak sa posun neprijme. Overené na páre, ktorý je v repe:
+snímka z 18. 9. (`data/sessions/20260918T154914Z_validate/snap`) + profil z 19. 9.
+— pred A2 `ss` vrátil 0 socketov a každý podpríkaz končil kódom 5; po A2 sa profil
+preukotvil o `-0x1a800000`, `ss` rekonštruuje 13 socketov (rovnako ako historický
+artefakt so sediacim profilom) a `validate` beží. Drží to
+`guestparse/tests/test_reanchor.py` a `guestparse/tests/test_profile_boot.py`.
+Pozor na detail: posun sa NEBERIE priamo zo skenu banneru — ten dáva správne fyzické
+adresy, ale virtuálne o konštantu inak (obraz jadra sa mapuje s reziduálnym posunom
+2 MiB), preto sa meria z tabuliek.
+
+**Čo to znamená pre prácu (po vyriešení).** Nástroj chybu nezakrýva a od 2026-09-19 sa
+už nedala prehliadnuť; od 2026-10-05 ju navyše sám opraví. `guestparse/cli.py` pred
+výkonom každého podpríkazu volá `GuestView.profile_boot_mismatch()` a pri nesúlade sa
+pokúsi o preukotvenie (`GuestView.reanchor()`); úspech oznámi na stderr a pokračuje.
+Kód **5** (`EXIT_PROFILE_MISMATCH`) a hlásenie `NESULAD PROFILU` zostávajú pre prípad,
+keď preukotvenie nejde — kotva sa v tabuľkách nenájde (FGKASLR, chýbajúce stranky) —
+a vtedy platí pôvodné správanie vrátane rady obnoviť profil cez `scripts/get_profile.sh`.
 Kód 5 prebíja aj nález (1), aj neuzavretosť (4): nález zo zlého profilu nálezom nie je.
-`validate` sa pritom nespustí vôbec a výstupný JSON nezapíše, aby po sebe nenechal
-výsledok z profilu, ktorý k snímke nepatrí. Čítacie podpríkazy výpis aj tak vypíšu
-a označia ho `NEUPLNE`. Drží to `guestparse/tests/test_profile_boot.py` (nesúlad si
-vyrobí kópiou profilu s posunutými adresami jadra). Uložiť k výsledku aj výpis
-`python3 -m guestparse info` je stále užitočný záznam, podmienkou platnosti výsledku
-už ale nie je: nesúlad zastaví samotný podpríkaz.
 
 **Formulácia do textu práce.**
 
 > Profil jadra hosťa, ktorý preklenuje semantic gap, sa skladá z offsetov polí štruktúr
 > a z adries symbolov. Prvé sú viazané na verziu jadra, druhé na konkrétny štart systému,
-> pretože jadro adresy pri každom štarte randomizuje. Rekonštrukcia objektov hosťa preto
-> vyžaduje profil odobratý z toho istého behu hosťa, z ktorého pochádza snímka; pri profile
-> z iného behu prechod tabuľkami stránok zlyhá, nástroj príčinu pomenuje, výpis označí ako
-> neúplný a skončí vyhradeným návratovým kódom.
+> pretože jadro adresy pri každom štarte randomizuje. Modul preto posun medzi bootom
+> profilu a bootom snímky zmeria priamo z tabuliek stránok snímky (spätné hľadanie
+> virtuálnej adresy pre fyzickú adresu `init_task`, potvrdené druhou kotvou `linux_banner`)
+> a adresy profilu preukotví; keď sa kotva nenájde, rekonštrukciu označí ako neúplnú
+> a skončí vyhradeným návratovým kódom.
 > Rovnaká závislosť platí pre LibVMI aj Volatility.
 
-**Čo by to odstránilo.** Odvodiť zo samotnej snímky, kde v tomto štarte leží obraz jadra
-vo virtuálnom priestore, a týmto rozdielom prepočítať virtuálne adresy zo `kallsyms`.
-Sken banneru dáva dnes len rozdiel medzi virtuálnou adresou z profilu a fyzickou adresou
-v snímke; s ním sedí lineárne čítanie aj so starým profilom, ale prechod tabuliek stránok
-nie — tie sú indexované skutočnými virtuálnymi adresami tohto štartu, takže adresy
-v oblasti modulov a vo `vmalloc` zostávajú nedostupné. Prepočet hotový nie je a je
-v súboroch `guestparse/`, teda mimo správy tohto dokumentu.
-
-Hlásenie nesúladu hotové **je** (2026-09-19, návratový kód 5 a pomenovaná príčina), takže
-táto časť sa už medzi otvorené veci nepočíta. Zostáva samotná závislosť na boote: profil
-sa musí po reštarte hosťa odobrať nanovo (`scripts/get_profile.sh -f <cieľ>`), existujúci
-sa neprepíše bez `-f`.
+**Čo to odstránilo.** Odvodenie zo samotnej snímky, kde v tomto štarte leží obraz jadra
+vo virtuálnom priestore, a prepočet virtuálnych adries z `kallsyms` týmto rozdielom —
+presne postup opísaný nižšie v pôvodnom texte. Sken banneru dáva len rozdiel medzi
+virtuálnou adresou z profilu a fyzickou adresou v snímke; s ním sedí lineárne čítanie,
+ale prechod tabuliek stránok nie, lebo tie sú indexované skutočnými virtuálnymi
+adresami tohto štartu. Preukotvenie (A2) preto posun meria z tabuliek, nie z banneru.
 
 ---
 

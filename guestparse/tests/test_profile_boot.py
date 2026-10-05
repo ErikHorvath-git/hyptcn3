@@ -13,6 +13,11 @@ kazdom starte - posuva cely obraz jadra naraz - takze kopia sa sprava ako
 kallsyms z ineho bootu toho isteho jadra: sken banneru posun dopocita,
 init_task.comm sedi, ale tabulky stranok o tychto virtualnych adresach nevedia.
 Test tak nepotrebuje druhu snimku ani odlozeny stary profil.
+
+Od bloku A2 sa taky nesulad NEkonci hned kodom 5: CLI sa pokusi profil
+preukotvit na boot snimky (view.reanchor - delta zmerany z tabuliek stranok)
+a pokracuje. Kod 5 a NESULAD zostavaju pre pripad, ked preukotvenie nejde
+(FGKASLR, chybajuce stranky tabuliek).
 """
 
 import os
@@ -122,54 +127,71 @@ def test_chybajuca_tabulka_nie_je_nesulad(mini_view):
 
 
 # ------------------------------------------------------- navratove kody CLI
+#
+# Od bloku A2 sa nesulad najprv SKUSA preukotvit (posun z tabuliek stranok).
+# Synteticky "iny boot" (vsetky adresy + POSUN) je presne ten pripad, ktory
+# preukotvenie VYRIESI - CLI teda nesmie padnut, ale pokracovat. Kod 5 ostava
+# pre pripad, ked preukotvenie nejde (FGKASLR / chybajuce stranky) - to sa
+# simuluje vypnutym spatnym hladanim.
 
 
-def test_info_konci_kodom_5(mini_path, profil_iny_boot, capsys):
+def test_info_sa_preukotvi_namiesto_kodu_5(mini_path, profil_iny_boot, capsys):
     rc = cli.main(["info", "--snapshot", mini_path,
                    "--profile", profil_iny_boot])
-    out = capsys.readouterr().out
-    assert rc == cli.EXIT_PROFILE_MISMATCH == 5
-    assert "NESULAD PROFILU" in out
-    assert "NEZHODA" in out
+    captured = capsys.readouterr()
+    assert rc == cli.EXIT_OK
+    assert "preukotvenie" in captured.err
+    assert "NESULAD" not in captured.out
 
 
-def test_ps_varuje_a_konci_kodom_5(mini_path, profil_iny_boot, capsys):
-    """
-    Podprikaz nad prechodom zoznamu vysledok vypise (je oznaceny NEUPLNE),
-    ale diagnoza ide na stderr a kod je nenulovy - inak by sa v skripte
-    stratila.
-    """
+def test_ps_sa_preukotvi_a_konci_nulou(mini_path, profil_iny_boot, capsys):
     rc = cli.main(["ps", "--snapshot", mini_path,
                    "--profile", profil_iny_boot])
     err = capsys.readouterr().err
-    assert rc == cli.EXIT_PROFILE_MISMATCH
-    assert "NESULAD PROFILU" in err
+    assert rc == cli.EXIT_OK
+    assert "preukotvenie" in err
+    assert "NESULAD" not in err
 
 
-def test_kod_5_prebije_nalez_aj_neuzavretost(mini_path, profil_iny_boot,
-                                             capsys):
+def test_checks_sa_preukotvia_a_bezia(mini_path, profil_iny_boot, capsys):
     """
-    Nalez zo zleho profilu nalezom nie je: chyba vstupu prebija aj kod 1,
-    aj kod 4.
+    Po preukotveni uz profil k snimke patri, takze vysledky kontrol su
+    platne a kod je 0/1/4 - nie 5.
     """
     rc = cli.main(["checks", "--snapshot", mini_path,
                    "--profile", profil_iny_boot])
     capsys.readouterr()
-    assert rc == cli.EXIT_PROFILE_MISMATCH
+    assert rc != cli.EXIT_PROFILE_MISMATCH
 
 
-def test_validate_sa_pri_nesulade_ani_nespusti(mini_path, profil_iny_boot,
-                                               tmp_path, capsys):
-    """Zo zleho profilu sa subor v data/results nevyraba."""
+def test_validate_sa_po_preukotveni_spusti(mini_path, profil_iny_boot,
+                                           tmp_path, capsys):
+    """Po preukotveni uz profil k snimke patri - validate smie bezat."""
     out = tmp_path / "validate.json"
     rc = cli.main(["validate", "--snapshot", mini_path,
                    "--profile", profil_iny_boot,
                    "--ps-before", os.devnull, "--ps-after", os.devnull,
                    "--out", str(out)])
     err = capsys.readouterr().err
-    assert rc == cli.EXIT_PROFILE_MISMATCH
-    assert not out.exists()
-    assert "nezapisal" in err
+    assert rc != cli.EXIT_PROFILE_MISMATCH
+    assert "preukotvenie" in err
+    assert out.exists()
+
+
+def test_kod_5_ostava_ked_preukotvenie_nejde(mini_path, profil_iny_boot,
+                                             capsys, monkeypatch):
+    """
+    Ked sa kotva v tabulkach stranok nenajde (FGKASLR, chybajuce stranky),
+    plati stary kontrakt: kod 5, NESULAD a rada obnovit profil.
+    """
+    from guestparse.view import GuestView
+    monkeypatch.setattr(GuestView, "_va_for_pa", lambda self, pa: None)
+    rc = cli.main(["info", "--snapshot", mini_path,
+                   "--profile", profil_iny_boot])
+    out = capsys.readouterr().out
+    assert rc == cli.EXIT_PROFILE_MISMATCH == 5
+    assert "NESULAD PROFILU" in out
+    assert "get_profile.sh" in out
 
 
 # ------------------------------------------------------------ povod profilu

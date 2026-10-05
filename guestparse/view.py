@@ -66,6 +66,9 @@ class GuestView:
         self.banner = None
         self.banner_pa = None
         self.banner_candidates = 0
+        # Posun, o ktory sa profil preukotvil na boot snimky (A2);
+        # 0 = profil a snimka su z toho isteho bootu.
+        self.reanchored = 0
         # Nad hranicou uz nie je RAM snimky; ukazovatel, ktory sem trafi,
         # je roztrhnuty zoznam, nie platny objekt.
         self.max_pa = max(getattr(img, "memsize", 0) or 0,
@@ -614,6 +617,9 @@ class GuestView:
             "banner_pa": self.banner_pa,
             "banner_candidates": self.banner_candidates,
             "ktext_shift": self.ktext_shift,
+            # 0 = profil a snimka su z toho isteho bootu; inak posun, o ktory
+            # sa profil preukotvil (A2)
+            "reanchored": self.reanchored,
             "page_offset_base": self.page_offset_base,
             "translation_check": self.translation_check(),
             # None alebo text diagnozy; nesulad profilu je chyba vstupu,
@@ -733,9 +739,86 @@ class GuestView:
             "  Obnov profil: scripts/get_profile.sh -f root@<host-hosta> "
             "(alebo -t agent <domena>).")
         riadky.append(
-            "  Snimka z ineho bootu potrebuje profil z TOHO bootu - stary "
-            "profil sa uz neda dopocitat.")
+            "  Snimka z ineho bootu potrebuje profil z TOHO bootu, alebo "
+            "preukotvenie (A2) - toto zlyhalo, pozri dovod vyssie.")
         return "\n".join(riadky)
+
+    def reanchor(self):
+        """
+        Preukotvenie profilu na boot snimky (blok A2): namiesto padu s kodom 5
+        sa profil posunie o KASLR rozdiel a pokracuje sa.
+
+        Ako to funguje. KASLR posuva obraz jadra pri kazdom starte, ale
+        VZDY rovnako pre vsetky symboly - preto staci najst posun `delta`
+        medzi bootom profilu a bootom snimky. Neberie sa zo samotneho
+        banneru (ten da spravne fyzicke adresy, ale virtualne o konstantu
+        inak - obraz jadra sa mapuje s rezidualnym posunom 2 MiB), ale
+        MERIA sa z tabuliek stranok: pre znamu fyzicku adresu init_task
+        (overenu obsahom comm == "swapper/0" v resolve()) sa najde virtualna
+        adresa, ktora ju mapuje; delta = VA_v_snimke - VA_v_profile.
+        Druha kotva (linux_banner) musi s tym istym delta sediet, inak sa
+        posun NEAKCEPTUJE - nesediaci walk znamena FGKASLR alebo chybajuce
+        stranky a plati doterajsie spravanie.
+
+        Vrati (True, info) alebo (False, dovod). Na uspech mutuje profil
+        (Profile.shift) a upravi ktext_shift tak, aby preklad VA->PA zostal
+        presne taky isty ako pred preukotvenim.
+        """
+        if self.ktext_shift is None:
+            return False, "posun jadra sa nenasiel - nie je z coho preukotvit"
+        init_va = self.p.addr("init_task")
+        banner_va = self.p.addr("linux_banner")
+        if init_va is None or banner_va is None:
+            return False, "profil nema kotvy init_task/linux_banner"
+        init_pa = self.ktext_pa(init_va)     # banner-anchored, obsahovo overeny
+        if init_pa is None:
+            return False, "PA init_task sa neda vypocitat"
+
+        va_init_b = self._va_for_pa(init_pa)
+        if va_init_b is None:
+            return False, ("PA init_task 0x%x sa v tabulkach stranok obrazu "
+                           "jadra nenasla - snimke chybaju stranky alebo ide "
+                           "o FGKASLR" % init_pa)
+        delta = va_init_b - init_va
+        if delta == 0:
+            return False, "posun vysiel nulovy - profil a snimka sedia"
+        va_banner_b = banner_va + delta
+        if not (START_KERNEL_MAP <= va_banner_b < MODULES_VADDR):
+            return False, ("posun %+d vyvedie banner mimo rozsah obrazu "
+                           "jadra" % delta)
+        d = self.walk_pa_detail(va_banner_b)
+        if d["pa"] != self.banner_pa:
+            return False, ("druha kotva nesedi: walk(banner) dal 0x%x, banner "
+                           "je na 0x%x - posun by bol hadanie"
+                           % (d["pa"] or 0, self.banner_pa or 0))
+
+        self.p.shift(delta, START_KERNEL_MAP, MODULES_VADDR)
+        # preklad VA->PA musi ostat rovnaky: pa = va_po - START + ktext_shift
+        self.ktext_shift = self.ktext_shift - delta
+        self.reanchored = delta
+        return True, {"delta": delta, "init_task_va": va_init_b,
+                      "init_task_pa": init_pa}
+
+    def _va_for_pa(self, pa, step=2 * 1024 * 1024):
+        """
+        Spatne hladanie: ktora virtualna adresa obrazu jadra mapuje danu
+        fyzicku adresu? Skenuje sa okno [__START_KERNEL_map,
+        MODULES_VADDR) po 2 MiB blokoch a kandidat sa overi presnym
+        prechodom tabuliek - vracia iba POTVRDENE adresy.
+        """
+        for s in range(0, 1 << 30, step):
+            va = START_KERNEL_MAP + s
+            d = self.walk_pa_detail(va)
+            if d["pa"] is None:
+                continue
+            base = d["pa"] & ~(step - 1)
+            if not (0 <= pa - base < step):
+                continue
+            cand = va + (pa - base)
+            dd = self.walk_pa_detail(cand)
+            if dd["pa"] == pa:
+                return cand
+        return None
 
     # -------------------------------------------------------------- utility
 

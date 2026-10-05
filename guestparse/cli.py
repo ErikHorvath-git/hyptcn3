@@ -41,6 +41,9 @@ NAVRATOVE KODY:
      v repe je z predchadzajuceho bootu. Diagnozu stanovi
      GuestView.profile_boot_mismatch(): symbol sa linearne precitat DA, ale
      prechod tabuliek stranok pre jeho VA konci na nepritomnej polozke.
+     Od bloku A2 sa nesulad najprv SKUSA preukotvit (GuestView.reanchor():
+     posun zmerany z tabuliek stranok, dvojita kotva init_task+linux_banner);
+     az ked preukotvenie NEJDE (FGKASLR, chybajuce stranky), plati kod 5.
      PRECO VLASTNY KOD a preco nie 4: nie je to neuzavreta kontrola ("neviem"),
      je to CHYBA VSTUPU - nastroju sa dal profil, ktory k snimke nepatri.
      Preto prebija aj nalez (1), aj neuzavretost (4): nalez zo zleho profilu
@@ -198,6 +201,9 @@ def _print_info(res):
           % (res["banner_pa"], res["banner_candidates"]))
     shift = res["ktext_shift"]
     print("posun jadra:   %s0x%x" % ("-" if shift < 0 else "", abs(shift)))
+    if res.get("reanchored"):
+        print("preukotvenie:  %+d - profil bol z ineho bootu (KASLR), "
+              "adresy su posunute" % res["reanchored"])
     pob = res["page_offset_base"]
     print("page_offset:   %s" % ("0x%x" % pob if pob else "?"))
     print("krizova kontrola prekladu (linearne vs. tabulky stranok):")
@@ -329,6 +335,20 @@ def main(argv=None):
         # Nesulad profilu s bootom snimky sa zistuje raz, pred vykonom prikazu:
         # tyka sa vsetkeho, co z profilu cita adresy, nie iba `info`.
         mismatch = view.profile_boot_mismatch()
+
+        # A2: namiesto padu s kodom 5 sa profil skusi preukotvit na boot
+        # snimky. Uspech = pokracuje sa s preukotvenym profilom; neuspech
+        # (napr. FGKASLR) = doterajsie spravanie, kod 5.
+        if mismatch:
+            ok, why = view.reanchor()
+            if ok:
+                sys.stderr.write(
+                    "POZOR: profil bol z ineho bootu (KASLR); preukotvenie "
+                    "o %+d uspelo - pokracujem s preukotvenym profilom\n"
+                    % why["delta"])
+                mismatch = view.profile_boot_mismatch()
+            else:
+                sys.stderr.write("POZOR: preukotvenie neprebehlo: %s\n" % why)
 
         def final(rc):
             """Chyba vstupu prebija kazdy iny kod - viz navratove kody vyssie."""

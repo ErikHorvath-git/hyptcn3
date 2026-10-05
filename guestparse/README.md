@@ -58,13 +58,17 @@ ide iba JSON; upozornenia idú na stderr), `--banner` (iný reťazec bannera),
 | 2 | chyba: snímka sa nedá otvoriť (aj rozbitý reťazec), profil sa nedá načítať, posun jadra sa nenašiel |
 | 3 | podpríkaz nie je implementovaný (chýba modul balíka) |
 | 4 | `checks`: nič sa nenašlo, **ale aspoň jedna kontrola sa neuzavrela** |
-| 5 | **nesúlad profilu**: `kallsyms` je z iného štartu jadra (KASLR) než snímka |
+| 5 | **nesúlad profilu**: `kallsyms` je z iného štartu jadra (KASLR) než snímka a preukotvenie (nižšie) neprebehlo |
 
 Kód 5 platí pre **všetky** podpríkazy a zisťuje sa pred ich výkonom
-(`GuestView.profile_boot_mismatch()`). Nie je to neuzavretá kontrola („neviem"), ale chyba
-vstupu — nástroju sa dal profil, ktorý k snímke nepatrí — preto prebíja aj nález (1), aj
-neuzavretosť (4). Čítacie podpríkazy (`info`, `ps`, `lsmod`, `ss`, `checks`) výsledok aj
-tak vypíšu, označený ako `NEUPLNE`, a diagnózu vypíšu na stderr; `validate` sa nespustí
+(`GuestView.profile_boot_mismatch()`). Od bloku A2 sa nesúlad najprv **skúsi preukotviť**
+(`GuestView.reanchor()`): posun medzi bootom profilu a bootom snímky sa zmeria z tabuliek
+stránok (spätné hľadanie VA pre fyzickú adresu `init_task`, potvrdené druhou kotvou
+`linux_banner`) a adresy profilu sa posunú; úspech sa oznámi na stderr a pokračuje sa.
+Kód 5 nastáva až vtedy, keď preukotvenie nejde (FGKASLR, chýbajúce stranky tabuliek) —
+nie je to neuzavretá kontrola („neviem"), ale chyba vstupu, preto prebíja aj nález (1),
+aj neuzavretosť (4). Čítacie podpríkazy (`info`, `ps`, `lsmod`, `ss`, `checks`) výsledok
+aj tak vypíšu, označený ako `NEUPLNE`, a diagnózu vypíšu na stderr; `validate` sa nespustí
 vôbec a výstupný JSON nezapíše, aby po sebe nenechal súbor v `data/results`.
 
 Kód 4 je tam preto, že nula z prerušeného prechodu nie je dôkaz čistoty. Snímka je živá
