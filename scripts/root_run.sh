@@ -117,6 +117,13 @@ done
 [ $# -ge 1 ] || die_usage "chyba podprikaz"
 SUB="$1"; shift
 
+# Sedenie (B4) je samostatny orchestrator; root_run.sh ho len prepasa
+# dalej, aby "jediny skript pod rootom" ostal pravdivy.
+if [ "$SUB" = "session" ]; then
+    [ "$DRY" -eq 1 ] && set -- --dry-run "$@"
+    exec "$REPO/scripts/session.sh" "$@"
+fi
+
 case "$SUB" in
     probe|validate|once|run) ;;
     *) die_usage "neznamy podprikaz '$SUB'" ;;

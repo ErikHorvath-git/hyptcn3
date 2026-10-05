@@ -36,6 +36,15 @@ binárky** (B5): benígne sedenie injikuje benígnu binárku (napr. `sleep`),
 rovnako dlho a rovnako. Preto sa model nemôže naučiť harness namiesto
 správania. Priebeh sa zaznamenáva do manifestu, aby sa dal overiť.
 
+**Politika payloadov.** Injikovaný súbor sa musí dať spustiť v hosťovi
+(Debian 12); binárky z hostiteľa (Fedora 43, novší glibc) v ňom nebežia.
+Benígne sedenia preto injikujú **záťažové skripty z `scripts/loads/`**
+(`injekcia.subor = scripts/loads/<load>.sh`, `SEED`/`DUR` sa odovzdajú pri
+spustení) — mechanizmus (guest-file-write cez agenta, chmod +x, exec, kill
+po `runtime_s`) je doslova ten istý ako pri škodlivej binárke. PoC pre G1
+sa budú kompilovať pre Debian 12 (v hosťovi alebo musl-static) a nikdy
+nepôjdu do gitu — do manifestu ide len ich SHA-256.
+
 ## Zlatý obraz
 
 `make_golden.sh` stiahne pripnutú verziu `debian-12-genericcloud-amd64`
