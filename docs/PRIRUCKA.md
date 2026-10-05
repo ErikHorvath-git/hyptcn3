@@ -33,7 +33,7 @@ python3 -m pytest -q      # testy parsera a príznakov
 ```
 
 `make test` prejde celú cestu zberu nad syntetickým obrazom veľkosti
-16 MiB, ktorý si sám vyrobí. Testov je 226 prešlých a 24 preskočených v `pytest` (spolu 250 zozbieraných; preskočený test nie je prešiel) a 4 v C (`alarm_test`, `hole_test`, `perbin_test`, `retention_test`).
+16 MiB, ktorý si sám vyrobí. Testov je 237 prešlých a 24 preskočených v `pytest` (spolu 261 zozbieraných; preskočený test nie je prešiel) a 4 v C (`alarm_test`, `hole_test`, `perbin_test`, `retention_test`).
 
 ## 4. Ako vznikne snímka
 
@@ -75,9 +75,9 @@ zapíše.
 | `vmicollect/` | zberač snímok pamäte VM: C a eBPF nad QEMU/KVM | `vmicollect/src/collector.c` | 34 / 10 109 |
 | `guestparse/` | rekonštrukcia procesov, modulov a soketov zo snímky | `guestparse/view.py` | 30 / 6 052 |
 | `features/` | per-bin príznakový vektor (referencia), okná, normalizácia | `features/perbin.py` | 18 / 4 335 |
-| `tcn/` | model (Temporal Convolutional Network), baseliny, tréning a skórovanie snímok; model natrénovaný nie je a skóre nie je detekcia | `tcn/score.py` | 9 / 1 263 |
+| `tcn/` | model (Temporal Convolutional Network), baseliny, tréning a skórovanie snímok; model natrénovaný nie je a skóre nie je detekcia | `tcn/score.py` | 11 / 1 852 |
 | `profiles/` | profil jadra hosťa: symboly a offsety polí štruktúr | `profiles/debian12-6.1.0-42-cloud-amd64/README.md` | jeden adresár na boot hosťa — pozri L17 |
-| `scripts/` | root behy, príkazy v hosťovi, kontroly tvrdení | `scripts/root_run.sh` | 9 / 4 116 |
+| `scripts/` | root behy, príkazy v hosťovi, kontroly tvrdení | `scripts/root_run.sh` | 17 / 4 611 |
 | `data/` | výsledkové JSONy z meraní (`data/results/`) a pozemná pravda odobratá v hosťovi (`data/sessions/`); samotné snímky `.vmicd` sú mimo gitu (`data/raw/`) | `data/results/2026-09-18_zmrazeny_host/README.md` | rastie s každým meraním, nepočíta sa |
 
 ## 6. Ako to funguje
