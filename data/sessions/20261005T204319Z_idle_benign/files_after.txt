@@ -1,0 +1,5 @@
+/root/.bash_history 1929
+/root/.bashrc 571
+/root/.profile 161
+/root/.ssh/authorized_keys 93
+/tmp/hyptcn_payload 198

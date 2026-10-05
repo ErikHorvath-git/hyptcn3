@@ -1,0 +1,28 @@
+{
+ "schema": "hyptcn3/aktivita/1",
+ "date": "2026-10-05T20:45:55Z",
+ "aktivny": true,
+ "poznamka": "aktivita sa pozoruje NEZAVISLE od zberaca (pozemná pravda pred/po z hosta); detekcia sa pocita len nad aktivnymi behmi. Prazdne hodnoty (null) znamenaju chybajucu pozemnú pravdu - vtedy je oznacenie nedokazane, nie neaktivne.",
+ "pocty": {
+  "nove_procesy": 3,
+  "nove_moduly": 3,
+  "nove_sockety": 0,
+  "nove_subory": 1
+ },
+ "dokaz": {
+  "nove_procesy": [
+   "756",
+   "767",
+   "776"
+  ],
+  "nove_moduly": [
+   "inet_diag              24576  2 tcp_diag,udp_diag",
+   "tcp_diag               16384  0",
+   "udp_diag               16384  0"
+  ],
+  "nove_sockety": null,
+  "nove_subory": [
+   "/tmp/hyptcn_payload 198"
+  ]
+ }
+}

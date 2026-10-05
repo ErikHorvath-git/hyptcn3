@@ -799,6 +799,20 @@ na každom mieste, kde by inak vznikol dojem, že detekcia bola vyhodnotená.
 
 ---
 
+## L18 - A3: zvyskovy rozdiel textu medzi bootmi
+
+Baseline textu jadra maskuje styri triedy boot-variantnych patchov
+(static keys z __jump_table, absolutne relokacie R_X86_64_64/32/32S zo
+sekcii .rela vmlinux-u, alternative z .altinstructions, static calls z
+__static_call_sites). Na jadre 6.1.0-42-cloud-amd64 sa tym pokryje rozdiel
+oproti CISTEJ snimke TOHO ISTEHO bootu uplne (0 nalezov na 3586 stranach),
+ale medzi DVOMA bootmi zostava ~1116 stranok s rozdielom, ktory vysvetluje
+dalsia trieda boot-variantnych patchov (kandidati: retpoline/rethunk
+prepisovanie, zbytkove paravirt miesta - tabulka __parainstructions je na
+tejto VM prazdna). Dolezitok pre prax: 4. kontrola sa preto vyhodnocuje
+proti baseline z cistej snimky AKTUALNEHO bootu (session.sh ju vytvara
+pred kazdou seriou); od A2 sa profil preukotvuje sam.
+
 ## L17 — Profil jadra hosťa platí pre jeden boot, nie pre verziu jadra — VYRIEŠENÉ 2026-10-05 (preukotvenie, blok A2)
 
 **Fakt.** Profil v `profiles/` má dve časti a každá starne inak. Offsety polí štruktúr

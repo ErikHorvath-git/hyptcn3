@@ -1,0 +1,54 @@
+{
+ "schema": "hyptcn3/session/1",
+ "stamp": "20261005T204319Z",
+ "date": "2026-10-05T20:43:19Z",
+ "commit": "bdd83b51121734bcf2833b8c73e50be8a7434baa",
+ "typ": "benign",
+ "label": "idle",
+ "seed": 42,
+ "manifest": {
+  "schema": "hyptcn3/session-manifest/1",
+  "typ": "benign",
+  "label": "idle",
+  "seed": 42,
+  "warmup_s": 30,
+  "runtime_s": 120,
+  "interval_s": 5,
+  "tcpdump": true,
+  "apt_packages": [],
+  "injekcia": {
+   "subor": "scripts/loads/idle.sh",
+   "args": []
+  },
+  "collect": {
+   "writer": "delta",
+   "hash": "none"
+  }
+ },
+ "injekcia": {
+  "subor": "scripts/loads/idle.sh",
+  "sha256_merane": "x",
+  "args": []
+ },
+ "vystupy": {
+  "snimky_adresar": "data/raw/20261005T204319Z_session",
+  "snimok": 24,
+  "collect_tail": "2026-10-05T20:45:53.500Z INFO  koniec: 24 snimok, 0 chyb, 0 zmeskanych slotov, najvacsie meskanie 0.000 s, spolu 738.22 MiB",
+  "tcpdump": true,
+  "ground_truth": {
+   "ps_before.txt": "8038539bab4e36c156b6824d5eb425f4f275f5dd939d5952d871ee3581045a8f",
+   "ps_after.txt": "0e9593da57e9e60ff4293fa0b4d125ae03a8a92a19b85261d795b78f677bb263",
+   "lsmod_before.txt": "0b4a304085a83a86220b394ab643690168ff3879157aae5dc8358e329b004f50",
+   "lsmod_after.txt": "153db331d046d435cfacfba9524654b4c94f28578cb892f1a9d08a0c0b7d6203",
+   "ss_before.txt": "21a0f25cc2a83fd939d863e72cb3e9d7c623e3ae485ecbfab926b7c165e647ea",
+   "ss_after.txt": "21a0f25cc2a83fd939d863e72cb3e9d7c623e3ae485ecbfab926b7c165e647ea",
+   "boot_id_before.txt": "82fe28ecc210b72afa0e16affba68310584b77ed9f45c8b6356beb9788112b08",
+   "payload.log": "0db9c196c882ae99dc77aea8169915b411d320387235d20ba083559a4caf5636",
+   "collect.log": "59e628f47b341dfe1bf02c2af346a23e1b86f8f8312d7332ea733a13da47e753",
+   "apt.log": null
+  }
+ },
+ "priebeh": [
+  "(doplnene po dokonceni behu - manifest block zlyhal na __file__ v heredocu, opravene v session.sh)"
+ ]
+}

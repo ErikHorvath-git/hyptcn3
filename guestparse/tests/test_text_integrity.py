@@ -46,7 +46,9 @@ class StubProf:
     """Profil: _stext=0, _etext=3 stranky; meta a dir pre load_text_baseline."""
 
     def __init__(self, dir=None):
-        self.sym = {"_stext": 0x1000000, "_etext": 0x1000000 + 3 * PAGE}
+        self.sym = {"_stext": 0x1000000, "_etext": 0x1000000 + 3 * PAGE,
+                    "__start___jump_table": 0x5000000,
+                    "__stop___jump_table": 0x5000000}   # prazdna tabulka
         self.meta = {"boot_id": "test-boot"}
         self.dir = dir or ""
 
@@ -71,6 +73,7 @@ def _baseline_for(pages):
     return {"schema": checks.TEXT_BASELINE_SCHEMA, "page_size": PAGE,
             "stext": 0x1000000, "etext": 0x1000000 + 3 * PAGE,
             "boot_id": "test-boot",
+            "mask_rel": [], "mask_sites": 0,   # stub: ziadne static keys
             "pages": [{"va": va, "sha256": hashlib.sha256(pages[va]).hexdigest()}
                       for va in sorted(pages)]}
 
@@ -171,8 +174,9 @@ def test_check_all_obsahuje_text_integrity(mini_view):
     res = checks.check_all(mini_view)
     assert "text_integrity" in res
     assert res["summary"]["text_integrity_findings"] == 0
-    assert res["text_integrity"]["available"] is True
-    assert res["text_integrity"]["conclusive"] is False
+    # mini neobsahuje __jump_table - bez nej sa static keys nedaju
+    # maskovat, takze 4. kontrola je nedostupna a v zozname neuzavretych
+    assert res["text_integrity"]["available"] is False
     assert "text_integrity" in res["summary"]["inconclusive"]
 
 

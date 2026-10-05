@@ -47,12 +47,11 @@ premennou `VMIC_DOMAIN`. Profil jadra hosťa (symboly z `kallsyms`, offsety pol�
 z BTF) **pre túto doménu už v repozitári je** — priznaná vstupná závislosť, rovnako ako
 profil pri LibVMI alebo Volatility.
 
-**Pozor na boot.** Adresy v `kallsyms` sú randomizované pri každom štarte hosťa (KASLR),
-takže profil platí pre ten boot, v ktorom vznikol; offsety polí z BTF reštart prežijú.
-Nesúlad sa neprehliadne a od bloku A2 sa aj sám opraví: pred každým podpríkazom sa zisťuje
-a pri nesúlade sa profil **preukotví** (posun medzi bootmi sa zmeria z tabuliek stránok
-snímky, kotvy `init_task` + `linux_banner`). Až keď preukotvenie nejde (FGKASLR, chýbajúce
-stranky), nástroj vypíše `NESULAD PROFILU`, výpisy označí `NEUPLNE` a skončí kódom 5.
+**Pozor na boot.** Adresy v `kallsyms` sú randomizované pri každom štarte hosťa (KASLR);
+offsety polí z BTF reštart prežijú.
+Nesúlad sa neprehliadne a od A2 sa aj sám opraví: pri nesúlade sa profil **preukotví**
+(posun sa zmeria z tabuliek stránok, kotvy `init_task` + `linux_banner`); až keď to nejde
+(FGKASLR, chýbajúce stranky), nástroj vypíše `NESULAD PROFILU` a skončí kódom 5.
 
 ```bash
 scripts/get_profile.sh -f root@192.168.122.100  # po reštarte hosťa; -f prepíše starý profil

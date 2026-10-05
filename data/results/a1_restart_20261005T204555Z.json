@@ -1,0 +1,40 @@
+{
+ "schema": "hyptcn3/a1-restart/1",
+ "date": "2026-10-05T20:45:55Z",
+ "commit": "bdd83b51121734bcf2833b8c73e50be8a7434baa",
+ "command": "vmicollect run (delta, interval 5.0s, 8 cyklov) na domene 'hyptcn-guest'; po 3. sidecari virsh destroy+start",
+ "domain": "hyptcn-guest",
+ "run_rc": 0,
+ "domain_state_po": "running",
+ "restart": {
+  "vykonany": true,
+  "poznamka": "po 3. sidecari"
+ },
+ "n_sidecars": 8,
+ "n_vmid": 2,
+ "vmids": {
+  "3792023": [
+   "hyptcn-guest_000000_20261005T204557110Z.json",
+   "hyptcn-guest_000001_20261005T204602111Z.json",
+   "hyptcn-guest_000002_20261005T204607111Z.json"
+  ],
+  "3794807": [
+   "hyptcn-guest_000003_20261005T204612111Z.json",
+   "hyptcn-guest_000004_20261005T204617111Z.json",
+   "hyptcn-guest_000005_20261005T204622111Z.json",
+   "hyptcn-guest_000006_20261005T204627111Z.json",
+   "hyptcn-guest_000007_20261005T204632111Z.json"
+  ]
+ },
+ "posledna_snimka": {
+  "subor": "hyptcn-guest_000007_20261005T204632111Z.json",
+  "vmid": 3794807,
+  "novy_pid": true
+ },
+ "chains": 1,
+ "log_tail": "2026-10-05T20:46:22.758Z INFO  #5 delta  1.38 MiB/4.00 GiB  stranky 352/528417 (0.07 %)  pauza 0.0 ms  citanie 646.7 ms  spolu 646.8 ms\n2026-10-05T20:46:27.738Z INFO  #6 delta  2.05 MiB/4.00 GiB  stranky 522/528417 (0.10 %)  pauza 0.0 ms  citanie 626.8 ms  spolu 627.0 ms\n2026-10-05T20:46:32.717Z INFO  #7 delta  1.06 MiB/4.00 GiB  stranky 270/528417 (0.05 %)  pauza 0.0 ms  citanie 606.1 ms  spolu 606.3 ms\n2026-10-05T20:46:32.717Z INFO  koniec: 8 snimok, 0 chyb, 0 zmeskanych slotov, najvacsie meskanie 0.000 s, spolu 785.38 MiB",
+ "values": {},
+ "host": "Fedora Linux 43, jadro 7.2.5-100.fc43.x86_64",
+ "guest": "hyptcn-guest, Debian 12, jadro 6.1.0-42-cloud-amd64",
+ "n": 1
+}

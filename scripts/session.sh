@@ -227,10 +227,12 @@ as_user virsh --connect "$URI" snapshot-revert "$DOMAIN" "$SNAPSHOT" >/dev/null 
 COLLECT_TAIL=$(grep -E "koniec:" "$SESS/collect.log" | tail -1 || true)
 N_SIDECARS=$(ls "$RAWDIR"/*.json 2>/dev/null | wc -l)
 python3 - "$SESS" "$MANIFEST_IN" "$STAMP" "$INJ_SHA" "$N_SIDECARS" \
-        "$COLLECT_TAIL" "$TYP" "$LABEL" "$SEED" <<'PYEOF'
+        "$COLLECT_TAIL" "$TYP" "$LABEL" "$SEED" "$REPO" <<'PYEOF'
 import json, os, subprocess, sys
-sess, manifest_in, stamp, inj_sha, n_sidecars, collect_tail, typ, label, seed = sys.argv[1:]
-repo = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sess, manifest_in, stamp, inj_sha, n_sidecars, collect_tail, typ, label, seed, repo = sys.argv[1:]
+# POZOR: skript bezi cez 'python3 -' (stdin), preto __file__ je '<stdin>' a
+# cestu k repu NESMIE odvodzovat - podava ju session.sh ako posledny argv
+# (2026-10-05: prave toto ticho zabilo manifest prveho sedenia).
 commit = subprocess.check_output(["git", "-C", repo, "rev-parse", "HEAD"],
                                  text=True).strip()
 inp = json.load(open(manifest_in, encoding="utf-8"))

@@ -42,12 +42,11 @@ premennou `VMIC_DOMAIN`. Profil jadra hosťa (symboly z `kallsyms`, offsety pol�
 z BTF) **pre túto doménu už v repozitári je** — priznaná vstupná závislosť, rovnako ako
 profil pri LibVMI alebo Volatility.
 
-**Pozor na boot.** Adresy v `kallsyms` sú randomizované pri každom štarte hosťa (KASLR),
-takže profil platí pre ten boot, v ktorom vznikol; offsety polí z BTF reštart prežijú.
-Nesúlad sa neprehliadne a od bloku A2 sa aj sám opraví: pred každým podpríkazom sa zisťuje
-a pri nesúlade sa profil **preukotví** (posun medzi bootmi sa zmeria z tabuliek stránok
-snímky, kotvy `init_task` + `linux_banner`). Až keď preukotvenie nejde (FGKASLR, chýbajúce
-stranky), nástroj vypíše `NESULAD PROFILU`, výpisy označí `NEUPLNE` a skončí kódom 5.
+**Pozor na boot.** Adresy v `kallsyms` sú randomizované pri každom štarte hosťa (KASLR);
+offsety polí z BTF reštart prežijú.
+Nesúlad sa neprehliadne a od A2 sa aj sám opraví: pri nesúlade sa profil **preukotví**
+(posun sa zmeria z tabuliek stránok, kotvy `init_task` + `linux_banner`); až keď to nejde
+(FGKASLR, chýbajúce stranky), nástroj vypíše `NESULAD PROFILU` a skončí kódom 5.
 
 ```bash
 scripts/get_profile.sh -f root@192.168.122.100  # po reštarte hosťa; -f prepíše starý profil
@@ -73,11 +72,11 @@ zapíše.
 | adresár | čo rieši | kde začať čítať | súborov spolu / riadkov v `.c .h .py .sh .md` |
 |---|---|---|---|
 | `vmicollect/` | zberač snímok pamäte VM: C a eBPF nad QEMU/KVM | `vmicollect/src/collector.c` | 35 / 10 316 |
-| `guestparse/` | rekonštrukcia procesov, modulov a soketov zo snímky | `guestparse/view.py` | 30 / 6 138 |
+| `guestparse/` | rekonštrukcia procesov, modulov a soketov zo snímky | `guestparse/view.py` | 30 / 6 462 |
 | `features/` | per-bin príznakový vektor (referencia), okná, normalizácia | `features/perbin.py` | 18 / 4 335 |
 | `tcn/` | model (Temporal Convolutional Network), baseliny, tréning a skórovanie snímok; model natrénovaný nie je a skóre nie je detekcia | `tcn/score.py` | 15 / 2 574 |
 | `profiles/` | profil jadra hosťa: symboly a offsety polí štruktúr | `profiles/debian12-6.1.0-42-cloud-amd64/README.md` | jeden adresár na boot hosťa — pozri L17 |
-| `scripts/` | root behy, príkazy v hosťovi, kontroly tvrdení | `scripts/root_run.sh` | 27 / 5 239 |
+| `scripts/` | root behy, príkazy v hosťovi, kontroly tvrdení | `scripts/root_run.sh` | 28 / 5 374 |
 | `data/` | výsledkové JSONy z meraní (`data/results/`) a pozemná pravda odobratá v hosťovi (`data/sessions/`); samotné snímky `.vmicd` sú mimo gitu (`data/raw/`) | `data/results/2026-09-18_zmrazeny_host/README.md` | rastie s každým meraním, nepočíta sa |
 
 ## 6. Ako to funguje
@@ -150,7 +149,7 @@ baseliny `tcn/baselines.py`, metriky `tcn/eval.py`. Okno vojde, jedno číslo vy
 
 Prepínače: `-c, --config F` konfiguracny subor (INI), `-o, --set K=V` prebi jeden parameter (da sa opakovat), `-v, --verbose` log na urovni DEBUG, `-q, --quiet` log iba ERROR.
 
-Podpríkazy `python3 -m guestparse`: `ps` zoznam procesov z init_task.tasks, `lsmod` zoznam nacitanych modulov, `ss` sietove spojenia (IPv4 aj IPv6), `info` profil, posun jadra a krizova kontrola prekladu adries, `checks` kontroly podozrivych vzorcov, `validate` porovnanie s pozemnou pravdou z hosta, `textbaseline` baseline textu jadra z cistej snimky (kontrola (d); — `zapise text_baseline.json do profilu)`, `procmap` ktoremu procesu patria zmenene stranky binov (A4).
+Podpríkazy `python3 -m guestparse`: `ps` zoznam procesov z init_task.tasks, `lsmod` zoznam nacitanych modulov, `ss` sietove spojenia (IPv4 aj IPv6), `info` profil, posun jadra a krizova kontrola prekladu adries, `checks` kontroly podozrivych vzorcov, `validate` porovnanie s pozemnou pravdou z hosta, `textbaseline` baseline textu jadra (kontrola (d); zapise — `text_baseline.json do profilu). Bez --vmlinux ide o` — `baseline z cistej snimky, s --vmlinux z linkovaneho` — `obrazu (silnejsia, boot-independent).`, `procmap` ktoremu procesu patria zmenene stranky binov (A4).
 Podpríkazy `python3 -m features`: `perbin` spocitaj vektor jednej snimky, `crosscheck` porovnaj referenciu s vektorom z C modulu, `session` pamat aj objekty hosta do jedneho vektora na snimku.
 
 **Konfiguračné kľúče** (`vmicollect config --keys`, prebijú sa cez `-o sekcia.kluc=hodnota`):
@@ -220,7 +219,7 @@ a **nenahrádzajú sa ničím** — napísané syntetické scenáre sa na tréni
 lebo model natrénovaný na nich by klasifikoval scenáre autora, nie malvér (L16). Pri
 načítaní BPF programu sa objaví nefatálne `libbpf: Error in bpf_create_map_xattr(pages): -EINVAL. Retrying without BTF.` — zber funguje, príčina neznáma.
 
-Ostatné obmedzenia vlastní `docs/LIMITACIE.md` (L1 až L17); prerozprávať ich tu by
+Ostatné obmedzenia vlastní `docs/LIMITACIE.md` (L1 až L18); prerozprávať ich tu by
 znamenalo držať dve znenia toho istého. Nadpisy sú preto dosadené z neho, skrátené:
 
 - **L1** — Živá snímka: VM sa nezastavuje
@@ -239,6 +238,7 @@ znamenalo držať dve znenia toho istého. Nadpisy sú preto dosadené z neho, s
 - **L14** — Procesy, moduly a sokety do príznakového vektora nevstupujú — **VYRIEŠENÉ 2026-09-19**
 - **L15** — Časové rozlíšenie: proces kratší než perióda zberu je nevidi…
 - **L16** — Presnosť detekcie malvéru nebola meraná a v tejto verzii sa…
+- **L18** — L18 - A3: zvyskovy rozdiel textu medzi bootmi
 - **L17** — Profil jadra hosťa platí pre jeden boot, nie pre verziu jadr… — **VYRIEŠENÉ 2026-10-05 (preukotvenie, blok A2)**
 
 ## 9. Kam ďalej
@@ -249,7 +249,7 @@ Každý typ faktu má jeden dokument, ktorý ho vlastní; keď si odporujú, pla
 |---|---|---|
 | `docs/ARCHITEKTURA.md` | rozhrania, formát `.vmicd` a sidecaru, tok dát podrobne | 1149 |
 | `docs/MERANIA.md` | log meraní: čo, kedy, akým príkazom a s akým výsledkom | 803 |
-| `docs/LIMITACIE.md` | L1 až L17: čo systém nevie a čo z toho plynie pre text | 865 |
+| `docs/LIMITACIE.md` | L1 až L18: čo systém nevie a čo z toho plynie pre text | 879 |
 | `docs/kontroly.md` | kontroly podozrivých vzorcov a validačný príkaz | 248 |
 | `HONESTY.md` | pravidlá pre čísla a slová v texte práce | 269 |
 | `README.md` | rozcestník repozitára a pôvod prevzatého kódu | 46 |

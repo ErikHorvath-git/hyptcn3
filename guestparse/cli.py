@@ -112,11 +112,17 @@ def build_parser():
     sp.add_argument("--out", required=True)
 
     sp = sub.add_parser("textbaseline",
-                        help="baseline textu jadra z cistej snimky (kontrola "
-                             "(d); zapise text_baseline.json do profilu)")
+                        help="baseline textu jadra (kontrola (d); zapise "
+                             "text_baseline.json do profilu). Bez --vmlinux "
+                             "ide o baseline z cistej snimky, s --vmlinux "
+                             "z linkovaneho obrazu (silnejsia, boot-"
+                             "independent).")
     _add_common(sp)
     sp.add_argument("--force", action="store_true",
                     help="prepis existujucu baseline")
+    sp.add_argument("--vmlinux", default=None,
+                    help="cesta k vmlinux (default: data/raw/profile-assets/"
+                         "vmlinux-<release> podla profilu)")
 
     sp = sub.add_parser("procmap",
                         help="ktoremu procesu patria zmenene stranky binov "
@@ -431,16 +437,28 @@ def main(argv=None):
                 sys.stderr.write("chyba: %s uz existuje (prepis len "
                                  "s --force)\n" % out)
                 return EXIT_ERROR
+            vmlinux = args.vmlinux
+            if vmlinux is None:
+                release = ((view.p.meta or {}).get("release")
+                           or (view.p.meta or {}).get("guest_kernel"))
+                if release:
+                    repo = os.path.dirname(os.path.dirname(
+                        os.path.abspath(__file__)))
+                    kandidat = os.path.join(repo, "data", "raw",
+                                            "profile-assets",
+                                            "vmlinux-%s" % release)
+                    if os.path.isfile(kandidat):
+                        vmlinux = kandidat
             try:
-                doc = checks.build_text_baseline(view)
+                doc = checks.build_text_baseline(view, vmlinux_path=vmlinux)
             except ValueError as exc:
                 sys.stderr.write("chyba: %s\n" % exc)
                 return EXIT_ERROR
             with open(out, "w", encoding="utf-8") as fh:
                 json.dump(doc, fh, indent=1)
                 fh.write("\n")
-            sys.stderr.write("zapisane: %s (%d stranok, boot %s)\n"
-                             % (out, len(doc["pages"]),
+            sys.stderr.write("zapisane: %s (%d stranok, zdroj %s, boot %s)\n"
+                             % (out, len(doc["pages"]), doc.get("zdroj"),
                                 doc.get("boot_id") or "neznamy"))
             return EXIT_OK
 
