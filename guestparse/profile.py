@@ -24,6 +24,8 @@ WANTED = (
     "fdtable",
     "socket",
     "sock_common",
+    "mm_struct",        # pre A4: mapovanie bin -> proces (mm->pgd, mm->mmap)
+    "vm_area_struct",   # vm_start/vm_end/vm_next
 )
 
 # Strojovo citatelne udaje o tom, z KTOREHO startu hosta je profil.

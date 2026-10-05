@@ -8,6 +8,8 @@ Kontrakt (na tento sa spoliehaju ostatne casti prace, nemeni sa):
   python3 -m guestparse ss       --snapshot <cesta> --profile <adresar> [--json]
   python3 -m guestparse info     --snapshot <cesta> --profile <adresar> [--json]
   python3 -m guestparse checks   --snapshot <cesta> --profile <adresar> [--json]
+  python3 -m guestparse procmap  --snapshot <retazec> --profile <adresar>
+        [--bin N] [--bin-bytes B]   # zmenene stranky binov -> procesy (A4)
   python3 -m guestparse textbaseline --snapshot <cista_snimka> --profile <adresar>
         [--force]          # baseline textu jadra pre kontrolu (d) do profilu
   python3 -m guestparse validate --snapshot <cesta> --profile <adresar> \
@@ -115,6 +117,18 @@ def build_parser():
     _add_common(sp)
     sp.add_argument("--force", action="store_true",
                     help="prepis existujucu baseline")
+
+    sp = sub.add_parser("procmap",
+                        help="ktoremu procesu patria zmenene stranky binov "
+                             "(A4)")
+    _add_common(sp)
+    sp.add_argument("--bin", type=int, action="append", default=None,
+                    metavar="INDEX",
+                    help="obmedz na index binu (da sa opakovat); bez = "
+                         "vsetky biny so zmenou")
+    sp.add_argument("--bin-bytes", type=int, default=16 * 1024 * 1024,
+                    dest="bin_bytes",
+                    help="velkost binu v bajtoch (vychodzie 16777216)")
     return ap
 
 
@@ -262,6 +276,20 @@ def _print_checks(res):
           % (res["finding_count"], s["syscall_hooks"]))
     for f in res["findings"]:
         print("  %s" % f)
+
+
+def _print_procmap(res):
+    print("bin   gpa_od          zmenenych   jadro   procesy (top 5)")
+    for b in sorted(res["bins"]):
+        row = res["bins"][b]
+        proc = ", ".join("%d/%s:%d" % (p["pid"], p["comm"], p["stranky"])
+                         for p in row["procesy"][:5])
+        print("%4d  0x%-12x %9d %7d   %s"
+              % (b, row["gpa_od"], row["zmenenych_stranok"],
+                 row["jadro_stranky"], proc))
+    print("mapovane_stranky=%d, capped=%s, cas=%.2f s (%s)"
+          % (res["mapovane_stranky"], res["capped"], res["cas_s"],
+             res["sposob"]))
 
 
 def _print_validate(res):
@@ -436,6 +464,9 @@ def main(argv=None):
         if args.cmd == "checks":
             print(json.dumps(res, indent=2)) if args.json else _print_checks(res)
             return final(checks_exit_code(res))
+        if args.cmd == "procmap":
+            print(json.dumps(res, indent=2)) if args.json else _print_procmap(res)
+            return final(EXIT_OK)
         if args.json:
             print(json.dumps(res, indent=2))
         return final(EXIT_OK)

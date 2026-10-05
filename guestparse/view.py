@@ -204,11 +204,15 @@ class GuestView:
         # "neviem" by inak vznikla diagnoza.
         return True
 
-    def walk_pa_detail(self, va):
+    def walk_pa_detail(self, va, root_pa=None):
         """
         Preklad virtualnej adresy hosta prechodom tabuliek stranok
         (4 urovne, x86_64). Pokryva aj oblasti, ktore linearne mapovane nie su -
         moduly a vmalloc.
+
+        `root_pa` = fyzicka adresa vrcholovej tabulky. Default je
+        init_top_pgt (jadro); pre uzivatelsky priestor procesu sa podava
+        jeho mm->pgd (preklad cez to_pa), pozri guestparse/procmap.py.
 
         Vracia {'pa', 'level', 'index', 'reason', 'reason_code'}; 'pa' je None,
         ked sa prechod nedokoncil. Velke stranky (1 GiB, 2 MiB) sa rozpoznaju
@@ -224,7 +228,7 @@ class GuestView:
         """
         out = {"pa": None, "level": None, "index": None,
                "reason": None, "reason_code": None}
-        table = self._pgt_root()
+        table = self._pgt_root() if root_pa is None else root_pa
         if table is None:
             out["reason_code"] = "bez_korena"
             out["reason"] = ("neznamy posun jadra alebo profil nema "

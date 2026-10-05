@@ -189,9 +189,9 @@ v hosťovi by protirečil zadaniu, nepoužíva sa, a pred meraniami sa v hosťov
 
 ---
 
-## L4 — Parsuje sa pamäť jadra, nie pamäť procesov
+## L4 — Parsuje sa pamäť jadra, nie pamäť procesov — ČIASTOČNE ODSTRÁNENÉ 2026-10-05 (A4)
 
-**Fakt.** Preklad adries pokrýva **priestor jadra**: obraz jadra a priamy mapping
+**Fakt (pôvodný).** Preklad adries pokrýva **priestor jadra**: obraz jadra a priamy mapping
 lineárnym vzťahom, oblasti modulov a vmalloc prechodom tabuliek stránok z `init_top_pgt`.
 Obsah pamäte používateľských procesov sa **neparsuje**. Chýba na to vstup: preklad
 používateľských adries potrebuje hodnotu CR3 konkrétneho vCPU (alebo `mm_struct->pgd`
@@ -201,6 +201,17 @@ vCPU iba ich počet.
 Prakticky to znamená: procesy, moduly a sokety sa zo snímky rekonštruujú, ale ich
 používateľské dáta (argumenty, obsah haldy, načítané knižnice v pamäti procesu, spustiteľný
 kód procesu) nie.
+
+**Zmena 2026-10-05 (blok A4, `guestparse/procmap.py`).** Registre vCPU stále nečíta nič,
+ale pre **priradenie zmenených binov procesom** sa registre nepotrebujú: pre každý proces
+sa koreň tabuliek vezme z `mm->pgd` (ukazovateľ v pamäti jadra, preloží sa rovnako ako
+iné jadrové adresy) a zostúpi sa celými používateľskými tabuľkami — bez VMA zoznamu,
+ktorý v BTF tohto jadra (Debian 6.1.159, maple tree) ani nie je. Výsledok:
+`python3 -m guestparse procmap` priradí zmenené stranky binu konkrétnym procesom
+(napr. bin 21: 3560 strán jadro, 512 systemd; merané na snímke z 18. 9., artefakt
+v testoch `guestparse/tests/test_procmap.py`). Čo sa NEZMENILO: obsah používateľskej
+pamäte sa stále neparsuje (žiadne argumenty, halda, knižnice) — mapovanie bin→proces
+je len o **vlastníctve stránok**, nie o čítaní ich obsahu.
 
 **Overenie.** Na strane parsera sa CR3 ani registre vCPU nespomínajú:
 

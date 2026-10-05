@@ -41,7 +41,9 @@ adresára funguje.
 | `lsmod` | načítané moduly zo zoznamu `modules` |
 | `ss` | sokety IPv4 aj IPv6 (protokol sa určuje podľa `skc_prot`, nie podľa portu) |
 | `info` | profil, reťazec snímky, posun jadra a krížová kontrola prekladu adries |
-| `checks` | kontroly integrity: `sys_call_table`, procesy krížovo, moduly krížovo |
+| `checks` | kontroly integrity: `sys_call_table`, procesy krížovo, moduly krížovo, text jadra |
+| `procmap` | zmenené stránky binov → ktorému procesu patria (A4; `--bin N`, `--bin-bytes B`) |
+| `textbaseline` | baseline textu jadra z čistej snímky (kontrola (d); zapíše sa do profilu) |
 | `validate` | porovnanie s pozemnou pravdou z hosťa (`ps`, `lsmod`, `ss`) |
 
 Spoločné parametre: `--snapshot` (adresár s reťazcom `.vmicd`, jeden `.vmicd` alebo
