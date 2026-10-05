@@ -145,6 +145,7 @@ zaznam "ground truth PRED"
 as_user "$GUEST_EXEC" -- 'ps -eo pid,comm --no-headers' > "$SESS/ps_before.txt"
 as_user "$GUEST_EXEC" -- 'lsmod' > "$SESS/lsmod_before.txt"
 as_user "$GUEST_EXEC" -- 'ss -tulpn' > "$SESS/ss_before.txt" 2>/dev/null || true
+as_user "$GUEST_EXEC" -- 'find /tmp /root /var/tmp -xdev -type f -printf "%p %s\n" 2>/dev/null | sort' > "$SESS/files_before.txt"
 as_user "$GUEST_EXEC" -- 'cat /proc/sys/kernel/random/boot_id' > "$SESS/boot_id_before.txt"
 
 # zber na pozadí
@@ -205,6 +206,7 @@ zaznam "ground truth PO"
 as_user "$GUEST_EXEC" -- 'ps -eo pid,comm --no-headers' > "$SESS/ps_after.txt"
 as_user "$GUEST_EXEC" -- 'lsmod' > "$SESS/lsmod_after.txt"
 as_user "$GUEST_EXEC" -- 'ss -tulpn' > "$SESS/ss_after.txt" 2>/dev/null || true
+as_user "$GUEST_EXEC" -- 'find /tmp /root /var/tmp -xdev -type f -printf "%p %s\n" 2>/dev/null | sort' > "$SESS/files_after.txt"
 
 # stop zberu a tcpdump
 kill -INT "$COLLECT_PID" 2>/dev/null || true
@@ -284,6 +286,9 @@ d["priebeh"] = json.loads(priebeh_json)
 json.dump(d, open(p, "w", encoding="utf-8"), indent=1, ensure_ascii=False)
 open(p, "a", encoding="utf-8").write("\n")
 PYEOF
+
+# G3: oznacenie behu aktivny/neaktivny z pozemnej pravdy
+"$REPO/scripts/aktivita.sh" "$SESS" || true
 
 give_back "$SESS" "$RAWDIR"
 
