@@ -81,6 +81,7 @@ done
 
 TYP=$(jq -r '.typ // "benign"' "$MANIFEST_IN")
 LABEL=$(jq -r '.label // empty' "$MANIFEST_IN")
+NET=$(jq -r '.net // "default"' "$MANIFEST_IN")
 [ -n "$LABEL" ] || die "manifest nema label"
 SEED=$(jq -r '.seed // 0' "$MANIFEST_IN")
 WARMUP=$(jq -r '.warmup_s // 30' "$MANIFEST_IN")
