@@ -141,9 +141,9 @@ porovnaniu so zadaním.
 | B5 | identický priebeh benígnych aj škodlivých sedení | návrh manifestu sedenia |
 | C | benígne záťaže (idle/nginx+wrk/pgbench/build/rsync+tar/mix) | `guest_exec.sh` |
 | D | ~~per-bin okná `(N,L,B*4+22)`~~ HOTOVÉ 2026-10-05 (voliteľný tvar popri `(N,L,22)` + loader z C sidecaru) | `features/windows.py:okna_s_perbin`, `features/tests/test_windows_perbin.py` |
-| E1 | regresná hlava TCN (predikcia vektora v t+1, MSE, bez štítkov) | `tcn/model.py`, `tcn/train.py:197-245`, testy kauzality |
-| E2 | skóre anomálie = chyba predikcie, per-bin lokalizácia | `tcn/score.py:103-216`, `features/perbin.py` |
-| E3 | `tcn/kalibracia.py` (kvantil, rozpočet FP, k-z-n okien) | `tcn/eval.py`, `features/normalize.py` |
+| E1 | ~~regresná hlava TCN~~ HOTOVÉ 2026-10-05 (TCNPrediktor, MSE, bez štítkov; syntetický dôkaz mse/var=0,019) | `tcn/model.py:TCNPrediktor`, `tcn/train.py` |
+| E2 | ~~skóre anomálie = chyba predikcie~~ HOTOVÉ 2026-10-05 (chyba okna + top priznaky v score.py; per-bin lokalizácia cez D + A4) | `tcn/score.py:beh_predikcia` |
+| E3 | ~~kalibrácia~~ HOTOVÉ 2026-10-05 (kvantil, rozpočet FP s base rate, k-z-n meraný na validácii) | `tcn/kalibracia.py` |
 | E4 | klasifikátor aktivít = dnešná TCN (treba korpus + labely) | `tcn/train.py`, `tcn/baselines.py`, `tcn/eval.py` |
 | F | anomálne baseliny (z-score, Isolation Forest, GRU prediktor) do jednej tabuľky s TCN | `tcn/baselines.py:43-86`, `tcn/eval.py` |
 | G1 | PoC techniky (ground truth, len test/validácia) | `guest_exec.sh`, `data/sessions/` (vzor ground truth) |
