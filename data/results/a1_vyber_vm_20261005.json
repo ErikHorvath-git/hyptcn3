@@ -6,7 +6,7 @@
  "command": "vmicollect probe (bez roota) s dvomi bezucimi domenami",
  "n": 3,
  "note": "Bez roota sa beh zastavi na EPERM pri nacitani BPF, ale vyber domeny (pick_vm) prebehol PRED tym - presne tu cast A1, ktoru overuje toto meranie. Domena a1-clone bola transientny klon (vms/a1-clone.xml).",
- "cases": {
+ "values": {
   "ziadna_domena": {
    "argv": "probe ",
    "rc": 3,
@@ -25,5 +25,7 @@
    "stdout": "",
    "stderr": "2026-10-05T16:34:25.099Z ERROR ebpf: 'e' sedi na viac domen, zadaj presne meno alebo pid"
   }
- }
+ },
+ "host": "Fedora Linux 43, jadro 7.2.5-100.fc43.x86_64 (zmerane dnes: uname -r)",
+ "guest": "libvirt domeny hyptcn-guest (Debian 12) a transientny klon a1-clone z vms/a1-clone.xml"
 }

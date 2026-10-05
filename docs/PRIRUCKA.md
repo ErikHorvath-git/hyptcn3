@@ -33,7 +33,7 @@ python3 -m pytest -q      # testy parsera a príznakov
 ```
 
 `make test` prejde celú cestu zberu nad syntetickým obrazom veľkosti
-16 MiB, ktorý si sám vyrobí. Testov je 220 prešlých a 24 preskočených v `pytest` (spolu 244 zozbieraných; preskočený test nie je prešiel) a 4 v C (`alarm_test`, `hole_test`, `perbin_test`, `retention_test`).
+16 MiB, ktorý si sám vyrobí. Testov je 226 prešlých a 24 preskočených v `pytest` (spolu 250 zozbieraných; preskočený test nie je prešiel) a 4 v C (`alarm_test`, `hole_test`, `perbin_test`, `retention_test`).
 
 ## 4. Ako vznikne snímka
 
@@ -73,11 +73,11 @@ zapíše.
 | adresár | čo rieši | kde začať čítať | súborov spolu / riadkov v `.c .h .py .sh .md` |
 |---|---|---|---|
 | `vmicollect/` | zberač snímok pamäte VM: C a eBPF nad QEMU/KVM | `vmicollect/src/collector.c` | 34 / 10 109 |
-| `guestparse/` | rekonštrukcia procesov, modulov a soketov zo snímky | `guestparse/view.py` | 28 / 5 590 |
+| `guestparse/` | rekonštrukcia procesov, modulov a soketov zo snímky | `guestparse/view.py` | 30 / 6 052 |
 | `features/` | per-bin príznakový vektor (referencia), okná, normalizácia | `features/perbin.py` | 18 / 4 335 |
 | `tcn/` | model (Temporal Convolutional Network), baseliny, tréning a skórovanie snímok; model natrénovaný nie je a skóre nie je detekcia | `tcn/score.py` | 9 / 1 263 |
 | `profiles/` | profil jadra hosťa: symboly a offsety polí štruktúr | `profiles/debian12-6.1.0-42-cloud-amd64/README.md` | jeden adresár na boot hosťa — pozri L17 |
-| `scripts/` | root behy, príkazy v hosťovi, kontroly tvrdení | `scripts/root_run.sh` | 8 / 3 907 |
+| `scripts/` | root behy, príkazy v hosťovi, kontroly tvrdení | `scripts/root_run.sh` | 9 / 4 116 |
 | `data/` | výsledkové JSONy z meraní (`data/results/`) a pozemná pravda odobratá v hosťovi (`data/sessions/`); samotné snímky `.vmicd` sú mimo gitu (`data/raw/`) | `data/results/2026-09-18_zmrazeny_host/README.md` | rastie s každým meraním, nepočíta sa |
 
 ## 6. Ako to funguje
@@ -150,7 +150,7 @@ baseliny `tcn/baselines.py`, metriky `tcn/eval.py`. Okno vojde, jedno číslo vy
 
 Prepínače: `-c, --config F` konfiguracny subor (INI), `-o, --set K=V` prebi jeden parameter (da sa opakovat), `-v, --verbose` log na urovni DEBUG, `-q, --quiet` log iba ERROR.
 
-Podpríkazy `python3 -m guestparse`: `ps` zoznam procesov z init_task.tasks, `lsmod` zoznam nacitanych modulov, `ss` sietove spojenia (IPv4 aj IPv6), `info` profil, posun jadra a krizova kontrola prekladu adries, `checks` kontroly podozrivych vzorcov, `validate` porovnanie s pozemnou pravdou z hosta, `textbaseline` baseline textu jadra z cistej snimky (kontrola (d); — `zapise text_baseline.json do profilu)`.
+Podpríkazy `python3 -m guestparse`: `ps` zoznam procesov z init_task.tasks, `lsmod` zoznam nacitanych modulov, `ss` sietove spojenia (IPv4 aj IPv6), `info` profil, posun jadra a krizova kontrola prekladu adries, `checks` kontroly podozrivych vzorcov, `validate` porovnanie s pozemnou pravdou z hosta, `textbaseline` baseline textu jadra z cistej snimky (kontrola (d); — `zapise text_baseline.json do profilu)`, `procmap` ktoremu procesu patria zmenene stranky binov (A4).
 Podpríkazy `python3 -m features`: `perbin` spocitaj vektor jednej snimky, `crosscheck` porovnaj referenciu s vektorom z C modulu, `session` pamat aj objekty hosta do jedneho vektora na snimku.
 
 **Konfiguračné kľúče** (`vmicollect config --keys`, prebijú sa cez `-o sekcia.kluc=hodnota`):
@@ -226,7 +226,7 @@ znamenalo držať dve znenia toho istého. Nadpisy sú preto dosadené z neho, s
 - **L1** — Živá snímka: VM sa nezastavuje
 - **L2** — Čítanie nie je úplne pasívne
 - **L3** — Profil jadra hosťa je vstupná závislosť získaná z hosťa
-- **L4** — Parsuje sa pamäť jadra, nie pamäť procesov
+- **L4** — Parsuje sa pamäť jadra, nie pamäť procesov — ČIASTOČNE ODSTR…
 - **L5** — `hole_test` netestuje BPF vetvu
 - **L6** — Injekčný test je injekcia do kópie snímky
 - **L7** — Confidential VM (SEV-SNP, TDX) sa takto prečítať nedá
@@ -249,12 +249,12 @@ Každý typ faktu má jeden dokument, ktorý ho vlastní; keď si odporujú, pla
 |---|---|---|
 | `docs/ARCHITEKTURA.md` | rozhrania, formát `.vmicd` a sidecaru, tok dát podrobne | 1149 |
 | `docs/MERANIA.md` | log meraní: čo, kedy, akým príkazom a s akým výsledkom | 803 |
-| `docs/LIMITACIE.md` | L1 až L17: čo systém nevie a čo z toho plynie pre text | 854 |
+| `docs/LIMITACIE.md` | L1 až L17: čo systém nevie a čo z toho plynie pre text | 865 |
 | `docs/kontroly.md` | kontroly podozrivých vzorcov a validačný príkaz | 248 |
 | `HONESTY.md` | pravidlá pre čísla a slová v texte práce | 269 |
 | `README.md` | rozcestník repozitára a pôvod prevzatého kódu | 46 |
 | `vmicollect/README.md` | zberač zvnútra: vrstvy, hooky, formáty | 460 |
-| `guestparse/README.md` | parser zvnútra: preklad adries, prechod zoznamami | 144 |
+| `guestparse/README.md` | parser zvnútra: preklad adries, prechod zoznamami | 146 |
 | `features/PERBIN.md` | definícia príznakov a ich kontrakt | 163 |
 
 ## 10. Ako sa táto príručka udržiava
