@@ -4,7 +4,7 @@
 #
 #   scripts/loads/run.sh <load> [--seed N] [--dur S] [--out LOG]
 #
-# <load> je meno generátora: idle, nginx_wrk, pgbench, build, rsync_tar, mix.
+# <load> je meno generátora: idle, nginx_wrk, pgbench, build, rsync_tar, mix, mikrosluzby.
 # Seed riadi VŠETKY náhodné parametre (RANDOM=$seed + odvodené), takže beh
 # je reprodukovateľný. Skript beží v hosťovi cez guest_exec.sh (ssh alebo
 # guest-agent); výstup generátora (seed, parametre, merané čísla) ide na
