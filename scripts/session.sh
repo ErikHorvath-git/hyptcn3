@@ -96,7 +96,6 @@ COLLECT_HASH=$(jq -r '.collect.hash // "none"' "$MANIFEST_IN")
 STAMP=$(date -u +%Y%m%dT%H%M%SZ)
 SESS="$REPO/data/sessions/${STAMP}_${LABEL}_${TYP}"
 RAWDIR="$REPO/data/raw/${STAMP}_session"
-mkdir -p "$SESS" "$RAWDIR"
 
 if [ "$DRY" -eq 1 ]; then
     echo "plan sedenia: $TYP/$LABEL seed=$SEED warmup=${WARMUP}s runtime=${RUNTIME}s interval=${INTERVAL}s"
@@ -107,6 +106,8 @@ if [ "$DRY" -eq 1 ]; then
     echo "  ground truth PRED/PO + tcpdump=$TCPDUMP -> $SESS"
     exit 0
 fi
+
+mkdir -p "$SESS" "$RAWDIR"
 
 [ "$(id -u)" -eq 0 ] || die "potrebuje root (eBPF zber) - spusti cez sudo"
 
