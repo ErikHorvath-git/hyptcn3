@@ -45,14 +45,15 @@ for i in $(seq 1 "$COUNT"); do
         '.seed = ($s | tonumber) | .label = $l' "$MANIFEST" > "$BM" \
         || { echo "session_batch: jq zlyhal" >&2; exit 2; }
     echo "=== session_batch: sedenie $i/$COUNT (seed=$SEED, label=$LABEL) ==="
+    LOG="$REPO/data/sessions/batch_$(date -u +%Y%m%dT%H%M%SZ)_$LABEL.log"
     if [ "$DRY" -eq 1 ]; then
         "$HERE/session.sh" "$BM" --dry-run && PASS=$((PASS+1)) \
             || { FAIL=$((FAIL+1)); echo "session_batch: dry-run $i zlyhal"; }
-    elif "$HERE/session.sh" "$BM"; then
+    elif setsid "$HERE/session.sh" "$BM" > "$LOG" 2>&1; then
         PASS=$((PASS+1))
     else
         FAIL=$((FAIL+1))
-        echo "session_batch: sedenie $i zlyhalo - koncim" >&2
+        echo "session_batch: sedenie $i zlyhalo - koncim (log: $LOG)" >&2
         rm -f "$BM"
         break
     fi

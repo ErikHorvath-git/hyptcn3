@@ -94,6 +94,11 @@ COLLECT_WRITER=$(jq -r '.collect.writer // "delta"' "$MANIFEST_IN")
 COLLECT_HASH=$(jq -r '.collect.hash // "none"' "$MANIFEST_IN")
 
 STAMP=$(date -u +%Y%m%dT%H%M%SZ)
+# Diagnostika: kazdy riadok aj stderr idu do /tmp/session_debug_<stamp>.log -
+# ked sedenie umrie, subor ukaze presne kde (zostava aj po ukonceni).
+exec 2> >(tee -a "/tmp/session_debug_${STAMP}.log" >&2)
+PS4='+${LINENO}: '
+if [ "${SESSION_TRACE:-0}" = "1" ]; then set -x; fi
 SESS="$REPO/data/sessions/${STAMP}_${LABEL}_${TYP}"
 RAWDIR="$REPO/data/raw/${STAMP}_session"
 
@@ -134,16 +139,15 @@ fi
 
 # tcpdump na moste
 TCPDUMP_PID=""
-if [ "$TCPDUMP" = "true" ]; then
+ISO_ATTACHED=0
 if [ "$NET" = "isolated" ]; then
     zaznam "izolovana siet: net-start hyptcn-iso + attach-interface"
     as_user virsh --connect "$URI" net-start hyptcn-iso >/dev/null 2>&1 || true
     as_user virsh --connect "$URI" attach-interface "$DOMAIN" network hyptcn-iso --model virtio --config --live >/dev/null 2>&1 \
         || zaznam "POZOR: attach hyptcn-iso zlyhal"
     ISO_ATTACHED=1
-else
-    ISO_ATTACHED=0
 fi
+if [ "$TCPDUMP" = "true" ]; then
     zaznam "tcpdump na $BRIDGE"
     tcpdump -i "$BRIDGE" -w "$SESS/tcpdump.pcap" -s 96 >/dev/null 2>&1 &
     TCPDUMP_PID=$!
