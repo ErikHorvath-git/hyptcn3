@@ -283,6 +283,22 @@ Obnova zacina od nuloveho obrazu, aplikuje plnu snimku a potom delty v poradi
 (`vmicollect restore`). Preto sa **retencia maze po celych retazcoch** - bez
 plnej snimky su delty nepouzitelne.
 
+### Marker HOLD (flight recorder)
+
+Retencia respektuje subor `HOLD` vo vystupnom adresari: retazce v nom uvedene
+sa **nikdy nemazu**, ani ked prekrocia `retention.max_snapshots` / `max_bytes` /
+`max_age_s`. Marker sa cita z disku pri kazdom upratovani, takze prezije
+restart zberaca. Jeden zaznam na riadok (`#` = komentar, prazdne riadky sa
+preskakuju); zaznam je `chain_id` retazca (delta zber) alebo meno suboru
+snimky - vtedy sa drzi cely retazec, v ktorom ten subor je.
+
+```sh
+vmicollect hold /var/tmp/snap 1789746463651   # drz retazec spred alarmu
+```
+
+Pouzitie: po alarme (blok A6) sa oznac retazec z obdobia PRED alarmom, aby
+forenzny material prezil upratovanie.
+
 ### Prenos stranok cez jednu mmap mapu
 
 BPF mapa `pages` je `BPF_F_MMAPABLE` a zberac si ju namapuje do svojho

@@ -29,6 +29,22 @@
 
 #define DELTA_EXT ".vmicd"
 
+/*
+ * Marker HOLD (subor 'HOLD' vo vystupnom adresari): retazce, ktore sa
+ * NESMU zmazat, ani ked prekrocia retencne limity. Flight recorder: po
+ * alarme oznacis retazec spred alarmu a forenzny material prezije
+ * upratovanie. Marker cita kazdy beh vmic_retention_apply() z disku, takze
+ * prezije aj restart zberaca - na rozdiel od ochrany aktivneho retazca,
+ * ktora zije len v pamati.
+ *
+ * Format: jeden zaznam na riadok; prazdne riadky a riadky zacinajuce '#'
+ * sa preskakuju. Zaznam je bud cislo = chain_id retazca (delta zber), alebo
+ * meno suboru snimky (napr. pri raw zbere, kde chain_id neexistuje) - drzi
+ * sa potom CELY retazec, v ktorom ten subor je.
+ *
+ * Zapise sa prikazom:  vmicollect hold <adresar> <chain_id|subor>...
+ */
+
 typedef struct {
     char     path[VMIC_PATH_MAX];
     char     sidecar[VMIC_PATH_MAX];
@@ -46,6 +62,12 @@ typedef struct {
     size_t  *idx;           /* indexy do pola poloziek                */
     size_t   idx_cap;
 } chain_t;
+
+typedef struct {
+    bool     is_id;         /* true: chain_id; false: meno suboru     */
+    uint64_t id;
+    char     name[VMIC_PATH_MAX];
+} hold_t;
 
 static bool ends_with(const char *s, const char *suf)
 {
@@ -73,6 +95,85 @@ static uint64_t read_chain_id(const char *path)
     uint64_t id = 0;
     for (int i = 7; i >= 0; i--) id = (id << 8) | hdr[16 + i];
     return id;
+}
+
+/* Nacita marker HOLD z vystupneho adresara. Chybajuci subor = ziadne
+ * zaznamy (nie chyba). Vracia pocet zaznamov, -1 pri chybe citania. */
+static ssize_t load_holds(const char *dir, hold_t **out)
+{
+    *out = NULL;
+    char path[VMIC_PATH_MAX];
+    if (vmic_join(path, sizeof(path), dir, VMIC_HOLD_MARKER) != 0) return -1;
+
+    FILE *f = fopen(path, "r");
+    if (!f) {
+        if (errno == ENOENT) return 0;
+        LOGW("retencia: HOLD '%s' sa nedal citat: %s", path, strerror(errno));
+        return -1;
+    }
+
+    size_t cap = 8, n = 0;
+    hold_t *h = malloc(cap * sizeof(*h));
+    if (!h) { fclose(f); return -1; }
+
+    char line[VMIC_PATH_MAX + 64];
+    while (fgets(line, sizeof(line), f)) {
+        char *s = line;
+        while (*s == ' ' || *s == '\t') s++;
+        if (*s == '\n' || *s == '\0' || *s == '#') continue;
+        char *e = s + strlen(s);
+        while (e > s && (e[-1] == '\n' || e[-1] == '\r' ||
+                         e[-1] == ' ' || e[-1] == '\t')) *--e = '\0';
+        if (!*s) continue;
+        if (n == cap) {
+            cap *= 2;
+            hold_t *bigger = realloc(h, cap * sizeof(*h));
+            if (!bigger) { free(h); fclose(f); return -1; }
+            h = bigger;
+        }
+        hold_t *it = &h[n];
+        memset(it, 0, sizeof(*it));
+        it->is_id = strspn(s, "0123456789") == strlen(s);
+        if (it->is_id) {
+            char *end = NULL;
+            errno = 0;
+            unsigned long long v = strtoull(s, &end, 10);
+            if (errno || !end || *end) {
+                LOGW("retencia: HOLD riadok '%s' nie je ani chain_id, ani "
+                     "meno; preskakujem", s);
+                continue;
+            }
+            it->id = (uint64_t)v;
+        } else {
+            snprintf(it->name, sizeof(it->name), "%s", s);
+        }
+        n++;
+    }
+    fclose(f);
+    *out = h;
+    return (ssize_t)n;
+}
+
+/* Plati hold pre dany retazec? Cez chain_id alebo cez meno ktorehokolvek
+ * suboru retazca (drzi sa potom cely retazec - bez plnej snimky by jeho
+ * delty nebolo z coho obnovit). */
+static bool chain_held(const chain_t *c, const item_t *items,
+                       const hold_t *holds, size_t nholds)
+{
+    if (!nholds) return false;
+    for (size_t j = 0; j < c->count; j++) {
+        const item_t *it = &items[c->idx[j]];
+        const char *base = strrchr(it->path, '/');
+        base = base ? base + 1 : it->path;
+        for (size_t h = 0; h < nholds; h++) {
+            if (holds[h].is_id) {
+                if (holds[h].id == it->chain_id) return true;
+            } else if (strcmp(holds[h].name, base) == 0) {
+                return true;
+            }
+        }
+    }
+    return false;
 }
 
 /*
@@ -103,6 +204,15 @@ int vmic_retention_apply(const vmic_config_t *cfg, uint64_t protect_chain)
     if (!cfg->max_snapshots && !cfg->max_bytes && cfg->max_age_s <= 0.0)
         return VMIC_OK;                       /* retencia je vypnuta */
 
+    hold_t *holds = NULL;
+    ssize_t nholds = load_holds(cfg->dir, &holds);
+    if (nholds < 0) {                         /* citatelny HOLD je sucast
+                                                 kontraktu, nie optional */
+        LOGE("retencia: marker HOLD sa nedal nacitat, retencia sa NESKUSILA "
+             "- snimky sa nemazu naslepo");
+        return VMIC_ERR;
+    }
+
     DIR *d = opendir(cfg->dir);
     if (!d) {
         LOGW("retencia: nedaji sa otvorit '%s': %s", cfg->dir, strerror(errno));
@@ -111,7 +221,7 @@ int vmic_retention_apply(const vmic_config_t *cfg, uint64_t protect_chain)
 
     size_t cap = 128, n = 0;
     item_t *items = malloc(cap * sizeof(*items));
-    if (!items) { closedir(d); return VMIC_ERR; }
+    if (!items) { free(holds); closedir(d); return VMIC_ERR; }
 
     struct dirent *e;
     while ((e = readdir(d)) != NULL) {
@@ -127,7 +237,7 @@ int vmic_retention_apply(const vmic_config_t *cfg, uint64_t protect_chain)
         if (n == cap) {
             cap *= 2;
             item_t *bigger = realloc(items, cap * sizeof(*items));
-            if (!bigger) { free(items); closedir(d); return VMIC_ERR; }
+            if (!bigger) { free(items); free(holds); closedir(d); return VMIC_ERR; }
             items = bigger;
         }
         item_t *it = &items[n];
@@ -163,7 +273,7 @@ int vmic_retention_apply(const vmic_config_t *cfg, uint64_t protect_chain)
 
     /* --- zoskupenie do retazcov --------------------------------- */
     chain_t *chains = calloc(n, sizeof(*chains));
-    if (!chains) { free(items); return VMIC_ERR; }
+    if (!chains) { free(items); free(holds); return VMIC_ERR; }
     size_t cn = 0;
 
     for (size_t i = 0; i < n; i++) {
@@ -220,6 +330,10 @@ int vmic_retention_apply(const vmic_config_t *cfg, uint64_t protect_chain)
      *
      * Ako poistku (napr. pri raw writeri, kde ziadne ID neexistuje)
      * chranime aj retazec s najnovsim casom.
+     *
+     * Treti druh ochrany je marker HOLD z disku (chain_id alebo meno
+     * suboru) - ten tu nechranime navyse, retazce s markerom sa preskocia
+     * pri mazani nizsie.
      */
     size_t protect = 0;
     for (size_t k = 1; k < cn; k++)
@@ -247,6 +361,12 @@ int vmic_retention_apply(const vmic_config_t *cfg, uint64_t protect_chain)
             drop = true; why = "vek";
         }
         if (!drop) continue;
+
+        if (chain_held(&chains[k], items, holds, nholds)) {
+            LOGI("retencia: retazec %" PRIu64 " je drzany markerom HOLD, "
+                 "nemazem ho (%s)", chains[k].chain_id, why);
+            continue;
+        }
 
         for (size_t j = 0; j < chains[k].count; j++) {
             item_t *it = &items[chains[k].idx[j]];
@@ -276,12 +396,14 @@ int vmic_retention_apply(const vmic_config_t *cfg, uint64_t protect_chain)
     for (size_t k = 0; k < cn; k++) free(chains[k].idx);
     free(chains);
     free(items);
+    free(holds);
     return VMIC_OK;
 
 oom:
     for (size_t k = 0; k < cn; k++) free(chains[k].idx);
     free(chains);
     free(items);
+    free(holds);
     LOGE("retencia: nedostatok pamate");
     return VMIC_ERR;
 }

@@ -86,6 +86,8 @@ static void usage(FILE *f)
 "  probe              pripoj sa a vypis parametre VM (nic nezapisuje)\n"
 "  restore            poskladaj plny obraz z delta retazca\n"
 "                       --dir D --out F [--chain ID] [--until SEQ]\n"
+"  hold <dir> <id>... oznac retazce markerom HOLD (retencia ich nezmaže)\n"
+"                       <id> = chain_id (delta zber) alebo meno suboru\n"
 "  verify [adresar]   over kontrolne sucty snimok podla .json\n"
 "  config             vypis efektivnu konfiguraciu\n"
 "  config --keys      vypis vsetky nastavitelne parametre\n"
@@ -618,6 +620,49 @@ static int cmd_selftest(const args_t *a)
 }
 
 /* ------------------------------------------------------------------ */
+/* hold: dopis markeru HOLD do vystupneho adresara                     */
+/* ------------------------------------------------------------------ */
+
+static int cmd_hold(const args_t *a)
+{
+    if (a->pos_count < 2) {
+        fprintf(stderr, "hold: ocakavam <adresar> a aspon jeden "
+                        "<chain_id|subor>\n");
+        return 2;
+    }
+    const char *dir = a->positional[0];
+    char path[VMIC_PATH_MAX];
+    if (vmic_join(path, sizeof(path), dir, VMIC_HOLD_MARKER) != 0) {
+        fprintf(stderr, "hold: cesta je prilis dlha\n");
+        return 2;
+    }
+    FILE *f = fopen(path, "a");
+    if (!f) {
+        fprintf(stderr, "hold: %s: %s\n", path, strerror(errno));
+        return 1;
+    }
+    size_t written = 0;
+    for (size_t i = 1; i < a->pos_count; i++) {
+        const char *e = a->positional[i];
+        if (!e[0] || strchr(e, '\n') || strchr(e, '\r')) {
+            fprintf(stderr, "hold: zaznam '%s' nie je platny riadok\n", e);
+            fclose(f);
+            return 2;
+        }
+        if (fprintf(f, "%s\n", e) < 0) {
+            fprintf(stderr, "hold: zapis do %s zlyhal: %s\n", path,
+                    strerror(errno));
+            fclose(f);
+            return 1;
+        }
+        written++;
+    }
+    fclose(f);
+    printf("hold: %zu zaznamov dopisanych do %s\n", written, path);
+    return 0;
+}
+
+/* ------------------------------------------------------------------ */
 
 int main(int argc, char **argv)
 {
@@ -644,6 +689,7 @@ int main(int argc, char **argv)
     if (!strcmp(cmd, "probe"))    return cmd_probe(&a);
     if (!strcmp(cmd, "verify"))   return cmd_verify(&a);
     if (!strcmp(cmd, "selftest")) return cmd_selftest(&a);
+    if (!strcmp(cmd, "hold"))     return cmd_hold(&a);
 
     if (!strcmp(cmd, "backends")) {
         printf("dostupne backendy:\n");

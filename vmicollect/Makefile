@@ -94,7 +94,7 @@ BIN := $(BUILD)/vmicollect
 # prepise iba ked sa obsah zmenil - takze zbytocny preklad nesposobuje.
 CONFIG_STAMP := $(BUILD)/.config
 
-.PHONY: all bpf hooks test test-holes test-perbin check debug install uninstall clean help FORCE
+.PHONY: all bpf hooks test test-holes test-perbin test-retention check debug install uninstall clean help FORCE
 
 all: $(BIN)
 ifneq ($(EBPF),1)
@@ -140,7 +140,7 @@ $(BUILD)/example_hook.so: hooks/example_hook.c include/vmic.h | $(BUILD)
 	$(CC) $(CFLAGS) -fPIC -shared -o $@ $<
 	@echo "hotovo -> $@"
 
-test: $(BIN) test-holes test-perbin
+test: $(BIN) test-holes test-perbin test-retention
 	$(BIN) selftest $(BUILD)/selftest
 
 # Regresny test na spravne preskakovanie dier vo fyzickom priestore.
@@ -160,6 +160,14 @@ test-perbin: $(BUILD)/perbin_test
 	$(BUILD)/perbin_test $(BUILD)/perbintest
 
 $(BUILD)/perbin_test: tests/perbin_test.c $(TEST_OBJ) $(EMBED_OBJ) | $(BUILD)
+	$(CC) $(CFLAGS) -o $@ $< $(TEST_OBJ) $(EMBED_OBJ) $(LDFLAGS) $(LDLIBS)
+
+# Regresny test markera HOLD v retencii (blok A5): oznaceny retazec
+# prezije retencne limity, cez chain_id aj cez meno suboru, raw aj delta.
+test-retention: $(BUILD)/retention_test
+	$(BUILD)/retention_test
+
+$(BUILD)/retention_test: tests/retention_test.c $(TEST_OBJ) $(EMBED_OBJ) | $(BUILD)
 	$(CC) $(CFLAGS) -o $@ $< $(TEST_OBJ) $(EMBED_OBJ) $(LDFLAGS) $(LDLIBS)
 
 # Kontrolny preklad, ktory NEPOTREBUJE ziadne extra balicky:

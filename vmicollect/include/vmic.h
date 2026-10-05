@@ -505,6 +505,11 @@ int vmic_meta_write(const vmic_snapshot_t *snap, char *out_path, size_t n);
 /* Retencia - retention.c
    `protect_chain` je id retazca, do ktoreho sa PRAVE zapisuje; nikdy sa
    nezmaze. 0 = nechranit nic (napr. pri raw writeri). */
+/* Marker HOLD vo vystupnom adresari: retazce, ktore retencia nesmie zmazat
+ * (flight recorder - oznaci sa retazec spred alarmu a prezije upratovanie).
+ * Format zaznamov je zdokumentovany v src/retention.c. */
+#define VMIC_HOLD_MARKER "HOLD"
+
 int vmic_retention_apply(const vmic_config_t *cfg, uint64_t protect_chain);
 
 /* Restore delta retazca - writer_delta.c */
