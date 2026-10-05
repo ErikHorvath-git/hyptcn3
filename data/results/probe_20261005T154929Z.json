@@ -1,0 +1,124 @@
+{
+  "schema": "hyptcn3/probe/1",
+  "date": "2026-10-05T15:49:30Z",
+  "date_unix": 1791215370,
+  "commit": "7bb2e4dcb2a4f50c6fe51f97992e3c951add87f6",
+  "commit_dirty": true,
+  "domain": "hyptcn-guest",
+  "libvirt_uri": "qemu:///session",
+  "command": "/home/eh/Desktop/hyptcn3/vmicollect/build/vmicollect probe -v -o vm.domain=hyptcn-guest",
+  "n": 1,
+  "binary": {
+    "path": "/home/eh/Desktop/hyptcn3/vmicollect/build/vmicollect",
+    "version": "vmicollect 1.0.0",
+    "sha256": "e1dad5941105c9eb7c1866aba328840f9e531b27fc6883b17563a435586cbbf8"
+  },
+  "host": {
+    "hostname": "fedora",
+    "kernel": "7.2.5-100.fc43.x86_64",
+    "cpus": 16
+  },
+  "guest": {
+    "domain": "hyptcn-guest",
+    "kernel": "6.1.0-42-cloud-amd64"
+  },
+  "exit_code": 0,
+  "values": {
+    "memslots": 10,
+    "ram_bytes": 2164396032,
+    "ram_human": "2.02 GiB",
+    "max_paddr": 4294967296,
+    "vcpus": 2,
+    "vmid": 3412763,
+    "backend": "ebpf/kvm",
+    "read_test": {
+      "bytes": 16646144,
+      "ms": 7.0,
+      "mib_s": 2282
+    },
+    "memslot_ranges": [
+      {
+        "id": 0,
+        "gpa_start": 0,
+        "gpa_end": 655359,
+        "size_bytes": 655360,
+        "hva": 139685003264000,
+        "flags": 0
+      },
+      {
+        "id": 8,
+        "gpa_start": 1048576,
+        "gpa_end": 2147483647,
+        "size_bytes": 2146435072,
+        "hva": 139685004312576,
+        "flags": 0
+      },
+      {
+        "id": 32765,
+        "gpa_start": 4276092928,
+        "gpa_end": 4276097023,
+        "size_bytes": 4096,
+        "hva": 139687228297216,
+        "flags": 0
+      },
+      {
+        "id": 3,
+        "gpa_start": 786432,
+        "gpa_end": 831487,
+        "size_bytes": 45056,
+        "hva": 139685004050432,
+        "flags": 0
+      },
+      {
+        "id": 6,
+        "gpa_start": 950272,
+        "gpa_end": 983039,
+        "size_bytes": 32768,
+        "hva": 139685004214272,
+        "flags": 0
+      },
+      {
+        "id": 1,
+        "gpa_start": 4294705152,
+        "gpa_end": 4294967295,
+        "size_bytes": 262144,
+        "hva": 139684976001024,
+        "flags": 2
+      },
+      {
+        "id": 4,
+        "gpa_start": 831488,
+        "gpa_end": 843775,
+        "size_bytes": 12288,
+        "hva": 139685004095488,
+        "flags": 0
+      },
+      {
+        "id": 7,
+        "gpa_start": 983040,
+        "gpa_end": 1048575,
+        "size_bytes": 65536,
+        "hva": 139685004247040,
+        "flags": 0
+      },
+      {
+        "id": 2,
+        "gpa_start": 4211081216,
+        "gpa_end": 4227858431,
+        "size_bytes": 16777216,
+        "hva": 139684732731392,
+        "flags": 1
+      },
+      {
+        "id": 5,
+        "gpa_start": 843776,
+        "gpa_end": 950271,
+        "size_bytes": 106496,
+        "hva": 139685004107776,
+        "flags": 0
+      }
+    ]
+  },
+  "stdout": "domena           : hyptcn-guest\nbackend          : ebpf/kvm\nid domeny        : 3412763\nvelkost RAM      : 2.02 GiB\nmax. fyz. adresa : 4.00 GiB (0x100000000)\npocet vCPU       : 2\nsirka adresy     : n/a\nstrankovanie     : n/a\nnahodny pristup  : ano\npripona vystupu  : .raw\ntest citania     : 16646144 B za 7.0 ms = 2282 MiB/s\n",
+  "stderr": "2026-10-05T15:49:29.526Z DEBUG ebpf: BTF vfs: task.files +3464, files.fdt +32, fdt.max_fds +0, fdt.fd +8, file.private_data +24, file.f_path +64, path.dentry +8, dentry.d_name +32, qstr.name +8, hlist.first +0, hlist.next +0\n2026-10-05T15:49:29.526Z DEBUG ebpf: BTF kvm: memslots +4360 (2 x 8 B), online_vcpus +4440, userspace_pid +6928 | memslots: generation +0, id_hash +40 (128), node_idx +1064 | slot: id_node +0 (16 B), base_gfn +176, npages +184, userspace_addr +248, flags +256, id +260\n2026-10-05T15:49:29.526Z DEBUG libbpf: loading object 'vmic_kvm' from buffer\n2026-10-05T15:49:29.526Z DEBUG libbpf: elf: section(2) .text, size 2464, link 0, flags 6, type=1\n2026-10-05T15:49:29.526Z DEBUG libbpf: sec '.text': found program 'fd_scan_step' at insn offset 45 (360 bytes), code size 87 insns (696 bytes)\n2026-10-05T15:49:29.526Z DEBUG libbpf: sec '.text': found program 'slot_scan_bucket' at insn offset 132 (1056 bytes), code size 176 insns (1408 bytes)\n2026-10-05T15:49:29.526Z DEBUG libbpf: sec '.text': found program 'page_copy_step' at insn offset 0 (0 bytes), code size 45 insns (360 bytes)\n2026-10-05T15:49:29.526Z DEBUG libbpf: elf: section(3) .rel.text, size 96, link 28, flags 40, type=9\n2026-10-05T15:49:29.526Z DEBUG libbpf: elf: section(4) syscall, size 3880, link 0, flags 6, type=1\n2026-10-05T15:49:29.526Z DEBUG libbpf: sec 'syscall': found program 'vmic_probe' at insn offset 0 (0 bytes), code size 344 insns (2752 bytes)\n2026-10-05T15:49:29.526Z DEBUG libbpf: sec 'syscall': found program 'vmic_read' at insn offset 344 (2752 bytes), code size 141 insns (1128 bytes)\n2026-10-05T15:49:29.526Z DEBUG libbpf: elf: section(5) .relsyscall, size 240, link 28, flags 40, type=9\n2026-10-05T15:49:29.526Z DEBUG libbpf: elf: section(6) license, size 4, link 0, flags 3, type=1\n2026-10-05T15:49:29.526Z DEBUG libbpf: license of vmic_kvm is GPL\n2026-10-05T15:49:29.526Z DEBUG libbpf: elf: section(7) .maps, size 104, link 0, flags 3, type=1\n2026-10-05T15:49:29.526Z DEBUG libbpf: elf: section(18) .BTF, size 10457, link 0, flags 0, type=1\n2026-10-05T15:49:29.526Z DEBUG libbpf: elf: section(20) .BTF.ext, size 4832, link 0, flags 0, type=1\n2026-10-05T15:49:29.526Z DEBUG libbpf: elf: section(28) .symtab, size 624, link 1, flags 0, type=2\n2026-10-05T15:49:29.526Z DEBUG libbpf: looking for externs among 26 symbols...\n2026-10-05T15:49:29.526Z DEBUG libbpf: collected 4 externs total\n2026-10-05T15:49:29.526Z DEBUG libbpf: extern (ksym) #0: symbol 20, name bpf_rcu_read_lock\n2026-10-05T15:49:29.526Z DEBUG libbpf: extern (ksym) #1: symbol 21, name bpf_rcu_read_unlock\n2026-10-05T15:49:29.526Z DEBUG libbpf: extern (ksym) #2: symbol 19, name bpf_task_from_vpid\n2026-10-05T15:49:29.526Z DEBUG libbpf: extern (ksym) #3: symbol 22, name bpf_task_release\n2026-10-05T15:49:29.526Z DEBUG libbpf: map 'koff': at sec_idx 7, offset 0.\n2026-10-05T15:49:29.526Z DEBUG libbpf: map 'koff': found type = 2.\n2026-10-05T15:49:29.526Z DEBUG libbpf: map 'koff': found key [8], sz = 4.\n2026-10-05T15:49:29.526Z DEBUG libbpf: map 'koff': found value [11], sz = 112.\n2026-10-05T15:49:29.526Z DEBUG libbpf: map 'koff': found max_entries = 1.\n2026-10-05T15:49:29.526Z DEBUG libbpf: map 'slots': at sec_idx 7, offset 32.\n2026-10-05T15:49:29.526Z DEBUG libbpf: map 'slots': found type = 2.\n2026-10-05T15:49:29.526Z DEBUG libbpf: map 'slots': found key [8], sz = 4.\n2026-10-05T15:49:29.526Z DEBUG libbpf: map 'slots': found value [15], sz = 2096.\n2026-10-05T15:49:29.526Z DEBUG libbpf: map 'slots': found max_entries = 1.\n2026-10-05T15:49:29.526Z DEBUG libbpf: map 'pages': at sec_idx 7, offset 64.\n2026-10-05T15:49:29.526Z DEBUG libbpf: map 'pages': found type = 2.\n2026-10-05T15:49:29.526Z DEBUG libbpf: map 'pages': found key [8], sz = 4.\n2026-10-05T15:49:29.526Z DEBUG libbpf: map 'pages': found value_size = 2097152.\n2026-10-05T15:49:29.526Z DEBUG libbpf: map 'pages': found max_entries = 1.\n2026-10-05T15:49:29.526Z DEBUG libbpf: map 'pages': found map_flags = 0x400.\n2026-10-05T15:49:29.526Z DEBUG libbpf: sec '.rel.text': collecting relocation for section(2) '.text'\n2026-10-05T15:49:29.526Z DEBUG libbpf: sec '.rel.text': relo #0: insn #12 against 'pages'\n2026-10-05T15:49:29.526Z DEBUG libbpf: prog 'page_copy_step': found map 2 (pages, sec 7, off 64) for insn #12\n2026-10-05T15:49:29.526Z DEBUG libbpf: sec '.rel.text': relo #1: insn #18 against 'bpf_task_from_vpid'\n2026-10-05T15:49:29.526Z DEBUG libbpf: prog 'page_copy_step': found extern #2 'bpf_task_from_vpid' (sym 19) for insn #18\n2026-10-05T15:49:29.526Z DEBUG libbpf: sec '.rel.text': relo #2: insn #32 against 'bpf_task_release'\n2026-10-05T15:49:29.526Z DEBUG libbpf: prog 'page_copy_step': found extern #3 'bpf_task_release' (sym 22) for insn #32\n2026-10-05T15:49:29.526Z DEBUG libbpf: sec '.rel.text': relo #3: insn #51 against 'koff'\n2026-10-05T15:49:29.526Z DEBUG libbpf: prog 'fd_scan_step': found map 0 (koff, sec 7, off 0) for insn #6\n2026-10-05T15:49:29.526Z DEBUG libbpf: sec '.rel.text': relo #4: insn #138 against 'koff'\n2026-10-05T15:49:29.526Z DEBUG libbpf: prog 'slot_scan_bucket': found map 0 (koff, sec 7, off 0) for insn #6\n2026-10-05T15:49:29.526Z DEBUG libbpf: sec '.rel.text': relo #5: insn #143 against 'slots'\n2026-10-05T15:49:29.526Z DEBUG libbpf: prog 'slot_scan_bucket': found map 1 (slots, sec 7, off 32) for insn #11\n2026-10-05T15:49:29.526Z DEBUG libbpf: sec '.relsyscall': collecting relocation for section(4) 'syscall'\n2026-10-05T15:49:29.526Z DEBUG libbpf: sec '.relsyscall': relo #0: insn #5 against 'koff'\n2026-10-05T15:49:29.526Z DEBUG libbpf: prog 'vmic_probe': found map 0 (koff, sec 7, off 0) for insn #5\n2026-10-05T15:49:29.526Z DEBUG libbpf: sec '.relsyscall': relo #1: insn #10 against 'slots'\n2026-10-05T15:49:29.526Z DEBUG libbpf: prog 'vmic_probe': found map 1 (slots, sec 7, off 32) for insn #10\n2026-10-05T15:49:29.526Z DEBUG libbpf: sec '.relsyscall': relo #2: insn #38 against 'bpf_task_from_vpid'\n2026-10-05T15:49:29.526Z DEBUG libbpf: prog 'vmic_probe': found extern #2 'bpf_task_from_vpid' (sym 19) for insn #38\n2026-10-05T15:49:29.526Z DEBUG libbpf: sec '.relsyscall': relo #3: insn #45 against 'bpf_rcu_read_lock'\n2026-10-05T15:49:29.526Z DEBUG libbpf: prog 'vmic_probe': found extern #0 'bpf_rcu_read_lock' (sym 20) for insn #45\n2026-10-05T15:49:29.526Z DEBUG libbpf: sec '.relsyscall': relo #4: insn #171 against '.text'\n2026-10-05T15:49:29.526Z DEBUG libbpf: sec '.relsyscall': relo #5: insn #182 against 'bpf_rcu_read_unlock'\n2026-10-05T15:49:29.526Z DEBUG libbpf: prog 'vmic_probe': found extern #1 'bpf_rcu_read_unlock' (sym 21) for insn #182\n2026-10-05T15:49:29.526Z DEBUG libbpf: sec '.relsyscall': relo #6: insn #184 against 'bpf_task_release'\n2026-10-05T15:49:29.526Z DEBUG libbpf: prog 'vmic_probe': found extern #3 'bpf_task_release' (sym 22) for insn #184\n2026-10-05T15:49:29.526Z DEBUG libbpf: sec '.relsyscall': relo #7: insn #260 against '.text'\n2026-10-05T15:49:29.526Z DEBUG libbpf: sec '.relsyscall': relo #8: insn #316 against 'bpf_rcu_read_unlock'\n2026-10-05T15:49:29.526Z DEBUG libbpf: prog 'vmic_probe': found extern #1 'bpf_rcu_read_unlock' (sym 21) for insn #316\n2026-10-05T15:49:29.526Z DEBUG libbpf: sec '.relsyscall': relo #9: insn #318 against 'bpf_task_release'\n2026-10-05T15:49:29.526Z DEBUG libbpf: prog 'vmic_probe': found extern #3 'bpf_task_release' (sym 22) for insn #318\n2026-10-05T15:49:29.526Z DEBUG libbpf: sec '.relsyscall': relo #10: insn #349 against 'slots'\n2026-10-05T15:49:29.526Z DEBUG libbpf: prog 'vmic_read': found map 1 (slots, sec 7, off 32) for insn #5\n2026-10-05T15:49:29.526Z DEBUG libbpf: sec '.relsyscall': relo #11: insn #354 against 'pages'\n2026-10-05T15:49:29.526Z DEBUG libbpf: prog 'vmic_read': found map 2 (pages, sec 7, off 64) for insn #10\n2026-10-05T15:49:29.526Z DEBUG libbpf: sec '.relsyscall': relo #12: insn #433 against 'bpf_task_from_vpid'\n2026-10-05T15:49:29.526Z DEBUG libbpf: prog 'vmic_read': found extern #2 'bpf_task_from_vpid' (sym 19) for insn #89\n2026-10-05T15:49:29.526Z DEBUG libbpf: sec '.relsyscall': relo #13: insn #456 against '.text'\n2026-10-05T15:49:29.526Z DEBUG libbpf: sec '.relsyscall': relo #14: insn #465 against 'bpf_task_release'\n2026-10-05T15:49:29.526Z DEBUG libbpf: prog 'vmic_read': found extern #3 'bpf_task_release' (sym 22) for insn #121\n2026-10-05T15:49:29.526Z DEBUG libbpf: object 'vmic_kvm': failed (-95) to create BPF token from '/sys/fs/bpf', skipping optional step...\n2026-10-05T15:49:29.529Z DEBUG libbpf: loaded kernel BTF from '/sys/kernel/btf/vmlinux'\n2026-10-05T15:49:29.529Z DEBUG libbpf: extern (func ksym) 'bpf_rcu_read_lock': resolved to vmlinux [88615]\n2026-10-05T15:49:29.529Z DEBUG libbpf: extern (func ksym) 'bpf_rcu_read_unlock': resolved to vmlinux [88616]\n2026-10-05T15:49:29.530Z DEBUG libbpf: extern (func ksym) 'bpf_task_from_vpid': resolved to vmlinux [88972]\n2026-10-05T15:49:29.530Z DEBUG libbpf: extern (func ksym) 'bpf_task_release': resolved to vmlinux [88975]\n2026-10-05T15:49:29.530Z DEBUG libbpf: prog 'vmic_probe': added 87 insns from sub-prog 'fd_scan_step'\n2026-10-05T15:49:29.530Z DEBUG libbpf: prog 'vmic_probe': insn #171 relocated, imm 172 points to subprog 'fd_scan_step' (now at 344 offset)\n2026-10-05T15:49:29.530Z DEBUG libbpf: prog 'vmic_probe': added 176 insns from sub-prog 'slot_scan_bucket'\n2026-10-05T15:49:29.530Z DEBUG libbpf: prog 'vmic_probe': insn #260 relocated, imm 170 points to subprog 'slot_scan_bucket' (now at 431 offset)\n2026-10-05T15:49:29.530Z DEBUG libbpf: prog 'vmic_read': added 45 insns from sub-prog 'page_copy_step'\n2026-10-05T15:49:29.530Z DEBUG libbpf: prog 'vmic_read': insn #112 relocated, imm 28 points to subprog 'page_copy_step' (now at 141 offset)\n2026-10-05T15:49:29.530Z DEBUG libbpf: map 'koff': created successfully, fd=3\n2026-10-05T15:49:29.530Z DEBUG libbpf: map 'slots': created successfully, fd=4\n2026-10-05T15:49:29.530Z WARN  libbpf: Error in bpf_create_map_xattr(pages): -EINVAL. Retrying without BTF.\n2026-10-05T15:49:29.530Z DEBUG libbpf: map 'pages': created successfully, fd=5\n2026-10-05T15:49:30.809Z INFO  ebpf: 'hyptcn-guest' (pid 3412763): 10 memslotov, 2.02 GiB pamate, max GPA 0x100000000\n2026-10-05T15:49:30.809Z DEBUG    slot  0: GPA 0x000000000000-0x00000009ffff  HVA 0x7f0af3000000  flags 0x0\n2026-10-05T15:49:30.809Z DEBUG    slot  8: GPA 0x000000100000-0x00007fffffff  HVA 0x7f0af3100000  flags 0x0\n2026-10-05T15:49:30.809Z DEBUG    slot 32765: GPA 0x0000fee00000-0x0000fee00fff  HVA 0x7f0b779f5000  flags 0x0\n2026-10-05T15:49:30.809Z DEBUG    slot  3: GPA 0x0000000c0000-0x0000000cafff  HVA 0x7f0af30c0000  flags 0x0\n2026-10-05T15:49:30.809Z DEBUG    slot  6: GPA 0x0000000e8000-0x0000000effff  HVA 0x7f0af30e8000  flags 0x0\n2026-10-05T15:49:30.809Z DEBUG    slot  1: GPA 0x0000fffc0000-0x0000ffffffff  HVA 0x7f0af1600000  flags 0x2\n2026-10-05T15:49:30.809Z DEBUG    slot  4: GPA 0x0000000cb000-0x0000000cdfff  HVA 0x7f0af30cb000  flags 0x0\n2026-10-05T15:49:30.809Z DEBUG    slot  7: GPA 0x0000000f0000-0x0000000fffff  HVA 0x7f0af30f0000  flags 0x0\n2026-10-05T15:49:30.809Z DEBUG    slot  2: GPA 0x0000fb000000-0x0000fbffffff  HVA 0x7f0ae2e00000  flags 0x1\n2026-10-05T15:49:30.809Z DEBUG    slot  5: GPA 0x0000000ce000-0x0000000e7fff  HVA 0x7f0af30ce000  flags 0x0\n2026-10-05T15:49:30.809Z WARN  ebpf: 4.00 KiB pamate hosta nie je anonymna (/dev/zero (deleted)) - citanie stranky, ktorej sa host este nedotkol, ju hostitelovi NAOZAJ alokuje\n2026-10-05T15:49:30.809Z WARN  ebpf: pri takejto VM zbieraj radsej konkretne oblasti (capture.regions), nech nenafuknes jej pamat na plnu velkost\n"
+}
