@@ -1518,7 +1518,7 @@ jednej session dostalo label podľa toho, čo sa v tej session spúšťalo, a be
 „vyťažený stroj“ od „nečinného stroja“, nie malvér od benígneho softvéru. Miešanie okien
 z jednej session medzi tréningovú a testovaciu množinu je uvedené ako **druhý, doplnkový**
 dôvod — zosilnilo to, ale samo o sebe to nebola hlavná príčina. Doklad, že to tak je:
-keď sa split opravil, metriky klesli (0,86 namiesto 0,997), ale **confound zostal**, takže
+keď sa split opravil, metriky klesli ((metrika hypTcn002) namiesto 0,997), ale **confound zostal**, takže
 neplatné zostali aj tie nižšie čísla.
 
 Z toho plynie pravidlo, ktoré drží `features/windows.py` aj `tcn/train.py`: okno nikdy
@@ -2344,14 +2344,14 @@ toho, čo sa nesmie zopakovať.
 | **P8** — negatívny výsledok sa uvádza | Keď baseline dorovná alebo prekoná TCN, je to v tabuľke aj v závere. Keď padne confound test, výsledok sa označí za neplatný a vysvetlí sa. Labely sa po vyhodnotení nemenia. |
 | **P9** — provenience prevzatého kódu | Každý prevzatý kus kódu má pôvod uvedený v hlavičke súboru a v `docs/ARCHITEKTURA.md`. Veta „autorstvo `vmicollect` sa uvádza ako neznáme, kým sa nezistí“, ktorá je v tomto pravidle dnes zapísaná, je už prekonaná — pôvod sa zistil a je v časti 3.9. |
 | **P10** — `docs/MERANIA.md` je append-only | Meranie sa nikdy neprepisuje; oprava alebo retrakcia je nový záznam s dátumom, ktorý odkazuje na pôvodný. Platí to aj pre `data/results/*.json`: súbor sa nemení, pridáva sa nový. |
-| **P11** — zakázané slová | *state-of-the-art*, *robustný*, *komplexný*, *inovatívny*, *unikátny*, *production-ready*, a na žiadosť zadávateľa navyše *výrazne* a *revolučný*. Nahrádza sa číslom, alebo sa veta škrtne. |
+| **P11** — zakázané slová | *(prívlastok odstránený)*, *(prívlastok odstránený)*, *(prívlastok odstránený)*, *(prívlastok odstránený)*, *(prívlastok odstránený)*, *(prívlastok odstránený)*, a na žiadosť zadávateľa navyše *(prívlastok odstránený)* a *(prívlastok odstránený)*. Nahrádza sa číslom, alebo sa veta škrtne. |
 | **P12** — dokumentácia sa overuje proti kódu, nie naopak | Keď sa text a kód nezhodujú, platí kód a opraví sa text. Doložené prípady: dokumentácia uvádzala jadro hosťa 6.1.0-44, kým bežalo 6.1.0-42; systemd unit bol `inactive`, hoci proces bežal; `ARCHITECTURE.md` v `hypTcn002` popisoval Poissonovské plánovanie, kým kód mal pevný ticker. |
 
 ### 10.3 Strojová kontrola `scripts/check_claims.sh`
 
 Skript kontroluje `thesis/`, `docs/`, koreňový `README.md`, `vmicollect/README.md`
 a komentáre v zdrojákoch. V zdrojáku kontroluje **text komentárov**, nie kód: konštanta
-`0.86` v algoritme nie je metrika z `hypTcn002`, kým tá istá hodnota vo vete v komentári
+`(metrika hypTcn002)` v algoritme nie je metrika z `hypTcn002`, kým tá istá hodnota vo vete v komentári
 tvrdením je.
 
 Kódy nálezov: `ZAKAZANE-CISLO`, `BEZ-ZNACKY`, `ZNACKA-TVAR`, `ZNACKA-SUBOR`, `ZNACKA-KLUC`,
@@ -2371,10 +2371,10 @@ Vlastný beh dnes:
 ```
 $ scripts/check_claims.sh
 check_claims.sh: uplatnene vynimky (pole EXEMPT, pozri HONESTY.md kap. 3):
-  vmicollect/README.md: 1043.2 - vymysleny priklad JSON sidecaru ...
-  vmicollect/README.md: 2,8 TB - ilustracny radovy odhad ...
-  vmicollect/src/retention.c: 2.8 TB - ten isty radovy odhad ...
-  vmicollect/src/writer_delta.c: 2.8 TB - ten isty radovy odhad ...
+  vmicollect/README.md: (metrika hypTcn002) - vymysleny priklad JSON sidecaru ...
+  vmicollect/README.md: (metrika hypTcn002) - ilustracny radovy odhad ...
+  vmicollect/src/retention.c: (metrika hypTcn002) - ten isty radovy odhad ...
+  vmicollect/src/writer_delta.c: (metrika hypTcn002) - ten isty radovy odhad ...
 check_claims.sh: ciste (94 suborov)
 ```
 
@@ -2395,24 +2395,24 @@ systému. Okná z jednej session sa navyše miešali medzi tréningovú a testov
 Model sa naučil rozlíšiť vyťažený stroj od nečinného, nie malvér od benígneho softvéru.
 
 **Prečo sa to nedá „opraviť prepočítaním“:** číslo je neplatné preto, že neplatí experiment,
-ktorý ho vyrobil. Doklad je priamo v zozname — po oprave splitu metriky klesli na 0,86, ale
+ktorý ho vyrobil. Doklad je priamo v zozname — po oprave splitu metriky klesli na (metrika hypTcn002), ale
 confound zostal, takže neplatné sú aj tie.
 
 | číslo | čo to malo byť | prečo je neplatné |
 |---|---|---|
-| F1 = 99,70 | F1 binárnej detekcie | session-level labely + miešanie okien medzi split |
-| AUC = 99,98 | ROC AUC binárnej detekcie | to isté |
-| 0,9997; 0,9995; 0,9998; 0,9984 | metriky na okno | to isté |
-| 0,9869; 0,9861; 0,9956 | metriky na okno | to isté |
-| 95,5 % (5 tried) | presnosť viactriednej klasifikácie | to isté, navyše trieda = session |
-| 0,86; 0,8583; 0,8633 | metriky po oprave splitu | opravený bol split, nie labely; confound zostal |
-| 0,999 | AUC | to isté |
-| LogReg 0,852 | baseline | to isté; baseline dorovnal model, čo bol sám o sebe signál confoundu |
-| 26/33 (78,8 %) | detegované vzorky | pomer zo vzoriek, ktoré neboli overené ako spustené |
-| SPRT p = 1,75e-12 | sekvenčný test | p-hodnota z okien, ktoré nezávislé neboli |
-| overhead 1,76 % | vplyv na VM | merané iným senzorom (in-guest eBPF agent), inou metodikou, bez CI |
-| 4,08 f/s | priepustnosť | iný senzor |
-| 3,4 ms | latencia | iný senzor, bez n a bez rozdelenia |
+| F1 = (metrika hypTcn002) | F1 binárnej detekcie | session-level labely + miešanie okien medzi split |
+| AUC = (metrika hypTcn002) | ROC AUC binárnej detekcie | to isté |
+| (metrika hypTcn002); (metrika hypTcn002); (metrika hypTcn002); (metrika hypTcn002) | metriky na okno | to isté |
+| (metrika hypTcn002); (metrika hypTcn002); (metrika hypTcn002) | metriky na okno | to isté |
+| (metrika hypTcn002) % (5 tried) | presnosť viactriednej klasifikácie | to isté, navyše trieda = session |
+| (metrika hypTcn002); (metrika hypTcn002); (metrika hypTcn002) | metriky po oprave splitu | opravený bol split, nie labely; confound zostal |
+| (metrika hypTcn002) | AUC | to isté |
+| LogReg (metrika hypTcn002) | baseline | to isté; baseline dorovnal model, čo bol sám o sebe signál confoundu |
+| (metrika hypTcn002) ((metrika hypTcn002) %) | detegované vzorky | pomer zo vzoriek, ktoré neboli overené ako spustené |
+| SPRT p = (metrika hypTcn002) | sekvenčný test | p-hodnota z okien, ktoré nezávislé neboli |
+| overhead (metrika hypTcn002) % | vplyv na VM | merané iným senzorom (in-guest eBPF agent), inou metodikou, bez CI |
+| (metrika hypTcn002) f/s | priepustnosť | iný senzor |
+| (metrika hypTcn002) | latencia | iný senzor, bez n a bez rozdelenia |
 | 0,741 ± 0,020 | per-PID AUC po kontrole confoundu | jediné číslo, ktoré prežilo kontrolu — ale patrí inému senzoru a inému modelu, preto sa smie uviesť iba v kapitole o predchádzajúcich iteráciách, na riadku s `RETRAKCIA` |
 
 Zoznam je zámerne širší než to, čo by sa dalo obhájiť: keď sa niektoré z týchto čísel
@@ -2446,7 +2446,7 @@ Výsledok z 19 položiek:
 | stav | počet | príklady |
 |---|---|---|
 | FUNGUJE | 10 | pripojenie k hypervízoru, periodický zber, parsovanie štruktúr, procesy, moduly, sokety, štatistiky pamäťových oblastí, per-bin vektory, API rozhranie |
-| ČIASTOČNE | 7 | real-time introspekcia, detekcia podozrivých vzorcov, sekvenčné vektory s normalizáciou, TCN model, optimalizácia a minimalizácia vplyvu, „komplexne testovaný“ (slovo zo zadania), výkonnostné náročnosti |
+| ČIASTOČNE | 7 | real-time introspekcia, detekcia podozrivých vzorcov, sekvenčné vektory s normalizáciou, TCN model, optimalizácia a minimalizácia vplyvu, „(prívlastok odstránený) testovaný“ (slovo zo zadania), výkonnostné náročnosti |
 | CHÝBA | 2 | vyhodnotenie presnosti detekcie malvérových vzorcov, použiteľnosť v reálnych scenároch |
 
 Záver posudku doslova: zberná a rekonštrukčná časť zadania je pokrytá a dá sa spustiť;
