@@ -160,9 +160,11 @@ if [ ! -f "$INJ_FILE" ]; then
 fi
 INJ_SHA=$(sha256sum "$INJ_FILE" | cut -d' ' -f1)
 INJ_REMOTE="/tmp/hyptcn_payload"
-python3 - "$MANIFEST_IN" "$INJ_FILE" "$INJ_REMOTE" "$URI" "$DOMAIN" <<'PYEOF'
+# virsh qemu-agent-command musi bezat pod SUDO_USER (libvirt session rezim) -
+# preto cely pythonovy prenos ide cez as_user, ktore nastavi HOME/XDG.
+as_user python3 - "$INJ_FILE" "$INJ_REMOTE" "$URI" "$DOMAIN" <<'PYEOF'
 import base64, json, subprocess, sys
-_, manifest, local, remote, uri, domain = sys.argv
+local, remote, uri, domain = sys.argv[1:]
 def ga(cmd):
     r = subprocess.run(["virsh", "--connect", uri, "qemu-agent-command", domain, cmd],
                        capture_output=True, text=True)
@@ -193,6 +195,9 @@ as_user "$GUEST_EXEC" -- "SEED=$SEED DUR=$RUNTIME $INJ_REMOTE $INJ_ARGS" \
 PAYLOAD_PID=$!
 sleep "$RUNTIME"
 kill "$PAYLOAD_PID" 2>/dev/null || true
+# ssh/agent zabije len prenos, nie vzdialeny proces - dobeh sa pripadne
+# dorazi v hostovi (best effort; skripty sa koncia same po DUR)
+as_user "$GUEST_EXEC" -- "pkill -f $INJ_REMOTE" >/dev/null 2>&1 || true
 
 # pozemná pravda PO
 zaznam "ground truth PO"
