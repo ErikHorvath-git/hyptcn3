@@ -1,0 +1,10 @@
+{
+  "schema": "hyptcn3/golden/1",
+  "date": "2026-10-05T18:16:44Z",
+  "commit": "cd5c183640854d83d190a0eafee77f0904c14408",
+  "image_url": "https://cloud.debian.org/images/cloud/bookworm/20241004-1890/debian-12-genericcloud-amd64-20241004-1890.qcow2",
+  "image_sha256": "a8c66c614a3e829581d9cc830e97695a820cb1cdd117450de282e2794e7b753f",
+  "seed_sha256": "ff44493e243d3a0f27f67eb211ff0058a930473e35923bd55f3f6aa4d9e1f479",
+  "base_path": "/home/eh/Desktop/hyptcn3/vms/debian-12-base.qcow2",
+  "virtual_size_gib": 3
+}
