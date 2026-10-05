@@ -208,10 +208,14 @@ static int build_config(const args_t *a, vmic_config_t *cfg, bool need_target)
 /* run / once                                                          */
 /* ------------------------------------------------------------------ */
 
-static int cycle_adapter(uint64_t seq, double deadline, void *user)
+static int cycle_adapter(uint64_t seq, double deadline,
+                         const vmic_sched_ctx_t *ctx, void *user)
 {
     (void)seq; (void)deadline;
-    return vmic_collector_cycle((vmic_collector_t *)user, NULL);
+    vmic_collector_t *c = (vmic_collector_t *)user;
+    c->sched_lateness_s   = ctx->lateness_s;
+    c->sched_skipped_before = ctx->skipped_before;
+    return vmic_collector_cycle(c, NULL);
 }
 
 static int cmd_run(const args_t *a, bool once)

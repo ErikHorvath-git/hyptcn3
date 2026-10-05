@@ -221,6 +221,8 @@ int vmic_collector_cycle(vmic_collector_t *c, vmic_snapshot_t *out)
     vmic_snapshot_t snap;
     memset(&snap, 0, sizeof(snap));
     snap.seq = c->seq;
+    snap.sched_lateness_s   = c->sched_lateness_s;
+    snap.sched_skipped_before = c->sched_skipped_before;
     snap.vm  = &c->vm;
     snap.cfg = cfg;
     vmic_now_real(&snap.wall);

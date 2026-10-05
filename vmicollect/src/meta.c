@@ -118,6 +118,13 @@ int vmic_meta_write(const vmic_snapshot_t *s, char *out_path, size_t n)
     fprintf(f, "    \"read_mib_s\": %.2f\n", mbps);
     fprintf(f, "  },\n");
 
+    /* --- planovac (blok A8): meskanie tohto cyklu a zmeskane sloty
+           PRED nim - tak ma dlhy beh evidenciu pri kazdej vzorke, nie len
+           v zaverecnom logu --- */
+    fprintf(f, "  \"sched\": {\"lateness_s\": %.6f, \"skipped_before\": "
+               "%" PRIu64 "},\n",
+            s->sched_lateness_s, s->sched_skipped_before);
+
     /* --- vysledok --- */
     fprintf(f, "  \"output\": {\n");
     fprintf(f, "    \"writer\": ");  json_str(f, cfg->writer); fprintf(f, ",\n");

@@ -293,6 +293,13 @@ typedef struct {
     const vmic_features_t *features;
 
     vmic_stats_t          stats;
+
+    /* Planovac (blok A8): meskanie zaciatku tohto cyklu a zmeskane sloty
+       pred nim - perzistuje sa do sidecaru, aby dlhy beh mal evidenciu
+       pri kazdej vzorke, nie len v zaverecnom logu. */
+    double                sched_lateness_s;
+    uint64_t              sched_skipped_before;
+
     const vmic_vminfo_t  *vm;
     const vmic_config_t  *cfg;
 } vmic_snapshot_t;
@@ -417,10 +424,21 @@ typedef struct {
     double   worst_lateness_s; /* najvacsie meskanie oproti terminu   */
 } vmic_sched_stats_t;
 
-/* Vrati VMIC_OK / VMIC_FATAL / VMIC_STOP. `work` dostane poradove cislo
-   a plánovany termin (monotonny cas), vracia vmic_rc_t. */
+/* Kontext jedneho cyklu, ktory planovac podava praci (blok A8): takto sa
+   zmeskane sloty a meskanie dostanu do sidecaru kazdej snimky, nie len do
+   zaverecneho logu - dlhy beh potom ma evidenciu pri kazdej vzorke. */
+typedef struct {
+    double   lateness_s;       /* zaciatok prace vs. termin; >= 0 = meskanie */
+    uint64_t skipped_before;   /* zmeskanych slotov PRED tymto cyklom        */
+    uint64_t cycles_done_before;
+    uint64_t cycles_failed_before;
+} vmic_sched_ctx_t;
+
+/* Vrati VMIC_OK / VMIC_FATAL / VMIC_STOP. `work` dostane poradove cislo,
+   planovany termin (monotonny cas) a kontext cyklu, vracia vmic_rc_t. */
 int vmic_sched_run(const vmic_config_t *cfg,
-                   int (*work)(uint64_t seq, double deadline, void *user),
+                   int (*work)(uint64_t seq, double deadline,
+                               const vmic_sched_ctx_t *ctx, void *user),
                    void *user,
                    volatile sig_atomic_t *stop,
                    vmic_sched_stats_t *out);
@@ -524,6 +542,9 @@ typedef struct {
     uint64_t             seq;
     uint64_t             total_bytes;
     volatile sig_atomic_t *stop;
+    /* kontext planovaca pre prave prebiehajuci cyklus (nastavuje adapter) */
+    double                sched_lateness_s;
+    uint64_t              sched_skipped_before;
 } vmic_collector_t;
 
 int  vmic_collector_init(vmic_collector_t *c, const vmic_config_t *cfg,

@@ -34,7 +34,8 @@
 #include <string.h>
 
 int vmic_sched_run(const vmic_config_t *cfg,
-                   int (*work)(uint64_t seq, double deadline, void *user),
+                   int (*work)(uint64_t seq, double deadline,
+                               const vmic_sched_ctx_t *ctx, void *user),
                    void *user,
                    volatile sig_atomic_t *stop,
                    vmic_sched_stats_t *out)
@@ -110,7 +111,13 @@ int vmic_sched_run(const vmic_config_t *cfg,
         double late  = began - next;
         if (late > st.worst_lateness_s) st.worst_lateness_s = late;
 
-        int wrc = work(seq, next, user);
+        vmic_sched_ctx_t ctx = {
+            .lateness_s         = late,
+            .skipped_before     = st.cycles_skipped,
+            .cycles_done_before = st.cycles_done,
+            .cycles_failed_before = st.cycles_failed,
+        };
+        int wrc = work(seq, next, &ctx, user);
         seq++;
 
         if (wrc == VMIC_OK)          st.cycles_done++;
