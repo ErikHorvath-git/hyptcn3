@@ -38,4 +38,9 @@ runcmd:
   - apt-get update
   - DEBIAN_FRONTEND=noninteractive apt-get install -y qemu-guest-agent
   - systemctl enable --now qemu-guest-agent || true
+  # Zataze C (blok C): nginx+wrk, pgbench, build, rsync+tar|zstd. Merane
+  # 2026-10-05: instalacia tychto balikov do hotovej VM cez NAT trvala
+  # ~50 min bez dokoncenia - preto patria do GOLDEN obrazu, nie do
+  # apt_packages sedenia (apt_packages ostava pre drobne doplnky).
+  - DEBIAN_FRONTEND=noninteractive apt-get install -y nginx wrk postgresql gcc zstd rsync || true
 
