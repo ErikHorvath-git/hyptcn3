@@ -119,6 +119,11 @@ SUB="$1"; shift
 
 # Sedenie (B4) je samostatny orchestrator; root_run.sh ho len prepasa
 # dalej, aby "jediny skript pod rootom" ostal pravdivy.
+if [ "$SUB" = "batch" ]; then
+    [ "$DRY" -eq 1 ] && set -- --dry-run "$@"
+    exec "$REPO/scripts/session_batch.sh" "$@"
+fi
+
 if [ "$SUB" = "session" ]; then
     [ "$DRY" -eq 1 ] && set -- --dry-run "$@"
     exec "$REPO/scripts/session.sh" "$@"

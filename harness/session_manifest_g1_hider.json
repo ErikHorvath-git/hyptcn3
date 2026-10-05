@@ -1,0 +1,24 @@
+{
+ "schema": "hyptcn3/session-manifest/1",
+ "typ": "malicious",
+ "label": "hider",
+ "seed": 1,
+ "warmup_s": 30,
+ "runtime_s": 120,
+ "interval_s": 5,
+ "tcpdump": true,
+ "apt_packages": [
+  "gcc",
+  "git"
+ ],
+ "net": "default",
+ "injekcia": {
+  "subor": "scripts/poc/hider_run.sh",
+  "args": []
+ },
+ "collect": {
+  "writer": "delta",
+  "hash": "none"
+ },
+ "poznamka": "PoC LEN na test/validaciu citlivosti (G1); nikdy na trening"
+}

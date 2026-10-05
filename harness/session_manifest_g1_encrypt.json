@@ -1,0 +1,21 @@
+{
+ "schema": "hyptcn3/session-manifest/1",
+ "typ": "malicious",
+ "label": "encrypt",
+ "seed": 1,
+ "warmup_s": 30,
+ "runtime_s": 120,
+ "interval_s": 5,
+ "tcpdump": true,
+ "apt_packages": [],
+ "net": "default",
+ "injekcia": {
+  "subor": "scripts/poc/encrypt_files.sh",
+  "args": []
+ },
+ "collect": {
+  "writer": "delta",
+  "hash": "none"
+ },
+ "poznamka": "PoC LEN na test/validaciu citlivosti (G1); nikdy na trening"
+}
