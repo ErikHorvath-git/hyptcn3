@@ -1,0 +1,29 @@
+{
+ "schema": "hyptcn3/a1-vyber-vm/1",
+ "date": "2026-10-05T16:34:25Z",
+ "commit": "2e8f79ef63ab64200b86cc917bb20fae70700fed",
+ "commit_dirty": false,
+ "command": "vmicollect probe (bez roota) s dvomi bezucimi domenami",
+ "n": 3,
+ "note": "Bez roota sa beh zastavi na EPERM pri nacitani BPF, ale vyber domeny (pick_vm) prebehol PRED tym - presne tu cast A1, ktoru overuje toto meranie. Domena a1-clone bola transientny klon (vms/a1-clone.xml).",
+ "cases": {
+  "ziadna_domena": {
+   "argv": "probe ",
+   "rc": 3,
+   "stdout": "",
+   "stderr": "2026-10-05T16:34:25.063Z ERROR ebpf: bezi 2 domen, vyber jednu cez vm.domain:\n2026-10-05T16:34:25.064Z ERROR    a1-clone                         pid 94969 (qemu-system-x86)\n2026-10-05T16:34:25.064Z ERROR    hyptcn-guest                     pid 3412763 (qemu-system-x86)"
+  },
+  "presne_meno_a1-clone": {
+   "argv": "probe -o vm.domain=a1-clone",
+   "rc": 3,
+   "stdout": "",
+   "stderr": "2026-10-05T16:34:25.091Z WARN  libbpf: Failed to bump RLIMIT_MEMLOCK (err = -EPERM), you might need to do it explicitly!\n2026-10-05T16:34:25.091Z WARN  libbpf: Error in bpf_object__probe_loading(): -EPERM. Couldn't load trivial BPF program. Make sure your kernel supports BPF (CONFIG_BPF_SYSCALL=y) and/or that RLIMIT_MEMLOCK is set to big enough value.\n2026-10-05T16:34:25.091Z ERROR ebpf: BPF program sa nepodarilo nacitat do jadra: Operation not permitted\n2026-10-05T16:34:25.091Z ERROR ebpf: nacitanie BPF programu vyzaduje roota (alebo CAP_BPF+CAP_PERFMON) - skus `sudo`"
+  },
+  "nejednoznacny_podretazec_e": {
+   "argv": "probe -o vm.domain=e",
+   "rc": 3,
+   "stdout": "",
+   "stderr": "2026-10-05T16:34:25.099Z ERROR ebpf: 'e' sedi na viac domen, zadaj presne meno alebo pid"
+  }
+ }
+}

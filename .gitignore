@@ -17,3 +17,7 @@ data/raw/
 
 # vystup prikladoveho hook pluginu z testovacieho behu, nie vysledok merania
 vmicollect-index.csv
+
+# testovacie VM disky a definicie (blok A1) - do gitu nepatria
+vms/
+*.qcow2
