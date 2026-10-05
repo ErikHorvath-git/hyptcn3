@@ -1,0 +1,24 @@
+{
+ "schema": "hyptcn3/g1-citlivost-sim/1",
+ "date": "2026-10-05T19:28:28Z",
+ "commit": "66ec043a4ed6575d19ab62204a662049a627a9a1",
+ "command": "simulacia PoC zapisu (8B) do stranky sshd v KOPII retazca 19.9. - posledna delta rozsirena o zaznam",
+ "host": "Fedora Linux 43, jadro 7.2.5-100.fc43.x86_64",
+ "guest": "hyptcn-guest, Debian 12, jadro 6.1.0-42-cloud-amd64 (snimka z 2026-09-19)",
+ "n": 1,
+ "values": {
+  "stranka_pa": 222158848,
+  "bin": 13,
+  "perbin": {
+   "has_changed": 1,
+   "changed_ratio": 0.0009765625
+  },
+  "procmap_proces": {
+   "pid": 381,
+   "comm": "sshd",
+   "stranky": 1
+  },
+  "invarianty_nalezov": 0,
+  "poznamka": "zapis do UZIVATELSKEJ pamate je pre kernel invarianty neviditelny (ocakavane - toto je presne uloha prediktora a per-bin priznakov: zmena je v perbin vektore binu a lokalizuje sa cez procmap na sshd). Injekcia ide do KOPIE snimky, nie do beziacej VM."
+ }
+}
