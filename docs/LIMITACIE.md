@@ -802,7 +802,7 @@ prekladu adries vrátila pre obe kontrolné adresy `0x0` a výpisy procesov aj m
 označené `NEUPLNE`. Čerstvý profil z toho istého bootu: krížová kontrola sedí na bit,
 výpisy úplné. Celý výstup oboch behov je v `docs/MERANIA.md`, záznam z 2026-09-19.
 
-**Vyriešené 2026-10-05 (blok A2, commit `??`).** Namiesto pádu s kódom 5 sa profil
+**Vyriešené 2026-10-05 (blok A2, commit `61a8980`).** Namiesto pádu s kódom 5 sa profil
 preukotví. Posun medzi bootom profilu a bootom snimky sa **meria z tabuliek stránok**:
 pre známu fyzickú adresu `init_task` (overenú obsahom `comm == "swapper/0"` pri skene
 banneru) sa spätne nájde virtuálna adresa, ktorá ju mapuje, a rozdiel voči adrese
