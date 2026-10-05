@@ -1,0 +1,18 @@
+{
+ "schema": "hyptcn3/perbin-crosscheck/1",
+ "schema_dat": "hyptcn3/perbin-crosscheck/1",
+ "date": "2026-10-05T19:43:35Z",
+ "commit": "e6e0173cfcd92bc929917432bc55f19cc0238665",
+ "commit_dirty": false,
+ "command": "python3 -m features crosscheck --snapshot data/raw/20260919T110017Z_run --memslots data/results/probe_20260919T142620Z.json",
+ "host": "Fedora Linux 43, jadro 7.2.5-100.fc43.x86_64",
+ "guest": "hyptcn-guest, Debian 12, jadro 6.1.0-42-cloud-amd64",
+ "n": 10,
+ "values": {
+  "snimok": 10,
+  "binov": 131,
+  "zhoda": "vsetkych 10 snimok, najvacsi rozdiel <= 5e-7",
+  "poli_mimo_presnosti": 0,
+  "poznamka": "C modul (sidecar blok features) proti nezavislej Python referencii na retazci z 2026-09-19 11:01Z (boot 82b778a3 - profil v repe sedi bez preukotvenia)"
+ }
+}

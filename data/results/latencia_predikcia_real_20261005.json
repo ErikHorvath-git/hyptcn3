@@ -1,0 +1,33 @@
+{
+ "schema": "hyptcn3/latencia-predikcia/1",
+ "date": "2026-10-05T19:33:06Z",
+ "commit": "e6e0173cfcd92bc929917432bc55f19cc0238665",
+ "command": "python3 -m tcn.score --uloha predikcia --dlzka 5 nad ulozenym retazcom 19.9. (10 snimok) so smoke modelom",
+ "host": "Fedora Linux 43, jadro 7.2.5-100.fc43.x86_64",
+ "guest": "hyptcn-guest, Debian 12, jadro 6.1.0-42-cloud-amd64",
+ "n": 6,
+ "values": {
+  "vektor_ms": {
+   "n": 10,
+   "median": 204.073,
+   "p95": 488.899,
+   "min": 199.841,
+   "max": 488.899
+  },
+  "model_ms": {
+   "n": 6,
+   "median": 1.324,
+   "p95": 2.349,
+   "min": 1.001,
+   "max": 2.349
+  },
+  "spracovanie_ms": {
+   "n": 6,
+   "median": 205.255,
+   "p95": 209.154,
+   "min": 200.86,
+   "max": 209.154
+  },
+  "poznamka": "nad ULOZENYMI snimkami (nie zivy zber); okno 5 (nie 16 - retazec ma 10 snimok); model je smoke (1 trenovacie okno), casy su casy cesty snímka->vektor->skore, nie detekcie."
+ }
+}
