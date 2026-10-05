@@ -53,38 +53,52 @@ def _commit():
 # na benigne/skodlive pri merani.
 
 
-def far_h(skore_benigne, prah, perioda_s=5.0):
-    """FAR za hodinu: podiel benígnych okien nad prahom x okna za hodinu.
+def far_h(skore_benigne, prah, perioda_s=5.0, k=3, n=5):
+    """FAR za hodinu podla ROVNAKEHO pravidla alarmu ako detekcia (k z n).
 
-    Vstup: skore benígnych okien (z behov bez skodlivej aktivity - najlepsie
-    z ODLOZENEJ casti, ktoru kalibracia nevidela). Vystup: dict s cislami,
-    nie jednym cislom - n, hodin, nad prahom, far/h.
+    Vstup: skore benígnych okien - bud jedna seria (pole), alebo zoznam
+    serii (sedenia), aby sa pravidlo NEaplikovalo cez hranicu sedeni.
+    Alarmy sa rataju na okna, NIE jednotlive prekrocenia prahu - inak by
+    FAR/h a detekcia pouzivali ine pravidla.
     """
-    s = np.asarray(skore_benigne, dtype=np.float64)
-    if not len(s):
-        return {"n": 0, "far_h": None,
+    if isinstance(skore_benigne, np.ndarray) and skore_benigne.ndim == 1:
+        serie = [np.asarray(skore_benigne, dtype=np.float64)]
+    else:
+        serie = [np.asarray(s, dtype=np.float64) for s in skore_benigne]
+    alarmy = 0
+    okien = 0
+    for s in serie:
+        okien += len(s)
+        nad = s >= prah
+        for i in range(len(s) - n + 1):
+            if int(np.sum(nad[i:i + n])) >= k:
+                alarmy += 1
+                # spotrebuj cele okno - dalsi alarm az po jeho konci
+                # (inak by jeden usek nad prahom vyrobil kaskadu alarmov)
+                for j in range(i, min(i + n, len(s))):
+                    nad[j] = False
+    if not okien:
+        return {"n": 0, "far_h": None, "alarmov": 0,
                 "poznamka": "ziadne benigne okna na meranie FAR"}
-    nad = int(np.sum(s >= prah))
-    hodiny = len(s) * float(perioda_s) / 3600.0
-    return {"n": int(len(s)), "hodiny": hodiny,
-            "nad_prahom": nad,
-            "far_h": (nad / hodiny) if hodiny > 0 else None,
+    hodiny = okien * float(perioda_s) / 3600.0
+    return {"n": int(okien), "sedeni": len(serie), "hodiny": hodiny,
+            "alarmov": alarmy, "k_z_n": [k, n],
+            "far_h": (alarmy / hodiny) if hodiny > 0 else None,
             "prah": float(prah), "perioda_s": float(perioda_s)}
 
 
 def cas_do_detekcie(skore, prah, k=3, n=5, perioda_s=5.0, t0_s=0.0):
     """Prvy cas, ked k z n poslednych okien je nad prahom (alarm).
 
-    Vstup: skore okien jedneho behu v poradi casu. Vracia dict s
-    detegovany: bool, cas_s (od t0 po START alarmoveho okna) a index okna.
-    Beh bez alarmu => detegovany False - detekcia sa nad nim nepocita.
+    Cas sa pocita od t0 po KONIEC alarmoveho okna: k z n sa da potvrdit az
+    ked prislo n-te skore okna, nie na jeho zaciatku.
     """
     s = np.asarray(skore, dtype=np.float64)
     nad = s >= prah
     for i in range(len(s) - n + 1):
         if int(np.sum(nad[i:i + n])) >= k:
             return {"detegovany": True,
-                    "cas_s": float(t0_s + i * perioda_s),
+                    "cas_s": float(t0_s + (i + n - 1) * perioda_s),
                     "okno": int(i), "k_z_n": [k, n]}
     return {"detegovany": False, "cas_s": None, "okno": None, "k_z_n": [k, n]}
 

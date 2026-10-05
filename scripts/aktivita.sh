@@ -11,16 +11,18 @@
 #
 set -uo pipefail
 
-SESS="${1:?pouzitie: aktivita.sh <adresar_sedenia>}"
+SESS="${1:?pouzitie: aktivita.sh <adresar_sedenia> [<cesta_payloadu>]}"
+INJ="${2:-}"
 [ -d "$SESS" ] || { echo "aktivita: $SESS nie je adresar" >&2; exit 2; }
 
-python3 - "$SESS" <<'PYEOF'
+python3 - "$SESS" "$INJ" <<'PYEOF'
 import datetime
 import json
 import os
 import sys
 
 sess = sys.argv[1]
+inj = sys.argv[2] if len(sys.argv) > 2 else ""
 
 def riadky(meno):
     p = os.path.join(sess, meno)
@@ -46,8 +48,43 @@ def pidy(ps):
 
 nove_procesy = pidy(ps_a) - pidy(ps_b) if ps_b is not None and ps_a is not None else None
 nove_moduly = (lsmod_a - lsmod_b) if lsmod_b is not None and lsmod_a is not None else None
+# `ss` samo naloaduje diagnosticke moduly (tcp/udp/inet_diag) - to je
+# meracia sonda, nie aktivita payloadu
+if nove_moduly is not None:
+    nove_moduly = {m for m in nove_moduly
+                   if not m.startswith(("tcp_diag", "udp_diag", "inet_diag"))}
 nove_sockety = (ss_a - ss_b) if ss_b is not None and ss_a is not None else None
 nove_subory = (files_a - files_b) if files_b is not None and files_a is not None else None
+
+# Injekcia SAMOTNA nie je dokaz aktivity: payloadovy subor vytvara harness
+# (guest-agent zapis), takze jeho pritomnost v zozname suborov nic
+# nedokazuje - musi byt z dokazov vyluceny.
+if inj and nove_subory is not None:
+    nove_subory = {f for f in nove_subory if not f.startswith(inj)}
+
+# Rovnako transport pozemnej pravdy (ssh/qemu-guest-agent) sam o sebe
+# vytvara procesy - tie nie su aktivitou payloadu, su to meracie sondy.
+# Transport a meracie sondy pozemnej pravdy: sshd/ssh (pripojenie),
+# qemu-ga (agent), ps (samotny odber zoznamu) a kworker/* (jadrove
+# workery, ktore vznika/zanikaju nepretrzite - prizve ich kazdy odber,
+# nie payload). Bezne shells (sh/bash) sa NEVYLUCUJU - payload bezi ako sh.
+HARNESS_COMM = {"sshd", "ssh", "qemu-ga", "sftp-server", "scp", "ps"}
+
+
+def comm_z(riadok):
+    cast = riadok.split()
+    return cast[1] if len(cast) > 1 else ""
+
+
+def je_harness(riadok):
+    c = comm_z(riadok)
+    return c in HARNESS_COMM or c.startswith("kworker")
+
+
+if nove_procesy is not None and ps_a is not None:
+    riadky_a = {r.split()[0]: r for r in ps_a if r.split()}
+    nove_procesy = {p for p in nove_procesy
+                    if not je_harness(riadky_a.get(p, p))}
 
 def pocet(s):
     return None if s is None else len(s)
@@ -65,9 +102,10 @@ doc = {
     "aktivny": aktivny,
     "poznamka": ("aktivita sa pozoruje NEZAVISLE od zberaca (pozemná pravda "
                  "pred/po z hosta); detekcia sa pocita len nad aktivnymi "
-                 "behmi. Prazdne hodnoty (null) znamenaju chybajucu "
-                 "pozemnú pravdu - vtedy je oznacenie nedokazane, nie "
-                 "neaktivne."),
+                 "behmi. Payloadovy subor (%s) sa z dokazov VYLUCUJE - "
+                 "vytvara ho injekcia sama, nie beh payloadu. Prazdne "
+                 "hodnoty (null) znamenaju chybajucu pozemnú pravdu - "
+                 "vtedy je oznacenie nedokazane, nie neaktivne." % inj),
     "pocty": {
         "nove_procesy": pocet(nove_procesy),
         "nove_moduly": pocet(nove_moduly),

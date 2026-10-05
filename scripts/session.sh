@@ -135,6 +135,15 @@ fi
 # tcpdump na moste
 TCPDUMP_PID=""
 if [ "$TCPDUMP" = "true" ]; then
+if [ "$NET" = "isolated" ]; then
+    zaznam "izolovana siet: net-start hyptcn-iso + attach-interface"
+    as_user virsh --connect "$URI" net-start hyptcn-iso >/dev/null 2>&1 || true
+    as_user virsh --connect "$URI" attach-interface "$DOMAIN" network hyptcn-iso --model virtio --config --live >/dev/null 2>&1 \
+        || zaznam "POZOR: attach hyptcn-iso zlyhal"
+    ISO_ATTACHED=1
+else
+    ISO_ATTACHED=0
+fi
     zaznam "tcpdump na $BRIDGE"
     tcpdump -i "$BRIDGE" -w "$SESS/tcpdump.pcap" -s 96 >/dev/null 2>&1 &
     TCPDUMP_PID=$!
@@ -154,6 +163,19 @@ zaznam "zber: vmicollect run writer=$COLLECT_WRITER interval=${INTERVAL}s"
     -o output.writer="$COLLECT_WRITER" -o schedule.interval_s="$INTERVAL" \
     -o output.hash="$COLLECT_HASH" > "$SESS/collect.log" 2>&1 &
 COLLECT_PID=$!
+
+# A3: baseline textu z CISTEJ snimky TOHOTO bootu (LIMITACIE L18 -
+# medzi bootmi sa text legitímne líši, takže baseline pre validaciu
+# sedenia musi vzniknut z prvej (plnej) snimky rovnakeho bootu; profil
+# sa preukotvi sam)
+sleep 10
+if ls "$RAWDIR"/*.json >/dev/null 2>&1; then
+    python3 -m guestparse textbaseline --snapshot "$RAWDIR" \
+        --profile "$PROFILE" --force >> "$SESS/collect.log" 2>&1 \
+        || zaznam "POZOR: baseline textu tohto bootu sa nepodarila"
+else
+    zaznam "POZOR: prva snimka sa neobjavila - baseline textu sa nevytvorila"
+fi
 
 # injekcia binárky cez guest-agent (identický mechanizmus pre oba typy)
 zaznam "injekcia: $INJ_FILE"
@@ -215,6 +237,11 @@ if [ -n "$TCPDUMP_PID" ]; then
     sleep 1
     kill "$TCPDUMP_PID" 2>/dev/null || true
     wait "$TCPDUMP_PID" 2>/dev/null || true
+fi
+
+if [ "$ISO_ATTACHED" = "1" ]; then
+    as_user virsh --connect "$URI" detach-interface "$DOMAIN" network --live >/dev/null 2>&1 || true
+    zaznam "izolovana siet odpojena"
 fi
 
 # zahodenie overlayu
@@ -289,8 +316,9 @@ json.dump(d, open(p, "w", encoding="utf-8"), indent=1, ensure_ascii=False)
 open(p, "a", encoding="utf-8").write("\n")
 PYEOF
 
-# G3: oznacenie behu aktivny/neaktivny z pozemnej pravdy
-"$REPO/scripts/aktivita.sh" "$SESS" || true
+# G3: oznacenie behu aktivny/neaktivny z pozemnej pravdy (payloadovy
+# subor sa z dokazov vylucuje - vytvara ho injekcia, nie beh)
+"$REPO/scripts/aktivita.sh" "$SESS" "$INJ_REMOTE" || true
 
 give_back "$SESS" "$RAWDIR"
 

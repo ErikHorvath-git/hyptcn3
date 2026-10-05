@@ -144,8 +144,8 @@ def hodnotenie(sedenia, perioda_s=5.0, fp_za_den=1.0, k=3, n=5,
     kal = kalibracia(chyby_val, perioda_s=perioda_s, fp_za_den=fp_za_den,
                      k=k, n=n, seed=seed)
 
-    far = far_h(np.concatenate([sedenia[m]["skore"] for m in far_s]),
-                kal["prah"], perioda_s=perioda_s) if far_s else {
+    far = far_h([sedenia[m]["skore"] for m in far_s],
+                kal["prah"], perioda_s=perioda_s, k=k, n=n) if far_s else {
                     "n": 0, "far_h": None,
                     "poznamka": "ziadne benigne sedenie mimo kalibracie"}
 

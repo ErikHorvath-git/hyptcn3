@@ -1,28 +1,18 @@
 {
  "schema": "hyptcn3/aktivita/1",
- "date": "2026-10-05T20:45:55Z",
- "aktivny": true,
- "poznamka": "aktivita sa pozoruje NEZAVISLE od zberaca (pozemná pravda pred/po z hosta); detekcia sa pocita len nad aktivnymi behmi. Prazdne hodnoty (null) znamenaju chybajucu pozemnú pravdu - vtedy je oznacenie nedokazane, nie neaktivne.",
+ "date": "2026-10-05T22:09:07Z",
+ "aktivny": false,
+ "poznamka": "aktivita sa pozoruje NEZAVISLE od zberaca (pozemná pravda pred/po z hosta); detekcia sa pocita len nad aktivnymi behmi. Payloadovy subor (/tmp/hyptcn_payload) sa z dokazov VYLUCUJE - vytvara ho injekcia sama, nie beh payloadu. Prazdne hodnoty (null) znamenaju chybajucu pozemnú pravdu - vtedy je oznacenie nedokazane, nie neaktivne.",
  "pocty": {
-  "nove_procesy": 3,
-  "nove_moduly": 3,
+  "nove_procesy": 0,
+  "nove_moduly": 0,
   "nove_sockety": 0,
-  "nove_subory": 1
+  "nove_subory": 0
  },
  "dokaz": {
-  "nove_procesy": [
-   "756",
-   "767",
-   "776"
-  ],
-  "nove_moduly": [
-   "inet_diag              24576  2 tcp_diag,udp_diag",
-   "tcp_diag               16384  0",
-   "udp_diag               16384  0"
-  ],
+  "nove_procesy": null,
+  "nove_moduly": null,
   "nove_sockety": null,
-  "nove_subory": [
-   "/tmp/hyptcn_payload 198"
-  ]
+  "nove_subory": null
  }
 }

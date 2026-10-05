@@ -27,8 +27,9 @@
  },
  "injekcia": {
   "subor": "scripts/loads/idle.sh",
-  "sha256_merane": "x",
-  "args": []
+  "sha256_merane": "74fcdeb9b3b10bfd9673bcc889e982ae41095bc6c6f6dbaabe22ea0ebe59c1ab",
+  "args": [],
+  "poznamka": "doplnene po dokonceni behu: povodny manifest block zlyhal na __file__ v heredocu; sha pocitane zo zdroja scripts/loads/idle.sh, ktory bol injekovany"
  },
  "vystupy": {
   "snimky_adresar": "data/raw/20261005T204319Z_session",

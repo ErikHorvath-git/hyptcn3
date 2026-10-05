@@ -54,11 +54,11 @@ def _najvacsi_retazec(sides):
             key = "raw-" + re.sub(r"_\d{6}_", "_", d.get("id", "?"))
         groups.setdefault(key, []).append(d)
     best = max(groups.values(), key=len)
-    return best, sorted(groups)
+    return best, groups
 
 
-def skontroluj(sides, perioda_s, score_doc=None):
-    sides, vsetky = _najvacsi_retazec(sides)
+def _skontroluj_retazec(sides, perioda_s, score_doc=None):
+    """Kontrola JEDNEHO retazca; vracia dict s chybami a cislami."""
     chyby = []
     seqy = [d["seq"] for d in sides]
     if not seqy:
@@ -72,7 +72,11 @@ def skontroluj(sides, perioda_s, score_doc=None):
         chyby.append("zmeskanych slotov: max %d" % max_skip)
 
     total = [d.get("capture", {}).get("total_ms") for d in sides]
+    chyba_cas = any(t is None for t in total)
     total = [t for t in total if t is not None]
+    if chyba_cas:
+        chyby.append("sidecary nemaju casy (capture.total_ms) - bez nich "
+                     "sa soft real-time NEDA preukazat")
     nad = [t for t in total if t > perioda_s * 1000.0]
     if nad:
         chyby.append("cyklus nad periodou: %d z %d (max %.1f ms)"
@@ -92,13 +96,15 @@ def skontroluj(sides, perioda_s, score_doc=None):
             if p95 > perioda_s * 1000.0:
                 chyby.append("p95 latencie snímka->skóre %.1f ms > perioda "
                              "%.1f s" % (p95, perioda_s))
+        else:
+            chyby.append("score JSON nema latencie (latencia_od_snimky_ms) "
+                         "- bez nich sa cas snímka->skóre NEDA preukazat")
+    elif "latencia_skore" not in ("",):
+        pass
 
     return {
-        "schema": "hyptcn3/soft-rt/1",
         "perioda_s": float(perioda_s),
         "snimok": len(sides),
-        "retazcov_v_adresari": len(vsetky),
-        "seq_suvise": not any("seq" in c for c in chyby),
         "max_skipped_before": max_skip,
         "cyklov_nad_periodou": len(nad) if total else None,
         "cyklov_celkom": len(total),
@@ -106,6 +112,28 @@ def skontroluj(sides, perioda_s, score_doc=None):
         "verdict": "OK" if not chyby else "NEUSPECH",
         "chyby": chyby,
     }
+
+
+def skontroluj(sides, perioda_s, score_doc=None):
+    """Kontroluju sa VSETKY retazce v adresari, nie len najvacsi -
+    inak by zmeskane sloty v malom retazci (napr. po restarte) presli."""
+    groups = _najvacsi_retazec(sides)[1]
+    retazec_chyby = {}
+    chyby = []
+    for key, r in sorted(groups.items()):
+        r2 = _skontroluj_retazec(r, perioda_s, score_doc)
+        if r2["chyby"]:
+            retazec_chyby[key] = r2["chyby"]
+            chyby.append("retazec %s: %s" % (key[:24],
+                                             "; ".join(r2["chyby"])))
+    najvacsi = max(groups.values(), key=len)
+    res = _skontroluj_retazec(najvacsi, perioda_s, score_doc)
+    res["schema"] = "hyptcn3/soft-rt/1"
+    res["retazcov_v_adresari"] = len(groups)
+    res["retazce_s_chybami"] = retazec_chyby
+    res["verdict"] = "OK" if not chyby else "NEUSPECH"
+    res["chyby"] = chyby
+    return res
 
 
 def main(argv=None):
