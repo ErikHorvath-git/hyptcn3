@@ -19,7 +19,12 @@ def test_cisty_host_nema_nalezy(val_view):
     res = checks.check_all(val_view)
     assert res["finding_count"] == 0, res["findings"]
     assert res["summary"]["syscall_hooks"] == 0
-    assert res["summary"]["inconclusive"] == [], res["summary"]
+    # 4. kontrola (text jadra) je uzavreta len s baseline v profile;
+    # bez baseline musi byt priznana ako neuzavreta (nula nic nedokazuje)
+    assert set(res["summary"]["inconclusive"]) <= {"text_integrity"}, \
+        res["summary"]
+    if "text_integrity" in res["summary"]["inconclusive"]:
+        assert "baseline" in res["text_integrity"]["reason"]
 
 
 def test_tabulka_volani_ma_rozumnu_dlzku(val_view):

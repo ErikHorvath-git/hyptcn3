@@ -9,7 +9,7 @@ a `data/results/validate_*.json`.
 
 ## Čo sa kontroluje a prečo práve toto
 
-Zo samotnej pamäte sa dá overiť len to, čo má jadro dané invariantne. Každá z troch
+Zo samotnej pamäte sa dá overiť len to, čo má jadro dané invariantne. Každá zo štyroch
 kontrol porovnáva dva zdroje, ktoré musia sedieť; nález je ich **rozdiel**, nie skóre
 a nie odhad. Žiadna kontrola nemá voľný prah, ktorý by sa dal doladiť na požadovaný
 výsledok.
@@ -50,12 +50,39 @@ vždy viac než modulov: 105 ku 47 na snímke `/var/tmp/vmic-val`).
 Navyše sa pri každom module overuje, že meno je tlačiteľný ASCII reťazec a že adresa
 `struct module` leží v oblasti modulov `[0xffffffffc0000000, 0xffffffffff000000)`.
 
+### (d) Text jadra sa nemení
+
+Obsah každej stranky `[_stext, _etext)` sa porovná so SHA-256 **baseline z čistej
+snímky toho istého bootu** (súbor `text_baseline.json` v profile). Text sa po boote
+nesmie meniť, takže každá zmenená stranka je nález — práve toto chytí inline hook,
+ktorý smeruje **do vnútra** textu a kontrola (a) ho nevidí (tá overuje len kam
+ukazuje tabuľka, nie čo v texte je).
+
+Baseline vzniká z čistej snímky príkazom:
+
+```sh
+python3 -m guestparse textbaseline --snapshot <cista_snimka> \
+        --profile profiles/debian12-6.1.0-42-cloud-amd64
+```
+
+a zapíše sa do adresára profilu. Z **neúplnej** snímky sa vyrobiť nedá — príkaz sa
+odmietne, lebo baseline, ktorej časť chýba, by kontrolu umelo zúžila (hook v
+chýbajúcej stranke by bol neviditeľný). Rovnako sa odmietne profil z iného bootu.
+
+Známe obmedzenie: `jump labels`/`static keys` text jadra za behu naozaj prepisujú
+(prepínanie vetiev cez `text_poke`). Nález sa preto hlási **s najbližším symbolom**
+a vyhodnocuje sa v kontexte — jeden prepis na známej adrese jump labelu sa nevykladá
+ako útok skôr, než sa vylúči táto legitímna príčina. Overuje to meranie na čistom
+hosťovi (koľko stránok sa medzi dvoma snímkami zmení bez akéhokoľvek zásahu).
+
 ### Čo kontrola nehovorí
 
 Každá kontrola hlási `conclusive`. Snímka sa odoberá bez zastavenia VM, takže prechod
 zoznamu sa môže roztrhnúť; keď sa niektorý prechod neuzavrel, rozdiel dvoch zoznamov
 **nie je** dôkaz skrývania a nulový výsledok nič nedokazuje. V takom prípade je názov
-kontroly v poli `summary.inconclusive`.
+kontroly v poli `summary.inconclusive`. Pri kontrole (d) `conclusive` znamená, že
+každá stranka baseline bola v snímke naozaj prečítaná; chýbajúca stranka je „neviem“,
+nie „čisté“.
 
 ## Namerané: čistý hosť
 
@@ -67,8 +94,10 @@ kontroly v poli `summary.inconclusive`.
 | `/var/tmp/vmic-delta` (1 plná + 5 delt) | 451 položiek | 76 vs. 76 | 47 vs. 47 (zo 105 kobjektov) | **0** |
 | `data/sessions/20260918T154914Z_validate/snap` | 451 položiek | 80 vs. 80 | 51 vs. 51 (zo 109 kobjektov) | **0** |
 
-Vo všetkých troch behoch bolo `summary.inconclusive` prázdne, teda všetky tri kontroly
-sa uzavreli. Artefakty: `data/results/checks_20260918_{val,delta,session}.json`.
+Vo všetkých troch behoch bolo `summary.inconclusive` prázdne, teda vtedajšie tri kontroly
+sa uzavreli. (Štvrtá kontrola — text jadra — vtedy ešte neexistovala; potrebuje
+baseline z čistej snímky, pozri (d).)
+Artefakty: `data/results/checks_20260918_{val,delta,session}.json`.
 
 ## Injekčný test — čo to je a čo to NIE je
 

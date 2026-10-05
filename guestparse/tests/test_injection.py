@@ -137,11 +137,12 @@ def test_mini_injikovany_hook_sa_najde(mini_path, tmp_path, profile):
     finally:
         img.close()
     assert f["index"] == INJECT_INDEX
-    # Mala snimka drzi iba stranky, ktore testy citaju - krizove kontrole
-    # procesov a modulov v nej stranky chybaju a MUSIA sa priznat ako
-    # neuzavrete, nie vydavat za ciste.
+    # Mala snimka drzi iba stranky, ktore testy citaju - krizovej kontrole
+    # procesov a modulov v nej stranky chybaju a textu jadra chyba baseline;
+    # vsetko sa MUSI priznat ako neuzavrete, nie vydavat za ciste.
     assert set(full["summary"]["inconclusive"]) == {"process_cross_view",
-                                                    "modules"}
+                                                    "modules",
+                                                    "text_integrity"}
 
 
 def test_mini_snimka_sa_nemeni(mini_path, mini_manifest):
@@ -180,7 +181,12 @@ def test_kopia_bez_zasahu_nema_nalezy(clean_copy):
 
     full = check_all(view)
     assert full["summary"]["syscall_hooks"] == 0
-    assert full["summary"]["inconclusive"] == [], full["summary"]
+    # 4. kontrola (text jadra) je uzavreta len s baseline v profile;
+    # bez baseline musi byt priznana ako neuzavreta (nula nic nedokazuje)
+    assert set(full["summary"]["inconclusive"]) <= {"text_integrity"}, \
+        full["summary"]
+    if "text_integrity" in full["summary"]["inconclusive"]:
+        assert "baseline" in full["text_integrity"]["reason"]
 
 
 def test_injikovany_hook_sa_najde(clean_copy, tmp_path_factory, profile):
@@ -191,8 +197,10 @@ def test_injikovany_hook_sa_najde(clean_copy, tmp_path_factory, profile):
     assert f["index"] == INJECT_INDEX
     assert full["summary"]["process_cross_view_findings"] == 0
     assert full["summary"]["module_findings"] == 0
+    assert full["summary"]["text_integrity_findings"] == 0
     assert full["finding_count"] == 1
-    assert full["summary"]["inconclusive"] == []
+    assert set(full["summary"]["inconclusive"]) <= {"text_integrity"}, \
+        full["summary"]
 
 
 def test_original_snimka_je_len_na_citanie(val_dir):

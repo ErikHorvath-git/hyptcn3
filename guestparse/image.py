@@ -62,6 +62,11 @@ class RawImage:
         b = self.f.read(n)
         return b if len(b) == n else None
 
+    def page_present(self, pa):
+        """Raw obraz nema zaznamovu strukturu - stranka v rozsahu suboru sa
+        povazuje za pritomnu (riedke nuly su na nerozoznanie od obsahu)."""
+        return pa is not None and 0 <= pa < self.size
+
     def pages(self):
         """Iteruje (index_stranky, obsah) - pre skenovanie; nulove preskakuje."""
         for idx in range(self.size // self.page_size):
@@ -206,6 +211,14 @@ class VmicdImage:
             pa += take
             n -= take
         return bytes(out)
+
+    def page_present(self, pa):
+        """True, ked je stranka naozaj v retazci. Citanie (read) vracia za
+        chybajucu stranku nuly - diera vo fyzickom priestore - takze bez
+        tejto metody sa chybajuca a nulova stranka neda rozlisit."""
+        if pa is None or pa < 0:
+            return False
+        return (pa // self.page_size) in self.index
 
     def pages(self):
         for idx in sorted(self.index):

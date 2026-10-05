@@ -1,7 +1,7 @@
 """
 Kontroly integrity nad jednou snimkou.
 
-PRECO tieto tri a nie "detekcia malveru": zo samotnej pamate sa da overit
+PRECO tieto styri a nie "detekcia malveru": zo samotnej pamate sa da overit
 len to, co ma jadro invariantne dane. Kazda kontrola nizsie porovnava dva
 zdroje, ktore musia sediet, a nalez je ich rozdiel - nie skore, nie odhad.
 
@@ -16,13 +16,25 @@ zdroje, ktore musia sediet, a nalez je ich rozdiel - nie skore, nie odhad.
   (c) moduly krizovo  - zoznam `modules` proti kobjektom v module_kset
       (to, co vidno ako /sys/module). Plus meno modulu ako tlacitelny retazec
       a adresa struct module v oblasti modulov.
+  (d) text jadra      - obsah stranok [_stext, _etext) proti baseline,
+      ktoru si profil drzi z CISTEJ snimky toho isteho bootu. Text sa po
+      boote nema menit, takze rozdiel je inline hook alebo iny zapis do
+      textu - presne to, co kontrola (a) NEVIDI, ked hook ukazuje do vnutra
+      textu. (Zname obmedzenie: jump labels/static keys text naozaj
+      prepisuju - rozdiel sa preto hlasi s najblizsim symbolom a hodnoti sa
+      v kontexte, pozri docs/kontroly.md.)
 
 Snimka je ziva (VM sa nezastavuje), takze prechod zoznamu sa moze roztrhnut.
 Kazda kontrola preto hlasi 'conclusive': ked je niektory prechod neuplny,
-rozdiel dvoch zoznamov nie je dokaz skryvania a nesmie sa tak citat.
+rozdiel dvoch zoznamov nie je dokaz skryvania a nesmie sa tak citat. Pri
+kontrole (d) 'conclusive' znamena, ze kazda stranka baseline bola v snimke
+precitana - chybajuca stranka je 'neviem', nie 'ciste'.
 """
 
 import bisect
+import hashlib
+import json
+import os
 
 from .profile import btf_offsets
 
@@ -398,24 +410,161 @@ def module_checks(view, mods=None):
 
 # --------------------------------------------------------------- spolu
 
+# ------------------------------------------------- (d) text jadra sa nemeni
 
-def check_all(view, procs=None, mods=None):
+TEXT_BASELINE_SCHEMA = "hyptcn3/text-baseline/1"
+TEXT_BASELINE_FILE = "text_baseline.json"
+PAGE_SIZE = 4096
+
+
+def _baseline_path(prof):
+    return os.path.join(prof.dir, TEXT_BASELINE_FILE)
+
+
+def load_text_baseline(prof):
+    """
+    Baseline textu jadra z profilu: zoznam {va, sha256} stranok [_stext,
+    _etext) odobraty z cistej snimky. Vrati dict, alebo None, ked ho profil
+    nema (starsie profily) - kontrola sa potom prizna ako nedostupna.
+    """
+    path = _baseline_path(prof)
+    if not os.path.exists(path):
+        return None
+    with open(path, encoding="utf-8") as fh:
+        doc = json.load(fh)
+    if doc.get("schema") != TEXT_BASELINE_SCHEMA:
+        raise ValueError("%s: schema %r, cakam %r"
+                         % (path, doc.get("schema"), TEXT_BASELINE_SCHEMA))
+    return doc
+
+
+def build_text_baseline(view):
+    """
+    Baseline z CISTEJ snimky: SHA-256 kazdej stranky [_stext, _etext).
+
+    Odmietne neuplnu snimku: baseline, ktorej cast chyba, by kontrolu umelo
+    zuzila a hook v chybajucej stranke by nevidela - preto sa neda vyrobit
+    z polovicnej snimky a hovori to chybou, nie tichym orezanim.
+    """
+    prof = view.p
+    stext = prof.addr("_stext")
+    etext = prof.addr("_etext")
+    if stext is None or etext is None:
+        raise ValueError("profil nema _stext/_etext")
+    if stext % PAGE_SIZE:
+        raise ValueError("_stext 0x%x nie je zarovnany na stranku" % stext)
+    if etext <= stext:
+        raise ValueError("prazdny rozsah textu jadra")
+
+    pages, missing = [], 0
+    has_pp = hasattr(view.img, "page_present")
+    for va in range(stext, etext, PAGE_SIZE):
+        pa = view.to_pa(va)
+        # Citanie vracia za chybajucu stranku NULY (diera), preto sa
+        # pritomnost musi zistit zvlast - inak by baseline ticho zahashovala
+        # nuly tam, kde v snimke nic nie je.
+        if pa is None or (has_pp and not view.img.page_present(pa)):
+            missing += 1
+            continue
+        b = view.img.read(pa, PAGE_SIZE)
+        if b is None or len(b) < PAGE_SIZE:
+            missing += 1
+            continue
+        pages.append({"va": va, "sha256": hashlib.sha256(b).hexdigest()})
+    if missing:
+        raise ValueError(
+            "%d z %d stranok textu v snimke nie je; baseline sa da vyrobit "
+            "len z uplnej snimky tohto bootu" % (missing,
+                                                 (etext - stext) // PAGE_SIZE))
+    boot_id = (prof.meta or {}).get("boot_id")
+    return {
+        "schema": TEXT_BASELINE_SCHEMA,
+        "page_size": PAGE_SIZE,
+        "stext": stext,
+        "etext": etext,
+        "boot_id": boot_id,
+        "pages": pages,
+    }
+
+
+def text_integrity(view, baseline=None):
+    """
+    Porovna obsah textu jadra v snimke s baseline z profilu (cista snimka
+    toho isteho bootu). Kazda stranka, ktora sa lisi, je nalez - text sa po
+    boote nesmie menit a rozdiel znamena zapis do textu (inline hook).
+
+    `conclusive` = kazda stranka baseline bola precitana. Chybajuce stranky
+    sa neohlasuju ako ciste: je to 'neviem' (pozri modulovu hlavicku).
+    """
+    res = {"available": False, "conclusive": False, "reason": None,
+           "pages_total": 0, "pages_checked": 0, "pages_missing": 0,
+           "findings": []}
+    if baseline is None:
+        baseline = load_text_baseline(view.p)
+    if not baseline:
+        res["reason"] = (
+            "profil nema %s (baseline z cistej snimky); vyrob ho prikazom "
+            "'python3 -m guestparse textbaseline --snapshot <cista> "
+            "--profile <profil>'" % TEXT_BASELINE_FILE)
+        return res
+
+    stext = view.p.addr("_stext")
+    etext = view.p.addr("_etext")
+    if baseline.get("stext") != stext or baseline.get("etext") != etext:
+        res["reason"] = ("baseline je z ineho bootu (ine _stext/_etext); "
+                         "obnov ho nad cistou snimkou tohto bootu")
+        return res
+
+    pages = baseline.get("pages") or []
+    res["pages_total"] = len(pages)
+    has_pp = hasattr(view.img, "page_present")
+    for pg in pages:
+        pa = view.to_pa(pg["va"])
+        if pa is None or (has_pp and not view.img.page_present(pa)):
+            res["pages_missing"] += 1
+            continue
+        b = view.img.read(pa, PAGE_SIZE)
+        if b is None or len(b) < PAGE_SIZE:
+            res["pages_missing"] += 1
+            continue
+        res["pages_checked"] += 1
+        if hashlib.sha256(b).hexdigest() != pg["sha256"]:
+            sym, delta = _nearest(view.p, pg["va"])
+            res["findings"].append(_finding("text_integrity", {
+                "va": pg["va"],
+                "nearest_symbol": sym,
+                "symbol_offset": delta,
+                "note": ("obsah textu jadra na tejto stranke sa lisi od "
+                         "cistej snimky (baseline)"),
+            }))
+    res["available"] = True
+    res["conclusive"] = res["pages_missing"] == 0
+    if not res["conclusive"]:
+        res["reason"] = ("%d z %d stranok textu v snimke nie je - nula "
+                         "nalezov nic nedokazuje"
+                         % (res["pages_missing"], res["pages_total"]))
+    return res
+
+
+def check_all(view, procs=None, mods=None, text_baseline=None):
     """
     Vsetky kontroly nad jednou snimkou; vracia slovnik na vypis aj do JSON.
 
     `procs` a `mods` su cele vysledky view.processes() a view.modules() -
     daju sa podat, ked ich volajuci uz ma, aby sa snimka nemusela prechadzat
-    druhy raz.
+    druhy raz. `text_baseline` je baseline textu jadra (default: z profilu).
     """
     tables = syscall_tables(view)
     proc = process_cross_view(view, procs)
     mod = module_checks(view, mods)
+    text = text_integrity(view, text_baseline)
 
     findings = []
     for t in tables:
         findings.extend(t["findings"])
     findings.extend(proc["findings"])
     findings.extend(mod["findings"])
+    findings.extend(text["findings"])
 
     hooks = sum(len(t["findings"]) for t in tables)
     return {
@@ -423,6 +572,7 @@ def check_all(view, procs=None, mods=None):
         "syscall_tables": tables,
         "process_cross_view": proc,
         "modules": mod,
+        "text_integrity": text,
         "findings": findings,
         "finding_count": len(findings),
         "summary": {
@@ -430,12 +580,14 @@ def check_all(view, procs=None, mods=None):
             "syscall_entries_checked": sum(t["entries"] for t in tables),
             "process_cross_view_findings": len(proc["findings"]),
             "module_findings": len(mod["findings"]),
+            "text_integrity_findings": len(text["findings"]),
             # kontrola, ktora sa neuzavrela, je "neviem", nie "ciste"
             "inconclusive": sorted(
                 n for n, ok in (("syscall_table",
                                  all(t["available"] for t in tables)),
                                 ("process_cross_view", proc["conclusive"]),
-                                ("modules", mod["conclusive"])) if not ok),
+                                ("modules", mod["conclusive"]),
+                                ("text_integrity", text["conclusive"])) if not ok),
         },
     }
 

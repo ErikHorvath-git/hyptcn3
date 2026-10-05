@@ -8,6 +8,8 @@ Kontrakt (na tento sa spoliehaju ostatne casti prace, nemeni sa):
   python3 -m guestparse ss       --snapshot <cesta> --profile <adresar> [--json]
   python3 -m guestparse info     --snapshot <cesta> --profile <adresar> [--json]
   python3 -m guestparse checks   --snapshot <cesta> --profile <adresar> [--json]
+  python3 -m guestparse textbaseline --snapshot <cista_snimka> --profile <adresar>
+        [--force]          # baseline textu jadra pre kontrolu (d) do profilu
   python3 -m guestparse validate --snapshot <cesta> --profile <adresar> \
         --ps-before F --ps-after F [--lsmod F] [--ss F] --out results.json
 
@@ -50,8 +52,10 @@ NAVRATOVE KODY:
 
 import argparse
 import json
+import os
 import sys
 
+from . import checks
 from .view import build_view
 
 EXIT_OK = 0
@@ -101,6 +105,13 @@ def build_parser():
     sp.add_argument("--lsmod")
     sp.add_argument("--ss")
     sp.add_argument("--out", required=True)
+
+    sp = sub.add_parser("textbaseline",
+                        help="baseline textu jadra z cistej snimky (kontrola "
+                             "(d); zapise text_baseline.json do profilu)")
+    _add_common(sp)
+    sp.add_argument("--force", action="store_true",
+                    help="prepis existujucu baseline")
     return ap
 
 
@@ -228,6 +239,15 @@ def _print_checks(res):
     else:
         print("%-22s len meno a adresa, nalezov: %d (%s)"
               % ("moduly krizovo", len(m["findings"]), m.get("reason")))
+    t = res.get("text_integrity")
+    if t:
+        if t["available"]:
+            print("%-22s %d/%d stranok precitanych, nalezov: %d%s"
+                  % ("text jadra", t["pages_checked"], t["pages_total"],
+                     len(t["findings"]),
+                     "" if t["conclusive"] else " (NEUZAVRETA)"))
+        else:
+            print("%-22s NEDOSTUPNA (%s)" % ("text jadra", t["reason"]))
     if s["inconclusive"]:
         print("NEUZAVRETE kontroly: %s - ich nulovy vysledok nic nedokazuje "
               "(preto navratovy kod %d, nie 0)"
@@ -349,6 +369,32 @@ def main(argv=None):
             _warn(res)
             print(json.dumps(res, indent=2)) if args.json else _print_ss(res)
             return final(EXIT_OK)
+
+        # baseline textu jadra sa smie vyrobit len zo snimky, ktora sedi
+        # s profilom (inak by patrila inemu bootu) a z UPLNEJ snimky
+        # (inak by kontrola slepla prave tam, kde by hook bol)
+        if args.cmd == "textbaseline":
+            if mismatch:
+                sys.stderr.write("%s\n" % mismatch)
+                sys.stderr.write("baseline z iného bootu sa NEvytvori\n")
+                return EXIT_PROFILE_MISMATCH
+            out = os.path.join(view.p.dir, checks.TEXT_BASELINE_FILE)
+            if os.path.exists(out) and not args.force:
+                sys.stderr.write("chyba: %s uz existuje (prepis len "
+                                 "s --force)\n" % out)
+                return EXIT_ERROR
+            try:
+                doc = checks.build_text_baseline(view)
+            except ValueError as exc:
+                sys.stderr.write("chyba: %s\n" % exc)
+                return EXIT_ERROR
+            with open(out, "w", encoding="utf-8") as fh:
+                json.dump(doc, fh, indent=1)
+                fh.write("\n")
+            sys.stderr.write("zapisane: %s (%d stranok, boot %s)\n"
+                             % (out, len(doc["pages"]),
+                                doc.get("boot_id") or "neznamy"))
+            return EXIT_OK
 
         # `validate` po sebe necha subor v data/results - vysledok z profilu,
         # ktory k snimke nepatri, sa preto nevyraba vobec. Citacie podprikazy
