@@ -78,7 +78,7 @@ from features.windows import (DLZKA_OKNA, DOVOD_PLNA,       # noqa: E402
 from tcn import eval as ev                                  # noqa: E402
 from tcn.baselines import (GRU, BagOfFrames, LogRegPriemer,  # noqa: E402
                            skryte_pre_parametre)
-from tcn.model import TCN, pocet_parametrov                 # noqa: E402
+from tcn.model import TCN, TCNPrediktor, pocet_parametrov                 # noqa: E402
 
 BENIGNA = "idle"
 
@@ -279,11 +279,144 @@ def beh(data, seed=0, epochy=60):
     return vysledky
 
 
+# ------------------------------------------------------- predikcia normalu
+# (blok E1): regresna hlava nad rovnakym backbone-om, strata MSE, tréning
+# BEZ štítkov. Zmluva: v predikčnom režime sú VŠETKY vstupné sedenia
+# benígne (škodlivé vzorky sa nikdy netrénujú - HONESTY P4); labely.json sa
+# preto nevyžaduje vôbec.
+
+
+def syn_sessions_predikcia(seed=0, na_sessions=4, dlzka=40):
+    """
+    Synteticke sessions pre PREDIKCIU normalu (E1): deterministicka
+    sinusoida + maly sum, vsetky sedenia z toho isteho procesu.
+
+    NIE JE TO MERANIE. Overuje sa MECHANIKA: okna sa skladaju bez stitkov,
+    chronologicky split po sedeniach nepreteka, MSE klesne pod var ciela
+    (referencia "predpovedaj stred" = 1.0). Sinusoida ma periodu ~25
+    snimok, takze z 15 krokov okna sa da pokracovanie naozaj predpovedat.
+    """
+    rng = np.random.default_rng(seed)
+    out = []
+    for i in range(na_sessions):
+        t = np.arange(dlzka)
+        X = np.zeros((dlzka, len(MENA)))
+        X[:, 0] = np.sin(t / 4.0) + rng.normal(0.0, 0.05, size=dlzka)
+        X[:, 1] = np.cos(t / 5.0) + rng.normal(0.0, 0.05, size=dlzka)
+        X[:, MENA.index("ma_predchodcu")] = 1.0
+        X[0, MENA.index("ma_predchodcu")] = 0.0     # prva snimka retazca
+        X[:, MENA.index("je_plna")] = 0.0
+        X[0, MENA.index("je_plna")] = 1.0           # prva je vzdy plna
+        out.append({"meno": "202601%02dT000000Z_pred_%d" % (i + 1, i),
+                    "trieda": "idle", "matica": X})
+    return out
+
+
+def priprav_predikcia(sessions, dlzka=DLZKA_OKNA, podiel=0.6):
+    """Okna, chronologický split po sedeniach a normalizácia - bez štítkov."""
+    mena = sorted(s["meno"] for s in sessions)
+    for m in mena:
+        if not m[:8].isdigit():
+            raise ValueError(
+                "session %r nezacina casovou peciatkou, chronologicky "
+                "split sa neda urobit" % m)
+    k = max(1, int(round(podiel * len(mena))))
+    if k >= len(mena):
+        raise ValueError("podiel %s necha prazdny test pri %d sedeniach"
+                         % (podiel, len(mena)))
+    tr_mena, te_mena = mena[:k], mena[k:]
+
+    snimky = [sn for s in sessions
+              for sn in snimky_z_matice(s["meno"], s["matica"], MENA)]
+    # normalizacia: fit IBA na trenovacich (vsetky benigne - zmluva rezimu)
+    norm = Normalizer(priznaky=MENA,
+                      nenormalizovane=("ma_predchodcu", "je_plna"))
+    norm.fit([sn for sn in snimky if not sn.dovody()],
+             sessions_fit=tr_mena, dlzka_okna=dlzka)
+
+    vsetky = okna(snimky, dlzka=dlzka)
+    data = {"train_sessions": tr_mena, "test_sessions": te_mena,
+            "dlzka_okna": dlzka, "normalizacia": norm}
+    for cast, cm in (("train", tr_mena), ("test", te_mena)):
+        o = vsetky.vyber_sessions(cm)
+        if not len(o):
+            raise ValueError("cast %s nema ani jedno okno" % cast)
+        X = norm.transform(o).X
+        # vstup BEZ posledneho kroku: kauzalny vystup na pozicii L-2
+        # predpoveda krok L-1; keby ciel v okne bol, uloha by zdegenerovala
+        # na kopirovanie (MSE ~ 0 bez ucenia) - pozri TCNPrediktor
+        data["X_%s" % cast] = X[:, :-1, :]
+        data["y_%s" % cast] = X[:, -1, :]
+    data["okien_bez_predchodcu"] = vsetky.pocty_vynechanych().get(
+        DOVOD_PREDCHODCA, 0)
+    data["okien_s_plnou_snimkou"] = vsetky.pocty_vynechanych().get(
+        DOVOD_PLNA, 0)
+    data["kratke_useky"] = list(vsetky.preskocene)
+    data["konstantne_priznaky"] = list(norm.manifest.konstantne)
+    return data
+
+
+def trenuj_prediktor(model, X, y, seed=0, epochy=60, lr=0.01, davka=64):
+    """Adam + MSE, fixny seed, CPU. Vracia model v rezime eval()."""
+    nastav_seed(seed)
+    g = torch.Generator().manual_seed(seed)
+    Xt = torch.as_tensor(X, dtype=torch.float32)
+    yt = torch.as_tensor(y, dtype=torch.float32)
+    opt = torch.optim.Adam(model.parameters(), lr=lr)
+    strata = nn.MSELoss()
+    model.train()
+    for _ in range(epochy):
+        for i in torch.randperm(len(Xt), generator=g).split(davka):
+            opt.zero_grad()
+            strata(model(Xt[i]), yt[i]).backward()
+            opt.step()
+    model.eval()
+    return model
+
+
+def chyba_predikcie(model, X, y):
+    """Per-okno aj per-priznak stvorce chyb (E2 zaklad)."""
+    with torch.no_grad():
+        p = model(torch.as_tensor(X, dtype=torch.float32))
+        t = torch.as_tensor(y, dtype=torch.float32)
+        return ((p - t) ** 2).numpy()
+
+
+def beh_predikcia(data, seed=0, epochy=60):
+    """TCNPrediktor + referencia 'predpovedaj stred' (nula po z-score).
+
+    Referencia je ta spravna dolna latka: ked model nevie nic, jeho MSE sa
+    rovna rozptylu ciela. mse_na_var < 1 teda znamena, ze sa nieco naucil.
+    """
+    nastav_seed(seed)
+    F_ = data["X_train"].shape[2]
+    tcn = TCNPrediktor(F_, dlzka_okna=data["dlzka_okna"])
+    n_tcn = pocet_parametrov(tcn)
+    trenuj_prediktor(tcn, data["X_train"], data["y_train"], seed, epochy)
+    err_te = chyba_predikcie(tcn, data["X_test"], data["y_test"])
+    err_tr = chyba_predikcie(tcn, data["X_train"], data["y_train"])
+    var_te = float(np.mean(data["y_test"] ** 2))
+    data["model"] = tcn            # score.py/_uloz_prediktor pouziju ten isty
+    return {
+        "model": "tcn_prediktor", "parametrov": n_tcn,
+        "recepcne_pole": tcn.rf, "dlzka_okna": data["dlzka_okna"],
+        "mse_train": float(np.mean(err_tr)),
+        "mse_test": float(np.mean(err_te)),
+        "var_test_ciela": var_te,
+        "mse_na_var": float(np.mean(err_te) / (var_te or 1.0)),
+        "synteticke_data": True,          # hlavny beh s korpusom prepise
+    }
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(description="trening TCN a baselinov")
     ap.add_argument("--data", help="adresar s .npz a labely.json")
     ap.add_argument("--syn", action="store_true",
                     help="synteticke data (nie meranie) namiesto korpusu")
+    ap.add_argument("--uloha", default="klasifikacia",
+                    choices=("klasifikacia", "predikcia"),
+                    help="klasifikacia aktivit (stitky) alebo predikcia "
+                         "normalu (E1, bez stitkov)")
     ap.add_argument("--rezim", default="hodnota",
                     choices=("hodnota", "poradie", "sum"),
                     help="druh synteticnej ulohy, pozri syn_sessions()")
@@ -293,12 +426,36 @@ def main(argv=None):
     ap.add_argument("--podiel", type=float, default=0.6,
                     help="podiel starsich sessions v treningu")
     ap.add_argument("--out", help="JSON s vysledkami do data/results/")
+    ap.add_argument("--uloz-model", default=None,
+                    help="uloz natrenovany model + normalizacny manifest "
+                         "(<cesta>.pt a <cesta>.manifest.json)")
     a = ap.parse_args(argv)
     if bool(a.data) == bool(a.syn):
         ap.error("zadaj bud --data, alebo --syn")
 
-    sessions = (syn_sessions(a.seed, rezim=a.rezim) if a.syn
-                else nacitaj_sessions(a.data))
+    if a.syn:
+        sessions = (syn_sessions_predikcia(a.seed) if a.uloha == "predikcia"
+                    else syn_sessions(a.seed, rezim=a.rezim))
+    else:
+        sessions = nacitaj_sessions(a.data)
+
+    if a.uloha == "predikcia":
+        data = priprav_predikcia(sessions, dlzka=a.dlzka, podiel=a.podiel)
+        vysledky = beh_predikcia(data, seed=a.seed, epochy=a.epochy)
+        print("predikcia normalu (E1):")
+        print("  mse_test=%.4f, var ciela=%.4f, mse/var=%.3f (referencia "
+              "stred = 1.0)" % (vysledky["mse_test"],
+                                vysledky["var_test_ciela"],
+                                vysledky["mse_na_var"]))
+        if a.uloz_model:
+            _uloz_prediktor(a.uloz_model, data, vysledky)
+            print("zapisane: %s (+ manifest)" % a.uloz_model)
+        if a.out:
+            prikaz = "python3 -m tcn.train " + " ".join(sys.argv[1:])
+            ev.uloz(vysledky, data, a.out, prikaz, synteticke=a.syn)
+            print("zapisane: %s" % a.out)
+        return 0
+
     data = priprav(sessions, dlzka=a.dlzka, podiel=a.podiel)
     vysledky = beh(data, seed=a.seed, epochy=a.epochy)
     print(ev.tabulka(vysledky, data))
@@ -307,6 +464,23 @@ def main(argv=None):
         ev.uloz(vysledky, data, a.out, prikaz, synteticke=a.syn)
         print("zapisane: %s" % a.out)
     return 0
+
+
+def _uloz_prediktor(cesta, data, vysledky):
+    """Model (state_dict + popis) a normalizacny manifest vedla seba.
+
+    score.py bez manifestu nemôže preškálovať vstup tými istými mu/sd,
+    ktorými sa trénovalo - preto sa ukladajú vždy spolu.
+    """
+    import torch as _torch
+    model = data["model"]
+    _torch.save({"state_dict": model.state_dict(),
+                 "priznakov": data["X_train"].shape[2],
+                 "dlzka_okna": data["dlzka_okna"],
+                 "recepcne_pole": model.rf,
+                 "mse_test": vysledky["mse_test"]},
+                cesta)
+    data["normalizacia"].save(cesta + ".manifest.json")
 
 
 if __name__ == "__main__":

@@ -60,14 +60,16 @@ import os
 import sys
 import time
 
+import numpy as np
 import torch
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+from features.normalize import Normalizer                  # noqa: E402
 from features.perbin import FeatureError                    # noqa: E402
 from features.snapshot import MENA, vektor_snimky           # noqa: E402
 from features.windows import DLZKA_OKNA                     # noqa: E402
-from tcn.model import TCN                                   # noqa: E402
+from tcn.model import TCN, TCNPrediktor                     # noqa: E402
 
 SCHEMA = "hyptcn3/latencia-skore/1"
 EXIT_OK = 0
@@ -216,6 +218,102 @@ def suhrn(zaznamy, kluc):
             "min": round(h[0], 3), "max": round(h[-1], 3)}
 
 
+# ------------------------------------------------------ E2: chyba predikcie
+
+
+def nacitaj_prediktor(cesta):
+    """Model + normalizacia z treningu (--uloz-model v tcn/train.py)."""
+    doc = torch.load(cesta, map_location="cpu")
+    m = TCNPrediktor(doc["priznakov"], dlzka_okna=doc["dlzka_okna"])
+    m.load_state_dict(doc["state_dict"])
+    m.eval()
+    norm = Normalizer.load(cesta + ".manifest.json", priznaky=tuple(MENA))
+    return m, norm, doc
+
+
+def chyba_predikcie_okna(model, norm, okno):
+    """Okno L vektorov -> (skore, chyby na priznak, predpoved).
+
+    Skore = priemerna stvorcova chyba cez priznaky BEZ indikatorov
+    ma_predchodcu/je_plna (tie su 0/1 znacky o tom, co riadok je - nie
+    meranie, predikovat ich nema zmysel a ich chyba by skore zriedila).
+    """
+    X = np.asarray([list(okno)], dtype=np.float64)
+    Xn = norm.transform(X)                       # (1, L, F)
+    vstup, ciel = Xn[:, :-1, :], Xn[:, -1, :]
+    with torch.no_grad():
+        p = model(torch.tensor(vstup, dtype=torch.float32))[0].numpy()
+    chyby = (p - ciel[0]) ** 2
+    indikatory = ("ma_predchodcu", "je_plna")
+    mask = np.array([n not in indikatory for n in norm.priznaky])
+    skore = float(np.mean(chyby[mask]))
+    return skore, [float(v) for v in chyby], [float(v) for v in p]
+
+
+def beh_predikcia(adresar, profil, dlzka, model, norm, cakaj=0.0, perioda=0.5,
+                  vypis=print):
+    """Hlavna slucka pre predikcny rezim: skore = chyba predikcie okna."""
+    vypis("rezim          : predikcia normalu (E2), skore = chyba predikcie")
+    vypis("adresar snimok : %s" % adresar)
+    vypis("dlzka okna     : %d snimok" % dlzka)
+
+    okno = collections.deque(maxlen=dlzka)
+    videne, zaznamy, predch = set(), [], None
+    posledna = time.monotonic()
+
+    while True:
+        nove = nove_sidecary(adresar, videne)
+        if not nove:
+            if time.monotonic() - posledna >= cakaj:
+                break
+            time.sleep(perioda)
+            continue
+        posledna = time.monotonic()
+
+        for seq, sid, cas_snimky in nove:
+            videne_unix = time.time()
+            t0 = time.monotonic()
+            vektor, predch, pozn = vektor_snimky(adresar, profil, seq, predch)
+            t_vektor = time.monotonic() - t0
+
+            okno.append(vektor)
+            z = {"seq": seq, "id": sid, "timestamp_unix": cas_snimky,
+                 "videne_unix": videne_unix,
+                 "vektor_ms": round(t_vektor * 1000, 3),
+                 "model_ms": None, "skore": None, "chyby": None,
+                 "okno_plne": len(okno) >= dlzka,
+                 "poznamky": list(pozn)}
+            for p in pozn:
+                vypis("snimka %s: poznamka: %s" % (sid, p))
+
+            caka = cakam_text(len(okno), dlzka)
+            if caka:
+                vypis("snimka %s: vektor za %.0f ms; %s"
+                      % (sid, t_vektor * 1000, caka))
+            else:
+                t1 = time.monotonic()
+                sk, chyby, _ = chyba_predikcie_okna(model, norm, okno)
+                t_model = time.monotonic() - t1
+                hotovo = time.time()
+                top = sorted(range(len(chyby)), key=lambda i: -chyby[i])[:3]
+                z["model_ms"] = round(t_model * 1000, 3)
+                z["skore"] = sk
+                z["chyby"] = chyby
+                z["top_priznaky"] = [
+                    {"priznak": norm.priznaky[i], "chyba": chyby[i]}
+                    for i in top]
+                z["skore_unix"] = hotovo
+                z["spracovanie_ms"] = round((hotovo - videne_unix) * 1000, 3)
+                z["latencia_od_snimky_ms"] = round(
+                    (hotovo - cas_snimky) * 1000, 3)
+                vypis("snimka %s: vektor za %.0f ms, model za %.1f ms, "
+                      "chyba predikcie = %.6f (top: %s)"
+                      % (sid, t_vektor * 1000, t_model * 1000, sk,
+                         ", ".join(norm.priznaky[i] for i in top)))
+            zaznamy.append(z)
+    return zaznamy
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(
         prog="python3 -m tcn.score",
@@ -227,6 +325,13 @@ def main(argv=None):
                     help="adresar profilu jadra hosta (kallsyms.txt, btf.txt)")
     ap.add_argument("--dlzka", type=int, default=DLZKA_OKNA,
                     help="dlzka okna v snimkach (vychodzia %d)" % DLZKA_OKNA)
+    ap.add_argument("--uloha", default="skore",
+                    choices=("skore", "predikcia"),
+                    help="skore = netrenovany klasifikator (dokaz cesty); "
+                         "predikcia = natrenovany prediktor normalu (E2)")
+    ap.add_argument("--model", default=None,
+                    help="predikcia: <cesta>.pt z tcn.train --uloz-model "
+                         "(vedla musi byt <cesta>.pt.manifest.json)")
     ap.add_argument("--cakaj", type=float, default=0.0, metavar="S",
                     help="ako dlho cakat na dalsiu snimku, kym sa skonci "
                          "(0 = spracovat, co je v adresari, a skoncit)")
@@ -234,8 +339,17 @@ def main(argv=None):
                     help="kam zapisat zaznamy a suhrn casov")
     a = ap.parse_args(argv)
 
+    if a.uloha == "predikcia" and not a.model:
+        ap.error("--uloha predikcia vyzaduje --model <cesta>.pt")
+
     try:
-        zaznamy = beh(a.snapshots, a.profile, a.dlzka, a.cakaj)
+        if a.uloha == "predikcia":
+            model, norm, doc_modelu = nacitaj_prediktor(a.model)
+            zaznamy = beh_predikcia(a.snapshots, a.profile, a.dlzka,
+                                    model, norm, a.cakaj)
+        else:
+            doc_modelu = None
+            zaznamy = beh(a.snapshots, a.profile, a.dlzka, a.cakaj)
     except FeatureError as exc:
         print("chyba: %s" % exc, file=sys.stderr)
         return EXIT_ERROR
@@ -246,6 +360,12 @@ def main(argv=None):
     so_skore = [z for z in zaznamy if z["skore"] is not None]
     print("spracovanych snimok: %d, z toho so skore: %d"
           % (len(zaznamy), len(so_skore)))
+    if a.uloha == "predikcia" and so_skore:
+        s = [z["skore"] for z in so_skore]
+        print("chyba predikcie: median=%.6f, p95=%.6f, max=%.6f (n=%d)"
+              % (sorted(s)[len(s) // 2],
+                 sorted(s)[min(len(s) - 1, -(-95 * len(s) // 100) - 1)],
+                 max(s), len(s)))
     if not so_skore:
         print("ziadne okno sa nenaplnilo - na skore treba aspon %d snimok"
               % a.dlzka)
@@ -253,8 +373,11 @@ def main(argv=None):
     if a.json:
         doc = {
             "schema": SCHEMA,
-            "model_natrenovany": False,
-            "model_poznamka": UPOZORNENIE[0] + " " + UPOZORNENIE[1],
+            "model_natrenovany": a.uloha == "predikcia",
+            "model_poznamka": (UPOZORNENIE[0] + " " + UPOZORNENIE[1]
+                               if a.uloha != "predikcia" else ""),
+            "uloha": a.uloha,
+            "model": os.path.abspath(a.model) if a.model else None,
             "dlzka_okna": a.dlzka,
             "adresar": os.path.abspath(a.snapshots),
             "profil": os.path.abspath(a.profile),

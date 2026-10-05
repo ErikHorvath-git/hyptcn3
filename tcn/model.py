@@ -109,3 +109,35 @@ class TCN(nn.Module):
         # Bez po_krokoch sa klasifikuje posledny krok okna: rozhodnutie patri
         # k najnovsej snimke a ta vidi cele okno (RF >= L).
         return logity if po_krokoch else logity[:, -1, :]
+
+
+class TCNPrediktor(nn.Module):
+    """
+    Regresna hlava nad tym istym backbone-om (blok E1): z okna
+    t-n .. t-1 predpoveda vektor priznakov v case t.
+
+    Vstup ma byt (N, L-1, F) - kroky okna BEZ posledneho; vystup posledneho
+    kroku siete predpoveda krok t. Dovod: kauzalna konvolucia na pozicii
+    L-1 by videla aj samotny ciel, keby bol v okne - vtedy by sa uloha
+    zdegenerovala na kopirovanie (MSE ~ 0 bez akehokolvek ucenia).
+    Kauzalita je ta ista ako pri TCN, takze plati rovnaky test.
+    """
+
+    def __init__(self, priznakov, kanaly=16, k=3, blokov=3, dropout=0.1,
+                 dlzka_okna=None):
+        super().__init__()
+        if dlzka_okna is not None:
+            # vstup ma L-1 krokov; RF sa kontroluje proti plnemu oknu
+            skontroluj_rf(dlzka_okna, k, blokov)
+        self.rf = recepcne_pole(k, blokov)
+        self.bloky = nn.ModuleList([
+            Blok(priznakov if i == 0 else kanaly, kanaly, k, 2 ** i, dropout)
+            for i in range(blokov)])
+        self.hlava = nn.Linear(kanaly, priznakov)
+
+    def forward(self, x, po_krokoch=False):
+        h = x.transpose(1, 2)                     # (N, F, L) pre Conv1d
+        for b in self.bloky:
+            h = b(h)
+        pred = self.hlava(h.transpose(1, 2))      # (N, L, F)
+        return pred if po_krokoch else pred[:, -1, :]
