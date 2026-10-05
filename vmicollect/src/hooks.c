@@ -115,8 +115,9 @@ vmic_hooks_t *vmic_hooks_load(const vmic_config_t *cfg)
         vmic_hook_alarm_fn    alarm = (vmic_hook_alarm_fn)   dlsym(lib, "vmic_hook_alarm");
         vmic_hook_fini_fn     fini  = (vmic_hook_fini_fn)    dlsym(lib, "vmic_hook_fini");
 
-        if (!snap) {
-            LOGE("hooks: '%s' neexportuje vmic_hook_snapshot()", path);
+        if (!snap && !alarm) {
+            LOGE("hooks: '%s' neexportuje vmic_hook_snapshot() ani "
+                 "vmic_hook_alarm()", path);
             dlclose(lib);
             if (h->strict) goto fail;
             continue;
@@ -152,7 +153,7 @@ int vmic_hooks_fire(vmic_hooks_t *h, const vmic_snapshot_t *snap)
 
     for (size_t i = 0; i < h->count; i++) {
         loaded_t *it = &h->item[i];
-        if (it->disabled) continue;
+        if (it->disabled || !it->on_snapshot) continue;
 
         int rc = it->on_snapshot(it->state, snap);
         if (rc == 0) continue;

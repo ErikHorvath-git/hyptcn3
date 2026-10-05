@@ -134,7 +134,7 @@ $(BPF_EMBED): $(BPF_OBJ)
 
 # Plugin sa linkuje ako zdielana kniznica; nepotrebuje nic zo zberaca,
 # staci mu hlavicka include/vmic.h.
-hooks: $(BUILD)/example_hook.so $(BUILD)/alarm_hook.so
+hooks: $(BUILD)/example_hook.so $(BUILD)/alarm_hook.so $(BUILD)/react_hook.so
 
 $(BUILD)/example_hook.so: hooks/example_hook.c include/vmic.h | $(BUILD)
 	$(CC) $(CFLAGS) -fPIC -shared -o $@ $<
@@ -143,6 +143,13 @@ $(BUILD)/example_hook.so: hooks/example_hook.c include/vmic.h | $(BUILD)
 # Priklad detektora pre alarmove rozhranie (blok A6): prah na pocet
 # zmenenych stranok -> api->alarm(), prijima aj alarmy inych pluginov.
 $(BUILD)/alarm_hook.so: hooks/alarm_hook.c include/vmic.h | $(BUILD)
+	$(CC) $(CFLAGS) -fPIC -shared -o $@ $<
+	@echo "hotovo -> $@"
+
+# VOLITELNA reakcia na urovni hypervizora cez libvirt (blok A7), DEFAULT
+# VYPNUTA (nahra sa len ked je v hooks.load); latencia alarm->reakcia sa
+# meria do alarm_reakcia.jsonl.
+$(BUILD)/react_hook.so: hooks/react_hook.c include/vmic.h | $(BUILD)
 	$(CC) $(CFLAGS) -fPIC -shared -o $@ $<
 	@echo "hotovo -> $@"
 
@@ -178,8 +185,8 @@ $(BUILD)/retention_test: tests/retention_test.c $(TEST_OBJ) $(EMBED_OBJ) | $(BUI
 
 # Regresny test alarmoveho rozhrania (blok A6): alarm.json + alarms.jsonl
 # + HOLD + notifikacia vmic_hook_alarm, end-to-end cez hooks.c/meta.c.
-test-alarm: $(BUILD)/alarm_test $(BUILD)/alarm_hook.so
-	$(BUILD)/alarm_test $(BUILD)/alarm_hook.so
+test-alarm: $(BUILD)/alarm_test $(BUILD)/alarm_hook.so $(BUILD)/react_hook.so
+	$(BUILD)/alarm_test $(BUILD)/alarm_hook.so $(BUILD)/react_hook.so
 
 $(BUILD)/alarm_test: tests/alarm_test.c $(TEST_OBJ) $(EMBED_OBJ) | $(BUILD)
 	$(CC) $(CFLAGS) -o $@ $< $(TEST_OBJ) $(EMBED_OBJ) $(LDFLAGS) $(LDLIBS)

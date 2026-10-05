@@ -27,6 +27,7 @@
 
 static char g_dir[VMIC_PATH_MAX];
 static char g_hook[VMIC_PATH_MAX];
+static char g_react[VMIC_PATH_MAX];
 static char g_csv[VMIC_PATH_MAX];
 static int  g_fails = 0;
 
@@ -71,6 +72,8 @@ int main(int argc, char **argv)
 {
     snprintf(g_hook, sizeof(g_hook), "%s",
              argc > 1 ? argv[1] : "build/alarm_hook.so");
+    snprintf(g_react, sizeof(g_react), "%s",
+             argc > 2 ? argv[2] : "build/react_hook.so");
     snprintf(g_dir, sizeof(g_dir), "/tmp/vmic-alarm-XXXXXX");
     if (!mkdtemp(g_dir)) {
         fprintf(stderr, "alarm_test: mkdtemp: %s\n", strerror(errno));
@@ -83,9 +86,13 @@ int main(int argc, char **argv)
     vmic_config_t cfg;
     memset(&cfg, 0, sizeof(cfg));
     snprintf(cfg.dir, sizeof(cfg.dir), "%s", g_dir);
-    cfg.hook_count = 1;
+    cfg.hook_count = 2;
     snprintf(cfg.hook_path[0], sizeof(cfg.hook_path[0]), "%s", g_hook);
     snprintf(cfg.hook_args[0], sizeof(cfg.hook_args[0]), "%s,0", g_csv);
+    /* A7: reakcny plugin v DRY rezime - ziadne virsh, len merana latencia */
+    snprintf(cfg.hook_path[1], sizeof(cfg.hook_path[1]), "%s", g_react);
+    snprintf(cfg.hook_args[1], sizeof(cfg.hook_args[1]),
+             "suspend,nobody,testvm,dry");
     cfg.hooks_strict = false;
 
     vmic_hooks_t *h = vmic_hooks_load(&cfg);
@@ -123,6 +130,12 @@ int main(int argc, char **argv)
     /* prijatie alarmu cez vmic_hook_alarm: CSV detektora ma hlavicku + 1 */
     int csv_lines = count_lines("prijate.csv");
     check(csv_lines == 2, "detektor prijal alarm cez vmic_hook_alarm (1 riadok)");
+
+    /* A7: reakcny plugin (DRY) dostal alarm a odmeral latenciu */
+    check(file_contains("alarm_reakcia.jsonl", "\"akcia\": \"suspend\""),
+          "react_hook dostal alarm a zapisal akciu");
+    check(file_contains("alarm_reakcia.jsonl", "latencia_alarm_reakcia_ms"),
+          "react_hook odmeral latenciu alarm->reakcia");
 
     /* snimka pod prahom: ziadny dalsi alarm */
     snap.seq = 4;
