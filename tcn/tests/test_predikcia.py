@@ -52,6 +52,23 @@ def test_beh_predikcia_sa_nauci_predpovedat_sinusoidu():
     assert vysledky["zscore"]["skore_test"]["n"] > 0
 
 
+def test_konfunder_podskupina_sa_nauci_iba_predpovedatelny_signal():
+    """Orezana podmnozina priznakov: mechanika funguje (signalova podskupina
+    sa nauci). Samotne porovnanie 'zatazove priznaky nesmu dorovnat plny
+    model' patri do H nad realnymi datami - tu sa overuje len to, ze
+    podskupinovy beh bez stitkov bezi a reportuje."""
+    from tcn.train import beh_konfunder
+    from features.snapshot import MENA
+    sessions = syn_sessions_predikcia(seed=5, na_sessions=4, dlzka=60)
+    data = priprav_predikcia(sessions, dlzka=16, podiel=0.5)
+    v = beh_konfunder(data, ("mem_changed_ratio", "proc_total"), epochy=60)
+    assert v["priznakov"] == 2
+    assert v["podskupina"] == ["mem_changed_ratio", "proc_total"]
+    assert v["tcn_prediktor"]["mse_na_var"] >= 0.0
+    v2 = beh_konfunder(data, MENA[:2], epochy=60)
+    assert v2["tcn_prediktor"]["mse_na_var"] < 0.5
+
+
 def test_priprav_predikcia_odmietne_sedenia_bez_peciatky():
     sessions = syn_sessions_predikcia(seed=1, na_sessions=2)
     sessions[0]["meno"] = "bez_peciatky"

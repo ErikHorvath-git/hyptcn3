@@ -392,7 +392,7 @@ def _popis_skore(s):
     return {"n": len(s), "median": s[len(s) // 2], "p95": s[i], "max": s[-1]}
 
 
-def beh_predikcia(data, seed=0, epochy=60):
+def beh_predikcia(data, seed=0, epochy=60, priznaky=MENA):
     """Predikcia normalu (E1) + anomálne baseliny (F) na tych istych datach.
 
     TCN prediktor a GRU prediktor sa trenuju MSE (porovnatelny pocet
@@ -430,7 +430,7 @@ def beh_predikcia(data, seed=0, epochy=60):
     vysledky["tcn_prediktor"]["recepcne_pole"] = tcn.rf
 
     # baseliny bez sekvencie: z-score a izolacny les
-    zs = ZScoreAnomalia(MENA).fit(data["X_train"])
+    zs = ZScoreAnomalia(priznaky).fit(data["X_train"])
     vysledky["zscore"] = {
         "parametrov": int(np.sum(zs.mask)),
         "skore_test": _popis_skore(zs.skore(data["X_test"])),
@@ -446,6 +446,40 @@ def beh_predikcia(data, seed=0, epochy=60):
                                                 "z-score)"}
     data["model"] = tcn            # score.py/_uloz_prediktor pouziju ten isty
     return vysledky
+
+
+# --------------------------------------------------- konfunder test (H)
+# "Prediktor len zo zaťažových príznakov nesmie dorovnať plný": keby sa
+# detekcia dala postaviť len na tom, ze sa VM proste ZATAZI (mem_* priznaky
+# rastu s akoukoľvek aktivitou), alarm by nehovoril o anomálii, ale o zatazi.
+# Tento beh to overi: ten isty model, len orezana podmnozina priznakov.
+
+MEM_PRIZNAKY = tuple(m for m in MENA if m.startswith("mem_"))
+
+
+def podskupina(data, mena):
+    """X/y okna orezane na podmnozinu priznakov (rovnaka dlzka okna)."""
+    idx = [MENA.index(m) for m in mena]
+    return {
+        "X_train": data["X_train"][..., idx],
+        "X_test": data["X_test"][..., idx],
+        "y_train": data["y_train"][..., idx],
+        "y_test": data["y_test"][..., idx],
+        "dlzka_okna": data["dlzka_okna"],
+        "train_sessions": data["train_sessions"],
+        "test_sessions": data["test_sessions"],
+        "normalizacia": data["normalizacia"],
+    }
+
+
+def beh_konfunder(data, podskupina_mena, seed=0, epochy=60):
+    """Predikcia nad podmnožinou priznakov - porovna sa s plnym modelom."""
+    d = podskupina(data, podskupina_mena)
+    v = beh_predikcia(d, seed=seed, epochy=epochy,
+                      priznaky=tuple(podskupina_mena))
+    v["podskupina"] = list(podskupina_mena)
+    v["priznakov"] = len(podskupina_mena)
+    return v
 
 
 def main(argv=None):
