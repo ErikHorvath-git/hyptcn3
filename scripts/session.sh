@@ -217,6 +217,19 @@ zaznam "beh injikovanej binárky ${RUNTIME}s (seed=$SEED)"
 as_user "$GUEST_EXEC" -- "SEED=$SEED DUR=$RUNTIME $INJ_REMOTE $INJ_ARGS" \
     > "$SESS/payload.log" 2>&1 &
 PAYLOAD_PID=$!
+
+# HOST-SIDE traffic: skutocna externa premavka (host -> virbr0 -> sluzby
+# v hostovi), paralelne s payloadom - tcpdump na moste ju zachyti
+HT_PID=""
+HOST_TRAFFIC=$(jq -r '.host_traffic // false' "$MANIFEST_IN")
+if [ "$HOST_TRAFFIC" != "false" ]; then
+    HT_TARGET=$(jq -r '.host_traffic_target // "http://192.168.122.100"' "$MANIFEST_IN")
+    zaznam "host-side traffic: host_traffic.py -> $HT_TARGET (${RUNTIME}s, seed=$SEED)"
+    python3 "$REPO/scripts/host_traffic.py" --target "$HT_TARGET" \
+        --dur "$RUNTIME" --seed "$SEED" > "$SESS/host_traffic.log" 2>&1 &
+    HT_PID=$!
+fi
+
 sleep "$RUNTIME"
 kill "$PAYLOAD_PID" 2>/dev/null || true
 # ssh/agent zabije len prenos, nie vzdialeny proces - dobeh sa pripadne
@@ -229,6 +242,9 @@ as_user "$GUEST_EXEC" -- 'ps -eo pid,comm --no-headers' > "$SESS/ps_after.txt"
 as_user "$GUEST_EXEC" -- 'lsmod' > "$SESS/lsmod_after.txt"
 as_user "$GUEST_EXEC" -- 'ss -tulpn' > "$SESS/ss_after.txt" 2>/dev/null || true
 as_user "$GUEST_EXEC" -- 'find /tmp /root /var/tmp -xdev -type f -printf "%p %s\n" 2>/dev/null | sort' > "$SESS/files_after.txt"
+
+[ -n "$HT_PID" ] && kill "$HT_PID" 2>/dev/null || true
+[ -n "$HT_PID" ] && wait "$HT_PID" 2>/dev/null || true
 
 # stop zberu a tcpdump
 kill -INT "$COLLECT_PID" 2>/dev/null || true

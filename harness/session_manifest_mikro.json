@@ -1,0 +1,21 @@
+{
+ "schema": "hyptcn3/session-manifest/1",
+ "typ": "benign",
+ "seed": 42,
+ "warmup_s": 30,
+ "runtime_s": 120,
+ "interval_s": 5,
+ "tcpdump": true,
+ "apt_packages": [],
+ "host_traffic": true,
+ "host_traffic_target": "http://192.168.122.100",
+ "collect": {
+  "writer": "delta",
+  "hash": "none"
+ },
+ "label": "mikrosluzby",
+ "injekcia": {
+  "subor": "scripts/loads/mikrosluzby.sh",
+  "args": []
+ }
+}
