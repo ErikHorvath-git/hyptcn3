@@ -117,13 +117,21 @@ a kalibrácia (E3) neexistujú.
 
 ## Čo chýba (mapované na bloky)
 
+Stav po bloku 1 (2026-10-05, commity `2da4651`..`88608d7`): **A2, A3, A4, A5, A6, D
+sú HOTOVÉ** (každý s testami); **A1 hotový z časti** — výber domény podľa mena pri
+dvoch VM je dokázaný artefaktom `data/results/a1_vyber_vm_20261005.json`,
+znovupripojenie po reštarte má pripravený `scripts/a1_restart_test.sh` (čaká na
+jedno `sudo`). Riadky nižšie s ~~škrtom~~ sú vyriešené a nechávajú sa kvôli
+porovnaniu so zadaním.
+
 | blok | čo chýba | existujúci kód, z ktorého stavať |
 |---|---|---|
-| A2 | auto-preukotvenie profilu po KASLR posune (pokračovať, nie padať) | `guestparse/view.py:657-738` (posun + diagnóza už sú) |
-| A3 | 4. invariant: zmena binov rozsahu textu jadra | `guestparse/checks.py:105-158` (vzor kontroly), rozsah `_stext–_etext` z kallsyms |
-| A4 | mapovanie bin → proces cez page tables hosťa | `guestparse/view.py:165-275` (preklad adries jadra), `vmicollect/src/perbin.c` (fyzické biny) |
-| A5 | `hold` marker v retencii | `vmicollect/src/retention.c:101-287` |
-| A6 | `alarm.json` + alarmový hook | `vmicollect/src/hooks.c:62-160` + `src/meta.c:42-202` (JSON writer) |
+| A1 | ~~výber podľa mena~~ HOTOVÉ (živý test, artefakt); znovupripojenie po reštarte = `scripts/a1_restart_test.sh` (sudo) | `vmicollect/src/backend_ebpf.c:493-587,1028-1054` |
+| A2 | ~~auto-preukotvenie profilu po KASLR posune~~ HOTOVÉ 2026-10-05 (delta meraný z tabuliek stránok, kotvy init_task+linux_banner) | `guestparse/view.py:reanchor`, `guestparse/tests/test_reanchor.py` |
+| A3 | ~~4. invariant: zmena binov rozsahu textu jadra~~ HOTOVÉ 2026-10-05 (SHA-256 strán textu proti baseline z čistej snímky) | `guestparse/checks.py:text_integrity`, podpríkaz `textbaseline` |
+| A4 | ~~mapovanie bin → proces cez page tables hosťa~~ HOTOVÉ 2026-10-05 (zostup tabuľkami z `mm->pgd`; VMA zoznam v BTF tohto jadra nie je) | `guestparse/procmap.py`, podpríkaz `procmap` |
+| A5 | ~~`hold` marker v retencii~~ HOTOVÉ 2026-10-05 (subor HOLD, chain_id aj meno suboru) | `vmicollect/src/retention.c`, podpríkaz `hold` |
+| A6 | ~~`alarm.json` + alarmový hook~~ HOTOVÉ 2026-10-05 (api->alarm, alarm.json + alarms.jsonl, HOLD reťazca, vmic_hook_alarm) | `vmicollect/src/hooks.c`, `src/meta.c:vmic_alarm_write` |
 | A7 | voliteľná libvirt reakcia s meranou latenciou | `vmicollect/src/backend.c:102-133` (`vmic_backend_pause/resume`), prázdne ops `backend_ebpf.c:1167-1168` |
 | A8 | dlhý beh (hodiny) + persistovaná evidencia zmeškaných slotov | `vmicollect/src/sched.c:110-134`, `vmicollect/include/vmic.h:413-418`, `scripts/root_run.sh run` |
 | B1 | golden image definícia v repe | `/home/eh/vms/` (cloud-init.iso, debian-12-base.qcow2), `scripts/get_profile.sh` |
@@ -132,7 +140,7 @@ a kalibrácia (E3) neexistujú.
 | B4 | `root_run.sh session <manifest>`: revert→štart→zber→injekcia→beh→ground truth→stop→zahoď overlay→manifest+tcpdump | `root_run.sh probe/validate/once/run`, `guest_exec.sh`, `stamp_results.py` |
 | B5 | identický priebeh benígnych aj škodlivých sedení | návrh manifestu sedenia |
 | C | benígne záťaže (idle/nginx+wrk/pgbench/build/rsync+tar/mix) | `guest_exec.sh` |
-| D | per-bin okná `(N,L,B*4+22)` | `b574b8d~1` (zmazané čítačky), `features/manifest.py` (rezim `bin_priznak`), `features/PERBIN.md` |
+| D | ~~per-bin okná `(N,L,B*4+22)`~~ HOTOVÉ 2026-10-05 (voliteľný tvar popri `(N,L,22)` + loader z C sidecaru) | `features/windows.py:okna_s_perbin`, `features/tests/test_windows_perbin.py` |
 | E1 | regresná hlava TCN (predikcia vektora v t+1, MSE, bez štítkov) | `tcn/model.py`, `tcn/train.py:197-245`, testy kauzality |
 | E2 | skóre anomálie = chyba predikcie, per-bin lokalizácia | `tcn/score.py:103-216`, `features/perbin.py` |
 | E3 | `tcn/kalibracia.py` (kvantil, rozpočet FP, k-z-n okien) | `tcn/eval.py`, `features/normalize.py` |
