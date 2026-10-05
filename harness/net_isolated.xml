@@ -1,0 +1,12 @@
+<!-- Izolovaná sieť bez NAT (B3): hosť dosiahne iba hostiteľa na 192.168.99.1,
+     žiadny forward, žiadna MASQUERADE. Fake služby (INetSim/FakeNet) bežia
+     na hostiteľovi a počúvajú na virbr1. -->
+<network>
+  <name>hyptcn-iso</name>
+  <bridge name='virbr1' stp='on' delay='0'/>
+  <ip address='192.168.99.1' netmask='255.255.255.0'>
+    <dhcp>
+      <range start='192.168.99.10' end='192.168.99.99'/>
+    </dhcp>
+  </ip>
+</network>
