@@ -79,8 +79,14 @@ def walk_user_pages(view, root_pa, out, limit_pages):
         entries = _table(view, tbl)
         if entries is None:
             continue
-        for e in entries:
+        for idx, e in enumerate(entries):
             if not (e & PTE_PRESENT):
+                continue
+            # PGD ma aj JADROVU polovicu (indices 256+): tam su zrkadlene
+            # mapovania jadra (vmalloc, ioremap - napr. IOAPIC na
+            # 0xfec00000). Do "pamati procesu" patri len uzivatelska
+            # polovica, inak by procesu patrilo aj MMIO a cely jadro.
+            if lvl == 0 and idx >= 256:
                 continue
             phys = e & ENTRY_MASK
             if lvl == 3:                              # PTE -> stranka

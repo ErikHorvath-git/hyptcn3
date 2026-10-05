@@ -214,3 +214,38 @@ def test_changed_pages_citaju_poslednu_cast_retazca():
         assert len(changed) > 100000
     finally:
         img.close()
+
+
+def test_jadrova_polovica_pgd_sa_nepriradi_procesu():
+    """PGD ma zrkadlene jadrove mapovania v indexoch 256+ (vmalloc,
+    ioremap). Walk uzivatelskej pamate musi zostupovat len do
+    uzivatelskej polovice - inak by procesu patrilo aj MMIO a jadro."""
+    R = 0x100000; U = 0x110000; M = 0x120000; PT = 0x130000
+    R2 = 0x140000; U2 = 0x150000; M2 = 0x160000; PT2 = 0x170000
+    F, F2 = 0x2000000, 0xFEC0000      # F2 = IOAPIC (MMIO)
+
+    pages = {}
+    pages[R] = _page(*([U | 1] + [0] * 255 + [R2 | 1] + [0] * 255))
+    pages[U] = _page(M | 1)
+    pages[M] = _page(*([0] * 8 + [PT | 1] + [0] * 503))
+    pages[PT] = _page(*([F | 3] + [0] * 511))
+    pages[R2] = _page(U2 | 1)
+    pages[U2] = _page(M2 | 1)
+    pages[M2] = _page(PT2 | 1)
+    pages[PT2] = _page(*([F2 | 3] + [0] * 511))
+    pages[F] = _page(1)
+    pages[F2] = _page(2)
+
+    img = FakeImg(pages)
+    view = GuestView.__new__(GuestView)
+    view.img = img
+    view.p = FakeProf()
+    view.ktext_shift = 0
+    view.page_offset_base = None
+    view.max_pa = 0x100000000
+
+    from guestparse.procmap import walk_user_pages
+    out = {}
+    walk_user_pages(view, R, out, 1000)
+    assert F in out
+    assert F2 not in out, "MMIO z jadrovej polovice PGD nesmie patrit procesu"
