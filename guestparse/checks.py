@@ -510,16 +510,22 @@ def text_integrity(view, baseline=None):
 
     stext = view.p.addr("_stext")
     etext = view.p.addr("_etext")
-    if baseline.get("stext") != stext or baseline.get("etext") != etext:
-        res["reason"] = ("baseline je z ineho bootu (ine _stext/_etext); "
-                         "obnov ho nad cistou snimkou tohto bootu")
+    # Baseline je na OBSAH textu, nie na boot: po preukotveni (A2) sa jej
+    # virtualne adresy posunu o rovnaky rozdiel ako profil. Rozsah teda
+    # musi sediet az PO posune - inak je baseline z ineho JADRA.
+    delta = getattr(view, "reanchored", 0)
+    if (baseline.get("stext", 0) + delta != stext or
+            baseline.get("etext", 0) + delta != etext):
+        res["reason"] = ("baseline textu nesedi s profilom ani po posune o "
+                         "KASLR rozdiel (ine jadro); obnov ju nad cistou "
+                         "snimkou")
         return res
 
     pages = baseline.get("pages") or []
     res["pages_total"] = len(pages)
     has_pp = hasattr(view.img, "page_present")
     for pg in pages:
-        pa = view.to_pa(pg["va"])
+        pa = view.to_pa(pg["va"] + delta)
         if pa is None or (has_pp and not view.img.page_present(pa)):
             res["pages_missing"] += 1
             continue
@@ -529,11 +535,12 @@ def text_integrity(view, baseline=None):
             continue
         res["pages_checked"] += 1
         if hashlib.sha256(b).hexdigest() != pg["sha256"]:
-            sym, delta = _nearest(view.p, pg["va"])
+            sym, d = _nearest(view.p, pg["va"] + delta)
             res["findings"].append(_finding("text_integrity", {
-                "va": pg["va"],
+                "va": pg["va"] + delta,
+                "baseline_va": pg["va"],
                 "nearest_symbol": sym,
-                "symbol_offset": delta,
+                "symbol_offset": d,
                 "note": ("obsah textu jadra na tejto stranke sa lisi od "
                          "cistej snimky (baseline)"),
             }))

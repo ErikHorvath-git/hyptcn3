@@ -129,15 +129,50 @@ def test_baseline_z_ineho_bootu_sa_odmietne():
     view = StubView(pages, StubProf())
     res = checks.text_integrity(view, baseline)
     assert not res["available"]
-    assert "ineho bootu" in res["reason"]
+    assert "ine jadro" in res["reason"]
+
+
+def test_baseline_sa_posuva_s_preukotvenim():
+    """Baseline je na OBSAH textu, nie na boot: po preukotveni (A2) sa jej
+    adresy posunu o rovnaky rozdiel ako profil a kontrola musi fungovat."""
+    # baseline z bootu A: stext 0x1000000, stranka na VA 0x1000000
+    pages_a = {0x1000000: _page(1)}
+    baseline = _baseline_for(pages_a)
+    baseline["stext"] = 0x1000000
+    baseline["etext"] = 0x1010000
+    # profil po preukotveni na boot B: stext 0x1200000 (delta +0x200000)
+    prof = StubProf()
+    prof.sym["_stext"] = 0x1200000
+    prof.sym["_etext"] = 0x1210000
+    view = StubView({0x1200000: _page(1)}, prof)
+    view.reanchored = 0x200000
+    res = checks.text_integrity(view, baseline)
+    assert res["available"] and res["conclusive"], res
+    assert res["pages_checked"] == 1
+    assert res["findings"] == [], res["findings"]
+
+    # zmeneny obsah na posunutej adrese -> nalez s boot-B adresou
+    view2 = StubView({0x1200000: _page(99)}, prof)
+    view2.reanchored = 0x200000
+    res2 = checks.text_integrity(view2, baseline)
+    assert len(res2["findings"]) == 1, res2
+    f = res2["findings"][0]
+    assert f["va"] == 0x1200000
+    assert f["baseline_va"] == 0x1000000
 
 
 def test_check_all_obsahuje_text_integrity(mini_view):
-    """check_all musi 4. kontrolu spustit a priznat jej stav do summary."""
+    """check_all musi 4. kontrolu spustit a priznat jej stav do summary.
+
+    Profil v repe ma text_baseline.json (2026-10-05), takze na mini snimke
+    je kontrola DOSTUPNA, ale neuzavreta (mini neobsahuje vsetky stranky
+    textu) - nula z nej nic nedokazuje. Nedostupna zostava len bez
+    baseline (kryje StubProf test vyssie)."""
     res = checks.check_all(mini_view)
     assert "text_integrity" in res
     assert res["summary"]["text_integrity_findings"] == 0
-    assert res["text_integrity"]["available"] is False
+    assert res["text_integrity"]["available"] is True
+    assert res["text_integrity"]["conclusive"] is False
     assert "text_integrity" in res["summary"]["inconclusive"]
 
 
@@ -234,10 +269,12 @@ def test_mini_injikovat_do_textu_sa_najde(mini_path, tmp_path, profile):
 
 
 def test_mini_check_all_bez_baseline_je_neuzavreta(mini_view):
-    """Bez baseline v profile je 4. kontrola nedostupna a MUSI byt v
-    zozname neuzavretych - nula z nej nic nedokazuje."""
+    """Mini snimka neobsahuje cele tabulky ani vsetky stranky textu -
+    krizove kontroly aj 4. kontrola MUSIA byt v zozname neuzavretych.
+    (Mini je synteticky rez: prechody sa roztrhnu a jeho stranky v rozsahu
+    textu nesedia s realnou baseline - preto sa tu priznava neuzavretost,
+    nie cistota.)"""
     full = checks.check_all(mini_view)
-    assert full["text_integrity"]["available"] is False
     assert "text_integrity" in full["summary"]["inconclusive"]
 
 

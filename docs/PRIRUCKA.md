@@ -33,7 +33,7 @@ python3 -m pytest -q      # testy parsera a príznakov
 ```
 
 `make test` prejde celú cestu zberu nad syntetickým obrazom veľkosti
-16 MiB, ktorý si sám vyrobí. Testov je 256 prešlých a 24 preskočených v `pytest` (spolu 280 zozbieraných; preskočený test nie je prešiel) a 4 v C (`alarm_test`, `hole_test`, `perbin_test`, `retention_test`).
+16 MiB, ktorý si sám vyrobí. Testov je 257 prešlých a 24 preskočených v `pytest` (spolu 281 zozbieraných; preskočený test nie je prešiel) a 4 v C (`alarm_test`, `hole_test`, `perbin_test`, `retention_test`).
 
 ## 4. Ako vznikne snímka
 
@@ -73,7 +73,7 @@ zapíše.
 | adresár | čo rieši | kde začať čítať | súborov spolu / riadkov v `.c .h .py .sh .md` |
 |---|---|---|---|
 | `vmicollect/` | zberač snímok pamäte VM: C a eBPF nad QEMU/KVM | `vmicollect/src/collector.c` | 35 / 10 316 |
-| `guestparse/` | rekonštrukcia procesov, modulov a soketov zo snímky | `guestparse/view.py` | 30 / 6 053 |
+| `guestparse/` | rekonštrukcia procesov, modulov a soketov zo snímky | `guestparse/view.py` | 30 / 6 097 |
 | `features/` | per-bin príznakový vektor (referencia), okná, normalizácia | `features/perbin.py` | 18 / 4 335 |
 | `tcn/` | model (Temporal Convolutional Network), baseliny, tréning a skórovanie snímok; model natrénovaný nie je a skóre nie je detekcia | `tcn/score.py` | 15 / 2 574 |
 | `profiles/` | profil jadra hosťa: symboly a offsety polí štruktúr | `profiles/debian12-6.1.0-42-cloud-amd64/README.md` | jeden adresár na boot hosťa — pozri L17 |

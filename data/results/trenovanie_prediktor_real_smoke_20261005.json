@@ -1,0 +1,48 @@
+{
+ "schema": "hyptcn3/trenovanie-prediktor/1",
+ "date": "2026-10-05T19:16:27Z",
+ "commit": "32f8060fc4d00e2134c7c7eacfc6bb766e0405bb",
+ "command": "priprav_predikcia + beh_predikcia nad 2 realnymi sedeniami (dlzka okna 5)",
+ "sessions": [
+  "data/raw/20260919T110017Z_run (10 snimok, boot 19.9.)",
+  "/var/tmp/perbin_c/on (6 snimok, boot 18.9., preukotvene A2)"
+ ],
+ "dlzka_okna": 5,
+ "note": "SMOKE, NIE VYSLEDOK: 16 okien spolu, 2 sedenia - cisla tu len dokazuju, ze cela cesta (snimky -> vektor -> okna -> prediktor -> MSE) bezi na realnych datach. FAR/h a detekcia potrebuju korpus zo session.sh (10 sedeni).",
+ "values": {
+  "tcn_prediktor": {
+   "parametrov": 5734,
+   "mse_train": 7.648533210158348e-05,
+   "mse_test": 21524974.0,
+   "mse_na_var": 1.5667052268981934,
+   "recepcne_pole": 29
+  },
+  "gru_prediktor": {
+   "parametrov": 5819,
+   "mse_train": 7.224187306036686e-15,
+   "mse_test": 13738683.0,
+   "mse_na_var": 0.999976396560669
+  },
+  "zscore": {
+   "parametrov": 20,
+   "skore_test": {
+    "n": 5,
+    "median": 1.5113615035431968e+31,
+    "p95": 1.511541243689332e+31,
+    "max": 1.511541243689332e+31
+   }
+  },
+  "iforest": {
+   "parametrov": "n/a (sklearn)",
+   "skore_test": {
+    "n": 5,
+    "median": -0.0,
+    "p95": -0.0,
+    "max": -0.0
+   }
+  }
+ },
+ "host": "Fedora Linux 43, jadro 7.2.5-100.fc43.x86_64",
+ "guest": "hyptcn-guest, Debian 12, jadro 6.1.0-42-cloud-amd64 (2 realne sedenia: 10+6 snimok)",
+ "n": 16
+}

@@ -1,0 +1,26 @@
+{
+ "schema": "hyptcn3/a3-pozitivny/1",
+ "date": "2026-10-05T19:14:22Z",
+ "commit": "32f8060fc4d00e2134c7c7eacfc6bb766e0405bb",
+ "command": "injekcia 8 bajtov na PA _stext v KOPII retazca data/raw/20260919T110017Z_run",
+ "snimka": "data/raw/20260919T110017Z_run",
+ "pa": 106954752,
+ "stext": 18446744072375762944,
+ "values": {
+  "finding_count": 1,
+  "text_integrity_findings": 1,
+  "syscall_hooks": 0,
+  "inconclusive": [],
+  "nalez": {
+   "check": "text_integrity",
+   "va": 18446744072375762944,
+   "baseline_va": 18446744072375762944,
+   "nearest_symbol": "startup_64",
+   "symbol_offset": 0,
+   "note": "obsah textu jadra na tejto stranke sa lisi od cistej snimky (baseline)"
+  }
+ },
+ "host": "Fedora Linux 43, jadro 7.2.5-100.fc43.x86_64",
+ "guest": "hyptcn-guest, Debian 12, jadro 6.1.0-42-cloud-amd64 (snimka z 2026-09-19)",
+ "n": 1
+}
