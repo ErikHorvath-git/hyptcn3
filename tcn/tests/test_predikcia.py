@@ -46,7 +46,10 @@ def test_beh_predikcia_sa_nauci_predpovedat_sinusoidu():
     sessions = syn_sessions_predikcia(seed=2, na_sessions=4, dlzka=60)
     data = priprav_predikcia(sessions, dlzka=16, podiel=0.5)
     vysledky = beh_predikcia(data, seed=0, epochy=80)
-    assert vysledky["mse_na_var"] < 0.5, vysledky
+    assert vysledky["tcn_prediktor"]["mse_na_var"] < 0.5, vysledky
+    # GRU baseline bezi na tych istych datach a tiez musi nieco vediet
+    assert vysledky["gru_prediktor"]["mse_na_var"] < 0.8, vysledky
+    assert vysledky["zscore"]["skore_test"]["n"] > 0
 
 
 def test_priprav_predikcia_odmietne_sedenia_bez_peciatky():
@@ -140,3 +143,46 @@ class Manifest_stub:
     """Normalizer.transform potrebuje len manifest.overit (tu ziadne kontroly)."""
     def overit(self, priznaky=None):
         return None
+
+
+# ------------------------------------------------------- F: anomálne baseliny
+
+
+def test_zscore_ignoruje_indikatory():
+    from tcn.baselines import ZScoreAnomalia
+    priznaky = ("proc_total", "je_plna", "ma_predchodcu")
+    zs = ZScoreAnomalia(priznaky)
+    rng = np.random.default_rng(0)
+    X = rng.normal(size=(50, 4, 3))
+    X[:, :, 1] = 0.0
+    X[:, :, 2] = 1.0
+    zs.fit(X)
+    assert zs.mask.tolist() == [True, False, False]
+    s1 = zs.skore(X)
+    X2 = X.copy()
+    X2[:, :, 1] = 1.0                       # zmen len indikator je_plna
+    s2 = zs.skore(X2)
+    assert np.allclose(s1, s2)
+
+
+def test_isolation_forest_deterministicky_s_rovnakym_seedom():
+    from tcn.baselines import IsolationForestAnomalia
+    rng = np.random.default_rng(3)
+    X = rng.normal(size=(120, 8, 4))
+    a = IsolationForestAnomalia(seed=7).fit(X).skore(X)
+    b = IsolationForestAnomalia(seed=7).fit(X).skore(X)
+    assert np.allclose(a, b)
+    c = IsolationForestAnomalia(seed=8).fit(X).skore(X)
+    assert not np.allclose(a, c)
+
+
+def test_gru_prediktor_je_kauzalny():
+    from tcn.baselines import GRUPrediktor
+    torch.manual_seed(0)
+    m = GRUPrediktor(4, 8)
+    m.eval()
+    x = torch.randn(2, 8, 4)
+    y1 = m(x, po_krokoch=True)
+    x[:, 7, :] += 100.0
+    y2 = m(x, po_krokoch=True)
+    assert torch.allclose(y1[:, :7, :], y2[:, :7, :], atol=1e-5)

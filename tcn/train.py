@@ -76,8 +76,9 @@ from features.windows import (DLZKA_OKNA, DOVOD_PLNA,       # noqa: E402
                               DOVOD_PREDCHODCA, okna,
                               snimky_z_matice)
 from tcn import eval as ev                                  # noqa: E402
-from tcn.baselines import (GRU, BagOfFrames, LogRegPriemer,  # noqa: E402
-                           skryte_pre_parametre)
+from tcn.baselines import (GRU, GRUPrediktor, BagOfFrames,   # noqa: E402
+                           IsolationForestAnomalia, LogRegPriemer,
+                           ZScoreAnomalia, skryte_pre_parametre)
 from tcn.model import TCN, TCNPrediktor, pocet_parametrov                 # noqa: E402
 
 BENIGNA = "idle"
@@ -382,30 +383,69 @@ def chyba_predikcie(model, X, y):
         return ((p - t) ** 2).numpy()
 
 
-def beh_predikcia(data, seed=0, epochy=60):
-    """TCNPrediktor + referencia 'predpovedaj stred' (nula po z-score).
+def _popis_skore(s):
+    """median/p95/max skóre - popis distribucie, NIE detekcny vysledok."""
+    s = sorted(float(v) for v in s)
+    if not s:
+        return {"n": 0, "median": None, "p95": None, "max": None}
+    i = min(len(s) - 1, -(-95 * len(s) // 100) - 1)
+    return {"n": len(s), "median": s[len(s) // 2], "p95": s[i], "max": s[-1]}
 
-    Referencia je ta spravna dolna latka: ked model nevie nic, jeho MSE sa
-    rovna rozptylu ciela. mse_na_var < 1 teda znamena, ze sa nieco naucil.
+
+def beh_predikcia(data, seed=0, epochy=60):
+    """Predikcia normalu (E1) + anomálne baseliny (F) na tych istych datach.
+
+    TCN prediktor a GRU prediktor sa trenuju MSE (porovnatelny pocet
+    parametrov); z-score a Isolation Forest fitnu na benígnych oknach a ich
+    skore su popisne. Referencia 'predpovedaj stred' (nula po z-score):
+    mse_na_var < 1 znamena, ze sa model nieco naucil. Detekcne porovnanie
+    vsetkych modelov robi az kalibracia (E3) na benígnej validácii - tam sa
+    dostanu do jednej tabulky.
     """
     nastav_seed(seed)
     F_ = data["X_train"].shape[2]
-    tcn = TCNPrediktor(F_, dlzka_okna=data["dlzka_okna"])
-    n_tcn = pocet_parametrov(tcn)
-    trenuj_prediktor(tcn, data["X_train"], data["y_train"], seed, epochy)
-    err_te = chyba_predikcie(tcn, data["X_test"], data["y_test"])
-    err_tr = chyba_predikcie(tcn, data["X_train"], data["y_train"])
     var_te = float(np.mean(data["y_test"] ** 2))
-    data["model"] = tcn            # score.py/_uloz_prediktor pouziju ten isty
-    return {
-        "model": "tcn_prediktor", "parametrov": n_tcn,
-        "recepcne_pole": tcn.rf, "dlzka_okna": data["dlzka_okna"],
-        "mse_train": float(np.mean(err_tr)),
-        "mse_test": float(np.mean(err_te)),
-        "var_test_ciela": var_te,
-        "mse_na_var": float(np.mean(err_te) / (var_te or 1.0)),
-        "synteticke_data": True,          # hlavny beh s korpusom prepise
+
+    vysledky = {"dlzka_okna": data["dlzka_okna"], "synteticke_data": True}
+
+    tcn = TCNPrediktor(F_, dlzka_okna=data["dlzka_okna"])
+    for meno in ("tcn_prediktor", "gru_prediktor"):
+        if meno == "gru_prediktor":
+            # GRU: skryty rozmer podla TCN parametrov (porovnatelnost)
+            skryte, _ = skryte_pre_parametre(F_, F_, pocet_parametrov(tcn))
+            model = GRUPrediktor(F_, skryte)
+        else:
+            model = tcn
+        trenuj_prediktor(model, data["X_train"], data["y_train"], seed,
+                         epochy)
+        err_te = chyba_predikcie(model, data["X_test"], data["y_test"])
+        err_tr = chyba_predikcie(model, data["X_train"], data["y_train"])
+        n_par = pocet_parametrov(model)
+        vysledky[meno] = {
+            "parametrov": n_par,
+            "mse_train": float(np.mean(err_tr)),
+            "mse_test": float(np.mean(err_te)),
+            "mse_na_var": float(np.mean(err_te) / (var_te or 1.0)),
+        }
+    vysledky["tcn_prediktor"]["recepcne_pole"] = tcn.rf
+
+    # baseliny bez sekvencie: z-score a izolacny les
+    zs = ZScoreAnomalia(MENA).fit(data["X_train"])
+    vysledky["zscore"] = {
+        "parametrov": int(np.sum(zs.mask)),
+        "skore_test": _popis_skore(zs.skore(data["X_test"])),
     }
+    ifo = IsolationForestAnomalia(seed=seed).fit(data["X_train"])
+    vysledky["iforest"] = {
+        "parametrov": "n/a (sklearn)",
+        "skore_test": _popis_skore(ifo.skore(data["X_test"])),
+    }
+
+    vysledky["referencia_stred"] = {"mse_na_var": 1.0,
+                                    "poznamka": "predpovedaj nulu (stred po "
+                                                "z-score)"}
+    data["model"] = tcn            # score.py/_uloz_prediktor pouziju ten isty
+    return vysledky
 
 
 def main(argv=None):
@@ -442,11 +482,18 @@ def main(argv=None):
     if a.uloha == "predikcia":
         data = priprav_predikcia(sessions, dlzka=a.dlzka, podiel=a.podiel)
         vysledky = beh_predikcia(data, seed=a.seed, epochy=a.epochy)
-        print("predikcia normalu (E1):")
-        print("  mse_test=%.4f, var ciela=%.4f, mse/var=%.3f (referencia "
-              "stred = 1.0)" % (vysledky["mse_test"],
-                                vysledky["var_test_ciela"],
-                                vysledky["mse_na_var"]))
+        print("predikcia normalu (E1) + anomálne baseliny (F):")
+        for meno in ("tcn_prediktor", "gru_prediktor"):
+            v = vysledky[meno]
+            print("  %-14s parametrov=%-6d mse_test=%.4f mse/var=%.3f"
+                  % (meno, v["parametrov"], v["mse_test"], v["mse_na_var"]))
+        for meno in ("zscore", "iforest"):
+            v = vysledky[meno]
+            print("  %-14s %s skore_test median=%.4f p95=%.4f"
+                  % (meno, v["parametrov"],
+                     v["skore_test"]["median"] or 0.0,
+                     v["skore_test"]["p95"] or 0.0))
+        print("  referencia stred: mse/var = 1.0")
         if a.uloz_model:
             _uloz_prediktor(a.uloz_model, data, vysledky)
             print("zapisane: %s (+ manifest)" % a.uloz_model)
@@ -478,7 +525,7 @@ def _uloz_prediktor(cesta, data, vysledky):
                  "priznakov": data["X_train"].shape[2],
                  "dlzka_okna": data["dlzka_okna"],
                  "recepcne_pole": model.rf,
-                 "mse_test": vysledky["mse_test"]},
+                 "mse_test": vysledky["tcn_prediktor"]["mse_test"]},
                 cesta)
     data["normalizacia"].save(cesta + ".manifest.json")
 
