@@ -39,6 +39,8 @@ URI="${VMIC_LIBVIRT_URI:-qemu:///session}"
 DOMAIN="${VMIC_DOMAIN:-hyptcn-guest}"
 SNAPSHOT="${VMIC_SNAPSHOT:-hyptcn-clean}"
 BRIDGE="${VMIC_BRIDGE:-virbr0}"
+# profil hosta (kallsyms+BTF); A2 preukotvenie ho pri inych bootoch opravi
+PROFILE="${VMIC_PROFILE:-$REPO/profiles/debian12-6.1.0-42-cloud-amd64}"
 DRY=0
 
 as_user()
