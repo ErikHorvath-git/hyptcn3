@@ -274,13 +274,18 @@ def validate_chain(headers):
     if not headers:
         raise ChainError("retazec je prazdny: ziadny subor .vmicd")
 
-    chains = sorted({h["chain_id"] for h in headers})
-    if len(chains) != 1:
-        raise ChainError(
-            "retazec miesa %d rozne chain_id (%s) - stranky z roznych "
-            "retazcov spolu nedavaju jeden stav pamate; subory: %s"
-            % (len(chains), ", ".join(str(c) for c in chains),
-               ", ".join(os.path.basename(h["path"]) for h in headers)))
+    # 2b. chain_id sa smie zmenit LEN na PLNEJ snimke: kolektor pri dlhsom
+    # behu retazec deli (nova PLNA snimka = novy chain_id, seq pokracuje) -
+    # vmic_delta_restore() taketo retazce cita. Mixovanie delt z dvoch
+    # retazcov BEZ plnej hranice je nadalej chyba.
+    for i, h in enumerate(headers[1:], 1):
+        prev = headers[i - 1]
+        if h["chain_id"] != prev["chain_id"] and not h["full"]:
+            raise ChainError(
+                "retazec meni chain_id na DELTE (seq=%d, %s) - zmena je "
+                "pripustna len na plnej snimke; mixovanie delt z roznych "
+                "retazcov by dalo pamat, ktora nikdy neexistovala"
+                % (h["seq"], os.path.basename(h["path"])))
 
     first = headers[0]
     chain = first["chain_id"]
@@ -367,6 +372,18 @@ def chain_headers(directory, chain_id=None, until_seq=None, warn=True):
 
     if chain_id is None:
         pritomne = sorted({h["chain_id"] for h in parts})
+        if until_seq is not None:
+            # Rekonstrukcia po konkretne seq: kolektor pri dlhsom behu
+            # rozdeli retazec novou PLNOU snimkou (novy chain_id, seq
+            # pokracuje). Casti po until_seq sa preto beru zo VSETKYCH
+            # retazcov naraz - inak by sa prva polka sedenia stratila.
+            sel = [h for h in parts if h["seq"] <= until_seq]
+            sel.sort(key=lambda h: h["seq"])
+            if not sel:
+                raise ChainError(
+                    "%s: ziadna cast so seq <= %d" % (directory, until_seq))
+            validate_chain(sel)
+            return sel
         chain_id = max(pritomne)
         # Viac retazcov v jednom adresari znamena, ze sa tu zbieralo viackrat.
         # Vybrat ten najnovsi je rozumne vychodisko, ale ticho to spravit nie je:

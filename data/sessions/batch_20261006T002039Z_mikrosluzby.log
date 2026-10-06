@@ -1,0 +1,4 @@
+
+error: Failed to revert snapshot hyptcn-clean
+error: internal error: Process exited prior to exec: libvirt:  error : cannot limit core file size of process 2480529 to 18446744073709551615: Operation not permitted
+session.sh: revert hyptcn-clean zlyhal - vytvor ho: virsh snapshot-create-as hyptcn-guest hyptcn-clean 'cisty stav'

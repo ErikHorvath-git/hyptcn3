@@ -1,0 +1,21 @@
+{
+ "schema": "hyptcn3/aktivita/1",
+ "date": "2026-10-06T00:18:17Z",
+ "aktivny": true,
+ "poznamka": "aktivita sa pozoruje NEZAVISLE od zberaca (pozemná pravda pred/po z hosta); detekcia sa pocita len nad aktivnymi behmi. Payloadovy subor (/tmp/hyptcn_payload) sa z dokazov VYLUCUJE - vytvara ho injekcia sama, nie beh payloadu. Prazdne hodnoty (null) znamenaju chybajucu pozemnú pravdu - vtedy je oznacenie nedokazane, nie neaktivne.",
+ "pocty": {
+  "nove_procesy": 2,
+  "nove_moduly": 0,
+  "nove_sockety": 0,
+  "nove_subory": 0
+ },
+ "dokaz": {
+  "nove_procesy": [
+   "488",
+   "489"
+  ],
+  "nove_moduly": null,
+  "nove_sockety": null,
+  "nove_subory": null
+ }
+}

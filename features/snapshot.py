@@ -325,6 +325,37 @@ def vektor_snimky(snapshot, profil, seq=None, predch=None):
 # ------------------------------------------------------------ cely retazec
 
 
+def _vsetky_hlavicky(snapshot):
+    """Hlavicky VSETKYCH retazcov v adresari, zoradene podla seq."""
+    from guestparse.image import VmicdImage
+    if os.path.isdir(snapshot):
+        podla_retazca = {}
+        for name in sorted(os.listdir(snapshot)):
+            if not name.endswith(".vmicd"):
+                continue
+            try:
+                h = VmicdImage.header(os.path.join(snapshot, name))
+            except (ValueError, OSError):
+                continue
+            podla_retazca.setdefault(h["chain_id"], []).append(h)
+        heads = []
+        for hlist in sorted(podla_retazca.values(),
+                            key=lambda hl: hl[0]["chain_id"]):
+            heads.extend(sorted(hlist, key=lambda h: h["seq"]))
+        return heads
+    h = VmicdImage.header(snapshot)
+    if not h["full"]:
+        from .perbin import FeatureError
+        raise FeatureError(
+            "%s je delta bez baseline - bez predchadzajucich casti sa "
+            "stav pamate zrekonstruovat neda. Zadaj adresar s retazcom."
+            % snapshot)
+    return [h]
+
+
+# ------------------------------------------------------------ cely retazec
+
+
 def retazec(snapshot, profil):
     """
     Cely retazec snimok: matica (cas x dlzka MENA) a mena priznakov.
@@ -333,7 +364,11 @@ def retazec(snapshot, profil):
     snimky, jej cas a trvanie spracovania - trvanie je udaj do kapitoly o
     real-time a nema zmysel ho merat zvlast inym behom.
     """
-    heads = _chain_parts(snapshot)
+    # Kolektor pri dlhsom behu rozdeli retazec: kazda nova PLNA snimka
+    # zacina novy retazec (chain_id), seq pokracuje. Features sa musia
+    # pocitat nad VSETKYMI retazcami v poradi seq - inak by dlhe sedenia
+    # potichu prisli o vsetko okrem posledneho useku.
+    heads = _vsetky_hlavicky(snapshot)
     matica, snimky, poznamky, trvania = [], [], [], []
     predch = None
     for h in heads:

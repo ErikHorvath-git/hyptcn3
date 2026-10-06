@@ -1,0 +1,53 @@
+{
+ "schema": "hyptcn3/trenovanie-prediktor/1",
+ "date": "2026-10-06T00:24:23Z",
+ "commit": "1f82df62c4c41a040c7b632e211ca13530c35cca",
+ "command": "priprav_predikcia + beh_predikcia nad 4 realnymi idle sedeniami (vsetky retazce, dlzka okna 8)",
+ "host": "Fedora Linux 43, jadro 7.2.5-100.fc43.x86_64",
+ "guest": "hyptcn-guest, Debian 12, jadro 6.1.0-42-cloud-amd64",
+ "n": 48,
+ "sessions": [
+  "20261005T204319Z_idle_benign",
+  "20261006T000919Z_idle_benign",
+  "20261006T001225Z_idle_benign",
+  "20261006T001531Z_idle_benign"
+ ],
+ "dlzka_okna": 8,
+ "values": {
+  "tcn_prediktor": {
+   "parametrov": 5734,
+   "mse_train": 0.0033438089303672314,
+   "mse_test": 56.55382537841797,
+   "mse_na_var": 1.0681883096694946,
+   "recepcne_pole": 29
+  },
+  "gru_prediktor": {
+   "parametrov": 5819,
+   "mse_train": 5.066861558589153e-05,
+   "mse_test": 53.14185333251953,
+   "mse_na_var": 1.0037429332733154
+  },
+  "zscore": {
+   "parametrov": 20,
+   "skore_test": {
+    "n": 24,
+    "median": 1.1520000000000001e+26,
+    "p95": 1.1520000000000001e+26,
+    "max": 1.1520000000000001e+26
+   }
+  },
+  "iforest": {
+   "parametrov": "n/a (sklearn)",
+   "skore_test": {
+    "n": 24,
+    "median": -0.013734463228589733,
+    "p95": 0.10036873340198915,
+    "max": 0.106736280460069
+   }
+  },
+  "referencia_stred": {
+   "mse_na_var": 1.0,
+   "poznamka": "predpovedaj nulu (stred po z-score)"
+  }
+ }
+}

@@ -1,0 +1,62 @@
+{
+ "schema": "hyptcn3/session/1",
+ "stamp": "20261006T001531Z",
+ "date": "2026-10-06T00:15:31Z",
+ "commit": "054bd39956b1c50e0b3bc7cae300d08da358aba1",
+ "typ": "benign",
+ "label": "idle",
+ "seed": 102,
+ "manifest": {
+  "schema": "hyptcn3/session-manifest/1",
+  "typ": "benign",
+  "label": "idle",
+  "seed": 102,
+  "warmup_s": 30,
+  "runtime_s": 120,
+  "interval_s": 5,
+  "tcpdump": true,
+  "apt_packages": [],
+  "injekcia": {
+   "subor": "scripts/loads/idle.sh",
+   "args": []
+  },
+  "collect": {
+   "writer": "delta",
+   "hash": "none"
+  }
+ },
+ "injekcia": {
+  "subor": "scripts/loads/idle.sh",
+  "sha256_merane": "74fcdeb9b3b10bfd9673bcc889e982ae41095bc6c6f6dbaabe22ea0ebe59c1ab",
+  "args": []
+ },
+ "vystupy": {
+  "snimky_adresar": "data/raw/20261006T001531Z_session",
+  "snimok": 27,
+  "collect_tail": "2026-10-06T00:18:15.547Z INFO  koniec: 27 snimok, 0 chyb, 0 zmeskanych slotov, najvacsie meskanie 0.000 s, spolu 644.07 MiB",
+  "tcpdump": true,
+  "ground_truth": {
+   "ps_before.txt": "7187d0aaf4e77ab423f287d2c17bbef357e23da6b2c96f3d55a2df146465576c",
+   "ps_after.txt": "1e8d0456b39e7abb58d32a7caa7adcfd36dafcecd8a33f74b9a7345eeb6d52a5",
+   "lsmod_before.txt": "6bfe4fd5f4d522fb52df4890b539cf7b87a4bb770ad88c9998189249dec3807e",
+   "lsmod_after.txt": "a717a398310380c95ca04498b4a3de256ba6d54228d0f0c9ceaf70d89883b63b",
+   "ss_before.txt": "49e996f1bb1d69c03fba2ec34821741e2b618e839d608ca48e12d961c4043653",
+   "ss_after.txt": "49e996f1bb1d69c03fba2ec34821741e2b618e839d608ca48e12d961c4043653",
+   "boot_id_before.txt": "b02ee7499d2a43ef19a7d57798d019802204944d76f043d34f394cf37db72028",
+   "payload.log": "bcf4adca4d7606c3121c3f6d69df2fbd5f724a7e16687dc4ce5a2e710f9e8e0a",
+   "collect.log": "d716263005d2d51800c5d4e81e3817611016cd486eb4b2c2ca031898c6785e44",
+   "apt.log": null
+  }
+ },
+ "priebeh": [
+  "00:15:31Z revert hyptcn-clean ok, VM startuje",
+  "00:15:31Z zahriatie 30s",
+  "00:16:01Z tcpdump na virbr0",
+  "00:16:01Z ground truth PRED",
+  "00:16:02Z zber: vmicollect run writer=delta interval=5s",
+  "00:16:14Z injekcia: scripts/loads/idle.sh",
+  "00:16:14Z beh injikovanej binárky 120s (seed=102)",
+  "00:18:14Z ground truth PO",
+  "00:18:16Z stop VM + revert (zahodenie overlayu)"
+ ]
+}

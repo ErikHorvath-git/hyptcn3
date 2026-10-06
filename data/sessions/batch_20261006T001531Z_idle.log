@@ -1,0 +1,18 @@
+Domain snapshot hyptcn-clean reverted
+
+session: revert hyptcn-clean ok, VM startuje
+session: zahriatie 30s
+session: tcpdump na virbr0
+session: ground truth PRED
+session: zber: vmicollect run writer=delta interval=5s
+session: injekcia: scripts/loads/idle.sh
+injekcia: 198 bajtov cez guest-agent -> /tmp/hyptcn_payload
+session: beh injikovanej binárky 120s (seed=102)
+session: ground truth PO
+session: stop VM + revert (zahodenie overlayu)
+manifest zapisany: /home/eh/Desktop/hyptcn3/data/sessions/20261006T001531Z_idle_benign/manifest.json
+aktivita: AKTIVNY -> /home/eh/Desktop/hyptcn3/data/sessions/20261006T001531Z_idle_benign/aktivita.json (nove procesy=2, moduly=0, sockety=0, subory=0)
+session.sh: hotovo
+  sedenie: /home/eh/Desktop/hyptcn3/data/sessions/20261006T001531Z_idle_benign
+  snimky:  /home/eh/Desktop/hyptcn3/data/raw/20261006T001531Z_session (27 sidecarov)
+  zber:    2026-10-06T00:18:15.547Z INFO  koniec: 27 snimok, 0 chyb, 0 zmeskanych slotov, najvacsie meskanie 0.000 s, spolu 644.07 MiB

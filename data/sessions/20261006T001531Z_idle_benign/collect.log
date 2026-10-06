@@ -1,0 +1,35 @@
+2026-10-06T00:16:02.777Z WARN  libbpf: Error in bpf_create_map_xattr(pages): -EINVAL. Retrying without BTF.
+2026-10-06T00:16:04.126Z INFO  ebpf: 'hyptcn-guest' (pid 2425299): 10 memslotov, 2.02 GiB pamate, max GPA 0x100000000
+2026-10-06T00:16:04.126Z WARN  ebpf: 4.00 KiB pamate hosta nie je anonymna (/dev/zero (deleted)) - citanie stranky, ktorej sa host este nedotkol, ju hostitelovi NAOZAJ alokuje
+2026-10-06T00:16:04.126Z WARN  ebpf: pri takejto VM zbieraj radsej konkretne oblasti (capture.regions), nech nenafuknes jej pamat na plnu velkost
+2026-10-06T00:16:04.126Z INFO  VM 'hyptcn-guest' [ebpf/kvm]: RAM 2.02 GiB, max_paddr 0x100000000, vCPU 2, strankovanie n/a
+2026-10-06T00:16:04.126Z INFO  zbierane oblasti: 5, spolu 2.02 GiB
+2026-10-06T00:16:04.126Z INFO  zacinam zber: perioda 5.000 s, writer 'delta', vystup '/home/eh/Desktop/hyptcn3/data/raw/20261006T001531Z_session'
+2026-10-06T00:16:05.397Z INFO  #0 PLNA   292.09 MiB/4.00 GiB  stranky 74628/528417 (14.12 %)  pauza 0.0 ms  citanie 1169.8 ms  spolu 1270.5 ms
+2026-10-06T00:16:09.765Z INFO  #1 delta  3.71 MiB/4.00 GiB  stranky 949/528417 (0.18 %)  pauza 0.0 ms  citanie 630.6 ms  spolu 638.6 ms
+2026-10-06T00:16:14.799Z INFO  #2 delta  11.45 MiB/4.00 GiB  stranky 2924/528417 (0.55 %)  pauza 0.0 ms  citanie 663.9 ms  spolu 672.3 ms
+2026-10-06T00:16:19.785Z INFO  #3 delta  14.71 MiB/4.00 GiB  stranky 3758/528417 (0.71 %)  pauza 0.0 ms  citanie 651.2 ms  spolu 658.0 ms
+2026-10-06T00:16:24.757Z INFO  #4 delta  1.16 MiB/4.00 GiB  stranky 295/528417 (0.06 %)  pauza 0.0 ms  citanie 628.4 ms  spolu 630.7 ms
+2026-10-06T00:16:29.743Z INFO  #5 delta  1.19 MiB/4.00 GiB  stranky 303/528417 (0.06 %)  pauza 0.0 ms  citanie 608.1 ms  spolu 616.1 ms
+2026-10-06T00:16:34.756Z INFO  #6 delta  1.10 MiB/4.00 GiB  stranky 280/528417 (0.05 %)  pauza 0.0 ms  citanie 622.3 ms  spolu 629.7 ms
+2026-10-06T00:16:39.753Z INFO  #7 delta  4.48 MiB/4.00 GiB  stranky 1145/528417 (0.22 %)  pauza 0.0 ms  citanie 618.8 ms  spolu 626.4 ms
+2026-10-06T00:16:44.760Z INFO  #8 delta  1.63 MiB/4.00 GiB  stranky 417/528417 (0.08 %)  pauza 0.0 ms  citanie 626.0 ms  spolu 633.5 ms
+2026-10-06T00:16:49.747Z INFO  #9 delta  960.00 KiB/4.00 GiB  stranky 239/528417 (0.05 %)  pauza 0.0 ms  citanie 612.3 ms  spolu 620.0 ms
+2026-10-06T00:16:54.753Z INFO  #10 delta  1.04 MiB/4.00 GiB  stranky 266/528417 (0.05 %)  pauza 0.0 ms  citanie 619.3 ms  spolu 626.4 ms
+2026-10-06T00:16:59.728Z INFO  #11 delta  980.00 KiB/4.00 GiB  stranky 244/528417 (0.05 %)  pauza 0.0 ms  citanie 599.2 ms  spolu 601.7 ms
+2026-10-06T00:17:04.755Z INFO  #12 delta  872.00 KiB/4.00 GiB  stranky 217/528417 (0.04 %)  pauza 0.0 ms  citanie 620.9 ms  spolu 628.5 ms
+2026-10-06T00:17:09.747Z INFO  #13 delta  1016.00 KiB/4.00 GiB  stranky 253/528417 (0.05 %)  pauza 0.0 ms  citanie 612.3 ms  spolu 620.2 ms
+2026-10-06T00:17:14.759Z INFO  #14 delta  1.04 MiB/4.00 GiB  stranky 266/528417 (0.05 %)  pauza 0.0 ms  citanie 625.4 ms  spolu 632.8 ms
+2026-10-06T00:17:19.759Z INFO  #15 delta  828.00 KiB/4.00 GiB  stranky 206/528417 (0.04 %)  pauza 0.0 ms  citanie 624.6 ms  spolu 632.3 ms
+2026-10-06T00:17:24.761Z INFO  #16 delta  868.00 KiB/4.00 GiB  stranky 216/528417 (0.04 %)  pauza 0.0 ms  citanie 627.3 ms  spolu 634.6 ms
+2026-10-06T00:17:29.754Z INFO  #17 delta  884.00 KiB/4.00 GiB  stranky 220/528417 (0.04 %)  pauza 0.0 ms  citanie 619.8 ms  spolu 627.3 ms
+2026-10-06T00:17:34.780Z INFO  #18 delta  1.08 MiB/4.00 GiB  stranky 276/528417 (0.05 %)  pauza 0.0 ms  citanie 646.2 ms  spolu 653.3 ms
+2026-10-06T00:17:39.748Z INFO  #19 delta  3.79 MiB/4.00 GiB  stranky 967/528417 (0.18 %)  pauza 0.0 ms  citanie 613.9 ms  spolu 621.6 ms
+2026-10-06T00:17:45.417Z INFO  #20 PLNA   292.38 MiB/4.00 GiB  stranky 74704/528417 (14.14 %)  pauza 0.0 ms  citanie 1180.2 ms  spolu 1290.8 ms
+2026-10-06T00:17:49.751Z INFO  #21 delta  992.00 KiB/4.00 GiB  stranky 247/528417 (0.05 %)  pauza 0.0 ms  citanie 616.5 ms  spolu 624.0 ms
+2026-10-06T00:17:54.736Z INFO  #22 delta  904.00 KiB/4.00 GiB  stranky 225/528417 (0.04 %)  pauza 0.0 ms  citanie 601.8 ms  spolu 609.3 ms
+2026-10-06T00:17:59.736Z INFO  #23 delta  1.05 MiB/4.00 GiB  stranky 267/528417 (0.05 %)  pauza 0.0 ms  citanie 604.6 ms  spolu 609.4 ms
+2026-10-06T00:18:04.740Z INFO  #24 delta  820.00 KiB/4.00 GiB  stranky 204/528417 (0.04 %)  pauza 0.0 ms  citanie 606.2 ms  spolu 613.7 ms
+2026-10-06T00:18:09.750Z INFO  #25 delta  896.00 KiB/4.00 GiB  stranky 223/528417 (0.04 %)  pauza 0.0 ms  citanie 615.0 ms  spolu 623.0 ms
+2026-10-06T00:18:14.754Z INFO  #26 delta  2.39 MiB/4.00 GiB  stranky 610/528417 (0.12 %)  pauza 0.0 ms  citanie 624.6 ms  spolu 627.7 ms
+2026-10-06T00:18:15.547Z INFO  koniec: 27 snimok, 0 chyb, 0 zmeskanych slotov, najvacsie meskanie 0.000 s, spolu 644.07 MiB

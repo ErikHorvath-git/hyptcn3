@@ -292,16 +292,39 @@ def page_entropy(page):
 
 
 def _chain_parts(snapshot, chain_id=None, until_seq=None):
-    """Cesty jedneho overeneho retazca .vmicd, v poradi seq."""
+    """Cesty retazca .vmicd v poradi seq.
+
+    Pri adresari sa beru VSETKY retazce (kolektor pri dlhsom behu rozdeli
+    retazec novou PLNOU snimkou): z kazdeho retazca sa vezmu casti az po
+    until_seq a zosortuju sa podla seq - rekonstrukcia potom presla cez
+    novy PLNY zaciatok a pokracuje.
+    """
     if os.path.isdir(snapshot):
-        heads = chain_headers(snapshot, chain_id, until_seq, warn=False)
-    else:
-        heads = [VmicdImage.header(snapshot)]
-        if not heads[0]["full"]:
-            raise FeatureError(
-                "%s je delta bez baseline - bez predchadzajucich casti sa "
-                "stav pamate zrekonstruovat neda. Zadaj adresar s retazcom."
-                % snapshot)
+        # zoznam chain_id v adresari
+        from guestparse.image import VmicdImage as _V
+        ids = set()
+        for name in sorted(os.listdir(snapshot)):
+            if not name.endswith(".vmicd"):
+                continue
+            try:
+                ids.add(_V.header(os.path.join(snapshot, name))["chain_id"])
+            except (ValueError, OSError):
+                continue
+        heads = []
+        for cid in sorted(ids):
+            try:
+                heads.extend(chain_headers(snapshot, cid, until_seq,
+                                           warn=False))
+            except Exception:
+                continue
+        heads.sort(key=lambda h: h["seq"])
+        return heads
+    heads = [VmicdImage.header(snapshot)]
+    if not heads[0]["full"]:
+        raise FeatureError(
+            "%s je delta bez baseline - bez predchadzajucich casti sa "
+            "stav pamate zrekonstruovat neda. Zadaj adresar s retazcom."
+            % snapshot)
     return heads
 
 
