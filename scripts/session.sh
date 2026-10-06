@@ -128,6 +128,16 @@ as_user virsh --connect "$URI" snapshot-revert "$DOMAIN" "$SNAPSHOT" --running \
 priebeh=()
 zaznam() { priebeh+=("$(date -u +%H:%M:%S)Z $1"); echo "session: $1"; }
 
+# POISTKA: ked session.sh zomrie kdekolvek (aj na die/chybu), kolektor
+# nesmie ostat sirotou, ktora zbiera donekonecna a drzi eBPF na VM.
+cleanup_jobs() {
+    [ -n "${COLLECT_PID:-}" ] && kill -INT "$COLLECT_PID" 2>/dev/null || true
+    [ -n "${HT_PID:-}" ] && kill "$HT_PID" 2>/dev/null || true
+    [ -n "${TCPDUMP_PID:-}" ] && kill "$TCPDUMP_PID" 2>/dev/null || true
+    [ -n "${PAYLOAD_PID:-}" ] && kill "$PAYLOAD_PID" 2>/dev/null || true
+}
+trap cleanup_jobs EXIT
+
 zaznam "revert $SNAPSHOT ok, VM startuje"
 zaznam "zahriatie ${WARMUP}s"
 sleep "$WARMUP"
@@ -168,6 +178,7 @@ as_user "$GUEST_EXEC" -- 'cat /proc/sys/kernel/random/boot_id' > "$SESS/boot_id_
 zaznam "zber: vmicollect run writer=$COLLECT_WRITER interval=${INTERVAL}s"
 "$BIN" run -o vm.domain="$DOMAIN" -o output.dir="$RAWDIR" \
     -o output.writer="$COLLECT_WRITER" -o schedule.interval_s="$INTERVAL" \
+    -o schedule.max_cycles="$((RUNTIME / INTERVAL + 10))" \
     -o output.hash="$COLLECT_HASH" > "$SESS/collect.log" 2>&1 &
 COLLECT_PID=$!
 
