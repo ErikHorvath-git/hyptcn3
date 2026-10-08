@@ -1062,3 +1062,270 @@
 2026-10-06T00:27:18.324Z WARN  parametre VM sa nedali overit - zbieram podla poslednych znamych
 2026-10-06T00:27:18.325Z ERROR ebpf: tabulka memslotov nie je platna
 2026-10-06T00:27:18.325Z ERROR read_pa(0x0, 655360) zlyhalo
+2026-10-06T00:27:23.306Z ERROR ebpf: domena 'hyptcn-guest' (pid 2425299): proces uz nezije
+2026-10-06T00:27:23.321Z ERROR ebpf: na tomto stroji nebezi ziadna KVM domena (ziadny proces nema otvoreny /dev/kvm)
+2026-10-06T00:27:23.321Z WARN  backend nevedel pripravit novy cyklus - data mozu byt zastarale
+2026-10-06T00:27:23.321Z ERROR ebpf: domena 'hyptcn-guest' (pid 2425299): proces uz nezije
+2026-10-06T00:27:23.321Z WARN  parametre VM sa nedali overit - zbieram podla poslednych znamych
+2026-10-06T00:27:23.322Z ERROR ebpf: tabulka memslotov nie je platna
+2026-10-06T00:27:23.322Z ERROR read_pa(0x0, 655360) zlyhalo
+2026-10-06T00:27:28.306Z ERROR ebpf: domena 'hyptcn-guest' (pid 2425299): proces uz nezije
+2026-10-06T00:27:28.321Z ERROR ebpf: na tomto stroji nebezi ziadna KVM domena (ziadny proces nema otvoreny /dev/kvm)
+2026-10-06T00:27:28.321Z WARN  backend nevedel pripravit novy cyklus - data mozu byt zastarale
+2026-10-06T00:27:28.321Z ERROR ebpf: domena 'hyptcn-guest' (pid 2425299): proces uz nezije
+2026-10-06T00:27:28.321Z WARN  parametre VM sa nedali overit - zbieram podla poslednych znamych
+2026-10-06T00:27:28.321Z ERROR ebpf: tabulka memslotov nie je platna
+2026-10-06T00:27:28.321Z ERROR read_pa(0x0, 655360) zlyhalo
+2026-10-06T00:27:33.306Z ERROR ebpf: domena 'hyptcn-guest' (pid 2425299): proces uz nezije
+2026-10-06T00:27:33.326Z ERROR ebpf: na tomto stroji nebezi ziadna KVM domena (ziadny proces nema otvoreny /dev/kvm)
+2026-10-06T00:27:33.326Z WARN  backend nevedel pripravit novy cyklus - data mozu byt zastarale
+2026-10-06T00:27:33.326Z ERROR ebpf: domena 'hyptcn-guest' (pid 2425299): proces uz nezije
+2026-10-06T00:27:33.326Z WARN  parametre VM sa nedali overit - zbieram podla poslednych znamych
+2026-10-06T00:27:33.326Z ERROR ebpf: tabulka memslotov nie je platna
+2026-10-06T00:27:33.326Z ERROR read_pa(0x0, 655360) zlyhalo
+2026-10-06T00:27:38.306Z ERROR ebpf: domena 'hyptcn-guest' (pid 2425299): proces uz nezije
+2026-10-06T00:27:38.324Z ERROR ebpf: na tomto stroji nebezi ziadna KVM domena (ziadny proces nema otvoreny /dev/kvm)
+2026-10-06T00:27:38.324Z WARN  backend nevedel pripravit novy cyklus - data mozu byt zastarale
+2026-10-06T00:27:38.324Z ERROR ebpf: domena 'hyptcn-guest' (pid 2425299): proces uz nezije
+2026-10-06T00:27:38.324Z WARN  parametre VM sa nedali overit - zbieram podla poslednych znamych
+2026-10-06T00:27:38.324Z ERROR ebpf: tabulka memslotov nie je platna
+2026-10-06T00:27:38.324Z ERROR read_pa(0x0, 655360) zlyhalo
+2026-10-06T00:27:43.306Z ERROR ebpf: domena 'hyptcn-guest' (pid 2425299): proces uz nezije
+2026-10-06T00:27:43.324Z ERROR ebpf: na tomto stroji nebezi ziadna KVM domena (ziadny proces nema otvoreny /dev/kvm)
+2026-10-06T00:27:43.324Z WARN  backend nevedel pripravit novy cyklus - data mozu byt zastarale
+2026-10-06T00:27:43.324Z ERROR ebpf: domena 'hyptcn-guest' (pid 2425299): proces uz nezije
+2026-10-06T00:27:43.324Z WARN  parametre VM sa nedali overit - zbieram podla poslednych znamych
+2026-10-06T00:27:43.324Z ERROR ebpf: tabulka memslotov nie je platna
+2026-10-06T00:27:43.324Z ERROR read_pa(0x0, 655360) zlyhalo
+2026-10-06T00:27:48.306Z ERROR ebpf: domena 'hyptcn-guest' (pid 2425299): proces uz nezije
+2026-10-06T00:27:48.324Z ERROR ebpf: na tomto stroji nebezi ziadna KVM domena (ziadny proces nema otvoreny /dev/kvm)
+2026-10-06T00:27:48.324Z WARN  backend nevedel pripravit novy cyklus - data mozu byt zastarale
+2026-10-06T00:27:48.324Z ERROR ebpf: domena 'hyptcn-guest' (pid 2425299): proces uz nezije
+2026-10-06T00:27:48.324Z WARN  parametre VM sa nedali overit - zbieram podla poslednych znamych
+2026-10-06T00:27:48.325Z ERROR ebpf: tabulka memslotov nie je platna
+2026-10-06T00:27:48.325Z ERROR read_pa(0x0, 655360) zlyhalo
+2026-10-06T00:27:53.306Z ERROR ebpf: domena 'hyptcn-guest' (pid 2425299): proces uz nezije
+2026-10-06T00:27:53.324Z ERROR ebpf: na tomto stroji nebezi ziadna KVM domena (ziadny proces nema otvoreny /dev/kvm)
+2026-10-06T00:27:53.324Z WARN  backend nevedel pripravit novy cyklus - data mozu byt zastarale
+2026-10-06T00:27:53.324Z ERROR ebpf: domena 'hyptcn-guest' (pid 2425299): proces uz nezije
+2026-10-06T00:27:53.324Z WARN  parametre VM sa nedali overit - zbieram podla poslednych znamych
+2026-10-06T00:27:53.324Z ERROR ebpf: tabulka memslotov nie je platna
+2026-10-06T00:27:53.324Z ERROR read_pa(0x0, 655360) zlyhalo
+2026-10-06T00:27:58.306Z ERROR ebpf: domena 'hyptcn-guest' (pid 2425299): proces uz nezije
+2026-10-06T00:27:58.328Z ERROR ebpf: na tomto stroji nebezi ziadna KVM domena (ziadny proces nema otvoreny /dev/kvm)
+2026-10-06T00:27:58.328Z WARN  backend nevedel pripravit novy cyklus - data mozu byt zastarale
+2026-10-06T00:27:58.328Z ERROR ebpf: domena 'hyptcn-guest' (pid 2425299): proces uz nezije
+2026-10-06T00:27:58.328Z WARN  parametre VM sa nedali overit - zbieram podla poslednych znamych
+2026-10-06T00:27:58.329Z ERROR ebpf: tabulka memslotov nie je platna
+2026-10-06T00:27:58.329Z ERROR read_pa(0x0, 655360) zlyhalo
+2026-10-06T00:28:03.306Z ERROR ebpf: domena 'hyptcn-guest' (pid 2425299): proces uz nezije
+2026-10-06T00:28:03.325Z ERROR ebpf: na tomto stroji nebezi ziadna KVM domena (ziadny proces nema otvoreny /dev/kvm)
+2026-10-06T00:28:03.325Z WARN  backend nevedel pripravit novy cyklus - data mozu byt zastarale
+2026-10-06T00:28:03.325Z ERROR ebpf: domena 'hyptcn-guest' (pid 2425299): proces uz nezije
+2026-10-06T00:28:03.325Z WARN  parametre VM sa nedali overit - zbieram podla poslednych znamych
+2026-10-06T00:28:03.325Z ERROR ebpf: tabulka memslotov nie je platna
+2026-10-06T00:28:03.325Z ERROR read_pa(0x0, 655360) zlyhalo
+2026-10-06T00:28:08.306Z ERROR ebpf: domena 'hyptcn-guest' (pid 2425299): proces uz nezije
+2026-10-06T00:28:08.323Z ERROR ebpf: na tomto stroji nebezi ziadna KVM domena (ziadny proces nema otvoreny /dev/kvm)
+2026-10-06T00:28:08.323Z WARN  backend nevedel pripravit novy cyklus - data mozu byt zastarale
+2026-10-06T00:28:08.323Z ERROR ebpf: domena 'hyptcn-guest' (pid 2425299): proces uz nezije
+2026-10-06T00:28:08.323Z WARN  parametre VM sa nedali overit - zbieram podla poslednych znamych
+2026-10-06T00:28:08.324Z ERROR ebpf: tabulka memslotov nie je platna
+2026-10-06T00:28:08.324Z ERROR read_pa(0x0, 655360) zlyhalo
+2026-10-06T00:28:13.306Z ERROR ebpf: domena 'hyptcn-guest' (pid 2425299): proces uz nezije
+2026-10-06T00:28:13.326Z ERROR ebpf: na tomto stroji nebezi ziadna KVM domena (ziadny proces nema otvoreny /dev/kvm)
+2026-10-06T00:28:13.326Z WARN  backend nevedel pripravit novy cyklus - data mozu byt zastarale
+2026-10-06T00:28:13.326Z ERROR ebpf: domena 'hyptcn-guest' (pid 2425299): proces uz nezije
+2026-10-06T00:28:13.326Z WARN  parametre VM sa nedali overit - zbieram podla poslednych znamych
+2026-10-06T00:28:13.327Z ERROR ebpf: tabulka memslotov nie je platna
+2026-10-06T00:28:13.327Z ERROR read_pa(0x0, 655360) zlyhalo
+2026-10-06T00:28:18.306Z ERROR ebpf: domena 'hyptcn-guest' (pid 2425299): proces uz nezije
+2026-10-06T00:28:18.320Z ERROR ebpf: na tomto stroji nebezi ziadna KVM domena (ziadny proces nema otvoreny /dev/kvm)
+2026-10-06T00:28:18.320Z WARN  backend nevedel pripravit novy cyklus - data mozu byt zastarale
+2026-10-06T00:28:18.320Z ERROR ebpf: domena 'hyptcn-guest' (pid 2425299): proces uz nezije
+2026-10-06T00:28:18.320Z WARN  parametre VM sa nedali overit - zbieram podla poslednych znamych
+2026-10-06T00:28:18.320Z ERROR ebpf: tabulka memslotov nie je platna
+2026-10-06T00:28:18.320Z ERROR read_pa(0x0, 655360) zlyhalo
+2026-10-06T00:28:23.306Z ERROR ebpf: domena 'hyptcn-guest' (pid 2425299): proces uz nezije
+2026-10-06T00:28:23.322Z ERROR ebpf: na tomto stroji nebezi ziadna KVM domena (ziadny proces nema otvoreny /dev/kvm)
+2026-10-06T00:28:23.322Z WARN  backend nevedel pripravit novy cyklus - data mozu byt zastarale
+2026-10-06T00:28:23.322Z ERROR ebpf: domena 'hyptcn-guest' (pid 2425299): proces uz nezije
+2026-10-06T00:28:23.322Z WARN  parametre VM sa nedali overit - zbieram podla poslednych znamych
+2026-10-06T00:28:23.322Z ERROR ebpf: tabulka memslotov nie je platna
+2026-10-06T00:28:23.322Z ERROR read_pa(0x0, 655360) zlyhalo
+2026-10-06T00:28:28.306Z ERROR ebpf: domena 'hyptcn-guest' (pid 2425299): proces uz nezije
+2026-10-06T00:28:28.322Z ERROR ebpf: na tomto stroji nebezi ziadna KVM domena (ziadny proces nema otvoreny /dev/kvm)
+2026-10-06T00:28:28.322Z WARN  backend nevedel pripravit novy cyklus - data mozu byt zastarale
+2026-10-06T00:28:28.322Z ERROR ebpf: domena 'hyptcn-guest' (pid 2425299): proces uz nezije
+2026-10-06T00:28:28.322Z WARN  parametre VM sa nedali overit - zbieram podla poslednych znamych
+2026-10-06T00:28:28.323Z ERROR ebpf: tabulka memslotov nie je platna
+2026-10-06T00:28:28.323Z ERROR read_pa(0x0, 655360) zlyhalo
+2026-10-06T00:28:33.306Z ERROR ebpf: domena 'hyptcn-guest' (pid 2425299): proces uz nezije
+2026-10-06T00:28:33.324Z ERROR ebpf: na tomto stroji nebezi ziadna KVM domena (ziadny proces nema otvoreny /dev/kvm)
+2026-10-06T00:28:33.324Z WARN  backend nevedel pripravit novy cyklus - data mozu byt zastarale
+2026-10-06T00:28:33.324Z ERROR ebpf: domena 'hyptcn-guest' (pid 2425299): proces uz nezije
+2026-10-06T00:28:33.324Z WARN  parametre VM sa nedali overit - zbieram podla poslednych znamych
+2026-10-06T00:28:33.325Z ERROR ebpf: tabulka memslotov nie je platna
+2026-10-06T00:28:33.325Z ERROR read_pa(0x0, 655360) zlyhalo
+2026-10-06T00:28:38.306Z ERROR ebpf: domena 'hyptcn-guest' (pid 2425299): proces uz nezije
+2026-10-06T00:28:38.320Z ERROR ebpf: na tomto stroji nebezi ziadna KVM domena (ziadny proces nema otvoreny /dev/kvm)
+2026-10-06T00:28:38.320Z WARN  backend nevedel pripravit novy cyklus - data mozu byt zastarale
+2026-10-06T00:28:38.320Z ERROR ebpf: domena 'hyptcn-guest' (pid 2425299): proces uz nezije
+2026-10-06T00:28:38.320Z WARN  parametre VM sa nedali overit - zbieram podla poslednych znamych
+2026-10-06T00:28:38.321Z ERROR ebpf: tabulka memslotov nie je platna
+2026-10-06T00:28:38.321Z ERROR read_pa(0x0, 655360) zlyhalo
+2026-10-06T00:28:43.306Z ERROR ebpf: domena 'hyptcn-guest' (pid 2425299): proces uz nezije
+2026-10-06T00:28:43.325Z ERROR ebpf: na tomto stroji nebezi ziadna KVM domena (ziadny proces nema otvoreny /dev/kvm)
+2026-10-06T00:28:43.325Z WARN  backend nevedel pripravit novy cyklus - data mozu byt zastarale
+2026-10-06T00:28:43.325Z ERROR ebpf: domena 'hyptcn-guest' (pid 2425299): proces uz nezije
+2026-10-06T00:28:43.325Z WARN  parametre VM sa nedali overit - zbieram podla poslednych znamych
+2026-10-06T00:28:43.326Z ERROR ebpf: tabulka memslotov nie je platna
+2026-10-06T00:28:43.326Z ERROR read_pa(0x0, 655360) zlyhalo
+2026-10-06T00:28:48.306Z ERROR ebpf: domena 'hyptcn-guest' (pid 2425299): proces uz nezije
+2026-10-06T00:28:48.321Z ERROR ebpf: na tomto stroji nebezi ziadna KVM domena (ziadny proces nema otvoreny /dev/kvm)
+2026-10-06T00:28:48.321Z WARN  backend nevedel pripravit novy cyklus - data mozu byt zastarale
+2026-10-06T00:28:48.321Z ERROR ebpf: domena 'hyptcn-guest' (pid 2425299): proces uz nezije
+2026-10-06T00:28:48.321Z WARN  parametre VM sa nedali overit - zbieram podla poslednych znamych
+2026-10-06T00:28:48.322Z ERROR ebpf: tabulka memslotov nie je platna
+2026-10-06T00:28:48.322Z ERROR read_pa(0x0, 655360) zlyhalo
+2026-10-06T00:28:53.306Z ERROR ebpf: domena 'hyptcn-guest' (pid 2425299): proces uz nezije
+2026-10-06T00:28:53.326Z ERROR ebpf: na tomto stroji nebezi ziadna KVM domena (ziadny proces nema otvoreny /dev/kvm)
+2026-10-06T00:28:53.326Z WARN  backend nevedel pripravit novy cyklus - data mozu byt zastarale
+2026-10-06T00:28:53.326Z ERROR ebpf: domena 'hyptcn-guest' (pid 2425299): proces uz nezije
+2026-10-06T00:28:53.326Z WARN  parametre VM sa nedali overit - zbieram podla poslednych znamych
+2026-10-06T00:28:53.327Z ERROR ebpf: tabulka memslotov nie je platna
+2026-10-06T00:28:53.327Z ERROR read_pa(0x0, 655360) zlyhalo
+2026-10-06T00:28:58.306Z ERROR ebpf: domena 'hyptcn-guest' (pid 2425299): proces uz nezije
+2026-10-06T00:28:58.333Z ERROR ebpf: na tomto stroji nebezi ziadna KVM domena (ziadny proces nema otvoreny /dev/kvm)
+2026-10-06T00:28:58.333Z WARN  backend nevedel pripravit novy cyklus - data mozu byt zastarale
+2026-10-06T00:28:58.333Z ERROR ebpf: domena 'hyptcn-guest' (pid 2425299): proces uz nezije
+2026-10-06T00:28:58.333Z WARN  parametre VM sa nedali overit - zbieram podla poslednych znamych
+2026-10-06T00:28:58.334Z ERROR ebpf: tabulka memslotov nie je platna
+2026-10-06T00:28:58.334Z ERROR read_pa(0x0, 655360) zlyhalo
+2026-10-06T00:29:03.306Z ERROR ebpf: domena 'hyptcn-guest' (pid 2425299): proces uz nezije
+2026-10-06T00:29:03.327Z ERROR ebpf: na tomto stroji nebezi ziadna KVM domena (ziadny proces nema otvoreny /dev/kvm)
+2026-10-06T00:29:03.327Z WARN  backend nevedel pripravit novy cyklus - data mozu byt zastarale
+2026-10-06T00:29:03.327Z ERROR ebpf: domena 'hyptcn-guest' (pid 2425299): proces uz nezije
+2026-10-06T00:29:03.327Z WARN  parametre VM sa nedali overit - zbieram podla poslednych znamych
+2026-10-06T00:29:03.327Z ERROR ebpf: tabulka memslotov nie je platna
+2026-10-06T00:29:03.327Z ERROR read_pa(0x0, 655360) zlyhalo
+2026-10-06T00:29:08.306Z ERROR ebpf: domena 'hyptcn-guest' (pid 2425299): proces uz nezije
+2026-10-06T00:29:08.327Z ERROR ebpf: na tomto stroji nebezi ziadna KVM domena (ziadny proces nema otvoreny /dev/kvm)
+2026-10-06T00:29:08.327Z WARN  backend nevedel pripravit novy cyklus - data mozu byt zastarale
+2026-10-06T00:29:08.327Z ERROR ebpf: domena 'hyptcn-guest' (pid 2425299): proces uz nezije
+2026-10-06T00:29:08.327Z WARN  parametre VM sa nedali overit - zbieram podla poslednych znamych
+2026-10-06T00:29:08.327Z ERROR ebpf: tabulka memslotov nie je platna
+2026-10-06T00:29:08.327Z ERROR read_pa(0x0, 655360) zlyhalo
+2026-10-06T00:29:13.306Z ERROR ebpf: domena 'hyptcn-guest' (pid 2425299): proces uz nezije
+2026-10-06T00:29:13.320Z ERROR ebpf: na tomto stroji nebezi ziadna KVM domena (ziadny proces nema otvoreny /dev/kvm)
+2026-10-06T00:29:13.320Z WARN  backend nevedel pripravit novy cyklus - data mozu byt zastarale
+2026-10-06T00:29:13.320Z ERROR ebpf: domena 'hyptcn-guest' (pid 2425299): proces uz nezije
+2026-10-06T00:29:13.320Z WARN  parametre VM sa nedali overit - zbieram podla poslednych znamych
+2026-10-06T00:29:13.320Z ERROR ebpf: tabulka memslotov nie je platna
+2026-10-06T00:29:13.320Z ERROR read_pa(0x0, 655360) zlyhalo
+2026-10-06T00:29:18.306Z ERROR ebpf: domena 'hyptcn-guest' (pid 2425299): proces uz nezije
+2026-10-06T00:29:18.325Z ERROR ebpf: na tomto stroji nebezi ziadna KVM domena (ziadny proces nema otvoreny /dev/kvm)
+2026-10-06T00:29:18.325Z WARN  backend nevedel pripravit novy cyklus - data mozu byt zastarale
+2026-10-06T00:29:18.325Z ERROR ebpf: domena 'hyptcn-guest' (pid 2425299): proces uz nezije
+2026-10-06T00:29:18.325Z WARN  parametre VM sa nedali overit - zbieram podla poslednych znamych
+2026-10-06T00:29:18.326Z ERROR ebpf: tabulka memslotov nie je platna
+2026-10-06T00:29:18.326Z ERROR read_pa(0x0, 655360) zlyhalo
+2026-10-06T00:29:23.306Z ERROR ebpf: domena 'hyptcn-guest' (pid 2425299): proces uz nezije
+2026-10-06T00:29:23.320Z ERROR ebpf: na tomto stroji nebezi ziadna KVM domena (ziadny proces nema otvoreny /dev/kvm)
+2026-10-06T00:29:23.320Z WARN  backend nevedel pripravit novy cyklus - data mozu byt zastarale
+2026-10-06T00:29:23.320Z ERROR ebpf: domena 'hyptcn-guest' (pid 2425299): proces uz nezije
+2026-10-06T00:29:23.320Z WARN  parametre VM sa nedali overit - zbieram podla poslednych znamych
+2026-10-06T00:29:23.321Z ERROR ebpf: tabulka memslotov nie je platna
+2026-10-06T00:29:23.321Z ERROR read_pa(0x0, 655360) zlyhalo
+2026-10-06T00:29:28.306Z ERROR ebpf: domena 'hyptcn-guest' (pid 2425299): proces uz nezije
+2026-10-06T00:29:28.326Z ERROR ebpf: na tomto stroji nebezi ziadna KVM domena (ziadny proces nema otvoreny /dev/kvm)
+2026-10-06T00:29:28.326Z WARN  backend nevedel pripravit novy cyklus - data mozu byt zastarale
+2026-10-06T00:29:28.326Z ERROR ebpf: domena 'hyptcn-guest' (pid 2425299): proces uz nezije
+2026-10-06T00:29:28.326Z WARN  parametre VM sa nedali overit - zbieram podla poslednych znamych
+2026-10-06T00:29:28.326Z ERROR ebpf: tabulka memslotov nie je platna
+2026-10-06T00:29:28.326Z ERROR read_pa(0x0, 655360) zlyhalo
+2026-10-06T00:29:33.306Z ERROR ebpf: domena 'hyptcn-guest' (pid 2425299): proces uz nezije
+2026-10-06T00:29:33.320Z ERROR ebpf: na tomto stroji nebezi ziadna KVM domena (ziadny proces nema otvoreny /dev/kvm)
+2026-10-06T00:29:33.320Z WARN  backend nevedel pripravit novy cyklus - data mozu byt zastarale
+2026-10-06T00:29:33.320Z ERROR ebpf: domena 'hyptcn-guest' (pid 2425299): proces uz nezije
+2026-10-06T00:29:33.320Z WARN  parametre VM sa nedali overit - zbieram podla poslednych znamych
+2026-10-06T00:29:33.320Z ERROR ebpf: tabulka memslotov nie je platna
+2026-10-06T00:29:33.320Z ERROR read_pa(0x0, 655360) zlyhalo
+2026-10-06T00:29:38.306Z ERROR ebpf: domena 'hyptcn-guest' (pid 2425299): proces uz nezije
+2026-10-06T00:29:38.326Z ERROR ebpf: na tomto stroji nebezi ziadna KVM domena (ziadny proces nema otvoreny /dev/kvm)
+2026-10-06T00:29:38.326Z WARN  backend nevedel pripravit novy cyklus - data mozu byt zastarale
+2026-10-06T00:29:38.326Z ERROR ebpf: domena 'hyptcn-guest' (pid 2425299): proces uz nezije
+2026-10-06T00:29:38.326Z WARN  parametre VM sa nedali overit - zbieram podla poslednych znamych
+2026-10-06T00:29:38.327Z ERROR ebpf: tabulka memslotov nie je platna
+2026-10-06T00:29:38.327Z ERROR read_pa(0x0, 655360) zlyhalo
+2026-10-06T00:29:43.306Z ERROR ebpf: domena 'hyptcn-guest' (pid 2425299): proces uz nezije
+2026-10-06T00:29:43.323Z ERROR ebpf: na tomto stroji nebezi ziadna KVM domena (ziadny proces nema otvoreny /dev/kvm)
+2026-10-06T00:29:43.323Z WARN  backend nevedel pripravit novy cyklus - data mozu byt zastarale
+2026-10-06T00:29:43.323Z ERROR ebpf: domena 'hyptcn-guest' (pid 2425299): proces uz nezije
+2026-10-06T00:29:43.323Z WARN  parametre VM sa nedali overit - zbieram podla poslednych znamych
+2026-10-06T00:29:43.324Z ERROR ebpf: tabulka memslotov nie je platna
+2026-10-06T00:29:43.324Z ERROR read_pa(0x0, 655360) zlyhalo
+2026-10-06T00:29:48.306Z ERROR ebpf: domena 'hyptcn-guest' (pid 2425299): proces uz nezije
+2026-10-06T00:29:48.325Z ERROR ebpf: na tomto stroji nebezi ziadna KVM domena (ziadny proces nema otvoreny /dev/kvm)
+2026-10-06T00:29:48.325Z WARN  backend nevedel pripravit novy cyklus - data mozu byt zastarale
+2026-10-06T00:29:48.325Z ERROR ebpf: domena 'hyptcn-guest' (pid 2425299): proces uz nezije
+2026-10-06T00:29:48.325Z WARN  parametre VM sa nedali overit - zbieram podla poslednych znamych
+2026-10-06T00:29:48.326Z ERROR ebpf: tabulka memslotov nie je platna
+2026-10-06T00:29:48.326Z ERROR read_pa(0x0, 655360) zlyhalo
+2026-10-06T00:29:53.306Z ERROR ebpf: domena 'hyptcn-guest' (pid 2425299): proces uz nezije
+2026-10-06T00:29:53.319Z ERROR ebpf: na tomto stroji nebezi ziadna KVM domena (ziadny proces nema otvoreny /dev/kvm)
+2026-10-06T00:29:53.319Z WARN  backend nevedel pripravit novy cyklus - data mozu byt zastarale
+2026-10-06T00:29:53.319Z ERROR ebpf: domena 'hyptcn-guest' (pid 2425299): proces uz nezije
+2026-10-06T00:29:53.319Z WARN  parametre VM sa nedali overit - zbieram podla poslednych znamych
+2026-10-06T00:29:53.320Z ERROR ebpf: tabulka memslotov nie je platna
+2026-10-06T00:29:53.320Z ERROR read_pa(0x0, 655360) zlyhalo
+2026-10-06T00:29:58.306Z ERROR ebpf: domena 'hyptcn-guest' (pid 2425299): proces uz nezije
+2026-10-06T00:29:58.326Z ERROR ebpf: na tomto stroji nebezi ziadna KVM domena (ziadny proces nema otvoreny /dev/kvm)
+2026-10-06T00:29:58.326Z WARN  backend nevedel pripravit novy cyklus - data mozu byt zastarale
+2026-10-06T00:29:58.326Z ERROR ebpf: domena 'hyptcn-guest' (pid 2425299): proces uz nezije
+2026-10-06T00:29:58.326Z WARN  parametre VM sa nedali overit - zbieram podla poslednych znamych
+2026-10-06T00:29:58.327Z ERROR ebpf: tabulka memslotov nie je platna
+2026-10-06T00:29:58.327Z ERROR read_pa(0x0, 655360) zlyhalo
+2026-10-06T00:30:03.306Z ERROR ebpf: domena 'hyptcn-guest' (pid 2425299): proces uz nezije
+2026-10-06T00:30:03.326Z ERROR ebpf: na tomto stroji nebezi ziadna KVM domena (ziadny proces nema otvoreny /dev/kvm)
+2026-10-06T00:30:03.326Z WARN  backend nevedel pripravit novy cyklus - data mozu byt zastarale
+2026-10-06T00:30:03.326Z ERROR ebpf: domena 'hyptcn-guest' (pid 2425299): proces uz nezije
+2026-10-06T00:30:03.326Z WARN  parametre VM sa nedali overit - zbieram podla poslednych znamych
+2026-10-06T00:30:03.326Z ERROR ebpf: tabulka memslotov nie je platna
+2026-10-06T00:30:03.326Z ERROR read_pa(0x0, 655360) zlyhalo
+2026-10-06T00:30:08.306Z ERROR ebpf: domena 'hyptcn-guest' (pid 2425299): proces uz nezije
+2026-10-06T00:30:08.321Z ERROR ebpf: na tomto stroji nebezi ziadna KVM domena (ziadny proces nema otvoreny /dev/kvm)
+2026-10-06T00:30:08.321Z WARN  backend nevedel pripravit novy cyklus - data mozu byt zastarale
+2026-10-06T00:30:08.321Z ERROR ebpf: domena 'hyptcn-guest' (pid 2425299): proces uz nezije
+2026-10-06T00:30:08.321Z WARN  parametre VM sa nedali overit - zbieram podla poslednych znamych
+2026-10-06T00:30:08.322Z ERROR ebpf: tabulka memslotov nie je platna
+2026-10-06T00:30:08.322Z ERROR read_pa(0x0, 655360) zlyhalo
+2026-10-06T00:30:13.306Z ERROR ebpf: domena 'hyptcn-guest' (pid 2425299): proces uz nezije
+2026-10-06T00:30:13.325Z ERROR ebpf: na tomto stroji nebezi ziadna KVM domena (ziadny proces nema otvoreny /dev/kvm)
+2026-10-06T00:30:13.325Z WARN  backend nevedel pripravit novy cyklus - data mozu byt zastarale
+2026-10-06T00:30:13.325Z ERROR ebpf: domena 'hyptcn-guest' (pid 2425299): proces uz nezije
+2026-10-06T00:30:13.325Z WARN  parametre VM sa nedali overit - zbieram podla poslednych znamych
+2026-10-06T00:30:13.325Z ERROR ebpf: tabulka memslotov nie je platna
+2026-10-06T00:30:13.325Z ERROR read_pa(0x0, 655360) zlyhalo
+2026-10-06T00:30:18.306Z ERROR ebpf: domena 'hyptcn-guest' (pid 2425299): proces uz nezije
+2026-10-06T00:30:18.321Z ERROR ebpf: na tomto stroji nebezi ziadna KVM domena (ziadny proces nema otvoreny /dev/kvm)
+2026-10-06T00:30:18.321Z WARN  backend nevedel pripravit novy cyklus - data mozu byt zastarale
+2026-10-06T00:30:18.321Z ERROR ebpf: domena 'hyptcn-guest' (pid 2425299): proces uz nezije
+2026-10-06T00:30:18.321Z WARN  parametre VM sa nedali overit - zbieram podla poslednych znamych
+2026-10-06T00:30:18.322Z ERROR ebpf: tabulka memslotov nie je platna
+2026-10-06T00:30:18.322Z ERROR read_pa(0x0, 655360) zlyhalo
+2026-10-06T00:30:23.306Z ERROR ebpf: domena 'hyptcn-guest' (pid 2425299): proces uz nezije
+2026-10-06T00:30:23.321Z ERROR ebpf: na tomto stroji nebezi ziadna KVM domena (ziadny proces nema otvoreny /dev/kvm)
+2026-10-06T00:30:23.321Z WARN  backend nevedel pripravit novy cyklus - data mozu byt zastarale
+2026-10-06T00:30:23.321Z ERROR ebpf: domena 'hyptcn-guest' (pid 2425299): proces uz nezije
+2026-10-06T00:30:23.321Z WARN  parametre VM sa nedali overit - zbieram podla poslednych znamych
+2026-10-06T00:30:23.322Z ERROR ebpf: tabulka memslotov nie je platna
+2026-10-06T00:30:23.322Z ERROR read_pa(0x0, 655360) zlyhalo
+2026-10-06T00:30:28.306Z ERROR ebpf: domena 'hyptcn-guest' (pid 2425299): proces uz nezije
+2026-10-06T00:30:28.323Z ERROR ebpf: na tomto stroji nebezi ziadna KVM domena (ziadny proces nema otvoreny /dev/kvm)
+2026-10-06T00:30:28.323Z WARN  backend nevedel pripravit novy cyklus - data mozu byt zastarale
+2026-10-06T00:30:28.323Z ERROR ebpf: domena 'hyptcn-guest' (pid 2425299): proces uz nezije
+2026-10-06T00:30:28.323Z WARN  parametre VM sa nedali overit - zbieram podla poslednych znamych
+2026-10-06T00:30:28.324Z ERROR ebpf: tabulka memslotov nie je platna
+2026-10-06T00:30:28.324Z ERROR read_pa(0x0, 655360) zlyhalo
+2026-10-06T00:30:32.703Z INFO  koniec: 209 snimok, 156 chyb, 1 zmeskanych slotov, najvacsie meskanie 0.000 s, spolu 5.53 GiB

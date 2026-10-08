@@ -14,10 +14,8 @@ Program číta pamäť bežiaceho virtuálneho stroja zvonku, z hostiteľa, a pe
 ukladá snímky. Druhý program zo snímky poskladá zoznam procesov, modulov jadra a sieťových
 spojení tak, ako ich v tej chvíli videl hosťovaný systém. Z každej snímky sa počíta krátky
 číselný vektor o tom, kde a ako sa pamäť oproti predchádzajúcej zmenila; vektory idú za
-sebou do okien a okno je vstupom modelu (Temporal Convolutional Network), ktorý z neho
-vypočíta jedno číslo. Model je implementovaný a napojený, ale **natrénovaný nie je** —
-korpus neexistuje, takže to číslo nie je detekcia. Vnútri sledovaného stroja pritom nebeží
-nič, čo by sa dalo vypnúť.
+sebou do okien pre TCN prediktor normálu. Tréning na krátkych benígnych idle sedeniach
+je uložený v artefaktoch; skóre pre nové serverové prostredie zatiaľ nie je kalibrované.
 
 ## 2. Čo treba mať
 
@@ -94,7 +92,7 @@ snímka .vmicd  +  sidecar .json (metadáta snímky vedľa nej)
                        ▼
                      skóre: jedno číslo na okno
                      tcn/score.py nad bežiacim zberom, tcn/train.py nad uloženými
-                     oknami; model NIE JE natrénovaný, skóre NIE JE detekcia
+                     oknami; bez kalibrácie skóre nie je dôkaz detekcie
 ```
 
 **1. Čítanie pamäte** — `vmicollect/src/backend_ebpf.c`, slučka `vmicollect/src/backend.c`.

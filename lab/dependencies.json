@@ -1,0 +1,8 @@
+{
+  "python3-psycopg2": {
+    "filename": "python3-psycopg2_2.9.5-1+b1_amd64.deb",
+    "url": "https://deb.debian.org/debian/pool/main/p/psycopg2/python3-psycopg2_2.9.5-1+b1_amd64.deb",
+    "sha256": "e4f59385b82c63dc54cce79a53e5f0fbeb6d5b343698a43e135b95cd2823e564",
+    "distribution": "Debian 12, amd64, Python 3.11"
+  }
+}

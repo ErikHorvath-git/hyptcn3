@@ -9,10 +9,8 @@ Program číta pamäť bežiaceho virtuálneho stroja zvonku, z hostiteľa, a pe
 ukladá snímky. Druhý program zo snímky poskladá zoznam procesov, modulov jadra a sieťových
 spojení tak, ako ich v tej chvíli videl hosťovaný systém. Z každej snímky sa počíta krátky
 číselný vektor o tom, kde a ako sa pamäť oproti predchádzajúcej zmenila; vektory idú za
-sebou do okien a okno je vstupom modelu (Temporal Convolutional Network), ktorý z neho
-vypočíta jedno číslo. Model je implementovaný a napojený, ale **natrénovaný nie je** —
-korpus neexistuje, takže to číslo nie je detekcia. Vnútri sledovaného stroja pritom nebeží
-nič, čo by sa dalo vypnúť.
+sebou do okien pre TCN prediktor normálu. Tréning na krátkych benígnych idle sedeniach
+je uložený v artefaktoch; skóre pre nové serverové prostredie zatiaľ nie je kalibrované.
 
 ## 2. Čo treba mať
 
@@ -33,7 +31,7 @@ python3 -m pytest -q      # testy parsera a príznakov
 ```
 
 `make test` prejde celú cestu zberu nad syntetickým obrazom veľkosti
-16 MiB, ktorý si sám vyrobí. Testov je 259 prešlých a 24 preskočených v `pytest` (spolu 283 zozbieraných; preskočený test nie je prešiel) a 4 v C (`alarm_test`, `hole_test`, `perbin_test`, `retention_test`).
+16 MiB, ktorý si sám vyrobí. Testov je 266 prešlých a 24 preskočených v `pytest` (spolu 290 zozbieraných; preskočený test nie je prešiel) a 4 v C (`alarm_test`, `hole_test`, `perbin_test`, `retention_test`).
 
 ## 4. Ako vznikne snímka
 
@@ -73,10 +71,11 @@ zapíše.
 |---|---|---|---|
 | `vmicollect/` | zberač snímok pamäte VM: C a eBPF nad QEMU/KVM | `vmicollect/src/collector.c` | 35 / 10 316 |
 | `guestparse/` | rekonštrukcia procesov, modulov a soketov zo snímky | `guestparse/view.py` | 30 / 6 479 |
-| `features/` | per-bin príznakový vektor (referencia), okná, normalizácia | `features/perbin.py` | 18 / 4 393 |
-| `tcn/` | model (Temporal Convolutional Network), baseliny, tréning a skórovanie snímok; model natrénovaný nie je a skóre nie je detekcia | `tcn/score.py` | 15 / 2 599 |
+| `features/` | per-bin príznakový vektor (referencia), okná, normalizácia | `features/perbin.py` | 18 / 4 440 |
+| `tcn/` | TCN, prediktor normálu, baseliny, tréning a skórovanie snímok | `tcn/score.py` | 15 / 2 584 |
 | `profiles/` | profil jadra hosťa: symboly a offsety polí štruktúr | `profiles/debian12-6.1.0-42-cloud-amd64/README.md` | jeden adresár na boot hosťa — pozri L17 |
-| `scripts/` | root behy, príkazy v hosťovi, kontroly tvrdení | `scripts/root_run.sh` | 35 / 6 079 |
+| `scripts/` | root behy, príkazy v hosťovi, kontroly tvrdení | `scripts/root_run.sh` | 40 / 6 740 |
+| `lab/` | trvalé benígne API služby, PostgreSQL a nginx vo VM | `lab/services.py` | 6 / 250 |
 | `data/` | výsledkové JSONy z meraní (`data/results/`) a pozemná pravda odobratá v hosťovi (`data/sessions/`); samotné snímky `.vmicd` sú mimo gitu (`data/raw/`) | `data/results/2026-09-18_zmrazeny_host/README.md` | rastie s každým meraním, nepočíta sa |
 
 ## 6. Ako to funguje
@@ -95,7 +94,7 @@ snímka .vmicd  +  sidecar .json (metadáta snímky vedľa nej)
                        ▼
                      skóre: jedno číslo na okno
                      tcn/score.py nad bežiacim zberom, tcn/train.py nad uloženými
-                     oknami; model NIE JE natrénovaný, skóre NIE JE detekcia
+                     oknami; bez kalibrácie skóre nie je dôkaz detekcie
 ```
 
 **1. Čítanie pamäte** — `vmicollect/src/backend_ebpf.c`, slučka `vmicollect/src/backend.c`.
@@ -248,11 +247,12 @@ Každý typ faktu má jeden dokument, ktorý ho vlastní; keď si odporujú, pla
 | dokument | čo vlastní | riadkov |
 |---|---|---|
 | `docs/ARCHITEKTURA.md` | rozhrania, formát `.vmicd` a sidecaru, tok dát podrobne | 1149 |
-| `docs/MERANIA.md` | log meraní: čo, kedy, akým príkazom a s akým výsledkom | 803 |
+| `docs/MERANIA.md` | log meraní: čo, kedy, akým príkazom a s akým výsledkom | 851 |
 | `docs/LIMITACIE.md` | L1 až L18: čo systém nevie a čo z toho plynie pre text | 879 |
 | `docs/kontroly.md` | kontroly podozrivých vzorcov a validačný príkaz | 248 |
 | `HONESTY.md` | pravidlá pre čísla a slová v texte práce | 269 |
-| `README.md` | rozcestník repozitára a pôvod prevzatého kódu | 46 |
+| `README.md` | rozcestník repozitára a pôvod prevzatého kódu | 52 |
+| `docs/LAB.sk.md` | serverové laboratórium, premávka z hostiteľa a RAM zber | 162 |
 | `vmicollect/README.md` | zberač zvnútra: vrstvy, hooky, formáty | 460 |
 | `guestparse/README.md` | parser zvnútra: preklad adries, prechod zoznamami | 146 |
 | `features/PERBIN.md` | definícia príznakov a ich kontrakt | 163 |

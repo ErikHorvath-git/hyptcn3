@@ -241,12 +241,23 @@ def objekty_z_pohladu(view):
     dolna hranica, nie pocet. Do vektora sa zapise, ale v reporte to musi byt
     vidiet - preto sa vracia von, nie iba do logu.
     """
+    # The CLI already repairs KASLR changes; library callers (training and
+    # online scoring) must do the same before comparing kernel pointers.
+    if view.ktext_shift is None:
+        raise FeatureError("profil sa neda ukotvit: " + view.resolve_problem())
+    ukotvenie = []
+    mismatch = view.profile_boot_mismatch()
+    if mismatch:
+        ok, info = view.reanchor()
+        if not ok or view.profile_boot_mismatch():
+            raise FeatureError("NESULAD PROFILU pri vypocte priznakov: %s" % info)
+        ukotvenie.append("profil: preukotvenie KASLR o %+d" % info["delta"])
     p = view.processes()
     m = view.modules()
     s = view.sockets(procs=p["processes"])
     c = checks.check_all(view, procs=p, mods=m)
 
-    pozn = []
+    pozn = list(ukotvenie)
     for meno, res in (("procesy", p), ("moduly", m), ("sokety", s)):
         if res["truncated"]:
             pozn.append("%s: prechod sa neuzavrel (%s), pocet je dolna hranica"

@@ -93,6 +93,18 @@ def test_main_hlasi_chybu_nad_neexistujucim_adresarom(tmp_path, capsys):
     assert rc == score.EXIT_ERROR
 
 
+def test_prediction_cli_uses_training_window(monkeypatch, tmp_path):
+    monkeypatch.setattr(score, "nacitaj_prediktor", lambda _: (None, None, {"dlzka_okna": 8}))
+    observed = []
+    monkeypatch.setattr(score, "beh_predikcia", lambda _a, _p, length, *args: observed.append(length) or [])
+    argv = ["--snapshots", str(tmp_path), "--profile", "unused", "--uloha", "predikcia", "--model", "unused"]
+    assert score.main(argv) == 0
+    assert observed == [8]
+    with pytest.raises(SystemExit) as error:
+        score.main(argv + ["--dlzka", "16"])
+    assert error.value.code == 2
+
+
 @pytest.mark.parametrize("dlzka", [1, 4])
 def test_skore_az_z_plneho_okna(dlzka, monkeypatch, tmp_path):
     """Skore vznikne presne vtedy, ked je v okne dlzka snimok - ani skor."""

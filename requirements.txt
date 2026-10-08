@@ -1,0 +1,5 @@
+# Versions used for host-side Python verification. Lab management uses stdlib.
+numpy==2.3.5
+scikit-learn==1.8.0
+torch==2.11.0
+pytest==8.3.5

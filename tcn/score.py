@@ -1,56 +1,23 @@
 """
-score.py - skorovaci proces: adresar so snimkami -> vektor -> okno -> TCN -> cislo.
+score.py - adresar so snimkami -> vektory -> okno -> TCN skore.
 
-MODEL NIE JE NATRENOVANY A SKORE NIE JE DETEKCIA
-------------------------------------------------
-Korpus neexistuje: na tomto stroji nie su ziadne realne malverove vzorky,
-takze niet co oznacit a niet na com trenovat. Vahy modelu su nahodne
-inicializovane s pevnym seedom. Cislo, ktore tento proces vypise, preto
-NEHOVORI NIC o tom, ci sa vo VM nieco deje - je to dokaz, ze cela cesta
-(pamat VM -> snimka -> priznakovy vektor -> klzave okno -> TCN -> cislo)
-bezi ako jeden celok. Ziadna hodnota z tohto programu sa nesmie uviest ako
-vysledok detekcie (HONESTY.md, P4 a P7).
+Dva rezimy:
+- `--uloha skore` spusta diagnosticky klasifikator, ktory NIE JE NATRENOVANY.
+  Jeho skore sa nesmie uviest ako vysledok detekcie; overuje iba tok dat.
+- `--uloha predikcia --model ...` nacita nauceny prediktor normalu aj
+  jeho normalizaciu a dlzku okna. Chyba predikcie potrebuje oddelenu
+  kalibraciu; sama o sebe nie je pravdepodobnost napadnutia.
 
-Upozornenie je na troch miestach zamerne: v tomto docstringu, na zaciatku
-kazdeho vypisu programu a v kazdom JSON vystupe (kluc `model_natrenovany`).
-Kto cislo odniekial skopiruje, musi na upozornenie narazit.
+Trening prediktora pouziva benigne sedenia. Nevyzaduje malverove vzorky.
+Historicke vysledky kratkeho idle treningu su v data/results; neoveruju
+spravanie pri novych serverovych zataziach.
 
-PRECO TENTO SUBOR EXISTUJE
---------------------------
-Zadanie ziada zakladnu implementaciu alebo integraciu TCN modelu.
-Implementacia je v tcn/model.py, trening v tcn/train.py - oboje ale pracuje
-s maticami z .npz suborov a snimku z bezicej VM nikdy nevidelo. Tu sa model
-prvykrat napaja na vystup zberaca.
+Sidecar je zapisany po obraze pamate a sluzi ako oznamenie dokoncenej
+snimky. Vektory pocita features/snapshot.py rovnako ako priprava treningu.
+Nevyplnene okno sa neskoruje. Cas od timestampu starej ulozenej snimky je
+jej vek, nie latencia ziveho spracovania.
 
-CO SA CITA A KEDY JE SNIMKA HOTOVA
-----------------------------------
-Sleduje sa ten isty adresar, do ktoreho pise `vmicollect run`
-(output.dir). Jedna snimka su dva subory: `<id>.vmicd` (stranky) a `<id>.json`
-(sidecar). Zberac zapisuje sidecar az po obraze (vmic_meta_write az za
-meranim v collector.c), takze prave sidecar je znamenie, ze snimka je cela na
-disku. Ked sa sidecar nacitat neda, este sa zapisuje a skusi sa v dalsom kole.
-
-Vektor sa pocita cez features/snapshot.py (dvadsat priznakov + ma_predchodcu),
-teda tou istou funkciou ako pri priprave dat na trening - v jednom datasete
-nesmu byt cisla z dvoch implementacii.
-
-KLZAVE OKNO
------------
-Drzia sa posledne L snimok (L = features.windows.DLZKA_OKNA = 16, dovody su
-v hlavicke windows.py). Kym okno plne nie je, skore sa nepocita a vypisuje sa,
-na kolko snimok sa este caka. Ticho nerobit nic by vyzeralo ako porucha.
-
-CO TU ZAMERNE NIE JE
---------------------
-Normalizacia (features/normalize.py). mu/sd sa fituje na benignych
-trenovacich sessions; ziadne natrenovane mu/sd neexistuje a vymysliet ho tu
-by znamenalo, ze skorovanie pouziva inu skalu nez trening. Az bude model
-natrenovany, nacita sa spolu s jeho mu/sd a normalizacia patri sem, medzi
-`vektor_snimky` a okno.
-
-NAVRATOVE KODY (rovnake ako `python3 -m features`)
-  0  prebehlo
-  2  snimka, sidecar alebo profil sa nedaju precitat
+NAVRATOVE KODY: 0 = prebehlo, 2 = chyba vstupov alebo spracovania.
 """
 
 import argparse
@@ -81,8 +48,8 @@ TRIED = 2
 SEED = 0
 
 UPOZORNENIE = (
-    "POZOR: model NIE JE NATRENOVANY - korpus neexistuje (na tomto stroji nie "
-    "su realne malverove vzorky).",
+    "POZOR: diagnosticky model NIE JE NATRENOVANY. "
+    "Ulozeny prediktor pouzite cez --uloha predikcia --model.",
     "Vahy su nahodne inicializovane seedom %d. Vypisane skore NIE JE detekcia "
     "ani pravdepodobnost napadnutia;" % SEED,
     "je to dokaz, ze cesta snimka -> vektor -> okno -> TCN bezi. Ako vysledok "
@@ -317,14 +284,15 @@ def beh_predikcia(adresar, profil, dlzka, model, norm, cakaj=0.0, perioda=0.5,
 def main(argv=None):
     ap = argparse.ArgumentParser(
         prog="python3 -m tcn.score",
-        description="skorovanie snimok z adresara zberaca; model NIE JE "
-                    "natrenovany a skore nie je detekcia")
+        description="skorovanie snimok: diagnosticky klasifikator alebo "
+                    "ulozeny prediktor normalu")
     ap.add_argument("--snapshots", required=True,
                     help="adresar, do ktoreho pise vmicollect (output.dir)")
     ap.add_argument("--profile", required=True,
                     help="adresar profilu jadra hosta (kallsyms.txt, btf.txt)")
-    ap.add_argument("--dlzka", type=int, default=DLZKA_OKNA,
-                    help="dlzka okna v snimkach (vychodzia %d)" % DLZKA_OKNA)
+    ap.add_argument("--dlzka", type=int, default=None,
+                    help="dlzka okna; predikcia pouzije checkpoint, "
+                         "diagnosticke skore predvolene %d" % DLZKA_OKNA)
     ap.add_argument("--uloha", default="skore",
                     choices=("skore", "predikcia"),
                     help="skore = netrenovany klasifikator (dokaz cesty); "
@@ -345,10 +313,15 @@ def main(argv=None):
     try:
         if a.uloha == "predikcia":
             model, norm, doc_modelu = nacitaj_prediktor(a.model)
+            ulozena_dlzka = int(doc_modelu["dlzka_okna"])
+            if a.dlzka is not None and a.dlzka != ulozena_dlzka:
+                ap.error("--dlzka sa musi zhodovat s oknom checkpointu (%d)" % ulozena_dlzka)
+            a.dlzka = ulozena_dlzka
             zaznamy = beh_predikcia(a.snapshots, a.profile, a.dlzka,
                                     model, norm, a.cakaj)
         else:
             doc_modelu = None
+            a.dlzka = a.dlzka if a.dlzka is not None else DLZKA_OKNA
             zaznamy = beh(a.snapshots, a.profile, a.dlzka, a.cakaj)
     except FeatureError as exc:
         print("chyba: %s" % exc, file=sys.stderr)

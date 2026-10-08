@@ -1,0 +1,110 @@
+{
+  "schema": "hyptcn3/lab-smoke/1",
+  "commit": "c221c6af24b3b023fed290a69cb189b1196192d2",
+  "commit_dirty": true,
+  "date": "2026-10-06T13:14:42.332932+00:00",
+  "host": "Linux-7.2.5-100.fc43.x86_64-x86_64-with-glibc2.42",
+  "guest": {
+    "domain": "hyptcn-lab",
+    "target": "http://127.0.0.1:18080"
+  },
+  "command": "python3 scripts/lab_smoke.py --target http://127.0.0.1:18080",
+  "n": 12,
+  "values": {
+    "checks": [
+      {
+        "method": "GET",
+        "path": "/healthz",
+        "expected": 200,
+        "status": 200,
+        "elapsed_ms": 15.84
+      },
+      {
+        "method": "GET",
+        "path": "/api/catalog",
+        "expected": 200,
+        "status": 200,
+        "elapsed_ms": 1.99
+      },
+      {
+        "method": "GET",
+        "path": "/api/orders",
+        "expected": 401,
+        "status": 401,
+        "elapsed_ms": 2.178
+      },
+      {
+        "method": "POST",
+        "path": "/api/auth/token",
+        "expected": 200,
+        "status": 200,
+        "elapsed_ms": 1.399
+      },
+      {
+        "method": "GET",
+        "path": "/api/orders",
+        "expected": 401,
+        "status": 401,
+        "elapsed_ms": 2.005
+      },
+      {
+        "method": "POST",
+        "path": "/api/orders",
+        "expected": 400,
+        "status": 400,
+        "elapsed_ms": 2.533
+      },
+      {
+        "method": "POST",
+        "path": "/api/orders",
+        "expected": 400,
+        "status": 400,
+        "elapsed_ms": 2.258
+      },
+      {
+        "method": "POST",
+        "path": "/api/orders",
+        "expected": 201,
+        "status": 201,
+        "elapsed_ms": 11.032
+      },
+      {
+        "method": "GET",
+        "path": "/api/orders",
+        "expected": 200,
+        "status": 200,
+        "elapsed_ms": 3.553
+      },
+      {
+        "method": "GET",
+        "path": "/api/orders",
+        "expected": 200,
+        "status": 200,
+        "elapsed_ms": 4.948
+      },
+      {
+        "method": "GET",
+        "path": "/api/orders",
+        "expected": 200,
+        "status": 200,
+        "elapsed_ms": 7.16
+      },
+      {
+        "method": "GET",
+        "path": "/does-not-exist",
+        "expected": 404,
+        "status": 404,
+        "elapsed_ms": 2.032
+      }
+    ],
+    "order_completed": true,
+    "source_sha256": {
+      "lab/dependencies.json": "31bc036da7b333c26c3e785fb756f4b98083848f15e43483e863be3f3c79cbba",
+      "lab/hyptcn-lab@.service": "af75eee623f3c7a0b7a1c10a35c2216684c6f4b610d44e46560de137ef3d6962",
+      "lab/install.sh": "b8f08bda02d2480f2fe37a7a13c81d66639bb0d89bba70740015670b95fc5f79",
+      "lab/nginx.conf": "08f376bb8fd855e2b2b9ef454b6fdb73bcb08efec2eb24ddd9734796f056530b",
+      "lab/schema.sql": "d7372422553f866333177456ac6daec4847f5660c1c854a646e602d0be0fcf6c",
+      "lab/services.py": "61e339da8d3fc8dab38f6d60fa49860afbb5248fe5963879a14c036aec37b957"
+    }
+  }
+}

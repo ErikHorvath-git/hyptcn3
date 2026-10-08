@@ -1,0 +1,44 @@
+{
+  "schema": "hyptcn3/lab-traffic-verification/1",
+  "commit": "c221c6af24b3b023fed290a69cb189b1196192d2",
+  "commit_dirty": true,
+  "date": "2026-10-06T13:11:08.457062+00:00",
+  "host": "Linux-7.2.5-100.fc43.x86_64-x86_64-with-glibc2.42",
+  "guest": {
+    "domain": "hyptcn-lab",
+    "target": "http://127.0.0.1:18080"
+  },
+  "command": "python3 scripts/host_traffic.py --profile lab --target http://127.0.0.1:18080 --dur 30 --vlakien 8 --seed 42 --out data/lab/verification-traffic.json",
+  "n": 1485,
+  "values": {
+    "schema": "hyptcn3/host-traffic/2",
+    "started_at": "2026-10-06T13:09:29.266064+00:00",
+    "updated_at": "2026-10-06T13:09:59.274150+00:00",
+    "elapsed_s": 30.008,
+    "ok": 1485,
+    "errors": 0,
+    "requests": 1485,
+    "ok_per_s": 49.487,
+    "status_codes": {
+      "200": 1193,
+      "201": 292
+    },
+    "routes": {
+      "POST /api/auth/token": 8,
+      "GET /api/catalog": 714,
+      "GET /api/orders": 401,
+      "POST /api/orders": 292,
+      "GET /healthz": 70
+    },
+    "latency_sample_n": 1485,
+    "latency_p95_ms": 19.089,
+    "last_error": null,
+    "target": "http://127.0.0.1:18080",
+    "profile": "lab",
+    "seed": 42,
+    "workers": 8,
+    "final": true
+  },
+  "source_sha256": "e9dc06748900a88882297d8e97c458329110e01002dd076d4cd1e79ddaf813c2",
+  "note": "Concurrent continuous four-worker traffic was also running; this is a functional traffic check, not an isolated performance benchmark."
+}

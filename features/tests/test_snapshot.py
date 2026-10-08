@@ -151,6 +151,42 @@ def test_sidecar_cesta():
     assert sidecar_cesta("/a/b.vmicd") == "/a/b.json"
 
 
+def test_object_features_reanchor_before_reading_pointers(monkeypatch):
+    from features import snapshot
+
+    class View:
+        ktext_shift = 1
+        shifted = False
+
+        def profile_boot_mismatch(self):
+            return None if self.shifted else "different boot"
+
+        def reanchor(self):
+            self.shifted = True
+            return True, {"delta": 4096}
+
+        def processes(self):
+            assert self.shifted
+            return dict(processes=[], count=0, truncated=False, stop_reason=None)
+
+        def modules(self):
+            assert self.shifted
+            return dict(modules=[], count=0, truncated=False, stop_reason=None)
+
+        def sockets(self, **_):
+            assert self.shifted
+            return dict(sockets=[], count=0, truncated=False, stop_reason=None)
+
+    monkeypatch.setattr(snapshot.checks, "check_all", lambda *a, **kw: {
+        "summary": {"inconclusive": [], "syscall_hooks": 0}, "findings": []})
+    _, _, notes = objekty_z_pohladu(View())
+    assert any("preukotvenie KASLR" in note for note in notes)
+    bad = View()
+    bad.reanchor = lambda: (False, "missing tables")
+    with pytest.raises(FeatureError, match="NESULAD PROFILU"):
+        objekty_z_pohladu(bad)
+
+
 # ----------------------------------------------------- 3. realny retazec
 
 

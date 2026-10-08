@@ -6,6 +6,12 @@ Zadanie je v `zadanie-zp_105826.pdf`.
 
 ## Začni tu
 
+**Serverové laboratórium:** `make lab-up` spustí samostatnú VM s nginx,
+API službami, PostgreSQL a premávkou z hostiteľa. Vstup je
+**http://127.0.0.1:18080**; `make lab-status`, `make lab-test` a `make lab-stop`
+slúžia na kontrolu a vypnutie. Postup a napojenie RAM zberu:
+[`docs/LAB.sk.md`](docs/LAB.sk.md).
+
 **[`docs/PRIRUCKA.md`](docs/PRIRUCKA.md)** — čo to je, čo treba mať, ako vznikne snímka,
 čo je kde, ako to funguje, aké čísla sú namerané a čo nefunguje. Generuje sa z kódu
 a z uložených artefaktov, takže sa s kódom nerozíde ticho, a všetko ostatné je odtiaľ

@@ -1,0 +1,22 @@
+{
+  "schema": "hyptcn3/detector-offline-smoke/1",
+  "commit": "c221c6af24b3b023fed290a69cb189b1196192d2",
+  "commit_dirty": true,
+  "date": "2026-10-06T13:16:28.593444+00:00",
+  "host": "Linux-7.2.5-100.fc43.x86_64-x86_64-with-glibc2.42",
+  "guest": {
+    "domain": "hyptcn-guest",
+    "source": "data/raw/20261006T001531Z_session"
+  },
+  "command": "python3 scripts/detektor.py --snapshots data/raw/20261006T001531Z_session --profile profiles/debian12-6.1.0-42-cloud-amd64 --model data/raw/models/prediktor_real_4idle.pt --prah 1e100 --out data/lab/detector-offline.jsonl",
+  "n": 27,
+  "values": {
+    "events": 27,
+    "scored_windows": 20,
+    "alarms": 0,
+    "window_length": 8,
+    "output_sha256": "85bbff72bce0faccd959c876d415329f6d38f255f4629c6dfc87f1aac66cebcd",
+    "model_sha256": "a438c8925db5ba66f9240d88bb4f4ade66e4f035b3932fbdc760823ec3ccab67"
+  },
+  "note": "Historical snapshots; forced high threshold only checks successful extraction/inference without changing source HOLD files. No calibration or detection-quality claim; snapshot age is not live latency."
+}

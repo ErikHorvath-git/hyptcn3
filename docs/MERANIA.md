@@ -801,3 +801,51 @@ z dnešného bootu, takže k hosťovi sedí a krížová kontrola nad snímkou
 profil“ vyššie sa preto z repozitára už zopakovať nedajú — `kallsyms` z predchádzajúceho
 bootu zostáva iba v histórii gitu. Adresy oboch verzií sú uvedené vyššie, takže sa dá
 overiť, čo sa zmenilo.
+
+
+## 2026-10-06 — serverové laboratórium a premávka z hostiteľa
+
+Samostatná VM `hyptcn-lab` bola vytvorená kópiou zastaveného
+`hyptcn-guest`. Nasadené nginx, auth, catalog, orders, PostgreSQL a worker;
+HTTP prichádza cez `passt` na `http://127.0.0.1:18080`. Kód je v pracovnom
+strome po commite `c221c6a`; artefakty obsahujú `commit_dirty` a hashe zdrojov.
+
+Príkaz `python3 scripts/lab_smoke.py` overil zdravotný stav, autentizáciu,
+odmietnutie neplatných vstupov a dokončenie objednávky workerom. Výstup:
+`data/results/lab_smoke_20261006T130615775462Z.json`.
+
+Ohraničený beh `python3 scripts/host_traffic.py --profile lab --target
+http://127.0.0.1:18080 --dur 30 --vlakien 8 --seed 42 --out
+data/lab/verification-traffic.json` zaznamenal 1485 {{res:lab_traffic_20261006T131108470896Z.json:values.ok}} úspešných požiadaviek.
+HTTP chýb bolo 0 {{res:lab_traffic_20261006T131108470896Z.json:values.errors}}.
+Súbežne bežal aj trvalý generátor; ide o funkčné overenie toku požiadaviek,
+nie izolovaný benchmark priepustnosti ani meranie vplyvu introspekcie.
+Artefakt: `data/results/lab_traffic_20261006T131108470896Z.json`.
+
+Tento beh neposkytuje výsledok detekcie ani kalibráciu TCN. Živý eBPF zber
+laboratória vyžaduje hostiteľské oprávnenia cez `scripts/lab_capture.sh`.
+
+
+### 2026-10-06 — živý zber nového laboratória a oprava KASLR príznakov
+
+Používateľ spustil `sudo scripts/lab_capture.sh 24`. Záznam
+`data/results/lab_live_20261006T132412264043Z.json` obsahuje identitu binárky,
+metadáta zberu, cykly, HTTP počty pred/po a kontrolu rekonštrukcie objektov.
+Vzniklo 24 {{res:lab_live_20261006T132412264043Z.json:values.snapshots}} snímok.
+Chýb čítania bolo 0 {{res:lab_live_20261006T132412264043Z.json:values.read_errors}},
+zmeškaných slotov 0 {{res:lab_live_20261006T132412264043Z.json:values.skipped_slots}}.
+Počas zberu pribudlo 3062 {{res:lab_live_20261006T132412264043Z.json:values.http_ok_delta}} úspešných HTTP požiadaviek.
+Ide o tento ohraničený beh, nie dôkaz dlhodobého časového správania.
+
+Prvý výpočet príznakov odhalil chybu: `features.snapshot` volal `build_view`,
+ale nevolal KASLR preukotvenie, ktoré už CLI parsera vykonávalo. V novom
+boote sa preto zoznamy neuzavreli a sokety vyšli nulové. Po oprave sa príznaky
+vypočítali znova; posledná snímka má uzavreté prechody procesov, modulov
+a soketov. Kernelová kontrola textu ostáva bez baseline tohto bootu neuzavretá.
+
+Staršie tréningové artefakty, vrátane
+`data/results/trenovanie_prediktor_4idle_20261006.json`, sa nemenia. Ich
+príznaky treba znovu overiť a vygenerovať opravenou cestou pred novým tréningom;
+pôvodný checkpoint nie je validovaný model nového laboratória. Ani skorší
+`data/results/detector_offline_smoke_20261006T131628600669Z.json` nedokazuje
+správnosť objektových počtov — overoval dokončenie výpočtu a počet výstupov.

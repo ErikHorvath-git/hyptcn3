@@ -217,13 +217,14 @@ ADRESARE = [
      "guestparse/view.py", None),
     ("features/", "per-bin príznakový vektor (referencia), okná, normalizácia",
      "features/perbin.py", None),
-    ("tcn/", "model (Temporal Convolutional Network), baseliny, tréning "
-     "a skórovanie snímok; model natrénovaný nie je a skóre nie je detekcia",
+    ("tcn/", "TCN, prediktor normálu, baseliny, tréning a skórovanie snímok",
      "tcn/score.py", None),
     ("profiles/", "profil jadra hosťa: symboly a offsety polí štruktúr",
      "profiles/*/README.md", "jeden adresár na boot hosťa — pozri L17"),
     ("scripts/", "root behy, príkazy v hosťovi, kontroly tvrdení",
      "scripts/root_run.sh", None),
+    ("lab/", "trvalé benígne API služby, PostgreSQL a nginx vo VM",
+     "lab/services.py", None),
     ("data/", "výsledkové JSONy z meraní (`data/results/`) a pozemná pravda "
      "odobratá v hosťovi (`data/sessions/`); samotné snímky `.vmicd` sú mimo "
      "gitu (`data/raw/`)",
@@ -1008,6 +1009,7 @@ DOKUMENTY = [
     ("docs/kontroly.md", "kontroly podozrivých vzorcov a validačný príkaz"),
     ("HONESTY.md", "pravidlá pre čísla a slová v texte práce"),
     ("README.md", "rozcestník repozitára a pôvod prevzatého kódu"),
+    ("docs/LAB.sk.md", "serverové laboratórium, premávka z hostiteľa a RAM zber"),
     ("vmicollect/README.md", "zberač zvnútra: vrstvy, hooky, formáty"),
     ("guestparse/README.md", "parser zvnútra: preklad adries, prechod zoznamami"),
     ("features/PERBIN.md", "definícia príznakov a ich kontrakt"),

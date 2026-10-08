@@ -21,3 +21,6 @@ vmicollect-index.csv
 # testovacie VM disky a definicie (blok A1) - do gitu nepatria
 vms/
 *.qcow2
+
+# Runtime lab traffic and local state; validation artifacts go to data/results.
+data/lab/
