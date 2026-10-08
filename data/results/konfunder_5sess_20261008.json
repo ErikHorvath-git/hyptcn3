@@ -1,0 +1,126 @@
+{
+ "schema": "hyptcn3/konfunder/1",
+ "date": "2026-10-08",
+ "commit": "23c5999dd194ce52779d3ad7f26769111cc5d610",
+ "command": "konfunder + per-priznak chyby na 5 sedeniach (4 idle + 1 lab), dlzka 6",
+ "host": "Fedora Linux 43, jadro 7.2.5-100.fc43.x86_64",
+ "guest": "hyptcn-guest + hyptcn-lab",
+ "n": 73,
+ "values": {
+  "plny_model": {
+   "parametrov": 5734,
+   "mse_train": 0.007290617562830448,
+   "mse_test": 3.334287405014038,
+   "mse_na_var": 0.7254049181938171,
+   "recepcne_pole": 29
+  },
+  "mem_only": {
+   "mse_na_var": 0.767,
+   "mse_test": 7.453,
+   "dlzka": 6
+  },
+  "per_priznak_lab_vs_idle": {
+   "mem_changed_ratio": {
+    "lab_median": 14.490452591266344,
+    "idle_median": 0.015779545600928212,
+    "pomer": 918.3060753291883
+   },
+   "mem_bins_active": {
+    "lab_median": 45.02615227333712,
+    "idle_median": 0.7093847656107768,
+    "pomer": 63.47211619997199
+   },
+   "mem_changed_max": {
+    "lab_median": 0.5141990312286354,
+    "idle_median": 0.031230018247028108,
+    "pomer": 16.464896919410776
+   },
+   "mem_changed_p95": {
+    "lab_median": 11.820907181666156,
+    "idle_median": 0.004065382844535769,
+    "pomer": 2907.698397348848
+   },
+   "mem_changed_spread": {
+    "lab_median": 2.6698459906007166,
+    "idle_median": 0.6515253251378226,
+    "pomer": 4.097839159262063
+   },
+   "mem_entropy_mean": {
+    "lab_median": 5.8005784257670046,
+    "idle_median": 1.384341278060322,
+    "pomer": 4.190136144675625
+   },
+   "mem_entropy_max": {
+    "lab_median": 2.60230871517794,
+    "idle_median": 3.0654938932903417,
+    "pomer": 0.8489035717454185
+   },
+   "mem_zero_ratio": {
+    "lab_median": 5.496590050200686,
+    "idle_median": 0.002344004207040441,
+    "pomer": 2344.9574167534133
+   },
+   "proc_total": {
+    "lab_median": 0.16444751626887327,
+    "idle_median": 0.0012370819042597193,
+    "pomer": 132.931793523631
+   },
+   "proc_user": {
+    "lab_median": 2.113671185873085,
+    "idle_median": 0.010575491322162095,
+    "pomer": 199.86505794238198
+   },
+   "proc_kernel": {
+    "lab_median": 7.829866693104025,
+    "idle_median": 0.03494750438191838,
+    "pomer": 224.0465186737382
+   },
+   "proc_new": {
+    "lab_median": 0.8480376722499172,
+    "idle_median": 0.00019740435444668428,
+    "pomer": 4295.942075983731
+   },
+   "proc_gone": {
+    "lab_median": 3.5209885650682335,
+    "idle_median": 5.8290591287125756e-06,
+    "pomer": 604040.6328569686
+   },
+   "mod_total": {
+    "lab_median": 15.936954722462364,
+    "idle_median": 5.099207353451846e-06,
+    "pomer": 3125378.8320010244
+   },
+   "mod_delta": {
+    "lab_median": 0.004038640533143852,
+    "idle_median": 2.401647202111834e-05,
+    "pomer": 168.16127404527046
+   },
+   "sock_total": {
+    "lab_median": 5.683148050349278,
+    "idle_median": 0.01330040735512152,
+    "pomer": 427.29127752323296
+   },
+   "sock_listen": {
+    "lab_median": 9.217271612434704,
+    "idle_median": 0.016232949229450143,
+    "pomer": 567.8125078905899
+   },
+   "sock_estab": {
+    "lab_median": 1.254096407689235,
+    "idle_median": 0.0190463326925721,
+    "pomer": 65.84450812299006
+   },
+   "chk_syscall_hooks": {
+    "lab_median": 1.5248026092322957,
+    "idle_median": 0.021465117745795625,
+    "pomer": 71.03630305177147
+   },
+   "chk_crossview": {
+    "lab_median": 1.069919922020498,
+    "idle_median": 0.011596374356731087,
+    "pomer": 92.263313438089
+   }
+  },
+  "poznamka": "mem_* samotne daju mse/var 0.767 vs plny 0.725, ale test MSE 7.45 vs 3.33 (2.2x) - zatazovy footprint sam NESTACI, plny vektor generalizuje lepsie na prevadzku; POZOR na rozdiel distribucii: lab VM bezi serverovy stack (nginx/auth/orders/postgres), idle guest nie - oddelenie preto NIE JE cisto 'prevadzka vs idle', ale ciastocne 'stack vs prazdna VM'. Finalny model sa musi trenovat na VLASTNYCH benignych zberoch labu a anomaly sa bude injektovat do labu."
+ }
+}
