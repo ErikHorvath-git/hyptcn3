@@ -1,0 +1,44 @@
+{
+ "schema": "hyptcn3/trenovanie-prediktor/1",
+ "date": "2026-10-08T10:06:49Z",
+ "commit": "19b48c84676f47c69f542ab830e7db01564fe7ea",
+ "command": "trenovanie na 4 idle + 1 lab-traffic (24 snimok zberu so 3062 HTTP req), dlzka okna 8, split 60/40 (lab v teste)",
+ "host": "Fedora Linux 43, jadro 7.2.5-100.fc43.x86_64",
+ "guest": "hyptcn-guest (4x idle) + hyptcn-lab (traffic, KASLR preukotveny)",
+ "n": 60,
+ "dlzka_okna": 8,
+ "values": {
+  "tcn_prediktor": {
+   "parametrov": 5734,
+   "mse_train": 0.0051954216323792934,
+   "mse_test": 4.015655994415283,
+   "mse_na_var": 0.8385283946990967,
+   "recepcne_pole": 29
+  },
+  "gru_prediktor": {
+   "parametrov": 5819,
+   "mse_train": 0.00018134167476091534,
+   "mse_test": 5.324222564697266,
+   "mse_na_var": 1.1117764711380005
+  },
+  "zscore": {
+   "parametrov": 20,
+   "skore_test": {
+    "n": 24,
+    "median": 8e+23,
+    "p95": 8e+23,
+    "max": 8e+23
+   }
+  },
+  "iforest": {
+   "parametrov": "n/a (sklearn)",
+   "skore_test": {
+    "n": 24,
+    "median": 0.17193454596474134,
+    "p95": 0.18982032976599272,
+    "max": 0.19171412453227277
+   }
+  },
+  "poznamka": "mse_na_var ~1 = na idle sa model nic nenauci; lab test = signal, ci sa prevadzka od idle lisi"
+ }
+}
