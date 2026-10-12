@@ -83,10 +83,11 @@ def nacitaj_sedenia(adresar_sessions, adresar_raw, profil, dlzka=DLZKA_OKNA):
             out[meno] = {"label": label, "typ": typ, "chyba":
                          r.stderr.strip()[-300:]}
             continue
-        data = np.load(npz, allow_pickle=False)
+        from features.archive import load
+        data = load(npz)
         matica = np.asarray(data["matica"], dtype=np.float64)
-        snimky = snimky_z_matice(meno, matica, MENA)
-        o = okna(snimky, dlzka=dlzka)
+        snimky = snimky_z_matice(meno, matica, MENA, data["casy"], data["seq"], data["valid"])
+        o = okna(snimky, dlzka=dlzka, max_medzera_s=float(data["max_medzera_s"]))
         out[meno] = {
             "label": label, "typ": typ,
             "okien": len(o),

@@ -1,4 +1,4 @@
-.PHONY: build test check lab-up lab-status lab-stop lab-test lab-traffic-stop
+.PHONY: build test check lab-up lab-status lab-stop lab-test lab-traffic-stop collection-plan
 
 build:
 	$(MAKE) -C vmicollect
@@ -24,3 +24,6 @@ lab-test:
 
 lab-traffic-stop:
 	python3 scripts/labctl.py traffic-stop
+
+collection-plan:
+	python3 scripts/collection.py plan

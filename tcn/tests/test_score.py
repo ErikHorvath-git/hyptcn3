@@ -109,7 +109,7 @@ def test_prediction_cli_uses_training_window(monkeypatch, tmp_path):
 def test_skore_az_z_plneho_okna(dlzka, monkeypatch, tmp_path):
     """Skore vznikne presne vtedy, ked je v okne dlzka snimok - ani skor."""
     monkeypatch.setattr(score, "vektor_snimky",
-                        lambda *a, **k: ([0.1] * len(MENA), None, []))
+                        lambda *a, **k: ([0.1] * (len(MENA) - 2) + [1., 0.], None, []))
     for seq in range(5):
         _sidecar(tmp_path, seq)
     zaznamy = score.beh(str(tmp_path), "profil-netreba", dlzka=dlzka,

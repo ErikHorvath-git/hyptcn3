@@ -98,7 +98,7 @@ from guestparse.view import build_view                     # noqa: E402
 
 from .perbin import FeatureError, _chain_parts             # noqa: E402
 
-SCHEMA = "hyptcn3/snapshot-vektor/1"
+SCHEMA = "hyptcn3/snapshot-vektor/2"
 
 MENA = (
     "mem_changed_ratio", "mem_bins_active", "mem_changed_max",
@@ -270,6 +270,14 @@ def objekty_z_pohladu(view):
     stav = {
         "pids": frozenset(pr["pid"] for pr in p["processes"]),
         "mod_total": m["count"],
+        "quality": {
+            "traversals_complete": not any(r["truncated"] for r in (p, m, s)),
+            "inconclusive": list(c["summary"]["inconclusive"]),
+            "findings": c["findings"],
+            # text integrity is a separate verdict, not one of the 22 columns.
+            "model_valid": not any(r["truncated"] for r in (p, m, s))
+                and not (set(c["summary"]["inconclusive"]) - {"text_integrity"}),
+        },
     }
     hodnoty = {
         "proc_total": p["count"],
@@ -303,12 +311,24 @@ def vektor_snimky(snapshot, profil, seq=None, predch=None):
     # retazci: pri output.delta_full_every je plna snimka aj uprostred.
     je_plna = 1 if heads[-1]["full"] else 0
     pamat = pamat_zo_sidecaru(sidecar_cesta(heads[-1]["path"]))
+    from .contract import validate_sidecar
+    with open(sidecar_cesta(heads[-1]["path"]), encoding="utf-8") as fh:
+        side = json.load(fh)
+    layout = validate_sidecar(side)
+    if predch is not None and predch.get("layout", layout) != layout:
+        raise FeatureError("zmena rozlozenia pamate pocas sedenia")
 
     view, img = build_view(snapshot, profil, until_seq=seq)
     try:
         obj, stav, pozn = objekty_z_pohladu(view)
     finally:
         img.close()
+
+    stav["layout"] = layout
+    stats = side.get("stats", {})
+    if stats.get("read_errors", 0) or stats.get("filled_zero", 0):
+        stav["quality"]["model_valid"] = False
+        pozn.append("chyby citania RAM: vektor sa nesmie skorovat")
 
     if predch is None:
         proc_new = proc_gone = mod_delta = 0
@@ -346,13 +366,13 @@ def _vsetky_hlavicky(snapshot):
                 continue
             try:
                 h = VmicdImage.header(os.path.join(snapshot, name))
-            except (ValueError, OSError):
-                continue
+            except (ValueError, OSError) as exc:
+                raise FeatureError("neplatna hlavicka snimky %s: %s" % (name, exc)) from exc
             podla_retazca.setdefault(h["chain_id"], []).append(h)
-        heads = []
-        for hlist in sorted(podla_retazca.values(),
-                            key=lambda hl: hl[0]["chain_id"]):
-            heads.extend(sorted(hlist, key=lambda h: h["seq"]))
+        heads = sorted((h for hs in podla_retazca.values() for h in hs),
+                       key=lambda h: h["seq"])
+        if len({h["seq"] for h in heads}) != len(heads):
+            raise FeatureError("duplicitne seq: adresar obsahuje viac zberov")
         return heads
     h = VmicdImage.header(snapshot)
     if not h["full"]:
@@ -367,7 +387,7 @@ def _vsetky_hlavicky(snapshot):
 # ------------------------------------------------------------ cely retazec
 
 
-def retazec(snapshot, profil):
+def retazec(snapshot, profil, max_medzera_s=7.5):
     """
     Cely retazec snimok: matica (cas x dlzka MENA) a mena priznakov.
 
@@ -381,15 +401,48 @@ def retazec(snapshot, profil):
     # potichu prisli o vsetko okrem posledneho useku.
     heads = _vsetky_hlavicky(snapshot)
     matica, snimky, poznamky, trvania = [], [], [], []
+    seqs, casy, quality, perbin, chains = [], [], [], [], []
+    biny, layout = None, None
     predch = None
+    previous = None
     for h in heads:
+        from .contract import validate_sidecar
+        from .windows import perbin_zo_sidecaru
+        sidepath = sidecar_cesta(h["path"])
+        with open(sidepath, encoding="utf-8") as fh:
+            side = json.load(fh)
+        current_layout = validate_sidecar(side)
+        if (side["seq"] != h["seq"] or side["output"]["full"] != h["full"]
+                or str(side["output"]["chain_id"]) != str(h["chain_id"])):
+            raise FeatureError("sidecar nepatri k hlavicke snimky")
+        if layout is not None and layout != current_layout:
+            raise FeatureError("zmena rozlozenia pamate pocas sedenia")
+        layout = current_layout
+        now = float(side["timestamp_unix"])
+        if previous is not None and (h["seq"] != previous[0] + 1
+                or not 0 < now - previous[1] <= max_medzera_s):
+            predch = None
         t0 = time.monotonic()
         vektor, stav, pozn = vektor_snimky(snapshot, profil, h["seq"], predch)
         trvania.append(time.monotonic() - t0)
         matica.append(vektor)
         snimky.append(os.path.basename(h["path"])[:-len(".vmicd")])
         poznamky.append(pozn)
-        predch = stav
+        ids, values = perbin_zo_sidecaru(sidepath)
+        if biny is not None and biny != ids:
+            raise FeatureError("zmena identity binov pocas sedenia")
+        biny = ids
+        perbin.append(values.tolist())
+        q = dict(stav["quality"])
+        q["read_errors"] = side["stats"]["read_errors"]
+        q["filled_zero"] = side["stats"]["filled_zero"]
+        q["model_valid"] = q["model_valid"] and not q["read_errors"] and not q["filled_zero"]
+        quality.append(q)
+        seqs.append(h["seq"])
+        casy.append(now)
+        chains.append(str(side["output"]["chain_id"]))
+        predch = stav if q["model_valid"] else None
+        previous = h["seq"], now
     return {
         "schema": SCHEMA,
         "mena": list(MENA),
@@ -397,4 +450,8 @@ def retazec(snapshot, profil):
         "snimky": snimky,
         "poznamky": poznamky,
         "trvanie_s": trvania,
+        "seq": seqs, "casy": casy, "quality": quality,
+        "valid": [q["model_valid"] for q in quality],
+        "perbin": perbin, "biny": list(biny or ()), "chain_ids": chains,
+        "layout": layout, "max_medzera_s": max_medzera_s,
     }

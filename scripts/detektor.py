@@ -30,6 +30,7 @@ import time
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from tcn.score import chyba_predikcie_okna, nacitaj_prediktor  # noqa: E402
+from features.stream import WindowStream, valid_state  # noqa: E402
 
 
 def alarm_pravidlo(skore, prah, k, n):
@@ -51,6 +52,7 @@ def main(argv=None):
     ap.add_argument("--cakaj", type=float, default=0.0,
                     help="0 = spracuj co je a skonci; >0 = zivy rezim")
     ap.add_argument("--out", default=None)
+    ap.add_argument("--max-medzera-s", type=float, default=None)
     a = ap.parse_args(argv)
 
     if (not math.isfinite(a.prah) or a.prah < 0 or not 1 <= a.k <= a.n
@@ -68,12 +70,12 @@ def main(argv=None):
     from tcn.score import nove_sidecary
     from features.snapshot import vektor_snimky
 
-    okno = collections.deque(maxlen=dlzka)
+    gap = a.max_medzera_s if a.max_medzera_s is not None else (checkpoint.get("max_medzera_s") or 7.5)
+    okno = WindowStream(dlzka, gap)
     retazce = collections.deque(maxlen=dlzka)
     skore_hist = collections.deque(maxlen=a.n)
     videne, predch = set(), None
     posledna = time.monotonic()
-    predch_seq = None
     drzane = set()
 
     while True:
@@ -86,22 +88,26 @@ def main(argv=None):
         posledna = time.monotonic()
         for seq, sid, cas_snimky in nove:
             t0 = time.monotonic()
-            if predch_seq is not None and seq != predch_seq + 1:
-                okno.clear()
+            if okno.discontinuity(seq, cas_snimky):
                 retazce.clear()
                 skore_hist.clear()
                 predch = None
-            predch_seq = seq
             sidecar = json.loads((Path(a.snapshots) / (sid + ".json")).read_text())
             chain_id = str(sidecar["output"]["chain_id"])
             vektor, predch, _ = vektor_snimky(a.snapshots, a.profile, seq,
                                               predch)
-            okno.append(vektor)
+            window = okno.push(seq, cas_snimky, vektor, valid_state(predch))
+            if okno.reset:
+                retazce.clear()
+                skore_hist.clear()
+            if not valid_state(predch):
+                predch = None
             retazce.append(chain_id)
-            if len(okno) < dlzka:
-                emit(seq=seq, stav="zahrievanie", okno=len(okno), potrebne=dlzka)
+            if window is None:
+                emit(seq=seq, stav="zahrievanie", dovod=okno.reason,
+                     okno=len(okno.rows), potrebne=dlzka)
                 continue
-            sk, _, _ = chyba_predikcie_okna(model, norm, okno)
+            sk, _, _ = chyba_predikcie_okna(model, norm, window)
             if not math.isfinite(sk):
                 raise ValueError("prediktor vratil nekonecne alebo NaN skore")
             skore_hist.append(sk)

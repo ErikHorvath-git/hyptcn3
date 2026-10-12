@@ -140,22 +140,28 @@ class Snimka:
     """
 
     __slots__ = ("session", "seq", "cas_unix", "x", "priznaky", "je_plna",
-                 "ma_predchodcu", "x_perbin", "biny")
+                 "ma_predchodcu", "x_perbin", "biny", "valid")
 
     def __init__(self, session, seq, x, priznaky, cas_unix=None,
-                 je_plna=False, ma_predchodcu=True, x_perbin=None, biny=None):
+                 je_plna=False, ma_predchodcu=True, x_perbin=None, biny=None,
+                 valid=True):
         self.session = str(session)
         self.seq = int(seq)
         self.cas_unix = None if cas_unix is None else float(cas_unix)
         self.priznaky = tuple(priznaky)
         self.je_plna = bool(je_plna)
         self.ma_predchodcu = bool(ma_predchodcu)
+        self.valid = bool(valid)
         x = np.asarray(x, dtype=np.float64)
         if x.shape != (len(self.priznaky),):
             raise WindowError(
                 "snimka %s/%d: vektor ma tvar %r, cakam (%d,)"
                 % (self.session, self.seq, x.shape, len(self.priznaky)))
         self.x = x
+        if not np.isfinite(x).all():
+            raise WindowError("snimka obsahuje NaN alebo nekonecny priznak")
+        if self.cas_unix is not None and not np.isfinite(self.cas_unix):
+            raise WindowError("neplatny cas snimky")
         if x_perbin is None:
             self.x_perbin = None
             self.biny = ()
@@ -181,6 +187,8 @@ class Snimka:
     def dovody(self):
         """Preco tento riadok nesmie byt v okne; prazdne = smie."""
         d = []
+        if not self.valid:
+            d.append("neuplne meranie")
         if self.je_plna:
             d.append(DOVOD_PLNA)
         if not self.ma_predchodcu:
@@ -265,7 +273,7 @@ class Okna:
                    self.b, len(self.preskocene), len(self.vynechane)))
 
 
-def snimky_z_matice(session, matica, priznaky, casy=None):
+def snimky_z_matice(session, matica, priznaky, casy=None, seqs=None, valid=None):
     """Riadky matice (T, F) jedneho sedenia ako zoznam Snimok.
 
     `je_plna` a `ma_predchodcu` sa citaju Z MATICE - su sucastou kontraktu
@@ -291,17 +299,21 @@ def snimky_z_matice(session, matica, priznaky, casy=None):
                           % (len(casy), len(X)))
     i_plna = priznaky.index(STLPEC_PLNA)
     i_pred = priznaky.index(STLPEC_PREDCHODCA)
+    for name, values in (("seq", seqs), ("valid", valid)):
+        if values is not None and len(values) != len(X):
+            raise WindowError("%s: pocet hodnot nesedi s maticou" % name)
     out = []
     for seq, riadok in enumerate(X):
         for i, meno in ((i_plna, STLPEC_PLNA), (i_pred, STLPEC_PREDCHODCA)):
             if riadok[i] not in (0.0, 1.0):
                 raise WindowError("session %s, riadok %d: %s = %r, cakam 0/1"
                                   % (session, seq, meno, riadok[i]))
-        out.append(Snimka(session=session, seq=seq, x=riadok,
+        out.append(Snimka(session=session, seq=seq if seqs is None else seqs[seq], x=riadok,
                           priznaky=priznaky,
                           cas_unix=None if casy is None else casy[seq],
                           je_plna=riadok[i_plna] == 1.0,
-                          ma_predchodcu=riadok[i_pred] == 1.0))
+                          ma_predchodcu=riadok[i_pred] == 1.0,
+                          valid=True if valid is None else valid[seq]))
     return out
 
 
@@ -312,12 +324,19 @@ def segmenty(snimky, max_medzera_s=None):
     v hlavicke modulu. Riadky, ktore v okne byt nesmu, sa TU nerezu - su to
     plnohodnotne casove kroky a zamieta sa az cele okno (pozri okna()).
     """
+    if max_medzera_s is not None and (not np.isfinite(max_medzera_s) or max_medzera_s <= 0):
+        raise WindowError("max_medzera_s musi byt kladna a konecna")
     usek = []
     out = []
     predch = None
     for s in snimky:
         rez = False
         if predch is not None:
+            if s.session == predch.session and s.seq <= predch.seq:
+                raise WindowError("duplicitne alebo neusporiadane seq")
+            if (s.session == predch.session and s.cas_unix is not None
+                    and predch.cas_unix is not None and s.cas_unix <= predch.cas_unix):
+                raise WindowError("cas snimok nie je rastuci")
             if s.session != predch.session:
                 rez = True
             elif s.seq != predch.seq + 1:
@@ -487,7 +506,7 @@ def perbin_zo_sidecaru(path):
             if meno not in r:
                 raise WindowError("sidecar %s: bin %s nema pole %r"
                                   % (path, r.get("bin"), meno))
-        if int(r["has_changed"]) not in (0, 1):
+        if r["has_changed"] not in (0, 1):
             raise WindowError("sidecar %s: bin %s ma has_changed=%r, cakam 0/1"
                               % (path, r["bin"], r["has_changed"]))
         if int(r["has_changed"]) == 0 and float(r["entropy_mean"]) != 0.0:
@@ -495,5 +514,10 @@ def perbin_zo_sidecaru(path):
                 "sidecar %s: bin %s ma has_changed=0, ale entropy_mean=%r; "
                 "podla kontraktu (features/PERBIN.md) ma byt 0"
                 % (path, r["bin"], r["entropy_mean"]))
-        matica.append([float(r[m]) for m in BIN_PRIZNAKY])
+        values = [float(r[m]) for m in BIN_PRIZNAKY]
+        if "pages_changed" in r and "pages_total" in r:
+            values[0] = r["pages_changed"] / r["pages_total"] if r["pages_total"] else 0.0
+        if not np.isfinite(values).all():
+            raise WindowError("nekonecny alebo NaN per-bin priznak")
+        matica.append(values)
     return biny, np.asarray(matica, dtype=np.float64)

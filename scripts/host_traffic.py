@@ -97,9 +97,11 @@ def worker(args, index, stop, metrics):
                 request(args.target, path, metrics)
             else:
                 choice = rng.random()
-                if choice < .5:
+                catalog_share = getattr(args, "catalog_share", .5)
+                write_share = getattr(args, "write_share", .2)
+                if choice < catalog_share:
                     request(args.target, "/api/catalog", metrics)
-                elif choice < .75:
+                elif choice < .95 - write_share:
                     request(args.target, "/api/orders", metrics, token=token)
                 elif choice < .95:
                     request(args.target, "/api/orders", metrics, "POST",
@@ -117,10 +119,15 @@ def main(argv=None):
     parser.add_argument("--vlakien", type=int, default=8)
     parser.add_argument("--burst", type=float, default=1)
     parser.add_argument("--profile", choices=["legacy", "lab"], default="legacy")
+    parser.add_argument("--catalog-share", type=float, default=.5)
+    parser.add_argument("--write-share", type=float, default=.2)
     parser.add_argument("--out", type=Path, help="atomic JSON metrics, refreshed every 5 seconds")
     args = parser.parse_args(argv)
     if not math.isfinite(args.dur) or args.dur < 0 or not 1 <= args.vlakien <= 64 or not 0 <= args.burst <= 1:
         parser.error("Require duration >= 0, 1..64 workers and burst in [0,1]")
+    if not (0 <= args.catalog_share <= .95 and 0 <= args.write_share <= .95
+            and args.catalog_share + args.write_share <= .95):
+        parser.error("catalog-share + write-share must be <= .95 and nonnegative")
     stop, metrics = threading.Event(), Metrics()
     for sig in (signal.SIGINT, signal.SIGTERM):
         signal.signal(sig, lambda *_: stop.set())

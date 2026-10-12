@@ -348,22 +348,12 @@ def cmd_session(args):
     """
     from .snapshot import MENA, SCHEMA, retazec
 
-    res = retazec(args.snapshot, args.profile)
+    res = retazec(args.snapshot, args.profile, args.max_medzera_s)
     mena, matica = res["mena"], res["matica"]
 
     if args.out:
-        import numpy as np
-        os.makedirs(os.path.dirname(os.path.abspath(args.out)), exist_ok=True)
-        np.savez(
-            args.out,
-            schema=SCHEMA,
-            matica=np.array(matica, dtype=np.float64),
-            mena=np.array(mena),
-            snimky=np.array(res["snimky"]),
-            trvanie_s=np.array(res["trvanie_s"], dtype=np.float64),
-            # Poznamka je text; prazdny retazec znamena "prechody sa uzavreli".
-            poznamky=np.array(["; ".join(p) for p in res["poznamky"]]),
-        )
+        from .archive import save
+        save(args.out, res)
         # np.savez si priponu .npz doplni samo; vypis musi ukazovat na subor,
         # ktory naozaj vznikol, nie na to, co bolo zadane
         print("zapisane: %s" % (args.out if args.out.endswith(".npz")
@@ -453,6 +443,8 @@ def build_parser():
                    help="adresar s kallsyms.txt a btf.txt")
     p.add_argument("--out", default=None, help="kam zapisat .npz")
     p.add_argument("--csv", default=None, help="kam zapisat citatelny .csv")
+    p.add_argument("--max-medzera-s", type=float, default=7.5,
+                   help="najvacsia pripustna medzera pri periode zberu 5 s")
     p.set_defaults(func=cmd_session)
     return ap
 

@@ -1147,3 +1147,14 @@ zmenený oproti prevzatej verzii je `bpf/vmic_kvm.bpf.c` — štyri opravy potre
 aby program prešiel verifikátorom. Balík `guestparse` vznikol rozdelením prototypu
 `vmi_parse.py` (2026-09-18) do modulov; poznámka o pôvode je v hlavičke
 `guestparse/__init__.py` a `guestparse/image.py`.
+
+Integračný balík `safeguard/` vznikol pre tento projekt. Spája existujúci
+zberač a parser s jednotnou tvorbou vstupov, normalizáciou, explicitnými
+rolami korpusu, verziovaným uložením modelov a hostiteľským detektorom.
+`safeguard/model.py` používa kauzálne dilatované bloky z `tcn/model.py`,
+ktoré implementujú architektúrny princíp TCN podľa Bai, Kolter a Koltun
+(2018); zdieľaná per-bin vetva, spojenie chýb, klasifikátor záťaže a ich
+integrácia sú zapísané v tomto repozitári. Nejde o prevzatie cudzích
+natrénovaných váh. Kontrakt, príkazy a hranice overenia opisuje
+[`SAFEGUARD.sk.md`](SAFEGUARD.sk.md). Syntetický integračný test nie je
+experimentom účinnosti voči malvéru.

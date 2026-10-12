@@ -138,8 +138,7 @@ baseliny `tcn/baselines.py`, metriky `tcn/eval.py`. Okno vojde, jedno číslo vy
 
 Prepínače: @@PREPINACE_VMIC@@.
 
-Podpríkazy `python3 -m guestparse`: @@PODPRIKAZY_GUESTPARSE@@.
-Podpríkazy `python3 -m features`: @@PODPRIKAZY_FEATURES@@.
+Podpríkazy: `python3 -m guestparse` — @@PODPRIKAZY_GUESTPARSE@@; `python3 -m features` — @@PODPRIKAZY_FEATURES@@.
 
 **Konfiguračné kľúče** (`vmicollect config --keys`, prebijú sa cez `-o sekcia.kluc=hodnota`):
 
@@ -176,13 +175,13 @@ Commity, z ktorých merania pochádzajú:
 
 ## 8. Čo nefunguje a čo ešte nie je
 
-Skórovanie (`tcn/score.py`) beží, model natrénovaný nie je, takže jeho výstup nie je
-detekcia. Živá latencia snímka → skóre, teda meraná počas zberu, meraná nie je; odmerané
+Balík `safeguard/` spája tréning, normalizáciu, načítanie a detektor (`docs/SAFEGUARD.sk.md`).
+Model pre serverový lab ešte vyžaduje plánovaný korpus a nezávislé vyhodnotenie.
+Živá latencia snímka → skóre, teda meraná počas zberu, meraná nie je; odmerané
 je len spracovanie nad uloženou snímkou (`data/results/latency_score_20260919.json`).
 Slovo „real-time“ v názve práce preto znamená periodický zber s meraným časom cyklu.
-Presnosť voči malvérovým vzorkám sa merať nebude: vzorky nie sú k dispozícii
-a **nenahrádzajú sa ničím** — napísané syntetické scenáre sa na tréning vedome nepoužili,
-lebo model natrénovaný na nich by klasifikoval scenáre autora, nie malvér (L16). Pri
+Presnosť voči reálnym malvérovým vzorkám zatiaľ nebola meraná; syntetický scenár
+sa za také meranie nevydáva. Plán ďalšej etapy je v `docs/METODIKA_ZBERU.sk.md`. Pri
 načítaní BPF programu sa objaví nefatálne `@@LIBBPF@@` — zber funguje, príčina neznáma.
 
 Ostatné obmedzenia vlastní `docs/LIMITACIE.md` (@@LIMITACIE@@); prerozprávať ich tu by
@@ -191,8 +190,6 @@ znamenalo držať dve znenia toho istého. Nadpisy sú preto dosadené z neho, s
 @@LIMITACIE_NADPISY@@
 
 ## 9. Kam ďalej
-
-Každý typ faktu má jeden dokument, ktorý ho vlastní; keď si odporujú, platí tabuľka.
 
 | dokument | čo vlastní | riadkov |
 |---|---|---|

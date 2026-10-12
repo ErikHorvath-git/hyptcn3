@@ -849,3 +849,60 @@ príznaky treba znovu overiť a vygenerovať opravenou cestou pred novým tréni
 pôvodný checkpoint nie je validovaný model nového laboratória. Ani skorší
 `data/results/detector_offline_smoke_20261006T131628600669Z.json` nedokazuje
 správnosť objektových počtov — overoval dokončenie výpočtu a počet výstupov.
+
+
+## 2026-10-13 — metodika korpusu a zhodnosť offline/stream okien
+
+Protokol a návrh príznakov sú v `docs/METODIKA_ZBERU.sk.md`, vykonateľné
+parametre v `config/collection-v1.json`. Ide o plán zberu, nie nový tréning
+ani meranie účinnosti detekcie. Nový privilegovaný runner zatiaľ neprešiel
+živým pilotom; protokol má preto stav `pilot_required`.
+
+Nad pôvodným zberom laboratória sa zopakovala extrakcia a porovnalo sa
+offline skladanie okien s cestou `tcn.score.beh_predikcia`. Použil sa
+historický idle checkpoint výlučne na porovnanie mechaniky. Artefakt:
+`data/results/methodology_validation_20261012T221950635871Z.json`.
+Z 24 {{res:methodology_validation_20261012T221950635871Z.json:values.snapshots}}
+snímok bolo pri uloženom okne 8 {{res:methodology_validation_20261012T221950635871Z.json:values.window_rows}}
+v oboch cestách 12 {{res:methodology_validation_20261012T221950635871Z.json:values.offline_windows}}
+skórovateľných okien. Koncové sekvencie a skóre sa zhodovali presne.
+Archív zároveň zachoval pôvodné sekvencie, časy, kvalitu prechodov a per-bin tenzor.
+
+Oprava: živá cesta predtým používala aj okná obsahujúce plnú snímku;
+tréning ich vylučoval. Teraz obe cesty používajú rovnaké pravidlá.
+Do nového tréningového importu sa neprijme starý archív bez časov a kvality;
+musí sa znovu odvodiť zo surových dát. Historické artefakty sa nemenia.
+
+Krátky zber nie je prijatý do nového korpusu: chýba mu nová proveniencia
+a dostatočne dlhé okná podľa plánovaného protokolu. Toto je očakávané
+zamietnutie, nie zlyhanie pôvodného funkčného overenia. Ani zhodné skóre
+nepotvrdzuje detekciu malvéru, kalibráciu, dostupnosť baseline textu jadra
+alebo latenciu počas živého zberu.
+
+## Integrovaný safeguard — diagnostické overenie softvéru, október 2026
+
+Artefakt: `data/results/safeguard_validation_20261013_a.json`. Reprodukčný
+príkaz aj hashe vstupných RAM súborov, zdrojového kódu, archívu príznakov
+a modelového manifestu sú uložené v artefakte. Beh vykonal
+`scripts/validate_safeguard.py`; výstupy sú v
+`data/lab/safeguard-validation-20261013-a`.
+
+Čerstvý syntetický korpus overil tréning prediktora a klasifikátora záťaže,
+oddelenie rolí, kalibráciu, uloženie, načítanie a odmietnutie diagnostického
+balíka pri bežnom načítaní. Tieto modely sa použili výlučne na skúšku
+spracovania už uložených RAM snímok. Modely neboli natrénované na prevádzke
+serverového labu a ich alarmy nie sú meraním falošných poplachov.
+
+Prehralo sa 24 {{res:safeguard_validation_20261013_a.json:values.real_replay_rows}}
+reálnych snímok; skórovateľných bolo
+12 {{res:safeguard_validation_20261013_a.json:values.real_replay_scored}}
+okien. Skóre, chyby jednotlivých binov a pravdepodobnosti klasifikácie
+sa presne zhodovali medzi archivovanými príznakmi a opakovanou extrakciou
+zo surovej RAM cez nový detektor. Plné snímky prerušili modelové okná.
+Prehratie nemenilo pôvodný zber a nespúšťalo príkaz HOLD.
+
+Toto overuje prepojenie softvéru. Nový spoločný privilegovaný beh zberača
+a detektora je zatiaľ UNVERIFIED na živom hosťovi; jeho riadenie procesov
+a chybové vetvy overujú testy s náhradným procesom. Živý pilot, tréning
+na plánovanom korpuse, nezávislé metriky a merania reálnych malvérových
+vzoriek zostávajú ďalšou etapou.

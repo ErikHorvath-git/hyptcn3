@@ -36,6 +36,7 @@ from features.normalize import Normalizer                  # noqa: E402
 from features.perbin import FeatureError                    # noqa: E402
 from features.snapshot import MENA, vektor_snimky           # noqa: E402
 from features.windows import DLZKA_OKNA                     # noqa: E402
+from features.stream import WindowStream, valid_state        # noqa: E402
 from tcn.model import TCN, TCNPrediktor                     # noqa: E402
 
 SCHEMA = "hyptcn3/latencia-skore/1"
@@ -75,7 +76,7 @@ def skore(model, okno):
     Softmax preto, ze sa cisla daju vypisat vedla seba a sucet je 1. Nie je to
     pravdepodobnost niecoho - model nebol trenovany.
     """
-    x = torch.tensor([list(okno)], dtype=torch.float32)
+    x = torch.as_tensor(np.asarray(okno)[None, ...], dtype=torch.float32)
     with torch.no_grad():
         p = torch.softmax(model(x), dim=1)[0]
     return [float(v) for v in p]
@@ -120,7 +121,7 @@ def beh(adresar, profil, dlzka=DLZKA_OKNA, cakaj=0.0, perioda=0.5, vypis=print):
     vypis("dlzka okna     : %d snimok" % dlzka)
 
     model = model_bez_treningu(dlzka)
-    okno = collections.deque(maxlen=dlzka)
+    okno = WindowStream(dlzka)
     videne, zaznamy, predch = set(), [], None
     posledna = time.monotonic()
 
@@ -136,26 +137,31 @@ def beh(adresar, profil, dlzka=DLZKA_OKNA, cakaj=0.0, perioda=0.5, vypis=print):
         for seq, sid, cas_snimky in nove:
             videne_unix = time.time()
             t0 = time.monotonic()
+            if okno.discontinuity(seq, cas_snimky):
+                predch = None
             vektor, predch, pozn = vektor_snimky(adresar, profil, seq, predch)
             t_vektor = time.monotonic() - t0
 
-            okno.append(vektor)
+            window = okno.push(seq, cas_snimky, vektor, valid_state(predch))
+            if not valid_state(predch):
+                predch = None
             z = {"seq": seq, "id": sid, "timestamp_unix": cas_snimky,
                  "videne_unix": videne_unix,
                  "vektor_ms": round(t_vektor * 1000, 3),
-                 "model_ms": None, "skore": None, "okno_plne": len(okno) >= dlzka,
+                 "model_ms": None, "skore": None, "okno_plne": window is not None,
+                 "dovod": okno.reason,
                  "poznamky": list(pozn)}
 
             for p in pozn:
                 vypis("snimka %s: poznamka: %s" % (sid, p))
 
-            caka = cakam_text(len(okno), dlzka)
+            caka = cakam_text(len(okno.rows), dlzka)
             if caka:
                 vypis("snimka %s: vektor za %.0f ms; %s"
                       % (sid, t_vektor * 1000, caka))
             else:
                 t1 = time.monotonic()
-                s = skore(model, okno)
+                s = skore(model, window)
                 t_model = time.monotonic() - t1
                 hotovo = time.time()
                 z["model_ms"] = round(t_model * 1000, 3)
@@ -218,13 +224,13 @@ def chyba_predikcie_okna(model, norm, okno):
 
 
 def beh_predikcia(adresar, profil, dlzka, model, norm, cakaj=0.0, perioda=0.5,
-                  vypis=print):
+                  vypis=print, max_medzera_s=7.5):
     """Hlavna slucka pre predikcny rezim: skore = chyba predikcie okna."""
     vypis("rezim          : predikcia normalu (E2), skore = chyba predikcie")
     vypis("adresar snimok : %s" % adresar)
     vypis("dlzka okna     : %d snimok" % dlzka)
 
-    okno = collections.deque(maxlen=dlzka)
+    okno = WindowStream(dlzka, max_medzera_s)
     videne, zaznamy, predch = set(), [], None
     posledna = time.monotonic()
 
@@ -240,26 +246,30 @@ def beh_predikcia(adresar, profil, dlzka, model, norm, cakaj=0.0, perioda=0.5,
         for seq, sid, cas_snimky in nove:
             videne_unix = time.time()
             t0 = time.monotonic()
+            if okno.discontinuity(seq, cas_snimky):
+                predch = None
             vektor, predch, pozn = vektor_snimky(adresar, profil, seq, predch)
             t_vektor = time.monotonic() - t0
 
-            okno.append(vektor)
+            window = okno.push(seq, cas_snimky, vektor, valid_state(predch))
+            if not valid_state(predch):
+                predch = None
             z = {"seq": seq, "id": sid, "timestamp_unix": cas_snimky,
                  "videne_unix": videne_unix,
                  "vektor_ms": round(t_vektor * 1000, 3),
                  "model_ms": None, "skore": None, "chyby": None,
-                 "okno_plne": len(okno) >= dlzka,
+                 "okno_plne": window is not None, "dovod": okno.reason,
                  "poznamky": list(pozn)}
             for p in pozn:
                 vypis("snimka %s: poznamka: %s" % (sid, p))
 
-            caka = cakam_text(len(okno), dlzka)
+            caka = cakam_text(len(okno.rows), dlzka)
             if caka:
                 vypis("snimka %s: vektor za %.0f ms; %s"
                       % (sid, t_vektor * 1000, caka))
             else:
                 t1 = time.monotonic()
-                sk, chyby, _ = chyba_predikcie_okna(model, norm, okno)
+                sk, chyby, _ = chyba_predikcie_okna(model, norm, window)
                 t_model = time.monotonic() - t1
                 hotovo = time.time()
                 top = sorted(range(len(chyby)), key=lambda i: -chyby[i])[:3]
@@ -318,7 +328,8 @@ def main(argv=None):
                 ap.error("--dlzka sa musi zhodovat s oknom checkpointu (%d)" % ulozena_dlzka)
             a.dlzka = ulozena_dlzka
             zaznamy = beh_predikcia(a.snapshots, a.profile, a.dlzka,
-                                    model, norm, a.cakaj)
+                                    model, norm, a.cakaj, 0.5, print,
+                                    doc_modelu.get("max_medzera_s") or 7.5)
         else:
             doc_modelu = None
             a.dlzka = a.dlzka if a.dlzka is not None else DLZKA_OKNA

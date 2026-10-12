@@ -741,6 +741,15 @@ než periodické čítanie pamäte — a hook je v tejto práci notifikačný (L
 
 ## L16 — Presnosť detekcie malvéru nebola meraná a v tejto verzii sa merať nedá
 
+**Aktualizácia 2026-10-13:** nasledujúci text zachytáva historické rozhodnutie
+nepokračovať v zbere bez vzoriek. Aktuálny plán je v
+[`METODIKA_ZBERU.sk.md`](METODIKA_ZBERU.sk.md): najprv benígny korpus a tréning
+normálu, potom izolované testy. Malvér nie je podmienkou tréningu normálu.
+Staré tvrdenie, že sa korpus ani tréning nerobia, už neplatí. Presnosť voči
+reálnym vzorkám stále nie je zmeraná a zostáva otvorenou časťou zadania.
+
+### Historické zdôvodnenie pôvodného rozsahu
+
 **Fakt.** Na stroji, na ktorom táto práca vznikla, nie sú žiadne reálne malvérové vzorky.
 Bez nich sa nedá zmerať, ako dobre model odlíši malvér od bežnej záťaže. Zber korpusu ani
 tréning detekčného modelu sa preto v tejto verzii nerobia. Vetva zberu korpusu

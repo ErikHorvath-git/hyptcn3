@@ -6,6 +6,16 @@ Zadanie je v `zadanie-zp_105826.pdf`.
 
 ## Začni tu
 
+**Integrovaný safeguard:** [`docs/SAFEGUARD.sk.md`](docs/SAFEGUARD.sk.md).
+`python3 -m safeguard` poskytuje tréning, načítanie, prehrávanie a spoločný
+beh zberača s detektorom. `smoke` overuje mechaniku na syntetických dátach;
+nový korpus, živý spoločný beh a účinnosť detekcie zostávajú na overenie.
+
+**Metodika zberu a príznakov:** [`docs/METODIKA_ZBERU.sk.md`](docs/METODIKA_ZBERU.sk.md).
+`make collection-plan` vypíše pridelenie behov do tréningu, vývoja, kalibrácie
+a testu. Nové merania začínajú pilotom a auditom dát; staré krátke zbery
+nie sú automaticky súčasťou finálneho korpusu.
+
 **Serverové laboratórium:** `make lab-up` spustí samostatnú VM s nginx,
 API službami, PostgreSQL a premávkou z hostiteľa. Vstup je
 **http://127.0.0.1:18080**; `make lab-status`, `make lab-test` a `make lab-stop`

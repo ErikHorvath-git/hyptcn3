@@ -26,7 +26,7 @@
 # VYCHODZI ROZSAH zodpovedá prvej vete HONESTY.md ("thesis/, docs/, README.md,
 # komentare v zdrojakoch"): thesis/, docs/, README.md v koreni, vmicollect/README.md
 # a komentare v zdrojakoch (cely vmicollect/ okrem build/, guestparse/, scripts/,
-# features/, tcn/).
+# features/, tcn/, safeguard/).
 # Predtym to bolo iba thesis/ a docs/, takze korenovy README.md - subor
 # s hlavnymi namerannymi cislami - sa nekontroloval nikdy.
 #
@@ -552,7 +552,7 @@ if [ "${#ARGS[@]}" -gt 0 ]; then
   TARGETS=("${ARGS[@]}")
 else
   DEFAULT_SCOPE=1
-  for t in thesis docs README.md vmicollect guestparse scripts features tcn; do
+  for t in thesis docs README.md vmicollect guestparse scripts features tcn safeguard; do
     [ -e "$REPO_DIR/$t" ] && TARGETS+=("$REPO_DIR/$t")
   done
 fi

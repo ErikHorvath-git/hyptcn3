@@ -34,12 +34,15 @@ už poznáme; značka zachytí aj nové nepodložené číslo. `check_claims.sh`
 bez značky a každú značku, ktorej súbor alebo kľúč neexistuje, aj rozdiel medzi hodnotou
 v texte a hodnotou v JSON.
 
-### P4 — Detekčné výsledky sa volajú syntetické scenáre správania
+### P4 — Scenár správania nie je reálna malvérová vzorka
 
-Žiadna tabuľka, graf ani veta o detekcii sa nesmie nazvať výsledkom nad malvérom.
-Triedy sa pomenúvajú podľa správania (`cpu_burn`, `mass_file_rewrite`, `proc_scan`,
-`anon_exec`, `idle`, `mixed_work`), nie podľa rodín malvéru. Veta „presnosť voči reálnym
-malvérovým vzorkám nebola meraná“ patrí do abstraktu, do kapitoly o testovaní aj do záveru.
+Výsledky syntetických scenárov sa pomenúvajú podľa správania (`cpu_burn`,
+`mass_file_rewrite`, `proc_scan`, `anon_exec`, `idle`, `mixed_work`), nie podľa
+rodín malvéru. Výsledok nad reálnymi vzorkami sa smie uviesť až s doloženým
+pôvodom, hashom, izolovaným behom, overenou aktiváciou a nezávislým testom.
+Neaktivovaná vzorka sa nepočíta ako detegovaná. Kým také merania neexistujú,
+veta „presnosť voči reálnym malvérovým vzorkám nebola meraná“ patrí do abstraktu,
+kapitoly o testovaní aj záveru. Metodiku ďalšej etapy určuje `docs/METODIKA_ZBERU.sk.md`.
 
 ### P5 — „Funguje“ vyžaduje výstup behu z tohto repa
 

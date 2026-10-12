@@ -84,6 +84,15 @@ from tcn.model import TCN, TCNPrediktor, pocet_parametrov                 # noqa
 BENIGNA = "idle"
 
 
+def _max_gap(sessions):
+    values = {float(s["max_medzera_s"]) for s in sessions if "max_medzera_s" in s}
+    if not values:
+        return None  # synthetic in-memory test data
+    if len(values) != 1 or any("max_medzera_s" not in s for s in sessions):
+        raise ValueError("mixed temporal contracts")
+    return values.pop()
+
+
 def nastav_seed(seed):
     """Fixny seed pre numpy aj torch. Beh je CPU-only, takze to staci."""
     np.random.seed(seed)
@@ -99,13 +108,14 @@ def nacitaj_sessions(adresar):
         labely = json.load(fh)
     out = []
     for meno in sorted(labely):
-        d = np.load(os.path.join(adresar, meno + ".npz"), allow_pickle=False)
+        from features.archive import load
+        d = load(os.path.join(adresar, meno + ".npz"))
         mena = tuple(str(m) for m in d["mena"])
         if mena != tuple(MENA):
             raise ValueError("session %s ma ine poradie priznakov nez kontrakt"
                              % meno)
         out.append({"meno": meno, "trieda": labely[meno],
-                    "matica": np.asarray(d["matica"], dtype=np.float64)})
+                    **{k: d[k] for k in ("matica", "seq", "casy", "valid", "max_medzera_s")}})
     if not out:
         raise ValueError("v %s nie je ziadna session" % adresar)
     return out
@@ -185,8 +195,8 @@ def priprav(sessions, dlzka=DLZKA_OKNA, podiel=0.6, benigna=BENIGNA):
     tr_mena, te_mena = split_chronologicky(sessions, podiel)
     labely = {s["meno"]: s["trieda"] for s in sessions}
 
-    snimky = [sn for s in sessions
-              for sn in snimky_z_matice(s["meno"], s["matica"], MENA)]
+    from features.archive import snapshots
+    snimky = [sn for s in sessions for sn in snapshots(s)]
 
     # Normalizacia: fit iba na benignych trenovacich sedeniach a iba z
     # riadkov, ktore sa aj do okien dostanu. Riadok plnej snimky ma v
@@ -201,7 +211,7 @@ def priprav(sessions, dlzka=DLZKA_OKNA, podiel=0.6, benigna=BENIGNA):
              sessions_fit=fit_mena, labely=labely,
              benigna_trieda=benigna, dlzka_okna=dlzka)
 
-    vsetky = okna(snimky, dlzka=dlzka)
+    vsetky = okna(snimky, dlzka=dlzka, max_medzera_s=_max_gap(sessions))
     casti = {}
     for cast, mena in (("train", tr_mena), ("test", te_mena)):
         o = vsetky.vyber_sessions(mena)
@@ -327,17 +337,18 @@ def priprav_predikcia(sessions, dlzka=DLZKA_OKNA, podiel=0.6):
                          % (podiel, len(mena)))
     tr_mena, te_mena = mena[:k], mena[k:]
 
-    snimky = [sn for s in sessions
-              for sn in snimky_z_matice(s["meno"], s["matica"], MENA)]
+    from features.archive import snapshots
+    snimky = [sn for s in sessions for sn in snapshots(s)]
     # normalizacia: fit IBA na trenovacich (vsetky benigne - zmluva rezimu)
     norm = Normalizer(priznaky=MENA,
                       nenormalizovane=("ma_predchodcu", "je_plna"))
     norm.fit([sn for sn in snimky if not sn.dovody()],
              sessions_fit=tr_mena, dlzka_okna=dlzka)
 
-    vsetky = okna(snimky, dlzka=dlzka)
+    vsetky = okna(snimky, dlzka=dlzka, max_medzera_s=_max_gap(sessions))
     data = {"train_sessions": tr_mena, "test_sessions": te_mena,
-            "dlzka_okna": dlzka, "normalizacia": norm}
+            "dlzka_okna": dlzka, "normalizacia": norm,
+            "max_medzera_s": _max_gap(sessions)}
     for cast, cm in (("train", tr_mena), ("test", te_mena)):
         o = vsetky.vyber_sessions(cm)
         if not len(o):
@@ -559,6 +570,7 @@ def _uloz_prediktor(cesta, data, vysledky):
                  "priznakov": data["X_train"].shape[2],
                  "dlzka_okna": data["dlzka_okna"],
                  "recepcne_pole": model.rf,
+                 "max_medzera_s": data.get("max_medzera_s"),
                  "mse_test": vysledky["tcn_prediktor"]["mse_test"]},
                 cesta)
     data["normalizacia"].save(cesta + ".manifest.json")
