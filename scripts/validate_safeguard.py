@@ -35,7 +35,8 @@ def main():
     a.out.mkdir(parents=True, exist_ok=False)
     torch.set_num_threads(4)
     print("Extracting saved real RAM; no live collector is started.", flush=True)
-    extracted = retazec(str(a.raw.resolve()), str(a.profile.resolve()))
+    extracted = retazec(str(a.raw.resolve()), str(a.profile.resolve()),
+                       quality_policy="behavioral-inputs-v1")
     archive = save(a.out / "real-features.npz", extracted)
     print("Training synthetic diagnostic models with matching memory geometry.", flush=True)
     demo = smoke(a.out / "synthetic", layout=extracted["layout"])

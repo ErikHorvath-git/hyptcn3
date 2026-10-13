@@ -348,7 +348,8 @@ def cmd_session(args):
     """
     from .snapshot import MENA, SCHEMA, retazec
 
-    res = retazec(args.snapshot, args.profile, args.max_medzera_s)
+    res = retazec(args.snapshot, args.profile, args.max_medzera_s,
+                  quality_policy=args.quality_policy)
     mena, matica = res["mena"], res["matica"]
 
     if args.out:
@@ -445,6 +446,8 @@ def build_parser():
     p.add_argument("--csv", default=None, help="kam zapisat citatelny .csv")
     p.add_argument("--max-medzera-s", type=float, default=7.5,
                    help="najvacsia pripustna medzera pri periode zberu 5 s")
+    p.add_argument("--quality-policy", choices=("legacy-vector-v1", "behavioral-inputs-v1"),
+                   default="legacy-vector-v1", help="platnost pre historicky alebo behavioralny model")
     p.set_defaults(func=cmd_session)
     return ap
 

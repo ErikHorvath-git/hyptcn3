@@ -22,7 +22,7 @@ def sample(seq=0, *, session="synthetic", full=False, predecessor=True,
                  vector,
                  [[.5, .5, 2., 1.], [0., 1., 0., 0.]] if perbin is None else perbin,
                  (0, 1),
-                 {"model_valid": valid, "traversals_complete": valid,
+                 {"model_valid": valid, "behavior_valid": valid, "traversals_complete": valid,
                   "inconclusive": ["text_integrity"], "findings": [],
                   "read_errors": 0, "filled_zero": 0}, "chain-a",
                  {"bin_bytes": 8192, "page_size": 4096, "bins": [[0, 2], [1, 2]],
@@ -198,7 +198,7 @@ def test_archive_roundtrip_preserves_frames_and_requires_quality(tmp_path):
               "chain_ids": [f.chain_id for f in frames], "snimky": [str(f.seq) for f in frames],
               "trvanie_s": [0.] * len(frames), "poznamky": [[]] * len(frames),
               "quality": [f.quality for f in frames], "layout": frames[0].layout,
-              "max_medzera_s": 7.5}
+              "max_medzera_s": 7.5, "quality_policy": "behavioral-inputs-v1"}
     imported = archive.load(archive.save(tmp_path / "features.npz", result))
     restored = frames_from_archive(imported, "synthetic")
     for before, after in zip(frames, restored):
@@ -211,7 +211,8 @@ def test_archive_roundtrip_preserves_frames_and_requires_quality(tmp_path):
         frames_from_archive(imported, "synthetic")
 
 
-def test_live_extraction_resets_predecessor_on_gap_and_preserves_checks(monkeypatch, tmp_path):
+@pytest.mark.parametrize("cross_view_complete", [True, False])
+def test_live_extraction_resets_predecessor_on_gap_and_preserves_checks(monkeypatch, tmp_path, cross_view_complete):
     calls = []
     frame = sample(1)
     def extract(raw, profile, seq, previous):
@@ -219,6 +220,9 @@ def test_live_extraction_resets_predecessor_on_gap_and_preserves_checks(monkeypa
         row = sample(seq, predecessor=previous is not None)
         state = {"pids": {1, 2}, "mod_total": 1, "quality": deepcopy(row.quality),
                  "layout": row.layout}
+        if not cross_view_complete:
+            state["quality"]["model_valid"] = False
+            state["quality"]["inconclusive"].append("process_cross_view")
         return row.vector, state, ["synthetic extraction"]
     heads = [{"seq": seq, "full": False, "chain_id": "chain-a", "path": str(tmp_path / f"{seq}.vmicd")}
              for seq in (1, 2, 4)]
@@ -244,6 +248,28 @@ def test_live_extraction_resets_predecessor_on_gap_and_preserves_checks(monkeypa
     assert calls[0] is None and calls[1] is not None and calls[2] is None
     assert not one.has_predecessor and two.has_predecessor and not four.has_predecessor
     assert four.quality["process_ids"] == [1, 2]
-    assert four.quality["inconclusive"] == ["text_integrity"]
+    assert four.quality["inconclusive"] == (["text_integrity"] if cross_view_complete
+                                           else ["text_integrity", "process_cross_view"])
     with pytest.raises(ValueError, match="non-increasing"):
         features.frame_from_snapshot(tmp_path, "unused", 4, state)
+
+
+@pytest.mark.parametrize("field,value", [("read_errors", 1), ("filled_zero", 1),
+                                          ("traversals_complete", False)])
+def test_behavior_valid_cannot_override_failed_input_evidence(field, value):
+    row = sample(1)
+    quality = {**row.quality, "model_valid": False, field: value}
+    with pytest.raises(ValueError, match="behavior_valid"):
+        replace(row, quality=quality)
+    invalid = replace(row, quality={**quality, "behavior_valid": False})
+    buffer = WindowBuffer(2)
+    buffer.push(sample(0))
+    assert buffer.push(invalid) is None
+    assert buffer.reason == "invalid_input" and buffer.reset
+
+
+def test_behavior_archive_rejects_legacy_quality_policy(tmp_path):
+    from features.tests.test_collection_contract import archive_result
+    data = archive.load(archive.save(tmp_path / "legacy-policy.npz", archive_result()))
+    with pytest.raises(ValueError, match="quality policy"):
+        frames_from_archive(data, "legacy")

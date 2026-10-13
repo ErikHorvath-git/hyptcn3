@@ -964,3 +964,30 @@ JSON súbory v adresári ako snímky a čítal počítadlá z nesprávnej úrovn
 Jeho `values.capture` nahrádza vyššie citovaný artefakt s príponou `_v2`,
 ktorý vyberá sidecary podľa pôvodného auditu a overuje ich hashe. Záznamy
 prehratia sú rovnaké; pôvodný report zostáva zachovaný.
+
+
+## 2026-10-13 — návrh v2: oddelenie vstupov modelu a integrity
+
+Po zamietnutí prvého pilotu vznikol samostatný protokol
+`config/collection-v2.json`. Hranica pokrytia, dĺžka okna, perióda a rotácia
+sa nemenia. Platnosť behaviorálnych vstupov sa vyhodnocuje podľa úplnosti
+primárnych prechodov a čítania RAM; dostupnosť nezávislých kontrol integrity
+sa vykazuje osobitne. Benígny audit s nálezom integrity sa zamietne na
+preskúmanie. Chýbajúce vstupy sa nenahrádzajú ani nepreskakujú.
+
+Archív má novú schému a explicitnú politiku platnosti. Historická cesta so
+stĺpcami integrity má vlastnú politiku a ostáva prísnejšia. Tréning ani
+detektor nemôžu prijať archív s inou politikou či starý modelový kontrakt.
+
+Artefakt `data/results/quality_policy_validation_20261013_a.json` zaznamenáva
+prehratie 6 {{res:quality_policy_validation_20261013_a.json:n}} vybraných
+uložených snímok okolo oboch problémových miest. Hashe pôvodných vstupov
+boli overené. Príznaky bez závislosti od predchodcu a lokálne biny sa zhodovali
+s pôvodnou extrakciou. Zachovanie dostupného predchodcu obnovilo aj merané
+rozdiely množín PID po neuzavretej krížovej kontrole. Kontrola zostala označená
+ako neuzavretá; nevytvorila nález integrity.
+
+Krátke diagnostické okno v tomto overení slúži iba na kontrolu kontinuity.
+Nie je to okno výskumného protokolu, meranie pokrytia nového pilotu ani
+výsledok detekcie. Zamietnutý pilot v1 sa nepreklasifikoval na prijatý;
+v2 vyžaduje nový zber s vopred určenou konfiguráciou.

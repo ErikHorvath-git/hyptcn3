@@ -6,6 +6,7 @@ import numpy as np
 
 from .snapshot import MENA, SCHEMA
 from .windows import snimky_z_matice
+from .quality import valid_for
 
 # Integrity verdicts and acquisition flags are kept as metadata, not behavioral
 # prediction targets. This selection is independent of process/VM identities.
@@ -41,6 +42,7 @@ def save(path, result):
             trvanie_s=np.array(result["trvanie_s"], dtype=np.float64),
             poznamky=np.array(["; ".join(p) for p in result["poznamky"]]),
             quality_json=json.dumps(result["quality"]),
+            quality_policy=result["quality_policy"],
             layout_json=json.dumps(result["layout"], sort_keys=True),
             max_medzera_s=result["max_medzera_s"],
         )
@@ -61,7 +63,8 @@ def load(path):
     if any(len(result[k]) != len(rows) for k in ("chain_ids", "snimky", "poznamky", "trvanie_s")):
         raise ValueError("metadata row count mismatch")
     quality = json.loads(str(result["quality_json"]))
-    if len(quality) != len(rows) or [q["model_valid"] for q in quality] != result["valid"].tolist():
+    policy = str(result["quality_policy"])
+    if len(quality) != len(rows) or [valid_for(q, policy) for q in quality] != result["valid"].tolist():
         raise ValueError("quality metadata mismatch")
     from .windows import segmenty
     segmenty(rows, max_medzera_s=float(result["max_medzera_s"]))

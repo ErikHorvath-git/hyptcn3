@@ -56,6 +56,14 @@ prerušia aj históriu hlasovania. Nerastúce časy a duplicitné sekvencie sú
 chybou. Nezodpovedajúca geometria alebo poradie príznakov sa neprepočítajú
 potichu na iný vstup modelu.
 
+Aktuálny kontrakt `hyptcn3/safeguard-features/2` vyžaduje archív
+`hyptcn3/snapshot-vektor/3` s politikou `behavioral-inputs-v1`.
+`behavior_valid` vyjadruje úspešné čítanie RAM a úplné primárne prechody
+procesov, modulov a soketov. Neuzavretá nezávislá kontrola integrity zostáva
+viditeľná v udalosti, ale tieto namerané vstupy nezneplatňuje. Nález integrity
+stále vyvolá alarm nezávisle od modelu. Staršie archívy alebo manifesty sa
+odmietnu; vyžadujú novú extrakciu a tréning, nie ručné prepísanie verzie.
+
 Normalizátor vidí iba vhodné riadky role `train`, každý práve raz. Parametre
 lokálnych príznakov sú spoločné pre biny; entropia sa fituje iba tam, kde
 `has_changed=1`. Pri transformácii má nemeraná entropia hodnotu nula a maska
@@ -116,8 +124,8 @@ meranie detekcie alebo presnosti klasifikátora na skutočnej prevádzke.
 **Tréning po prijatí celého korpusu:**
 
 ```sh
-python3 -m safeguard train --corpus data/corpus-v1.json --out data/models/server-v1 --epochs 10 --seed 0
-python3 -m safeguard inspect --bundle data/models/server-v1
+python3 -m safeguard train --corpus data/corpus-v2.json --out data/models/server-v2 --epochs 10 --seed 0
+python3 -m safeguard inspect --bundle data/models/server-v2
 ```
 
 Časové nastavenia sa preberajú z protokolu v indexe. Neúplný korpus sa pre
@@ -127,8 +135,8 @@ nenahrádza splnenie podmienok finálneho korpusu.
 **Konečné prehratie uložených dát:**
 
 ```sh
-python3 -m safeguard replay --bundle data/models/server-v1 --archive data/collections/SESSION/audit_TIMESTAMP.npz --out data/safeguard/replay-01
-python3 -m safeguard replay --bundle data/models/server-v1 --snapshots data/collections/SESSION/raw --profile data/collections/SESSION/profile --out data/safeguard/replay-raw-01
+python3 -m safeguard replay --bundle data/models/server-v2 --archive data/collections/SESSION/audit_TIMESTAMP.npz --out data/safeguard/replay-01
+python3 -m safeguard replay --bundle data/models/server-v2 --snapshots data/collections/SESSION/raw --profile data/collections/SESSION/profile --out data/safeguard/replay-raw-01
 ```
 
 `replay` nemení retenciu surových dát a nespúšťa zberač. Pre diagnostický
@@ -138,7 +146,7 @@ sedieť aj v diagnostickom režime.
 **Sledovanie adresára, do ktorého už zapisuje zberač:**
 
 ```sh
-python3 -m safeguard watch --bundle data/models/server-v1 --snapshots data/safeguard/existing-capture/raw --profile profiles/debian12-6.1.0-42-cloud-amd64 --out data/safeguard/watch-01
+python3 -m safeguard watch --bundle data/models/server-v2 --snapshots data/safeguard/existing-capture/raw --profile profiles/debian12-6.1.0-42-cloud-amd64 --out data/safeguard/watch-01
 ```
 
 `watch` nevytvára druhý zberač. Spracúva pribúdajúce súbory a pri alarme
@@ -152,7 +160,7 @@ načítanie je možné, jeho výsledky zostávajú diagnostické.
 
 ```sh
 make lab-up
-sudo env PYTHONPATH="$(python3 -m site --user-site)" python3 -m safeguard run --bundle data/models/server-v1 --protocol config/collection-v1.json --domain hyptcn-lab --profile profiles/debian12-6.1.0-42-cloud-amd64 --out data/safeguard/live-01
+sudo env PYTHONPATH="$(python3 -m site --user-site)" python3 -m safeguard run --bundle data/models/server-v2 --protocol config/collection-v2.json --domain hyptcn-lab --profile profiles/debian12-6.1.0-42-cloud-amd64 --out data/safeguard/live-01
 python3 -m safeguard status --out data/safeguard/live-01
 ```
 

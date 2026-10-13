@@ -1,0 +1,161 @@
+{
+  "schema": "hyptcn3/quality-policy-validation/1",
+  "date": "2026-10-13T14:01:07.201726+00:00",
+  "commit": "94d52cf0b7b621be83db3f539d017d01ee02a31e",
+  "commit_dirty": true,
+  "host": "Linux-7.2.5-100.fc43.x86_64-x86_64-with-glibc2.42",
+  "guest": {
+    "kernel": "6.1.0-42-cloud-amd64",
+    "boot_id": "c01be2c5-8e02-49e7-9db3-44a88ef35d35",
+    "machine_id": "95ef9ee3bbc4447fab58abc4a04decbc",
+    "stack_sha256": "e01385b256e27f6479e0ef899bcb4ff18bf658416ad07e41d5b35568f06f93a5",
+    "stack_manifest": [
+      "61e339da8d3fc8dab38f6d60fa49860afbb5248fe5963879a14c036aec37b957  /opt/hyptcn-lab/services.py",
+      "d7372422553f866333177456ac6daec4847f5660c1c854a646e602d0be0fcf6c  /opt/hyptcn-lab/schema.sql",
+      "08f376bb8fd855e2b2b9ef454b6fdb73bcb08efec2eb24ddd9734796f056530b  /etc/nginx/conf.d/hyptcn-lab.conf",
+      "af75eee623f3c7a0b7a1c10a35c2216684c6f4b610d44e46560de137ef3d6962  /etc/systemd/system/hyptcn-lab@.service",
+      "nginx\t1.22.1-9+deb12u9",
+      "postgresql\t15+248+deb12u1",
+      "python3\t3.11.2-1+b1",
+      "python3-psycopg2\t2.9.5-1+b1"
+    ]
+  },
+  "command": "/usr/bin/python3 scripts/validate_quality_policy.py --audit data/results/collection_pilot_20261013_audit.json --seq 80 --seq 81 --seq 82 --seq 330 --seq 331 --seq 332 --out data/results/quality_policy_validation_20261013_a.json",
+  "n": 6,
+  "values": {
+    "diagnostic": true,
+    "session": "/home/eh/Desktop/hyptcn3/data/collections/20261013T121136639363Z_pilot_steady",
+    "original_audit_sha256": "49448063ee1701e67ccb18fcc7db88e359dc68635c453cfa6f70e1f162b18105",
+    "original_features_sha256": "4b754e0701dcae25f70f54e2e8fa16440cabf22b6888ad2092ec5a5ffa2d38cf",
+    "replays": [
+      {
+        "seq": 80,
+        "behavior_valid": true,
+        "legacy_valid": true,
+        "has_predecessor": false,
+        "inconclusive": [
+          "text_integrity"
+        ],
+        "integrity_findings": 0,
+        "diagnostic_window_ready": false,
+        "original_model_valid": true,
+        "changed_behavior_columns": [],
+        "independent_behavior_values_and_bins_unchanged": true
+      },
+      {
+        "seq": 81,
+        "behavior_valid": true,
+        "legacy_valid": false,
+        "has_predecessor": true,
+        "inconclusive": [
+          "process_cross_view",
+          "text_integrity"
+        ],
+        "integrity_findings": 0,
+        "diagnostic_window_ready": false,
+        "original_model_valid": false,
+        "changed_behavior_columns": [],
+        "independent_behavior_values_and_bins_unchanged": true
+      },
+      {
+        "seq": 82,
+        "behavior_valid": true,
+        "legacy_valid": true,
+        "has_predecessor": true,
+        "inconclusive": [
+          "text_integrity"
+        ],
+        "integrity_findings": 0,
+        "diagnostic_window_ready": true,
+        "original_model_valid": true,
+        "changed_behavior_columns": [
+          "proc_gone"
+        ],
+        "independent_behavior_values_and_bins_unchanged": true
+      },
+      {
+        "seq": 330,
+        "behavior_valid": true,
+        "legacy_valid": true,
+        "has_predecessor": false,
+        "inconclusive": [
+          "text_integrity"
+        ],
+        "integrity_findings": 0,
+        "diagnostic_window_ready": false,
+        "original_model_valid": true,
+        "changed_behavior_columns": [],
+        "independent_behavior_values_and_bins_unchanged": true
+      },
+      {
+        "seq": 331,
+        "behavior_valid": true,
+        "legacy_valid": false,
+        "has_predecessor": true,
+        "inconclusive": [
+          "process_cross_view",
+          "text_integrity"
+        ],
+        "integrity_findings": 0,
+        "diagnostic_window_ready": false,
+        "original_model_valid": false,
+        "changed_behavior_columns": [],
+        "independent_behavior_values_and_bins_unchanged": true
+      },
+      {
+        "seq": 332,
+        "behavior_valid": true,
+        "legacy_valid": true,
+        "has_predecessor": true,
+        "inconclusive": [
+          "text_integrity"
+        ],
+        "integrity_findings": 0,
+        "diagnostic_window_ready": true,
+        "original_model_valid": true,
+        "changed_behavior_columns": [
+          "proc_new",
+          "proc_gone"
+        ],
+        "independent_behavior_values_and_bins_unchanged": true
+      }
+    ],
+    "source_sha256": {
+      "features/manifest.py": "9c8353c93d5276a94cf428eb7b2f677d6dd7cf9f0717d1da63edbf325ca350bd",
+      "features/perbin.py": "19a642ce37468ee56acaf408155933d35f81f45588b2d527d38aa700ace1e46f",
+      "features/__main__.py": "3ad44f361e7d3a7925070cb0f1935df8fbb16055cccadd84f9317deb89e15a9e",
+      "features/__init__.py": "896f5a042106b05da8291cc22c0186f1a098e90e145d3e708df7d51670640265",
+      "features/crosscheck.py": "30fbaf0df1d8aab390e018f81dc00a9e08bdd13898f5816b8e864a0981fd3bbb",
+      "features/snapshot.py": "81d0d749211042ba27618b3a5964512a6acbb166fa49daacb85d526522be91d4",
+      "features/cli.py": "9127ab073bb8066b7cd84feb7ea6500eaabb54e532c2f08842b68b98c91cca25",
+      "features/normalize.py": "f3dd2ecc53d636ed1ba0f219915b4c5e784d463042ee58d78d5475ae96b9e965",
+      "features/windows.py": "ac9954bda49b1bd1355be080bd5a1c5529b898fa9cf021987b067c6020d4a790",
+      "features/stream.py": "b10faf3ec928d704d24776c161a79430bfa2460e3c7f76ebbe23d9885cd99ac0",
+      "features/contract.py": "97930184ecd0a276f0f7ac3772a5652631735c726599c3b3231d555243a5eb6e",
+      "features/archive.py": "120ae743dc7e3ecfe85c2c4054c29532905dccd6a1d59d94e6ed83f53a0935c8",
+      "features/dataset.py": "3b2b34b8d9b2a6d0ca2923effb4e40aa9ebf18766d2625e2b2a14e4973700698",
+      "features/quality.py": "e7dd6c2476ad62bbf17d1fc7969ba206169067767c486cdc23f5c2f2c13029fb",
+      "guestparse/__init__.py": "59510cb87991d23814b9b7df34bf809369c23871acae629f689d37378dface62",
+      "guestparse/__main__.py": "2e49dabc9bee0ec02712ae2f753c00420b3ddbfa892c357ce603603e3be54155",
+      "guestparse/validate.py": "6ab979ed5cc65f53f65eee124853f7d328c3980d2064aeeb5008bdb7a4502806",
+      "guestparse/image.py": "1b11a794562046729e730085ee6facc9489242427cb2c23ad1d504fa11d0e9db",
+      "guestparse/view.py": "c8c89d1a600c2a444e25475bc97d5c547d138556a2149c212e8818011554c772",
+      "guestparse/profile.py": "90b318795a4d415ba310b1081dd45b3feab8ac8f7021c5fe830847ce7f3069bc",
+      "guestparse/cli.py": "e5806cd49f95490c4b5155bd9e994e9644645ac97f6743503e5782d2a5931ef2",
+      "guestparse/checks.py": "06fdee587b247024856ed6c3d3709be261da1ce8b5cff06b31684b4ceddb4002",
+      "guestparse/procmap.py": "67766b37167e7fe37e857467106c44be72bcc14c6509ac1ec037f44c050d7447",
+      "safeguard/model.py": "b601b6e1279e2b2e3244e02170327760bafb1ed1d3602d4a9c1a54d26f5935d3",
+      "safeguard/bundle.py": "afb5b2f34348b5db519b6d1545cce6eb0041fe3c2be0f771c39f74361492e3ad",
+      "safeguard/__init__.py": "a846b213918daa6ba5f58f1ff95dda2e5aeb40f04c10df7ba78bf64cc0545af7",
+      "safeguard/features.py": "f0c3dec67e9c285b3cc46b004b42256f49734d5391524d2c3ae309d364560de1",
+      "safeguard/runtime.py": "c1a27bfc3fe33b935f5d79ffa89959dce781c6a9d5efb818c8103a4d0676236e",
+      "safeguard/training.py": "1db962bafe1e639f9206dac05e46a10f953adfae82778d0a98b9de7316cc4857",
+      "safeguard/demo.py": "98dc2a832129666e97365446c29cae74488d2697ccc45b6d196315c7ff7bb131",
+      "safeguard/supervisor.py": "8f084fd3471c1661ee5494c29de9737e6048790e82924afcd9f96f8d8ca50ef8",
+      "safeguard/cli.py": "8b1cebcf07b553a8322ba9d10230f5849f732557d32f867c9e6212ac5a3487c1",
+      "safeguard/__main__.py": "3dbf2d1046841370d186eafb631d790c5b231a433668561b0a0742f731966da5"
+    },
+    "script_sha256": "54943ad76b747fd5ccab665550a38c5d08951855b06b1ad88e85f8c6d4350fd7",
+    "note": "Selected saved-frame replay only. Original pilot verdict is unchanged; admission requires a new pilot under the new protocol. No detection or live latency claim."
+  }
+}

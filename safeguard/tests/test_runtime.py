@@ -2,6 +2,7 @@
 import json
 import threading
 import time
+from dataclasses import replace
 from types import SimpleNamespace
 
 import numpy as np
@@ -16,7 +17,7 @@ def frame(seq, *, timestamp=None, full=False, valid=True, predecessor=True,
           findings=None, inconclusive=None, chain="1791292684568", vcpus=2):
     vector = np.ones(len(MENA))
     vector[-2:] = [predecessor, full]
-    quality = dict(model_valid=valid, traversals_complete=valid,
+    quality = dict(model_valid=valid, behavior_valid=valid, traversals_complete=valid,
                    findings=findings or [], inconclusive=inconclusive or [],
                    read_errors=0, filled_zero=0)
     return Frame("test-session", seq, 1000 + seq * 5 if timestamp is None else timestamp,
@@ -75,6 +76,20 @@ def test_inconclusive_cross_view_is_input_error_without_integrity_alarm():
     assert row["integrity"]["status"] == "inconclusive"
     assert not row["alarm"] and not row["integrity_alarm"]
     assert row["score"] is None
+
+
+@pytest.mark.parametrize("independent_finding", [False, True])
+def test_integrity_gap_preserves_behavior_windows_and_independent_alarm(independent_finding):
+    detector = runtime.Detector(FakeBundle(window=2, scores={2: 0.0}), preserve=False)
+    detector.process(frame(1))
+    row = frame(2)
+    quality = {**row.quality, "model_valid": False, "inconclusive": ["process_cross_view"],
+               "findings": [{"check": "syscall_hook"}] if independent_finding else []}
+    result = detector.process(replace(row, quality=quality))
+    assert result["score"] == 0.0
+    assert result["integrity"]["conclusive"] is False
+    assert result["integrity_alarm"] is independent_finding
+    assert result["alarm"] is independent_finding
 
 
 def test_event_counts_are_rising_edges_and_threshold_is_strict():
@@ -328,7 +343,7 @@ def test_archive_uses_same_detector_path_without_hold(monkeypatch, tmp_path):
     frames = [frame(seq, full=seq == 0, predecessor=seq != 0,
                     inconclusive=["text_integrity"]) for seq in range(8)]
     path = tmp_path / "features.npz"
-    np.savez(path, schema=SCHEMA, mena=np.array(MENA),
+    np.savez(path, schema=SCHEMA, mena=np.array(MENA), quality_policy="behavioral-inputs-v1",
              matica=np.stack([item.vector for item in frames]),
              seq=np.array([item.seq for item in frames]),
              casy=np.array([item.timestamp for item in frames]),

@@ -190,6 +190,26 @@ def test_object_features_reanchor_before_reading_pointers(monkeypatch):
 # ----------------------------------------------------- 3. realny retazec
 
 
+@pytest.mark.parametrize("incomplete", [None, "processes", "modules", "sockets"])
+def test_behavior_quality_depends_on_feature_traversals_not_cross_view(monkeypatch, incomplete):
+    from types import SimpleNamespace
+    from features import snapshot
+    def walk(name, field):
+        return {field: [], "count": 0, "truncated": name == incomplete, "stop_reason": "cut"}
+    view = SimpleNamespace(
+        ktext_shift=1, profile_boot_mismatch=lambda: None,
+        processes=lambda: walk("processes", "processes"),
+        modules=lambda: walk("modules", "modules"),
+        sockets=lambda **kwargs: walk("sockets", "sockets"),
+    )
+    monkeypatch.setattr(snapshot.checks, "check_all", lambda *args, **kwargs: {
+        "summary": {"inconclusive": ["process_cross_view", "text_integrity"], "syscall_hooks": 0},
+        "findings": []})
+    _, state, _ = objekty_z_pohladu(view)
+    assert state["quality"]["behavior_valid"] is (incomplete is None)
+    assert state["quality"]["model_valid"] is False
+
+
 def _najdi_retazec():
     """
     Adresar v data/raw/ s aspon dvoma snimkami retazca, ktore maju vedla

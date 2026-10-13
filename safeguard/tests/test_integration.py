@@ -65,7 +65,7 @@ def test_loaded_model_shared_replay_exactness_and_recovery(demo):
     for frame in frames[:12]:
         detector.process(frame)
     invalid = replace(frames[12], quality={**frames[12].quality, "model_valid": False,
-                                           "read_errors": 1})
+                                           "behavior_valid": False, "read_errors": 1})
     assert detector.process(invalid)["state"] == "input_error"
     assert detector.process(frames[13])["score"] is None
     row = None

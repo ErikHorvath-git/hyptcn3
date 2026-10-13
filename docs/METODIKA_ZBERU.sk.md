@@ -1,16 +1,23 @@
-# Metodika zberu RAM a príznakov — protokol server-normal-v1
+# Metodika zberu RAM a príznakov — protokol server-normal-v2
 
 Tento dokument uzatvára **návrh zberu**, nie výsledky detekcie. Časy,
 počty behov a hranice prijatia nižšie sú plánované parametre. Stav protokolu
 je `pilot_required`: dlhý zber nesmie začať bez prijatého pilotného auditu.
 Účinnosť safeguardu, online latencia a vplyv na VM sa merajú v ďalšej etape.
 
-Strojovo čitateľná konfigurácia: [`config/collection-v1.json`](../config/collection-v1.json).
+Strojovo čitateľná konfigurácia: [`config/collection-v2.json`](../config/collection-v2.json).
 Orchestrácia a audit: [`scripts/collection.py`](../scripts/collection.py).
 Implementovaný tréning, načítanie a detektor:
 [`SAFEGUARD.sk.md`](SAFEGUARD.sk.md), CLI `python3 -m safeguard`.
 Rozhodnutia platia pre jednu konfiguráciu Linux/QEMU/KVM; prenos na iné jadro,
 veľkosť RAM alebo iný serverový stack je osobitný experiment.
+
+Verzia v2 vznikla po zamietnutom pilote v1, opísanom v `MERANIA.md`.
+Oddeľuje platnosť behaviorálnych vstupov od dostupnosti nezávislých kontrol
+integrity. Dĺžka okna, perióda, rotácia, hranica pokrytia aj zákaz dopĺňania
+chýbajúcich vstupov zostávajú rovnaké. Pôvodná konfigurácia v1 a jej zamietnutý
+audit sú zachované; prehratie starých dát slúži iba na diagnostiku zmeny.
+Prijatie v2 vyžaduje nový pilot zozbieraný podľa jeho vopred uloženého protokolu.
 
 ## 1. Otázky experimentu a jednotka merania
 
@@ -55,12 +62,13 @@ snímky; súbory majú SHA-256. Výstupný adresár a výsledky sa neprepisujú.
 
 ## 3. Príznaky a ich fyzikálny význam
 
-Archív `hyptcn3/snapshot-vektor/2` uchováva:
+Archív `hyptcn3/snapshot-vektor/3` uchováva:
 
 - `matica[T,22]` a explicitné poradie `mena`;
 - `perbin[T,B,4]`, `biny[B]`, rozloženie memslotov a počet podložených stránok;
 - pôvodné `seq`, `casy`, `chain_ids`, identifikátory snímok a dobu extrakcie;
 - `valid`, štruktúrovanú kvalitu prechodov, nálezy kontrol a neuzavreté kontroly;
+- explicitnú `quality_policy`, podľa ktorej vznikli maska aj rozdielové príznaky;
 - časový kontrakt `max_medzera_s`.
 
 | Skupina | Stĺpce | Interpretácia |
@@ -110,7 +118,12 @@ Pravidlá nadväzujú na `features.windows` používané auditom:
 1. Overiť schému, konečné čísla, pomery, počty stránok, identitu binov a ich súčty.
 2. Overiť ukotvenie profilu po KASLR ešte pred parsovaním objektov.
 3. Neúplný prechod procesov, modulov alebo soketov nie je normálny počet.
-   Neuzavretá kontrola použitá vo vektore znamená neplatný vstup modelu.
+   Taká snímka má `behavior_valid=false` a nesmie vstúpiť do modelového okna.
+   Krížový pohľad na procesy/moduly, tabuľky volaní a text jadra nie sú vstupmi
+   behaviorálneho modelu: ich `inconclusive` preto nemení jeho platnosť.
+   Dostupnosť týchto kontrol a ich nálezy sa vykazujú osobitne v každom audite
+   a pri každom kroku živého detektora. Nález zostáva dôvodom alarmu aj vtedy,
+   keď model ešte nemá okno alebo nemôže skórovať.
 4. Plná snímka, chýbajúci predchodca a neplatný riadok zamedzia skórovaniu okna.
 5. Medzera v sekvencii alebo čase, nová session alebo reťazec prerušia
    modelový kontext a históriu hlasovania alarmu.
@@ -127,6 +140,21 @@ Audit zamietne neúplný benígny beh; zachová jeho dáta aj dôvod. Vo výsled
 sa uvedie aj počet zamietnutých behov. Pri testovaní útokov sa neplatné riadky
 zachovajú v časovej osi a výpadok senzora sa vykáže oddelene od skóre modelu.
 Úspešnosť sa nesmie počítať iba zo vzoriek, pri ktorých parser náhodou uspel.
+
+Politika `behavioral-inputs-v1` používa iba úplné primárne prechody a úspešné
+čítanie RAM. Pri nej sa predchodca zachová aj cez neuzavretú nezávislú kontrolu,
+pretože namerané množiny PID a počty modulov sú dostupné. Pri chybe primárneho
+prechodu alebo čítania sa predchodca zahodí. Starý stĺpcový prediktor používa
+osobitnú politiku `legacy-vector-v1` a príznak `model_valid`, ktorý vyžaduje aj
+uzavreté kontroly poskytujúce jeho stĺpce integrity. Archívy týchto politík
+sa nezamieňajú. Staršie archívy a balíky vyžadujú novú extrakciu/tréning;
+nedostávajú spätne predpokladanú platnosť.
+
+Úplné okno modelu neznamená úplnú kontrolu integrity. Audit uvádza počet
+neuzavretých riadkov pre každú kontrolu a sekvencie neplatných vstupov modelu.
+Benígny beh s nálezom integrity sa zamietne do jeho samostatného preskúmania,
+aj keď sú behaviorálne vstupy úplné. Zmena dostupnosti kontroly sa nesmie
+v budúcich útokových experimentoch zameniť za úspešnú detekciu.
 
 ## 5. Rozdelenie korpusu a scenáre
 
@@ -184,7 +212,7 @@ vstupu. Diagnostický syntetický model sa nesmie zameniť za finálny tréning.
 make lab-up
 make lab-test
 make collection-plan
-sudo python3 scripts/collection.py run --role pilot --group pilot-1 --scenario steady --seed 101
+sudo python3 scripts/collection.py --protocol config/collection-v2.json run --role pilot --group pilot-2 --scenario steady --seed 102
 ```
 
 Pilot trvá približne 40 minút zberu plus zahrievanie. Runner vypne iba trvalý
@@ -219,7 +247,7 @@ treba nový boot. Prvý tréningový boot musí byť odlišný aj od pilotného.
 Po prijatí všetkých behov sa vytvorí index:
 
 ```sh
-python3 -m features.dataset --protocol config/collection-v1.json --out data/corpus-v1.json <audit1.json> <audit2.json> ...
+python3 -m features.dataset --protocol config/collection-v2.json --out data/corpus-v2.json <audit1.json> <audit2.json> ...
 ```
 
 Index s `complete=false` nie je hotový korpus. Opravou chyby extraktora
@@ -229,8 +257,8 @@ a celý index musí používať rovnakú implementáciu extrakcie.
 Po prijatí korpusu sa použije nový tréner:
 
 ```sh
-python3 -m safeguard train --corpus data/corpus-v1.json --out data/models/server-v1 --epochs 10 --seed 0
-python3 -m safeguard inspect --bundle data/models/server-v1
+python3 -m safeguard train --corpus data/corpus-v2.json --out data/models/server-v2 --epochs 10 --seed 0
+python3 -m safeguard inspect --bundle data/models/server-v2
 ```
 
 Pred korpusom možno mechaniku overiť príkazom

@@ -58,6 +58,9 @@ def build(audits, protocol, protocol_sha):
         if sha(feature_path) != v["features_sha256"]:
             raise ValueError("feature archive changed since audit")
         data = load(feature_path)
+        from .quality import protocol_policy
+        if str(data["quality_policy"]) != protocol_policy(protocol):
+            raise ValueError("feature quality policy differs from corpus protocol")
         if not data["valid"].all():
             raise ValueError("incomplete features in accepted audit")
         layouts.add(json.dumps(v["layout"], sort_keys=True))

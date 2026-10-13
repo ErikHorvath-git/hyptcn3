@@ -22,7 +22,8 @@ def write_json(path, value):
 def make_corpus(directory):
     """All four explicit roles with checkable, labeled synthetic provenance."""
     directory.mkdir(parents=True, exist_ok=True)
-    protocol = {"schema": "hyptcn3/collection-protocol/1", "window_rows": 8,
+    protocol = {"schema": "hyptcn3/collection-protocol/2", "window_rows": 8,
+                "quality_policy": "behavioral-inputs-v1",
                 "max_gap_s": 1.5, "interval_s": 1,
                 "roles": {role: 1 for role in ("train", "dev", "calibration", "test_benign")},
                 "scenarios": {"quiet": {}, "busy": {}}}
@@ -49,7 +50,7 @@ def make_corpus(directory):
             local[..., 2] = rng.uniform(2, 5, size=(rows, 3))
             local[..., 3] = 1
             times = 1000 + 1000 * role_index + 100 * scenario_index + np.arange(rows, dtype=float)
-            quality = [{"model_valid": True, "traversals_complete": True,
+            quality = [{"model_valid": True, "behavior_valid": True, "traversals_complete": True,
                         "inconclusive": ["text_integrity"], "findings": [],
                         "read_errors": 0, "filled_zero": 0} for _ in range(rows)]
             feature_path = save(location / "features.npz", {
@@ -57,7 +58,8 @@ def make_corpus(directory):
                 "valid": [True] * rows, "perbin": local, "biny": [0, 1, 2],
                 "chain_ids": [name] * rows, "snimky": [str(i) for i in range(rows)],
                 "trvanie_s": [0] * rows, "poznamky": [[] for _ in range(rows)],
-                "quality": quality, "layout": layout, "max_medzera_s": 1.5})
+                "quality": quality, "quality_policy": "behavioral-inputs-v1",
+                "layout": layout, "max_medzera_s": 1.5})
             guest = {"boot_id": role + "-boot", "kernel": "synthetic-kernel", "stack_sha256": "synthetic-stack"}
             metadata = {"schema": "hyptcn3/collection-session/1", "session_id": name,
                         "role": role, "group": role + "-1", "scenario": scenario,

@@ -11,6 +11,7 @@ from pathlib import Path
 
 import numpy as np
 import torch
+from features.quality import BEHAVIOR_POLICY, protocol_policy
 
 from .features import FeatureNormalizer, WindowBuffer, Frame, arrays, check_frame
 from .model import Classifier, Predictor, SCORE_FORMULA, LOSS_FORMULA, anomaly_score, prediction_errors
@@ -119,13 +120,15 @@ def load_bundle(path, allow_diagnostic=False):
     if training.get("windows", {}).get("calibration") != calibration["n_scores"]:
         raise ValueError("calibration count differs from training provenance")
     protocol = manifest["provenance"]["protocol"]
+    if protocol_policy(protocol) != BEHAVIOR_POLICY:
+        raise ValueError("bundle requires the behavioral input protocol")
     if (protocol.get("window_rows") != contract["window_rows"]
             or protocol.get("max_gap_s") != contract["max_gap_s"]):
         raise ValueError("feature timing differs from frozen protocol")
     if (calibration.get("method") != "benign_score_quantile_higher"
             or calibration.get("comparison") != ">"):
         raise ValueError("unsupported calibration rule")
-    if contract.get("schema") != "hyptcn3/safeguard-features/1":
+    if contract.get("schema") != "hyptcn3/safeguard-features/2":
         raise ValueError("unsupported feature contract")
     if not math.isfinite(contract["max_gap_s"]) or contract["max_gap_s"] <= 0:
         raise ValueError("invalid temporal contract")
@@ -133,7 +136,7 @@ def load_bundle(path, allow_diagnostic=False):
     # independently of the first incoming frame.
     dummy = Frame("contract-validation", 0, 0.0, np.zeros(22),
                   np.zeros((len(contract["biny"]), 4)), tuple(contract["biny"]),
-                  {"model_valid": True, "traversals_complete": True,
+                  {"model_valid": True, "behavior_valid": True, "traversals_complete": True,
                    "inconclusive": [], "findings": [], "read_errors": 0, "filled_zero": 0},
                   "contract-validation", contract["layout"])
     check_frame(dummy, contract)

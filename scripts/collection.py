@@ -27,8 +27,9 @@ from features.snapshot import retazec, MENA
 from features.windows import okna, snimky_z_matice
 from features.perbin import FeatureError
 from features.windows import WindowError
+from features.quality import protocol_policy, valid_for
 
-DEFAULT = ROOT / "config/collection-v1.json"
+DEFAULT = ROOT / "config/collection-v2.json"
 
 
 def digest(path):
@@ -44,8 +45,10 @@ def write_json(path, doc):
 
 def protocol(path):
     p = json.loads(Path(path).read_text())
-    if p["schema"] != "hyptcn3/collection-protocol/1":
-        raise ValueError("unsupported protocol")
+    protocol_policy(p)
+    gate = p.get("min_score_coverage", .85)
+    if type(gate) not in (int, float) or not 0 < gate <= 1:
+        raise ValueError("invalid minimum score coverage")
     for key in ("interval_s", "window_rows", "full_every", "cycles", "pilot_cycles", "bin_bytes"):
         if type(p[key]) is not int or p[key] < 1:
             raise ValueError("invalid " + key)
@@ -224,6 +227,40 @@ def run_session(a, p):
         print(f"Audit: python3 scripts/collection.py audit {out}")
 
 
+def analyze_windows(result, p, session):
+    """Audit the frozen input policy while retaining independent integrity gaps."""
+    policy = protocol_policy(p)
+    if result["quality_policy"] != policy:
+        raise ValueError("extraction quality policy differs from protocol")
+    if result["valid"] != [valid_for(q, policy) for q in result["quality"]]:
+        raise ValueError("valid mask differs from structured quality")
+    rows = snimky_z_matice(session, result["matica"], MENA, result["casy"],
+                          result["seq"], result["valid"])
+    windows = okna(rows, dlzka=p["window_rows"], max_medzera_s=p["max_gap_s"])
+    coverage = len(windows) / len(rows)
+    reasons = []
+    if not all(result["valid"]):
+        reasons.append("incomplete model inputs under " + policy)
+    if any(q["findings"] for q in result["quality"]):
+        reasons.append("integrity findings require review before benign admission")
+    gate = p.get("min_score_coverage", .85)
+    if coverage < gate:
+        reasons.append(f"score coverage below design gate {gate:g}")
+    checks = {"syscall_table", "process_cross_view", "modules", "text_integrity"}
+    checks.update(name for q in result["quality"] for name in q["inconclusive"])
+    quality = {
+        "policy": policy,
+        "behavior_valid_rows": sum(q["behavior_valid"] for q in result["quality"]),
+        "legacy_valid_rows": sum(q["model_valid"] for q in result["quality"]),
+        "invalid_input_seq": [seq for seq, good in zip(result["seq"], result["valid"]) if not good],
+        "integrity_inconclusive_rows": {
+            name: sum(name in q["inconclusive"] for q in result["quality"]) for name in sorted(checks)},
+        "integrity_finding_rows": sum(bool(q["findings"]) for q in result["quality"]),
+        "integrity_findings": sum(len(q["findings"]) for q in result["quality"]),
+    }
+    return rows, windows, coverage, reasons, quality
+
+
 def audit_session(directory, p, protocol_path, output=None):
     directory = Path(directory).resolve()
     native = (directory / "session.json").exists()
@@ -281,14 +318,10 @@ def audit_session(directory, p, protocol_path, output=None):
             reasons.append("read errors/fill/missed slots: " + image.name)
         if side["capture"]["total_ms"] >= p["interval_s"] * 1000:
             reasons.append("collector cycle exceeded period")
-    result = retazec(str(raw), str(directory / "profile" if native else ROOT / p["profile"]), p["max_gap_s"])
-    rows = snimky_z_matice(directory.name, result["matica"], MENA, result["casy"], result["seq"], result["valid"])
-    windows = okna(rows, dlzka=p["window_rows"], max_medzera_s=p["max_gap_s"])
-    if not all(result["valid"]):
-        reasons.append("incomplete object traversal or model-input integrity checks")
-    coverage = len(windows) / len(rows)
-    if coverage < .85:
-        reasons.append("score coverage below design gate 0.85")
+    result = retazec(str(raw), str(directory / "profile" if native else ROOT / p["profile"]),
+                    p["max_gap_s"], quality_policy=protocol_policy(p))
+    rows, windows, coverage, quality_reasons, quality = analyze_windows(result, p, directory.name)
+    reasons.extend(quality_reasons)
     if any(b - a != 1 for a, b in zip(result["seq"], result["seq"][1:])):
         reasons.append("sequence gap")
     if any(not 0 < b - a <= p["max_gap_s"] for a, b in zip(result["casy"], result["casy"][1:])):
@@ -308,6 +341,7 @@ def audit_session(directory, p, protocol_path, output=None):
     values = {"accepted": not reasons, "reasons": sorted(set(reasons)),
               "role": metadata.get("role"), "protocol_sha256": digest(protocol_path),
               "snapshots": len(rows), "windows": len(windows), "score_coverage": coverage,
+              "quality": quality,
               "raw_bytes": total_bytes, "source_sha256": source_hashes,
               "session_sha256": digest(directory / "session.json") if native else None,
               "extractor_sha256": {str(f.relative_to(ROOT)): digest(f)

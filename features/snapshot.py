@@ -97,8 +97,9 @@ from guestparse import checks                              # noqa: E402
 from guestparse.view import build_view                     # noqa: E402
 
 from .perbin import FeatureError, _chain_parts             # noqa: E402
+from .quality import LEGACY_POLICY, BEHAVIOR_POLICY, valid_for  # noqa: E402
 
-SCHEMA = "hyptcn3/snapshot-vektor/2"
+SCHEMA = "hyptcn3/snapshot-vektor/3"
 
 MENA = (
     "mem_changed_ratio", "mem_bins_active", "mem_changed_max",
@@ -272,9 +273,11 @@ def objekty_z_pohladu(view):
         "mod_total": m["count"],
         "quality": {
             "traversals_complete": not any(r["truncated"] for r in (p, m, s)),
+            "behavior_valid": not any(r["truncated"] for r in (p, m, s)),
             "inconclusive": list(c["summary"]["inconclusive"]),
             "findings": c["findings"],
-            # text integrity is a separate verdict, not one of the 22 columns.
+            # Legacy 22-column validity also needs the integrity count checks.
+            # The primary 18-column model uses behavior_valid instead.
             "model_valid": not any(r["truncated"] for r in (p, m, s))
                 and not (set(c["summary"]["inconclusive"]) - {"text_integrity"}),
         },
@@ -328,6 +331,7 @@ def vektor_snimky(snapshot, profil, seq=None, predch=None):
     stats = side.get("stats", {})
     if stats.get("read_errors", 0) or stats.get("filled_zero", 0):
         stav["quality"]["model_valid"] = False
+        stav["quality"]["behavior_valid"] = False
         pozn.append("chyby citania RAM: vektor sa nesmie skorovat")
 
     if predch is None:
@@ -387,7 +391,7 @@ def _vsetky_hlavicky(snapshot):
 # ------------------------------------------------------------ cely retazec
 
 
-def retazec(snapshot, profil, max_medzera_s=7.5):
+def retazec(snapshot, profil, max_medzera_s=7.5, *, quality_policy=LEGACY_POLICY):
     """
     Cely retazec snimok: matica (cas x dlzka MENA) a mena priznakov.
 
@@ -399,6 +403,8 @@ def retazec(snapshot, profil, max_medzera_s=7.5):
     # zacina novy retazec (chain_id), seq pokracuje. Features sa musia
     # pocitat nad VSETKYMI retazcami v poradi seq - inak by dlhe sedenia
     # potichu prisli o vsetko okrem posledneho useku.
+    if quality_policy not in (LEGACY_POLICY, BEHAVIOR_POLICY):
+        raise ValueError("unsupported feature quality policy")
     heads = _vsetky_hlavicky(snapshot)
     matica, snimky, poznamky, trvania = [], [], [], []
     seqs, casy, quality, perbin, chains = [], [], [], [], []
@@ -437,11 +443,12 @@ def retazec(snapshot, profil, max_medzera_s=7.5):
         q["read_errors"] = side["stats"]["read_errors"]
         q["filled_zero"] = side["stats"]["filled_zero"]
         q["model_valid"] = q["model_valid"] and not q["read_errors"] and not q["filled_zero"]
+        q["behavior_valid"] = q["behavior_valid"] and not q["read_errors"] and not q["filled_zero"]
         quality.append(q)
         seqs.append(h["seq"])
         casy.append(now)
         chains.append(str(side["output"]["chain_id"]))
-        predch = stav if q["model_valid"] else None
+        predch = stav if valid_for(q, quality_policy) else None
         previous = h["seq"], now
     return {
         "schema": SCHEMA,
@@ -451,7 +458,8 @@ def retazec(snapshot, profil, max_medzera_s=7.5):
         "poznamky": poznamky,
         "trvanie_s": trvania,
         "seq": seqs, "casy": casy, "quality": quality,
-        "valid": [q["model_valid"] for q in quality],
+        "valid": [valid_for(q, quality_policy) for q in quality],
+        "quality_policy": quality_policy,
         "perbin": perbin, "biny": list(biny or ()), "chain_ids": chains,
         "layout": layout, "max_medzera_s": max_medzera_s,
     }

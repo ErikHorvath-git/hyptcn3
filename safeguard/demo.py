@@ -28,7 +28,8 @@ def create_corpus(output, *, layout=None, rows=96, window_rows=8):
                   "regions": [{"gpa": 0, "bytes": 50331648}],
                   "memsize": 50331648, "vcpus": 2}
     roles = ("train", "dev", "calibration", "test_benign")
-    protocol = {"schema": "hyptcn3/collection-protocol/1", "name": "synthetic-mechanics-only",
+    protocol = {"schema": "hyptcn3/collection-protocol/2", "name": "synthetic-mechanics-only",
+                "quality_policy": "behavioral-inputs-v1",
                 "diagnostic": True, "interval_s": 5, "max_gap_s": 7.5,
                 "window_rows": window_rows, "bin_bytes": layout["bin_bytes"],
                 "roles": dict.fromkeys(roles, 1), "scenarios": {"quiet": {}, "steady": {}}}
@@ -57,7 +58,7 @@ def create_corpus(output, *, layout=None, rows=96, window_rows=8):
             local[:, :, 3] = local[:, :, 0] > 0
             local[:, :, 2] = np.clip(4 + scenario_i + rng.normal(0, 0.1, local.shape[:2]), 0, 8) * local[:, :, 3]
             times = (1700000000 + (2 * role_i + scenario_i) * (rows + 20) * 5 + t * 5).astype(float)
-            quality = [{"model_valid": True, "traversals_complete": True,
+            quality = [{"model_valid": True, "behavior_valid": True, "traversals_complete": True,
                         "inconclusive": ["text_integrity"], "findings": [],
                         "read_errors": 0, "filled_zero": 0} for _ in t]
             archive = save(directory / "features.npz", {
@@ -66,7 +67,8 @@ def create_corpus(output, *, layout=None, rows=96, window_rows=8):
                 "chain_ids": [f"{name}-chain-{i // 64}" for i in t],
                 "snimky": [f"synthetic-{i}" for i in t], "trvanie_s": np.zeros(rows),
                 "poznamky": [["synthetic diagnostic input"] for _ in t],
-                "quality": quality, "layout": layout, "max_medzera_s": 7.5})
+                "quality": quality, "quality_policy": "behavioral-inputs-v1",
+                "layout": layout, "max_medzera_s": 7.5})
             guest = {"boot_id": f"synthetic-{role}-boot", "kernel": "synthetic",
                      "stack_sha256": "synthetic-no-guest"}
             meta = {"schema": "hyptcn3/collection-session/1", "session_id": name,

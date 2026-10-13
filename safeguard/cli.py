@@ -41,7 +41,7 @@ def parser():
             command.add_argument("--snapshots", required=True, type=Path)
             command.add_argument("--idle-timeout", type=float)
         if name == "run":
-            command.add_argument("--protocol", type=Path, default=ROOT / "config/collection-v1.json")
+            command.add_argument("--protocol", type=Path, default=ROOT / "config/collection-v2.json")
             command.add_argument("--domain", default="hyptcn-lab")
             command.add_argument("--cycles", type=int)
     status = sub.add_parser("status")

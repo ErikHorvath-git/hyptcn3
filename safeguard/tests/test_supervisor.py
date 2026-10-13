@@ -49,7 +49,7 @@ def setup(tmp_path, monkeypatch):
         source = root / name
         source.parent.mkdir(exist_ok=True)
         source.write_text("# inference implementation fixture\n")
-    protocol = json.loads((actual_root / "config/collection-v1.json").read_text())
+    protocol = json.loads((actual_root / "config/collection-v2.json").read_text())
     protocol["min_free_gib"] = 1
     protocol_path = root / "protocol.json"
     protocol_path.write_text(json.dumps(protocol))

@@ -84,7 +84,9 @@ kontroly v poli `summary.inconclusive`. Rozdiely neúplných pohľadov na proces
 a moduly sú v `inconclusive_differences`, nie vo `findings`; nevytvárajú preto
 alarm integrity. Nezávislé nálezy (napríklad neprípustné meno modulu alebo hook
 v tabuľke volaní) sa vyhodnocujú aj pri neuzavretej krížovej kontrole.
-Neúplná kontrola naďalej zneplatňuje vstup do modelového okna podľa protokolu.
+Neúplná kontrola zneplatňuje historický vektor so stĺpcami integrity. Protokol
+server-normal-v2 posudzuje behaviorálne vstupy osobitne; neuzavretá kontrola
+sa vykazuje aj vtedy, keď sú tieto vstupy úplné (pozri `METODIKA_ZBERU.sk.md`).
 Pri kontrole (d) `conclusive` znamená, že
 každá stranka baseline bola v snímke naozaj prečítaná; chýbajúca stranka je „neviem“,
 nie „čisté“.

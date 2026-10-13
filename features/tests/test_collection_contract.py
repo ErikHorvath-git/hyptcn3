@@ -93,7 +93,8 @@ def archive_result():
             "valid": [True] * 5, "perbin": np.zeros((5, 1, 4)), "biny": [0],
             "chain_ids": ["a"] * 5, "snimky": [str(i) for i in range(5)],
             "trvanie_s": [0.] * 5, "poznamky": [[]] * 5,
-            "quality": [{"model_valid": True}] * 5, "layout": {}, "max_medzera_s": 7.5}
+            "quality": [{"model_valid": True, "behavior_valid": True}] * 5,
+            "quality_policy": "legacy-vector-v1", "layout": {}, "max_medzera_s": 7.5}
 
 
 def test_archive_preserves_actual_gaps_bins_and_quality(tmp_path):

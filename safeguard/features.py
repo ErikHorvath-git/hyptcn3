@@ -18,9 +18,10 @@ from features.contract import validate_sidecar
 from features.perbin import Memslots
 from features.snapshot import MENA, SCHEMA, _vsetky_hlavicky, sidecar_cesta, vektor_snimky
 from features.windows import BIN_PRIZNAKY, perbin_zo_sidecaru
+from features.quality import BEHAVIOR_POLICY
 
 
-CONTRACT_SCHEMA = "hyptcn3/safeguard-features/1"
+CONTRACT_SCHEMA = "hyptcn3/safeguard-features/2"
 NORMALIZER_SCHEMA = "hyptcn3/safeguard-normalizer/1"
 GLOBAL_NAMES = tuple(BEHAVIOR_NAMES)
 LOCAL_NAMES = tuple(BIN_PRIZNAKY)
@@ -82,11 +83,11 @@ def _layout(layout, biny):
 
 
 def _quality(quality):
-    required = {"model_valid", "traversals_complete", "inconclusive", "findings",
+    required = {"model_valid", "behavior_valid", "traversals_complete", "inconclusive", "findings",
                 "read_errors", "filled_zero"}
     if not isinstance(quality, dict) or not required <= quality.keys():
         raise ValueError("missing structured quality metadata")
-    for key in ("model_valid", "traversals_complete"):
+    for key in ("model_valid", "behavior_valid", "traversals_complete"):
         if type(quality[key]) is not bool:
             raise ValueError(f"quality {key} must be boolean")
     if not isinstance(quality["inconclusive"], list) or not all(
@@ -98,9 +99,11 @@ def _quality(quality):
     for name in ("read_errors", "filled_zero"):
         _integer(quality[name], name)
     complete = (quality["traversals_complete"] and not quality["read_errors"]
-                and not quality["filled_zero"]
-                and not (set(quality["inconclusive"]) - {"text_integrity"}))
-    if quality["model_valid"] and not complete:
+                and not quality["filled_zero"])
+    if quality["behavior_valid"] and not complete:
+        raise ValueError("behavior_valid contradicts structured quality metadata")
+    if quality["model_valid"] and (not quality["behavior_valid"] or not complete
+            or (set(quality["inconclusive"]) - {"text_integrity"})):
         raise ValueError("model_valid contradicts structured quality metadata")
 
 
@@ -167,7 +170,7 @@ class Frame:
     @property
     def valid(self):
         _quality(self.quality)
-        return self.quality["model_valid"]
+        return self.quality["behavior_valid"]
 
     @property
     def full(self):
@@ -182,6 +185,8 @@ def frames_from_archive(data, session_id):
     """Import the versioned archive without guessing missing timing or quality."""
     if str(data["schema"]) != SCHEMA or tuple(data["mena"]) != MENA:
         raise ValueError("incompatible feature archive schema/order")
+    if str(data.get("quality_policy", "")) != BEHAVIOR_POLICY:
+        raise ValueError("incompatible feature quality policy; re-extract for behavioral inputs")
     quality = (json.loads(str(data["quality_json"])) if "quality_json" in data
                else data["quality"])
     layout = (json.loads(str(data["layout_json"])) if "layout_json" in data
@@ -239,7 +244,7 @@ def frame_from_snapshot(raw_dir, profile, seq, previous=None, session_id=None, *
         elif seq <= meta["seq"] or timestamp <= meta["timestamp"]:
             raise ValueError("non-increasing snapshot sequence/time")
         elif (seq != meta["seq"] + 1 or timestamp - meta["timestamp"] > gap
-              or not previous["quality"]["model_valid"]):
+              or not previous["quality"]["behavior_valid"]):
             previous = None
     vector, state, notes = vektor_snimky(raw_dir, str(profile), seq, previous)
     ids, local = perbin_zo_sidecaru(sidepath)
@@ -249,6 +254,8 @@ def frame_from_snapshot(raw_dir, profile, seq, previous=None, session_id=None, *
                    process_ids=sorted(state["pids"]), snapshot_path=str(head["path"]))
     quality["model_valid"] = (quality["model_valid"] and not quality["read_errors"]
                               and not quality["filled_zero"])
+    quality["behavior_valid"] = (quality["behavior_valid"] and not quality["read_errors"]
+                                and not quality["filled_zero"])
     frame = Frame(session, seq, timestamp, vector, local, ids, quality,
                   str(side["output"]["chain_id"]), layout)
     state["quality"] = quality
@@ -320,7 +327,7 @@ class WindowBuffer:
 def feature_contract(frame, window_rows, max_gap_s):
     rows, gap = _temporal(window_rows, max_gap_s)
     _layout(frame.layout, frame.biny)
-    return {"schema": CONTRACT_SCHEMA, "raw_names": list(MENA),
+    return {"schema": CONTRACT_SCHEMA, "quality_policy": BEHAVIOR_POLICY, "raw_names": list(MENA),
             "global_names": list(GLOBAL_NAMES), "local_names": list(LOCAL_NAMES),
             "biny": list(frame.biny), "layout": deepcopy(frame.layout),
             "window_rows": rows, "max_gap_s": gap}

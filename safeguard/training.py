@@ -20,6 +20,7 @@ import torch
 from torch import nn
 
 from features.archive import load as load_archive
+from features.quality import BEHAVIOR_POLICY, protocol_policy
 from .bundle import SCHEMA, digest
 from .features import (FeatureNormalizer, WindowBuffer, arrays, check_frame,
                        feature_contract, frames_from_archive)
@@ -73,8 +74,8 @@ def validate_index(path, diagnostic=False):
     protocol = _json(protocol_path)
     if protocol_hash != doc["protocol_sha256"] or protocol != doc["protocol_config"]:
         raise ValueError("corpus protocol checksum/configuration mismatch")
-    if protocol.get("schema") != "hyptcn3/collection-protocol/1":
-        raise ValueError("unsupported collection protocol")
+    if protocol_policy(protocol) != BEHAVIOR_POLICY:
+        raise ValueError("safeguard training requires the behavioral input protocol")
     records = copy.deepcopy(doc["sessions"])
     if not records:
         raise ValueError("empty corpus")

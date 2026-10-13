@@ -110,6 +110,8 @@ def nacitaj_sessions(adresar):
     for meno in sorted(labely):
         from features.archive import load
         d = load(os.path.join(adresar, meno + ".npz"))
+        if str(d["quality_policy"]) != "legacy-vector-v1":
+            raise ValueError("22-column diagnostics require legacy-vector-v1 extraction")
         mena = tuple(str(m) for m in d["mena"])
         if mena != tuple(MENA):
             raise ValueError("session %s ma ine poradie priznakov nez kontrakt"

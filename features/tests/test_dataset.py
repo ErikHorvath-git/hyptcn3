@@ -10,6 +10,7 @@ def record(tmp_path, role, number, boot=None):
     directory = tmp_path / f"{role}-{number}"
     directory.mkdir()
     result = archive_result()
+    result["quality_policy"] = "behavioral-inputs-v1"
     result["casy"] = [t + number * 100 for t in result["casy"]]
     feature_path = archive.save(directory / "features.npz", result)
     meta = {"session_id": directory.name, "role": role, "group": f"{role}-1",
@@ -28,7 +29,8 @@ def record(tmp_path, role, number, boot=None):
 
 
 def protocol():
-    return {"roles": dict.fromkeys(dataset.ROLES, 1), "scenarios": {"steady": {}}}
+    return {"schema": "hyptcn3/collection-protocol/2", "quality_policy": "behavioral-inputs-v1",
+            "roles": dict.fromkeys(dataset.ROLES, 1), "scenarios": {"steady": {}}}
 
 
 def test_complete_corpus_keeps_prescribed_roles(tmp_path):
@@ -66,7 +68,7 @@ def test_index_builder_and_trainer_accept_same_collection_provenance(tmp_path):
     """Exercise the CLI-produced index shape against training's strict reader."""
     from safeguard.training import validate_index
 
-    config = {**protocol(), "schema": "hyptcn3/collection-protocol/1",
+    config = {**protocol(),
               "window_rows": 3, "max_gap_s": 7.5, "interval_s": 5}
     protocol_path = tmp_path / "protocol.json"
     protocol_path.write_text(json.dumps(config))

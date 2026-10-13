@@ -1,0 +1,64 @@
+{
+  "schema": "hyptcn3/collection-protocol/2",
+  "name": "server-normal-v2",
+  "status": "pilot_required",
+  "domain": "hyptcn-lab",
+  "target": "http://127.0.0.1:18080",
+  "profile": "profiles/debian12-6.1.0-42-cloud-amd64",
+  "interval_s": 5,
+  "max_gap_s": 7.5,
+  "bin_bytes": 16777216,
+  "window_rows": 32,
+  "stride": 1,
+  "full_every": 360,
+  "cycles": 720,
+  "pilot_cycles": 480,
+  "warmup_s": 120,
+  "min_free_gib": 30,
+  "roles": {
+    "train": 3,
+    "dev": 1,
+    "calibration": 2,
+    "test_benign": 2
+  },
+  "scenarios": {
+    "quiet": {
+      "workers": 1,
+      "burst": 0,
+      "catalog_share": 0.5,
+      "write_share": 0.2
+    },
+    "steady": {
+      "workers": 4,
+      "burst": 0.2,
+      "catalog_share": 0.5,
+      "write_share": 0.2
+    },
+    "bursty": {
+      "workers": 8,
+      "burst": 1,
+      "catalog_share": 0.5,
+      "write_share": 0.2
+    },
+    "read_heavy": {
+      "workers": 6,
+      "burst": 0.5,
+      "catalog_share": 0.85,
+      "write_share": 0.02
+    },
+    "write_heavy": {
+      "workers": 6,
+      "burst": 0.5,
+      "catalog_share": 0.15,
+      "write_share": 0.65
+    },
+    "mixed": {
+      "workers": 5,
+      "burst": 0.7,
+      "catalog_share": 0.35,
+      "write_share": 0.35
+    }
+  },
+  "quality_policy": "behavioral-inputs-v1",
+  "min_score_coverage": 0.85
+}
