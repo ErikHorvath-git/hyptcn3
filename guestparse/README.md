@@ -50,6 +50,17 @@ Spoločné parametre: `--snapshot` (adresár s reťazcom `.vmicd`, jeden `.vmicd
 surový obraz), `--profile` (adresár s `kallsyms.txt` a `btf.txt`), `--json` (na stdout
 ide iba JSON; upozornenia idú na stderr), `--banner` (iný reťazec bannera),
 `--chain-until SEQ` (použi reťazec iba po danú časť — ako `vmicollect restore --until`).
+Parameter `--boot-id UUID` zadáva doloženú identitu bootu pre samostatný obraz.
+Pri native zbere sa identita načíta z `session.json` (collection) alebo `run.json`
+(safeguard) vedľa adresára `raw`; explicitný parameter s ňou nesmie byť v rozpore.
+
+Po teplom reštarte môžu v RAM zostať staré kópie jadra vrátane banneru,
+`init_task` a tabuliek stránok. Parser preto kontroluje `sysctl_bootid` v RAM
+proti identite zaznamenanej pred zberom. Bez nej vyžaduje jedinú kotvu;
+viac kandidátov, chýbajúca identita alebo viac zhodných kópií sú chybou vstupu.
+`info --json` uchováva kandidátov, vybraný boot aj očakávaný boot. Identita
+profilu z `boot.json` sa nezamieňa s identitou snímky. Ide o kontrolu súladu
+vstupov, nie o kryptografické overenie nezmeneného jadra.
 
 ## Návratové kódy
 

@@ -10,7 +10,9 @@ odlisit od skutocneho stavu hosta.
 
 import ipaddress
 import struct
+from uuid import UUID
 
+from .context import boot_uuid, capture_boot_id
 from .image import PAGE
 from .profile import ProfileError
 
@@ -58,7 +60,7 @@ class GuestView:
     # stranky v snimke.
     PGT_LEVELS = ("PGD", "PUD", "PMD", "PTE")
 
-    def __init__(self, img, prof):
+    def __init__(self, img, prof, expected_boot_id=None):
         self.img = img
         self.p = prof
         self.ktext_shift = None
@@ -66,6 +68,10 @@ class GuestView:
         self.banner = None
         self.banner_pa = None
         self.banner_candidates = 0
+        self.expected_boot_id = boot_uuid(expected_boot_id) if expected_boot_id is not None else None
+        self.snapshot_boot_id = None
+        self.kernel_candidates = []
+        self._resolve_error = None
         # Posun, o ktory sa profil preukotvil na boot snimky (A2);
         # 0 = profil a snimka su z toho isteho bootu.
         self.reanchored = 0
@@ -82,17 +88,29 @@ class GuestView:
 
         Skenuje sa banner: kazdy jeho vyskyt je kandidat na fyzicku adresu
         symbolu linux_banner. Kandidat plati az vtedy, ked pri jeho posune
-        sedi init_task.comm == "swapper/0" - jeden retazec v pamati sa najde
-        aj v inych kontextoch (log jadra, /proc data), samotny nalez nestaci.
+        sedi init_task.comm == "swapper/0". Po reboote moze RAM obsahovat
+        aj stare jadro s rovnakou dvojicou kotiev. Pri native zbere musi
+        sysctl_bootid sediet s identitou ulozenou pred zberom; bez nej sa
+        viac kandidatov odmietne. Pocet procesov ani verdikt integrity
+        nerozhoduju o tom, ktoru kopiu jadra vybrat.
         """
+        self.ktext_shift = self.page_offset_base = None
+        self.banner = self.banner_pa = self.snapshot_boot_id = None
+        self.kernel_candidates = []
+        self._resolve_error = None
         needle = (banner_text or "Linux version ").encode()
         comm_off = self.p.member("task_struct", "comm")
         banner_va = self.p.addr("linux_banner")
         init_va = self.p.addr("init_task")
         if comm_off is None or banner_va is None or init_va is None:
             return False
+        boot_va = self.p.addr("sysctl_bootid")
+        if self.expected_boot_id is not None and boot_va is None:
+            self._resolve_error = "profil nema sysctl_bootid; boot snimky sa neda overit"
+            return False
 
         seen = 0
+        matches = []
         for pa in self._find(needle):
             seen += 1
             shift = pa - (banner_va - START_KERNEL_MAP)
@@ -101,18 +119,31 @@ class GuestView:
                 continue
             comm = self.img.read(ipa + comm_off, 16)
             if comm and comm.split(b"\0")[0] == b"swapper/0":
-                self.ktext_shift = shift
-                self.banner_pa = pa
-                self.banner_candidates = seen
-                raw = self.img.read(pa, 256) or b""
-                self.banner = raw.split(b"\n")[0].split(b"\0")[0].decode(
-                    "utf8", "replace")
-                pob_sym = self.p.addr("page_offset_base")
-                if pob_sym is not None:
-                    self.page_offset_base = self.u64(self.ktext_pa(pob_sym))
-                return True
+                boot_pa = boot_va - START_KERNEL_MAP + shift if boot_va is not None else None
+                raw_boot = self.img.read(boot_pa, 16) if self._ok(boot_pa, 16) else None
+                boot_id = str(UUID(bytes=raw_boot)) if raw_boot and len(raw_boot) == 16 and any(raw_boot) else None
+                candidate = {"banner_pa": pa, "init_task_pa": ipa, "boot_id": boot_id}
+                self.kernel_candidates.append(candidate)
+                if self.expected_boot_id is None or boot_id == self.expected_boot_id:
+                    matches.append((shift, candidate))
         self.banner_candidates = seen
-        return False
+        if not matches:
+            if self.expected_boot_id is not None:
+                self._resolve_error = "ziadna kotva jadra nema zaznamenany boot_id " + self.expected_boot_id
+            return False
+        if len(matches) != 1:
+            self._resolve_error = ("nejednoznacne kotvy jadra: %d kandidatov; "
+                                   "treba jednoznacny boot_id zo zberu" % len(matches))
+            return False
+        self.ktext_shift, selected = matches[0]
+        self.banner_pa = selected["banner_pa"]
+        self.snapshot_boot_id = selected["boot_id"]
+        raw = self.img.read(self.banner_pa, 256) or b""
+        self.banner = raw.split(b"\n")[0].split(b"\0")[0].decode("utf8", "replace")
+        pob_sym = self.p.addr("page_offset_base")
+        if pob_sym is not None:
+            self.page_offset_base = self.u64(self.ktext_pa(pob_sym))
+        return True
 
     def resolve_problem(self):
         """
@@ -128,6 +159,8 @@ class GuestView:
         """
         if self.ktext_shift is not None:
             return None
+        if self._resolve_error:
+            return self._resolve_error
         chyba = [n for n in ("linux_banner", "init_task")
                  if self.p.addr(n) is None]
         if self.p.member("task_struct", "comm") is None:
@@ -620,6 +653,9 @@ class GuestView:
             "banner": self.banner,
             "banner_pa": self.banner_pa,
             "banner_candidates": self.banner_candidates,
+            "expected_boot_id": self.expected_boot_id,
+            "snapshot_boot_id": self.snapshot_boot_id,
+            "kernel_candidates": self.kernel_candidates,
             "ktext_shift": self.ktext_shift,
             # 0 = profil a snimka su z toho isteho bootu; inak posun, o ktory
             # sa profil preukotvil (A2)
@@ -700,7 +736,9 @@ class GuestView:
         Podmienka je preto: symbol sa na linearne vypocitanej adrese precitat
         DA a obsah sedi (init_task.comm == "swapper/0", resp. banner na
         najdenej adrese), ale prechod tabuliek stranok pre jeho virtualnu
-        adresu skoncil na NEPRITOMNEJ polozke v tabulke, ktora v snimke je.
+        adresu skoncil na NEPRITOMNEJ polozke v tabulke, ktora v snimke je,
+        alebo mapoval na inu fyzicku stranku. Prekryv KASLR rozsahov medzi
+        bootmi nezarucuje zhodu len tym, ze sa stara VA da prelozit.
         S profilom z toho isteho bootu tato dvojica nastat nemoze.
 
         Vracia None (nic tomu nenasvedcuje) alebo text diagnozy.
@@ -714,7 +752,9 @@ class GuestView:
             lin = self.ktext_pa(va)
             d = self.walk_pa_detail(va)
             if d["pa"] is not None:
-                return None                   # prechod presiel - profil sedi
+                if d["pa"] != lin and self._linear_confirmed(name, lin):
+                    return self._mismatch_text(name, va, lin, d)
+                continue                      # verify the other anchor too
             if d["reason_code"] != "chyba_polozka":
                 continue                      # tabulku nemame: nedokazuje nic
             if not self._linear_confirmed(name, lin):
@@ -724,13 +764,15 @@ class GuestView:
 
     def _mismatch_text(self, name, va, lin, d):
         """Hlaska diagnozy: co sa stalo, preco to tak je a co s tym."""
+        outcome = ("mapuje na inu fyzicku adresu 0x%x." % d["pa"]
+                   if d["pa"] is not None else
+                   "skoncil na urovni %s, %s." % (d["level"], d["reason"]))
         riadky = [
             "NESULAD PROFILU: kallsyms je z ineho startu jadra (KASLR), nez je "
             "snimka.",
             "  symbol %s: linearne sa cita z 0x%x (obsah sedi), ale prechod "
             "tabuliek stranok" % (name, lin),
-            "  pre VA 0x%x skoncil na urovni %s, %s."
-            % (va, d["level"], d["reason"]),
+            "  pre VA 0x%x %s" % (va, outcome),
             "  Tabulky stranok su indexovane virtualnymi adresami TOHTO startu; "
             "adresy v kallsyms.txt",
             "  su z ineho. Offsety poli z BTF reboot prezivaju, adresy symbolov "
@@ -755,8 +797,7 @@ class GuestView:
         Ako to funguje. KASLR posuva obraz jadra pri kazdom starte, ale
         VZDY rovnako pre vsetky symboly - preto staci najst posun `delta`
         medzi bootom profilu a bootom snimky. Neberie sa zo samotneho
-        banneru (ten da spravne fyzicke adresy, ale virtualne o konstantu
-        inak - obraz jadra sa mapuje s rezidualnym posunom 2 MiB), ale
+        banneru (ten ukotvi fyzicke adresy, nie aktualne virtualne adresy), ale
         MERIA sa z tabuliek stranok: pre znamu fyzicku adresu init_task
         (overenu obsahom comm == "swapper/0" v resolve()) sa najde virtualna
         adresa, ktora ju mapuje; delta = VA_v_snimke - VA_v_profile.
@@ -836,7 +877,7 @@ class GuestView:
         }
 
 
-def build_view(image_path, profile_dir, banner_text=None, until_seq=None):
+def build_view(image_path, profile_dir, banner_text=None, until_seq=None, *, expected_boot_id=None):
     """
     Otvori snimku, nacita profil a najde posun. Vracia (view, image).
 
@@ -847,8 +888,13 @@ def build_view(image_path, profile_dir, banner_text=None, until_seq=None):
     from .image import open_image
     from .profile import Profile
 
+    expected_boot_id = capture_boot_id(image_path, expected_boot_id)
     img = open_image(image_path, until_seq=until_seq)
-    prof = Profile.from_dir(profile_dir)
-    view = GuestView(img, prof)
-    view.resolve(banner_text)
+    try:
+        prof = Profile.from_dir(profile_dir)
+        view = GuestView(img, prof, expected_boot_id)
+        view.resolve(banner_text)
+    except BaseException:
+        img.close()
+        raise
     return view, img

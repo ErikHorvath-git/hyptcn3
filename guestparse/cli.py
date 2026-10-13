@@ -80,6 +80,8 @@ def _add_common(sp):
     sp.add_argument("--banner", default=None,
                     help="retazec banneru na hladanie posunu "
                          "(vychodzie: 'Linux version ')")
+    sp.add_argument("--boot-id", default=None,
+                    help="boot UUID zaznamenane pri zbere; native sessions ho nacitaju z metadat")
     sp.add_argument("--chain-until", type=int, default=None, metavar="SEQ",
                     dest="chain_until",
                     help="pouzi retazec .vmicd iba po danu cast (seq); "
@@ -217,7 +219,7 @@ def _print_info(res):
         print("posun jadra:   NENAJDENY - %s" % res["resolve_problem"])
         return
     print("banner:        %s" % res["banner"])
-    print("banner PA:     0x%x (kandidat %d)"
+    print("banner PA:     0x%x (vyskytov bannera %d)"
           % (res["banner_pa"], res["banner_candidates"]))
     shift = res["ktext_shift"]
     print("posun jadra:   %s0x%x" % ("-" if shift < 0 else "", abs(shift)))
@@ -360,7 +362,7 @@ def main(argv=None):
 
     try:
         view, img = build_view(args.snapshot, args.profile, args.banner,
-                               until_seq=args.chain_until)
+                               until_seq=args.chain_until, expected_boot_id=args.boot_id)
     except Exception as exc:
         sys.stderr.write("chyba: %s\n" % exc)
         return EXIT_ERROR

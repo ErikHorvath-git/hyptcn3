@@ -115,6 +115,20 @@ def test_spravny_profil_diagnozu_nevyvola(mini_view):
     assert all(r["match"] for r in mini_view.translation_check())
 
 
+def test_mapped_but_different_physical_anchor_is_a_mismatch(mini_view, monkeypatch):
+    original = mini_view.walk_pa_detail
+
+    def shifted(va):
+        result = original(va)
+        if va == mini_view.p.addr("linux_banner"):
+            result["pa"] += 4096
+        return result
+
+    monkeypatch.setattr(mini_view, "walk_pa_detail", shifted)
+    # The first anchor still matches; it must not hide a mismapped second one.
+    assert "inu fyzicku adresu" in mini_view.profile_boot_mismatch()
+
+
 def test_chybajuca_tabulka_nie_je_nesulad(mini_view):
     """
     Adresa, ktoru mala snimka nepokryva, sa neprelozi - a to o profile

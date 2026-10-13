@@ -967,7 +967,8 @@ Jeden cyklus, kompletne:
  9. guestparse.profile.Profile: kallsyms (92698 symbolov v dnešnom profile) + offsety z BTF
       ▼
 10. guestparse.view.GuestView.resolve(): sken banneru → kandidáti na posun jadra
-      │  → overenie init_task.comm == "swapper/0" → ktext_shift, page_offset_base
+      │  → init_task.comm == "swapper/0" + identita bootu → jediná kotva
+      │  → ktext_shift, page_offset_base
       ▼
 11. preklad adries: lineárne vetvy (obraz jadra, priamy mapping) alebo
       │  prechod tabuliek stránok z init_top_pgt (moduly, vmalloc)
@@ -995,10 +996,14 @@ Postup:
    spája susedné stránky, aby sa reťazec na hranici stránok nestratil.
 2. Každý výskyt je kandidát na fyzickú adresu symbolu `linux_banner`; z neho vyplýva
    posun `shift = pa − (banner_va − __START_KERNEL_map)`.
-3. Kandidát platí až vtedy, keď pri jeho posune `init_task.comm` naozaj obsahuje
-   `"swapper/0"`. **Posun sa teda nehádže.** V meranej snímke bol správny až 10. kandidát
-   — reťazec sa v pamäti nachádza aj v logu jadra a v dátach `/proc`, takže samotný nález
-   nestačí.
+3. Kandidát musí mať pri tomto posune `init_task.comm == "swapper/0"`.
+   Samotná dvojica ešte nestačí: RAM po reštarte môže obsahovať viac kópií jadra.
+4. Pri native zbere `guestparse.context` načíta boot UUID zaznamenané pred zberom
+   a resolver ho porovná so `sysctl_bootid` každej kópie. Vyžaduje jedinú zhodu.
+   Bez metadát vyžaduje jediného kandidáta alebo explicitne doloženú identitu;
+   nejednoznačnosť znamená chybu vstupu. Boot profilu neurčuje boot snímky.
+   Kandidáti a vybraná identita sú v `info --json`. Rozhodnutie nevyužíva
+   modelové skóre, úplnosť procesného zoznamu ani výsledok kontrol integrity.
 
 Výsledok pre meranú snímku: posun `-0x200000`, `banner PA = 0x16f1f560`,
 `page_offset_base = 0xffff99c940000000`.
@@ -1016,8 +1021,9 @@ vetvy je `MODULES_VADDR`: nad ňou lineárny vzťah neplatí a výpočet by tich
 stránku. `walk_pa()` rozpoznáva veľké stránky podľa bitu PSE. Správnosť sa kontroluje
 krížovo — `info` porovná lineárny výpočet a prechod tabuliek pre `linux_banner`
 a `init_task`; v meranej snímke obe sedia (výpis v časti 7.2). Z tej istej dvojice stavia
-`GuestView.profile_boot_mismatch()` diagnózu „profil je z iného štartu jadra"; volá sa
-pred **každým** podpríkazom a pri nesúlade končí príkaz kódom 5 (L17).
+`GuestView.profile_boot_mismatch()` diagnózu „profil je z iného štartu jadra".
+Za nesúlad považuje aj úspešný preklad na inú fyzickú stránku. Pred parsovaním
+sa skúsi preukotvenie s oboma kotvami; ak neuspeje, platí kód 5 (L17).
 
 **Miesto 3 — rekonštrukcia objektov (`view.py`, `checks.py`).** Offsety polí sa berú z BTF
 hosťa, nie z hlavičkových súborov: rozloženie štruktúr závisí od konfigurácie jadra

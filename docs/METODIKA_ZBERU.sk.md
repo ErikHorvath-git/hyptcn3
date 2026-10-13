@@ -117,6 +117,14 @@ Pravidlá nadväzujú na `features.windows` používané auditom:
 
 1. Overiť schému, konečné čísla, pomery, počty stránok, identitu binov a ich súčty.
 2. Overiť ukotvenie profilu po KASLR ešte pred parsovaním objektov.
+   Pri native zbere sa `sysctl_bootid` v RAM musí zhodovať s boot UUID,
+   ktoré orchestrácia uložila pred zberom. RAM po reštarte môže obsahovať
+   aj staré jadro s platným bannerom a `init_task`; prvá nájdená kópia nestačí.
+   Nejednoznačná alebo chýbajúca kotva znamená chybu vstupu. Historická
+   samostatná snímka bez metadát potrebuje jediného kandidáta, prípadne
+   explicitný doložený `--boot-id` v CLI parsera. Boot profilu sa nepoužije
+   ako identita snímky. Táto kontrola nevyberá jadro podľa počtu procesov,
+   modelového skóre ani výsledku kontrol integrity.
 3. Neúplný prechod procesov, modulov alebo soketov nie je normálny počet.
    Taká snímka má `behavior_valid=false` a nesmie vstúpiť do modelového okna.
    Krížový pohľad na procesy/moduly, tabuľky volaní a text jadra nie sú vstupmi
@@ -155,6 +163,12 @@ neuzavretých riadkov pre každú kontrolu a sekvencie neplatných vstupov model
 Benígny beh s nálezom integrity sa zamietne do jeho samostatného preskúmania,
 aj keď sú behaviorálne vstupy úplné. Zmena dostupnosti kontroly sa nesmie
 v budúcich útokových experimentoch zameniť za úspešnú detekciu.
+
+Oprava chyby parsera nad nezmenenými surovými dátami vyžaduje nový audit
+a nový archív príznakov s hashmi opraveného extraktora. Pôvodné výstupy
+zostávajú zachované spolu s dôvodom opravy; nejde o nový živý zber.
+Konfigurácia experimentu a pravidlá prijatia sa tým nemenia. Korpus nesmie
+miešať výstupy rôznych verzií extraktora.
 
 ## 5. Rozdelenie korpusu a scenáre
 

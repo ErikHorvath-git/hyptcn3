@@ -991,3 +991,60 @@ Krátke diagnostické okno v tomto overení slúži iba na kontrolu kontinuity.
 Nie je to okno výskumného protokolu, meranie pokrytia nového pilotu ani
 výsledok detekcie. Zamietnutý pilot v1 sa nepreklasifikoval na prijatý;
 v2 vyžaduje nový zber s vopred určenou konfiguráciou.
+
+
+## 2026-10-13 — pilot v2: dokončený zber, chybná kotva po reštarte
+
+Session `data/collections/20261013T140853080075Z_pilot_steady` vznikla
+podľa nezmeneného `config/collection-v2.json` z commitu `6fcd6f9`, skupina
+`pilot-2`, scenár `steady`, seed `102`. Zber aj prvý audit prebehli s čistým
+pracovným stromom. Pôvodný audit je bez zmeny uložený ako
+`data/results/collection_pilot_v2_20261013_audit.json`; podporné počítadlá,
+zdroje a postup ich agregácie obsahuje
+`data/results/collection_pilot_v2_20261013_summary.json`.
+
+Zber dokončil 480 {{res:collection_pilot_v2_20261013_summary.json:values.capture.snapshots}}
+snímok, s počtom chýb čítania
+0 {{res:collection_pilot_v2_20261013_summary.json:values.capture.read_errors}}
+a vynechaných intervalov
+0 {{res:collection_pilot_v2_20261013_summary.json:values.capture.skipped_slots}}.
+Najdlhší cyklus zberača trval
+1972,359 ms {{res:collection_pilot_v2_20261013_summary.json:values.capture.max_cycle_ms}}.
+Surové obrazy zaberajú
+5,492 GiB {{res:collection_pilot_v2_20261013_summary.json:values.capture.raw_gib}}.
+Premávka vrátane zahrievania skončila s počtom úspešných požiadaviek
+19144 {{res:collection_pilot_v2_20261013_summary.json:values.traffic.including_warmup.ok}}
+a chýb
+0 {{res:collection_pilot_v2_20261013_summary.json:values.traffic.including_warmup.errors}}.
+
+Prvý audit v2 napriek tomu zamietol všetky vstupy: počet platných okien bol
+0 {{res:collection_pilot_v2_20261013_audit.json:values.windows}}.
+V RAM zostali dve kópie banneru a `init_task` z rôznych bootov. Starý
+resolver vybral prvú obsahovo zodpovedajúcu dvojicu, ktorej zvyšné objekty
+už nepatrili aktívnemu jadru. Reukotvenie KASLR samo osebe túto chybu
+neodhalilo: aj stará kópia mala zvyšky zodpovedajúcich tabuliek stránok.
+
+Oprava overuje `sysctl_bootid` z RAM proti boot UUID uloženému orchestráciou
+pred zberom. Nepýta sa bežiaceho hosťa počas extrakcie. Pri chýbajúcej alebo
+nejednoznačnej zhode zlyhá; bez identity pripustí iba jedinú kotvu.
+Profilový `boot.json` nie je dôkazom bootu snímky. Rovnaká funkcia sa používa
+pri audite aj pri spracovaní surovej RAM safeguardom. Krížová kontrola adries
+zároveň odmieta aj mapovanie symbolu na inú fyzickú stránku, nielen chýbajúcu
+položku tabuľky.
+
+Diagnostika `data/results/boot_anchor_validation_20261013_a.json` overila
+6 {{res:boot_anchor_validation_20261013_a.json:n}} uložených snímok zo začiatku,
+priebehu, rotácie a konca zberu. Každá obsahovala starú aj aktuálnu kotvu;
+vybraná identita sa zhodovala s metadátami zberu. Po preukotvení sa obe
+kontrolované adresy zhodovali s prechodom tabuliek a primárne prechody boli
+úplné. Pamäťové príznaky a lokálne biny sa oproti pôvodnej extrakcii nezmenili.
+Hashe všetkých surových vstupov boli overené. Táto diagnostika nie je audit
+celej session ani výsledok detekcie; nový úplný audit ešte musí prebehnúť.
+
+Overená kópia pôvodnej session je na
+`/run/media/eh/Seagate Expansion Drive/hyptcn3/collections/20261013T140853080075Z_pilot_steady`.
+Kopírovanie overilo SHA-256 zdroja aj cieľa pre každý z
+980 {{res:collection_pilot_v2_20261013_summary.json:values.archive.files}} súborov
+aj nemennosť zdroja počas prenosu. Cesta a hash úplného manifestu sú v súhrne.
+Pôvodné dáta na internom disku zostávajú zachované; absolútne cesty vo vnútri
+metadát sa pri zálohe neprepisovali.
