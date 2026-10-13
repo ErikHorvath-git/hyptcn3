@@ -343,7 +343,6 @@ def audit_capture(directory, manifest, p, row, session, guard):
                            timeout=max(600, p["cycles"] * 15), guard=guard)
             if rc not in (0, 2) or not report.exists():
                 raise ValueError("audit did not produce a verdict; see campaign log")
-        write_new(pointer, {"path": str(report), "sha256": digest(report)})
     doc = read_json(report)
     v = doc["values"]
     if (v["protocol_sha256"] != manifest["protocol_sha256"] or doc["commit"] != manifest["commit"]
@@ -352,6 +351,8 @@ def audit_capture(directory, manifest, p, row, session, guard):
             or v["session_sha256"] != digest(session / "session.json")
             or digest(v["features"]) != v["features_sha256"]):
         raise ValueError("audit provenance differs from campaign/session")
+    if not pointer.exists():
+        write_new(pointer, {"path": str(report), "sha256": digest(report)})
     return report, v
 
 

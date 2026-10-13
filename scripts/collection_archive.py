@@ -8,6 +8,7 @@ from datetime import datetime, timezone
 import json
 import os
 from pathlib import Path
+import re
 import shutil
 import stat
 import subprocess
@@ -35,6 +36,16 @@ def sync_dir(path):
         os.fsync(fd)
     finally:
         os.close(fd)
+
+
+def mkdir_durable(path):
+    """Persist each new directory's entry before relying on its descendants."""
+    path = Path(path)
+    if path.is_dir():
+        return
+    mkdir_durable(path.parent)
+    path.mkdir()
+    sync_dir(path.parent)
 
 
 def write_new(path, doc, *, replace=False):
@@ -133,16 +144,21 @@ def publish_archive(source, destination, guard, reserve_bytes):
     if (source / RECEIPT).exists() or (source / PENDING).exists():
         raise ValueError("archive missing after local reclamation was started")
     expected = inventory(source)
-    if MANIFEST in expected or RECEIPT in expected or any(n.endswith(".copying") for n in expected):
+    if (MANIFEST in expected or RECEIPT in expected
+            or any(n.endswith(".copying") or n.startswith("." + MANIFEST + ".") for n in expected)):
         raise ValueError("reserved archive metadata in source")
     needed = sum(v["size"] for v in expected.values())
-    destination.parent.mkdir(parents=True, exist_ok=True)
+    mkdir_durable(destination.parent)
     partial = destination.with_name(".partial-" + destination.name)
     if partial.is_symlink():
         raise ValueError("archive staging directory is a symlink")
-    partial.mkdir(exist_ok=True)
+    mkdir_durable(partial)
     # Remaining work, not already verified staged files, determines free space.
     staged = files_in(partial)
+    for name in list(staged):
+        # A kill between fsync(temp) and publication may leave this scratch file.
+        if re.fullmatch(r"\.archive-manifest\.json\.[0-9a-f]{32}\.tmp", name):
+            staged.pop(name).unlink()
     allowed = set(expected) | {MANIFEST} | {n + ".copying" for n in expected}
     if set(staged) - allowed:
         raise ValueError("unexpected file in archive staging directory")
@@ -152,7 +168,7 @@ def publish_archive(source, destination, guard, reserve_bytes):
     for name, item in expected.items():
         guard()
         target = partial / name
-        target.parent.mkdir(parents=True, exist_ok=True)
+        mkdir_durable(target.parent)
         if target.exists():
             check_file(target, item)
             target.with_name(target.name + ".copying").unlink(missing_ok=True)

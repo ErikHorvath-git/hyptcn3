@@ -64,6 +64,23 @@ def test_corrupt_published_archive_never_authorizes_deletion(session):
     assert not (src / arc.RECEIPT).exists()
 
 
+@pytest.mark.parametrize("manifest_published", [False, True])
+def test_interrupted_atomic_manifest_publication_resumes(session, manifest_published):
+    src, dst = session
+    partial = dst.with_name(".partial-" + dst.name)
+    if manifest_published:
+        arc.archive_session(src, dst, lambda: None)
+        dst.rename(partial)
+    else:
+        partial.mkdir(parents=True)
+    temp = partial / ("." + arc.MANIFEST + "." + "a" * 32 + ".tmp")
+    temp.write_text('{"partial":')
+    move(src, dst)
+    assert not (dst / temp.name).exists()
+    arc.verify_archive(dst, src)
+    assert (src / "raw").is_symlink()
+
+
 @pytest.mark.parametrize("phase", ["rename", "unlink"])
 def test_crash_during_reclamation_is_resumable(session, monkeypatch, phase):
     src, dst = session

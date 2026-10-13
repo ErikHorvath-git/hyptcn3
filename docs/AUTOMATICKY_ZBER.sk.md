@@ -91,6 +91,7 @@ Dokončené session sa nezbierajú znova. Prerušené kopírovanie a uvoľňovan
 pracovných raw kópií sú obnoviteľné. Prerušená extrakcia dostane nový názov
 výstupu, pôvodný čiastočný výstup zostáva. Hotový zamietavý verdikt sa nesmie
 obísť opakovaním auditu. Zber sa po prerušení nedopĺňa chýbajúcimi snímkami.
+Neúplný JSON auditu nie je hotovým verdiktom a nezamkne výber ďalšieho auditu.
 
 Ak sa zber nedokončil alebo audit session zamietol, runner uloží jej archív
 a zastaví alokáciu. Nevymení ju automaticky za úspešnejšiu session. Dôvod
@@ -123,5 +124,7 @@ hranice, zámok, poškodenie dát, prerušenie kopírovania a prerušenie uvoľn
 pracovnej kópie. Nie sú dôkazom dokončeného živého korpusu.
 `scripts/validate_campaign_archive.py` samostatne overuje reálny disk:
 kopíruje existujúci pilot bez zmeny pôvodných dát a uvoľňovanie skúša na
-syntetickej pracovnej kópii. Výsledky vykonaných overení patria do
+syntetickej pracovnej kópii. Vykonaný beh je v
+[`campaign_archive_validation_20261013_a.json`](../data/results/campaign_archive_validation_20261013_a.json).
+Výsledky vykonaných overení patria do
 [`MERANIA.md`](MERANIA.md), nie do označenia plánovaných session za merania.

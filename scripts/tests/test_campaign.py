@@ -42,7 +42,8 @@ def lab(tmp_path, monkeypatch):
     write_new(directory / "campaign.json", manifest)
     state = {"directory": directory, "manifest": manifest, "p": p, "rows": rows,
              "captures": captures, "calls": [], "boot": "pilot-boot", "reboots": 0,
-             "capture_complete": True, "audit_accepted": True, "interrupt_audit": False}
+             "capture_complete": True, "audit_accepted": True, "interrupt_audit": False,
+             "truncate_audit": False}
     monkeypatch.setattr(c, "COLLECTIONS", captures)
     monkeypatch.setattr(os, "geteuid", lambda: 0)
     monkeypatch.setenv("SUDO_USER", "test-owner")
@@ -83,6 +84,9 @@ def lab(tmp_path, monkeypatch):
         feature.write_bytes(b"synthetic feature archive")
         if state["interrupt_audit"]:
             raise InterruptedError("interrupted extractor")
+        if state["truncate_audit"]:
+            report.write_text('{"schema":')
+            return 2
         row = next(r for r in rows if r["session_id"] == src.name)
         write_new(report, {"schema": "hyptcn3/collection-audit/1", "commit": manifest["commit"],
                   "commit_dirty": False, "values": {"accepted": state["audit_accepted"],
@@ -143,11 +147,13 @@ def test_failed_assignment_is_archived_but_never_replaced(lab, failure):
     assert not list((lab["directory"] / "attempts").glob("*.done.json"))
 
 
-def test_interrupted_extraction_retries_without_recapturing(lab):
-    lab["interrupt_audit"] = True
-    with pytest.raises(InterruptedError, match="extractor"):
+@pytest.mark.parametrize("failure", ["interrupt_audit", "truncate_audit"])
+def test_interrupted_extraction_retries_without_recapturing(lab, failure):
+    lab[failure] = True
+    with pytest.raises((InterruptedError, json.JSONDecodeError)):
         c.execute(lab["directory"])
-    lab["interrupt_audit"] = False
+    assert not list((lab["directory"] / "attempts").glob("*.audit.json"))
+    lab[failure] = False
     c.execute(lab["directory"], stop_after=1)
     assert lab["calls"].count("capture") == 1
     assert lab["calls"].count("audit") == 2

@@ -1096,3 +1096,39 @@ núdzová rezerva protokolu sa ponechá navyše. Artefakt uchováva aj rozdeleni
 časovača `feature_extraction_s` z offline auditu. Živý spoločný zber a detektor
 stále vyžadujú samostatné meranie. Pred kampaňou zostáva dokončiť priebežné
 archivovanie a správu pracovných kópií na internom disku.
+
+
+## 2026-10-13 — overenie automatickej archivácie na Seagate
+
+`scripts/campaign.py` implementuje zmrazený plán benígneho zberu, riadené
+reštarty skupín, spustenie zberača, offline audity, archiváciu a zostavenie
+indexu. Jednotkové integračné testy používajú nahradené procesy zberača a
+auditu; overujú riadenie a chybové stavy, nie nový živý korpus.
+Postup obsluhy je v `docs/AUTOMATICKY_ZBER.sk.md`.
+
+`data/results/campaign_archive_validation_20261013_a.json` obsahuje
+2 {{res:campaign_archive_validation_20261013_a.json:n}} funkčné prípady
+z commitu `ea3dc4b`: kopírovanie existujúcej reálnej session a uvoľnenie
+samostatnej syntetickej pracovnej kópie. Nie sú to nezávislé opakovania
+RAM zberu ani experimenty detekcie.
+
+Kópia prijatého pilotu na pripojenom Seagate má
+982 {{res:campaign_archive_validation_20261013_a.json:values.real_session_copied_files}}
+súborov. Archivácia overila ich SHA-256 aj nemennosť zdroja, zviazala
+archivované obrazy a príznaky s prijatým auditom a samostatne znovu overila
+publikovaný archív. Artefakt obsahuje cestu a hash manifestu aj UUID disku.
+Pôvodná session aj jej surové súbory zostali na internom disku nezmenené.
+
+Syntetický prípad obsahoval
+4 {{res:campaign_archive_validation_20261013_a.json:values.synthetic_reclamation_files}}+súbory. Po overení kópie sa lokálny `raw/` nahradil odkazom do archívu
+a pracovné raw súbory sa odstránili. Opätovné spustenie prešlo, lokálna
+cesta príznakov sa nezmenila a vyhľadanie native bootových metadát fungovalo
+aj po vyriešení odkazu. Syntetické bajty sa neparsovali ako RAM a nevstúpili
+do datasetu.
+
+Kód navyše ošetruje prerušenie pri zápise manifestu, premenovaní raw adresára,
+odstraňovaní už overených pracovných súborov a neúplnom zápise auditu. Také
+prípady majú regresné testy; hotový zamietavý verdikt sa opakovaním neobchádza.
+Adresárové položky novej archívnej cesty sa synchronizujú pred uvoľnením
+zdroja. Plná živá kampaň zostáva samostatným zberom; tento záznam nepotvrdzuje
+jej dokončenie, pripravený natrénovaný model ani účinnosť voči malvéru.
