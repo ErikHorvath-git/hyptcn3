@@ -7,9 +7,10 @@ dát a nový beh nad VM. Diagnostický model nie je modelom natrénovaným na
 serverovom korpuse. Účinnosť proti útokom, falošné alarmy pri dlhšej prevádzke
 a vplyv celého detektora na VM ešte neboli touto integráciou vyhodnotené.
 
-Prijatý pilot a nový benígny korpus podľa
-[`METODIKA_ZBERU.sk.md`](METODIKA_ZBERU.sk.md) zostávajú podmienkou ďalšej
-experimentálnej etapy. Nový spoločný beh `run` s hostiteľským eBPF zberom je
+Pilot podľa [`METODIKA_ZBERU.sk.md`](METODIKA_ZBERU.sk.md) má
+[prijatý audit](../data/results/collection_pilot_v2_20261013_reaudit.json).
+Nový benígny korpus zostáva podmienkou tréningu a ďalšej experimentálnej etapy.
+Nový spoločný beh `run` s hostiteľským eBPF zberom je
 zatiaľ **UNVERIFIED**; staršie overenie samostatného zberača ho nenahrádza.
 Výstupy vykonaných overení sa evidujú v [`MERANIA.md`](MERANIA.md).
 Konkrétny integračný záznam vrátane zhody spracovania uložených RAM dát je
@@ -213,7 +214,7 @@ dlhodobé meranie časovania, spotreby zdrojov a vplyvu na služby hosťa.
 
 ## Čo zostáva experimentálne overiť
 
-- Prijať pilot a nazbierať benígny korpus s oddelenými bootmi a rolami.
+- Nazbierať benígny korpus s oddelenými bootmi a rolami; pilotný audit je prijatý.
 - Natrénovať modely nad touto prevádzkou a zmraziť kalibráciu pred testami.
 - Overiť spoločný hostiteľský zber a detektor vrátane dlhého reťazca a backlogu.
 - Porovnať TCN s alternatívami a vyhodnotiť klasifikáciu aj falošné alarmy.

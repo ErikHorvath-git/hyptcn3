@@ -1,0 +1,49 @@
+{
+  "schema": "hyptcn3/pilot-readiness-estimate/1",
+  "commit": "bf6ed3769d1a57aadd059b6bb057681cedc8d793",
+  "date": "2026-10-13T15:31:50.305079+00:00",
+  "host": "Linux-7.2.5-100.fc43.x86_64-x86_64-with-glibc2.42",
+  "guest": {
+    "kernel": "6.1.0-42-cloud-amd64",
+    "boot_id": "1602ed36-8187-4f33-bbaa-a36ebff348b4",
+    "machine_id": "95ef9ee3bbc4447fab58abc4a04decbc",
+    "stack_sha256": "e01385b256e27f6479e0ef899bcb4ff18bf658416ad07e41d5b35568f06f93a5",
+    "stack_manifest": [
+      "61e339da8d3fc8dab38f6d60fa49860afbb5248fe5963879a14c036aec37b957  /opt/hyptcn-lab/services.py",
+      "d7372422553f866333177456ac6daec4847f5660c1c854a646e602d0be0fcf6c  /opt/hyptcn-lab/schema.sql",
+      "08f376bb8fd855e2b2b9ef454b6fdb73bcb08efec2eb24ddd9734796f056530b  /etc/nginx/conf.d/hyptcn-lab.conf",
+      "af75eee623f3c7a0b7a1c10a35c2216684c6f4b610d44e46560de137ef3d6962  /etc/systemd/system/hyptcn-lab@.service",
+      "nginx\t1.22.1-9+deb12u9",
+      "postgresql\t15+248+deb12u1",
+      "python3\t3.11.2-1+b1",
+      "python3-psycopg2\t2.9.5-1+b1"
+    ]
+  },
+  "command": "Estimate = audited raw_bytes * (sum(protocol.roles.values()) * len(protocol.scenarios) * protocol.cycles) / audited snapshots; reserve multiplier 1.5; shutil.disk_usage(storage).free; timing percentiles by nearest rank from feature_extraction_s.",
+  "n": 480,
+  "values": {
+    "source_audit": "/home/eh/Desktop/hyptcn3/data/results/collection_pilot_v2_20261013_reaudit.json",
+    "source_audit_sha256": "6bc4329c8985f92f82e9b5fbea41d3596ca05bd6a8a6f6a83e347588e1571c9d",
+    "protocol_sha256": "e9d2bfbf38ae13e772b4c5407eeb6ec272898b683db9765e9542f08f4ead2a85",
+    "planned_sessions": 48,
+    "planned_snapshots": 34560,
+    "projected_raw_gib": 395.42814445495605,
+    "projected_with_50_percent_reserve_gib": 593.1422166824341,
+    "required_including_stop_reserve_gib": 623.1422166824341,
+    "storage": "/run/media/eh/Seagate Expansion Drive/hyptcn3",
+    "external_free_gib": 785.5364570617676,
+    "internal_free_gib": 201.7781105041504,
+    "offline_feature_extraction_s": {
+      "minimum": 0.4509590779998689,
+      "p50_nearest_rank": 1.0181715519993304,
+      "p95_nearest_rank": 1.48845294900093,
+      "maximum": 1.6091151159998844
+    },
+    "assumptions": [
+      "All scenarios are extrapolated from one steady pilot; this is a capacity estimate, not measured corpus size.",
+      "Keep the protocol disk stop reserve in addition to the planning multiplier.",
+      "Capture staging on the internal disk requires per-run verified archiving and separately managed retention; external backup copies alone do not free internal capacity.",
+      "feature_extraction_s is the offline audit timer, not end-to-end live detector latency."
+    ]
+  }
+}

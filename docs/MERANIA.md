@@ -1048,3 +1048,51 @@ Kopírovanie overilo SHA-256 zdroja aj cieľa pre každý z
 aj nemennosť zdroja počas prenosu. Cesta a hash úplného manifestu sú v súhrne.
 Pôvodné dáta na internom disku zostávajú zachované; absolútne cesty vo vnútri
 metadát sa pri zálohe neprepisovali.
+
+
+## 2026-10-13 — pilot v2 prijatý po novej extrakcii rovnakých RAM dát
+
+Nový audit z čistého commitu `bf6ed37` je uložený bez zmien ako
+`data/results/collection_pilot_v2_20261013_reaudit.json`. Ide o opravenú
+extrakciu a audit rovnakej session, nie nezávislé opakovanie živého zberu.
+Pôvodný zamietnutý audit a jeho archív príznakov zostali zachované.
+
+Prijatý audit má
+480 {{res:collection_pilot_v2_20261013_reaudit.json:values.quality.behavior_valid_rows}}
+platných behaviorálnych riadkov a
+416 {{res:collection_pilot_v2_20261013_reaudit.json:values.windows}}
+skórovateľných okien. Podiel skórovateľných časových krokov je
+0,8667 {{res:collection_pilot_v2_20261013_reaudit.json:values.score_coverage}}.
+Okno sa naďalej neskladá cez plné snímky a chýbajúci kontext po ich vložení.
+Konfigurácia, časová perióda, pravidlá platnosti a návrhová hranica prijatia
+sa nemenili. Pilot zostáva v role `pilot`, mimo tréningu, kalibrácie aj testu.
+
+Nálezy integrity: počet
+0 {{res:collection_pilot_v2_20261013_reaudit.json:values.quality.integrity_findings}}.
+Kontrola textu jadra zostala neuzavretá vo všetkých
+480 {{res:collection_pilot_v2_20261013_reaudit.json:values.quality.integrity_inconclusive_rows.text_integrity}}
+riadkoch pre chýbajúcu baseline. Prijatie behaviorálnych dát nepotvrdzuje
+kontrolu textu jadra. Účinnosť voči malvéru, falošné alarmy, živá latencia
+a vplyv celého detektora na VM sa týmto auditom nemerali.
+
+`data/results/collection_pilot_v2_20261013_reanalysis.json` dokladá zhodu
+manifestu surových vstupov, metadát session aj protokolu medzi oboma auditmi.
+Časové osi, globálne pamäťové príznaky a celý per-bin tenzor sa zhodovali
+pre celý zber. Zmenila sa rekonštrukcia objektov jadra a z nej odvodené
+príznaky, kvalita a okná. Nové súbory sú overene skopírované osobitne pod
+`/run/media/eh/Seagate Expansion Drive/hyptcn3/derived/`; cesta, súbory a hash
+manifestu sú v tomto artefakte. Pôvodný archív sa neprepisoval.
+
+Plánovací odhad `data/results/collection_pilot_readiness_20261013_a.json`
+prenáša priemerný objem snímky tohto scenára na celý vopred určený plán.
+Odhaduje
+395,43 GiB {{res:collection_pilot_readiness_20261013_a.json:values.projected_raw_gib}}
+surových obrazov; po pridaní plánovacej rezervy
+593,14 GiB {{res:collection_pilot_readiness_20261013_a.json:values.projected_with_50_percent_reserve_gib}}.
+V čase kontroly mal externý disk voľných
+785,54 GiB {{res:collection_pilot_readiness_20261013_a.json:values.external_free_gib}}.
+Ide o extrapoláciu jedného scenára, nie o nameranú veľkosť budúceho korpusu;
+núdzová rezerva protokolu sa ponechá navyše. Artefakt uchováva aj rozdelenie
+časovača `feature_extraction_s` z offline auditu. Živý spoločný zber a detektor
+stále vyžadujú samostatné meranie. Pred kampaňou zostáva dokončiť priebežné
+archivovanie a správu pracovných kópií na internom disku.

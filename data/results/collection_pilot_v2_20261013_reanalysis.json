@@ -1,0 +1,73 @@
+{
+  "schema": "hyptcn3/pilot-reanalysis/1",
+  "commit": "bf6ed3769d1a57aadd059b6bb057681cedc8d793",
+  "commit_note": "Extractor revision used by the new audit; aggregation source is embedded in generator_source.",
+  "date": "2026-10-13T15:29:03.469928+00:00",
+  "host": "Linux-7.2.5-100.fc43.x86_64-x86_64-with-glibc2.42",
+  "guest": {
+    "kernel": "6.1.0-42-cloud-amd64",
+    "boot_id": "1602ed36-8187-4f33-bbaa-a36ebff348b4",
+    "machine_id": "95ef9ee3bbc4447fab58abc4a04decbc",
+    "stack_sha256": "e01385b256e27f6479e0ef899bcb4ff18bf658416ad07e41d5b35568f06f93a5",
+    "stack_manifest": [
+      "61e339da8d3fc8dab38f6d60fa49860afbb5248fe5963879a14c036aec37b957  /opt/hyptcn-lab/services.py",
+      "d7372422553f866333177456ac6daec4847f5660c1c854a646e602d0be0fcf6c  /opt/hyptcn-lab/schema.sql",
+      "08f376bb8fd855e2b2b9ef454b6fdb73bcb08efec2eb24ddd9734796f056530b  /etc/nginx/conf.d/hyptcn-lab.conf",
+      "af75eee623f3c7a0b7a1c10a35c2216684c6f4b610d44e46560de137ef3d6962  /etc/systemd/system/hyptcn-lab@.service",
+      "nginx\t1.22.1-9+deb12u9",
+      "postgresql\t15+248+deb12u1",
+      "python3\t3.11.2-1+b1",
+      "python3-psycopg2\t2.9.5-1+b1"
+    ]
+  },
+  "command": "python3 data/lab/record_pilot_v2_reanalysis.py",
+  "n": 480,
+  "generator_source": "\"\"\"Keep reanalysis separate from the original, verified capture archive.\"\"\"\nfrom datetime import datetime, timezone\nimport hashlib\nimport json\nimport os\nfrom pathlib import Path\nimport shutil\n\nimport numpy as np\n\nROOT = Path('/home/eh/Desktop/hyptcn3')\nSTATE = ROOT / 'data/lab/pilot-v2-reaudit-state.json'\nORIGINAL = ROOT / 'data/results/collection_pilot_v2_20261013_audit.json'\nCOPY = ROOT / 'data/results/collection_pilot_v2_20261013_reaudit.json'\nOUT = ROOT / 'data/results/collection_pilot_v2_20261013_reanalysis.json'\nSTORAGE = Path('/run/media/eh/Seagate Expansion Drive/hyptcn3')\n\n\ndef read(path):\n    return json.loads(path.read_text())\n\n\ndef digest(path):\n    with path.open('rb') as stream:\n        return hashlib.file_digest(stream, 'sha256').hexdigest()\n\n\nstate = read(STATE)\nassert state['state'] == 'complete'\nreport = Path(state['report'])\nnew, old = read(report), read(ORIGINAL)\nvalues, previous = new['values'], old['values']\nfor key in ('protocol_sha256', 'session_sha256', 'source_sha256', 'raw_bytes', 'snapshots', 'session_dir', 'layout'):\n    assert values[key] == previous[key], key\nassert not new['commit_dirty']\nassert new['guest'] == old['guest']\nassert values['quality']['policy'] == previous['quality']['policy']\nassert new['commit'] != old['commit']\nassert values['extractor_sha256'] != previous['extractor_sha256']\nfeatures, old_features = Path(values['features']), Path(previous['features'])\nassert digest(features) == values['features_sha256']\nassert digest(old_features) == previous['features_sha256']\nwith np.load(features, allow_pickle=False) as current, np.load(old_features, allow_pickle=False) as original:\n    for key in ('seq', 'casy', 'biny', 'perbin', 'chain_ids', 'snimky'):\n        np.testing.assert_array_equal(current[key], original[key])\n    np.testing.assert_array_equal(current['matica'][:, :8], original['matica'][:, :8])\nassert STORAGE.parent.is_mount()\nassert not COPY.exists() and not OUT.exists()\ndestination = STORAGE / 'derived' / Path(values['session_dir']).name / report.stem\nassert not destination.exists()\npartial = destination.with_name('.partial-' + destination.name)\npartial.mkdir(parents=True, exist_ok=False)\nentries = []\nfor source in (report, features):\n    expected = digest(source)\n    target = partial / source.name\n    with source.open('rb') as inp, target.open('xb') as out:\n        shutil.copyfileobj(inp, out)\n        out.flush()\n        os.fsync(out.fileno())\n    assert digest(target) == digest(source) == expected\n    entries.append({'path': source.name, 'bytes': source.stat().st_size, 'sha256': expected})\nmanifest = {'schema': 'hyptcn3/verified-derived-copy/1',\n            'created_utc': datetime.now(timezone.utc).isoformat(),\n            'source_session': values['session_dir'], 'destination': str(destination),\n            'original_audit_sha256': digest(ORIGINAL), 'files': entries,\n            'verified': True, 'source_retained': True, 'audit_accepted': values['accepted']}\nwith (partial / 'manifest.json').open('x') as out:\n    json.dump(manifest, out, indent=2)\n    out.write('\\n')\n    out.flush()\n    os.fsync(out.fileno())\npartial.rename(destination)\nwith COPY.open('xb') as out:\n    out.write(report.read_bytes())\nrecord = {'schema': 'hyptcn3/pilot-reanalysis/1', 'commit': new['commit'],\n          'commit_note': 'Extractor revision used by the new audit; aggregation source is embedded in generator_source.',\n          'date': datetime.now(timezone.utc).isoformat(), 'host': new['host'], 'guest': new['guest'],\n          'command': 'python3 data/lab/record_pilot_v2_reanalysis.py', 'n': new['n'],\n          'generator_source': Path(__file__).read_text(),\n          'values': {'accepted': values['accepted'], 'reasons': values['reasons'],\n                     'snapshots': values['snapshots'], 'windows': values['windows'],\n                     'score_coverage': values['score_coverage'], 'quality': values['quality'],\n                     'original_audit_sha256': digest(ORIGINAL), 'reaudit_sha256': digest(report),\n                     'source_manifest_unchanged': True, 'protocol_unchanged': True,\n                     'memory_values_and_bins_unchanged': True,\n                     'original_audit_commit': old['commit'], 'extractor_commit': new['commit'],\n                     'archive': {'path': str(destination), 'manifest_sha256': digest(destination / 'manifest.json'),\n                                 'files': entries, 'verified': True, 'source_retained': True},\n                     'note': 'New offline extraction and audit of the same pilot capture. Original rejected audit, features and raw archive remain unchanged. No independent repeat capture, live detector latency, false-alarm, overhead or malware-detection measurement.'}}\nwith OUT.open('x') as out:\n    json.dump(record, out, indent=2, ensure_ascii=False, allow_nan=False)\n    out.write('\\n')\nprint(json.dumps({'accepted': values['accepted'], 'windows': values['windows'],\n                  'coverage': values['score_coverage'], 'archive': str(destination)}, indent=2))\n",
+  "values": {
+    "accepted": true,
+    "reasons": [],
+    "snapshots": 480,
+    "windows": 416,
+    "score_coverage": 0.8666666666666667,
+    "quality": {
+      "policy": "behavioral-inputs-v1",
+      "behavior_valid_rows": 480,
+      "legacy_valid_rows": 480,
+      "invalid_input_seq": [],
+      "integrity_inconclusive_rows": {
+        "modules": 0,
+        "process_cross_view": 0,
+        "syscall_table": 0,
+        "text_integrity": 480
+      },
+      "integrity_finding_rows": 0,
+      "integrity_findings": 0
+    },
+    "original_audit_sha256": "ccd1c40913d298a6c5b04bf222079614171a468cee3fe6b3c0af3d7c027fdb5c",
+    "reaudit_sha256": "6bc4329c8985f92f82e9b5fbea41d3596ca05bd6a8a6f6a83e347588e1571c9d",
+    "source_manifest_unchanged": true,
+    "protocol_unchanged": true,
+    "memory_values_and_bins_unchanged": true,
+    "original_audit_commit": "6fcd6f9f45d0275129159dd1d1826858d70faae6",
+    "extractor_commit": "bf6ed3769d1a57aadd059b6bb057681cedc8d793",
+    "archive": {
+      "path": "/run/media/eh/Seagate Expansion Drive/hyptcn3/derived/20261013T140853080075Z_pilot_steady/audit_bootfix_20261013T152011553255Z",
+      "manifest_sha256": "120d98845b6493c97b2b6f6a4bfde3bb4953204db1300cb7e4f08556dbd14ea8",
+      "files": [
+        {
+          "path": "audit_bootfix_20261013T152011553255Z.json",
+          "bytes": 140150,
+          "sha256": "6bc4329c8985f92f82e9b5fbea41d3596ca05bd6a8a6f6a83e347588e1571c9d"
+        },
+        {
+          "path": "audit_bootfix_20261013T152011553255Z.npz",
+          "bytes": 225778,
+          "sha256": "1859b2d512503cd2d595fdbdd67c63f7fa3dcf8bfa519bdeb0719455107ca955"
+        }
+      ],
+      "verified": true,
+      "source_retained": true
+    },
+    "note": "New offline extraction and audit of the same pilot capture. Original rejected audit, features and raw archive remain unchanged. No independent repeat capture, live detector latency, false-alarm, overhead or malware-detection measurement."
+  }
+}

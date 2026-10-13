@@ -245,14 +245,14 @@ znamenalo držať dve znenia toho istého. Nadpisy sú preto dosadené z neho, s
 | dokument | čo vlastní | riadkov |
 |---|---|---|
 | `docs/ARCHITEKTURA.md` | rozhrania, formát `.vmicd` a sidecaru, tok dát podrobne | 1166 |
-| `docs/MERANIA.md` | log meraní: čo, kedy, akým príkazom a s akým výsledkom | 1050 |
+| `docs/MERANIA.md` | log meraní: čo, kedy, akým príkazom a s akým výsledkom | 1098 |
 | `docs/LIMITACIE.md` | L1 až L18: čo systém nevie a čo z toho plynie pre text | 888 |
 | `docs/kontroly.md` | kontroly podozrivých vzorcov a validačný príkaz | 255 |
 | `HONESTY.md` | pravidlá pre čísla a slová v texte práce | 272 |
-| `README.md` | rozcestník repozitára a pôvod prevzatého kódu | 62 |
+| `README.md` | rozcestník repozitára a pôvod prevzatého kódu | 66 |
 | `docs/LAB.sk.md` | serverové laboratórium, premávka z hostiteľa a RAM zber | 162 |
-| `docs/METODIKA_ZBERU.sk.md` | protokol zberu, príznaky, rozdelenie korpusu a audit | 317 |
-| `docs/SAFEGUARD.sk.md` | tréning modelového balíka, replay a spustenie detektora | 224 |
+| `docs/METODIKA_ZBERU.sk.md` | protokol zberu, príznaky, rozdelenie korpusu a audit | 335 |
+| `docs/SAFEGUARD.sk.md` | tréning modelového balíka, replay a spustenie detektora | 225 |
 | `vmicollect/README.md` | zberač zvnútra: vrstvy, hooky, formáty | 460 |
 | `guestparse/README.md` | parser zvnútra: preklad adries, prechod zoznamami | 157 |
 | `features/PERBIN.md` | definícia príznakov a ich kontrakt | 163 |

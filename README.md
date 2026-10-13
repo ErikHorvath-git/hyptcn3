@@ -15,6 +15,10 @@ nový korpus, živý spoločný beh a účinnosť detekcie zostávajú na overen
 `make collection-plan` vypíše pridelenie behov do tréningu, vývoja, kalibrácie
 a testu. Nové merania začínajú pilotom a auditom dát; staré krátke zbery
 nie sú automaticky súčasťou finálneho korpusu.
+Pilot protokolu v2 prešiel po oprave výberu jadra podľa boot UUID;
+[prijatý audit](data/results/collection_pilot_v2_20261013_reaudit.json) a história
+oboch zamietnutých auditov sú zaznamenané v [`docs/MERANIA.md`](docs/MERANIA.md).
+Pilot sa nepoužije na tréning ani kalibráciu.
 
 **Serverové laboratórium:** `make lab-up` spustí samostatnú VM s nginx,
 API službami, PostgreSQL a premávkou z hostiteľa. Vstup je

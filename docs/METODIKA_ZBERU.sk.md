@@ -18,6 +18,10 @@ integrity. Dĺžka okna, perióda, rotácia, hranica pokrytia aj zákaz dopĺňa
 chýbajúcich vstupov zostávajú rovnaké. Pôvodná konfigurácia v1 a jej zamietnutý
 audit sú zachované; prehratie starých dát slúži iba na diagnostiku zmeny.
 Prijatie v2 vyžaduje nový pilot zozbieraný podľa jeho vopred uloženého protokolu.
+Tento pilot má [prijatý audit](../data/results/collection_pilot_v2_20261013_reaudit.json)
+po oprave výberu aktuálneho jadra z RAM; priebeh a pôvodné zamietnutia zachováva
+`MERANIA.md`. Konfigurácia sa neprepisuje na `accepted`: splnenie podmienky
+sa dokladá konkrétnym auditom, ktorý sa podá cez `--pilot-report`.
 
 ## 1. Otázky experimentu a jednotka merania
 
@@ -257,6 +261,20 @@ Pre ďalšie behy sa z výpisu plánu preberú presné `role`, `group`, `scenari
 a `seed`; navyše sa zadá `--pilot-report <prijatý-audit.json>`. Runner overí
 pridelenie, protokol a priestor odvodený z pilotu s rezervou. Medzi skupinami
 treba nový boot. Prvý tréningový boot musí byť odlišný aj od pilotného.
+
+Pre prijatý pilot možno použiť
+`--pilot-report data/results/collection_pilot_v2_20261013_reaudit.json`.
+Externý archív je pripravený v
+`/run/media/eh/Seagate Expansion Drive/hyptcn3`: `collections/` uchováva
+overenú kópiu zberu a `derived/` nové odvodené výstupy. Prijatý opakovaný audit
+má vlastný manifest; zamietnutý pôvodný audit zostáva v pôvodnej kópii.
+Odhad kapacity a offline časy obsahuje
+[`collection_pilot_readiness_20261013_a.json`](../data/results/collection_pilot_readiness_20261013_a.json).
+Odhad prenáša objem scenára `steady` na ostatné scenáre, ktoré ho môžu prekročiť.
+Interný disk je iba pracovné úložisko: pred celou kampaňou treba zabezpečiť
+priebežnú overenú archiváciu a uvoľňovanie pracovných kópií so zachovaním
+rozlíšenia bootov a ciest v indexe. Samotná záloha miesto na internom disku
+neuvoľní; doterajšie zdroje sa nezmazali.
 
 Po prijatí všetkých behov sa vytvorí index:
 
