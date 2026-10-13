@@ -271,12 +271,17 @@ má vlastný manifest; zamietnutý pôvodný audit zostáva v pôvodnej kópii.
 Odhad kapacity a offline časy obsahuje
 [`collection_pilot_readiness_20261013_a.json`](../data/results/collection_pilot_readiness_20261013_a.json).
 Odhad prenáša objem scenára `steady` na ostatné scenáre, ktoré ho môžu prekročiť.
-Interný disk je iba pracovné úložisko: pred celou kampaňou treba zabezpečiť
-priebežnú overenú archiváciu a uvoľňovanie pracovných kópií so zachovaním
-rozlíšenia bootov a ciest v indexe. Samotná záloha miesto na internom disku
-neuvoľní; doterajšie zdroje sa nezmazali.
+Interný disk je pracovné úložisko. `scripts/campaign.py` spája zmrazený plán,
+reštarty skupín, zbery, audity, overené presuny a vytvorenie indexu.
+Po verifikácii úplnej externej kópie uvoľní iba surové pracovné súbory svojej
+kampane. Lokálne metadáta a príznaky ostávajú na pôvodných cestách, `raw/`
+sa zmení na odkaz do archívu. Tým zostane zachovaná evidencia bootov aj vstup
+trénera. Staršie piloty sa týmto mechanizmom neuvoľňujú.
+Príkazy, obnova po prerušení a pravidlá zastavenia sú v
+[`AUTOMATICKY_ZBER.sk.md`](AUTOMATICKY_ZBER.sk.md).
 
-Po prijatí všetkých behov sa vytvorí index:
+Automatická kampaň po prijatí všetkých behov vytvorí a overí vlastný
+`data/campaigns/<id>/corpus.json`. Pri manuálnom zbere sa index zostaví takto:
 
 ```sh
 python3 -m features.dataset --protocol config/collection-v2.json --out data/corpus-v2.json <audit1.json> <audit2.json> ...

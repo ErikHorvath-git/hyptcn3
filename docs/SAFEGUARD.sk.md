@@ -10,6 +10,9 @@ a vplyv celého detektora na VM ešte neboli touto integráciou vyhodnotené.
 Pilot podľa [`METODIKA_ZBERU.sk.md`](METODIKA_ZBERU.sk.md) má
 [prijatý audit](../data/results/collection_pilot_v2_20261013_reaudit.json).
 Nový benígny korpus zostáva podmienkou tréningu a ďalšej experimentálnej etapy.
+Jeho automatický zber a archiváciu riadi
+[`scripts/campaign.py`](../scripts/campaign.py); postup je v
+[`AUTOMATICKY_ZBER.sk.md`](AUTOMATICKY_ZBER.sk.md).
 Nový spoločný beh `run` s hostiteľským eBPF zberom je
 zatiaľ **UNVERIFIED**; staršie overenie samostatného zberača ho nenahrádza.
 Výstupy vykonaných overení sa evidujú v [`MERANIA.md`](MERANIA.md).

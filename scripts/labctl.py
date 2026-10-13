@@ -32,7 +32,7 @@ class Lab:
         self.uri, self.domain = uri, domain
 
     def virsh(self, *args):
-        return run(["virsh", "-c", self.uri, *args], capture_output=True).stdout.strip()
+        return run(["virsh", "-c", self.uri, *args], capture_output=True, timeout=30).stdout.strip()
 
     def agent(self, command, arguments=None):
         req = {"execute": command}
@@ -135,6 +135,23 @@ class Lab:
         if xml.findtext("description") != "hyptcn3 benign persistent lab":
             raise RuntimeError("Refusing to modify a domain not created by labctl")
 
+    def reboot(self, timeout=180):
+        self.owned()
+        before = self.guest("cat /proc/sys/kernel/random/boot_id").strip()
+        self.virsh("reboot", self.domain, "--mode", "agent")
+        deadline = time.monotonic() + timeout
+        while time.monotonic() < deadline:
+            try:
+                after = self.guest("cat /proc/sys/kernel/random/boot_id", timeout=10).strip()
+                if after and after != before:
+                    self.health()
+                    print(json.dumps({"previous_boot": before, "boot_id": after}))
+                    return
+            except (OSError, RuntimeError, subprocess.SubprocessError):
+                pass
+            time.sleep(2)
+        raise TimeoutError("Guest did not become healthy on a new boot")
+
     def start(self):
         self.owned()
         if self.virsh("domstate", self.domain) == "shut off":
@@ -214,7 +231,7 @@ class Lab:
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("command", choices=["up", "create", "start", "deploy", "status", "stop",
+    parser.add_argument("command", choices=["up", "create", "start", "deploy", "status", "stop", "reboot",
                                             "traffic-start", "traffic-stop", "exec", "logs"])
     parser.add_argument("--domain", default="hyptcn-lab")
     parser.add_argument("--uri", default="qemu:///session")
@@ -238,9 +255,15 @@ def main(argv=None):
         print(state)
         if state == "running":
             lab.health()
-        subprocess.run(["systemctl", "--user", "status", UNIT, "--no-pager"])
+        loaded = subprocess.check_output(["systemctl", "--user", "show", UNIT, "-p", "LoadState", "--value"], text=True).strip()
+        if loaded != "not-found":
+            subprocess.run(["systemctl", "--user", "status", UNIT, "--no-pager"])
     if args.command in ("stop", "traffic-stop"):
-        subprocess.run(["systemctl", "--user", "stop", UNIT], check=False)
+        loaded = subprocess.check_output(["systemctl", "--user", "show", UNIT, "-p", "LoadState", "--value"], text=True).strip()
+        if loaded != "not-found":
+            subprocess.run(["systemctl", "--user", "stop", UNIT], check=True)
+    if args.command == "reboot":
+        lab.reboot()
     if args.command == "stop":
         lab.owned()
         print(lab.virsh("shutdown", lab.domain))

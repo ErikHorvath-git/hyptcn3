@@ -20,6 +20,11 @@ Pilot protokolu v2 prešiel po oprave výberu jadra podľa boot UUID;
 oboch zamietnutých auditov sú zaznamenané v [`docs/MERANIA.md`](docs/MERANIA.md).
 Pilot sa nepoužije na tréning ani kalibráciu.
 
+**Automatická kampaň:** [`docs/AUTOMATICKY_ZBER.sk.md`](docs/AUTOMATICKY_ZBER.sk.md).
+`scripts/campaign.py` riadi reštarty skupín, zber, audit a overený presun RAM
+na externý disk. Na konci vytvorí index pre tréning; stav kampane rozlišuje
+naplánované, rozpracované a prijaté dáta.
+
 **Serverové laboratórium:** `make lab-up` spustí samostatnú VM s nginx,
 API službami, PostgreSQL a premávkou z hostiteľa. Vstup je
 **http://127.0.0.1:18080**; `make lab-status`, `make lab-test` a `make lab-stop`

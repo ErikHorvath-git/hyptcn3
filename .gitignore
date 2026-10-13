@@ -25,5 +25,6 @@ vms/
 # Runtime lab traffic and local state; validation artifacts go to data/results.
 data/lab/
 data/collections/
+data/campaigns/
 data/safeguard/
 data/models/

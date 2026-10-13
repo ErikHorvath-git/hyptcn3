@@ -5,6 +5,7 @@ Original protocol tooling for hyptcn3. Data and verdicts are written exclusively
 failed sessions remain on disk. Run audit again with a new output name.
 """
 import argparse
+from contextlib import contextmanager
 from datetime import datetime, timezone
 import fcntl
 import hashlib
@@ -13,6 +14,7 @@ import os
 from pathlib import Path
 import platform
 import random
+import re
 import shutil
 import signal
 import subprocess
@@ -88,6 +90,23 @@ def user_command(command):
     return list(map(str, command))
 
 
+@contextmanager
+def collection_lock(base):
+    """A campaign passes the same open lock to its capture child only."""
+    base.mkdir(parents=True, exist_ok=True)
+    path = base / ".lock"
+    inherited = os.environ.get("HYPTCN_COLLECTION_LOCK_FD")
+    fd = os.dup(int(inherited)) if inherited else os.open(path, os.O_CREAT | os.O_RDWR, 0o644)
+    try:
+        stat, expected = os.fstat(fd), path.stat()
+        if (stat.st_dev, stat.st_ino) != (expected.st_dev, expected.st_ino):
+            raise ValueError("inherited collection lock refers to another file")
+        fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        yield fd
+    finally:
+        os.close(fd)
+
+
 def guest_identity(p):
     identity_command = (
         "uname -r; cat /proc/sys/kernel/random/boot_id; cat /etc/machine-id; "
@@ -96,7 +115,7 @@ def guest_identity(p):
         "dpkg-query -W nginx postgresql python3 python3-psycopg2")
     command = [sys.executable, ROOT / "scripts/labctl.py", "exec", "--domain", p["domain"],
                "--guest-command", identity_command]
-    lines = subprocess.check_output(user_command(command), cwd=ROOT, text=True).strip().splitlines()
+    lines = subprocess.check_output(user_command(command), cwd=ROOT, text=True, timeout=150).strip().splitlines()
     if len(lines) < 11:
         raise ValueError("cannot establish guest identity")
     return {**dict(zip(("kernel", "boot_id", "machine_id"), lines[:3])),
@@ -111,9 +130,10 @@ def run_session(a, p):
         raise ValueError("unknown benign scenario")
     base = ROOT / "data/collections"
     base.mkdir(parents=True, exist_ok=True)
-    with (base / ".lock").open("w") as lock:
-        fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    with collection_lock(base):
         before = guest_identity(p)
+        if getattr(a, "expected_boot_id", None) and before["boot_id"] != a.expected_boot_id:
+            raise ValueError("guest boot differs from campaign group")
         if a.role != "pilot":
             assignment = {"role": a.role, "group": a.group, "scenario": a.scenario,
                           "seed": a.seed, "cycles": p["cycles"]}
@@ -141,7 +161,10 @@ def run_session(a, p):
                 if old["group"] == a.group or old["guest_before"]["boot_id"] == before["boot_id"]:
                     raise ValueError("one boot must correspond to exactly one collection group")
         stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")
-        out = base / f"{stamp}_{a.role}_{a.scenario}"
+        session_id = getattr(a, "session_id", None) or f"{stamp}_{a.role}_{a.scenario}"
+        if not re.fullmatch(r"[a-zA-Z0-9][a-zA-Z0-9_-]{0,159}", session_id):
+            raise ValueError("invalid session ID")
+        out = base / session_id
         out.mkdir()
         shutil.copyfile(a.protocol, out / "protocol.json")
         prof = ROOT / p["profile"]
@@ -152,6 +175,7 @@ def run_session(a, p):
         source_hashes = {str(f.relative_to(ROOT)): digest(f) for f in source_files}
         subprocess.run(user_command(["make", "-C", ROOT / "vmicollect"]), check=True)
         metadata = {"schema": "hyptcn3/collection-session/1", "session_id": out.name,
+                    "campaign_id": getattr(a, "campaign_id", None),
                     "role": a.role, "group": a.group, "scenario": a.scenario,
                     "typ": "benign", "seed": a.seed, "guest_before": before,
                     "protocol_sha256": digest(a.protocol), "source_sha256": source_hashes,
@@ -374,6 +398,9 @@ def main(argv=None):
     run.add_argument("--group", required=True)
     run.add_argument("--seed", type=int, required=True)
     run.add_argument("--pilot-report", type=Path)
+    run.add_argument("--session-id", help="Exclusive output name for a frozen campaign assignment")
+    run.add_argument("--campaign-id")
+    run.add_argument("--expected-boot-id", help="Refuse a boot change since campaign preflight")
     audit = sub.add_parser("audit")
     audit.add_argument("directory", type=Path)
     audit.add_argument("--out", type=Path)
