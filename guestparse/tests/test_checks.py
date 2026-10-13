@@ -6,6 +6,8 @@ vstupmi - porovnavaciu logiku treba overit aj na pripadoch, ktore cisty host
 nikdy nevyrobi (chybajuci proces, falosny proces, nezhoda mena).
 """
 
+from types import SimpleNamespace
+
 import pytest
 
 from guestparse import checks, validate
@@ -172,8 +174,55 @@ def test_neuplny_prechod_nie_je_uzavreta_kontrola(val_view):
     assert res["available"] is True
     assert res["conclusive"] is False
     assert "prerusil" in res["reason"]
-    # rozdiel sa aj tak vypise, ale je oznaceny ako neuzavrety
-    assert len(res["findings"]) > 0
+    # Rozdiel zostava diagnostikou; nesmie vytvorit bezpecnostny alarm.
+    assert res["findings"] == []
+    assert len(res["inconclusive_differences"]) > 0
 
     full = checks.check_all(val_view, procs=orezany)
     assert "process_cross_view" in full["summary"]["inconclusive"]
+    assert full["summary"]["process_cross_view_findings"] == 0
+
+
+@pytest.mark.parametrize("truncated,tree_stop", [
+    (False, None), (True, None), (False, "cyklus v children"),
+])
+def test_process_differences_require_both_complete_views(monkeypatch, truncated, tree_stop):
+    view = SimpleNamespace(p=SimpleNamespace(addr=lambda name: 1))
+    tree = {1: {"pid": 0, "comm": "init"}, 3: {"pid": 3, "comm": "tree_only"}}
+    procs = {"processes": [{"task_va": 2, "pid": 2, "comm": "list_only"}],
+             "truncated": truncated, "stop_reason": "cut" if truncated else None}
+    monkeypatch.setattr(checks, "_task_tree", lambda view: (tree, tree_stop))
+    res = checks.process_cross_view(view, procs=procs)
+    conclusive = not truncated and tree_stop is None
+    assert res["conclusive"] is conclusive
+    assert len(res["findings"]) == (2 if conclusive else 0)
+    assert len(res["inconclusive_differences"]) == (0 if conclusive else 2)
+
+
+@pytest.mark.parametrize("truncated", [False, True])
+def test_module_differences_preserve_independent_findings(monkeypatch, truncated):
+    module_va = checks.MODULES_VADDR
+    mods = {"modules": [{"module_va": module_va, "name": "bad\nname"}],
+            "truncated": truncated, "stop_reason": "cut" if truncated else None}
+    sysfs = {"modules": {module_va + 4096: "sysfs_only"},
+             "kset_entries": 1, "unnamed": 0}
+    monkeypatch.setattr(checks, "_sysfs_modules", lambda view: (sysfs, None))
+    res = checks.module_checks(object(), mods=mods)
+    assert res["conclusive"] is not truncated
+    # Neplatne meno je nezavisly nalez aj pri neuzavretom krizovom pohlade.
+    assert res["findings"][0]["check"] == "module_name"
+    assert len(res["findings"]) == (1 if truncated else 3)
+    assert len(res["inconclusive_differences"]) == (2 if truncated else 0)
+
+
+@pytest.mark.parametrize("link,reason", [(None, "neda precitat"), (2020, "cyklus")])
+def test_task_tree_does_not_accept_unreadable_or_cyclic_children(link, reason):
+    offsets = {"children": 10, "sibling": 20, "pid": 30, "comm": 40}
+    memory = {1010: link, 2020: link}
+    view = SimpleNamespace(
+        p=SimpleNamespace(member=lambda struct, name: offsets[name], addr=lambda name: 1000),
+        to_pa=lambda va: va, i32=lambda pa: 1, cstr=lambda pa, size: "task",
+        u64=memory.get, _plausible_va=lambda va: va is not None and va > 0,
+    )
+    _, stop = checks._task_tree(view)
+    assert reason in stop

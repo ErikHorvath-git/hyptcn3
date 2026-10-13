@@ -1,0 +1,166 @@
+{
+  "schema": "hyptcn3/pilot-crossview-diagnosis/1",
+  "date": "2026-10-13T13:38:01.595740+00:00",
+  "commit": "733c5a7383071feec8710363af8f15c1fe2bafcc",
+  "commit_dirty": true,
+  "host": "Linux-7.2.5-100.fc43.x86_64-x86_64-with-glibc2.42",
+  "guest": {
+    "kernel": "6.1.0-42-cloud-amd64",
+    "boot_id": "c01be2c5-8e02-49e7-9db3-44a88ef35d35",
+    "machine_id": "95ef9ee3bbc4447fab58abc4a04decbc",
+    "stack_sha256": "e01385b256e27f6479e0ef899bcb4ff18bf658416ad07e41d5b35568f06f93a5",
+    "stack_manifest": [
+      "61e339da8d3fc8dab38f6d60fa49860afbb5248fe5963879a14c036aec37b957  /opt/hyptcn-lab/services.py",
+      "d7372422553f866333177456ac6daec4847f5660c1c854a646e602d0be0fcf6c  /opt/hyptcn-lab/schema.sql",
+      "08f376bb8fd855e2b2b9ef454b6fdb73bcb08efec2eb24ddd9734796f056530b  /etc/nginx/conf.d/hyptcn-lab.conf",
+      "af75eee623f3c7a0b7a1c10a35c2216684c6f4b610d44e46560de137ef3d6962  /etc/systemd/system/hyptcn-lab@.service",
+      "nginx\t1.22.1-9+deb12u9",
+      "postgresql\t15+248+deb12u1",
+      "python3\t3.11.2-1+b1",
+      "python3-psycopg2\t2.9.5-1+b1"
+    ]
+  },
+  "command": "Replay guestparse checks for six selected pilot frames; exact commands in values.replays.",
+  "n": 6,
+  "values": {
+    "original_audit": "data/collections/20261013T121136639363Z_pilot_steady/audit_auto_20261013T125348277519Z.json",
+    "original_audit_sha256": "49448063ee1701e67ccb18fcc7db88e359dc68635c453cfa6f70e1f162b18105",
+    "published_audit": "data/results/collection_pilot_20261013_audit.json",
+    "original_features_sha256": "4b754e0701dcae25f70f54e2e8fa16440cabf22b6888ad2092ec5a5ffa2d38cf",
+    "source_sha256": {
+      "guestparse/checks.py": "06fdee587b247024856ed6c3d3709be261da1ce8b5cff06b31684b4ceddb4002",
+      "guestparse/view.py": "c8c89d1a600c2a444e25475bc97d5c547d138556a2149c212e8818011554c772",
+      "guestparse/cli.py": "e5806cd49f95490c4b5155bd9e994e9644645ac97f6743503e5782d2a5931ef2"
+    },
+    "capture": {
+      "read_errors": 0,
+      "filled_zero": 0,
+      "skipped_slots": 0,
+      "snapshots": 483,
+      "collector_rc": 0
+    },
+    "traffic": {
+      "ok": 19152,
+      "errors": 0,
+      "requests": 19152,
+      "elapsed_s": 2517.842,
+      "final": true
+    },
+    "traffic_scope": "Full traffic process including the pre-capture warmup.",
+    "original_model_valid_rows": 478,
+    "original_invalid_seq": [
+      81,
+      331
+    ],
+    "original_windows": 354,
+    "original_score_coverage": 0.7375,
+    "accepted": false,
+    "replays": [
+      {
+        "seq": 80,
+        "command": "/usr/bin/python3 -m guestparse checks --snapshot data/collections/20261013T121136639363Z_pilot_steady/raw --profile data/collections/20261013T121136639363Z_pilot_steady/profile --chain-until 80 --json",
+        "returncode": 4,
+        "conclusive": true,
+        "tree_stop_reason": null,
+        "list_count": 89,
+        "tree_count": 89,
+        "old_model_valid": true,
+        "old_process_findings": 0,
+        "new_process_findings": 0,
+        "new_inconclusive_differences": 0,
+        "new_total_findings": 0,
+        "inconclusive": [
+          "text_integrity"
+        ]
+      },
+      {
+        "seq": 81,
+        "command": "/usr/bin/python3 -m guestparse checks --snapshot data/collections/20261013T121136639363Z_pilot_steady/raw --profile data/collections/20261013T121136639363Z_pilot_steady/profile --chain-until 81 --json",
+        "returncode": 4,
+        "conclusive": false,
+        "tree_stop_reason": "cyklus v children pri 0xffff9067534289a0",
+        "list_count": 89,
+        "tree_count": 1,
+        "old_model_valid": false,
+        "old_process_findings": 88,
+        "new_process_findings": 0,
+        "new_inconclusive_differences": 88,
+        "new_total_findings": 0,
+        "inconclusive": [
+          "process_cross_view",
+          "text_integrity"
+        ]
+      },
+      {
+        "seq": 82,
+        "command": "/usr/bin/python3 -m guestparse checks --snapshot data/collections/20261013T121136639363Z_pilot_steady/raw --profile data/collections/20261013T121136639363Z_pilot_steady/profile --chain-until 82 --json",
+        "returncode": 4,
+        "conclusive": true,
+        "tree_stop_reason": null,
+        "list_count": 87,
+        "tree_count": 87,
+        "old_model_valid": true,
+        "old_process_findings": 0,
+        "new_process_findings": 0,
+        "new_inconclusive_differences": 0,
+        "new_total_findings": 0,
+        "inconclusive": [
+          "text_integrity"
+        ]
+      },
+      {
+        "seq": 330,
+        "command": "/usr/bin/python3 -m guestparse checks --snapshot data/collections/20261013T121136639363Z_pilot_steady/raw --profile data/collections/20261013T121136639363Z_pilot_steady/profile --chain-until 330 --json",
+        "returncode": 4,
+        "conclusive": true,
+        "tree_stop_reason": null,
+        "list_count": 87,
+        "tree_count": 87,
+        "old_model_valid": true,
+        "old_process_findings": 0,
+        "new_process_findings": 0,
+        "new_inconclusive_differences": 0,
+        "new_total_findings": 0,
+        "inconclusive": [
+          "text_integrity"
+        ]
+      },
+      {
+        "seq": 331,
+        "command": "/usr/bin/python3 -m guestparse checks --snapshot data/collections/20261013T121136639363Z_pilot_steady/raw --profile data/collections/20261013T121136639363Z_pilot_steady/profile --chain-until 331 --json",
+        "returncode": 4,
+        "conclusive": false,
+        "tree_stop_reason": "cyklus v children pri 0xffff906702b1bca0",
+        "list_count": 87,
+        "tree_count": 68,
+        "old_model_valid": false,
+        "old_process_findings": 19,
+        "new_process_findings": 0,
+        "new_inconclusive_differences": 19,
+        "new_total_findings": 0,
+        "inconclusive": [
+          "process_cross_view",
+          "text_integrity"
+        ]
+      },
+      {
+        "seq": 332,
+        "command": "/usr/bin/python3 -m guestparse checks --snapshot data/collections/20261013T121136639363Z_pilot_steady/raw --profile data/collections/20261013T121136639363Z_pilot_steady/profile --chain-until 332 --json",
+        "returncode": 4,
+        "conclusive": true,
+        "tree_stop_reason": null,
+        "list_count": 87,
+        "tree_count": 87,
+        "old_model_valid": true,
+        "old_process_findings": 0,
+        "new_process_findings": 0,
+        "new_inconclusive_differences": 0,
+        "new_total_findings": 0,
+        "inconclusive": [
+          "text_integrity"
+        ]
+      }
+    ],
+    "note": "The original pilot remains rejected. This is a six-frame diagnostic replay after a parser fix, not a full replacement audit, malware detection measurement or live detector latency measurement. Raw RAM and the original audit/archive were not modified."
+  }
+}

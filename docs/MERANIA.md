@@ -906,3 +906,61 @@ a detektora je zatiaľ UNVERIFIED na živom hosťovi; jeho riadenie procesov
 a chybové vetvy overujú testy s náhradným procesom. Živý pilot, tréning
 na plánovanom korpuse, nezávislé metriky a merania reálnych malvérových
 vzoriek zostávajú ďalšou etapou.
+
+
+## 2026-10-13 — prvý živý pilot: zber dokončený, audit zamietnutý
+
+Session `data/collections/20261013T121136639363Z_pilot_steady` vznikla príkazom
+`sudo python3 scripts/collection.py run --role pilot --group pilot-1 --scenario steady --seed 101`
+z commitu `733c5a7`. Pôvodný audit je bez zmien skopírovaný do
+`data/results/collection_pilot_20261013_audit.json`; pôvodné RAM snímky,
+archív príznakov a audit v session sa nemenia.
+
+Zber vytvoril 480 {{res:collection_pilot_20261013_diagnosis_v2.json:values.capture.snapshots}}
+snímok. Chýb čítania bolo
+0 {{res:collection_pilot_20261013_diagnosis_v2.json:values.capture.read_errors}},
+zmeškaných slotov
+0 {{res:collection_pilot_20261013_diagnosis_v2.json:values.capture.skipped_slots}}.
+Celý generátor premávky vrátane zahrievania zaznamenal
+19152 {{res:collection_pilot_20261013_diagnosis_v2.json:values.traffic.ok}}
+úspešných požiadaviek a
+0 {{res:collection_pilot_20261013_diagnosis_v2.json:values.traffic.errors}} chýb.
+
+Audit pilot neprijal. Platných vstupných riadkov bolo
+478 {{res:collection_pilot_20261013_diagnosis_v2.json:values.original_model_valid_rows}},
+ale po vylúčení okien pretínajúcich neplatné alebo plné snímky zostalo iba
+354 {{res:collection_pilot_20261013_audit.json:values.windows}} okien.
+Podiel skórovateľných krokov bol
+0,7375 {{res:collection_pilot_20261013_audit.json:values.score_coverage}},
+pod návrhovou hranicou protokolu. Neúplné kontroly zároveň samostatne
+porušili podmienku prijatia. Pilot sa nepoužije na tréning ani kalibráciu.
+
+Diagnostické prehratie odhalilo cykly v zoznamoch `children/sibling` pri
+sekvenciách uvedených v `values.original_invalid_seq` diagnostického artefaktu.
+Hlavný zoznam `tasks` aj susedné kontrolované snímky sa uzavreli. Presný pôvod
+cyklov toto prehratie neurčuje; rozdiel oproti neúplnému stromu nie je dôkaz
+skrývania procesu ani malvéru.
+
+Parser pred opravou zapisoval aj rozdiely neúplných krížových pohľadov medzi
+`findings`, čím mohol vyvolať alarm integrity. Teraz ich zachováva osobitne
+v `inconclusive_differences`. Nezávislé nálezy zostávajú účinné. Prechod stromom
+rozlišuje cyklus od neplatného ukazovateľa a neprijme nečitateľný odkaz ako
+uzavretý zoznam. Oprava nemení pravidlá platnosti modelových vstupov ani
+hranicu prijatia pilotu. Pôvodné archívy s nálezmi podľa starej implementácie
+sa nesmú vydávať za výstup opraveného parsera; pred použitím v detektore
+vyžadujú novú extrakciu do nového artefaktu.
+
+Príkazy prehratia a hashe kódu sú v
+`data/results/collection_pilot_20261013_diagnosis_v2.json`. Ide o kontrolu
+vybraných snímok, nie nový audit celej session. Chýbajúca baseline textu jadra
+tohto bootu zostáva priznaná ako neuzavretá kontrola. Účinnosť detekcie,
+falošné poplachy nasadeného modelu ani živá latencia detektora sa týmto
+pilotom nemerali. Pred ďalším zberom treba vyriešiť dostupnosť súvislých
+modelových okien a kapacitu úložiska pre celú kampaň.
+
+Oprava pomocného reportu: prvý súbor
+`data/results/collection_pilot_20261013_diagnosis.json` nesprávne rátal všetky
+JSON súbory v adresári ako snímky a čítal počítadlá z nesprávnej úrovne.
+Jeho `values.capture` nahrádza vyššie citovaný artefakt s príponou `_v2`,
+ktorý vyberá sidecary podľa pôvodného auditu a overuje ich hashe. Záznamy
+prehratia sú rovnaké; pôvodný report zostáva zachovaný.

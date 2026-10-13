@@ -223,11 +223,21 @@ def _task_tree(view, limit=8192):
             break
         head = tva + o_child
         nxt = view.u64(tpa + o_child)
-        steps = 0
-        while nxt is not None and nxt != head:
-            if not view._plausible_va(nxt) or steps > limit:
+        siblings = set()
+        while nxt != head:
+            if nxt is None:
+                stop = "ukazovatel v children task_struct 0x%x sa neda precitat" % tva
+                break
+            if not view._plausible_va(nxt):
                 stop = "nerozumny ukazovatel v children 0x%x" % (nxt or 0)
                 break
+            if nxt in siblings:
+                stop = "cyklus v children pri 0x%x" % nxt
+                break
+            if len(siblings) >= limit:
+                stop = "strop %d poloziek v children" % limit
+                break
+            siblings.add(nxt)
             child = nxt - o_sib
             cpa = view.to_pa(child)
             if cpa is None:
@@ -236,7 +246,6 @@ def _task_tree(view, limit=8192):
             if child not in found:
                 stack.append(child)
             nxt = view.u64(cpa + o_sib)
-            steps += 1
         if stop:
             break
     return found, stop
@@ -252,7 +261,7 @@ def process_cross_view(view, procs=None):
     omylom vyhlasit za uzavretu kontrolu.
     """
     res = {"available": False, "conclusive": False, "reason": None,
-           "findings": []}
+           "findings": [], "inconclusive_differences": []}
     plist = view.processes() if procs is None else procs
     tree, tree_stop = _task_tree(view)
     if not tree:
@@ -277,15 +286,18 @@ def process_cross_view(view, procs=None):
                          "rozdiel nie je dokaz skryvania"
                          % (plist["stop_reason"], tree_stop))
 
+    # Neuplny pohlad zachovame na diagnostiku, nie medzi nalezmi, ktore
+    # check_all sumarizuje a safeguard pouziva na okamzity alarm.
+    differences = res["findings"] if res["conclusive"] else res["inconclusive_differences"]
     for va in sorted(set(list_va) - tree_va):
         p = list_va[va]
-        res["findings"].append(_finding("process_cross_view", {
+        differences.append(_finding("process_cross_view", {
             "task_va": va, "pid": p["pid"], "comm": p["comm"],
             "seen_in": "tasks", "missing_in": "children/sibling",
         }))
     for va in sorted(tree_va - set(list_va)):
         t = tree[va]
-        res["findings"].append(_finding("process_cross_view", {
+        differences.append(_finding("process_cross_view", {
             "task_va": va, "pid": t["pid"], "comm": t["comm"],
             "seen_in": "children/sibling", "missing_in": "tasks",
         }))
@@ -352,7 +364,7 @@ def module_checks(view, mods=None):
     `mods` je cely vysledok view.modules(), z rovnakeho dovodu ako pri procesoch.
     """
     res = {"available": False, "conclusive": False, "reason": None,
-           "findings": []}
+           "findings": [], "inconclusive_differences": []}
     mres = view.modules() if mods is None else mods
     res.update({
         "available": True,
@@ -390,14 +402,15 @@ def module_checks(view, mods=None):
         res["reason"] = ("prechod zoznamu modulov sa prerusil (%s) - rozdiel "
                          "nie je dokaz skryvania" % mres["stop_reason"])
 
+    differences = res["findings"] if res["conclusive"] else res["inconclusive_differences"]
     by_va = {m["module_va"]: m["name"] for m in mres["modules"]}
     for va in sorted(set(by_va) - set(sysfs["modules"])):
-        res["findings"].append(_finding("module_cross_view", {
+        differences.append(_finding("module_cross_view", {
             "module_va": va, "name": by_va[va],
             "seen_in": "modules", "missing_in": "module_kset",
         }))
     for va in sorted(set(sysfs["modules"]) - set(by_va)):
-        res["findings"].append(_finding("module_cross_view", {
+        differences.append(_finding("module_cross_view", {
             "module_va": va, "name": sysfs["modules"][va],
             "seen_in": "module_kset", "missing_in": "modules",
         }))

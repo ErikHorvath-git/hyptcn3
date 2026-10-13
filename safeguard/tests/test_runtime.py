@@ -68,6 +68,15 @@ def test_integrity_finding_on_invalid_input_is_not_suppressed():
     assert row["integrity_alarm"] and row["score"] is None
 
 
+def test_inconclusive_cross_view_is_input_error_without_integrity_alarm():
+    row = runtime.Detector(FakeBundle(), preserve=False).process(
+        frame(0, valid=False, inconclusive=["process_cross_view"]))
+    assert row["state"] == "input_error"
+    assert row["integrity"]["status"] == "inconclusive"
+    assert not row["alarm"] and not row["integrity_alarm"]
+    assert row["score"] is None
+
+
 def test_event_counts_are_rising_edges_and_threshold_is_strict():
     detector = runtime.Detector(FakeBundle(window=1, k=2, n=2,
         scores={1: 1.0, 2: 2.0, 3: 2.0, 4: 2.0, 5: 0.0, 6: 2.0, 7: 2.0}), preserve=False)

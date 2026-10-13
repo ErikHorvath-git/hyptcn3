@@ -80,7 +80,12 @@ hosťovi (koľko stránok sa medzi dvoma snímkami zmení bez akéhokoľvek zás
 Každá kontrola hlási `conclusive`. Snímka sa odoberá bez zastavenia VM, takže prechod
 zoznamu sa môže roztrhnúť; keď sa niektorý prechod neuzavrel, rozdiel dvoch zoznamov
 **nie je** dôkaz skrývania a nulový výsledok nič nedokazuje. V takom prípade je názov
-kontroly v poli `summary.inconclusive`. Pri kontrole (d) `conclusive` znamená, že
+kontroly v poli `summary.inconclusive`. Rozdiely neúplných pohľadov na procesy
+a moduly sú v `inconclusive_differences`, nie vo `findings`; nevytvárajú preto
+alarm integrity. Nezávislé nálezy (napríklad neprípustné meno modulu alebo hook
+v tabuľke volaní) sa vyhodnocujú aj pri neuzavretej krížovej kontrole.
+Neúplná kontrola naďalej zneplatňuje vstup do modelového okna podľa protokolu.
+Pri kontrole (d) `conclusive` znamená, že
 každá stranka baseline bola v snímke naozaj prečítaná; chýbajúca stranka je „neviem“,
 nie „čisté“.
 
