@@ -7,7 +7,8 @@
   <vcpu placement='static'>2</vcpu>
   <os>
     <type arch='x86_64' machine='q35'>hvm</type>
-    <boot dev='hd'/>
+    <!-- Bez <boot dev='hd'/>: poradie určuje <boot order='1'/> na disku
+         a libvirt 11 kombináciu oboch odmietne (Debian 13). -->
   </os>
   <features>
     <acpi/>
@@ -30,10 +31,13 @@
       <target dev='vda' bus='virtio'/>
       <boot order='1'/>
     </disk>
-    <disk type='file' device='cdrom'>
+    <!-- Seed ako virtio disk, nie SATA cdrom: jadro *-cloud-amd64 nemá
+         AHCI, cloud-init by seed nenašiel (NoCloud ho hľadá podľa
+         menovky cidata na ľubovoľnom blokovom zariadení). -->
+    <disk type='file' device='disk'>
       <driver name='qemu' type='raw'/>
       <source file='@@SEED@@'/>
-      <target dev='sda' bus='sata'/>
+      <target dev='vdb' bus='virtio'/>
       <readonly/>
     </disk>
     <interface type='bridge'>
