@@ -18,10 +18,12 @@ integrity. Dĺžka okna, perióda, rotácia, hranica pokrytia aj zákaz dopĺňa
 chýbajúcich vstupov zostávajú rovnaké. Pôvodná konfigurácia v1 a jej zamietnutý
 audit sú zachované; prehratie starých dát slúži iba na diagnostiku zmeny.
 Prijatie v2 vyžaduje nový pilot zozbieraný podľa jeho vopred uloženého protokolu.
-Tento pilot má [prijatý audit](../data/results/collection_pilot_v2_20261013_reaudit.json)
+Pilot z pôvodného PC má [prijatý audit](../data/results/collection_pilot_v2_20261013_reaudit.json)
 po oprave výberu aktuálneho jadra z RAM; priebeh a pôvodné zamietnutia zachováva
-`MERANIA.md`. Konfigurácia sa neprepisuje na `accepted`: splnenie podmienky
-sa dokladá konkrétnym auditom, ktorý sa podá cez `--pilot-report`.
+`MERANIA.md`. Tento audit nedokazuje pripravenosť zberového PC z 2026-10-20:
+iný hostiteľ, disky, VM, logovanie aj kód runnera. Kampaň na ňom potrebuje nový
+pilot s vlastným auditom. Konfigurácia sa neprepisuje na `accepted`: splnenie
+podmienky sa dokladá konkrétnym auditom, ktorý sa podá cez `--pilot-report`.
 
 ## 1. Otázky experimentu a jednotka merania
 
@@ -230,11 +232,21 @@ vstupu. Diagnostický syntetický model sa nesmie zameniť za finálny tréning.
 make lab-up
 make lab-test
 make collection-plan
-sudo python3 scripts/collection.py --protocol config/collection-v2.json run --role pilot --group pilot-2 --scenario steady --seed 102
+sudo .venv/bin/python scripts/collection.py --protocol config/collection-v2.json run --role pilot --group <pilot-skupina> --scenario steady --seed <seed>
 ```
+
+Systémový `python3` na zberovom PC nemá NumPy, preto sa používa interpreter
+z `.venv`. Ručný beh treba spustiť v `tmux` alebo ako dočasnú systémovú službu;
+zatvorený terminál (SIGHUP) beh riadene ukončí ako neúplný.
 
 Pilot trvá približne 40 minút zberu plus zahrievanie. Runner vypne iba trvalý
 generátor tohto projektu a spustí vlastný meraný generátor. VM zostáva bežať.
+Pred zahrievaním overí, že nebeží iný generátor, zmeria posun hodín hosťa
+(nad 1 s ich synchronizuje a overí znova) a vykoná funkčnú kontrolu (token,
+katalóg, vytvorenie a čítanie objednávky, spracovanie workerom). Potom uzavrie
+segment logov nginx a overí, že sa v ňom nájdu request ID všetkých
+kontrolných požiadaviek. Zaznamená aj stav služieb a databázy. Väčšie logy
+hosťa prenáša až po zbere, mimo meraného intervalu.
 Nespúšťať druhý generátor, smoke test ani ďalšie úlohy vo VM počas merania.
 Hostiteľské náročné úlohy, spánok hosta a zmeny konfigurácie tiež kontaminujú beh.
 
@@ -262,19 +274,15 @@ a `seed`; navyše sa zadá `--pilot-report <prijatý-audit.json>`. Runner overí
 pridelenie, protokol a priestor odvodený z pilotu s rezervou. Medzi skupinami
 treba nový boot. Prvý tréningový boot musí byť odlišný aj od pilotného.
 
-Pre prijatý pilot možno použiť
-`--pilot-report data/results/collection_pilot_v2_20261013_reaudit.json`.
-Externý archív je pripravený v
-`/run/media/eh/Seagate Expansion Drive/hyptcn3`: `collections/` uchováva
-overenú kópiu zberu a `derived/` nové odvodené výstupy. Prijatý opakovaný audit
-má vlastný manifest; zamietnutý pôvodný audit zostáva v pôvodnej kópii.
-Odhad kapacity a offline časy obsahuje
-[`collection_pilot_readiness_20261013_a.json`](../data/results/collection_pilot_readiness_20261013_a.json).
-Odhad prenáša objem scenára `steady` na ostatné scenáre, ktoré ho môžu prekročiť.
-Interný disk je pracovné úložisko. `scripts/campaign.py` spája zmrazený plán,
-reštarty skupín, zbery, audity, overené presuny a vytvorenie indexu.
-Po verifikácii úplnej externej kópie uvoľní iba surové pracovné súbory svojej
-kampane. Lokálne metadáta a príznaky ostávajú na pôvodných cestách, `raw/`
+Pilot pôvodného PC (`collection_pilot_v2_20261013_reaudit.json`) a jeho odhad
+kapacity ([`collection_pilot_readiness_20261013_a.json`](../data/results/collection_pilot_readiness_20261013_a.json))
+patria inému hostiteľovi a archívu; pre zberové PC sa nepoužijú. Tamojší odhad
+prenášal objem scenára `steady` na ostatné scenáre, ktoré ho môžu prekročiť.
+Na zberovom PC je pracovné úložisko SSD a archív systémový HDD (rozloženie
+v [`AUTOMATICKY_ZBER.sk.md`](AUTOMATICKY_ZBER.sk.md)). `scripts/campaign.py`
+spája zmrazený plán, reštarty skupín, zbery, audity, overené presuny
+a vytvorenie indexu. Po verifikácii úplnej archívnej kópie uvoľní iba surové
+pracovné súbory svojej kampane. Lokálne metadáta a príznaky ostávajú na pôvodných cestách, `raw/`
 sa zmení na odkaz do archívu. Tým zostane zachovaná evidencia bootov aj vstup
 trénera. Staršie piloty sa týmto mechanizmom neuvoľňujú.
 Príkazy, obnova po prerušení a pravidlá zastavenia sú v
@@ -330,9 +338,14 @@ neznamenajú nulovú skutočnú mieru; interval neistoty patrí k výsledku.
 **Výkonnosť:** párované opakovania bez introspekcie, so zberačom a s celým
 detektorom pri rovnakom profile záťaže. Striedať poradie podmienok. Merať
 HTTP priepustnosť a latencie, chyby, CPU/RAM hosta, objem zápisu a latenciu
-snímka → príznaky → skóre. Aktuálny generátor má obmedzenú vzorku latencií;
-jej p95 nie je celobežné p95 dlhého experimentu. Pred výkonnostnou etapou
-treba doplniť intervalové histogramy alebo úplný merací záznam požiadaviek.
+snímka → príznaky → skóre. Generátor od 2026-10-20 ukladá úplný záznam
+požiadaviek a 5 s intervaly so zlúčiteľnými histogramami (definície v
+[`LAB.sk.md`](LAB.sk.md)). Celobežné percentily sa počítajú z úplného záznamu
+požiadaviek, nie z intervalov ani z posuvného okna stavového súboru.
+Generátor je uzavretý cyklus klientov, nie pevná frekvencia; pri porovnaní
+podmienok sa preto mení aj počet požiadaviek, nielen ich latencia. Samotné
+prevádzkové logy nedokazujú kauzálny vplyv zberača; na ten treba párované
+kontrolné merania.
 
 Porovnania: TCN proti GRU a jednoduchým modelom nad rovnakými rolami a vstupmi;
 globálne proti per-bin vstupom; iba pamäť proti objektom; kontroly integrity

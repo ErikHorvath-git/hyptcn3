@@ -31,6 +31,10 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_DIR="$(dirname "$SCRIPT_DIR")"
 PRIRUCKA="$REPO_DIR/docs/PRIRUCKA.md"
 GENERATOR="$SCRIPT_DIR/gen_prirucka.py"
+# Generator spusta aj testy (fakt TESTY). Na hostiteloch, kde maju NumPy,
+# PyTorch a pytest iba v .venv repozitara, ich systemovy python3 nenajde.
+PYTHON="$REPO_DIR/.venv/bin/python"
+[ -x "$PYTHON" ] || PYTHON=python3
 
 TMP="$(mktemp)"
 LOG="$(mktemp)"
@@ -53,7 +57,7 @@ if [ $? -ne 0 ]; then
   exit 1
 fi
 
-python3 "$GENERATOR" --out "$TMP" >"$LOG" 2>&1
+"$PYTHON" "$GENERATOR" --out "$TMP" >"$LOG" 2>&1
 rc=$?
 
 if [ "$rc" -eq 5 ]; then
