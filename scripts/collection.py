@@ -223,15 +223,25 @@ def stop_child(process, grace, *, first=signal.SIGTERM):
     return result
 
 
+def is_generator(argv):
+    """A process executing host_traffic.py, not one that merely mentions it in an argument."""
+    if not argv:
+        return False
+    target = argv[0]
+    if Path(argv[0].decode(errors="replace")).name.startswith("python"):
+        target = next((arg for arg in argv[1:] if not arg.startswith(b"-")), b"")
+    return Path(target.decode(errors="replace")).name == "host_traffic.py"
+
+
 def generators(exclude=()):
     """Host generator processes not started by this session."""
     found = []
     for proc in Path("/proc").glob("[0-9]*"):
         try:
-            argv = (proc / "cmdline").read_bytes().split(b"\0")
+            argv = [arg for arg in (proc / "cmdline").read_bytes().split(b"\0") if arg]
         except OSError:
             continue
-        if any(arg.endswith(b"host_traffic.py") for arg in argv) and int(proc.name) not in exclude:
+        if is_generator(argv) and int(proc.name) not in exclude:
             found.append(int(proc.name))
     return found
 

@@ -106,3 +106,16 @@ def test_hangup_interrupts_like_sigterm():
                 pass
     finally:
         interrupts.restore()
+
+
+@pytest.mark.parametrize("argv, expected", [
+    ([b"/usr/bin/python3", b"/repo/scripts/host_traffic.py", b"--profile", b"lab"], True),
+    ([b"python3", b"-u", b"scripts/host_traffic.py"], True),
+    ([b"/repo/scripts/host_traffic.py", b"--dur", b"0"], True),
+    ([b"/venv/bin/python", b"/repo/scripts/host_monitor.py", b"run", b"--match", b"traffic=host_traffic.py"], False),
+    ([b"grep", b"host_traffic.py"], False),
+    ([], False),
+])
+def test_only_running_generator_scripts_count_as_foreign_traffic(argv, expected):
+    from scripts.collection import is_generator
+    assert is_generator(argv) is expected
