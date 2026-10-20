@@ -249,7 +249,9 @@ static int cmd_run(const args_t *a, bool once)
     vmic_log_close();
 
     if (rc == VMIC_FATAL) return 3;
-    return st.cycles_done ? 0 : 1;
+    if (!st.cycles_done) return 1;
+    /* Aj jeden neuspesny cyklus znamena, ze beh nema vsetky snimky. */
+    return st.cycles_failed ? 4 : 0;
 }
 
 /* ------------------------------------------------------------------ */

@@ -244,12 +244,18 @@ static int raw_finish(vmic_writer_t *w, vmic_snapshot_t *s)
          * Bez toho by chybali koncove nuly (riedky zapis ich nezapisal)
          * a subor by bol kratsi ako pamat, ktoru ma reprezentovat.
          */
-        if (ftruncate(p->fd, (off_t)p->end_offset) != 0)
-            LOGW("raw: ftruncate zlyhal: %s", strerror(errno));
-        if (w->cfg->fsync && fsync(p->fd) != 0)
-            LOGW("raw: fsync zlyhal: %s", strerror(errno));
-        close(p->fd);
+        const char *failed = NULL;
+        if (ftruncate(p->fd, (off_t)p->end_offset) != 0) failed = "ftruncate";
+        else if (w->cfg->fsync && fsync(p->fd) != 0)     failed = "fsync";
+        int saved = errno;
+        if (close(p->fd) != 0 && !failed) { failed = "close"; saved = errno; }
         p->fd = -1;
+        if (failed) {
+            /* Kratsi alebo nezapisany subor by sa tvaril ako cela snimka. */
+            LOGE("raw: %s zlyhal: %s", failed, strerror(saved));
+            unlink(p->staging);
+            return VMIC_ERR;
+        }
     }
 
     if (rename(p->staging, p->final) != 0) {
