@@ -29,12 +29,13 @@ pre úspešný výsledok nestačí.
 Demo identity nemajú heslá. Presmerovaný port je viazaný na loopback hostiteľa.
 Je to benígna aplikácia na vytváranie záťaže, nie verejná obchodná služba.
 Databáza a interné API počúvajú len vo VM. Dokončené objednávky staršie ako deň
-worker priebežne odstraňuje; nginx používa systémové rotovanie logov.
+worker priebežne odstraňuje. Logy laboratória nginx neobsluhuje systémový
+logrotate; segmenty uzatvára zberový runner medzi meraniami (nižšie).
 
 ## Spustenie na tomto stroji
 
 ```sh
-cd /home/eh/Desktop/hyptcn3
+cd hyptcn3   # koreň repozitára
 make lab-up
 make lab-status
 make lab-test
@@ -49,6 +50,22 @@ doména, jej snapshot `hyptcn-clean` a pôvodné merania sa nemenia.
 Zdroj musí obsahovať Debian s qemu-guest-agentom; tento repozitár jeho
 existujúci lokálny disk nedistribuuje. Definovanie čistej VM na inom počítači
 cez pôvodný cloud-init zostáva samostatný krok v `harness/README.md`.
+
+Na zberovom PC (2026-10-20) bol disk hosťa zväčšený z 3 GiB na 20 GiB
+(`qemu-img resize` pri vypnutej VM, potom `growpart` a `resize2fs` v hosťovi).
+Pôvodných 899 MB voľného miesta by nestačilo na rast PostgreSQL a WAL počas
+dlhej kampane. Disk VM potom presunul na pracovný SSD:
+`/mnt/ssd/hyptcn3-work/vms/hyptcn-lab.qcow2` (kópia pri vypnutej VM, zhodná
+SHA-256 aj `qemu-img check`; libvirt definícia ukazuje na novú cestu).
+Kópia z HDD zostala ako `vms/hyptcn-lab.qcow2.hdd-backup-20261020` a už sa
+neaktualizuje. Cesta `vms/hyptcn-lab.qcow2` vyššie platí iba pre nové
+vytvorenie domény cez `labctl`.
+
+Libvirt 11 pri vypnutí hostiteľa VM session démona uloží (`reason=saved`
+v `~/.cache/libvirt/qemu/log/hyptcn-lab.log`) a pri ďalšom štarte démona ju
+obnoví (`-incoming defer`). Obnovená VM má rovnaký boot ID, ale iný proces
+QEMU a do zásahu NTP aj zastarané hodiny. Zberový runner preto zaznamenáva
+identitu procesu QEMU a pred meraním kontroluje posun hodín hosťa.
 
 Požiadavky hostiteľa: KVM, libvirt s používateľskou session, `virsh`,
 `qemu-img`, `passt`, Python a používateľský systemd. Vo VM treba nginx,
@@ -90,11 +107,64 @@ python3 scripts/labctl.py exec --guest-command 'systemctl status hyptcn-lab@orde
 
 Generátor mieša čítanie katalógu, čítanie objednávok, vytváranie objednávok
 a health kontroly. Každé vlákno má vlastný seedovaný generátor; súbežné
-plánovanie a presné časovanie sa medzi behmi môžu líšiť. JSON obsahuje
-skutočný čas behu, počty úspechov a chýb, HTTP statusy, počty podľa ciest
-a latencie poslednej obmedzenej vzorky požiadaviek. Pri SIGTERM dokončí
-rozpracované požiadavky a zapíše záverečné počty. HTTP chyby znamenajú
-nenulový návratový kód pri ohraničenom behu.
+plánovanie a presné časovanie sa medzi behmi môžu líšiť. Je to uzavretý
+cyklus klientov (každý pracovník posiela jednu požiadavku, potom čaká), nie
+pevná frekvencia požiadaviek. Stavový JSON (`--out`) obsahuje skutočný čas
+behu, počty úspechov a chýb, HTTP statusy a počty podľa ciest. Pole
+`latency_recent_p95_ms` je iba posuvné okno posledných 10 000 požiadaviek,
+nie p95 celej session. Pri SIGTERM generátor dokončí rozpracované požiadavky
+a zapíše záverečné počty. HTTP chyby znamenajú nenulový návratový kód.
+
+So `--requests-log` a `--intervals-log` vznikne úplný append-only záznam
+(`scripts/traffic_log.py summarize` ho skontroluje):
+
+- jeden JSONL riadok na požiadavku: request ID, pracovník, fáza
+  (`warmup`/`measure`/`post` podľa času začiatku), metóda, cesta bez parametrov,
+  HTTP status alebo transportná chyba či timeout, UTC začiatok a koniec,
+  trvanie z monotónnych hodín; tokeny ani telá odpovedí sa neukladajú;
+- 5 s intervaly s počtami podľa výsledku, statusu a cesty, skutočným trvaním
+  intervalu, priepustnosťou a histogramom latencií (logaritmické koše po 5 %,
+  hornou hranicou koša sa percentil nadhodnotí najviac o 5 %); požiadavka patrí
+  intervalu, v ktorom začala; histogramy sa zlučujú sčítaním;
+- hlavičku s konfiguráciou a definíciami a záverečný záznam s počtami.
+  Chýbajúci záverečný záznam alebo neukončený posledný riadok znamená neúplný log.
+
+Latencie vo všetkých percentiloch zahŕňajú aj neúspešné požiadavky; súhrn
+uvádza aj percentily iba úspešných. Celobežné percentily sa počítajú z úplného
+záznamu, nikdy priemerovaním intervalových hodnôt. SIGUSR1 prepne fázu na
+`measure`, SIGUSR2 na `post`. Chyba zápisu logu zastaví generátor s kódom 3.
+
+## Logy servera a korelačné ID
+
+Každá požiadavka generátora nesie hlavičku `X-Request-ID`. Nginx ju zapíše do
+JSON access logu (`/var/log/hyptcn-lab/nginx-access.jsonl`: čas, status,
+`request_time`, časy upstreamu, pôvodné aj preposlané ID) a pošle ďalej
+službám. Orders ho posiela aj vo vlastných interných volaniach auth a catalog.
+Každá služba zapíše jeden riadok do journalu s ID, metódou, cestou a statusom.
+Prenos ID cez celú cestu bol overený skutočnými požiadavkami 2026-10-20.
+
+Runner medzi meraniami uzatvára segmenty logov cez
+`python3 scripts/labctl.py segment --label L --dest DIR`. Pomocník v hosťovi
+(`lab/guest_state.py`) súbor premenuje, pošle nginx signál na znovuotvorenie
+a overí, že ho už žiadny proces nemá otvorený. Potom spočíta SHA-256
+a počet riadkov a kópiu skomprimuje. Hostiteľ po prenose overí kontrolné
+súčty a až potom sa kópia v hosťovi zmaže. `labctl journal` rovnako prenesie
+journal hosťa za zvolený interval, `labctl state` vypíše stav služieb, počty
+reštartov, stav databázy, NTP a disk, `labctl clock` posun hodín hosťa.
+Qemu-guest-agent tu slúži orchestrácii a zberu dôkazov; RAM číta hostiteľský
+zberač.
+
+V hosťovi sú vypnuté časovače `apt-daily`, `apt-daily-upgrade`, `man-db`,
+`fstrim` a `e2scrub_all`. Údržba a aktualizácie nie sú súčasťou modelu záťaže
+a menili by prostredie počas kampane.
+
+Incident 2026-10-20: adresár logov mal najprv práva `0750`. Pracovné procesy
+nginx (`www-data`) preto po uzavretí segmentu nemohli log znovu otvoriť
+a písali ďalej do premenovaného súboru, ktorý sa po prenose zmazal. Kontrola
+párovania request ID to zachytila pred meraním. Riadky boli zachránené
+z otvorených deskriptorov (`data/diagnostics/recovered-nginx-20261020/`).
+Adresár má teraz `0755` a uzavretie segmentu zlyhá, ak ho nejaký proces ešte
+drží otvorený.
 
 Ručné vytvorenie objednávky:
 
