@@ -28,6 +28,19 @@ def run(*args, check=True):
     return subprocess.run(args, check=check, capture_output=True, text=True, timeout=120).stdout
 
 
+def holders(paths):
+    """PIDs that still have one of these files open (also after unlink)."""
+    targets = {str(path) for path in paths} | {f"{path} (deleted)" for path in paths}
+    found = set()
+    for fd in Path("/proc").glob("[0-9]*/fd/*"):
+        try:
+            if os.readlink(fd) in targets:
+                found.add(int(fd.parts[2]))
+        except OSError:
+            continue
+    return sorted(found)
+
+
 def label_ok(label):
     if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,120}", label):
         raise SystemExit("invalid segment label")
@@ -73,6 +86,7 @@ def state():
            "journal_disk_usage": run("journalctl", "--disk-usage", check=False).strip(),
            "timers": run("systemctl", "list-timers", "--all", "--no-pager", check=False).splitlines(),
            "current_segment_bytes": {p.name: p.stat().st_size for p in LOGS.glob("nginx-*") if p.is_file()},
+           "log_holders": {p.name: holders([p]) for p in LOGS.glob("nginx-*") if p.is_file()},
            "pending_segments": sorted(p.name for p in SEGMENTS.glob("*"))}
     print(json.dumps(doc, sort_keys=True))
 
@@ -118,6 +132,11 @@ def segment(label):
             raise SystemExit("nginx did not reopen its logs")
         time.sleep(.1)
     time.sleep(3)  # Worker buffers (flush=2s) are written to the old file on reopen.
+    # A worker that failed to reopen keeps appending to the closed segment;
+    # such a segment is incomplete and must not be transferred or deleted.
+    still_open = holders(moved)
+    if still_open:
+        raise SystemExit(f"nginx processes {still_open} did not reopen their logs; segment left in place")
     print(json.dumps({"schema": "hyptcn3/guest-log-segment/1", "label": label, "closed_unix": time.time(),
                       "files": [describe(path) for path in moved]}, sort_keys=True))
 
@@ -140,7 +159,10 @@ def journal(label, since, until):
 def cleanup(label):
     label = label_ok(label)
     removed = []
-    for path in SEGMENTS.glob(f"{label}-*"):
+    paths = list(SEGMENTS.glob(f"{label}-*"))
+    if holders(paths):
+        raise SystemExit("segment files are still open; not deleting them")
+    for path in paths:
         path.unlink()
         removed.append(path.name)
     print(json.dumps({"label": label, "removed": sorted(removed)}))

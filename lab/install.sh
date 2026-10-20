@@ -21,7 +21,10 @@ if [ ! -f /etc/hyptcn-lab.env ]; then
     python3 -c 'import secrets; print("LAB_SECRET=" + secrets.token_hex(32))' > /etc/hyptcn-lab.env
 fi
 install -m 644 hyptcn-lab@.service /etc/systemd/system/hyptcn-lab@.service
-install -d -m 0750 -o root -g adm /var/log/hyptcn-lab /var/log/hyptcn-lab/segments
+# nginx workers (www-data) reopen their logs here after each segment cut;
+# without search permission they keep writing to the closed file.
+install -d -m 0755 -o root -g adm /var/log/hyptcn-lab
+install -d -m 0750 -o root -g adm /var/log/hyptcn-lab/segments
 install -m 644 nginx.conf /etc/nginx/conf.d/hyptcn-lab.conf
 systemctl daemon-reload
 # Package refreshes and maintenance jobs are not part of the benign workload
