@@ -32,15 +32,16 @@ def capture_boot_id(image_path, explicit=None):
     raw = path if path.is_dir() else path.parent
     if raw.name != "raw":
         return expected
-    for filename, schema, guest_key in (
-        ("session.json", "hyptcn3/collection-session/1", "guest_before"),
-        ("run.json", "hyptcn3/safeguard-supervisor/1", "guest"),
+    # Session schema 2 adds evidence/provenance fields; guest_before is unchanged.
+    for filename, schemas, guest_key in (
+        ("session.json", ("hyptcn3/collection-session/1", "hyptcn3/collection-session/2"), "guest_before"),
+        ("run.json", ("hyptcn3/safeguard-supervisor/1",), "guest"),
     ):
         metadata = raw.parent / filename
         if not metadata.exists():
             continue
         doc = json.loads(metadata.read_text())
-        if not isinstance(doc, dict) or doc.get("schema") != schema:
+        if not isinstance(doc, dict) or doc.get("schema") not in schemas:
             raise ValueError("unrecognized capture metadata: " + str(metadata))
         guest = doc.get(guest_key)
         if not isinstance(guest, dict):

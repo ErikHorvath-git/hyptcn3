@@ -112,7 +112,8 @@ def validate_index(path, diagnostic=False):
         files.add(record["features"])
         hashes.add(record["features_sha256"])
         meta, audit = _json(record["session"]), _json(record["audit"])
-        if meta.get("schema") != "hyptcn3/collection-session/1" or audit.get("schema") != "hyptcn3/collection-audit/1":
+        if (meta.get("schema") not in ("hyptcn3/collection-session/1", "hyptcn3/collection-session/2")
+                or audit.get("schema") != "hyptcn3/collection-audit/1"):
             raise ValueError("unsupported session/audit provenance")
         for key in ("role", "group", "scenario", "typ", "protocol_sha256"):
             if meta.get(key) != record[key]:

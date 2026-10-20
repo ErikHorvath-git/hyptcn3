@@ -19,7 +19,7 @@ def write_json(path, value):
     Path(path).write_text(json.dumps(value))
 
 
-def make_corpus(directory):
+def make_corpus(directory, session_schema="hyptcn3/collection-session/1"):
     """All four explicit roles with checkable, labeled synthetic provenance."""
     directory.mkdir(parents=True, exist_ok=True)
     protocol = {"schema": "hyptcn3/collection-protocol/2", "window_rows": 8,
@@ -61,7 +61,7 @@ def make_corpus(directory):
                 "quality": quality, "quality_policy": "behavioral-inputs-v1",
                 "layout": layout, "max_medzera_s": 1.5})
             guest = {"boot_id": role + "-boot", "kernel": "synthetic-kernel", "stack_sha256": "synthetic-stack"}
-            metadata = {"schema": "hyptcn3/collection-session/1", "session_id": name,
+            metadata = {"schema": session_schema, "session_id": name,
                         "role": role, "group": role + "-1", "scenario": scenario,
                         "typ": "benign", "guest_before": guest, "diagnostic": True,
                         "protocol_sha256": protocol_hash, "collector_sha256": "synthetic-collector"}
@@ -136,6 +136,16 @@ def test_training_never_opens_test_arrays(tmp_path, monkeypatch):
     train_bundle(corpus, tmp_path / "bundle", window_rows=8, max_gap_s=1.5,
                  epochs=1, batch_size=32, fpr=0.1, diagnostic=True)
     assert len(opened) == 6
+
+
+@pytest.mark.parametrize("version", [2, 3])
+def test_index_accepts_session_schema_2_and_rejects_unknown(tmp_path, version):
+    corpus = make_corpus(tmp_path / "corpus", f"hyptcn3/collection-session/{version}")
+    if version == 2:
+        validate_index(corpus, diagnostic=True)
+    else:
+        with pytest.raises(ValueError, match="unsupported session"):
+            validate_index(corpus, diagnostic=True)
 
 
 def test_index_rejects_leakage_and_modified_artifact(tmp_path):

@@ -83,13 +83,13 @@ def test_boot_uuid_alone_does_not_replace_init_task_anchor():
     assert not view.resolve()
 
 
-def native(tmp_path, *, supervisor=False, boot=CURRENT):
+def native(tmp_path, *, supervisor=False, boot=CURRENT, version=1):
     raw = tmp_path / "raw"
     raw.mkdir()
     if supervisor:
         name, schema, key = "run.json", "hyptcn3/safeguard-supervisor/1", "guest"
     else:
-        name, schema, key = "session.json", "hyptcn3/collection-session/1", "guest_before"
+        name, schema, key = "session.json", f"hyptcn3/collection-session/{version}", "guest_before"
     (tmp_path / name).write_text(json.dumps({"schema": schema, key: {"boot_id": boot}}))
     return raw
 
@@ -108,6 +108,16 @@ def test_native_metadata_reaches_common_parser(tmp_path, monkeypatch, supervisor
         assert view.banner_pa == 0x11000
     finally:
         image.close()
+
+
+@pytest.mark.parametrize("version", [1, 2])
+def test_both_session_schema_versions_provide_boot_context(tmp_path, version):
+    assert capture_boot_id(native(tmp_path, version=version)) == CURRENT
+
+
+def test_unknown_session_schema_is_rejected(tmp_path):
+    with pytest.raises(ValueError, match="unrecognized"):
+        capture_boot_id(native(tmp_path, version=3))
 
 
 def test_explicit_identity_cannot_override_capture(tmp_path):
