@@ -237,6 +237,9 @@ static int cmd_run(const args_t *a, bool once)
 
     vmic_sched_stats_t st;
     rc = vmic_sched_run(&cfg, cycle_adapter, &col, &g_stop, &st);
+    uint64_t deferred_failed = vmic_collector_flush(&col);
+    if (deferred_failed)
+        LOGE("odlozeny hash/sidecar zlyhal pri %" PRIu64 " plnych snimkach", deferred_failed);
 
     char human[32];
     vmic_human_size(col.total_bytes, human, sizeof(human));
@@ -251,7 +254,7 @@ static int cmd_run(const args_t *a, bool once)
     if (rc == VMIC_FATAL) return 3;
     if (!st.cycles_done) return 1;
     /* Aj jeden neuspesny cyklus znamena, ze beh nema vsetky snimky. */
-    return st.cycles_failed ? 4 : 0;
+    return (st.cycles_failed || deferred_failed) ? 4 : 0;
 }
 
 /* ------------------------------------------------------------------ */

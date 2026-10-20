@@ -18,6 +18,7 @@
 #include <errno.h>
 #include <inttypes.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 static void json_str(FILE *f, const char *s)
@@ -39,26 +40,62 @@ static void json_str(FILE *f, const char *s)
     fputc('"', f);
 }
 
-int vmic_meta_write(const vmic_snapshot_t *s, char *out_path, size_t n)
+static int meta_path(const vmic_snapshot_t *s, char *path, size_t n)
 {
-    const vmic_config_t *cfg = s->cfg;
-
-    char path[VMIC_PATH_MAX];
     char name[VMIC_NAME_MAX + 16];
     snprintf(name, sizeof(name), "%s.json", s->id);
-    if (vmic_join(path, sizeof(path), cfg->dir, name) != 0) return VMIC_ERR;
+    return vmic_join(path, n, s->cfg->dir, name) == 0 ? VMIC_OK : VMIC_ERR;
+}
+
+static void meta_emit(FILE *f, const vmic_snapshot_t *s, const char *hash_hex);
+
+int vmic_meta_write(const vmic_snapshot_t *s, char *out_path, size_t n)
+{
+    char path[VMIC_PATH_MAX];
+    if (meta_path(s, path, sizeof(path)) != VMIC_OK) return VMIC_ERR;
 
     FILE *f = fopen(path, "we");
     if (!f) {
         LOGE("meta: nedaji sa vytvorit '%s': %s", path, strerror(errno));
         return VMIC_ERR;
     }
+    char hex[VMIC_SHA256_BYTES * 2 + 1] = "";
+    if (s->has_hash) vmic_hex(s->sha256, VMIC_SHA256_BYTES, hex);
+    meta_emit(f, s, hex);
+    int err = ferror(f);
+    if (fclose(f) != 0 || err) {
+        LOGE("meta: zapis '%s' zlyhal", path);
+        return VMIC_ERR;
+    }
+    if (out_path) snprintf(out_path, n, "%s", path);
+    return VMIC_OK;
+}
+
+int vmic_meta_render(const vmic_snapshot_t *s, const char *hash_hex,
+                     char **buf, size_t *len, char *out_path, size_t n)
+{
+    char path[VMIC_PATH_MAX];
+    if (meta_path(s, path, sizeof(path)) != VMIC_OK) return VMIC_ERR;
+    *buf = NULL;
+    FILE *f = open_memstream(buf, len);
+    if (!f) return VMIC_FATAL;
+    meta_emit(f, s, hash_hex);
+    int err = ferror(f);
+    if (fclose(f) != 0 || err) {
+        free(*buf);
+        *buf = NULL;
+        return VMIC_ERR;
+    }
+    if (out_path) snprintf(out_path, n, "%s", path);
+    return VMIC_OK;
+}
+
+static void meta_emit(FILE *f, const vmic_snapshot_t *s, const char *hex)
+{
+    const vmic_config_t *cfg = s->cfg;
 
     char iso[48];
     vmic_ts_iso(iso, sizeof(iso), &s->wall);
-
-    char hex[VMIC_SHA256_BYTES * 2 + 1] = "";
-    if (s->has_hash) vmic_hex(s->sha256, VMIC_SHA256_BYTES, hex);
 
     double mbps = (s->stats.read_seconds > 0.0)
         ? ((double)s->stats.bytes_read / (1024.0 * 1024.0)) / s->stats.read_seconds
@@ -143,6 +180,7 @@ int vmic_meta_write(const vmic_snapshot_t *s, char *out_path, size_t n)
     }
     fprintf(f, "    \"sha256_covers_file\": %s,\n",
             s->hash_covers_file ? "true" : "false");
+    fprintf(f, "    \"hash_deferred\": %s,\n", s->hash_deferred ? "true" : "false");
     fprintf(f, "    \"sha256\": "); json_str(f, hex);
     fprintf(f, "\n  }");
 
@@ -199,14 +237,6 @@ int vmic_meta_write(const vmic_snapshot_t *s, char *out_path, size_t n)
         fprintf(f, "    ]\n  }");
     }
     fprintf(f, "\n}\n");
-
-    int err = ferror(f);
-    if (fclose(f) != 0 || err) {
-        LOGE("meta: zapis '%s' zlyhal", path);
-        return VMIC_ERR;
-    }
-    if (out_path) snprintf(out_path, n, "%s", path);
-    return VMIC_OK;
 }
 
 /* ------------------------------------------------------------------ */

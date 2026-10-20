@@ -25,10 +25,14 @@
 #include "log.h"
 #include "util.h"
 
+#include <errno.h>
+#include <fcntl.h>
 #include <inttypes.h>
+#include <pthread.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 
 /* ------------------------------------------------------------------ */
 /* Priprava oblasti na citanie                                         */
@@ -201,9 +205,12 @@ int vmic_collector_init(vmic_collector_t *c, const vmic_config_t *cfg,
     return VMIC_OK;
 }
 
+static void deferred_wait(vmic_collector_t *c);
+
 void vmic_collector_fini(vmic_collector_t *c)
 {
     if (!c) return;
+    deferred_wait(c);
     vmic_hooks_unload(c->hooks);
     c->hooks = NULL;
     vmic_writer_destroy(&c->writer);
@@ -213,6 +220,100 @@ void vmic_collector_fini(vmic_collector_t *c)
 /* ------------------------------------------------------------------ */
 /* Jeden cyklus                                                        */
 /* ------------------------------------------------------------------ */
+
+/* ------------------------------------------------------------------ */
+/* Odlozeny hash plnej snimky (output.hash_async)                      */
+/* ------------------------------------------------------------------ */
+/*
+ * Sidecar sa vykresli hned v cykle (vsetky ukazovatele su platne) s
+ * rezervovanym miestom pre hash. Vlakno spocita SHA-256 hotoveho suboru,
+ * doplni ho a sidecar zapise atomicky (tmp + rename). Cyklus tak nemeria
+ * hashovanie stoviek MiB. Kym sidecar nie je zapisany, snimka pre
+ * spracovanie neexistuje; pri zlyhani chyba sidecar a beh vrati kod 4.
+ */
+#define HASH_PLACEHOLDER \
+    "################################################################"
+
+typedef struct {
+    pthread_t thread;
+    char     *buf;
+    size_t    len;
+    size_t    hash_off;
+    char      image[VMIC_PATH_MAX];
+    char      sidecar[VMIC_PATH_MAX];
+    int       rc;
+} deferred_t;
+
+static void *deferred_main(void *arg)
+{
+    deferred_t *d = arg;
+    uint8_t digest[VMIC_SHA256_BYTES];
+    char hex[VMIC_SHA256_BYTES * 2 + 1];
+    char tmp[VMIC_PATH_MAX + 8];
+
+    d->rc = VMIC_ERR;
+    if (vmic_hash_file(d->image, digest) != 0) {
+        LOGE("odlozeny hash '%s' zlyhal: %s", d->image, strerror(errno));
+        return NULL;
+    }
+    vmic_hex(digest, VMIC_SHA256_BYTES, hex);
+    memcpy(d->buf + d->hash_off, hex, VMIC_SHA256_BYTES * 2);
+    if ((size_t)snprintf(tmp, sizeof(tmp), "%s.tmp", d->sidecar) >= sizeof(tmp))
+        return NULL;
+    int fd = open(tmp, O_WRONLY | O_CREAT | O_EXCL | O_CLOEXEC, 0644);
+    if (fd < 0) {
+        LOGE("odlozeny sidecar '%s': %s", tmp, strerror(errno));
+        return NULL;
+    }
+    int bad = vmic_write_all(fd, d->buf, d->len) != 0;
+    if (close(fd) != 0) bad = 1;
+    if (bad || rename(tmp, d->sidecar) != 0) {
+        LOGE("odlozeny sidecar '%s' sa nepodarilo zapisat: %s", d->sidecar, strerror(errno));
+        unlink(tmp);
+        return NULL;
+    }
+    d->rc = VMIC_OK;
+    return NULL;
+}
+
+static void deferred_wait(vmic_collector_t *c)
+{
+    deferred_t *d = c->deferred;
+    if (!d) return;
+    pthread_join(d->thread, NULL);
+    if (d->rc != VMIC_OK) c->deferred_failed++;
+    free(d->buf);
+    free(d);
+    c->deferred = NULL;
+}
+
+static int deferred_start(vmic_collector_t *c, vmic_snapshot_t *snap)
+{
+    deferred_wait(c);                    /* najviac jeden naraz */
+    deferred_t *d = calloc(1, sizeof(*d));
+    if (!d) return VMIC_ERR;
+    if (vmic_meta_render(snap, HASH_PLACEHOLDER, &d->buf, &d->len,
+                         snap->sidecar_path, sizeof(snap->sidecar_path)) != VMIC_OK)
+        goto fail;
+    char *at = memmem(d->buf, d->len, HASH_PLACEHOLDER, VMIC_SHA256_BYTES * 2);
+    if (!at) goto fail;
+    d->hash_off = (size_t)(at - d->buf);
+    snprintf(d->image, sizeof(d->image), "%s", snap->path);
+    snprintf(d->sidecar, sizeof(d->sidecar), "%s", snap->sidecar_path);
+    if (pthread_create(&d->thread, NULL, deferred_main, d) != 0) goto fail;
+    c->deferred = d;
+    return VMIC_OK;
+fail:
+    free(d->buf);
+    free(d);
+    return VMIC_ERR;
+}
+
+uint64_t vmic_collector_flush(vmic_collector_t *c)
+{
+    deferred_wait(c);
+    return c->deferred_failed;
+}
 
 int vmic_collector_cycle(vmic_collector_t *c, vmic_snapshot_t *out)
 {
@@ -337,8 +438,13 @@ int vmic_collector_cycle(vmic_collector_t *c, vmic_snapshot_t *out)
     c->total_bytes += snap.bytes_on_disk;
 
     /* --- metadata ------------------------------------------------- */
-    if (cfg->sidecar)
+    if (cfg->sidecar && (!snap.hash_deferred || deferred_start(c, &snap) != VMIC_OK)) {
+        if (snap.hash_deferred) {        /* vlakno sa nespustilo: synchronne */
+            snap.hash_deferred = false;
+            snap.has_hash = vmic_hash_file(snap.path, snap.sha256) == 0;
+        }
         vmic_meta_write(&snap, snap.sidecar_path, sizeof(snap.sidecar_path));
+    }
 
     /* --- zhrnutie do logu ----------------------------------------- */
     char disk[32], logical[32];

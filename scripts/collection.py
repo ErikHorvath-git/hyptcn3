@@ -49,6 +49,10 @@ NOT_MEASUREMENT = {"scripts/campaign_report.py", "scripts/gen_prirucka.py", "scr
 # by the audit and by the fsynced, decompression-verified archive. A crash can
 # lose an unarchived session, which then is incomplete - never silently accepted.
 COLLECTOR_FSYNC = False
+# Without SHA-NI the collector hashes ~230 MB/s; a 716 MiB full snapshot added
+# 3.3 s to its cycle. The full snapshot's SHA-256 is computed by a collector
+# thread after the cycle; its sidecar appears when the hash is done.
+COLLECTOR_HASH_ASYNC = True
 EVIDENCE = ("preflight_smoke.json", "host_monitor.jsonl", "traffic.json", "traffic.log", "traffic_before.json",
             "traffic_requests.jsonl", "traffic_intervals.jsonl", "capture.log", "guest/state_before.json",
             "guest/state_after.json", "guest/clock_before.json", "guest/clock_after.json",
@@ -372,6 +376,7 @@ def run_session(a, p):
                     "profile_sha256": {str(f.relative_to(prof)): digest(f) for f in prof.rglob("*") if f.is_file()},
                     "collector_sha256": digest(ROOT / "vmicollect/build/vmicollect"),
                     "collector_settings": {"writer": "delta", "fsync": COLLECTOR_FSYNC, "hash": "sha256",
+                                           "hash_async": COLLECTOR_HASH_ASYNC,
                                            "interval_s": p["interval_s"], "full_every": p["full_every"],
                                            "bin_bytes": p["bin_bytes"]},
                     "traffic": {"generator": "scripts/host_traffic.py", "profile": "lab", "target": p["target"],
@@ -471,6 +476,7 @@ def capture_session(p, out, metadata, cycles):
         status["measure_start_unix"] = time.time()
         env = dict(os.environ, VMIC_DOMAIN=p["domain"], VMIC_INTERVAL=str(p["interval_s"]),
                    VMIC_FULL_EVERY=str(p["full_every"]), VMIC_OUT=str(out / "raw"), VMIC_FSYNC=str(COLLECTOR_FSYNC).lower(),
+                   VMIC_HASH_ASYNC=str(COLLECTOR_HASH_ASYNC).lower(),
                    VMIC_MANAGED_SESSION="1")
         status["capture_started_unix"] = time.time()
         children["collector"] = start_child(["bash", "scripts/lab_capture.sh", str(cycles)], out / "capture.log", env)

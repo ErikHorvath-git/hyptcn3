@@ -104,6 +104,7 @@ F("output",   "sidecar",          T_BOOL,      sidecar,          NULL, "zapisova
 F("output",   "delta_page_size",  T_U32,       delta_page_size,  NULL, "granularita porovnavania (mocnina 2)"),
 F("output",   "delta_full_every", T_U64,       delta_full_every, NULL, "kazdych N snimok plna zaloha"),
 F("output",   "fsync",            T_BOOL,      fsync,            NULL, "fsync snimky pred rename; false = zapis cez page cache"),
+F("output",   "hash_async",       T_BOOL,      hash_async,       NULL, "SHA-256 plnej snimky vo vlakne mimo cyklu; sidecar pride neskor"),
 
 F("features", "enable",           T_BOOL,      feat_enable,      NULL, "pocitat per-bin priznakovy vektor do sidecaru"),
 F("features", "bin_bytes",        T_U64,       feat_bin_bytes,   NULL, "velkost binu (mocnina 2, >= delta_page_size)"),
@@ -158,6 +159,7 @@ void vmic_config_defaults(vmic_config_t *cfg)
     cfg->delta_page_size  = 4096;
     cfg->delta_full_every = 20;
     cfg->fsync            = true;
+    cfg->hash_async       = false;
 
     /* Vektor je vychodzo ZAPNUTY aj s entropiou: neuplny vektor by sa
        neskor tazko rozoznaval od uplneho, a cena je zmerana (MERANIA.md). */
@@ -624,6 +626,11 @@ int vmic_config_validate(vmic_config_t *cfg, bool need_target)
     }
     if (cfg->delta_full_every < 1) {
         LOGE("output.delta_full_every musi byt aspon 1"); bad++;
+    }
+    if (cfg->hash_async && cfg->hook_count) {
+        /* hooky dostavaju snimku hned po cykle - s odlozenym hashom by
+           videli iny stav nez sidecar */
+        LOGE("output.hash_async sa neda kombinovat s hooks.load"); bad++;
     }
     if (cfg->feat_enable) {
         /* Index binu je gpa >> log2(bin_bytes), takze mocnina 2 nie je

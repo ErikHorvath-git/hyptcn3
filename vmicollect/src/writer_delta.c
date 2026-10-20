@@ -431,7 +431,11 @@ static int delta_finish(vmic_writer_t *w, vmic_snapshot_t *s)
      * takze to nic nestoji, a `vmicollect verify` ho vie skontrolovat
      * rovnako ako raw snimku.
      */
-    if (p->hashing && vmic_hash_file(p->final, s->sha256) == 0)
+    /* Plna snimka ma stovky MiB a skalarny SHA-256 (CPU bez SHA-NI) by
+       predlzil cyklus nad periodu; pri output.hash_async ho spocita
+       vlakno zberaca a sidecar zapise az potom. */
+    s->hash_deferred = p->hashing && p->full && w->cfg->hash_async;
+    if (p->hashing && !s->hash_deferred && vmic_hash_file(p->final, s->sha256) == 0)
         s->has_hash = true;
     s->hash_covers_file = true;
     return VMIC_OK;

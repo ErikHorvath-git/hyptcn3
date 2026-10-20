@@ -78,9 +78,9 @@ SAN     ?=
 # preklad by spadol hned na prvom subore.
 override CFLAGS  += $(OPT) $(SAN) -std=c11 $(WARN) -MMD -MP \
                     -Iinclude -Isrc -Ibpf \
-                    $(BPF_DEFS) $(BPF_INC) $(Z_CFLAGS)
+                    $(BPF_DEFS) $(BPF_INC) $(Z_CFLAGS) -pthread
 override LDFLAGS += $(SAN)
-override LDLIBS  += $(BPF_LIBS) $(Z_LIBS) -ldl -lm
+override LDLIBS  += $(BPF_LIBS) $(Z_LIBS) -ldl -lm -pthread
 
 SRC := $(wildcard src/*.c)
 OBJ := $(patsubst src/%.c,$(BUILD)/%.o,$(SRC))

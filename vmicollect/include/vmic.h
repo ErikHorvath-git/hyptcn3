@@ -127,6 +127,7 @@ typedef struct {
     uint32_t       delta_page_size;
     uint64_t       delta_full_every;  /* kazdych N snimok plna zaloha */
     bool           fsync;             /* fsync snimky pred rename     */
+    bool           hash_async;        /* SHA-256 plnej snimky vo vlakne */
 
     /* ---- [features] : per-bin priznakovy vektor ------------------- */
     /* Pocita ho delta writer pocas porovnavania stranok (perbin.c) a
@@ -287,6 +288,9 @@ typedef struct {
        false = pokryva iba zozbierane oblasti (nesuvisle [capture].regions),
        takze sa neda porovnat s hashom suboru na disku */
     bool     hash_covers_file;
+    /* true = SHA-256 sa pocita az po cykle vo vlakne (output.hash_async,
+       iba plne snimky); sidecar sa zapise, ked je hash hotovy. */
+    bool     hash_deferred;
 
     /* Per-bin vektor tejto snimky, alebo NULL ked sa nepocital (vypnuty,
        iny writer nez delta, alebo nepresiel kontrolou invariantu). Ukazuje
@@ -546,12 +550,17 @@ typedef struct {
     /* kontext planovaca pre prave prebiehajuci cyklus (nastavuje adapter) */
     double                sched_lateness_s;
     uint64_t              sched_skipped_before;
+    /* odlozeny hash plnej snimky (output.hash_async): najviac jeden naraz */
+    void                 *deferred;
+    uint64_t              deferred_failed;
 } vmic_collector_t;
 
 int  vmic_collector_init(vmic_collector_t *c, const vmic_config_t *cfg,
                          volatile sig_atomic_t *stop);
 int  vmic_collector_cycle(vmic_collector_t *c, vmic_snapshot_t *out);
 void vmic_collector_fini(vmic_collector_t *c);
+/* Pocka na odlozeny hash a zapis sidecaru; vrati pocet zlyhanych. */
+uint64_t vmic_collector_flush(vmic_collector_t *c);
 
 /* ------------------------------------------------------------------ */
 /* Konfiguracia - config.c                                             */
@@ -571,6 +580,9 @@ void vmic_backend_print_list(void *stream);
 
 /* Sidecar metadata - meta.c */
 int vmic_meta_write(const vmic_snapshot_t *snap, char *out_path, size_t n);
+/* Sidecar do pamate (malloc); `hash_hex` nahradi hash zo snimky. */
+int vmic_meta_render(const vmic_snapshot_t *snap, const char *hash_hex,
+                     char **buf, size_t *len, char *out_path, size_t n);
 
 /* Alarm - meta.c: prepise alarm.json (posledny alarm) a dopise riadok do
    alarms.jsonl (historia) vo vystupnom adresari. */

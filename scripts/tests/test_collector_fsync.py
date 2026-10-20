@@ -90,3 +90,30 @@ def test_disabled_fsync_never_calls_fsync(tmp_path, failing_fsync):
                              "-o", "features.bin_bytes=16777216"], capture_output=True, text=True, timeout=60, env=env)
     assert result.returncode == 0, result.stderr
     assert len(list(out.glob("*.vmicd"))) == 2
+
+
+@pytest.mark.skipif(not BIN.exists(), reason="vmicollect is not built (make -C vmicollect)")
+def test_deferred_full_snapshot_hash_yields_complete_verified_sidecars(tmp_path):
+    """output.hash_async: full snapshots hash in a thread; every sidecar still carries the file SHA-256."""
+    image = tmp_path / "img.raw"
+    image.write_bytes(bytes(range(256)) * (2 * 16 * 4096))
+    out = tmp_path / "out"
+    subprocess.run([BIN, "run", "-o", "vm.backend=file", "-o", f"vm.image_path={image}",
+                    "-o", f"output.dir={out}", "-o", "output.writer=delta", "-o", "output.fsync=false",
+                    "-o", "output.hash_async=true", "-o", "output.delta_full_every=2",
+                    "-o", "schedule.interval_s=1", "-o", "schedule.max_cycles=4",
+                    "-o", "features.bin_bytes=16777216"], check=True, capture_output=True, timeout=60)
+    sidecars = sorted((json.loads(p.read_text()) for p in out.glob("*.json")), key=lambda d: d["seq"])
+    assert [s["seq"] for s in sidecars] == [0, 1, 2, 3]
+    assert [s["output"]["full"] for s in sidecars] == [True, False, True, False]
+    assert [s["output"]["hash_deferred"] for s in sidecars] == [True, False, True, False]
+    assert all(len(s["output"]["sha256"]) == 64 and "#" not in s["output"]["sha256"] for s in sidecars)
+    assert not list(out.glob("*.tmp"))
+    subprocess.run([BIN, "verify", out], check=True, capture_output=True, timeout=60)
+
+
+@pytest.mark.skipif(not BIN.exists(), reason="vmicollect is not built (make -C vmicollect)")
+def test_deferred_hash_is_refused_with_hooks(tmp_path):
+    result = subprocess.run([BIN, "config", "-o", "output.hash_async=true", "-o", f"hooks.load={tmp_path}/none.so"],
+                            capture_output=True, text=True, timeout=30)
+    assert result.returncode != 0 and "hash_async" in result.stderr
