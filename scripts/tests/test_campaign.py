@@ -1,5 +1,6 @@
 import json
 import os
+import shutil
 from pathlib import Path
 import subprocess
 import sys
@@ -51,6 +52,8 @@ def lab(tmp_path, monkeypatch):
     monkeypatch.setattr(collection, "guest_identity", lambda p: {**env, "boot_id": state["boot"]})
     monkeypatch.setattr(c, "verify_frozen", lambda *a: None)
     monkeypatch.setattr(c, "capacity_guard", lambda *a: None)
+    monkeypatch.setattr(c, "hold_sleep_inhibitor", lambda: None)  # Real one needs logind/polkit.
+    monkeypatch.setattr(c, "sleep_inhibited", lambda: False)
     monkeypatch.setattr(c, "guard_mount", lambda *a: None)
     def child(command, log, **kw):
         command = list(map(str, command))
@@ -230,3 +233,65 @@ def test_lab_reboot_cannot_accept_unchanged_boot(monkeypatch):
     monkeypatch.setattr(lab, "health", lambda: pytest.fail("old boot must not be accepted"))
     with pytest.raises(TimeoutError, match="new boot"):
         lab.reboot(timeout=0)
+
+
+def test_interrupted_run_records_stopped_state_and_signals(lab):
+    def interrupt(command, log, **kw):
+        raise InterruptedError("interrupted by signal 15")
+    c.run_child = interrupt
+    with pytest.raises(InterruptedError):
+        c.execute(lab["directory"])
+    state = read_json(lab["directory"] / "status.json")
+    assert state["status"] == "stopped" and state["stage"] == "interrupted"
+    assert "signal 15" in state["message"]
+
+
+def test_stale_running_status_is_recorded_as_unclean_end(lab):
+    write_new(lab["directory"] / "status.json", {"status": "running", "stage": "capture",
+                                                 "pid": 999999, "process_identity": {"x": 1}}, replace=True)
+    shown = c.status(lab["directory"])
+    assert shown["running"] is False and shown["stale"] is True
+    c.execute(lab["directory"], stop_after=1)
+    events = [read_json(e) for e in sorted((lab["directory"] / "events").glob("*.json"))]
+    assert any(e.get("stage") == "unclean-end" for e in events)
+
+
+def test_run_child_lets_the_child_finish_cleanup_on_interrupt(tmp_path):
+    marker = tmp_path / "end.json"
+    child = tmp_path / "child.py"
+    child.write_text(
+        "import signal, sys, time, pathlib\n"
+        "count = []\n"
+        "def stop(signum, frame):\n"
+        "    count.append(signum)\n"
+        "    if len(count) == 1:\n"
+        "        time.sleep(1)  # cleanup that must not be cut short\n"
+        "        pathlib.Path(sys.argv[1]).write_text(str(len(count)))\n"
+        "        sys.exit(0)\n"
+        "signal.signal(signal.SIGTERM, stop)\n"
+        "while True:\n"
+        "    time.sleep(.1)\n")
+    started = []
+    def guard():
+        started.append(1)
+        if len(started) > 1:
+            raise InterruptedError("operator stop")
+    with pytest.raises(InterruptedError):
+        c.run_child([sys.executable, child, marker], tmp_path / "child.log", timeout=60, guard=guard, grace=20)
+    assert marker.read_text() == "1"  # exactly one SIGTERM, cleanup completed
+
+
+@pytest.mark.skipif(not shutil.which("zstd"), reason="zstd CLI unavailable")
+def test_archive_estimate_measures_codec_on_pilot_images(tmp_path):
+    session = tmp_path / "pilot"
+    (session / "raw").mkdir(parents=True)
+    (session / "raw/a.vmicd").write_bytes(bytes(1 << 20))  # highly compressible
+    (session / "raw/b.vmicd").write_bytes(os.urandom(1 << 20))  # incompressible
+    (session / "features.npz").write_bytes(b"x" * 1000)
+    p = {"cycles": 720, "pilot_cycles": 480}
+    plain = c.archive_estimate(session, p, None)
+    packed = c.archive_estimate(session, p, "zstd")
+    assert plain["raw_ratio"] == 1 and plain["pilot_other_bytes"] == 1000
+    assert .45 < packed["raw_ratio"] < .55
+    assert packed["bytes_per_session"] == pytest.approx(
+        (packed["pilot_raw_stored_bytes"] + 1000) * 720 / 480 * 1.5)

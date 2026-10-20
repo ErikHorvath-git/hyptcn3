@@ -73,3 +73,21 @@ def test_pilot_gate_distinguishes_input_loss_from_integrity_gap(primary_complete
     assert report["legacy_valid_rows"] == len(matrix) - 2
     assert report["integrity_finding_rows"] == int(integrity_finding)
     assert len(windows) == (416 if primary_complete else 354)
+
+
+def test_interrupts_raise_once_and_record_every_signal():
+    import os
+    import signal
+    from scripts.collection import Interrupts
+    interrupts = Interrupts()
+    try:
+        with pytest.raises(InterruptedError):
+            os.kill(os.getpid(), signal.SIGTERM)
+            for _ in range(100):
+                pass  # The handler runs between bytecodes.
+        os.kill(os.getpid(), signal.SIGTERM)  # Second signal during cleanup must not raise.
+        for _ in range(100):
+            pass
+        assert [r["signal"] for r in interrupts.received] == [signal.SIGTERM, signal.SIGTERM]
+    finally:
+        interrupts.restore()

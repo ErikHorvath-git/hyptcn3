@@ -88,10 +88,42 @@ def capacity_guard(manifest, p, remaining):
     guard_mount(manifest["archive_root"], manifest["archive_mount"])
     reserve = p["min_free_gib"] * 2**30
     needed = manifest["estimated_session_bytes_with_reserve"]
+    archived = manifest.get("estimated_archive_bytes_per_session", needed)
     if shutil.disk_usage(COLLECTIONS).free < needed + reserve:
-        raise ValueError("insufficient internal working space for the next session")
-    if shutil.disk_usage(manifest["archive_root"]).free < needed * remaining + reserve:
-        raise ValueError("insufficient external space for remaining campaign estimate")
+        raise ValueError("insufficient working space for the next session")
+    if shutil.disk_usage(manifest["archive_root"]).free < archived * remaining + reserve:
+        raise ValueError("insufficient archive space for remaining campaign estimate")
+
+
+def archive_estimate(session_dir, p, compression):
+    """Archive bytes per hourly session from the accepted pilot itself.
+
+    Raw images use the archive codec on every pilot image; all other session
+    files count uncompressed (upper bound). The 1.5 planning margin is kept.
+    """
+    raw = Path(session_dir) / "raw"
+    original = stored = 0
+    for path in sorted(raw.glob("*.vmicd")):
+        size = path.stat().st_size
+        original += size
+        if compression is None:
+            stored += size
+            continue
+        with path.open("rb") as stream:
+            process = subprocess.Popen(["zstd", "-q", "-3", "-T1", "-c"], stdin=stream, stdout=subprocess.PIPE)
+            for chunk in iter(lambda: process.stdout.read(1 << 20), b""):
+                stored += len(chunk)
+            if process.wait():
+                raise ValueError("zstd failed while estimating the archive size")
+    if not original:
+        raise ValueError("pilot raw images are not available for the archive estimate")
+    other = sum(f.stat().st_size for f in Path(session_dir).rglob("*")
+                if f.is_file() and not f.is_symlink() and raw not in f.parents)
+    scale = p["cycles"] / p["pilot_cycles"]
+    return {"codec": compression, "pilot_raw_bytes": original, "pilot_raw_stored_bytes": stored,
+            "raw_ratio": stored / original, "pilot_other_bytes": other,
+            "bytes_per_session": (stored + other) * scale * 1.5,
+            "note": "Measured on the accepted pilot; heavier scenarios may exceed it."}
 
 
 def initialize(a):
@@ -106,7 +138,9 @@ def initialize(a):
     if not re.fullmatch(r"[a-zA-Z0-9][a-zA-Z0-9_-]{0,63}", name):
         raise ValueError("invalid campaign name")
     archive_root = Path(a.archive_root).absolute()
-    mount = mount_identity(archive_root)
+    mount = mount_identity(archive_root, allow_system=a.archive_on_system_disk)
+    compression = None if a.archive_compression == "none" else a.archive_compression
+    estimate = archive_estimate(read_json(a.pilot_report)["values"]["session_dir"], p, compression)
     owner = pwd.getpwuid(int(os.environ.get("SUDO_UID", os.getuid())))
     directory = BASE / name
     planned = collection.plan(p)
@@ -121,6 +155,9 @@ def initialize(a):
                 "guest_environment": guest_environment(identity),
                 "archive_root": str(archive_root), "archive_mount": mount,
                 "archive_dir": str(archive_root / "campaigns" / name),
+                "archive_compression": compression, "archive_estimate": estimate,
+                "estimated_archive_bytes_per_session": estimate["bytes_per_session"],
+                "working_storage": collection.storage_identity(COLLECTIONS),
                 "estimated_session_bytes_with_reserve": needed,
                 "sessions": planned["sessions"], "planned_capture_hours": planned["planned_hours"],
                 "note": "Frozen allocation, not a measurement or a completed corpus."}
@@ -200,6 +237,9 @@ def verify_frozen(directory, manifest, p):
             or tree_hashes(ROOT / p["profile"]) != manifest["profile_sha256"]
             or extractor_hashes() != manifest["extractor_sha256"]):
         raise ValueError("campaign runtime, profile or extractor changed")
+    # A missing SSD must stop the run, not redirect it to another disk.
+    if "working_storage" in manifest and collection.storage_identity(COLLECTIONS) != manifest["working_storage"]:
+        raise ValueError("working storage for data/collections is not the frozen disk")
     # External copy also detects accidental changes to the local immutable plan.
     guard_mount(manifest["archive_root"], manifest["archive_mount"])
     external = Path(manifest["archive_dir"])
@@ -228,7 +268,7 @@ def process_identity(pid):
         return None
 
 
-def run_child(command, log, *, timeout, guard=lambda: None, lock_fd=None):
+def run_child(command, log, *, timeout, guard=lambda: None, lock_fd=None, grace=150):
     env = dict(os.environ)
     env.pop("HYPTCN_COLLECTION_LOCK_FD", None)
     if lock_fd is not None:
@@ -245,6 +285,16 @@ def run_child(command, log, *, timeout, guard=lambda: None, lock_fd=None):
                     raise TimeoutError("campaign stage timed out: " + str(log))
                 time.sleep(2)
             return process.returncode
+        except InterruptedError:
+            # One SIGTERM to the child only; it stops its own helpers in order and
+            # writes a truthful end record. Group kills below are a last resort.
+            if process.poll() is None:
+                process.send_signal(signal.SIGTERM)
+                try:
+                    process.wait(timeout=grace)
+                except subprocess.TimeoutExpired:
+                    pass
+            raise
         finally:
             # A crashed parent script may leave traffic/capture grandchildren.
             try:
@@ -260,6 +310,33 @@ def run_child(command, log, *, timeout, guard=lambda: None, lock_fd=None):
             except ProcessLookupError:
                 pass
             process.wait(timeout=5)
+
+
+def hold_sleep_inhibitor():
+    """Block sleep while the runner lives; the helper exits when its stdin pipe closes."""
+    process = subprocess.Popen(["systemd-inhibit", "--what=sleep:idle", "--mode=block", "--who=hyptcn3 collection",
+                                "--why=Preserve the frozen RAM sampling timeline", "cat"],
+                               stdin=subprocess.PIPE, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    time.sleep(.5)
+    if process.poll() is not None:
+        raise ValueError("cannot take the sleep inhibitor lock")
+    return process
+
+
+def release_sleep_inhibitor(process):
+    if process is None:
+        return
+    process.stdin.close()
+    try:
+        process.wait(timeout=10)
+    except subprocess.TimeoutExpired:
+        process.kill()
+        process.wait()
+
+
+def sleep_inhibited():
+    listing = subprocess.run(["systemd-inhibit", "--list", "--no-pager"], capture_output=True, text=True, timeout=10)
+    return "hyptcn3 collection" in listing.stdout
 
 
 def ensure_group(directory, manifest, p, row):
@@ -361,7 +438,8 @@ def archive_capture(directory, manifest, session, p, audit=None):
     destination = Path(manifest["archive_dir"]) / "collections" / session.name
     guard = lambda: guard_mount(manifest["archive_root"], manifest["archive_mount"])
     return archive_session(session, destination, guard, reclaim=True, campaign_id=manifest["id"],
-                           audit=audit, reserve_bytes=p["min_free_gib"] * 2**30)
+                           audit=audit, reserve_bytes=p["min_free_gib"] * 2**30,
+                           compress=manifest.get("archive_compression"))
 
 
 def execute(directory, *, stop_after=None):
@@ -369,16 +447,21 @@ def execute(directory, *, stop_after=None):
     manifest, p = load_campaign(directory)
     if os.geteuid() != 0 or os.environ.get("SUDO_USER") != manifest["owner"]["name"]:
         raise ValueError("run with sudo from the campaign owner's account")
-    def interrupted(signum, _frame):
-        raise InterruptedError(f"campaign interrupted by signal {signum}")
-    previous = {s: signal.signal(s, interrupted) for s in (signal.SIGINT, signal.SIGTERM)}
-    owns_lock = False
+    interrupts = collection.Interrupts()
+    owns_lock, inhibitor = False, None
     try:
         with collection.collection_lock(COLLECTIONS) as lock_fd:
             owns_lock = True
             verify_frozen(directory, manifest, p)
+            last = read_json(directory / "status.json") if (directory / "status.json").exists() else {}
+            if last.get("status") == "running":
+                # The lock was free, so that process is gone: SIGKILL, crash or power loss.
+                update_state(directory, status="stopped", stage="unclean-end",
+                             message="previous run ended without a final status; its session is incomplete")
+            inhibitor = hold_sleep_inhibitor()
             update_state(directory, status="running", stage="preflight", pid=os.getpid(),
-                         process_identity=process_identity(os.getpid()), message=None)
+                         process_identity=process_identity(os.getpid()), inhibitor_pid=getattr(inhibitor, "pid", None),
+                         message=None, signals=[])
             reports = []
             processed = 0
             guard = lambda: guard_mount(manifest["archive_root"], manifest["archive_mount"])
@@ -434,12 +517,18 @@ def execute(directory, *, stop_after=None):
             finish_corpus(directory, manifest, p, reports)
             return 0
     except BaseException as exc:
+        try:
+            interrupts.disarm()
+        except InterruptedError:
+            pass  # First signal arrived exactly here; the handler disarmed itself.
         if owns_lock:
-            update_state(directory, status="stopped", stage="error", message=str(exc))
+            update_state(directory, status="stopped",
+                         stage="interrupted" if isinstance(exc, InterruptedError) else "error",
+                         message=str(exc), signals=interrupts.received)
         raise
     finally:
-        for sig, handler in previous.items():
-            signal.signal(sig, handler)
+        release_sleep_inhibitor(inhibitor)
+        interrupts.restore()
 
 
 def finish_corpus(directory, manifest, p, reports):
@@ -469,14 +558,14 @@ def launch(directory, stop_after=None):
     if os.geteuid() != 0 or os.environ.get("SUDO_USER") != manifest["owner"]["name"]:
         raise ValueError("launch with sudo from the campaign owner's account")
     verify_frozen(directory, manifest, p)
+    # KillMode=mixed: SIGTERM reaches only the runner, which stops its child in
+    # order; anything left after it exits (or after the timeout) gets SIGKILL.
     command = ["systemd-run", "--collect", f"--unit={UNIT}", "--description=hyptcn3 benign collection campaign",
-               "--property=Type=exec", "--property=KillMode=control-group", "--property=TimeoutStopSec=45",
+               "--property=Type=exec", "--property=KillMode=mixed", "--property=TimeoutStopSec=240",
                "--property=Restart=no", f"--working-directory={ROOT}",
                f"--setenv=SUDO_USER={manifest['owner']['name']}", f"--setenv=SUDO_UID={manifest['owner']['uid']}",
                f"--setenv=SUDO_GID={manifest['owner']['gid']}",
-               "systemd-inhibit", "--what=sleep", "--mode=block", "--who=hyptcn3 collection",
-               "--why=Preserve the frozen RAM sampling timeline", sys.executable, ROOT / "scripts/campaign.py",
-               "run", directory]
+               sys.executable, ROOT / "scripts/campaign.py", "run", directory]
     if stop_after:
         command += ["--stop-after", str(stop_after)]
     subprocess.run(list(map(str, command)), check=True, timeout=30)
@@ -490,6 +579,11 @@ def status(directory):
     state = read_json(directory / "status.json")
     state["running"] = (state.get("status") == "running" and state.get("process_identity") is not None
                         and process_identity(state.get("pid")) == state["process_identity"])
+    if state.get("status") == "running" and not state["running"]:
+        state["stale"] = True
+        state["note"] = ("recorded as running but that process is not alive (SIGKILL, crash or power loss); "
+                         "the current session is incomplete and the next run records an unclean end")
+    state["sleep_inhibitor_active"] = sleep_inhibited()
     state["campaign"] = str(directory)
     state["planned_capture_hours"] = manifest["planned_capture_hours"]
     if state.get("session"):
@@ -508,6 +602,9 @@ def main(argv=None):
     init.add_argument("--pilot-report", type=Path, required=True)
     init.add_argument("--archive-root", type=Path, required=True)
     init.add_argument("--name")
+    init.add_argument("--archive-on-system-disk", action="store_true",
+                      help="Explicitly allow an archive on the root filesystem (no second disk)")
+    init.add_argument("--archive-compression", choices=["zstd", "none"], default="zstd")
     for verb in ("run", "launch", "status", "verify-archives"):
         cmd = sub.add_parser(verb)
         cmd.add_argument("directory", type=Path)

@@ -116,6 +116,13 @@ def measurement_sources():
     return {str(f.relative_to(ROOT)): digest(f) for f in sorted(files)}
 
 
+def storage_identity(path):
+    """Filesystem holding a working directory (bind mounts show their source)."""
+    doc = json.loads(subprocess.check_output(["findmnt", "-J", "-T", str(path), "-o", "TARGET,SOURCE,FSTYPE,UUID"],
+                                             text=True, timeout=10))
+    return doc["filesystems"][0]
+
+
 def lab_json(p, *args, timeout=600):
     """labctl as the VM owner (qemu:///session); its reply is one JSON document."""
     command = [sys.executable, ROOT / "scripts/labctl.py", "--domain", p["domain"], *args]
@@ -347,7 +354,7 @@ def run_session(a, p):
                     "measurement_sha256": measurement_sources(),
                     "profile_sha256": {str(f.relative_to(prof)): digest(f) for f in prof.rglob("*") if f.is_file()},
                     "collector_sha256": digest(ROOT / "vmicollect/build/vmicollect"),
-                    "collector_settings": {"writer": "delta", "fsync": False, "hash": "sha256",
+                    "collector_settings": {"writer": "delta", "fsync": True, "hash": "sha256",
                                            "interval_s": p["interval_s"], "full_every": p["full_every"],
                                            "bin_bytes": p["bin_bytes"]},
                     "traffic": {"generator": "scripts/host_traffic.py", "profile": "lab", "target": p["target"],
@@ -355,6 +362,7 @@ def run_session(a, p):
                                 "catalog_share": s["catalog_share"], "write_share": s["write_share"],
                                 "summary_interval_s": 5, "load_model": "closed loop, not a fixed request rate"},
                     "metadata_not_model_inputs": ["scenario", "seed", "traffic", "boot_id", "group", "session_id"],
+                    "working_storage": storage_identity(base),
                     "host_context": {"host_boot": Path("/proc/sys/kernel/random/boot_id").read_text().strip(),
                                      "qemu": qemu_process(p["domain"]), "python": sys.executable},
                     "commit": subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip(),
@@ -445,7 +453,7 @@ def capture_session(p, out, metadata, cycles):
         os.kill(children["traffic"].pid, signal.SIGUSR1)
         status["measure_start_unix"] = time.time()
         env = dict(os.environ, VMIC_DOMAIN=p["domain"], VMIC_INTERVAL=str(p["interval_s"]),
-                   VMIC_FULL_EVERY=str(p["full_every"]), VMIC_OUT=str(out / "raw"), VMIC_FSYNC="false",
+                   VMIC_FULL_EVERY=str(p["full_every"]), VMIC_OUT=str(out / "raw"), VMIC_FSYNC="true",
                    VMIC_MANAGED_SESSION="1")
         status["capture_started_unix"] = time.time()
         children["collector"] = start_child(["bash", "scripts/lab_capture.sh", str(cycles)], out / "capture.log", env)
@@ -588,7 +596,9 @@ def audit_session(directory, p, protocol_path, output=None):
         raise ValueError("no collector sidecars")
     if len(list(raw.glob("*.vmicd"))) != len(sidecars):
         reasons.append("image/sidecar count mismatch")
-    expected = p["pilot_cycles"] if metadata.get("role") == "pilot" else p["cycles"]
+    # Diagnostic runs are shorter by design; their recorded length is the target.
+    expected = (p["pilot_cycles"] if metadata.get("role") == "pilot" else
+                metadata.get("cycles") if metadata.get("role") == "diagnostic" else p["cycles"])
     if len(sidecars) != expected:
         reasons.append("snapshot count differs from assigned protocol")
     if [d["seq"] for _, d in sidecars] != list(range(len(sidecars))):
