@@ -25,6 +25,8 @@ vms/
 # Runtime lab traffic and local state; validation artifacts go to data/results.
 data/lab/
 data/collections/
+# Diagnostic captures are kept apart from the corpus (see collection.py).
+data/diagnostics/
 data/campaigns/
 data/safeguard/
 data/models/
