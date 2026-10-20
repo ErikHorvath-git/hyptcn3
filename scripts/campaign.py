@@ -81,7 +81,19 @@ def pilot_gate(path, protocol_path, p):
     if (tree_hashes(ROOT / p["profile"]) != meta["profile_sha256"]
             or digest(ROOT / "vmicollect/build/vmicollect") != meta["collector_sha256"]):
         raise ValueError("pilot collector or profile differs from current environment")
+    changed = measurement_changes(meta)
+    if changed:
+        raise ValueError("measurement code changed since the pilot (new pilot required): " + ", ".join(changed[:12]))
     return meta, v["raw_bytes"] * p["cycles"] / p["pilot_cycles"] * 1.5
+
+
+def measurement_changes(meta):
+    """Capture/audit/archive code that differs from the pilot's; reports and docs may change."""
+    recorded = meta.get("measurement_sha256")
+    if recorded is None:
+        return ["<pilot predates measurement provenance>"]
+    current = collection.measurement_sources()
+    return sorted(name for name in set(recorded) | set(current) if recorded.get(name) != current.get(name))
 
 
 def capacity_guard(manifest, p, remaining):

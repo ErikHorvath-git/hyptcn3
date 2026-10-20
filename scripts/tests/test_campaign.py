@@ -295,3 +295,12 @@ def test_archive_estimate_measures_codec_on_pilot_images(tmp_path):
     assert .45 < packed["raw_ratio"] < .55
     assert packed["bytes_per_session"] == pytest.approx(
         (packed["pilot_raw_stored_bytes"] + 1000) * 720 / 480 * 1.5)
+
+
+def test_pilot_measurement_provenance_must_match_current_code(monkeypatch):
+    current = {"scripts/collection.py": "a", "lab/services.py": "b"}
+    monkeypatch.setattr(collection, "measurement_sources", lambda: dict(current))
+    assert c.measurement_changes({"measurement_sha256": dict(current)}) == []
+    assert c.measurement_changes({"measurement_sha256": {**current, "lab/services.py": "old"}}) == ["lab/services.py"]
+    assert c.measurement_changes({"measurement_sha256": {"scripts/collection.py": "a"}}) == ["lab/services.py"]
+    assert c.measurement_changes({}) == ["<pilot predates measurement provenance>"]

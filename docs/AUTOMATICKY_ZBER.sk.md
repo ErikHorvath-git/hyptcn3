@@ -26,8 +26,13 @@ Rozloženie na zberovom PC (2026-10-20, bez externého disku):
 
 Adresáre pod bind mountami majú na HDD príznak `chattr +i`. Ak SSD nie je
 pripojený, zápis do nich zlyhá aj pre roota (overené `Operation not permitted`).
-Zber zapisuje s `fsync`. Na HDD by zápis plnej snímky s `fsync` (4,6–5,8 s
-v teste 370 MB) nevošiel do periódy 5 s. Archív na systémovom disku musí byť
+Zber zapisuje bez `fsync`. S `fsync` trvali plné snímky na tomto SSD 4,7–10,7 s
+po súvislom zápise delt (diagnostika 2026-10-20, profily `write_heavy`
+a `bursty`), na HDD už samotný zápis 370 MB 4,6–5,8 s; perióda je 5 s.
+Snímka sa zverejní z page cache. Jej SHA-256 zo sidecaru znovu overí audit
+aj archivácia, ktorá kópie zapisuje s `fsync` a overuje dekompresiou. Pád PC
+môže stratiť ešte nearchivovanú session; tá je potom neúplná, nikdy potichu
+prijatá. Archív na systémovom disku musí byť
 výslovne povolený; HDD a SSD sú dva fyzické disky, ale po uvoľnení raw ostane
 jediná kópia RAM. Nie je to záloha.
 
