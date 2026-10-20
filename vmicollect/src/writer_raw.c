@@ -246,7 +246,7 @@ static int raw_finish(vmic_writer_t *w, vmic_snapshot_t *s)
          */
         if (ftruncate(p->fd, (off_t)p->end_offset) != 0)
             LOGW("raw: ftruncate zlyhal: %s", strerror(errno));
-        if (fsync(p->fd) != 0)
+        if (w->cfg->fsync && fsync(p->fd) != 0)
             LOGW("raw: fsync zlyhal: %s", strerror(errno));
         close(p->fd);
         p->fd = -1;

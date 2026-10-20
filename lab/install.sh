@@ -21,8 +21,14 @@ if [ ! -f /etc/hyptcn-lab.env ]; then
     python3 -c 'import secrets; print("LAB_SECRET=" + secrets.token_hex(32))' > /etc/hyptcn-lab.env
 fi
 install -m 644 hyptcn-lab@.service /etc/systemd/system/hyptcn-lab@.service
+install -d -m 0750 -o root -g adm /var/log/hyptcn-lab /var/log/hyptcn-lab/segments
 install -m 644 nginx.conf /etc/nginx/conf.d/hyptcn-lab.conf
 systemctl daemon-reload
+# Package refreshes and maintenance jobs are not part of the benign workload
+# model; they would change the guest or add unplanned activity mid-campaign.
+for timer in apt-daily.timer apt-daily-upgrade.timer man-db.timer fstrim.timer e2scrub_all.timer; do
+    if systemctl list-unit-files "$timer" >/dev/null 2>&1; then systemctl disable --now "$timer" >/dev/null 2>&1 || true; fi
+done
 systemctl enable hyptcn-lab@auth hyptcn-lab@catalog hyptcn-lab@orders hyptcn-lab@worker
 systemctl restart hyptcn-lab@auth hyptcn-lab@catalog hyptcn-lab@orders hyptcn-lab@worker
 nginx -t

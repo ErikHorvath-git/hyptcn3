@@ -6,8 +6,10 @@ failed sessions remain on disk. Run audit again with a new output name.
 """
 import argparse
 from contextlib import contextmanager
+import ctypes
 from datetime import datetime, timezone
 import fcntl
+import gzip
 import hashlib
 import json
 import os
@@ -32,6 +34,19 @@ from features.windows import WindowError
 from features.quality import protocol_policy, valid_for
 
 DEFAULT = ROOT / "config/collection-v2.json"
+COLLECTIONS = ROOT / "data/collections"  # Global lock; diagnostics only change the session base.
+DIAGNOSTICS = ROOT / "data/diagnostics"
+SESSION_SCHEMA = "hyptcn3/collection-session/2"
+END_SCHEMA = "hyptcn3/collection-end/2"
+MEASUREMENT_DIRS = ("features", "guestparse", "scripts", "lab", "vmicollect")
+SOURCE_SUFFIXES = (".py", ".c", ".h", ".sh", ".sql", ".conf", ".service")
+# Reporting/documentation tools do not take part in capture, audit or archival.
+NOT_MEASUREMENT = {"scripts/campaign_report.py", "scripts/gen_prirucka.py", "scripts/check_claims.sh",
+                   "scripts/check_prirucka.sh", "scripts/stamp_results.py"}
+EVIDENCE = ("preflight_smoke.json", "host_monitor.jsonl", "traffic.json", "traffic.log", "traffic_before.json",
+            "traffic_requests.jsonl", "traffic_intervals.jsonl", "capture.log", "guest/state_before.json",
+            "guest/state_after.json", "guest/clock_before.json", "guest/clock_after.json",
+            "guest/pre_segment.json", "guest/session_segment.json", "guest/journal_segment.json")
 
 
 def digest(path):
@@ -86,8 +101,25 @@ def user_command(command):
     if os.geteuid() == 0 and user:
         import pwd
         uid = pwd.getpwnam(user).pw_uid
-        return ["runuser", "-u", user, "--", "env", f"XDG_RUNTIME_DIR=/run/user/{uid}", *map(str, command)]
+        # LIBVIRT_AUTOSTART=0: a missing session daemon is an error here. An
+        # auto-spawned daemon would live (and die) inside the runner's cgroup.
+        return ["runuser", "-u", user, "--", "env", f"XDG_RUNTIME_DIR=/run/user/{uid}", "LIBVIRT_AUTOSTART=0",
+                *map(str, command)]
     return list(map(str, command))
+
+
+def measurement_sources():
+    """Hashes of code that captures, checks or archives data (tests and reports excluded)."""
+    files = [f for d in MEASUREMENT_DIRS for f in (ROOT / d).rglob("*")
+             if f.is_file() and f.suffix in SOURCE_SUFFIXES and "tests" not in f.relative_to(ROOT).parts
+             and str(f.relative_to(ROOT)) not in NOT_MEASUREMENT]
+    return {str(f.relative_to(ROOT)): digest(f) for f in sorted(files)}
+
+
+def lab_json(p, *args, timeout=600):
+    """labctl as the VM owner (qemu:///session); its reply is one JSON document."""
+    command = [sys.executable, ROOT / "scripts/labctl.py", "--domain", p["domain"], *args]
+    return json.loads(subprocess.check_output(user_command(command), cwd=ROOT, text=True, timeout=timeout))
 
 
 @contextmanager
@@ -110,17 +142,141 @@ def collection_lock(base):
 def guest_identity(p):
     identity_command = (
         "uname -r; cat /proc/sys/kernel/random/boot_id; cat /etc/machine-id; "
-        "sha256sum /opt/hyptcn-lab/services.py /opt/hyptcn-lab/schema.sql "
+        "sha256sum /opt/hyptcn-lab/services.py /opt/hyptcn-lab/schema.sql /opt/hyptcn-lab/guest_state.py "
         "/etc/nginx/conf.d/hyptcn-lab.conf /etc/systemd/system/hyptcn-lab@.service && "
         "dpkg-query -W nginx postgresql python3 python3-psycopg2")
     command = [sys.executable, ROOT / "scripts/labctl.py", "exec", "--domain", p["domain"],
                "--guest-command", identity_command]
     lines = subprocess.check_output(user_command(command), cwd=ROOT, text=True, timeout=150).strip().splitlines()
-    if len(lines) < 11:
+    if len(lines) < 12:
         raise ValueError("cannot establish guest identity")
     return {**dict(zip(("kernel", "boot_id", "machine_id"), lines[:3])),
             "stack_sha256": hashlib.sha256("\n".join(lines[3:]).encode()).hexdigest(),
             "stack_manifest": lines[3:]}
+
+
+class Interrupts:
+    """The first SIGINT/SIGTERM interrupts the run once; later ones are only recorded.
+
+    Repeated signals (systemd plus a forwarding parent, or an impatient
+    operator) must not cut the cleanup that writes the truthful end record.
+    """
+
+    def __init__(self):
+        self.received, self.armed = [], True
+        self.previous = {s: signal.signal(s, self.handle) for s in (signal.SIGINT, signal.SIGTERM)}
+
+    def handle(self, signum, _frame):
+        self.received.append({"signal": signum, "unix": time.time()})
+        if self.armed:
+            self.armed = False
+            raise InterruptedError(f"interrupted by signal {signum}")
+
+    def disarm(self):
+        self.armed = False
+
+    def restore(self):
+        for sig, handler in self.previous.items():
+            signal.signal(sig, handler)
+
+
+def _child_setup():
+    """New session plus SIGTERM if the runner itself dies (even by SIGKILL)."""
+    os.setsid()
+    ctypes.CDLL(None, use_errno=True).prctl(1, signal.SIGTERM)  # PR_SET_PDEATHSIG
+
+
+def start_child(command, log, env=None):
+    with open(log, "x") as stream:
+        return subprocess.Popen(list(map(str, command)), cwd=ROOT, env=env, stdout=stream,
+                                stderr=subprocess.STDOUT, preexec_fn=_child_setup)
+
+
+def stop_child(process, grace, *, first=signal.SIGTERM):
+    """Signal the child's own process group, wait, escalate; report what happened."""
+    if process is None:
+        return None
+    if process.poll() is not None:
+        return {"pid": process.pid, "rc": process.returncode, "stopped_by": "exited"}
+    result = {"pid": process.pid, "stopped_by": signal.Signals(first).name}
+    try:
+        os.killpg(process.pid, first)
+        process.wait(timeout=grace)
+    except ProcessLookupError:
+        process.wait()
+    except subprocess.TimeoutExpired:
+        result["stopped_by"] = "SIGKILL after %ss" % grace
+        try:
+            os.killpg(process.pid, signal.SIGKILL)
+        except ProcessLookupError:
+            pass
+        process.wait()
+    result["rc"] = process.returncode
+    return result
+
+
+def generators(exclude=()):
+    """Host generator processes not started by this session."""
+    found = []
+    for proc in Path("/proc").glob("[0-9]*"):
+        try:
+            argv = (proc / "cmdline").read_bytes().split(b"\0")
+        except OSError:
+            continue
+        if any(arg.endswith(b"host_traffic.py") for arg in argv) and int(proc.name) not in exclude:
+            found.append(int(proc.name))
+    return found
+
+
+def qemu_process(domain):
+    """Identity of the running QEMU process; changes when the VM is restarted or restored."""
+    marker = f"guest={domain},".encode()
+    for proc in Path("/proc").glob("[0-9]*"):
+        try:
+            argv = (proc / "cmdline").read_bytes()
+            stat = (proc / "stat").read_text()
+        except OSError:
+            continue
+        if argv.startswith(b"/usr/bin/qemu-system") and marker in argv:
+            return {"pid": int(proc.name), "start_ticks": int(stat.rsplit(")", 1)[1].split()[19]),
+                    "host_boot": Path("/proc/sys/kernel/random/boot_id").read_text().strip()}
+    return None
+
+
+def file_record(path, base):
+    with path.open("rb") as stream:
+        sha = hashlib.file_digest(stream, "sha256").hexdigest()
+    record = {"size": path.stat().st_size, "sha256": sha}
+    if path.suffix in (".jsonl", ".log"):
+        with path.open("rb") as stream:
+            data = stream.read()
+        record["lines"] = data.count(b"\n")
+        record["terminated"] = not data or data.endswith(b"\n")
+    return record
+
+
+def write_logs_manifest(out):
+    """Hash every evidence file outside raw/; the audit recomputes and compares."""
+    files = {}
+    for path in sorted(out.rglob("*")):
+        name = path.relative_to(out).as_posix()
+        if (path.is_file() and not path.is_symlink() and not name.startswith("raw/")
+                and name not in ("session.json", "end.json", "logs_manifest.json")
+                and not re.fullmatch(r"(campaign_)?audit_.*", name)):
+            files[name] = file_record(path, out)
+    doc = {"schema": "hyptcn3/session-logs/1", "date": datetime.now(timezone.utc).isoformat(), "files": files}
+    write_json(out / "logs_manifest.json", doc)
+    return digest(out / "logs_manifest.json")
+
+
+def smoke_rids(path):
+    return {c["rid"]: c["status"] for c in json.loads(Path(path).read_text())["values"]["checks"]}
+
+
+def nginx_lines(path):
+    with gzip.open(path, "rt") as stream:
+        for line in stream:
+            yield json.loads(line)
 
 
 def run_session(a, p):
@@ -128,13 +284,19 @@ def run_session(a, p):
         raise ValueError("host eBPF capture needs sudo; plan and audit do not")
     if a.scenario not in p["scenarios"]:
         raise ValueError("unknown benign scenario")
-    base = ROOT / "data/collections"
+    base = Path(getattr(a, "collections_dir", None) or COLLECTIONS).absolute()
+    diagnostic = a.role == "diagnostic"
+    if diagnostic != base.is_relative_to(DIAGNOSTICS):
+        raise ValueError("diagnostic runs (and only they) must use a directory under data/diagnostics")
+    if getattr(a, "cycles", None) and not diagnostic:
+        raise ValueError("--cycles is only allowed for diagnostic runs")
     base.mkdir(parents=True, exist_ok=True)
-    with collection_lock(base):
+    with collection_lock(COLLECTIONS):
         before = guest_identity(p)
         if getattr(a, "expected_boot_id", None) and before["boot_id"] != a.expected_boot_id:
             raise ValueError("guest boot differs from campaign group")
-        if a.role != "pilot":
+        attempt = getattr(a, "group_attempt", 1) or 1
+        if a.role not in ("pilot", "diagnostic"):
             assignment = {"role": a.role, "group": a.group, "scenario": a.scenario,
                           "seed": a.seed, "cycles": p["cycles"]}
             if assignment not in plan(p)["sessions"]:
@@ -150,37 +312,51 @@ def run_session(a, p):
             needed = 0
         if shutil.disk_usage(base).free < needed + p["min_free_gib"] * 2**30:
             raise ValueError("insufficient disk budget; archive existing captures first")
-        # Scan immutable start records, including unfinished/failed runs.
+        # Immutable start records, including unfinished/failed runs: a boot belongs to
+        # one group attempt only, and a group (across its attempts) to one role.
+        mine = (getattr(a, "campaign_id", None), a.group, attempt)
         for path in base.glob("*/session.json"):
             old = json.loads(path.read_text())
-            if old["guest_before"]["boot_id"] == before["boot_id"] and old["role"] != a.role:
-                raise ValueError("same guest boot already belongs to role " + old["role"])
+            theirs = (old.get("campaign_id"), old["group"], old.get("group_attempt", 1))
             if old["group"] == a.group and old["role"] != a.role:
                 raise ValueError("group already belongs to a different split")
-            if ((old["guest_before"]["boot_id"] == before["boot_id"]) != (old["group"] == a.group)):
-                if old["group"] == a.group or old["guest_before"]["boot_id"] == before["boot_id"]:
-                    raise ValueError("one boot must correspond to exactly one collection group")
+            if old["guest_before"]["boot_id"] == before["boot_id"] and theirs != mine:
+                raise ValueError("same guest boot already belongs to another group or group attempt")
+            if theirs == mine and old["guest_before"]["boot_id"] != before["boot_id"]:
+                raise ValueError("one boot must correspond to exactly one collection group attempt")
         stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")
         session_id = getattr(a, "session_id", None) or f"{stamp}_{a.role}_{a.scenario}"
         if not re.fullmatch(r"[a-zA-Z0-9][a-zA-Z0-9_-]{0,159}", session_id):
             raise ValueError("invalid session ID")
+        cycles = a.cycles if diagnostic and a.cycles else p["pilot_cycles"] if a.role in ("pilot", "diagnostic") else p["cycles"]
         out = base / session_id
         out.mkdir()
         shutil.copyfile(a.protocol, out / "protocol.json")
         prof = ROOT / p["profile"]
         shutil.copytree(prof, out / "profile")
-        source_files = [f for directory in ("features", "guestparse", "scripts", "lab", "vmicollect")
-                        for f in (ROOT / directory).rglob("*")
-                        if f.is_file() and f.suffix in (".py", ".c", ".h", ".sh", ".sql", ".conf", ".service")]
+        source_files = [f for directory in MEASUREMENT_DIRS for f in (ROOT / directory).rglob("*")
+                        if f.is_file() and f.suffix in SOURCE_SUFFIXES]
         source_hashes = {str(f.relative_to(ROOT)): digest(f) for f in source_files}
         subprocess.run(user_command(["make", "-C", ROOT / "vmicollect"]), check=True)
-        metadata = {"schema": "hyptcn3/collection-session/1", "session_id": out.name,
+        s = p["scenarios"][a.scenario]
+        metadata = {"schema": SESSION_SCHEMA, "session_id": out.name,
                     "campaign_id": getattr(a, "campaign_id", None),
-                    "role": a.role, "group": a.group, "scenario": a.scenario,
-                    "typ": "benign", "seed": a.seed, "guest_before": before,
+                    "role": a.role, "group": a.group, "group_attempt": attempt, "scenario": a.scenario,
+                    "typ": "benign", "seed": a.seed, "cycles": cycles, "guest_before": before,
                     "protocol_sha256": digest(a.protocol), "source_sha256": source_hashes,
+                    "measurement_sha256": measurement_sources(),
                     "profile_sha256": {str(f.relative_to(prof)): digest(f) for f in prof.rglob("*") if f.is_file()},
                     "collector_sha256": digest(ROOT / "vmicollect/build/vmicollect"),
+                    "collector_settings": {"writer": "delta", "fsync": False, "hash": "sha256",
+                                           "interval_s": p["interval_s"], "full_every": p["full_every"],
+                                           "bin_bytes": p["bin_bytes"]},
+                    "traffic": {"generator": "scripts/host_traffic.py", "profile": "lab", "target": p["target"],
+                                "seed": a.seed, "workers": s["workers"], "burst": s["burst"],
+                                "catalog_share": s["catalog_share"], "write_share": s["write_share"],
+                                "summary_interval_s": 5, "load_model": "closed loop, not a fixed request rate"},
+                    "metadata_not_model_inputs": ["scenario", "seed", "traffic", "boot_id", "group", "session_id"],
+                    "host_context": {"host_boot": Path("/proc/sys/kernel/random/boot_id").read_text().strip(),
+                                     "qemu": qemu_process(p["domain"]), "python": sys.executable},
                     "commit": subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip(),
                     "commit_dirty": bool(subprocess.check_output(["git", "status", "--porcelain"], cwd=ROOT)),
                     "host": platform.platform(), "created_unix": time.time()}
@@ -188,67 +364,158 @@ def run_session(a, p):
         subprocess.run(user_command(["virsh", "-c", "qemu:///session", "dumpxml", p["domain"]]),
                        stdout=(out / "domain.xml").open("x"), check=True)
         print(f"session: {out}", flush=True)
-        traffic = collector = None
-        status = {"completed": False}
-        def interrupted(signum, _frame):
-            raise InterruptedError(f"signal {signum}")
-        old_handlers = {sig: signal.signal(sig, interrupted) for sig in (signal.SIGINT, signal.SIGTERM)}
-        try:
-            # Stop only the generator managed by this project; the VM stays up.
-            subprocess.run(user_command([sys.executable, ROOT / "scripts/labctl.py", "traffic-stop"]), check=True)
-            s = p["scenarios"][a.scenario]
-            traffic_command = [sys.executable, ROOT / "scripts/host_traffic.py", "--profile", "lab",
-                               "--target", p["target"], "--dur", "0", "--seed", str(a.seed),
-                               "--vlakien", str(s["workers"]), "--burst", str(s["burst"]),
-                               "--catalog-share", str(s["catalog_share"]), "--write-share", str(s["write_share"]),
-                               "--out", str(out / "traffic.json")]
-            with (out / "traffic.log").open("x") as log:
-                traffic = subprocess.Popen(traffic_command, cwd=ROOT, stdout=log, stderr=subprocess.STDOUT)
-            time.sleep(p["warmup_s"])
-            metrics = json.loads((out / "traffic.json").read_text())
-            if traffic.poll() is not None or not metrics["ok"] or metrics["errors"]:
-                raise ValueError("warmup traffic failed")
-            write_json(out / "traffic_before.json", metrics)
-            env = dict(os.environ, VMIC_DOMAIN=p["domain"], VMIC_INTERVAL=str(p["interval_s"]),
-                       VMIC_FULL_EVERY=str(p["full_every"]), VMIC_OUT=str(out / "raw"))
-            cycles = p["pilot_cycles"] if a.role == "pilot" else p["cycles"]
-            status["capture_started_unix"] = time.time()
-            with (out / "capture.log").open("x") as log:
-                collector = subprocess.Popen(["bash", "scripts/lab_capture.sh", str(cycles)],
-                                             env=env, cwd=ROOT, stdout=log, stderr=subprocess.STDOUT)
-            while collector.poll() is None:
-                if traffic.poll() is not None:
-                    raise ValueError("traffic generator exited during capture")
-                if shutil.disk_usage(out).free < p["min_free_gib"] * 2**30:
-                    raise ValueError("disk reserve reached; preserving partial session")
-                time.sleep(1)
-            status["capture_finished_unix"] = time.time()
-            status["collector_rc"] = collector.returncode
-            if collector.returncode:
-                raise ValueError("collector failed; see capture.log")
-            status["guest_after"] = guest_identity(p)
-            if status["guest_after"] != before:
-                raise ValueError("guest rebooted or changed during capture")
-            status["completed"] = True
-        except BaseException as exc:
-            status["error"] = str(exc)
-            raise
-        finally:
-            for process in (collector, traffic):
-                if process is not None and process.poll() is None:
-                    process.terminate()
-                    try:
-                        process.wait(timeout=20)
-                    except subprocess.TimeoutExpired:
-                        process.kill()
-                        process.wait()
-            write_json(out / "end.json", status)
-            for sig, handler in old_handlers.items():
-                signal.signal(sig, handler)
-            if "SUDO_UID" in os.environ:
-                for path in [out, *out.rglob("*")]:
-                    os.chown(path, int(os.environ["SUDO_UID"]), int(os.environ["SUDO_GID"]))
+        capture_session(p, out, metadata, cycles)
         print(f"Audit: python3 scripts/collection.py audit {out}")
+
+
+def capture_session(p, out, metadata, cycles):
+    owner = (int(os.environ["SUDO_UID"]), int(os.environ["SUDO_GID"])) if "SUDO_UID" in os.environ else None
+    guest = out / "guest"
+    guest.mkdir()
+    if owner:
+        os.chown(guest, *owner)  # labctl runs as the VM owner and writes verified copies here.
+    status = {"schema": END_SCHEMA, "completed": False, "interrupted": False, "steps": {}}
+    children = {}
+    interrupts = Interrupts()
+
+    def step(name, **values):
+        status["steps"][name] = {"unix": time.time(), **values}
+        print(json.dumps({"step": name, **values}, default=str)[:400], flush=True)
+
+    def write_guest(name, doc):
+        write_json(guest / name, doc)
+
+    try:
+        # Preflight, all outside the measured interval: no other generator, a
+        # functional stack, guest clock, guest state and a closed log segment.
+        subprocess.run(user_command([sys.executable, ROOT / "scripts/labctl.py", "traffic-stop"]), check=True)
+        if generators():
+            raise ValueError("another host_traffic.py is running; refusing to mix traffic")
+        clock = lab_json(p, "clock", timeout=60)
+        if abs(clock["offset_s"]) > 1.0:
+            synced = lab_json(p, "sync-clock", timeout=60)
+            clock = {**synced["after"], "synced_from": synced["before"]}
+            if abs(clock["offset_s"]) > 1.0:
+                raise ValueError("guest clock offset above 1 s after synchronization")
+        write_guest("clock_before.json", clock)
+        step("clock", offset_s=clock["offset_s"], synced="synced_from" in clock)
+        smoke = subprocess.run([sys.executable, ROOT / "scripts/lab_smoke.py", "--target", p["target"],
+                                "--out", out / "preflight_smoke.json"], cwd=ROOT, capture_output=True,
+                               text=True, timeout=120)
+        if smoke.returncode:
+            raise ValueError("preflight functional check failed: " + (smoke.stdout + smoke.stderr)[-500:])
+        step("functional-check", result=smoke.stdout.strip()[-200:])
+        write_guest("state_before.json", lab_json(p, "state"))
+        pre = lab_json(p, "segment", "--label", out.name + "-pre", "--dest", guest)
+        write_guest("pre_segment.json", pre)
+        expected = smoke_rids(out / "preflight_smoke.json")
+        seen = {line["rid"]: line["status"] for line in nginx_lines(guest / (out.name + "-pre-nginx-access.jsonl.gz"))
+                if line["rid"] in expected}
+        if seen != expected:
+            raise ValueError("request ID correlation failed for the preflight checks")
+        step("pre-segment", lines=pre["files"][0]["lines"], correlated=len(seen))
+        s = p["scenarios"][metadata["scenario"]]
+        children["monitor"] = start_child(
+            [sys.executable, ROOT / "scripts/host_monitor.py", "run", "--out", out / "host_monitor.jsonl",
+             "--interval-s", "1", "--session-id", out.name, "--path", str(out), "--path", "/",
+             "--match", f"qemu=guest={p['domain']},", "--match", "vmicollect=vmicollect/build/vmicollect",
+             "--match", "traffic=host_traffic.py", "--match", "passt=^passt ", "--match", "monitor=host_monitor.py"],
+            out / "host_monitor.log")
+        children["traffic"] = start_child(
+            [sys.executable, ROOT / "scripts/host_traffic.py", "--profile", "lab", "--target", p["target"],
+             "--dur", "0", "--seed", str(metadata["seed"]), "--vlakien", str(s["workers"]),
+             "--burst", str(s["burst"]), "--catalog-share", str(s["catalog_share"]),
+             "--write-share", str(s["write_share"]), "--session-id", out.name,
+             "--requests-log", out / "traffic_requests.jsonl", "--intervals-log", out / "traffic_intervals.jsonl",
+             "--summary-interval-s", "5", "--initial-phase", "warmup", "--out", out / "traffic.json"],
+            out / "traffic.log")
+        step("warmup", seconds=p["warmup_s"])
+        deadline = time.monotonic() + p["warmup_s"]
+        while time.monotonic() < deadline:
+            for name in ("traffic", "monitor"):
+                if children[name].poll() is not None:
+                    raise ValueError(f"{name} exited during warmup")
+            time.sleep(min(1, max(0, deadline - time.monotonic())))
+        metrics = json.loads((out / "traffic.json").read_text())
+        if not metrics["ok"] or metrics["errors"] or metrics.get("logging_error"):
+            raise ValueError("warmup traffic failed")
+        write_json(out / "traffic_before.json", metrics)
+        if generators(exclude={children["traffic"].pid}):
+            raise ValueError("another host_traffic.py appeared during warmup")
+        os.kill(children["traffic"].pid, signal.SIGUSR1)
+        status["measure_start_unix"] = time.time()
+        env = dict(os.environ, VMIC_DOMAIN=p["domain"], VMIC_INTERVAL=str(p["interval_s"]),
+                   VMIC_FULL_EVERY=str(p["full_every"]), VMIC_OUT=str(out / "raw"), VMIC_FSYNC="false",
+                   VMIC_MANAGED_SESSION="1")
+        status["capture_started_unix"] = time.time()
+        children["collector"] = start_child(["bash", "scripts/lab_capture.sh", str(cycles)], out / "capture.log", env)
+        step("capture", cycles=cycles)
+        checked = 0
+        while children["collector"].poll() is None:
+            for name in ("traffic", "monitor"):
+                if children[name].poll() is not None:
+                    raise ValueError(f"{name} exited during capture")
+            if shutil.disk_usage(out).free < p["min_free_gib"] * 2**30:
+                raise ValueError("disk reserve reached; preserving partial session")
+            if time.monotonic() - checked > 15:
+                checked = time.monotonic()
+                if generators(exclude={children["traffic"].pid}):
+                    raise ValueError("another host_traffic.py appeared during capture")
+            time.sleep(1)
+        status["capture_finished_unix"] = time.time()
+        status["collector_rc"] = children["collector"].returncode
+        if children["collector"].returncode:
+            raise ValueError("collector failed; see capture.log")
+        os.kill(children["traffic"].pid, signal.SIGUSR2)
+        status["measure_end_unix"] = time.time()
+        status["traffic"] = stop_child(children["traffic"], 30)
+        children.pop("traffic")
+        # Request errors or a logging failure (rc 1/3) are audit reasons, not a broken capture.
+        status["traffic_rc"] = status["traffic"]["rc"]
+        status["guest_after"] = guest_identity(p)
+        if status["guest_after"] != metadata["guest_before"]:
+            raise ValueError("guest rebooted or changed during capture")
+        if qemu_process(p["domain"]) != metadata["host_context"]["qemu"]:
+            raise ValueError("VM process restarted during capture")
+        # Larger guest logs only now, between measurements.
+        segment = lab_json(p, "segment", "--label", out.name, "--dest", guest)
+        write_guest("session_segment.json", segment)
+        journal = lab_json(p, "journal", "--label", out.name + "-journal", "--since",
+                           str(metadata["created_unix"]), "--until", str(time.time()), "--dest", guest)
+        write_guest("journal_segment.json", journal)
+        write_guest("state_after.json", lab_json(p, "state"))
+        write_guest("clock_after.json", lab_json(p, "clock", timeout=60))
+        step("guest-evidence", nginx_lines=segment["files"][0]["lines"])
+        status["monitor"] = stop_child(children["monitor"], 15)
+        children.pop("monitor")
+        status["completed"] = True
+    except BaseException as exc:
+        status["error"] = f"{type(exc).__name__}: {exc}"
+        status["interrupted"] = isinstance(exc, InterruptedError)
+        raise
+    finally:
+        try:
+            interrupts.disarm()
+        except InterruptedError:
+            pass  # The first signal landed exactly here; the handler disarmed itself.
+        # Collector first, so no snapshot is taken without its generator.
+        for name, grace in (("collector", 60), ("traffic", 30), ("monitor", 15)):
+            if name in children:
+                status[name] = stop_child(children.pop(name), grace)
+        status["signals"] = interrupts.received
+        if status["interrupted"]:
+            status["note"] = ("Interrupted run: the guest log segment was not closed here; the next "
+                              "session's pre-segment keeps those nginx lines. Not a usable capture.")
+        try:
+            status["logs_manifest_sha256"] = write_logs_manifest(out)
+        except OSError as exc:
+            status["logs_manifest_error"] = str(exc)
+        status["written_unix"] = time.time()
+        write_json(out / "end.json", status)
+        interrupts.restore()
+        if owner:
+            for path in [out, *out.rglob("*")]:
+                os.chown(path, *owner, follow_symlinks=False)
 
 
 def analyze_windows(result, p, session):
@@ -393,7 +660,8 @@ def main(argv=None):
     sub = ap.add_subparsers(dest="command", required=True)
     sub.add_parser("plan")
     run = sub.add_parser("run")
-    run.add_argument("--role", choices=["pilot", "train", "dev", "calibration", "test_benign"], required=True)
+    run.add_argument("--role", choices=["pilot", "diagnostic", "train", "dev", "calibration", "test_benign"],
+                     required=True)
     run.add_argument("--scenario", default="steady")
     run.add_argument("--group", required=True)
     run.add_argument("--seed", type=int, required=True)
@@ -401,6 +669,9 @@ def main(argv=None):
     run.add_argument("--session-id", help="Exclusive output name for a frozen campaign assignment")
     run.add_argument("--campaign-id")
     run.add_argument("--expected-boot-id", help="Refuse a boot change since campaign preflight")
+    run.add_argument("--group-attempt", type=int, default=1, help="Campaign group generation after a recorded restart")
+    run.add_argument("--collections-dir", type=Path, help="Diagnostic session base under data/diagnostics")
+    run.add_argument("--cycles", type=int, help="Diagnostic runs only: number of snapshots")
     audit = sub.add_parser("audit")
     audit.add_argument("directory", type=Path)
     audit.add_argument("--out", type=Path)

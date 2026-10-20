@@ -103,6 +103,7 @@ F("output",   "hash",             T_ENUM_INT,  hash,             CH_HASH, "kontr
 F("output",   "sidecar",          T_BOOL,      sidecar,          NULL, "zapisovat .json s metadatami"),
 F("output",   "delta_page_size",  T_U32,       delta_page_size,  NULL, "granularita porovnavania (mocnina 2)"),
 F("output",   "delta_full_every", T_U64,       delta_full_every, NULL, "kazdych N snimok plna zaloha"),
+F("output",   "fsync",            T_BOOL,      fsync,            NULL, "fsync snimky pred rename; false = zapis cez page cache"),
 
 F("features", "enable",           T_BOOL,      feat_enable,      NULL, "pocitat per-bin priznakovy vektor do sidecaru"),
 F("features", "bin_bytes",        T_U64,       feat_bin_bytes,   NULL, "velkost binu (mocnina 2, >= delta_page_size)"),
@@ -156,6 +157,7 @@ void vmic_config_defaults(vmic_config_t *cfg)
     cfg->sidecar          = true;
     cfg->delta_page_size  = 4096;
     cfg->delta_full_every = 20;
+    cfg->fsync            = true;
 
     /* Vektor je vychodzo ZAPNUTY aj s entropiou: neuplny vektor by sa
        neskor tazko rozoznaval od uplneho, a cena je zmerana (MERANIA.md). */

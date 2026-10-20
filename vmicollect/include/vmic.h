@@ -126,6 +126,7 @@ typedef struct {
     bool           sidecar;           /* .json s metadatami           */
     uint32_t       delta_page_size;
     uint64_t       delta_full_every;  /* kazdych N snimok plna zaloha */
+    bool           fsync;             /* fsync snimky pred rename     */
 
     /* ---- [features] : per-bin priznakovy vektor ------------------- */
     /* Pocita ho delta writer pocas porovnavania stranok (perbin.c) a

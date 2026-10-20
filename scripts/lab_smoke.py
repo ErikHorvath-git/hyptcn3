@@ -21,9 +21,13 @@ def main(argv=None):
     parser.add_argument("--out", type=Path)
     args = parser.parse_args(argv)
     checks = []
+    run_id = "smoke" + datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S")
 
     def call(path, expected, method="GET", body=None, token=""):
-        headers = {"Content-Type": "application/json", "Authorization": f"Bearer {token}"}
+        # Correlation ID lets the runner find these checks in nginx/service logs.
+        rid = f"{run_id}-00-{len(checks):08d}"
+        headers = {"Content-Type": "application/json", "Authorization": f"Bearer {token}",
+                   "X-Request-ID": rid}
         request = urllib.request.Request(args.target + path, method=method, headers=headers,
                                          data=json.dumps(body).encode() if body is not None else None)
         started = time.monotonic()
@@ -34,7 +38,7 @@ def main(argv=None):
         with response:
             data = response.read()
             code = response.status
-        checks.append({"method": method, "path": path, "expected": expected, "status": code,
+        checks.append({"rid": rid, "method": method, "path": path, "expected": expected, "status": code,
                        "elapsed_ms": round((time.monotonic() - started) * 1000, 3)})
         assert code == expected, checks[-1]
         return json.loads(data) if data and data.lstrip().startswith(b"{") else None

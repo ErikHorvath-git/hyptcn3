@@ -129,6 +129,7 @@ int vmic_meta_write(const vmic_snapshot_t *s, char *out_path, size_t n)
     fprintf(f, "  \"output\": {\n");
     fprintf(f, "    \"writer\": ");  json_str(f, cfg->writer); fprintf(f, ",\n");
     fprintf(f, "    \"full\": %s,\n", s->is_full ? "true" : "false");
+    fprintf(f, "    \"fsync\": %s,\n", cfg->fsync ? "true" : "false");
     if (s->chain_id)
         fprintf(f, "    \"chain_id\": %" PRIu64 ",\n", s->chain_id);
     fprintf(f, "    \"bytes_logical\": %" PRIu64 ",\n", s->bytes_logical);

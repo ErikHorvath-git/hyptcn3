@@ -2,9 +2,11 @@
 """Host-side lifecycle for the benign server VM; no host root required."""
 import argparse
 import base64
+import gzip
 import hashlib
 import io
 import json
+import os
 from pathlib import Path
 import shlex
 import re
@@ -69,6 +71,59 @@ class Lab:
                     raise RuntimeError("Incomplete guest upload")
         finally:
             self.agent("guest-file-close", {"handle": fd})
+
+    def download(self, path, target):
+        """Copy one guest file over the agent channel; the caller verifies hashes."""
+        handle = self.agent("guest-file-open", {"path": path, "mode": "r"})
+        digest = hashlib.sha256()
+        try:
+            with open(target, "xb") as out:
+                while True:
+                    reply = self.agent("guest-file-read", {"handle": handle, "count": 1 << 20})
+                    data = base64.b64decode(reply.get("buf-b64", ""))
+                    out.write(data)
+                    digest.update(data)
+                    if reply.get("eof") or not data:
+                        break
+                out.flush()
+                os.fsync(out.fileno())
+        finally:
+            self.agent("guest-file-close", {"handle": handle})
+        return digest.hexdigest()
+
+    def helper(self, *args, timeout=600):
+        """Run the deployed guest evidence helper and parse its JSON reply."""
+        return json.loads(self.guest("python3 /opt/hyptcn-lab/guest_state.py "
+                                     + " ".join(shlex.quote(str(a)) for a in args), timeout=timeout))
+
+    def fetch_segment(self, doc, dest):
+        """Fetch gzip copies, verify transfer and content hashes, then delete them in the guest."""
+        dest = Path(dest)
+        files = []
+        for item in doc["files"]:
+            target = dest / (item["name"] + ".gz")
+            if self.download(item["gz_path"], target) != item["gz_sha256"] or target.stat().st_size != item["gz_bytes"]:
+                raise RuntimeError("guest segment transfer checksum mismatch: " + item["name"])
+            digest, size, lines = hashlib.sha256(), 0, 0
+            with gzip.open(target, "rb") as stream:
+                for line in stream:
+                    digest.update(line)
+                    size += len(line)
+                    lines += 1
+            if (digest.hexdigest(), size, lines) != (item["sha256"], item["bytes"], item["lines"]):
+                raise RuntimeError("guest segment content mismatch: " + item["name"])
+            files.append({**{k: v for k, v in item.items() if k != "gz_path"}, "file": target.name,
+                          "file_sha256": item["gz_sha256"]})
+        self.helper("cleanup", doc["label"])
+        return {**{k: v for k, v in doc.items() if k != "files"}, "files": files}
+
+    def clock(self):
+        """Host/guest wall-clock offset from one agent round trip."""
+        before = time.time()
+        guest_ns = self.agent("guest-get-time")
+        after = time.time()
+        return {"host_before_unix": before, "host_after_unix": after, "guest_unix": guest_ns / 1e9,
+                "offset_s": guest_ns / 1e9 - (before + after) / 2, "uncertainty_s": (after - before) / 2}
 
     def wait(self):
         deadline = time.monotonic() + 120
@@ -232,11 +287,16 @@ class Lab:
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("command", choices=["up", "create", "start", "deploy", "status", "stop", "reboot",
-                                            "traffic-start", "traffic-stop", "exec", "logs"])
+                                            "traffic-start", "traffic-stop", "exec", "logs", "state", "clock",
+                                            "sync-clock", "segment", "journal"])
     parser.add_argument("--domain", default="hyptcn-lab")
     parser.add_argument("--uri", default="qemu:///session")
     parser.add_argument("--source", default="hyptcn-guest")
     parser.add_argument("--guest-command", help="Command for exec, executed inside the lab VM")
+    parser.add_argument("--label", help="segment/journal: exclusive guest segment label")
+    parser.add_argument("--dest", type=Path, help="segment/journal: existing host directory for verified copies")
+    parser.add_argument("--since", type=float, help="journal: start, Unix seconds")
+    parser.add_argument("--until", type=float, help="journal: end, Unix seconds")
     args = parser.parse_args(argv)
     if args.domain == args.source:
         parser.error("Lab domain must be different from the experiment source")
@@ -274,6 +334,27 @@ def main(argv=None):
         print(lab.guest(args.guest_command), end="")
     if args.command == "logs":
         print(lab.guest("journalctl -u 'hyptcn-*' -n 60 --no-pager"), end="")
+    if args.command == "state":
+        lab.owned()
+        print(json.dumps(lab.helper("state"), sort_keys=True))
+    if args.command == "clock":
+        print(json.dumps(lab.clock()))
+    if args.command == "sync-clock":
+        lab.owned()
+        before = lab.clock()
+        lab.virsh("domtime", lab.domain, "--sync")
+        print(json.dumps({"before": before, "after": lab.clock()}))
+    if args.command in ("segment", "journal"):
+        lab.owned()
+        if not args.label or not args.dest or not args.dest.is_dir():
+            parser.error(args.command + " requires --label and an existing --dest directory")
+        if args.command == "segment":
+            doc = lab.helper("segment", args.label)
+        else:
+            if args.since is None or args.until is None:
+                parser.error("journal requires --since and --until")
+            doc = lab.helper("journal", args.label, args.since, args.until)
+        print(json.dumps(lab.fetch_segment(doc, args.dest), sort_keys=True))
     return 0
 
 

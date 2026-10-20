@@ -264,14 +264,23 @@ def test_realny_tvar_matice(vysledok):
 def test_prva_snimka_nema_predchodcu(vysledok):
     """
     Prva snimka: priznak je 0 a tri priznaky, ktore predchodcu potrebuju,
-    su v nej nula. Kazda dalsia ma priznak 1.
+    su v nej nula. Kazda dalsia ma priznak 1, ak predchadzajuci riadok je
+    platny podla politiky archivu a nedeli ich vynechany slot (casova medzera
+    nad max_medzera_s); realny zber so zmeskanym slotom kontext prerusi.
     """
     i = MENA.index("ma_predchodcu")
     assert vysledok["matica"][0][i] == 0.0
     for meno in ("proc_new", "proc_gone", "mod_delta"):
         assert vysledok["matica"][0][MENA.index(meno)] == 0.0
-    for riadok in vysledok["matica"][1:]:
-        assert riadok[i] == 1.0
+    casy, platne = vysledok["casy"], vysledok["valid"]
+    for k in range(1, len(casy)):
+        suvisle = 0 < casy[k] - casy[k - 1] <= vysledok["max_medzera_s"]
+        ocakavane = 1.0 if suvisle and platne[k - 1] else 0.0
+        assert vysledok["matica"][k][i] == ocakavane
+        if not ocakavane:
+            for meno in ("proc_new", "proc_gone", "mod_delta"):
+                assert vysledok["matica"][k][MENA.index(meno)] == 0.0
+    assert any(r[i] == 1.0 for r in vysledok["matica"][1:]), "retazec nema ziadny suvisly prechod"
 
 
 def test_je_plna_sedi_s_hlavickami_retazca(realny, vysledok):
@@ -315,14 +324,17 @@ def test_proc_new_a_gone_sedia_na_rucny_rozdiel(realny, vysledok):
     """
     from guestparse.view import build_view
     heads = _chain_parts(realny)
+    i = MENA.index("ma_predchodcu")
+    # Prvy suvisly prechod; zmeskany slot predchodcu zamerne zahodi.
+    k = next(k for k in range(1, len(heads)) if vysledok["matica"][k][i] == 1.0)
     pidy = []
-    for h in heads[:2]:
+    for h in heads[k - 1:k + 1]:
         view, img = build_view(realny, PROFIL, until_seq=h["seq"])
         try:
             pidy.append({p["pid"] for p in view.processes()["processes"]})
         finally:
             img.close()
-    riadok = vysledok["matica"][1]
+    riadok = vysledok["matica"][k]
     assert riadok[MENA.index("proc_new")] == float(len(pidy[1] - pidy[0]))
     assert riadok[MENA.index("proc_gone")] == float(len(pidy[0] - pidy[1]))
 

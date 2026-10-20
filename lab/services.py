@@ -54,9 +54,11 @@ def token_user(token):
         return None
 
 
-def fetch(service, path, token=""):
-    request = urllib.request.Request(f"http://127.0.0.1:{PORTS[service]}{path}",
-                                     headers={"Authorization": f"Bearer {token}"})
+def fetch(service, path, token="", rid=""):
+    headers = {"Authorization": f"Bearer {token}"}
+    if rid:
+        headers["X-Request-ID"] = rid  # Keep one correlation ID across internal calls.
+    request = urllib.request.Request(f"http://127.0.0.1:{PORTS[service]}{path}", headers=headers)
     with urllib.request.urlopen(request, timeout=4) as response:
         return json.load(response)
 
@@ -67,6 +69,16 @@ class Handler(BaseHTTPRequestHandler):
     def setup(self):
         super().setup()
         self.connection.settimeout(10)
+
+    def rid(self):
+        value = self.headers.get("X-Request-ID", "") if getattr(self, "headers", None) else ""
+        return value if value.replace("-", "").isalnum() and len(value) <= 64 else ""
+
+    def log_request(self, code="-", size="-"):
+        # One journald line per handled request; no headers, tokens or bodies.
+        self.log_message("request rid=%s method=%s path=%s status=%s", self.rid() or "-",
+                         getattr(self, "command", None), urlsplit(getattr(self, "path", "")).path,
+                         getattr(code, "value", code))
 
     def reply(self, status, body):
         data = json.dumps(body).encode()
@@ -111,8 +123,8 @@ class Handler(BaseHTTPRequestHandler):
                 with database() as cursor:
                     cursor.execute("SELECT 1")
             if service == "orders":
-                fetch("catalog", "/healthz")
-                fetch("auth", "/healthz")
+                fetch("catalog", "/healthz", rid=self.rid())
+                fetch("auth", "/healthz", rid=self.rid())
                 with database() as cursor:
                     cursor.execute("SELECT EXTRACT(EPOCH FROM now() - updated_at) FROM worker_heartbeat WHERE id=1")
                     row = cursor.fetchone()
@@ -149,7 +161,7 @@ class Handler(BaseHTTPRequestHandler):
                 return
         if service == "orders" and path == "/api/orders":
             token = self.headers.get("Authorization", "").removeprefix("Bearer ")
-            user = fetch("auth", "/api/auth/check", token)["user"]
+            user = fetch("auth", "/api/auth/check", token, self.rid())["user"]
             if method == "GET":
                 with database() as cursor:
                     cursor.execute("SELECT id, product_id, quantity, total_cents, status FROM orders WHERE username=%s ORDER BY id DESC LIMIT 50", (user,))
@@ -161,7 +173,7 @@ class Handler(BaseHTTPRequestHandler):
                 product_id, quantity = body.get("product_id"), body.get("quantity", 1)
                 if type(product_id) is not int or type(quantity) is not int or not 1 <= quantity <= 20:
                     raise ValueError("integer product_id and quantity 1..20 required")
-                product = fetch("catalog", f"/api/catalog/{product_id}")
+                product = fetch("catalog", f"/api/catalog/{product_id}", rid=self.rid())
                 with database() as cursor:
                     cursor.execute("INSERT INTO orders(username,product_id,quantity,total_cents) VALUES (%s,%s,%s,%s) RETURNING id", (user, product_id, quantity, product["price_cents"] * quantity))
                     order_id = cursor.fetchone()[0]

@@ -374,7 +374,12 @@ static int delta_finish(vmic_writer_t *w, vmic_snapshot_t *s)
         p->have_chain = false;
         return VMIC_ERR;
     }
-    if (fsync(p->fd) != 0) LOGW("delta: fsync zlyhal: %s", strerror(errno));
+    /* Bez fsync zapis skonci v page cache a jadro ho zapise na pozadi.
+       Na pomalom disku (HDD) by fsync plnej snimky presiahol periodu;
+       trvanlivost po vypadku napajania potom nezarucuje nic - takyto
+       zber je neuplny a SHA-256 v sidecari odhali poskodeny subor. */
+    if (w->cfg->fsync && fsync(p->fd) != 0)
+        LOGW("delta: fsync zlyhal: %s", strerror(errno));
     close(p->fd);
     p->fd = -1;
 
