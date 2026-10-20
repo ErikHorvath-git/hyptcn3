@@ -163,7 +163,7 @@ def guest_identity(p):
 
 
 class Interrupts:
-    """The first SIGINT/SIGTERM interrupts the run once; later ones are only recorded.
+    """The first SIGINT/SIGTERM/SIGHUP interrupts the run once; later ones are only recorded.
 
     Repeated signals (systemd plus a forwarding parent, or an impatient
     operator) must not cut the cleanup that writes the truthful end record.
@@ -171,7 +171,8 @@ class Interrupts:
 
     def __init__(self):
         self.received, self.armed = [], True
-        self.previous = {s: signal.signal(s, self.handle) for s in (signal.SIGINT, signal.SIGTERM)}
+        # SIGHUP (closed SSH terminal) also ends in an orderly, recorded stop.
+        self.previous = {s: signal.signal(s, self.handle) for s in (signal.SIGINT, signal.SIGTERM, signal.SIGHUP)}
 
     def handle(self, signum, _frame):
         self.received.append({"signal": signum, "unix": time.time()})

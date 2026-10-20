@@ -86,8 +86,23 @@ def test_interrupts_raise_once_and_record_every_signal():
             for _ in range(100):
                 pass  # The handler runs between bytecodes.
         os.kill(os.getpid(), signal.SIGTERM)  # Second signal during cleanup must not raise.
+        os.kill(os.getpid(), signal.SIGHUP)
         for _ in range(100):
             pass
-        assert [r["signal"] for r in interrupts.received] == [signal.SIGTERM, signal.SIGTERM]
+        assert [r["signal"] for r in interrupts.received] == [signal.SIGTERM, signal.SIGTERM, signal.SIGHUP]
+    finally:
+        interrupts.restore()
+
+
+def test_hangup_interrupts_like_sigterm():
+    import os
+    import signal
+    from scripts.collection import Interrupts
+    interrupts = Interrupts()
+    try:
+        with pytest.raises(InterruptedError, match="signal 1"):
+            os.kill(os.getpid(), signal.SIGHUP)
+            for _ in range(100):
+                pass
     finally:
         interrupts.restore()
