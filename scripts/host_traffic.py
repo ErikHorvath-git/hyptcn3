@@ -36,6 +36,7 @@ sys.path.insert(0, str(ROOT))
 from scripts.traffic_log import (EDGES, HIST_PRECISION, INTERVAL_SCHEMA, OUTCOMES, PHASES,  # noqa: E402
                                  REQUEST_SCHEMA, bucket_index)
 
+SIGNAL_POLL_S = .2
 CESTY = ["/auth", "/orders", "/", "/auth?u=%d", "/orders?page=%d"]
 GENERATOR = "hyptcn3 host_traffic 3"
 STATUS_SCHEMA = "hyptcn3/host-traffic/3"
@@ -476,9 +477,11 @@ def main(argv=None):
         parser.error("--requests-log and --intervals-log must be given together")
     stop, wake, pending = threading.Event(), threading.Event(), []
 
-    def on_signal(signum, _frame):  # handlers only record the signal
+    def on_signal(signum, _frame):
+        # Only record the signal. Event.set() takes a lock; a second signal landing
+        # while the main thread holds that same lock (inside wake.wait/clear)
+        # deadlocks it - observed with SIGUSR2 + SIGTERM sent back to back.
         pending.append(signum)
-        wake.set()
     for sig in (signal.SIGINT, signal.SIGTERM, signal.SIGUSR1, signal.SIGUSR2):
         signal.signal(sig, on_signal)
     files = {}
@@ -515,11 +518,11 @@ def main(argv=None):
     for thread in threads:
         thread.start()
     try:
+        next_save = time.monotonic()
         while not stop.is_set():
-            remaining = args.dur - (time.monotonic() - recorder.origin) if args.dur else args.summary_interval_s
-            if remaining <= 0:
+            if args.dur and time.monotonic() - recorder.origin >= args.dur:
                 break
-            wake.wait(min(args.summary_interval_s, remaining))
+            wake.wait(SIGNAL_POLL_S)  # pending signals are applied within this poll period
             wake.clear()
             while pending:
                 signum = pending.pop(0)
@@ -527,8 +530,10 @@ def main(argv=None):
                     stop.set()
                 else:
                     recorder.switch("measure" if signum == signal.SIGUSR1 else "post")
-            recorder.tick()
-            save()
+            if time.monotonic() >= next_save:
+                recorder.tick()
+                save()
+                next_save = time.monotonic() + args.summary_interval_s
     finally:
         stop.set()
         for thread in threads:

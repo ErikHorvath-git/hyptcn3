@@ -405,3 +405,28 @@ def test_existing_log_path_is_refused(server, tmp_path):
     assert result.returncode == 2 and b"cannot create log" in result.stderr
     assert req.read_text() == "old\n" and not ivl.exists()
     assert run_generator("--target", target, "--dur", ".2", "--requests-log", tmp_path / "x.jsonl").returncode == 2
+
+
+@pytest.mark.parametrize("attempt", range(3))
+def test_back_to_back_signals_never_deadlock_the_main_loop(server, tmp_path, attempt):
+    """Runner sends SIGUSR2 and SIGTERM back to back; a burst of signals must still end cleanly."""
+    _, target = server
+    req, ivl = tmp_path / "requests.jsonl", tmp_path / "intervals.jsonl"
+    process = subprocess.Popen([sys.executable, SCRIPT, "--profile", "lab", "--target", target, "--dur", "0",
+                                "--vlakien", "3", "--session-id", "S-burst", "--initial-phase", "measure",
+                                "--summary-interval-s", "0.25", "--requests-log", req, "--intervals-log", ivl],
+                               stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    try:
+        wait_until(lambda: req.exists() and req.stat().st_size > 0)
+        time.sleep(.5)
+        for _ in range(300):
+            process.send_signal(signal.SIGUSR2)
+        process.send_signal(signal.SIGTERM)
+        assert process.wait(timeout=10) == 0
+    finally:
+        if process.poll() is None:
+            process.kill()
+        process.communicate()
+    summary = summarize(req, ivl, session_id="S-burst")
+    assert summary["problems"] == [] and summary["clean"]
+    assert [m["phase"] for m in summary["phase_markers"]] == ["post"]
