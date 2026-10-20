@@ -123,6 +123,8 @@ def validate_index(path, diagnostic=False):
         if not diagnostic and (meta.get("diagnostic") or audit["values"].get("diagnostic")):
             raise ValueError("diagnostic artifacts cannot be used in production training")
         values = audit["values"]
+        from features.quality import require_log_audit
+        require_log_audit(meta, values)
         if (values.get("accepted") is not True or values.get("reasons")
                 or values.get("role") != role or values.get("protocol_sha256") != protocol_hash
                 or values.get("session_sha256") != record["session_sha256"]

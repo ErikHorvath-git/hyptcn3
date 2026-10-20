@@ -9,6 +9,7 @@ import json
 from pathlib import Path
 
 from .archive import load
+from .quality import require_log_audit
 
 
 ROLES = ("train", "dev", "calibration", "test_benign")
@@ -33,6 +34,7 @@ def build(audits, protocol, protocol_sha):
         environments.add((m["guest_before"]["stack_sha256"], m["collector_sha256"]))
         if v.get("session_sha256") != sha(meta_path):
             raise ValueError("session metadata changed since audit")
+        require_log_audit(m, v)
         if m["typ"] != "benign" or m["role"] not in ROLES:
             raise ValueError("pilot/attack data must not enter the benign corpus")
         identity = m["session_id"]

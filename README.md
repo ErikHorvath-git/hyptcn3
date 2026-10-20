@@ -20,6 +20,11 @@ Pilot protokolu v2 prešiel po oprave výberu jadra podľa boot UUID;
 oboch zamietnutých auditov sú zaznamenané v [`docs/MERANIA.md`](docs/MERANIA.md).
 Pilot sa nepoužije na tréning ani kalibráciu.
 
+**Kontrola pripravenosti dát:** [`docs/KONTROLA_ZBERU.sk.md`](docs/KONTROLA_ZBERU.sk.md).
+`collection.py coverage` vysvetlí skórovateľné okná a výpadky z uložených
+príznakov; `collection_logs.py` overí klientské, nginx a aplikačné logy,
+ich kontrolné súčty a priebeh merania. Obe kontroly sú súčasťou úplného auditu.
+
 **Automatická kampaň:** [`docs/AUTOMATICKY_ZBER.sk.md`](docs/AUTOMATICKY_ZBER.sk.md).
 `scripts/campaign.py` riadi reštarty skupín, zber, audit a overený presun RAM
 na externý disk. Na konci vytvorí index pre tréning; stav kampane rozlišuje

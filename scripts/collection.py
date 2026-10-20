@@ -31,14 +31,16 @@ from features.snapshot import retazec, MENA
 from features.windows import okna, snimky_z_matice
 from features.perbin import FeatureError
 from features.windows import WindowError
-from features.quality import protocol_policy, valid_for
+from features.quality import protocol_policy, valid_for, BEHAVIOR_POLICY
+from features.coverage import ideal_windows, scorable_windows
+from scripts.collection_logs import audit_logs
 
 DEFAULT = ROOT / "config/collection-v2.json"
 COLLECTIONS = ROOT / "data/collections"  # Global lock; diagnostics only change the session base.
 DIAGNOSTICS = ROOT / "data/diagnostics"
 SESSION_SCHEMA = "hyptcn3/collection-session/2"
 END_SCHEMA = "hyptcn3/collection-end/2"
-MEASUREMENT_DIRS = ("features", "guestparse", "scripts", "lab", "vmicollect")
+MEASUREMENT_DIRS = ("features", "guestparse", "safeguard", "scripts", "lab", "vmicollect")
 SOURCE_SUFFIXES = (".py", ".c", ".h", ".sh", ".sql", ".conf", ".service")
 # Reporting/documentation tools do not take part in capture, audit or archival.
 NOT_MEASUREMENT = {"scripts/campaign_report.py", "scripts/gen_prirucka.py", "scripts/check_claims.sh",
@@ -53,10 +55,6 @@ COLLECTOR_FSYNC = False
 # 3.3 s to its cycle. The full snapshot's SHA-256 is computed by a collector
 # thread after the cycle; its sidecar appears when the hash is done.
 COLLECTOR_HASH_ASYNC = True
-EVIDENCE = ("preflight_smoke.json", "host_monitor.jsonl", "traffic.json", "traffic.log", "traffic_before.json",
-            "traffic_requests.jsonl", "traffic_intervals.jsonl", "capture.log", "guest/state_before.json",
-            "guest/state_after.json", "guest/clock_before.json", "guest/clock_after.json",
-            "guest/pre_segment.json", "guest/session_segment.json", "guest/journal_segment.json")
 
 
 def digest(path):
@@ -79,10 +77,15 @@ def protocol(path):
     for key in ("interval_s", "window_rows", "full_every", "cycles", "pilot_cycles", "bin_bytes"):
         if type(p[key]) is not int or p[key] < 1:
             raise ValueError("invalid " + key)
+    if p.get("stride") != 1:
+        raise ValueError("collection and live scoring require stride 1")
     if not p["interval_s"] < p["max_gap_s"] < 2 * p["interval_s"]:
         raise ValueError("gap must distinguish a missed sampling slot")
     if p["full_every"] <= p["window_rows"] or p["pilot_cycles"] <= p["full_every"] + p["window_rows"]:
         raise ValueError("pilot must cover two full snapshots and score after both")
+    for key in ("pilot_cycles", "cycles"):
+        if ideal_windows(p[key], p["window_rows"], p["full_every"]) / p[key] < gate:
+            raise ValueError("score coverage gate is unreachable for " + key)
     if p["bin_bytes"] != 16777216:
         raise ValueError("capture runner currently supports 16 MiB bins")
     return p
@@ -284,11 +287,12 @@ def file_record(path, base):
 
 
 def write_logs_manifest(out):
-    """Hash every evidence file outside raw/; the audit recomputes and compares."""
+    """Hash evidence plus collector log/status; RAM hashes live in sidecars."""
     files = {}
     for path in sorted(out.rglob("*")):
         name = path.relative_to(out).as_posix()
-        if (path.is_file() and not path.is_symlink() and not name.startswith("raw/")
+        if (path.is_file() and not path.is_symlink()
+                and (not name.startswith("raw/") or name in ("raw/collect.log", "raw/capture.json"))
                 and name not in ("session.json", "end.json", "logs_manifest.json")
                 and not re.fullmatch(r"(campaign_)?audit_.*", name)):
             files[name] = file_record(path, out)
@@ -335,6 +339,8 @@ def run_session(a, p):
             if (not report["values"]["accepted"] or report["values"].get("role") != "pilot"
                     or report["values"]["protocol_sha256"] != digest(a.protocol)):
                 raise ValueError("pilot report is not accepted for this protocol")
+            from scripts.campaign import pilot_gate
+            pilot_gate(a.pilot_report, a.protocol, p)
             needed = report["values"]["raw_bytes"] * p["cycles"] / p["pilot_cycles"] * 1.5
         else:
             needed = 0
@@ -549,7 +555,7 @@ def capture_session(p, out, metadata, cycles):
                 os.chown(path, *owner, follow_symlinks=False)
 
 
-def analyze_windows(result, p, session):
+def analyze_windows(result, p, session, expected_rows=None):
     """Audit the frozen input policy while retaining independent integrity gaps."""
     policy = protocol_policy(p)
     if result["quality_policy"] != policy:
@@ -558,8 +564,12 @@ def analyze_windows(result, p, session):
         raise ValueError("valid mask differs from structured quality")
     rows = snimky_z_matice(session, result["matica"], MENA, result["casy"],
                           result["seq"], result["valid"])
-    windows = okna(rows, dlzka=p["window_rows"], max_medzera_s=p["max_gap_s"])
-    coverage = len(windows) / len(rows)
+    detail = None
+    if policy == BEHAVIOR_POLICY:
+        windows, detail = scorable_windows(result, p, session, expected_rows)
+    else:
+        windows = okna(rows, dlzka=p["window_rows"], max_medzera_s=p["max_gap_s"])
+    coverage = len(windows) / (expected_rows if expected_rows is not None else len(rows))
     reasons = []
     if not all(result["valid"]):
         reasons.append("incomplete model inputs under " + policy)
@@ -580,6 +590,8 @@ def analyze_windows(result, p, session):
         "integrity_finding_rows": sum(bool(q["findings"]) for q in result["quality"]),
         "integrity_findings": sum(len(q["findings"]) for q in result["quality"]),
     }
+    if detail is not None:
+        quality["coverage"] = detail
     return rows, windows, coverage, reasons, quality
 
 
@@ -644,7 +656,7 @@ def audit_session(directory, p, protocol_path, output=None):
             reasons.append("collector cycle exceeded period")
     result = retazec(str(raw), str(directory / "profile" if native else ROOT / p["profile"]),
                     p["max_gap_s"], quality_policy=protocol_policy(p))
-    rows, windows, coverage, quality_reasons, quality = analyze_windows(result, p, directory.name)
+    rows, windows, coverage, quality_reasons, quality = analyze_windows(result, p, directory.name, expected)
     reasons.extend(quality_reasons)
     if any(b - a != 1 for a, b in zip(result["seq"], result["seq"][1:])):
         reasons.append("sequence gap")
@@ -653,11 +665,9 @@ def audit_session(directory, p, protocol_path, output=None):
     span = result["casy"][-1] - result["casy"][0]
     if abs(span - (len(rows) - 1) * p["interval_s"]) > p["interval_s"]:
         reasons.append("sampling period differs from protocol")
-    if native:
-        before = json.loads((directory / "traffic_before.json").read_text())
-        after = json.loads((directory / "traffic.json").read_text())
-        if after["started_at"] != before["started_at"] or after["ok"] <= before["ok"] or after["errors"] != before["errors"]:
-            reasons.append("traffic failed or no successful requests during capture")
+    logs = audit_logs(directory, snapshot_times=result["casy"]) if native else None
+    if logs is not None:
+        reasons.extend("logs: " + problem for problem in logs["problems"])
     stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")
     output = Path(output).resolve() if output else directory / f"audit_{stamp}.json"
     feature_path = output.with_suffix(".npz")
@@ -665,6 +675,11 @@ def audit_session(directory, p, protocol_path, output=None):
     values = {"accepted": not reasons, "reasons": sorted(set(reasons)),
               "role": metadata.get("role"), "protocol_sha256": digest(protocol_path),
               "snapshots": len(rows), "windows": len(windows), "score_coverage": coverage,
+              "coverage": quality.pop("coverage", None), "logs": logs,
+              "auditor_sha256": {str(f.relative_to(ROOT)): digest(f) for f in
+                                  (Path(__file__), ROOT / "scripts/collection_logs.py",
+                                   ROOT / "scripts/traffic_log.py", ROOT / "scripts/host_monitor.py",
+                                   ROOT / "safeguard/features.py")},
               "quality": quality,
               "raw_bytes": total_bytes, "source_sha256": source_hashes,
               "session_sha256": digest(directory / "session.json") if native else None,
@@ -708,6 +723,11 @@ def main(argv=None):
     audit = sub.add_parser("audit")
     audit.add_argument("directory", type=Path)
     audit.add_argument("--out", type=Path)
+    coverage = sub.add_parser("coverage", help="explain score eligibility from an existing NPZ without re-reading RAM")
+    coverage.add_argument("archive", type=Path)
+    coverage.add_argument("--expected-snapshots", type=int, required=True,
+                          help="assigned cycle count, including missing snapshots")
+    coverage.add_argument("--out", type=Path)
     a = ap.parse_args(argv)
     p = protocol(a.protocol)
     if a.command == "plan":
@@ -716,6 +736,24 @@ def main(argv=None):
     if a.command == "run":
         run_session(a, p)
         return 0
+    if a.command == "coverage":
+        data = load(a.archive)
+        _, report = scorable_windows(data, p, a.archive.stem, a.expected_snapshots)
+        report.update(archive=str(a.archive.resolve()), archive_sha256=digest(a.archive),
+                      protocol_sha256=digest(a.protocol), minimum=p["min_score_coverage"],
+                      gate_passed=report["score_coverage"] >= p["min_score_coverage"],
+                      date=datetime.now(timezone.utc).isoformat(),
+                      source_sha256={str(f.relative_to(ROOT)): digest(f) for f in
+                                     (ROOT / "features/coverage.py", ROOT / "safeguard/features.py")})
+        if a.out:
+            write_json(a.out, report)
+            shown = {"report": str(a.out), **{key: report[key] for key in
+                     ("scorable_windows", "expected_snapshots", "score_coverage", "ideal_score_coverage",
+                      "gate_possible_at_assigned_length", "gate_passed")}}
+        else:
+            shown = report
+        print(json.dumps(shown, indent=2, ensure_ascii=False, allow_nan=False))
+        return 0 if report["gate_passed"] else 2
     return audit_session(a.directory, p, a.protocol, a.out)
 
 

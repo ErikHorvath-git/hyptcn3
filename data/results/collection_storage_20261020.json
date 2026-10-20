@@ -1,0 +1,255 @@
+{
+  "schema": "hyptcn3/collection-storage-preparation/1",
+  "date": "2026-10-20T23:36:22.209559+00:00",
+  "commit": "bbf624de4bbb3c552569adc2227f4c3af21fc151",
+  "commit_dirty": true,
+  "host": "Linux-7.2.9+deb13-amd64-x86_64-with-glibc2.41",
+  "guest": {
+    "domain": "hyptcn-lab",
+    "new_capture": false
+  },
+  "command": ".venv/bin/python data/lab/prepare_storage_20261020.py",
+  "n": 5,
+  "values": {
+    "archive_root": "/home/eh/hyptcn3-archive",
+    "archive_mount": {
+      "target": "/",
+      "fstype": "ext4",
+      "uuid": "c9d694b9-61a8-4918-aa6d-6379cd1b8b03",
+      "system_disk": true
+    },
+    "space_before": {
+      "working": {
+        "total": 234622398464,
+        "used": 150039060480,
+        "free": 72590618624
+      },
+      "archive": {
+        "total": 473321816064,
+        "used": 22649659392,
+        "free": 426553495552
+      }
+    },
+    "space_after": {
+      "working": {
+        "total": 234622398464,
+        "used": 99221848064,
+        "free": 123407831040
+      },
+      "archive": {
+        "total": 473321816064,
+        "used": 27902050304,
+        "free": 421301104640
+      }
+    },
+    "sessions": [
+      {
+        "session": "20261020T170034679155Z_diagnostic_bursty",
+        "scenario": "bursty",
+        "assigned_cycles": 400,
+        "observed_frames": 400,
+        "source": "/home/eh/projects/hyptcn3/data/diagnostics/20261020T170034679155Z_diagnostic_bursty",
+        "destination": "/home/eh/hyptcn3-archive/diagnostics/20261020T170034679155Z_diagnostic_bursty",
+        "archive_manifest_sha256": "af05fa7639678fd22035e3b485ee38573bcfbf1c9ad297c87763f2e88a986b82",
+        "source_bytes": 14090063255,
+        "stored_bytes": 2060507979,
+        "raw_bytes": 13988337232,
+        "raw_stored_bytes": 2016718425,
+        "reclaimed_bytes": 13998145608,
+        "verified": true,
+        "audit_bound": "/home/eh/projects/hyptcn3/data/diagnostics/20261020T170034679155Z_diagnostic_bursty/audit_20261020T181902833877Z.json",
+        "elapsed_s_before_reclaim": 636.751501302002,
+        "receipt": {
+          "schema": "hyptcn3/collection-archive-receipt/1",
+          "source": "/home/eh/projects/hyptcn3/data/diagnostics/20261020T170034679155Z_diagnostic_bursty",
+          "destination": "/home/eh/hyptcn3-archive/diagnostics/20261020T170034679155Z_diagnostic_bursty",
+          "manifest_sha256": "af05fa7639678fd22035e3b485ee38573bcfbf1c9ad297c87763f2e88a986b82"
+        }
+      },
+      {
+        "session": "20261020T142021156420Z_diagnostic_write_heavy",
+        "scenario": "write_heavy",
+        "assigned_cycles": 400,
+        "observed_frames": 400,
+        "source": "/home/eh/projects/hyptcn3/data/diagnostics/20261020T142021156420Z_diagnostic_write_heavy",
+        "destination": "/home/eh/hyptcn3-archive/diagnostics/20261020T142021156420Z_diagnostic_write_heavy",
+        "archive_manifest_sha256": "7a44eb8cf51c50a408779370eeac5d4462ac8c7c13b405333969cf72d22380c2",
+        "source_bytes": 9054456934,
+        "stored_bytes": 1337495607,
+        "raw_bytes": 8995525744,
+        "raw_stored_bytes": 1301880742,
+        "reclaimed_bytes": 9005316822,
+        "verified": true,
+        "audit_bound": null,
+        "elapsed_s_before_reclaim": 285.0261988150014,
+        "receipt": {
+          "schema": "hyptcn3/collection-archive-receipt/1",
+          "source": "/home/eh/projects/hyptcn3/data/diagnostics/20261020T142021156420Z_diagnostic_write_heavy",
+          "destination": "/home/eh/hyptcn3-archive/diagnostics/20261020T142021156420Z_diagnostic_write_heavy",
+          "manifest_sha256": "7a44eb8cf51c50a408779370eeac5d4462ac8c7c13b405333969cf72d22380c2"
+        }
+      },
+      {
+        "session": "20261020T145629855838Z_diagnostic_bursty",
+        "scenario": "bursty",
+        "assigned_cycles": 400,
+        "observed_frames": 400,
+        "source": "/home/eh/projects/hyptcn3/data/diagnostics/20261020T145629855838Z_diagnostic_bursty",
+        "destination": "/home/eh/hyptcn3-archive/diagnostics/20261020T145629855838Z_diagnostic_bursty",
+        "archive_manifest_sha256": "2e7dff2d63b594f16eec3c6c64ea085426a7fa3799efc430b5cb123002690c92",
+        "source_bytes": 13276889077,
+        "stored_bytes": 1884227249,
+        "raw_bytes": 13174953160,
+        "raw_stored_bytes": 1840757587,
+        "reclaimed_bytes": 13184746981,
+        "verified": true,
+        "audit_bound": null,
+        "elapsed_s_before_reclaim": 369.76995111100405,
+        "receipt": {
+          "schema": "hyptcn3/collection-archive-receipt/1",
+          "source": "/home/eh/projects/hyptcn3/data/diagnostics/20261020T145629855838Z_diagnostic_bursty",
+          "destination": "/home/eh/hyptcn3-archive/diagnostics/20261020T145629855838Z_diagnostic_bursty",
+          "manifest_sha256": "2e7dff2d63b594f16eec3c6c64ea085426a7fa3799efc430b5cb123002690c92"
+        }
+      },
+      {
+        "session": "20261020T161708770565Z_diagnostic_bursty",
+        "scenario": "bursty",
+        "assigned_cycles": 400,
+        "observed_frames": 400,
+        "source": "/home/eh/projects/hyptcn3/data/diagnostics/20261020T161708770565Z_diagnostic_bursty",
+        "destination": "/home/eh/hyptcn3-archive/diagnostics/20261020T161708770565Z_diagnostic_bursty",
+        "archive_manifest_sha256": "23c9265e7a636da0b893936b3ec84241cdb66fbacfaa395c5f3b91cb21e53b56",
+        "source_bytes": 13745739193,
+        "stored_bytes": 1990268115,
+        "raw_bytes": 13643568400,
+        "raw_stored_bytes": 1946736242,
+        "reclaimed_bytes": 13653364390,
+        "verified": true,
+        "audit_bound": null,
+        "elapsed_s_before_reclaim": 380.71155961200566,
+        "receipt": {
+          "schema": "hyptcn3/collection-archive-receipt/1",
+          "source": "/home/eh/projects/hyptcn3/data/diagnostics/20261020T161708770565Z_diagnostic_bursty",
+          "destination": "/home/eh/hyptcn3-archive/diagnostics/20261020T161708770565Z_diagnostic_bursty",
+          "manifest_sha256": "23c9265e7a636da0b893936b3ec84241cdb66fbacfaa395c5f3b91cb21e53b56"
+        }
+      },
+      {
+        "session": "20261020T173655582088Z_diagnostic_steady",
+        "scenario": "steady",
+        "assigned_cycles": 120,
+        "observed_frames": 11,
+        "source": "/home/eh/projects/hyptcn3/data/diagnostics/20261020T173655582088Z_diagnostic_steady",
+        "destination": "/home/eh/hyptcn3-archive/diagnostics/20261020T173655582088Z_diagnostic_steady",
+        "archive_manifest_sha256": "8956ff37eb964db0ac9a95dbafd9a09cbf83a6d243b87000f24340fd62b23ddb",
+        "source_bytes": 992785628,
+        "stored_bytes": 240603018,
+        "raw_bytes": 971331320,
+        "raw_stored_bytes": 220204593,
+        "reclaimed_bytes": 971601887,
+        "verified": true,
+        "audit_bound": null,
+        "elapsed_s_before_reclaim": 24.62682586399751,
+        "receipt": {
+          "schema": "hyptcn3/collection-archive-receipt/1",
+          "source": "/home/eh/projects/hyptcn3/data/diagnostics/20261020T173655582088Z_diagnostic_steady",
+          "destination": "/home/eh/hyptcn3-archive/diagnostics/20261020T173655582088Z_diagnostic_steady",
+          "manifest_sha256": "8956ff37eb964db0ac9a95dbafd9a09cbf83a6d243b87000f24340fd62b23ddb"
+        }
+      }
+    ],
+    "roundtrip": {
+      "archive": "/home/eh/hyptcn3-archive/diagnostics/20261020T170034679155Z_diagnostic_bursty",
+      "target": "/home/eh/projects/hyptcn3/data/lab/archive_roundtrip_20261020/restored/raw",
+      "schema": "hyptcn3/collection-archive/2",
+      "files": 802,
+      "bytes": 13998145608,
+      "stored_bytes": 2026526801,
+      "verified": true,
+      "reextracted_rows": 40,
+      "reextracted_seq": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20,
+        21,
+        22,
+        23,
+        24,
+        25,
+        26,
+        27,
+        28,
+        29,
+        30,
+        31,
+        32,
+        33,
+        34,
+        35,
+        36,
+        37,
+        38,
+        39
+      ],
+      "compared_fields": [
+        "matica",
+        "seq",
+        "casy",
+        "valid",
+        "perbin",
+        "chain_ids",
+        "snimky",
+        "poznamky",
+        "schema",
+        "mena",
+        "biny",
+        "quality_policy",
+        "layout_json",
+        "max_medzera_s",
+        "quality_json"
+      ],
+      "feature_archive": "/home/eh/projects/hyptcn3/data/lab/archive_roundtrip_20261020/reextracted.npz",
+      "feature_sha256": "084469a5539f0effa9ec0930842a5235a7386d78c020b8740895cb521f376e12",
+      "original_feature_sha256": "dfb3a25dc00e6bbdb15311fbe5cc2d4352289b38a7464418f23ecdde7cbb5b42",
+      "note": "All raw members restored and hashed. First 40/400 real rows re-extracted with their complete original context; timings intentionally excluded from equality. No new capture or admission."
+    },
+    "estimates": {
+      "basis_session": "20261020T170034679155Z_diagnostic_bursty",
+      "sessions": 48,
+      "raw_bytes_per_hour_max_observed": 25179007017.6,
+      "raw_bytes_all_sessions": 1208592336844.7998,
+      "archive_bytes_per_hour_max_observed": 3708914362.2,
+      "archive_bytes_all_sessions": 178027889385.59998,
+      "planning_margin": 1.5,
+      "emergency_reserve_bytes": 32212254720,
+      "planned_archive_bytes_with_margin_and_reserve": 299254088798.39996,
+      "working_bytes_per_session_with_margin_and_reserve": 69980765246.4,
+      "note": "Planning extrapolation from old diagnostic workload and measured zstd files, not accepted pilot, guarantee or completed corpus. New pool and other scenarios may differ; campaign init re-estimates from accepted pilot."
+    },
+    "reclaimed_bytes": 50813175688,
+    "stored_bytes": 7513101968,
+    "source_sha256": {
+      "data/lab/prepare_storage_20261020.py": "eeb7802af5cc4ac299c13b1b0c010b9d41604d5ae9ff63dee7e07af1c283d1c9",
+      "scripts/collection_archive.py": "d50e2ca2ba15c4f7a9d0d62b955d22c1b6e7a4a21f045be6b6ea602781f20a39"
+    }
+  }
+}

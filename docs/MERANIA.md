@@ -1132,3 +1132,130 @@ prípady majú regresné testy; hotový zamietavý verdikt sa opakovaním neobch
 Adresárové položky novej archívnej cesty sa synchronizujú pred uvoľnením
 zdroja. Plná živá kampaň zostáva samostatným zberom; tento záznam nepotvrdzuje
 jej dokončenie, pripravený natrénovaný model ani účinnosť voči malvéru.
+
+## 2026-10-20 — offline kontrola logov a dostupnosti modelových okien
+
+Artefakt [collection_readiness_20261020_logs_coverage.json](../data/results/collection_readiness_20261020_logs_coverage.json)
+obsahuje dodatočnú kontrolu uložených diagnostických zberov z tohto dňa.
+Nejde o nový pilot ani nové snímky. Pôvodné audity a NPZ sa nemenili;
+pred čítaním NPZ sa jeho SHA-256 porovnal s pôvodným auditom. Report
+zachováva hashe použitých nástrojov a príkazy na zopakovanie kontroly.
+
+Pri `20261020T170034679155Z_diagnostic_bursty` sú klientské, nginx
+a aplikačné logy navzájom zhodné; overenie zahŕňa aj manifesty,
+komprimované segmenty, stav služieb, hostiteľský monitor a koniec zberača.
+Tento výsledok sa týka logov, nie prijatia RAM dát. Z
+400 {{res:collection_readiness_20261020_logs_coverage.json:values.coverage.observed_snapshots}}
+snímok vzniklo
+145 {{res:collection_readiness_20261020_logs_coverage.json:values.coverage.scorable_windows}}
+skórovateľných okien, podiel
+0,3625 {{res:collection_readiness_20261020_logs_coverage.json:values.coverage.score_coverage}}.
+Neplatných primárnych vstupov bolo
+9 {{res:collection_readiness_20261020_logs_coverage.json:values.coverage.state_rows.invalid_input}};
+poznámky parsera pri nich hlásia cyklus v zozname procesov. Po každom
+takom vstupe sa stratí predchodca a musí sa znovu nazbierať celé okno.
+Prvý skórovateľný krok mal sekvenciu
+105 {{res:collection_readiness_20261020_logs_coverage.json:values.coverage.first_score_seq}}.
+Report vysvetľuje jednotlivé úseky bez skóre. Inferencia modelu sa nevykonávala.
+
+Pri tejto pridelenej dĺžke a predpísanej rotácii je výpočtový strop
+336 {{res:collection_readiness_20261020_logs_coverage.json:values.coverage.ideal_windows}}
+okien. Aj bez neplatných vstupov by krátka diagnostika nedosiahla hranicu
+protokolu; štandardný pilot je dlhší. Pokrytie sa nezvyšovalo skrátením
+okna, zmenou pravidiel platnosti ani doplnením chýbajúcich dát.
+
+`20261020T142021156420Z_diagnostic_write_heavy` kontrolou logov neprešiel:
+generátor bol násilne ukončený, chýbajú koncové záznamy a posledný interval,
+nginx obsahuje požiadavky bez dokončeného klientského záznamu a zberač
+hlási zmeškané sloty. `20261020T173655582088Z_diagnostic_steady` je
+prerušený beh s chýbajúcimi záverečnými dôkazmi. Obe zamietnutia sú
+v tom istom artefakte; žiadne z týchto dát sa touto kontrolou neprijímajú
+do benígneho korpusu.
+
+Pri čítaní nainštalovaného kódu psycopg2 vo VM sa overilo, že pôvodný pool
+zachováva len `minconn` nečinných spojení. Úprava v `lab/services.py`
+uchováva celý ohraničený pool, aby sa spojenia pri súbežných požiadavkách
+opakovane nezatvárali. Súvis medzi obmenou backendov PostgreSQL a chybami
+neatómových RAM snímok zostáva hypotézou. Úprava nebola počas tohto
+overenia nasadená a jej vplyv na pokrytie nebol meraný. Vyžaduje nový
+pilot s novou identitou stacku. Postup kontroly: [KONTROLA_ZBERU.sk.md](KONTROLA_ZBERU.sk.md).
+
+## 2026-10-20 — nasadenie trvalého databázového poolu
+
+Úprava `lab/services.py` bola nasadená do `hyptcn-lab`. Funkčná kontrola
+[`lab_smoke_pool_20261020.json`](../data/results/lab_smoke_pool_20261020.json)
+vykonala
+13 {{res:lab_smoke_pool_20261020.json:n}}
+HTTP kontrol vrátane autentifikácie, katalógu, zápisu objednávky a jej
+dokončenia workerom. Artefakt obsahuje hashe nasadených zdrojov a stavy
+odpovedí. Toto overenie nedokazuje zlepšenie skórovateľných RAM okien;
+to musí zmerať nový pilot. Predchádzajúci záznam o nenasadenej úprave
+popisuje stav pri skoršej offline kontrole a zostáva zachovaný.
+
+## 2026-10-20 — odstránenie regenerovateľných pracovných súborov
+
+Po kontrole proti `git ls-files` sa odstránili Python/pytest cache a
+syntetické výstupy C testov v `vmicollect/build/selftest` a `perbintest`.
+[`collection_cleanup_20261020.json`](../data/results/collection_cleanup_20261020.json)
+zaznamenáva konkrétne adresáre, logické aj alokované veľkosti a
+226 {{res:collection_cleanup_20261020.json:values.removed_files}}
+odstránených súborov. Verzionované súbory a dôkazy meraní sa týmto krokom
+nemažú. Cache môžu pri ďalších kontrolách opäť vzniknúť; nejde o meranie
+zníženia nárokov samotného zberača alebo modelu.
+
+## 2026-10-20 — obnova komprimovaných reálnych snímok a príznakov
+
+[`collection_archive_roundtrip_20261020.json`](../data/results/collection_archive_roundtrip_20261020.json)
+dokladá obnovu všetkých raw členov diagnostiky
+`20261020T170034679155Z_diagnostic_bursty` z archívu zstd na systémovom HDD.
+Archív obsahuje
+400 {{res:collection_archive_roundtrip_20261020.json:values.total_snapshots}}
+reálnych RAM snímok; pôvodné aj obnovené obsahy sa overili pomocou SHA-256.
+S pôvodným bootovým kontextom sa opäť extrahovalo prvých
+40 {{res:collection_archive_roundtrip_20261020.json:values.reextracted_rows}}
+nadväzujúcich snímok. Globálne/per-bin vstupy, sekvencie, časy snímok,
+platnosť, kvalita, poznámky a modelový kontrakt boli zhodné s pôvodným NPZ.
+Namerané trvania extrakcie sa neporovnávali. Nový NPZ a kópia použitého
+prípravného skriptu sú uložené pri výsledku.
+
+Nejde o nový zber, úplnú opätovnú extrakciu celého behu ani o prijatie
+zamietnutej diagnostiky do korpusu. Pracovná raw kópia bola uvoľnená až
+po overení archívu, obnove, porovnaní príznakov a opätovnom overení
+identity pracovných súborov. Archív, metadáta, pôvodný audit a príznaky
+zostávajú zachované; dočasné obnovené kópie sa odstránili.
+
+## 2026-10-20 — komprimovaný archív diagnostík a odhad kapacity
+
+[`collection_storage_20261020.json`](../data/results/collection_storage_20261020.json)
+zaznamenáva archiváciu
+5 {{res:collection_storage_20261020.json:n}}
+diagnostických behov na HDD. Archív zstd sa overoval dekompresiou a SHA-256;
+pri jedinom už auditovanom behu sa naviazal aj na pôvodný audit a NPZ.
+Po overení sa uvoľnili iba pracovné raw kópie, metadáta a výsledky zostali
+na pôvodných cestách. Žiadny zamietnutý beh sa týmto neprijal do korpusu.
+Report obsahuje manifesty, potvrdenia presunu, pôvodné/uložené veľkosti
+a voľný priestor pred a po operácii. Kópia prípravného skriptu je uložená
+pri výsledku obnovy vyššie.
+
+Odhad plánovanej kampane vychádza z najväčšieho komprimovaného objemu na
+snímku medzi úplnými diagnostikami. Prepočítava sa na hodinovú session,
+celý plán, plánovaciu a núdzovú rezervu. Krátky prerušený beh sa na tento
+odhad nepoužil. Ide o extrapoláciu starého workloadu pred zmenou poolu,
+nie o výsledok nového pilotu ani záruku kapacity všetkých budúcich scenárov.
+
+## 2026-10-20 — riadené zastavenie živého diagnostického zberu
+
+[`collection_stop_validation_20261020.json`](../data/results/collection_stop_validation_20261020.json)
+dokladá `systemctl stop` jednotky s `KillMode=mixed` po
+4 {{res:collection_stop_validation_20261020.json:n}}
+skutočných RAM snímkach. Prípravný runner použil riadenie procesov z
+`campaign.run_child`, `collection.Interrupts` a rovnaké blokovanie spánku.
+Zberač, HTTP generátor aj monitor skončili cez SIGTERM, nezostali živé
+deti, zámok bolo možné znovu získať a blokovanie spánku sa uvoľnilo.
+Runner zapísal `interrupted`, session `completed=false` a logový audit ju
+zamietol. Návratový kód runnera pri úmyselnom prerušení je uložený v reporte.
+
+Test používal samostatný diagnostický protokol so skráteným zahrievaním;
+jeho plán je súčasťou reportu. Nie je pilotom pokrytia ani dátami korpusu.
+Neoveruje celú kampaň, jej reštarty skupín, opätovné spustenie ani konečný
+index. Záznam zachováva zdrojové hashe a kópiu prípravného runnera.

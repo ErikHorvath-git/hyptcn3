@@ -30,6 +30,15 @@ def test_protocol_rejects_pilot_without_rotation(tmp_path):
         protocol(path)
 
 
+def test_protocol_rejects_unreachable_score_coverage(tmp_path):
+    p = protocol(DEFAULT)
+    p["pilot_cycles"] = 400
+    path = tmp_path / "impossible.json"
+    path.write_text(json.dumps(p))
+    with pytest.raises(ValueError, match="unreachable"):
+        protocol(path)
+
+
 def test_unprivileged_run_fails_before_mutating(monkeypatch):
     monkeypatch.setattr("os.geteuid", lambda: 1000)
     with pytest.raises(ValueError, match="sudo"):
@@ -48,10 +57,11 @@ def test_v1_cannot_silently_change_input_policy(tmp_path):
 @pytest.mark.parametrize("primary_complete", [True, False])
 @pytest.mark.parametrize("integrity_finding", [False, True])
 def test_pilot_gate_distinguishes_input_loss_from_integrity_gap(primary_complete, integrity_finding):
-    from features.snapshot import MENA
+    from features.snapshot import MENA, SCHEMA
     p = protocol(DEFAULT)
     matrix = [[0.] * len(MENA) for _ in range(p["pilot_cycles"])]
-    quality = [{"model_valid": True, "behavior_valid": True, "inconclusive": [], "findings": []}
+    quality = [{"model_valid": True, "behavior_valid": True, "inconclusive": [], "findings": [],
+                "traversals_complete": True, "read_errors": 0, "filled_zero": 0}
                for _ in matrix]
     for i, row in enumerate(matrix):
         row[-2:] = [i != 0, i % p["full_every"] == 0]
@@ -62,10 +72,14 @@ def test_pilot_gate_distinguishes_input_loss_from_integrity_gap(primary_complete
             matrix[i + 1][-2] = 0
     if integrity_finding:
         quality[7]["findings"] = [{"check": "synthetic-hook"}]
-    result = {"matica": matrix, "seq": list(range(len(matrix))),
+    result = {"schema": SCHEMA, "mena": MENA, "matica": matrix, "seq": list(range(len(matrix))),
               "casy": [float(i * p["interval_s"]) for i in range(len(matrix))],
               "quality": quality, "valid": [q["behavior_valid"] for q in quality],
-              "quality_policy": p["quality_policy"]}
+              "quality_policy": p["quality_policy"], "biny": [0],
+              "perbin": [[[0., 1., 0., 0.]]] * len(matrix),
+              "chain_ids": [str(i // p["full_every"]) for i in range(len(matrix))],
+              "layout": {"bin_bytes": 16777216, "page_size": 4096, "bins": [[0, 1]],
+                         "regions": [{"gpa": 0, "bytes": 4096}], "memsize": 4096, "vcpus": 2}}
     _, windows, coverage, reasons, report = analyze_windows(result, p, "synthetic-pilot")
     assert not reasons if primary_complete and not integrity_finding else reasons
     assert (coverage >= p["min_score_coverage"]) is primary_complete

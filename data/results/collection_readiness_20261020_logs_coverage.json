@@ -1,0 +1,885 @@
+{
+  "schema": "hyptcn3/collection-readiness-validation/1",
+  "date": "2026-10-20T22:24:14.631304+00:00",
+  "commit": "bbf624de4bbb3c552569adc2227f4c3af21fc151",
+  "commit_dirty": true,
+  "host": "Linux-7.2.9+deb13-amd64-x86_64-with-glibc2.41",
+  "guest": {
+    "kernel": "6.1.0-42-cloud-amd64",
+    "boot_id": "e450bff0-3144-449c-b4e0-0d6ffe34c63a",
+    "machine_id": "180ac982142b4714a979599073c96cdd",
+    "stack_sha256": "a3436458cb1660c1e5f9b9001372b32b2242dfbf81d86d83e1de78e281ff9e10",
+    "stack_manifest": [
+      "54406cae17dca58ce0e68d0c83c56be364adba534cfd9c0dda23a494caf984ec  /opt/hyptcn-lab/services.py",
+      "d7372422553f866333177456ac6daec4847f5660c1c854a646e602d0be0fcf6c  /opt/hyptcn-lab/schema.sql",
+      "a8e5ef8843ebae83eed8691f8eb7e1d186448d36e4be7d4406efeaa96291d5e3  /opt/hyptcn-lab/guest_state.py",
+      "62f55e4374b5db4522d0ce84c911f26ccd580e8f55bc570c09ee63c64be234c6  /etc/nginx/conf.d/hyptcn-lab.conf",
+      "af75eee623f3c7a0b7a1c10a35c2216684c6f4b610d44e46560de137ef3d6962  /etc/systemd/system/hyptcn-lab@.service",
+      "nginx\t1.22.1-9+deb12u10",
+      "postgresql\t15+248+deb12u1",
+      "python3\t3.11.2-1+b1",
+      "python3-psycopg2\t2.9.5-1+b1"
+    ]
+  },
+  "command": ".venv/bin/python - (offline audit_logs and scorable_windows; CLI reproductions in values.reproduce)",
+  "n": 3,
+  "values": {
+    "diagnostic": true,
+    "new_live_capture": false,
+    "logs": {
+      "20261020T170034679155Z_diagnostic_bursty": {
+        "schema": "hyptcn3/collection-logs-audit/1",
+        "session_dir": "/home/eh/projects/hyptcn3/data/diagnostics/20261020T170034679155Z_diagnostic_bursty",
+        "sections": {
+          "metadata": {
+            "session_sha256": "9395eb5b9b11c0628f4a64c25f65c7a888e5390d23fc465c3a8aed3a25bbbfd2",
+            "end_sha256": "81e4f0ce276c4efd7a67a190cc671edfce0bdf6dfd172965cbbecad289c378ba",
+            "measure_start_unix": 1792515760.567502,
+            "measure_end_unix": 1792517760.9875572
+          },
+          "manifest": {
+            "files_checked": 29,
+            "sha256": "faa2fea36334a046cd80a23d522109d29d2b120d6ff8da78505bc231abe1aa34"
+          },
+          "guest": {
+            "boot_id": "e450bff0-3144-449c-b4e0-0d6ffe34c63a",
+            "database_before": {
+              "completed": 95380,
+              "database_bytes": 24067431,
+              "max_created_unix": 1792515635.258034,
+              "max_id": 95380,
+              "min_created_unix": 1792449131.757222,
+              "orders": 95380,
+              "orders_id_seq_last": 95380,
+              "orders_relation_bytes": 16228352,
+              "pending": 0,
+              "worker_heartbeat_age_s": 0.508113
+            },
+            "database_after": {
+              "completed": 116333,
+              "database_bytes": 27737447,
+              "max_created_unix": 1792517761.001254,
+              "max_id": 116333,
+              "min_created_unix": 1792449131.757222,
+              "orders": 116333,
+              "orders_id_seq_last": 116333,
+              "orders_relation_bytes": 19898368,
+              "pending": 0,
+              "worker_heartbeat_age_s": 0.222102
+            },
+            "units_checked": [
+              "nginx",
+              "postgresql@15-main",
+              "hyptcn-lab@auth",
+              "hyptcn-lab@catalog",
+              "hyptcn-lab@orders",
+              "hyptcn-lab@worker",
+              "systemd-journald"
+            ]
+          },
+          "segments": {
+            "lines": {
+              "20261020T170034679155Z_diagnostic_bursty-pre-nginx-access.jsonl.gz": 13,
+              "20261020T170034679155Z_diagnostic_bursty-pre-nginx-error.log.gz": 0,
+              "20261020T170034679155Z_diagnostic_bursty-nginx-access.jsonl.gz": 104738,
+              "20261020T170034679155Z_diagnostic_bursty-nginx-error.log.gz": 0,
+              "20261020T170034679155Z_diagnostic_bursty-journal-journal.txt.gz": 185650
+            }
+          },
+          "traffic": {
+            "schema": "hyptcn3/traffic-summary/1",
+            "requests_path": "/home/eh/projects/hyptcn3/data/diagnostics/20261020T170034679155Z_diagnostic_bursty/traffic_requests.jsonl",
+            "intervals_path": "/home/eh/projects/hyptcn3/data/diagnostics/20261020T170034679155Z_diagnostic_bursty/traffic_intervals.jsonl",
+            "session_id": "20261020T170034679155Z_diagnostic_bursty",
+            "run_id": "f59415acc7a6",
+            "header_present": {
+              "requests": true,
+              "intervals": true
+            },
+            "end_present": {
+              "requests": true,
+              "intervals": true
+            },
+            "clean": true,
+            "problems": [],
+            "records": {
+              "requests": 104742,
+              "intervals": 430,
+              "request_records": 104738,
+              "interval_records": 426,
+              "phase_markers": 2
+            },
+            "phases": {
+              "warmup": {
+                "requests": 5861,
+                "intervals": 24,
+                "duration_s": 119.966414,
+                "ok": 5861,
+                "http_error": 0,
+                "timeout": 0,
+                "transport_error": 0
+              },
+              "measure": {
+                "requests": 98877,
+                "intervals": 401,
+                "duration_s": 2000.567789,
+                "ok": 98877,
+                "http_error": 0,
+                "timeout": 0,
+                "transport_error": 0
+              },
+              "post": {
+                "requests": 0,
+                "intervals": 1,
+                "duration_s": 0.003274,
+                "ok": 0,
+                "http_error": 0,
+                "timeout": 0,
+                "transport_error": 0
+              }
+            },
+            "phase_markers": [
+              {
+                "phase": "measure",
+                "previous": "warmup",
+                "t_utc": "2026-10-20T17:02:40.572872+00:00",
+                "t_mono": 119.966414,
+                "interval": 24
+              },
+              {
+                "phase": "post",
+                "previous": "measure",
+                "t_utc": "2026-10-20T17:36:01.140662+00:00",
+                "t_mono": 2120.534203,
+                "interval": 425
+              }
+            ],
+            "routes": {
+              "GET /api/catalog": {
+                "requests": 52139,
+                "ok": 52139,
+                "errors": 0,
+                "status_codes": {
+                  "200": 52139
+                }
+              },
+              "GET /api/orders": {
+                "requests": 26350,
+                "ok": 26350,
+                "errors": 0,
+                "status_codes": {
+                  "200": 26350
+                }
+              },
+              "GET /healthz": {
+                "requests": 5288,
+                "ok": 5288,
+                "errors": 0,
+                "status_codes": {
+                  "200": 5288
+                }
+              },
+              "POST /api/auth/token": {
+                "requests": 8,
+                "ok": 8,
+                "errors": 0,
+                "status_codes": {
+                  "200": 8
+                }
+              },
+              "POST /api/orders": {
+                "requests": 20953,
+                "ok": 20953,
+                "errors": 0,
+                "status_codes": {
+                  "201": 20953
+                }
+              }
+            },
+            "measure": {
+              "requests": 98877,
+              "ok": 98877,
+              "errors": 0,
+              "http_error": 0,
+              "timeout": 0,
+              "transport_error": 0,
+              "intervals": 401,
+              "phase_duration_s": 2000.567789,
+              "phase_mono_start": 119.966414,
+              "phase_mono_end": 2120.534203,
+              "latency_ms": {
+                "n": 98877,
+                "p50": 6.816,
+                "p90": 19.944,
+                "p95": 25.135,
+                "p99": 115.144,
+                "max": 1857.592
+              },
+              "latency_ok_ms": {
+                "n": 98877,
+                "p50": 6.816,
+                "p90": 19.944,
+                "p95": 25.135,
+                "p99": 115.144,
+                "max": 1857.592
+              },
+              "hist_p95_ms": 25.775095631363058,
+              "hist_ok_p95_ms": 25.775095631363058,
+              "routes": {
+                "GET /api/catalog": {
+                  "requests": 49272,
+                  "ok": 49272,
+                  "errors": 0,
+                  "status_codes": {
+                    "200": 49272
+                  }
+                },
+                "GET /api/orders": {
+                  "requests": 24834,
+                  "ok": 24834,
+                  "errors": 0,
+                  "status_codes": {
+                    "200": 24834
+                  }
+                },
+                "GET /healthz": {
+                  "requests": 4994,
+                  "ok": 4994,
+                  "errors": 0,
+                  "status_codes": {
+                    "200": 4994
+                  }
+                },
+                "POST /api/orders": {
+                  "requests": 19777,
+                  "ok": 19777,
+                  "errors": 0,
+                  "status_codes": {
+                    "201": 19777
+                  }
+                }
+              },
+              "first_start_utc": "2026-10-20T17:02:40.734644+00:00",
+              "last_start_utc": "2026-10-20T17:36:01.135547+00:00",
+              "first_end_utc": "2026-10-20T17:02:40.736591+00:00",
+              "last_end_utc": "2026-10-20T17:36:01.142953+00:00",
+              "first_start_mono": 120.128186,
+              "last_end_mono": 2120.536494,
+              "duration_s": 2000.408308,
+              "request_rate_rps": 49.428,
+              "ok_rate_rps": 49.428,
+              "phase_request_rate_rps": 49.424,
+              "max_ok_completion_gap_s": 1.434941
+            },
+            "intervals": {
+              "count": 426,
+              "zero_request_intervals": 1,
+              "mono_start": 0.0,
+              "mono_end": 2120.537477,
+              "coverage_s": 2120.537477
+            },
+            "end": {
+              "requests": {
+                "schema": "hyptcn3/traffic-request/1",
+                "n": 104741,
+                "type": "end",
+                "requests_started": 104738,
+                "requests_completed": 104738,
+                "ok": 104738,
+                "http_error": 0,
+                "timeout": 0,
+                "transport_error": 0,
+                "in_flight_at_stop": 0,
+                "worker_errors": 0,
+                "log_backpressure_s": 0.0,
+                "phase": "post",
+                "end_utc": "2026-10-20T17:36:01.143936+00:00",
+                "end_mono": 2120.537477,
+                "records": 104742,
+                "requests_logged": 104738,
+                "write_errors": 0,
+                "clean": true
+              },
+              "intervals": {
+                "schema": "hyptcn3/traffic-interval/1",
+                "n": 429,
+                "type": "end",
+                "requests_started": 104738,
+                "requests_completed": 104738,
+                "ok": 104738,
+                "http_error": 0,
+                "timeout": 0,
+                "transport_error": 0,
+                "in_flight_at_stop": 0,
+                "worker_errors": 0,
+                "log_backpressure_s": 0.0,
+                "phase": "post",
+                "end_utc": "2026-10-20T17:36:01.143936+00:00",
+                "end_mono": 2120.537477,
+                "records": 430,
+                "requests_logged": 104738,
+                "write_errors": 0,
+                "clean": true
+              }
+            }
+          },
+          "correlation": {
+            "requests": 104738,
+            "nginx_matched_once": 104738,
+            "service_records": 183570,
+            "preflight_requests": 13
+          },
+          "monitor": {
+            "path": "/home/eh/projects/hyptcn3/data/diagnostics/20261020T170034679155Z_diagnostic_bursty/host_monitor.jsonl",
+            "problems": [],
+            "samples": 2131,
+            "window_samples": 2001,
+            "first_utc": "2026-10-20T17:00:40.597988+00:00",
+            "last_utc": "2026-10-20T17:36:10.584990+00:00",
+            "max_gap_s": 1.0456531047821045,
+            "missed_ticks": 0,
+            "cpu_busy_pct": {
+              "p50": 13.079,
+              "p95": 23.153,
+              "max": 37.977
+            },
+            "iowait_pct_p95": 10.963,
+            "mem_available_kb_min": 10928340,
+            "swap_used_kb_max": 12,
+            "swap_in_pages": 0,
+            "swap_out_pages": 0,
+            "disk_bytes_written": {
+              "sda": 14763855872,
+              "sdb": 208183296
+            },
+            "fs_free_bytes_min": {
+              "/home/eh/projects/hyptcn3/data/diagnostics/20261020T170034679155Z_diagnostic_bursty": 73595707392,
+              "/": 430240768000
+            },
+            "temp_c_max": 41.0,
+            "window": {
+              "start_unix": 1792515760.567502,
+              "end_unix": 1792517760.9875572
+            },
+            "note": "Percentiles are nearest-rank over the samples inside the window."
+          },
+          "collector": {
+            "sha256": "7b4919fac3fb364e4c4ff26ad6c7ebd0a5066f542e01935d59a4043f7bcd0009",
+            "warnings": [
+              "2026-10-20T17:02:40.746Z WARN  libbpf: Error in bpf_create_map_xattr(pages):Invalid argument(-22). Retrying without BTF.",
+              "2026-10-20T17:02:43.579Z WARN  ebpf: 4.00 KiB pamate hosta nie je anonymna (/dev/zero (deleted)) - citanie stranky, ktorej sa host este nedotkol, ju hostitelovi NAOZAJ alokuje",
+              "2026-10-20T17:02:43.579Z WARN  ebpf: pri takejto VM zbieraj radsej konkretne oblasti (capture.regions), nech nenafuknes jej pamat na plnu velkost"
+            ],
+            "errors": [],
+            "end": [
+              "400",
+              "0",
+              "0"
+            ]
+          }
+        },
+        "problems": [],
+        "problem_counts": {},
+        "accepted": true,
+        "note": "Evidence only. RAM, feature coverage and model validation require separate checks."
+      },
+      "20261020T142021156420Z_diagnostic_write_heavy": {
+        "schema": "hyptcn3/collection-logs-audit/1",
+        "session_dir": "/home/eh/projects/hyptcn3/data/diagnostics/20261020T142021156420Z_diagnostic_write_heavy",
+        "sections": {
+          "metadata": {
+            "session_sha256": "dba2411d7c0f45a940a19476e8b39165554e7e7bea6a3c9a280c4948420a5387",
+            "end_sha256": "8de4a1bea74acc18238f4432f207e306dd8b2c2791e316e8223ee0e51700da38",
+            "measure_start_unix": 1792506146.313286,
+            "measure_end_unix": 1792508151.4314356
+          },
+          "manifest": {
+            "files_checked": 29,
+            "sha256": "d1af8d247740557401b707bb62fc228e88898f74e692c0af8e13088b37dd4bf5"
+          },
+          "guest": {
+            "boot_id": "e450bff0-3144-449c-b4e0-0d6ffe34c63a",
+            "database_before": {
+              "completed": 29105,
+              "database_bytes": 12713319,
+              "max_created_unix": 1792506021.531298,
+              "max_id": 29105,
+              "min_created_unix": 1792449131.757222,
+              "orders": 29105,
+              "orders_id_seq_last": 29105,
+              "orders_relation_bytes": 4874240,
+              "pending": 0,
+              "worker_heartbeat_age_s": 0.487737
+            },
+            "database_after": {
+              "completed": 52693,
+              "database_bytes": 16874855,
+              "max_created_unix": 1792508181.058318,
+              "max_id": 52693,
+              "min_created_unix": 1792449131.757222,
+              "orders": 52693,
+              "orders_id_seq_last": 52693,
+              "orders_relation_bytes": 9035776,
+              "pending": 0,
+              "worker_heartbeat_age_s": 0.550045
+            },
+            "units_checked": [
+              "nginx",
+              "postgresql@15-main",
+              "hyptcn-lab@auth",
+              "hyptcn-lab@catalog",
+              "hyptcn-lab@orders",
+              "hyptcn-lab@worker",
+              "systemd-journald"
+            ]
+          },
+          "segments": {
+            "lines": {
+              "20261020T142021156420Z_diagnostic_write_heavy-pre-nginx-access.jsonl.gz": 6072,
+              "20261020T142021156420Z_diagnostic_write_heavy-pre-nginx-error.log.gz": 0,
+              "20261020T142021156420Z_diagnostic_write_heavy-nginx-access.jsonl.gz": 36280,
+              "20261020T142021156420Z_diagnostic_write_heavy-nginx-error.log.gz": 0,
+              "20261020T142021156420Z_diagnostic_write_heavy-journal-journal.txt.gz": 94672
+            }
+          },
+          "correlation": {
+            "requests": 36275,
+            "nginx_matched_once": 36275,
+            "service_records": 92499,
+            "preflight_requests": 11
+          },
+          "monitor": {
+            "path": "/home/eh/projects/hyptcn3/data/diagnostics/20261020T142021156420Z_diagnostic_write_heavy/host_monitor.jsonl",
+            "problems": [],
+            "samples": 2163,
+            "window_samples": 2005,
+            "first_utc": "2026-10-20T14:20:26.317304+00:00",
+            "last_utc": "2026-10-20T14:56:28.304493+00:00",
+            "max_gap_s": 1.0449409484863281,
+            "missed_ticks": 0,
+            "cpu_busy_pct": {
+              "p50": 8.14,
+              "p95": 18.092,
+              "max": 46.167
+            },
+            "iowait_pct_p95": 6.177,
+            "mem_available_kb_min": 12219144,
+            "swap_used_kb_max": 0,
+            "swap_in_pages": 0,
+            "swap_out_pages": 0,
+            "disk_bytes_written": {
+              "sda": 9699909632,
+              "sdb": 234557440
+            },
+            "fs_free_bytes_min": {
+              "/home/eh/projects/hyptcn3/data/diagnostics/20261020T142021156420Z_diagnostic_write_heavy": 115026952192,
+              "/": 430263595008
+            },
+            "temp_c_max": 41.0,
+            "window": {
+              "start_unix": 1792506146.313286,
+              "end_unix": 1792508151.4314356
+            },
+            "note": "Percentiles are nearest-rank over the samples inside the window."
+          },
+          "collector": {
+            "sha256": "c48a2218cdddb71fef3e17558fe29a96e8d45f83697b4a55eb05a4fa1735f926",
+            "warnings": [
+              "2026-10-20T14:22:26.375Z WARN  libbpf: Error in bpf_create_map_xattr(pages):Invalid argument(-22). Retrying without BTF.",
+              "2026-10-20T14:22:29.162Z WARN  ebpf: 4.00 KiB pamate hosta nie je anonymna (/dev/zero (deleted)) - citanie stranky, ktorej sa host este nedotkol, ju hostitelovi NAOZAJ alokuje",
+              "2026-10-20T14:22:29.162Z WARN  ebpf: pri takejto VM zbieraj radsej konkretne oblasti (capture.regions), nech nenafuknes jej pamat na plnu velkost",
+              "2026-10-20T14:52:37.325Z WARN  planovac: cyklus 360 trval 8.163 s (perioda 5.000 s) - zahadzujem 1 slotov"
+            ],
+            "errors": [],
+            "end": [
+              "400",
+              "0",
+              "1"
+            ]
+          }
+        },
+        "problems": [
+          "child_exit:traffic:-9",
+          "traffic:requests:end_missing",
+          "traffic:intervals:end_missing",
+          "traffic:interval_missing:430",
+          "traffic:phase_count_mismatch:measure:34230!=34295",
+          "traffic_phases",
+          "traffic:unreadable:KeyError: 'post'",
+          "nginx_unknown_request:3dead3d6bf63-01-00006204",
+          "nginx_unknown_request:3dead3d6bf63-04-00006071",
+          "nginx_unknown_request:3dead3d6bf63-01-00006205",
+          "nginx_unknown_request:3dead3d6bf63-04-00006072",
+          "nginx_unknown_request:3dead3d6bf63-01-00006206",
+          "collector_errors_or_missed_slots"
+        ],
+        "problem_counts": {
+          "child_exit": 1,
+          "traffic": 4,
+          "traffic_phases": 1,
+          "traffic:unreadable": 1,
+          "nginx_unknown_request": 5,
+          "collector_errors_or_missed_slots": 1
+        },
+        "accepted": false,
+        "note": "Evidence only. RAM, feature coverage and model validation require separate checks."
+      },
+      "20261020T173655582088Z_diagnostic_steady": {
+        "schema": "hyptcn3/collection-logs-audit/1",
+        "session_dir": "/home/eh/projects/hyptcn3/data/diagnostics/20261020T173655582088Z_diagnostic_steady",
+        "sections": {
+          "manifest": {
+            "files_checked": 22,
+            "sha256": "964bbcd137b680b1cba51d1cc9aa441b154a265d5b56f2f5dec9bf7ccb4b32e1"
+          }
+        },
+        "problems": [
+          "incomplete_capture",
+          "guest_identity_changed",
+          "child_exit:collector:143",
+          "metadata:unreadable:KeyError: 'measure_end_unix'",
+          "missing_manifest_entry:guest/state_after.json",
+          "missing_evidence:guest/state_after.json",
+          "missing_manifest_entry:guest/clock_after.json",
+          "missing_evidence:guest/clock_after.json",
+          "missing_manifest_entry:guest/session_segment.json",
+          "missing_evidence:guest/session_segment.json",
+          "missing_manifest_entry:guest/journal_segment.json",
+          "missing_evidence:guest/journal_segment.json",
+          "guest:unreadable:FileNotFoundError: [Errno 2] No such file or directory: '/home/eh/projects/hyptcn3/data/diagnostics/20261020T173655582088Z_diagnostic_steady/guest/state_after.json'",
+          "segments:unreadable:FileNotFoundError: [Errno 2] No such file or directory: '/home/eh/projects/hyptcn3/data/diagnostics/20261020T173655582088Z_diagnostic_steady/guest/session_segment.json'",
+          "traffic_phases",
+          "traffic:unreadable:KeyError: 'post'",
+          "correlation:unreadable:KeyError: 'session:nginx-access.jsonl'",
+          "monitor:unreadable:KeyError: 'measure_end_unix'",
+          "collector:unreadable:FileNotFoundError: [Errno 2] No such file or directory: '/home/eh/projects/hyptcn3/data/diagnostics/20261020T173655582088Z_diagnostic_steady/raw/capture.json'"
+        ],
+        "problem_counts": {
+          "incomplete_capture": 1,
+          "guest_identity_changed": 1,
+          "child_exit": 1,
+          "metadata:unreadable": 1,
+          "missing_manifest_entry": 4,
+          "missing_evidence": 4,
+          "guest:unreadable": 1,
+          "segments:unreadable": 1,
+          "traffic_phases": 1,
+          "traffic:unreadable": 1,
+          "correlation:unreadable": 1,
+          "monitor:unreadable": 1,
+          "collector:unreadable": 1
+        },
+        "accepted": false,
+        "note": "Evidence only. RAM, feature coverage and model validation require separate checks."
+      }
+    },
+    "coverage": {
+      "schema": "hyptcn3/score-coverage/1",
+      "session": "20261020T170034679155Z_diagnostic_bursty",
+      "window_rows": 32,
+      "prediction_context_rows": 31,
+      "observed_snapshots": 400,
+      "expected_snapshots": 400,
+      "missing_snapshots": 0,
+      "scorable_windows": 145,
+      "score_coverage": 0.3625,
+      "observed_score_coverage": 0.3625,
+      "ideal_windows": 336,
+      "ideal_score_coverage": 0.84,
+      "gate_possible_at_assigned_length": false,
+      "lost_windows_vs_ideal": 191,
+      "state_rows": {
+        "full_snapshot": 2,
+        "warmup": 235,
+        "invalid_input": 9,
+        "no_predecessor": 9,
+        "scorable": 145
+      },
+      "unscored_rows_by_cause": {
+        "full_snapshot": 51,
+        "invalid_input": 204
+      },
+      "first_score_seq": 105,
+      "longest_observed_unscored_run_rows": 105,
+      "nominal_scored_s": 725,
+      "nominal_unscored_s": 1275,
+      "observed_span_s": 1995.0009999275208,
+      "barriers": [
+        {
+          "seq": 0,
+          "timestamp": 1792515763.579,
+          "causes": [
+            "full_snapshot",
+            "no_predecessor"
+          ],
+          "notes": "profil: preukotvenie KASLR o -228589568; neuzavrete kontroly: text_integrity"
+        },
+        {
+          "seq": 31,
+          "timestamp": 1792515918.58,
+          "causes": [
+            "invalid_input"
+          ],
+          "notes": "profil: preukotvenie KASLR o -228589568; procesy: prechod sa neuzavrel (cyklus v zozname), pocet je dolna hranica; neuzavrete kontroly: process_cross_view, text_integrity"
+        },
+        {
+          "seq": 32,
+          "timestamp": 1792515923.58,
+          "causes": [
+            "no_predecessor"
+          ],
+          "notes": "profil: preukotvenie KASLR o -228589568; neuzavrete kontroly: text_integrity"
+        },
+        {
+          "seq": 49,
+          "timestamp": 1792516008.58,
+          "causes": [
+            "invalid_input"
+          ],
+          "notes": "profil: preukotvenie KASLR o -228589568; procesy: prechod sa neuzavrel (cyklus v zozname), pocet je dolna hranica; neuzavrete kontroly: process_cross_view, text_integrity"
+        },
+        {
+          "seq": 50,
+          "timestamp": 1792516013.58,
+          "causes": [
+            "no_predecessor"
+          ],
+          "notes": "profil: preukotvenie KASLR o -228589568; neuzavrete kontroly: text_integrity"
+        },
+        {
+          "seq": 72,
+          "timestamp": 1792516123.58,
+          "causes": [
+            "invalid_input"
+          ],
+          "notes": "profil: preukotvenie KASLR o -228589568; procesy: prechod sa neuzavrel (cyklus v zozname), pocet je dolna hranica; neuzavrete kontroly: process_cross_view, text_integrity"
+        },
+        {
+          "seq": 73,
+          "timestamp": 1792516128.58,
+          "causes": [
+            "no_predecessor"
+          ],
+          "notes": "profil: preukotvenie KASLR o -228589568; neuzavrete kontroly: text_integrity"
+        },
+        {
+          "seq": 133,
+          "timestamp": 1792516428.58,
+          "causes": [
+            "invalid_input"
+          ],
+          "notes": "profil: preukotvenie KASLR o -228589568; procesy: prechod sa neuzavrel (cyklus v zozname), pocet je dolna hranica; neuzavrete kontroly: process_cross_view, text_integrity"
+        },
+        {
+          "seq": 134,
+          "timestamp": 1792516433.58,
+          "causes": [
+            "no_predecessor"
+          ],
+          "notes": "profil: preukotvenie KASLR o -228589568; neuzavrete kontroly: text_integrity"
+        },
+        {
+          "seq": 143,
+          "timestamp": 1792516478.58,
+          "causes": [
+            "invalid_input"
+          ],
+          "notes": "profil: preukotvenie KASLR o -228589568; procesy: prechod sa neuzavrel (cyklus v zozname), pocet je dolna hranica; neuzavrete kontroly: process_cross_view, text_integrity"
+        },
+        {
+          "seq": 144,
+          "timestamp": 1792516483.58,
+          "causes": [
+            "no_predecessor"
+          ],
+          "notes": "profil: preukotvenie KASLR o -228589568; neuzavrete kontroly: text_integrity"
+        },
+        {
+          "seq": 275,
+          "timestamp": 1792517138.58,
+          "causes": [
+            "invalid_input"
+          ],
+          "notes": "profil: preukotvenie KASLR o -228589568; procesy: prechod sa neuzavrel (cyklus v zozname), pocet je dolna hranica; neuzavrete kontroly: process_cross_view, text_integrity"
+        },
+        {
+          "seq": 276,
+          "timestamp": 1792517143.58,
+          "causes": [
+            "no_predecessor"
+          ],
+          "notes": "profil: preukotvenie KASLR o -228589568; neuzavrete kontroly: process_cross_view, text_integrity"
+        },
+        {
+          "seq": 326,
+          "timestamp": 1792517393.58,
+          "causes": [
+            "invalid_input"
+          ],
+          "notes": "profil: preukotvenie KASLR o -228589568; procesy: prechod sa neuzavrel (cyklus v zozname), pocet je dolna hranica; neuzavrete kontroly: process_cross_view, text_integrity"
+        },
+        {
+          "seq": 327,
+          "timestamp": 1792517398.58,
+          "causes": [
+            "no_predecessor"
+          ],
+          "notes": "profil: preukotvenie KASLR o -228589568; neuzavrete kontroly: text_integrity"
+        },
+        {
+          "seq": 350,
+          "timestamp": 1792517513.58,
+          "causes": [
+            "invalid_input"
+          ],
+          "notes": "profil: preukotvenie KASLR o -228589568; procesy: prechod sa neuzavrel (cyklus v zozname), pocet je dolna hranica; neuzavrete kontroly: process_cross_view, text_integrity"
+        },
+        {
+          "seq": 351,
+          "timestamp": 1792517518.58,
+          "causes": [
+            "no_predecessor"
+          ],
+          "notes": "profil: preukotvenie KASLR o -228589568; neuzavrete kontroly: text_integrity"
+        },
+        {
+          "seq": 360,
+          "timestamp": 1792517563.58,
+          "causes": [
+            "chain_change",
+            "full_snapshot"
+          ],
+          "notes": "profil: preukotvenie KASLR o -228589568; neuzavrete kontroly: text_integrity"
+        },
+        {
+          "seq": 380,
+          "timestamp": 1792517663.58,
+          "causes": [
+            "invalid_input"
+          ],
+          "notes": "profil: preukotvenie KASLR o -228589568; procesy: prechod sa neuzavrel (cyklus v zozname), pocet je dolna hranica; neuzavrete kontroly: process_cross_view, text_integrity"
+        },
+        {
+          "seq": 381,
+          "timestamp": 1792517668.58,
+          "causes": [
+            "no_predecessor"
+          ],
+          "notes": "profil: preukotvenie KASLR o -228589568; neuzavrete kontroly: text_integrity"
+        }
+      ],
+      "ranges": [
+        {
+          "cause": "full_snapshot",
+          "seq_from": 0,
+          "seq_to": 30,
+          "time_from": 1792515763.579,
+          "time_to": 1792515913.58,
+          "rows": 31
+        },
+        {
+          "cause": "invalid_input",
+          "seq_from": 31,
+          "seq_to": 104,
+          "time_from": 1792515918.58,
+          "time_to": 1792516283.58,
+          "rows": 74
+        },
+        {
+          "cause": "scorable",
+          "seq_from": 105,
+          "seq_to": 132,
+          "time_from": 1792516288.58,
+          "time_to": 1792516423.58,
+          "rows": 28
+        },
+        {
+          "cause": "invalid_input",
+          "seq_from": 133,
+          "seq_to": 175,
+          "time_from": 1792516428.58,
+          "time_to": 1792516638.58,
+          "rows": 43
+        },
+        {
+          "cause": "scorable",
+          "seq_from": 176,
+          "seq_to": 274,
+          "time_from": 1792516643.58,
+          "time_to": 1792517133.58,
+          "rows": 99
+        },
+        {
+          "cause": "invalid_input",
+          "seq_from": 275,
+          "seq_to": 307,
+          "time_from": 1792517138.58,
+          "time_to": 1792517298.58,
+          "rows": 33
+        },
+        {
+          "cause": "scorable",
+          "seq_from": 308,
+          "seq_to": 325,
+          "time_from": 1792517303.58,
+          "time_to": 1792517388.58,
+          "rows": 18
+        },
+        {
+          "cause": "invalid_input",
+          "seq_from": 326,
+          "seq_to": 359,
+          "time_from": 1792517393.58,
+          "time_to": 1792517558.58,
+          "rows": 34
+        },
+        {
+          "cause": "full_snapshot",
+          "seq_from": 360,
+          "seq_to": 379,
+          "time_from": 1792517563.58,
+          "time_to": 1792517658.58,
+          "rows": 20
+        },
+        {
+          "cause": "invalid_input",
+          "seq_from": 380,
+          "seq_to": 399,
+          "time_from": 1792517663.58,
+          "time_to": 1792517758.58,
+          "rows": 20
+        }
+      ],
+      "note": "Eligibility only, no inference executed. Nominal seconds = slots * protocol period; missing slots stay in the denominator. No online latency or detection claim.",
+      "archive": "/home/eh/projects/hyptcn3/data/diagnostics/20261020T170034679155Z_diagnostic_bursty/audit_20261020T181902833877Z.npz",
+      "archive_sha256": "dfb3a25dc00e6bbdb15311fbe5cc2d4352289b38a7464418f23ecdde7cbb5b42",
+      "original_audit": "data/diagnostics/20261020T170034679155Z_diagnostic_bursty/audit_20261020T181902833877Z.json",
+      "original_audit_sha256": "e70d559c573f2dc9bbc9aec39d24e3e5ec168b8a2a12e43bec2a6e840b1ae1d3",
+      "original_verdict": false,
+      "gate_passed": false
+    },
+    "protocol_sha256": "e9d2bfbf38ae13e772b4c5407eeb6ec272898b683db9765e9542f08f4ead2a85",
+    "source_sha256": {
+      "features/coverage.py": "9d745c854720e2f9855687c34657090a2ef86df05efabc2a492318f79b6ec14d",
+      "features/quality.py": "14304025b5f40e380453e18b9a32e4b30e1222f6fc553535541ff2af3c3699dd",
+      "features/archive.py": "120ae743dc7e3ecfe85c2c4054c29532905dccd6a1d59d94e6ed83f53a0935c8",
+      "safeguard/features.py": "f0c3dec67e9c285b3cc46b004b42256f49734d5391524d2c3ae309d364560de1",
+      "scripts/collection.py": "5dbb8fbbb19679f5cc0d30b640a3d1532f90a95709bdf9d840ce17f441d425ed",
+      "scripts/collection_logs.py": "f48ec8a7dc30c13b1296f2256f0d4d10dcc6fc93f41bbb6c7a986328bd9086b9",
+      "scripts/traffic_log.py": "ff00ccefaa6cf0af207664fb3b4e18342d62fa1108a11978ac37232e217ecb65",
+      "scripts/host_monitor.py": "d8d2bc698247b0e0bbd3b79aa055bdd2df2f3214425fd110f9a487160b7872a5"
+    },
+    "reproduce": [
+      "python3 scripts/collection_logs.py data/diagnostics/20261020T170034679155Z_diagnostic_bursty",
+      "python3 scripts/collection_logs.py data/diagnostics/20261020T142021156420Z_diagnostic_write_heavy",
+      "python3 scripts/collection_logs.py data/diagnostics/20261020T173655582088Z_diagnostic_steady",
+      ".venv/bin/python scripts/collection.py coverage /home/eh/projects/hyptcn3/data/diagnostics/20261020T170034679155Z_diagnostic_bursty/audit_20261020T181902833877Z.npz --expected-snapshots 400"
+    ],
+    "pool_change": {
+      "source_sha256": "c346dc8bc1c8c3649fc96064fddfc07172f740f7c82d1830dbb935b16c488271",
+      "deployed": false,
+      "coverage_effect_measured": false
+    },
+    "note": "Read-only checks of saved evidence. The original feature archive and audits are unchanged. No corpus admission, new pilot, model inference or detection measurement."
+  }
+}

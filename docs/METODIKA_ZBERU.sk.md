@@ -118,8 +118,9 @@ normalizácie a poradie príznakov sa musia použiť pri každom skórovaní.
 
 ## 4. Kvalita dát a jednotná tvorba okien
 
-Tréning, prehrávanie a živý safeguard používajú `safeguard.features.WindowBuffer`.
-Pravidlá nadväzujú na `features.windows` používané auditom:
+Tréning, prehrávanie, audit protokolu v2 a živý safeguard používajú
+`safeguard.features.WindowBuffer`. Historický protokol v1 používa
+`features.windows`. Pravidlá sú:
 
 1. Overiť schému, konečné čísla, pomery, počty stránok, identitu binov a ich súčty.
 2. Overiť ukotvenie profilu po KASLR ešte pred parsovaním objektov.
@@ -253,12 +254,15 @@ Hostiteľské náročné úlohy, spánok hosta a zmeny konfigurácie tiež konta
 Runner vypíše cestu `data/collections/<session>`. Následne bez roota:
 
 ```sh
-python3 scripts/collection.py audit data/collections/<session>
+.venv/bin/python scripts/collection.py audit data/collections/<session>
 ```
 
 Audit overí kontrolné súčty obrazov, konfiguráciu, počet snímok, medzery,
 čítacie chyby, rotáciu reťazca, stabilnú identitu VM, kvalitu príznakov
-a pokračovanie HTTP požiadaviek. Návratový kód 0 znamená prijatie;
+a klientské, nginx a aplikačné logy vrátane request ID, kontrolných súčtov,
+časového pokrytia a reštartov služieb. Rozpis skórovateľných okien a samostatné
+príkazy bez opakovanej extrakcie sú v [KONTROLA_ZBERU.sk.md](KONTROLA_ZBERU.sk.md).
+Návratový kód 0 znamená prijatie;
 kód 2 znamená chybu alebo zamietnutie. Vytvorí nový JSON a NPZ; nikdy neprepíše
 staré meranie. Čitateľné, ale metodicky nevyhovujúce dáta sa zachovajú pre diagnostiku.
 

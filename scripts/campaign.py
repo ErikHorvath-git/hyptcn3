@@ -78,6 +78,8 @@ def pilot_gate(path, protocol_path, p):
     if digest(session) != v["session_sha256"] or digest(v["features"]) != v["features_sha256"]:
         raise ValueError("pilot metadata or features changed since audit")
     meta = read_json(session)
+    from features.quality import require_log_audit
+    require_log_audit(meta, v)
     if (tree_hashes(ROOT / p["profile"]) != meta["profile_sha256"]
             or digest(ROOT / "vmicollect/build/vmicollect") != meta["collector_sha256"]):
         raise ValueError("pilot collector or profile differs from current environment")

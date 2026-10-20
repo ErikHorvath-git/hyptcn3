@@ -32,3 +32,19 @@ def protocol_policy(protocol):
             and protocol.get("quality_policy") == BEHAVIOR_POLICY):
         return BEHAVIOR_POLICY
     raise ValueError("unsupported collection protocol/quality policy")
+
+
+def require_log_audit(metadata, values):
+    """Managed v2 sessions need the evidence verdict as well as valid features.
+
+    Historical v1 provenance remains readable; it does not acquire new claims
+    about request-level logs that were never recorded.
+    """
+    if metadata.get("schema") != "hyptcn3/collection-session/2":
+        return
+    logs = values.get("logs") or {}
+    if (logs.get("schema") != "hyptcn3/collection-logs-audit/1"
+            or logs.get("accepted") is not True or logs.get("problems") != []
+            or logs.get("sections", {}).get("metadata", {}).get("session_sha256") != values.get("session_sha256")
+            or not values.get("session_sha256")):
+        raise ValueError("managed session requires an accepted log audit; re-audit the session")

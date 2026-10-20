@@ -1,6 +1,6 @@
 # Príručka k hyptcn3
 
-Vstupný dokument repozitára; stav kódu a artefaktov k 2026-10-13. Súbor je
+Vstupný dokument repozitára; stav kódu a artefaktov k 2026-10-20. Súbor je
 generovaný a needituje sa ručne — ako, hovorí kapitola 10.
 
 ## 1. Čo to je
@@ -31,7 +31,7 @@ python3 -m pytest -q      # testy parsera a príznakov
 ```
 
 `make test` prejde celú cestu zberu nad syntetickým obrazom veľkosti
-16 MiB, ktorý si sám vyrobí. Testov je 451 prešlých a 24 preskočených v `pytest` (spolu 475 zozbieraných; preskočený test nie je prešiel) a 4 v C (`alarm_test`, `hole_test`, `perbin_test`, `retention_test`).
+16 MiB, ktorý si sám vyrobí. Testov je 574 prešlých a 33 preskočených v `pytest` (spolu 607 zozbieraných; preskočený test nie je prešiel) a 4 v C (`alarm_test`, `hole_test`, `perbin_test`, `retention_test`).
 
 ## 4. Ako vznikne snímka
 
@@ -69,14 +69,14 @@ zapíše.
 
 | adresár | čo rieši | kde začať čítať | súborov spolu / riadkov v `.c .h .py .sh .md` |
 |---|---|---|---|
-| `vmicollect/` | zberač snímok pamäte VM: C a eBPF nad QEMU/KVM | `vmicollect/src/collector.c` | 35 / 10 316 |
-| `guestparse/` | rekonštrukcia procesov, modulov a soketov zo snímky | `guestparse/view.py` | 32 / 6 799 |
-| `features/` | per-bin príznakový vektor (referencia), okná, normalizácia | `features/perbin.py` | 25 / 5 112 |
+| `vmicollect/` | zberač snímok pamäte VM: C a eBPF nad QEMU/KVM | `vmicollect/src/collector.c` | 35 / 10 507 |
+| `guestparse/` | rekonštrukcia procesov, modulov a soketov zo snímky | `guestparse/view.py` | 32 / 6 810 |
+| `features/` | per-bin príznakový vektor (referencia), okná, normalizácia | `features/perbin.py` | 27 / 5 352 |
 | `tcn/` | TCN, prediktor normálu, baseliny, tréning a skórovanie snímok | `tcn/score.py` | 15 / 2 610 |
-| `safeguard/` | spoločné príznaky, modely, balík a hostiteľský detektor | `safeguard/cli.py` | 16 / 3 278 |
+| `safeguard/` | spoločné príznaky, modely, balík a hostiteľský detektor | `safeguard/cli.py` | 16 / 3 308 |
 | `profiles/` | profil jadra hosťa: symboly a offsety polí štruktúr | `profiles/debian12-6.1.0-42-cloud-amd64/README.md` | jeden adresár na boot hosťa — pozri L17 |
-| `scripts/` | root behy, príkazy v hosťovi, kontroly tvrdení | `scripts/root_run.sh` | 51 / 8 974 |
-| `lab/` | trvalé benígne API služby, PostgreSQL a nginx vo VM | `lab/services.py` | 6 / 250 |
+| `scripts/` | root behy, príkazy v hosťovi, kontroly tvrdení | `scripts/root_run.sh` | 58 / 12 738 |
+| `lab/` | trvalé benígne API služby, PostgreSQL a nginx vo VM | `lab/services.py` | 7 / 465 |
 | `data/` | výsledkové JSONy z meraní (`data/results/`) a pozemná pravda odobratá v hosťovi (`data/sessions/`); samotné snímky `.vmicd` sú mimo gitu (`data/raw/`) | `data/results/2026-09-18_zmrazeny_host/README.md` | rastie s každým meraním, nepočíta sa |
 
 ## 6. Ako to funguje
@@ -156,7 +156,7 @@ Podpríkazy: `python3 -m guestparse` — `ps` zoznam procesov z init_task.tasks,
 - `[vm]` — domain, backend, bpf_object, image_path
 - `[schedule]` — interval_s, jitter, overrun, max_cycles, duration_s, align
 - `[capture]` — pause, pause_max_ms, chunk_size, regions, skip_read_errors, max_read_errors
-- `[output]` — dir, writer, name_template, sparse, post_compress, hash, sidecar, delta_page_size, delta_full_every
+- `[output]` — dir, writer, name_template, sparse, post_compress, hash, sidecar, delta_page_size, delta_full_every, fsync, hash_async
 - `[features]` — enable, bin_bytes, entropy
 - `[retention]` — max_snapshots, max_bytes, max_age_s
 - `[hooks]` — load, strict
@@ -166,7 +166,7 @@ Východzie hodnoty kľúčov, ktoré text spomína: `schedule.interval_s` = `5`,
 
 **Polia sidecaru**, ktoré sú vstupom ďalších krokov:
 
-- `output` — writer, full, chain_id, bytes_logical, bytes_on_disk, pages_total, pages_changed, page_size, changed_ratio, sha256_covers_file, sha256
+- `output` — writer, full, fsync, chain_id, bytes_logical, bytes_on_disk, pages_total, pages_changed, page_size, changed_ratio, sha256_covers_file, hash_deferred, sha256
 - `features` — schema, bin_bytes, page_size, entropy, compute_ms, bins_total, regions, bins
 - jeden bin v `features.bins` — bin, gpa, pages_total, pages_changed, changed_ratio, zero_ratio, entropy_mean, has_changed
 - zdroj: sidecar vyrobený pri generovaní práve preloženou binárkou (backend `file` nad 4 MiB obrazom, writer `delta`), nie uložený artefakt
@@ -245,13 +245,13 @@ znamenalo držať dve znenia toho istého. Nadpisy sú preto dosadené z neho, s
 | dokument | čo vlastní | riadkov |
 |---|---|---|
 | `docs/ARCHITEKTURA.md` | rozhrania, formát `.vmicd` a sidecaru, tok dát podrobne | 1166 |
-| `docs/MERANIA.md` | log meraní: čo, kedy, akým príkazom a s akým výsledkom | 1134 |
+| `docs/MERANIA.md` | log meraní: čo, kedy, akým príkazom a s akým výsledkom | 1261 |
 | `docs/LIMITACIE.md` | L1 až L18: čo systém nevie a čo z toho plynie pre text | 888 |
 | `docs/kontroly.md` | kontroly podozrivých vzorcov a validačný príkaz | 255 |
 | `HONESTY.md` | pravidlá pre čísla a slová v texte práce | 272 |
-| `README.md` | rozcestník repozitára a pôvod prevzatého kódu | 71 |
-| `docs/LAB.sk.md` | serverové laboratórium, premávka z hostiteľa a RAM zber | 162 |
-| `docs/METODIKA_ZBERU.sk.md` | protokol zberu, príznaky, rozdelenie korpusu a audit | 340 |
+| `README.md` | rozcestník repozitára a pôvod prevzatého kódu | 76 |
+| `docs/LAB.sk.md` | serverové laboratórium, premávka z hostiteľa a RAM zber | 232 |
+| `docs/METODIKA_ZBERU.sk.md` | protokol zberu, príznaky, rozdelenie korpusu a audit | 357 |
 | `docs/SAFEGUARD.sk.md` | tréning modelového balíka, replay a spustenie detektora | 228 |
 | `vmicollect/README.md` | zberač zvnútra: vrstvy, hooky, formáty | 460 |
 | `guestparse/README.md` | parser zvnútra: preklad adries, prechod zoznamami | 157 |

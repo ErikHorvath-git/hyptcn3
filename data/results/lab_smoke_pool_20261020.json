@@ -1,0 +1,131 @@
+{
+  "schema": "hyptcn3/lab-smoke/1",
+  "commit": "bbf624de4bbb3c552569adc2227f4c3af21fc151",
+  "commit_dirty": true,
+  "date": "2026-10-20T22:54:16.796742+00:00",
+  "host": "Linux-7.2.9+deb13-amd64-x86_64-with-glibc2.41",
+  "guest": {
+    "domain": "hyptcn-lab",
+    "target": "http://127.0.0.1:18080"
+  },
+  "command": "python3 scripts/lab_smoke.py --target http://127.0.0.1:18080",
+  "n": 13,
+  "values": {
+    "checks": [
+      {
+        "rid": "smoke20261020225415-00-00000000",
+        "method": "GET",
+        "path": "/healthz",
+        "expected": 200,
+        "status": 200,
+        "elapsed_ms": 16.247
+      },
+      {
+        "rid": "smoke20261020225415-00-00000001",
+        "method": "GET",
+        "path": "/api/catalog",
+        "expected": 200,
+        "status": 200,
+        "elapsed_ms": 2.009
+      },
+      {
+        "rid": "smoke20261020225415-00-00000002",
+        "method": "GET",
+        "path": "/api/orders",
+        "expected": 401,
+        "status": 401,
+        "elapsed_ms": 1.939
+      },
+      {
+        "rid": "smoke20261020225415-00-00000003",
+        "method": "POST",
+        "path": "/api/auth/token",
+        "expected": 200,
+        "status": 200,
+        "elapsed_ms": 1.129
+      },
+      {
+        "rid": "smoke20261020225415-00-00000004",
+        "method": "GET",
+        "path": "/api/orders",
+        "expected": 401,
+        "status": 401,
+        "elapsed_ms": 1.736
+      },
+      {
+        "rid": "smoke20261020225415-00-00000005",
+        "method": "POST",
+        "path": "/api/orders",
+        "expected": 400,
+        "status": 400,
+        "elapsed_ms": 2.417
+      },
+      {
+        "rid": "smoke20261020225415-00-00000006",
+        "method": "POST",
+        "path": "/api/orders",
+        "expected": 400,
+        "status": 400,
+        "elapsed_ms": 1.872
+      },
+      {
+        "rid": "smoke20261020225415-00-00000007",
+        "method": "POST",
+        "path": "/api/orders",
+        "expected": 201,
+        "status": 201,
+        "elapsed_ms": 10.863
+      },
+      {
+        "rid": "smoke20261020225415-00-00000008",
+        "method": "GET",
+        "path": "/api/orders",
+        "expected": 200,
+        "status": 200,
+        "elapsed_ms": 2.717
+      },
+      {
+        "rid": "smoke20261020225415-00-00000009",
+        "method": "GET",
+        "path": "/api/orders",
+        "expected": 200,
+        "status": 200,
+        "elapsed_ms": 11.262
+      },
+      {
+        "rid": "smoke20261020225415-00-00000010",
+        "method": "GET",
+        "path": "/api/orders",
+        "expected": 200,
+        "status": 200,
+        "elapsed_ms": 5.028
+      },
+      {
+        "rid": "smoke20261020225415-00-00000011",
+        "method": "GET",
+        "path": "/api/orders",
+        "expected": 200,
+        "status": 200,
+        "elapsed_ms": 2.675
+      },
+      {
+        "rid": "smoke20261020225415-00-00000012",
+        "method": "GET",
+        "path": "/does-not-exist",
+        "expected": 404,
+        "status": 404,
+        "elapsed_ms": 0.752
+      }
+    ],
+    "order_completed": true,
+    "source_sha256": {
+      "lab/dependencies.json": "31bc036da7b333c26c3e785fb756f4b98083848f15e43483e863be3f3c79cbba",
+      "lab/guest_state.py": "a8e5ef8843ebae83eed8691f8eb7e1d186448d36e4be7d4406efeaa96291d5e3",
+      "lab/hyptcn-lab@.service": "af75eee623f3c7a0b7a1c10a35c2216684c6f4b610d44e46560de137ef3d6962",
+      "lab/install.sh": "07ad70223738356e5fd61a5785965cf1c89c73bd7319505a402a68c6f60508ea",
+      "lab/nginx.conf": "62f55e4374b5db4522d0ce84c911f26ccd580e8f55bc570c09ee63c64be234c6",
+      "lab/schema.sql": "d7372422553f866333177456ac6daec4847f5660c1c854a646e602d0be0fcf6c",
+      "lab/services.py": "c346dc8bc1c8c3649fc96064fddfc07172f740f7c82d1830dbb935b16c488271"
+    }
+  }
+}

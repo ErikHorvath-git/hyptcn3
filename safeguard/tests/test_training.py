@@ -71,6 +71,10 @@ def make_corpus(directory, session_schema="hyptcn3/collection-session/1"):
                       "protocol_sha256": protocol_hash, "session_sha256": digest(meta_path),
                       "features": str(feature_path), "features_sha256": digest(feature_path),
                       "layout": layout, "extractor_sha256": {"fixture": "synthetic"}, "diagnostic": True}
+            if session_schema == "hyptcn3/collection-session/2":
+                values["logs"] = {"schema": "hyptcn3/collection-logs-audit/1", "accepted": True,
+                                  "problems": [], "sections": {"metadata": {"session_sha256": digest(meta_path)}},
+                                  "note": "Synthetic provenance fixture, no real traffic."}
             write_json(audit_path, {"schema": "hyptcn3/collection-audit/1", "values": values})
             records.append({"id": name, "role": role, "group": metadata["group"],
                             "boot_id": guest["boot_id"], "scenario": scenario, "typ": "benign",
@@ -146,6 +150,19 @@ def test_index_accepts_session_schema_2_and_rejects_unknown(tmp_path, version):
     else:
         with pytest.raises(ValueError, match="unsupported session"):
             validate_index(corpus, diagnostic=True)
+
+
+def test_training_rejects_managed_session_without_logs_even_with_accepted_features(tmp_path):
+    corpus = make_corpus(tmp_path / "corpus", "hyptcn3/collection-session/2")
+    index = json.loads(corpus.read_text())
+    record = index["sessions"][0]
+    report = json.loads(Path(record["audit"]).read_text())
+    del report["values"]["logs"]
+    write_json(record["audit"], report)
+    record["audit_sha256"] = digest(record["audit"])
+    write_json(corpus, index)
+    with pytest.raises(ValueError, match="log audit"):
+        validate_index(corpus, diagnostic=True)
 
 
 def test_index_rejects_leakage_and_modified_artifact(tmp_path):

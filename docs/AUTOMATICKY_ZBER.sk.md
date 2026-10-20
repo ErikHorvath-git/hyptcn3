@@ -26,9 +26,15 @@ Rozloženie na zberovom PC (2026-10-20, bez externého disku):
 
 Adresáre pod bind mountami majú na HDD príznak `chattr +i`. Ak SSD nie je
 pripojený, zápis do nich zlyhá aj pre roota (overené `Operation not permitted`).
-Zber zapisuje bez `fsync`. S `fsync` trvali plné snímky na tomto SSD 4,7–10,7 s
-po súvislom zápise delt (diagnostika 2026-10-20, profily `write_heavy`
-a `bursty`), na HDD už samotný zápis 370 MB 4,6–5,8 s; perióda je 5 s.
+Zber zapisuje bez `fsync` a SHA-256 plnej snímky počíta vlákno zberača až
+po cykle (`output.hash_async`). S `fsync` trvali plné snímky na tomto SSD
+4,7–10,7 s po súvislom zápise delt (diagnostika 2026-10-20, profily
+`write_heavy` a `bursty`), na HDD už samotný zápis 370 MB 4,6–5,8 s; perióda
+je 5 s. Ani bez `fsync` cyklus nestačil (716 MiB, 5,46 s). Procesor i5-8400
+nemá SHA-NI, takže skalárny SHA-256 spracuje ~230 MB/s a plné snímky
+s pamäťou hosťa rastú. Sidecar plnej snímky vznikne až s hotovým hashom
+(`hash_deferred: true`). Zberač pred skončením na hash počká; ak zlyhá,
+sidecar chýba, zberač vráti kód 4 a audit zber zamietne.
 Snímka sa zverejní z page cache. Jej SHA-256 zo sidecaru znovu overí audit
 aj archivácia, ktorá kópie zapisuje s `fsync` a overuje dekompresiou. Pád PC
 môže stratiť ešte nearchivovanú session; tá je potom neúplná, nikdy potichu
@@ -113,8 +119,16 @@ vedľa ktorého treba skopírovať `session.json` (bootový kontext):
 .venv/bin/python -m scripts.collection_archive restore <archív>/campaigns/<id>/collections/<session> <nový>/raw
 ```
 
-Celý reťazec obnova → opätovná extrakcia nad reálnymi snímkami zatiaľ
-nebol overený (UNVERIFIED). Pôvodné piloty ani cudzie adresáre sa neuvoľňujú.
+Obnova a opätovná extrakcia boli overené na reálnom diagnostickom behu
+([výsledok](../data/results/collection_archive_roundtrip_20261020.json)):
+obnovili sa všetky snímky a vedľajšie súbory, príznaky prvého súvislého
+úseku sa zhodovali s pôvodným NPZ. Report uvádza presný rozsah porovnania;
+opätovná extrakcia celého behu sa v tomto overení nevykonávala.
+Automatická kampaň neuvoľňuje pôvodné piloty ani cudzie adresáre.
+Pri používateľom povolenej archivácii starých diagnostík zostávajú metadáta
+a výsledky na pôvodných cestách, `raw/` odkazuje do overeného archívu
+`/home/eh/hyptcn3-archive/diagnostics/`. Na nové parsovanie sa použije obnova
+vyššie; komprimované snímky parser priamo nečíta.
 Režim presunu povoľuje iba session patriace danej kampani.
 
 Odpojený alebo zamenený disk, nedostatok priestoru, nezhoda hashu a zmenený
@@ -144,8 +158,13 @@ nasledujúcej session, takže sa nestratia.
 Pôvodná chyba (chýbajúci `end.json`, stav `running` po zastavení) vznikala
 opakovaným SIGTERM: systemd poslal signál všetkým procesom jednotky a runner
 navyše celej skupine dieťaťa, čím prerušil jeho upratovanie. Hlavným procesom
-bol `systemd-inhibit`, ktorý signály neposúval. Oprava je pokrytá testami;
-skutočné `systemctl stop` na tomto PC zatiaľ overené nebolo (UNVERIFIED).
+bol `systemd-inhibit`, ktorý signály neposúval. Oprava je pokrytá testami.
+Skutočné `systemctl stop` bolo overené na tomto PC počas diagnostického
+zberu ([výsledok](../data/results/collection_stop_validation_20261020.json)).
+Prípravný runner použil rovnaké `campaign.run_child`, `collection.Interrupts`
+a `KillMode=mixed`; deti skončili, zámok aj blokovanie spánku sa uvoľnili
+a logový audit prerušenú session zamietol. Celá orchestrácia kampane vrátane
+obnovy po reštarte týmto testom overená nie je (UNVERIFIED).
 
 Pri SIGKILL alebo výpadku napájania upratovanie zaručiť nemožno. V súbore
 stavu potom ostane `running`. `status` ho podľa živosti procesu označí ako

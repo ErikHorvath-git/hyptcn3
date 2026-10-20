@@ -64,6 +64,28 @@ def test_duplicate_and_partial_corpus(tmp_path):
     assert not dataset.build([audit], protocol(), "protocol-test")["complete"]
 
 
+@pytest.mark.parametrize("verdict", [None, False, True])
+def test_managed_sessions_cannot_bypass_log_audit(tmp_path, verdict):
+    path = record(tmp_path, "train", 0)
+    meta_path = path.parent / "session.json"
+    meta = json.loads(meta_path.read_text())
+    meta["schema"] = "hyptcn3/collection-session/2"
+    meta_path.write_text(json.dumps(meta))
+    report = json.loads(path.read_text())
+    values = report["values"]
+    values["session_sha256"] = dataset.sha(meta_path)
+    if verdict is not None:
+        values["logs"] = {"schema": "hyptcn3/collection-logs-audit/1", "accepted": verdict,
+                          "problems": [] if verdict else ["missing request"],
+                          "sections": {"metadata": {"session_sha256": values["session_sha256"]}}}
+    path.write_text(json.dumps(report))
+    if verdict:
+        assert len(dataset.build([path], protocol(), "protocol-test")["sessions"]) == 1
+    else:
+        with pytest.raises(ValueError, match="log audit"):
+            dataset.build([path], protocol(), "protocol-test")
+
+
 def test_index_builder_and_trainer_accept_same_collection_provenance(tmp_path):
     """Exercise the CLI-produced index shape against training's strict reader."""
     from safeguard.training import validate_index

@@ -206,7 +206,12 @@ def main():
     if not SECRET:
         raise SystemExit("LAB_SECRET is required")
     if service != "auth":
-        POOL = ThreadedConnectionPool(1, 12, dbname="hyptcn_lab", user="hyptcnlab", host="/var/run/postgresql", connect_timeout=5)
+        # psycopg2 retains only minconn idle connections; minconn=1 closed
+        # concurrent connections on return and repeatedly created PostgreSQL
+        # backend processes. Keep the bounded pool alive across requests.
+        pool_size = 1 if service == "worker" else 12
+        POOL = ThreadedConnectionPool(pool_size, pool_size, dbname="hyptcn_lab", user="hyptcnlab",
+                                      host="/var/run/postgresql", connect_timeout=5)
     try:
         if service == "worker":
             worker()
