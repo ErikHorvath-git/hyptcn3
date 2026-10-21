@@ -1,0 +1,42 @@
+{
+  "commit": "c6846116fe671b240bdc49e60427c8bc5045b75b",
+  "date": "2026-10-21T01:15:04.116870+00:00",
+  "host": "Linux-7.2.9+deb13-amd64-x86_64-with-glibc2.41",
+  "guest": {
+    "kernel": "6.1.0-42-cloud-amd64",
+    "boot_id": "d43e5415-f77d-452f-8322-44e7bfbe4c3c",
+    "machine_id": "180ac982142b4714a979599073c96cdd",
+    "stack_sha256": "d8319b0fa22cdd4b336561e933e6415f136d95829b5ab05449765abbe0f89133",
+    "stack_manifest": [
+      "c346dc8bc1c8c3649fc96064fddfc07172f740f7c82d1830dbb935b16c488271  /opt/hyptcn-lab/services.py",
+      "d7372422553f866333177456ac6daec4847f5660c1c854a646e602d0be0fcf6c  /opt/hyptcn-lab/schema.sql",
+      "a8e5ef8843ebae83eed8691f8eb7e1d186448d36e4be7d4406efeaa96291d5e3  /opt/hyptcn-lab/guest_state.py",
+      "62f55e4374b5db4522d0ce84c911f26ccd580e8f55bc570c09ee63c64be234c6  /etc/nginx/conf.d/hyptcn-lab.conf",
+      "af75eee623f3c7a0b7a1c10a35c2216684c6f4b610d44e46560de137ef3d6962  /etc/systemd/system/hyptcn-lab@.service",
+      "nginx\t1.22.1-9+deb12u10",
+      "postgresql\t15+248+deb12u1",
+      "python3\t3.11.2-1+b1",
+      "python3-psycopg2\t2.9.5-1+b1"
+    ]
+  },
+  "command": "campaign.pilot_gate(original audit, current frozen protocol); preserve original audit and mark it superseded in this new report",
+  "n": 480,
+  "values": {
+    "usable_for_current_corpus": false,
+    "reason": "Confirmed obsolete nonzero memory pages across a full checkpoint in the original parser. The original audit is preserved, not amended. A new pilot is required with the fixed extractor.",
+    "original_audit": "/home/eh/projects/hyptcn3/data/collections/pilot_pool_20261020_bursty/audit_20261021T011307494540Z.json",
+    "original_audit_sha256": "6fac689bc3fd36960e230c2ef3f5ad2dd30fda23972f03d142ebbd0acba5abbb",
+    "preserved_audit": "data/results/collection_pilot_pool_20261021_prior_parser.json",
+    "reported_accepted": true,
+    "reported_behavior_valid_rows": 480,
+    "reported_windows": 416,
+    "reported_score_coverage": 0.8666666666666667,
+    "reported_invalid_input_seq": [],
+    "reported_integrity_findings": 0,
+    "logs_accepted": true,
+    "current_pilot_gate_rejected": true,
+    "current_pilot_gate_reason": "accepted pilot with current extractor and frozen protocol required",
+    "reset_validation": "data/results/full_snapshot_reset_20261021.json",
+    "offline_extraction_note": "The original extraction overlapped read-only reset diagnostics and short regression tests. Its timing is not an isolated latency benchmark."
+  }
+}

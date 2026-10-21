@@ -1,0 +1,78 @@
+{
+  "commit": "c6846116fe671b240bdc49e60427c8bc5045b75b",
+  "date": "2026-10-21T01:23:47.308968+00:00",
+  "host": "Linux-7.2.9+deb13-amd64-x86_64-with-glibc2.41",
+  "guest": null,
+  "command": "python3 data/lab/prepare_reset_pilot_20261021.py",
+  "n": 2,
+  "values": {
+    "sessions": [
+      {
+        "source": "/home/eh/projects/hyptcn3/data/collections/pilot_pool_20261020_bursty",
+        "role": "pilot",
+        "destination": "/home/eh/hyptcn3-archive/pilots/pilot_pool_20261020_bursty",
+        "archive_manifest_sha256": "a9c132495fb87f736416a5bd175f434ba74cfb9b31d3804954ffcbaccb5e8983",
+        "verified": true,
+        "audit_bound": "/home/eh/projects/hyptcn3/data/collections/pilot_pool_20261020_bursty/audit_20261021T011307494540Z.json",
+        "raw_working_bytes_removed": 11364962223,
+        "stored_archive_bytes": 1780642597,
+        "elapsed_s_before_reclaim": 337.8773516099973,
+        "receipt": {
+          "schema": "hyptcn3/collection-archive-receipt/1",
+          "source": "/home/eh/projects/hyptcn3/data/collections/pilot_pool_20261020_bursty",
+          "destination": "/home/eh/hyptcn3-archive/pilots/pilot_pool_20261020_bursty",
+          "manifest_sha256": "a9c132495fb87f736416a5bd175f434ba74cfb9b31d3804954ffcbaccb5e8983"
+        }
+      },
+      {
+        "source": "/home/eh/projects/hyptcn3/data/diagnostics/20261020_stop_validation",
+        "role": "diagnostic",
+        "destination": "/home/eh/hyptcn3-archive/diagnostics/20261020_stop_validation",
+        "archive_manifest_sha256": "73d003a2ecf71d76d94f958ef94bc4e118572c2289857078d04ba83608cad44a",
+        "verified": true,
+        "audit_bound": null,
+        "raw_working_bytes_removed": 923335174,
+        "stored_archive_bytes": 218751376,
+        "elapsed_s_before_reclaim": 21.678770737999002,
+        "receipt": {
+          "schema": "hyptcn3/collection-archive-receipt/1",
+          "source": "/home/eh/projects/hyptcn3/data/diagnostics/20261020_stop_validation",
+          "destination": "/home/eh/hyptcn3-archive/diagnostics/20261020_stop_validation",
+          "manifest_sha256": "73d003a2ecf71d76d94f958ef94bc4e118572c2289857078d04ba83608cad44a"
+        }
+      }
+    ],
+    "space_before": {
+      "working": {
+        "total": 234622398464,
+        "used": 111729909760,
+        "free": 110899769344
+      },
+      "archive": {
+        "total": 473321816064,
+        "used": 27993493504,
+        "free": 421209661440
+      }
+    },
+    "space_after": {
+      "working": {
+        "total": 234622398464,
+        "used": 99440386048,
+        "free": 123189293056
+      },
+      "archive": {
+        "total": 473321816064,
+        "used": 29994676224,
+        "free": 419208478720
+      }
+    },
+    "raw_working_bytes_removed": 12288297397,
+    "archive_mount": {
+      "target": "/",
+      "fstype": "ext4",
+      "uuid": "c9d694b9-61a8-4918-aa6d-6379cd1b8b03",
+      "system_disk": true
+    },
+    "note": "Superseded pilot and controlled-stop trial only. Exact compressed evidence, reports and features retained; original admission verdicts unchanged. No corpus sessions removed."
+  }
+}

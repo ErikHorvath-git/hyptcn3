@@ -1286,3 +1286,27 @@ dobiehal bez zmeny zdrojov; jeho prípadný kladný verdikt nie je prijatím
 po zistení chyby. Oprava sa overí novým pilotom s aktuálnym meracím kódom.
 Predchádzajúca skúška archívu porovnávala iba prvý súvislý úsek a túto
 hranicu nepokrývala; jej deklarovaný rozsah zostáva nezmenený.
+
+Pôvodný nezmenený audit dobehol a vykázal
+416 {{res:collection_pilot_pool_20261021_superseded.json:values.reported_windows}}
+okien a žiadny dodatočný výpadok. Známa chyba parsera tento pilot vylučuje
+z prijatia korpusu; výsledok logov zostáva samostatným zistením.
+[`collection_pilot_pool_20261021_superseded.json`](../data/results/collection_pilot_pool_20261021_superseded.json)
+uchováva dôvod vyradenia a overenie, že aktuálna vstupná kontrola kampane
+starší pilot odmietne. Doslovný pôvodný audit ostáva v samostatnej kópii.
+
+Úplné `make test` po oprave prešlo: Python vykonal
+580 {{res:full_snapshot_reset_checks_20261021.json:values.passed}}
+úspešných testov a
+33 {{res:full_snapshot_reset_checks_20261021.json:values.skipped}}
+preskočených testov. C testy tiež prešli. Výstup a dôvody preskočenia sú
+v [`full_snapshot_reset_checks_20261021.json`](../data/results/full_snapshot_reset_checks_20261021.json)
+a pripojenom doslovnom logu. Tieto testy nenahrádzajú nový živý pilot.
+
+Pracovné RAM kópie vyradeného pilotu a riadeného testu zastavenia boli
+po overení kompresie, pôvodných hashov a väzby pilotu na jeho audit
+odstránené z SSD. Presné objemy, archívne manifesty a miesto pred a po sú
+v [`collection_preflight_cleanup_20261021.json`](../data/results/collection_preflight_cleanup_20261021.json).
+Metadáta, príznaky a pôvodné verdikty ostávajú na pôvodných cestách;
+komprimované RAM dôkazy sú v archíve. Nový korpus tieto skúšobné behy
+neobsahuje. Skript údržby je zachovaný spolu s reportom.

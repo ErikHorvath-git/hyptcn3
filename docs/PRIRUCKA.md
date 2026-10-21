@@ -31,7 +31,7 @@ python3 -m pytest -q      # testy parsera a príznakov
 ```
 
 `make test` prejde celú cestu zberu nad syntetickým obrazom veľkosti
-16 MiB, ktorý si sám vyrobí. Testov je 574 prešlých a 33 preskočených v `pytest` (spolu 607 zozbieraných; preskočený test nie je prešiel) a 4 v C (`alarm_test`, `hole_test`, `perbin_test`, `retention_test`).
+16 MiB, ktorý si sám vyrobí. Testov je 580 prešlých a 33 preskočených v `pytest` (spolu 613 zozbieraných; preskočený test nie je prešiel) a 4 v C (`alarm_test`, `hole_test`, `perbin_test`, `retention_test`).
 
 ## 4. Ako vznikne snímka
 
@@ -70,7 +70,7 @@ zapíše.
 | adresár | čo rieši | kde začať čítať | súborov spolu / riadkov v `.c .h .py .sh .md` |
 |---|---|---|---|
 | `vmicollect/` | zberač snímok pamäte VM: C a eBPF nad QEMU/KVM | `vmicollect/src/collector.c` | 35 / 10 507 |
-| `guestparse/` | rekonštrukcia procesov, modulov a soketov zo snímky | `guestparse/view.py` | 32 / 6 810 |
+| `guestparse/` | rekonštrukcia procesov, modulov a soketov zo snímky | `guestparse/view.py` | 33 / 6 868 |
 | `features/` | per-bin príznakový vektor (referencia), okná, normalizácia | `features/perbin.py` | 27 / 5 352 |
 | `tcn/` | TCN, prediktor normálu, baseliny, tréning a skórovanie snímok | `tcn/score.py` | 15 / 2 610 |
 | `safeguard/` | spoločné príznaky, modely, balík a hostiteľský detektor | `safeguard/cli.py` | 16 / 3 308 |
@@ -245,7 +245,7 @@ znamenalo držať dve znenia toho istého. Nadpisy sú preto dosadené z neho, s
 | dokument | čo vlastní | riadkov |
 |---|---|---|
 | `docs/ARCHITEKTURA.md` | rozhrania, formát `.vmicd` a sidecaru, tok dát podrobne | 1166 |
-| `docs/MERANIA.md` | log meraní: čo, kedy, akým príkazom a s akým výsledkom | 1261 |
+| `docs/MERANIA.md` | log meraní: čo, kedy, akým príkazom a s akým výsledkom | 1312 |
 | `docs/LIMITACIE.md` | L1 až L18: čo systém nevie a čo z toho plynie pre text | 888 |
 | `docs/kontroly.md` | kontroly podozrivých vzorcov a validačný príkaz | 255 |
 | `HONESTY.md` | pravidlá pre čísla a slová v texte práce | 272 |

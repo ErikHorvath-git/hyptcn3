@@ -1,0 +1,91 @@
+make -C vmicollect
+make[1]: Entering directory '/home/eh/projects/hyptcn3/vmicollect'
+make[1]: Leaving directory '/home/eh/projects/hyptcn3/vmicollect'
+make -C vmicollect test
+make[1]: Entering directory '/home/eh/projects/hyptcn3/vmicollect'
+build/hole_test
+chunks=2 read_errors=1 filled_zero=131072 bytes_read=1966080
+OK: pamat za dierou sa zachovala, obraz je zhodny s referenciou
+build/perbin_test build/perbintest
+cyklus 0: stranky 384/640, binov 3, priznaky 4.169 ms
+cyklus 1: stranky 2/640, binov 3, priznaky 0.322 ms
+cyklus 0: stranky 384/640, binov 3, priznaky 3.677 ms
+cyklus 1: stranky 2/640, binov 3, priznaky 0.321 ms
+OK: 3 binov, invariant sedi, entropia 0/8 -> priemer 4, dva behy zhodne
+build/retention_test
+hold podla chain_id (delta zber)
+  OK   bez HOLD sa zmazal najstarsi retazec, najnovsi ostal
+  OK   HOLD s chain_id 100 drzi cely retazec 100
+  OK   HOLD s chain_id 200 drzi 200, retazec 100 sa zmazal
+  OK   bez HOLD ostal chraneny najnovsi retazec
+hold podla mena suboru drzi cely retazec
+  OK   HOLD s menom jednej delty drzi cely retazec 100
+  OK   HOLD presunuty na 200: retazec 100 sa zmazal
+hold podla mena pri raw zbere
+  OK   bez HOLD sa zmazal starsi raw subor
+  OK   HOLD s menom a.raw drzi raw subor pred retenciou
+  OK   po zruseni HOLD sa a.raw zmaze
+HOLD: komentare a prazdne riadky
+  OK   HOLD s komentarom a bielymi znakmi drzi retazec 100
+retention_test: VSETKO PRESLO (adresar: /tmp/vmic-retention-qJRH8j)
+build/alarm_test build/alarm_hook.so build/react_hook.so
+2026-10-21T01:14:27.326Z WARN  alarm: zdroj=example:pages_changed seq=3 score=5 retazec=777
+  OK   detektor sa nacital (alarm_hook.so)
+  OK   vmic_hooks_fire nad snimkou nad prahom -> OK
+  OK   alarm.json ma seq alarmu
+  OK   alarm.json ma chain_id
+  OK   alarm.json ma skore
+  OK   alarm.json ma zdroj
+  OK   alarm.json ma cas
+  OK   alarm.json ma pole top_bins
+  OK   alarms.jsonl ma prave jeden riadok
+  OK   marker HOLD obsahuje chain_id alarmu (flight recorder)
+  OK   detektor prijal alarm cez vmic_hook_alarm (1 riadok)
+  OK   react_hook dostal alarm a zapisal akciu
+  OK   react_hook odmeral latenciu alarm->reakcia
+  OK   snimka pod prahom nevyhlasi dalsi alarm
+alarm_test: VSETKO PRESLO (adresar: /tmp/vmic-alarm-5lkBxC)
+build/vmicollect selftest build/selftest
+2026-10-21T01:14:27.362Z INFO  selftest: pracovny adresar build/selftest
+2026-10-21T01:14:27.393Z INFO  selftest: vytvoreny obraz build/selftest/memory.img (16 MiB, druha polovica nulova)
+2026-10-21T01:14:27.393Z INFO  file: 'build/selftest/memory.img' otvoreny, 16777216 B
+2026-10-21T01:14:27.393Z INFO  VM 'selftest' [file]: RAM 16.00 MiB, max_paddr 0x1000000, vCPU 0, strankovanie n/a
+2026-10-21T01:14:27.393Z INFO  zbierane oblasti: 1, spolu 16.00 MiB
+2026-10-21T01:14:27.746Z INFO  #0 PLNA   8.02 MiB/16.00 MiB  stranky 2048/4096 (50.00 %)  pauza 0.0 ms  citanie 24.3 ms  spolu 352.2 ms
+2026-10-21T01:14:27.783Z INFO  #1 delta  16.00 KiB/16.00 MiB  stranky 3/4096 (0.07 %)  pauza 0.0 ms  citanie 4.9 ms  spolu 37.8 ms
+2026-10-21T01:14:27.825Z INFO  #2 delta  16.00 KiB/16.00 MiB  stranky 3/4096 (0.07 %)  pauza 0.0 ms  citanie 4.9 ms  spolu 41.8 ms
+2026-10-21T01:14:27.867Z INFO  #3 delta  16.00 KiB/16.00 MiB  stranky 3/4096 (0.07 %)  pauza 0.0 ms  citanie 10.6 ms  spolu 42.0 ms
+2026-10-21T01:14:27.897Z INFO  restore: vyberam najnovsi retazec 1792545267393
+2026-10-21T01:14:27.932Z INFO  restore: build/selftest/snapshots/selftest_000000_20261021T011427393Z.vmicd  seq=0  PLNA   2048 stranok
+2026-10-21T01:14:27.932Z INFO  restore: build/selftest/snapshots/selftest_000001_20261021T011427746Z.vmicd  seq=1  delta  3 stranok
+2026-10-21T01:14:27.932Z INFO  restore: build/selftest/snapshots/selftest_000002_20261021T011427783Z.vmicd  seq=2  delta  3 stranok
+2026-10-21T01:14:27.932Z INFO  restore: build/selftest/snapshots/selftest_000003_20261021T011427825Z.vmicd  seq=3  delta  3 stranok
+2026-10-21T01:14:27.963Z INFO  restore: hotovo -> build/selftest/restored.raw (16.00 MiB, 2057 zapisanych stranok)
+2026-10-21T01:14:27.975Z INFO  selftest: OK - obnoveny obraz je bajt po bajte zhodny
+2026-10-21T01:14:27.975Z INFO  file: 'build/selftest/memory.img' otvoreny, 16777216 B
+2026-10-21T01:14:27.976Z INFO  VM 'selftest' [file]: RAM 16.00 MiB, max_paddr 0x1000000, vCPU 0, strankovanie n/a
+2026-10-21T01:14:27.976Z INFO  zbierane oblasti: 1, spolu 16.00 MiB
+2026-10-21T01:14:28.192Z INFO  #0  16.00 MiB (8.00 MiB na disku)  pauza 0.0 ms  citanie 85.9 ms  186 MiB/s  spolu 215.8 ms
+2026-10-21T01:14:28.301Z INFO  selftest: OK - raw snimka ma spravny SHA-256
+2026-10-21T01:14:28.301Z INFO  selftest: VSETKO PRESLO. Data su v build/selftest
+make[1]: Leaving directory '/home/eh/projects/hyptcn3/vmicollect'
+python3 -m pytest -q
+........................................................................ [ 11%]
+......sss...................................................s........... [ 23%]
+.........................ssssss.........s............................... [ 35%]
+............sss..........sss.......................ssss..........s.sssss [ 46%]
+ssssss.................................................................. [ 58%]
+........................................................................ [ 70%]
+........................................................................ [ 82%]
+........................................................................ [ 93%]
+.....................................                                    [100%]
+
+POZOR: preskocilo sa 33 testov - preskoceny test NIE JE presiel.
+   19x Skipped: chyba validacna snimka /var/tmp/vmic-val (nastav GUESTPARSE_VAL)
+    7x Skipped: chyba snimka z ineho bootu: /home/eh/projects/hyptcn3/data/sessions/20260918T154914Z_validate/snap/hyptcn-guest_000000_20260918T154916673Z.vmicd
+    2x Skipped: retazec delta snimok nie je na tomto stroji: /var/tmp/vmic-delta
+    2x Skipped: chyba delta retazec /var/tmp/vmic-delta (nastav GUESTPARSE_DELTA)
+    1x Skipped: realna plna snimka nie je na tomto stroji (skusane: /home/eh/projects/hyptcn3/data/sessions/20260918_validate2/snap, /var/tmp/vmic-val)
+    1x Skipped: retazec delta snimok s C sidecarmi nie je na tomto stroji: /var/tmp/perbin_c/on
+    1x Skipped: mini snimka neobsahuje ziadnu stranku textu jadra
+580 passed, 33 skipped in 79.35s (0:01:19)

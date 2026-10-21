@@ -1,0 +1,19 @@
+{
+  "commit": "c6846116fe671b240bdc49e60427c8bc5045b75b",
+  "date": "2026-10-21T01:19:47.897144+00:00",
+  "host": "Linux-7.2.9+deb13-amd64-x86_64-with-glibc2.41",
+  "guest": null,
+  "command": "env PATH=\"$PWD/.venv/bin:$PATH\" make test",
+  "n": 613,
+  "values": {
+    "passed": 580,
+    "skipped": 33,
+    "python_tests_s": 79.35,
+    "make_exit_code": 0,
+    "c_tests_passed": true,
+    "log": "data/results/collection_preparation_20261021/make-test.log",
+    "log_sha256": "7e024532708e6373e5d132360be37e09c242de612f81dbefd620fd759a0b8a21",
+    "parser_sha256": "ff9ab762a2f1ca364a18c2c800133522e856391fd3fb5def6dfba598f4625e95",
+    "note": "Host-side unit and integration tests; no live guest measurement. Skips are explicitly listed in the log and are not passes."
+  }
+}
