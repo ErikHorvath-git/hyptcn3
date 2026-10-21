@@ -97,6 +97,10 @@ class VmicdImage:
     ktore v retazci nie su, su nulove - presne tak, ako ich zberac nenasiel
     (diera vo fyzickom priestore alebo nedotknuta pamat).
 
+    Kazda dalsia plna snimka nahradi cely stav. Jej vynechane stranky su
+    nulove, preto sa nesmu zdedit z predchadzajuceho reťazca. Starsia
+    historia sa aj tak overuje; nova baseline nezakryva chybajuce delty.
+
     Retazec sa pri otvoreni overuje (validate_chain). Kontrolu sa da vypnut
     iba vyslovne, parametrom validate=False - sluzi na skumanie rozbitych
     snimok v testoch, nie na bezne citanie.
@@ -172,6 +176,10 @@ class VmicdImage:
             raise ChainError(
                 "%s: subor je skrateny - hlavicka slubuje %d zaznamov "
                 "(%d B), subor ma %d B" % (path, h["records"], need, size))
+        # Full checkpoints omit zero pages. Keeping an older entry for an
+        # omitted page would resurrect bytes that this checkpoint replaced.
+        if h["full"]:
+            self.index.clear()
         f = open(path, "rb")
         self.files[path] = f
         self.page_size = psz
@@ -262,7 +270,7 @@ def validate_chain(headers):
     cast "OVERENIE SUVISLOSTI RETAZCA"):
 
       1. retazec nie je prazdny;
-      2. vsetky casti maju rovnaky chain_id;
+      2. chain_id sa smie zmenit iba na plnej snimke;
       3. subory su v poradi rastuceho seq a ziadne seq sa neopakuje;
       4. prva cast je PLNA snimka (baseline), inak sa delty aplikuju na nic;
       5. seq su suvisle - ziadna cast nesmie chybat;

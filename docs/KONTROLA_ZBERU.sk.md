@@ -142,3 +142,24 @@ pripočítava núdzovú rezervu protokolu. Pracovný SSD potrebuje miesto na
 nekomprimovanú session; HDD uchováva komprimovaný korpus. Ide o odhad zo
 starého workloadu, ktorý treba porovnať s novým prijatým pilotom a náročnými
 profilmi. `campaign.py init` vykoná vlastný prepočet a kontrolu voľného miesta.
+
+## Reset pamäte pri ďalšej plnej snímke
+
+Kontrola pred ostrým zberom odhalila chybu Python čítača: pri rekonštrukcii
+časovej osi cez ďalšiu plnú snímku zostávali v indexe aj stránky z jej
+predchodcov. Plná snímka vynecháva nulové stránky, preto sa chýbajúca
+stránka musí stať nulovou, nie zdediť starý obsah. Pri čítaní samotného
+nového reťazca sa chyba neprejavovala.
+
+Čítač teraz pri každej plnej snímke vyprázdni index a až potom načíta jej
+záznamy. Overenie celej predchádzajúcej histórie ostáva zachované: plná
+snímka nezakryje chýbajúcu deltu ani skrátený súbor. Regresné testy
+porovnávajú celý stav pamäte pred resetom, pri ňom a po nasledujúcej delte.
+
+Reálny pilot po zmene fondu spojení potvrdil aj tento problém parsera.
+Overenie opravy na hranici plnej snímky a na konci série je uložené v
+[`full_snapshot_reset_20261021.json`](../data/results/full_snapshot_reset_20261021.json).
+Pôvodné výstupy sa neprepisujú. Staršie rekonštrukcie, ktoré prechádzali
+cez ďalšiu plnú snímku, treba pred použitím znovu auditovať opraveným
+čítačom; úspešný audit logov tento problém pamäte nezistí. Starší pilot
+nespĺňa požiadavku na aktuálnu verziu extraktora a meracieho kódu.

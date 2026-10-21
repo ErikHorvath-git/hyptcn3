@@ -1259,3 +1259,30 @@ Test používal samostatný diagnostický protokol so skráteným zahrievaním;
 jeho plán je súčasťou reportu. Nie je pilotom pokrytia ani dátami korpusu.
 Neoveruje celú kampaň, jej reštarty skupín, opätovné spustenie ani konečný
 index. Záznam zachováva zdrojové hashe a kópiu prípravného runnera.
+
+## 2026-10-21 — oprava stavu pamäte po ďalšej plnej snímke
+
+[`full_snapshot_reset_20261021.json`](../data/results/full_snapshot_reset_20261021.json)
+dokladá chybu `guestparse.image.VmicdImage`: nová plná snímka nevyprázdnila
+index stránok z predchádzajúcej histórie. Stránky, ktoré v novej plnej
+snímke chýbali ako nulové, tak mohli niesť starý obsah. Pri reálnom pilote
+po nasadení poolu zostalo za druhou plnou snímkou
+140 {{res:full_snapshot_reset_20261021.json:values.before.obsolete_nonzero_pages}}
+takých nenulových stránok. Štyri varianty syntetického regresného testu
+chybu pred opravou zachytili; kontrola chýbajúcej alebo skrátenej histórie
+bola a zostáva samostatnou požiadavkou.
+
+Oprava vyprázdni index pred načítaním každej plnej snímky. Na reálnych
+dátach sa porovnal celý index fyzickej pamäte s nezávisle otvoreným novým
+reťazcom pri plnej snímke, nasledujúcej delte, obnovenom kontexte okna
+a poslednej snímke. Všetky
+4 {{res:full_snapshot_reset_20261021.json:n}}
+porovnania sa zhodovali. Rozsah a hashe zdrojov sú v reporte; čas týchto
+diagnostík sa pre súbeh s offline auditom nepoužíva ako výkonnostné meranie.
+
+Staršie výsledky sa neprepisujú. Rekonštrukcie prechádzajúce cez ďalšiu
+plnú snímku potrebujú nový audit pred použitím. Pôvodný audit tohto pilotu
+dobiehal bez zmeny zdrojov; jeho prípadný kladný verdikt nie je prijatím
+po zistení chyby. Oprava sa overí novým pilotom s aktuálnym meracím kódom.
+Predchádzajúca skúška archívu porovnávala iba prvý súvislý úsek a túto
+hranicu nepokrývala; jej deklarovaný rozsah zostáva nezmenený.
