@@ -301,13 +301,15 @@ def objekty_z_pohladu(view):
 # ------------------------------------------------------------ jedna snimka
 
 
-def vektor_snimky(snapshot, profil, seq=None, predch=None):
+def vektor_snimky(snapshot, profil, seq=None, predch=None, cursor=None):
     """
     Vektor jednej snimky retazca. Vracia (vektor, stav, poznamky).
 
     `seq` urcuje, po ktoru cast retazca sa stav pamate rekonstruuje (rovnako
     ako 'vmicollect restore --until'); None znamena poslednu cast.
     `predch` je `stav` z predchadzajucej snimky, alebo None pri prvej.
+    `cursor` (guestparse.image.ChainCursor) rekonstruuje pamat inkrementalne;
+    vysledok je rovnaky ako bez neho.
     """
     heads = _chain_parts(snapshot, until_seq=seq)
     # 'full' je z hlavicky .vmicd suboru tejto snimky, nie z poradia v
@@ -321,11 +323,14 @@ def vektor_snimky(snapshot, profil, seq=None, predch=None):
     if predch is not None and predch.get("layout", layout) != layout:
         raise FeatureError("zmena rozlozenia pamate pocas sedenia")
 
-    view, img = build_view(snapshot, profil, until_seq=seq)
+    shared = cursor is not None and seq is not None
+    image = cursor.image_at(seq) if shared else None
+    view, img = build_view(snapshot, profil, until_seq=seq, image=image)
     try:
         obj, stav, pozn = objekty_z_pohladu(view)
     finally:
-        img.close()
+        if not shared:
+            img.close()
 
     stav["layout"] = layout
     stats = side.get("stats", {})
@@ -406,6 +411,18 @@ def retazec(snapshot, profil, max_medzera_s=7.5, *, quality_policy=LEGACY_POLICY
     if quality_policy not in (LEGACY_POLICY, BEHAVIOR_POLICY):
         raise ValueError("unsupported feature quality policy")
     heads = _vsetky_hlavicky(snapshot)
+    # Jeden kurzor na sedenie: kazda cast retazca sa indexuje raz, nie znova
+    # pri kazdej dalsej snimke (vysledok je rovnaky ako open_image do seq).
+    from guestparse.image import ChainCursor
+    cursor = ChainCursor(snapshot) if os.path.isdir(snapshot) else None
+    try:
+        return _retazec_cyklus(snapshot, profil, max_medzera_s, quality_policy, heads, cursor)
+    finally:
+        if cursor is not None:
+            cursor.close()
+
+
+def _retazec_cyklus(snapshot, profil, max_medzera_s, quality_policy, heads, cursor):
     matica, snimky, poznamky, trvania = [], [], [], []
     seqs, casy, quality, perbin, chains = [], [], [], [], []
     biny, layout = None, None
@@ -429,7 +446,7 @@ def retazec(snapshot, profil, max_medzera_s=7.5, *, quality_policy=LEGACY_POLICY
                 or not 0 < now - previous[1] <= max_medzera_s):
             predch = None
         t0 = time.monotonic()
-        vektor, stav, pozn = vektor_snimky(snapshot, profil, h["seq"], predch)
+        vektor, stav, pozn = vektor_snimky(snapshot, profil, h["seq"], predch, cursor)
         trvania.append(time.monotonic() - t0)
         matica.append(vektor)
         snimky.append(os.path.basename(h["path"])[:-len(".vmicd")])

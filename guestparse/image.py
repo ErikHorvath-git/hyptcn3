@@ -196,6 +196,13 @@ class VmicdImage:
             self.index[idx] = (path, off + 8)   # neskorsi subor prepise starsi
             off += 8 + psz
 
+    def _extend(self, h):
+        """Pridaj dalsiu, uz overenu cast (ChainCursor); rovnaky stav ako nove otvorenie."""
+        self._load(h)
+        self.headers.append(h)
+        self.paths.append(h["path"])
+        self.seq_to = h["seq"]
+
     def _page(self, idx):
         loc = self.index.get(idx)
         if loc is None:
@@ -346,18 +353,8 @@ def validate_chain(headers):
                    prev["seq"], h["seq"], prev["seq"]))
 
 
-def chain_headers(directory, chain_id=None, until_seq=None, warn=True):
-    """
-    Precita hlavicky .vmicd v adresari a vyberie z nich jeden retazec.
-
-    V adresari moze lezat viac retazcov (kazda plna snimka zacina novy).
-    Miesanie dvoch retazcov by dalo nekonzistentnu pamat, preto sa berie
-    ten s najvyssim chain_id, ak sa nepovie inak. `until_seq` odreze
-    retazec po danom seq - rovnako ako `vmicollect restore --until`.
-
-    Subor, ktory sa neda precitat ako .vmicd, sa preskoci a NAHLASI sa
-    (C strana to robi rovnako, LOGW "nie je platny .vmicd subor").
-    """
+def _read_headers(directory, warn=True):
+    """Hlavicky vsetkych citatelnych .vmicd v adresari (necitatelne sa nahlasia)."""
     parts, skipped = [], []
     for name in sorted(os.listdir(directory)):
         if not name.endswith(".vmicd"):
@@ -377,7 +374,70 @@ def chain_headers(directory, chain_id=None, until_seq=None, warn=True):
             % (directory,
                " (%d suborov sa nedalo precitat)" % len(skipped)
                if skipped else ""))
+    return parts
 
+
+class ChainCursor:
+    """
+    open_image(adresar, until_seq=s) pre neklesajuce s bez opakovaneho citania.
+
+    Audit rekonstruuje kazdu snimku sedenia. Otvorenie od seq 0 pre kazdu z nich
+    prechadzalo indexy vsetkych predchodcov znova, takze cas snimky rastol s jej
+    poradim (2026-10-21: 16-27 ms na predchodcu). Kurzor kazdu cast indexuje raz.
+    Vyber casti aj validate_chain() su v kazdom kroku rovnake ako v
+    chain_headers(adresar, until_seq=s); ked vyber nie je predlzenim predosleho,
+    obraz sa postavi odznova. Vrateny obraz zdiela subory kurzora: zatvara sa
+    cez close() kurzora, nie obrazu.
+    """
+
+    def __init__(self, directory, warn=True):
+        self.directory, self.warn = directory, warn
+        self.parts = sorted(_read_headers(directory, warn), key=lambda h: h["seq"])
+        self.image, self.loaded = None, []
+
+    def image_at(self, until_seq):
+        if until_seq > self.parts[-1]["seq"]:
+            # Nove casti (zivy zber): rovnako ako chain_headers ich treba vidiet.
+            self.parts = sorted(_read_headers(self.directory, self.warn), key=lambda h: h["seq"])
+        sel = [h for h in self.parts if h["seq"] <= until_seq]
+        if not sel:
+            raise ChainError("%s: ziadna cast so seq <= %d" % (self.directory, until_seq))
+        validate_chain(sel)
+        n = len(self.loaded)
+        if self.image is None or len(sel) < n or sel[:n] != self.loaded:
+            self.close()
+            self.image = VmicdImage([h["path"] for h in sel])
+        else:
+            for h in sel[n:]:
+                self.image._extend(h)
+        self.loaded = list(sel)
+        return self.image
+
+    def close(self):
+        if self.image is not None:
+            self.image.close()
+        self.image, self.loaded = None, []
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *a):
+        self.close()
+
+
+def chain_headers(directory, chain_id=None, until_seq=None, warn=True):
+    """
+    Precita hlavicky .vmicd v adresari a vyberie z nich jeden retazec.
+
+    V adresari moze lezat viac retazcov (kazda plna snimka zacina novy).
+    Miesanie dvoch retazcov by dalo nekonzistentnu pamat, preto sa berie
+    ten s najvyssim chain_id, ak sa nepovie inak. `until_seq` odreze
+    retazec po danom seq - rovnako ako `vmicollect restore --until`.
+
+    Subor, ktory sa neda precitat ako .vmicd, sa preskoci a NAHLASI sa
+    (C strana to robi rovnako, LOGW "nie je platny .vmicd subor").
+    """
+    parts = _read_headers(directory, warn)
     if chain_id is None:
         pritomne = sorted({h["chain_id"] for h in parts})
         if until_seq is not None:

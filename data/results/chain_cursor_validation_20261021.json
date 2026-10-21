@@ -1,0 +1,189 @@
+{
+  "commit": "3a1754ece26ac09aa88a01e68ed895c7d6300d58",
+  "commit_dirty": true,
+  "commit_note": "Run on the working tree before committing the cursor; source_sha256 lists the exact verified files.",
+  "date": "2026-10-21T20:41:13.721265+00:00",
+  "host": "Linux-7.2.9+deb13-amd64-x86_64-with-glibc2.41",
+  "guest": {
+    "kernel": "6.1.0-42-cloud-amd64",
+    "boot_id": "e450bff0-3144-449c-b4e0-0d6ffe34c63a",
+    "machine_id": "180ac982142b4714a979599073c96cdd",
+    "stack_sha256": "a3436458cb1660c1e5f9b9001372b32b2242dfbf81d86d83e1de78e281ff9e10",
+    "stack_manifest": [
+      "54406cae17dca58ce0e68d0c83c56be364adba534cfd9c0dda23a494caf984ec  /opt/hyptcn-lab/services.py",
+      "d7372422553f866333177456ac6daec4847f5660c1c854a646e602d0be0fcf6c  /opt/hyptcn-lab/schema.sql",
+      "a8e5ef8843ebae83eed8691f8eb7e1d186448d36e4be7d4406efeaa96291d5e3  /opt/hyptcn-lab/guest_state.py",
+      "62f55e4374b5db4522d0ce84c911f26ccd580e8f55bc570c09ee63c64be234c6  /etc/nginx/conf.d/hyptcn-lab.conf",
+      "af75eee623f3c7a0b7a1c10a35c2216684c6f4b610d44e46560de137ef3d6962  /etc/systemd/system/hyptcn-lab@.service",
+      "nginx\t1.22.1-9+deb12u10",
+      "postgresql\t15+248+deb12u1",
+      "python3\t3.11.2-1+b1",
+      "python3-psycopg2\t2.9.5-1+b1"
+    ]
+  },
+  "command": ".venv/bin/python data/results/chain_cursor_validation_20261021/verify_cursor.py <restored session> <original audit npz> <report>; timing_tail.py <restored session>",
+  "n": 400,
+  "values": {
+    "session": "20261020T170034679155Z_diagnostic_bursty (diagnostic, rejected; restored from /home/eh/hyptcn3-archive/diagnostics with verified SHA-256)",
+    "index_checks": [
+      {
+        "seq": 0,
+        "pages": 186361,
+        "identical": true
+      },
+      {
+        "seq": 1,
+        "pages": 186623,
+        "identical": true
+      },
+      {
+        "seq": 2,
+        "pages": 186774,
+        "identical": true
+      },
+      {
+        "seq": 100,
+        "pages": 190385,
+        "identical": true
+      },
+      {
+        "seq": 358,
+        "pages": 210633,
+        "identical": true
+      },
+      {
+        "seq": 359,
+        "pages": 210633,
+        "identical": true
+      },
+      {
+        "seq": 360,
+        "pages": 203841,
+        "identical": true
+      },
+      {
+        "seq": 361,
+        "pages": 204391,
+        "identical": true
+      },
+      {
+        "seq": 362,
+        "pages": 204550,
+        "identical": true
+      },
+      {
+        "seq": 399,
+        "pages": 211416,
+        "identical": true
+      }
+    ],
+    "feature_checks": {
+      "rows_0_359_vs_original_audit": {
+        "matica_equal": true,
+        "perbin_equal": true,
+        "valid_equal": true,
+        "quality_equal": true,
+        "seq_equal": true,
+        "casy_equal": true
+      },
+      "rows_after_second_full_vs_no_cursor": {
+        "360": {
+          "equal": true,
+          "had_predecessor": true
+        },
+        "361": {
+          "equal": true,
+          "had_predecessor": true
+        },
+        "380": {
+          "equal": true,
+          "had_predecessor": true
+        },
+        "399": {
+          "equal": true,
+          "had_predecessor": true
+        }
+      }
+    },
+    "rows_360_399_differ_from_pre_reset_parser": 0,
+    "retazec_s_with_cursor": 684.3,
+    "retazec_extraction_s": {
+      "p50": 1.296,
+      "p95": 5.921,
+      "max": 9.023,
+      "sum": 682.411,
+      "mean_0_50": 1.108,
+      "mean_300_360": 1.465,
+      "mean_360_400": 5.445
+    },
+    "previous_audit_total_min": 41.8,
+    "isolated_row_seconds_340_399": {
+      "340": 1.62,
+      "341": 1.28,
+      "342": 1.26,
+      "343": 1.28,
+      "344": 1.27,
+      "345": 1.26,
+      "346": 1.24,
+      "347": 1.24,
+      "348": 1.25,
+      "349": 1.24,
+      "350": 1.25,
+      "351": 1.26,
+      "352": 1.28,
+      "353": 1.26,
+      "354": 1.32,
+      "355": 1.35,
+      "356": 1.33,
+      "357": 1.32,
+      "358": 1.33,
+      "359": 1.32,
+      "360": 2.25,
+      "361": 1.22,
+      "362": 1.22,
+      "363": 1.21,
+      "364": 1.22,
+      "365": 1.2,
+      "366": 1.36,
+      "367": 1.7,
+      "368": 1.25,
+      "369": 1.69,
+      "370": 1.26,
+      "371": 1.98,
+      "372": 1.34,
+      "373": 1.44,
+      "374": 1.59,
+      "375": 1.78,
+      "376": 1.23,
+      "377": 1.67,
+      "378": 1.8,
+      "379": 2.33,
+      "380": 2.38,
+      "381": 2.47,
+      "382": 2.18,
+      "383": 2.35,
+      "384": 2.51,
+      "385": 2.57,
+      "386": 2.42,
+      "387": 1.28,
+      "388": 1.27,
+      "389": 2.09,
+      "390": 1.2,
+      "391": 1.87,
+      "392": 1.81,
+      "393": 1.87,
+      "394": 2.17,
+      "395": 2.26,
+      "396": 2.3,
+      "397": 2.43,
+      "398": 2.54,
+      "399": 2.68
+    },
+    "source_sha256": {
+      "guestparse/image.py": "91e8f6ad19c6df8cee9ddb9cf9bc1e16ecb094fd92734abca48dd10f30411320",
+      "guestparse/view.py": "e0fc55e3b44d4897e0a9d9f3dd2091293aa113c5e179b7045897e56ca035f04d",
+      "features/snapshot.py": "d4f14adc74a0bb874d9858fe8fe083983ac2ec50b50d014d07d9d2a35509cb68"
+    },
+    "note": "Equivalence check of guestparse.image.ChainCursor against reopening the chain for each snapshot. Diagnostic data only; not a corpus session. Timings overlapped other host work (review agents) and are not an isolated benchmark; isolated rows 340-399 are listed separately."
+  }
+}

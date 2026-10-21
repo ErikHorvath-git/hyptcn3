@@ -877,7 +877,8 @@ class GuestView:
         }
 
 
-def build_view(image_path, profile_dir, banner_text=None, until_seq=None, *, expected_boot_id=None):
+def build_view(image_path, profile_dir, banner_text=None, until_seq=None, *, expected_boot_id=None,
+               image=None):
     """
     Otvori snimku, nacita profil a najde posun. Vracia (view, image).
 
@@ -889,12 +890,14 @@ def build_view(image_path, profile_dir, banner_text=None, until_seq=None, *, exp
     from .profile import Profile
 
     expected_boot_id = capture_boot_id(image_path, expected_boot_id)
-    img = open_image(image_path, until_seq=until_seq)
+    # `image` = obraz z ChainCursor (rovnaky stav ako open_image); patri kurzoru.
+    img = open_image(image_path, until_seq=until_seq) if image is None else image
     try:
         prof = Profile.from_dir(profile_dir)
         view = GuestView(img, prof, expected_boot_id)
         view.resolve(banner_text)
     except BaseException:
-        img.close()
+        if image is None:
+            img.close()
         raise
     return view, img
