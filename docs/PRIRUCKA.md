@@ -75,7 +75,7 @@ zapíše.
 | `tcn/` | TCN, prediktor normálu, baseliny, tréning a skórovanie snímok | `tcn/score.py` | 15 / 2 610 |
 | `safeguard/` | spoločné príznaky, modely, balík a hostiteľský detektor | `safeguard/cli.py` | 16 / 3 308 |
 | `profiles/` | profil jadra hosťa: symboly a offsety polí štruktúr | `profiles/debian12-6.1.0-42-cloud-amd64/README.md` | jeden adresár na boot hosťa — pozri L17 |
-| `scripts/` | root behy, príkazy v hosťovi, kontroly tvrdení | `scripts/root_run.sh` | 58 / 13 151 |
+| `scripts/` | root behy, príkazy v hosťovi, kontroly tvrdení | `scripts/root_run.sh` | 58 / 13 152 |
 | `lab/` | trvalé benígne API služby, PostgreSQL a nginx vo VM | `lab/services.py` | 7 / 471 |
 | `data/` | výsledkové JSONy z meraní (`data/results/`) a pozemná pravda odobratá v hosťovi (`data/sessions/`); samotné snímky `.vmicd` sú mimo gitu (`data/raw/`) | `data/results/2026-09-18_zmrazeny_host/README.md` | rastie s každým meraním, nepočíta sa |
 

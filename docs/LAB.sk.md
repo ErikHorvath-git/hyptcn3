@@ -164,8 +164,8 @@ počas kampane. Revízia 2026-10-21 zistila, že posledné tri časovače ešte 
 `systemd-tmpfiles-clean` by spadol do prvej session každej bootovej skupiny,
 `logrotate` a `dpkg-db-backup` o polnoci. Logy laboratória `logrotate`
 nerotuje (sú mimo `/var/log/nginx/`). Identita hosťa obsahuje zoznam
-načítaných časovačov, takže znovu zapnutý časovač zmení prostredie a kampaň
-zastaví pred ďalšou session.
+aktívnych časovačov, takže znovu zapnutý časovač (najneskôr po reštarte
+skupiny) zmení prostredie a kampaň zastaví pred ďalšou session.
 
 Incident 2026-10-20: adresár logov mal najprv práva `0750`. Pracovné procesy
 nginx (`www-data`) preto po uzavretí segmentu nemohli log znovu otvoriť

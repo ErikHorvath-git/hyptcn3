@@ -193,8 +193,9 @@ def guest_identity(p):
         "sha256sum /opt/hyptcn-lab/services.py /opt/hyptcn-lab/schema.sql /opt/hyptcn-lab/guest_state.py "
         "/etc/nginx/conf.d/hyptcn-lab.conf /etc/systemd/system/hyptcn-lab@.service && "
         "dpkg-query -W nginx postgresql python3 python3-psycopg2 && "
-        # Maintenance timers would add unplanned activity; none may be loaded (lab/install.sh).
-        "echo \"timers: $(systemctl list-timers --all --no-legend | awk '{print $(NF-1)}' | sort | tr '\\n' ' ')\"")
+        # Active (waiting) timers can start unplanned work; lab/install.sh leaves none.
+        "echo \"timers: $(systemctl list-units --type=timer --state=active --no-legend --plain"
+        " | awk '{print $1}' | sort | tr '\\n' ' ')\"")
     command = [sys.executable, ROOT / "scripts/labctl.py", "exec", "--domain", p["domain"],
                "--guest-command", identity_command]
     lines = subprocess.check_output(user_command(command), cwd=ROOT, text=True, timeout=150).strip().splitlines()
