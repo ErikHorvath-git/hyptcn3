@@ -65,7 +65,9 @@ Libvirt 11 pri vypnutí hostiteľa VM session démona uloží (`reason=saved`
 v `~/.cache/libvirt/qemu/log/hyptcn-lab.log`) a pri ďalšom štarte démona ju
 obnoví (`-incoming defer`). Obnovená VM má rovnaký boot ID, ale iný proces
 QEMU a do zásahu NTP aj zastarané hodiny. Zberový runner preto zaznamenáva
-identitu procesu QEMU a pred meraním kontroluje posun hodín hosťa.
+identitu procesu QEMU a pred meraním kontroluje posun hodín hosťa. Kampaň
+identitu procesu uloží pri vzniku bootovej skupiny; obnovená alebo
+reštartovaná VM uprostred skupiny kampaň zastaví pred ďalšou session.
 
 Požiadavky hostiteľa: KVM, libvirt s používateľskou session, `virsh`,
 `qemu-img`, `passt`, Python a používateľský systemd. Vo VM treba nginx,
@@ -155,8 +157,15 @@ Qemu-guest-agent tu slúži orchestrácii a zberu dôkazov; RAM číta hostiteľ
 zberač.
 
 V hosťovi sú vypnuté časovače `apt-daily`, `apt-daily-upgrade`, `man-db`,
-`fstrim` a `e2scrub_all`. Údržba a aktualizácie nie sú súčasťou modelu záťaže
-a menili by prostredie počas kampane.
+`fstrim`, `e2scrub_all`, `logrotate` a `dpkg-db-backup`; statický
+`systemd-tmpfiles-clean.timer` (15 min po boote, potom denne) je maskovaný.
+Údržba a aktualizácie nie sú súčasťou modelu záťaže a menili by prostredie
+počas kampane. Revízia 2026-10-21 zistila, že posledné tri časovače ešte bežali:
+`systemd-tmpfiles-clean` by spadol do prvej session každej bootovej skupiny,
+`logrotate` a `dpkg-db-backup` o polnoci. Logy laboratória `logrotate`
+nerotuje (sú mimo `/var/log/nginx/`). Identita hosťa obsahuje zoznam
+načítaných časovačov, takže znovu zapnutý časovač zmení prostredie a kampaň
+zastaví pred ďalšou session.
 
 Incident 2026-10-20: adresár logov mal najprv práva `0750`. Pracovné procesy
 nginx (`www-data`) preto po uzavretí segmentu nemohli log znovu otvoriť

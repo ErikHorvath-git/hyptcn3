@@ -43,9 +43,14 @@ def lab(tmp_path, monkeypatch):
     write_new(directory / "campaign.json", manifest)
     state = {"directory": directory, "manifest": manifest, "p": p, "rows": rows,
              "captures": captures, "calls": [], "boot": "pilot-boot", "reboots": 0,
+             "qemu": {"pid": 4242, "start_ticks": 1, "host_boot": "host-boot"},
              "capture_complete": True, "audit_accepted": True, "interrupt_audit": False,
-             "truncate_audit": False}
+             "truncate_audit": False, "preflight_failures": 0, "stop_during_capture": False,
+             "audit_measurement_dirty": []}
     monkeypatch.setattr(c, "COLLECTIONS", captures)
+    monkeypatch.setattr(c, "BASE", tmp_path)
+    monkeypatch.setattr(c, "RETRY_PAUSE_S", 0)
+    monkeypatch.setattr(collection, "qemu_process", lambda domain: state["qemu"])
     monkeypatch.setattr(os, "geteuid", lambda: 0)
     monkeypatch.setenv("SUDO_USER", "test-owner")
     monkeypatch.setattr(collection, "user_command", lambda args: list(map(str, args)))
@@ -68,16 +73,26 @@ def lab(tmp_path, monkeypatch):
             sid = command[command.index("--session-id") + 1]
             row = next(r for r in rows if r["session_id"] == sid)
             assert command[command.index("--expected-boot-id") + 1] == state["boot"]
+            assert json.loads(command[command.index("--expected-qemu") + 1]) == state["qemu"]
             assert kw["lock_fd"] >= 0
             src = captures / sid
             src.mkdir()
-            (src / "raw").mkdir()
-            (src / "raw/frame.vmicd").write_bytes(b"synthetic RAM " + sid.encode())
             identity = {**env, "boot_id": state["boot"]}
             write_new(src / "session.json", {**row, "schema": "hyptcn3/collection-session/1",
-                       "campaign_id": manifest["id"], "commit": manifest["commit"], "commit_dirty": False,
+                       "campaign_id": manifest["id"], "commit": manifest["commit"], "commit_dirty": True,
+                       "measurement_dirty": [], "host_context": {"qemu": state["qemu"]},
                        "protocol_sha256": manifest["protocol_sha256"], "guest_before": identity})
-            write_new(src / "end.json", {"completed": state["capture_complete"], "guest_after": identity})
+            if state["stop_during_capture"]:
+                c.request_stop(directory)
+            if state["preflight_failures"]:
+                state["preflight_failures"] -= 1
+                write_new(src / "end.json", {"completed": False, "measurement_started": False,
+                                             "error": "ValueError: preflight functional check failed"})
+                return 2
+            (src / "raw").mkdir()
+            (src / "raw/frame.vmicd").write_bytes(b"synthetic RAM " + sid.encode())
+            write_new(src / "end.json", {"completed": state["capture_complete"], "guest_after": identity,
+                                         "measurement_started": True})
             return 0 if state["capture_complete"] else 2
         assert "audit" in command
         state["calls"].append("audit")
@@ -92,7 +107,8 @@ def lab(tmp_path, monkeypatch):
             return 2
         row = next(r for r in rows if r["session_id"] == src.name)
         write_new(report, {"schema": "hyptcn3/collection-audit/1", "commit": manifest["commit"],
-                  "commit_dirty": False, "values": {"accepted": state["audit_accepted"],
+                  "commit_dirty": True, "measurement_dirty": state["audit_measurement_dirty"],
+                  "values": {"accepted": state["audit_accepted"],
                   "reasons": [] if state["audit_accepted"] else ["synthetic rejection"],
                   "protocol_sha256": manifest["protocol_sha256"], "extractor_sha256": manifest["extractor_sha256"],
                   "session_dir": str(src), "role": row["role"], "session_sha256": digest(src / "session.json"),
@@ -105,6 +121,7 @@ def lab(tmp_path, monkeypatch):
         assert len(set(reports)) == len(rows)
         c.update_state(directory, status="complete", stage="complete")
     monkeypatch.setattr(c, "finish_corpus", finish)
+    monkeypatch.setattr(c, "process_identity", lambda pid: {"alive": pid} if pid == os.getpid() else None)
     return state
 
 
@@ -304,3 +321,120 @@ def test_pilot_measurement_provenance_must_match_current_code(monkeypatch):
     assert c.measurement_changes({"measurement_sha256": {**current, "lab/services.py": "old"}}) == ["lab/services.py"]
     assert c.measurement_changes({"measurement_sha256": {"scripts/collection.py": "a"}}) == ["lab/services.py"]
     assert c.measurement_changes({}) == ["<pilot predates measurement provenance>"]
+
+
+def test_attempt_that_never_measured_is_kept_and_retried_in_the_same_boot(lab):
+    lab["preflight_failures"] = 1
+    assert c.execute(lab["directory"], stop_after=1) == 0
+    sid = lab["rows"][0]["session_id"]
+    retired = lab["captures"] / (sid + ".attempt-1")
+    assert read_json(retired / "end.json")["measurement_started"] is False
+    record = read_json(lab["directory"] / "attempts" / (sid + ".attempt-1.json"))
+    assert record["directory"] == str(retired) and "preflight" in record["reason"]
+    assert lab["calls"] == ["reboot", "capture", "capture", "audit"]
+    assert (lab["captures"] / sid / "raw").is_symlink()  # The retry was captured and archived.
+
+
+def test_retries_are_bounded_per_run_and_resume_after_review(lab):
+    lab["preflight_failures"] = c.MAX_ATTEMPTS
+    with pytest.raises(ValueError, match="ended before measurement"):
+        c.execute(lab["directory"])
+    sid = lab["rows"][0]["session_id"]
+    assert lab["calls"].count("capture") == c.MAX_ATTEMPTS
+    assert sorted(p.name for p in lab["captures"].glob(sid + "*")) == [
+        sid, *(f"{sid}.attempt-{n}" for n in range(1, c.MAX_ATTEMPTS))]
+    assert read_json(lab["directory"] / "status.json")["stage"] == "error"
+    # After the operator has removed the cause, a new run retires the last attempt first.
+    assert c.execute(lab["directory"], stop_after=1) == 0
+    assert (lab["captures"] / f"{sid}.attempt-{c.MAX_ATTEMPTS}").is_dir()
+    assert lab["reboots"] == 1
+
+
+def test_measured_attempt_is_never_retried(lab):
+    lab["capture_complete"] = False
+    with pytest.raises(ValueError, match="incomplete capture"):
+        c.execute(lab["directory"])
+    assert not list(lab["captures"].glob("*.attempt-*"))
+    assert not list((lab["directory"] / "attempts").glob("*.attempt-*.json"))
+
+
+def test_stop_request_ends_the_run_at_the_next_session_boundary(lab):
+    lab["stop_during_capture"] = True
+    assert c.execute(lab["directory"]) == 0
+    state = read_json(lab["directory"] / "status.json")
+    assert (state["status"], state["stage"], state["message"]) == ("stopped", "between-sessions", "operator stop request")
+    assert lab["calls"] == ["reboot", "capture", "audit"]  # The current session finished and was archived.
+    assert not (lab["directory"] / "stop-request.json").exists()
+    assert len(list((lab["directory"] / "events").glob("*_stop-request.json"))) == 1
+    lab["stop_during_capture"] = False
+    c.execute(lab["directory"], stop_after=1)
+    assert lab["calls"].count("capture") == 2 and lab["reboots"] == 1
+
+
+def test_stale_stop_request_does_not_stop_a_new_run(lab):
+    write_new(lab["directory"] / "stop-request.json", {"left": "by a crashed run"})
+    c.execute(lab["directory"], stop_after=1)
+    assert lab["calls"].count("capture") == 1
+    assert len(list((lab["directory"] / "events").glob("*_stop-request-stale.json"))) == 1
+
+
+def test_stop_request_needs_a_running_campaign(lab):
+    c.update_state(lab["directory"], status="stopped", stage="error")
+    with pytest.raises(ValueError, match="not running"):
+        c.request_stop(lab["directory"])
+    assert not (lab["directory"] / "stop-request.json").exists()
+
+
+def test_closed_campaign_cannot_run_and_releases_its_groups(lab):
+    c.execute(lab["directory"], stop_after=1)
+    group = lab["rows"][0]["group"]
+    assert not c.closed_campaign(lab["manifest"]["id"])
+    c.close(lab["directory"], "first session showed a lab defect; superseded by a new campaign")
+    record = read_json(lab["directory"] / "closed.json")
+    assert record["status_before"]["stage"] == "between-sessions"
+    assert read_json(Path(lab["manifest"]["archive_dir"]) / "closed.json") == record
+    assert read_json(lab["directory"] / "status.json")["status"] == "closed"
+    assert c.closed_campaign(lab["manifest"]["id"]) and not c.closed_campaign("../" + lab["manifest"]["id"])
+    assert read_json(lab["captures"] / lab["rows"][0]["session_id"] / "session.json")["group"] == group
+    with pytest.raises(ValueError, match="closed"):
+        c.execute(lab["directory"])
+    with pytest.raises(ValueError, match="already closed"):
+        c.close(lab["directory"], "again")
+    assert lab["calls"].count("capture") == 1
+
+
+def test_vm_restore_inside_a_group_stops_before_next_capture(lab):
+    c.execute(lab["directory"], stop_after=1)
+    lab["qemu"] = {**lab["qemu"], "pid": 4343, "start_ticks": 2}  # Same guest boot, new QEMU process.
+    with pytest.raises(ValueError, match="VM process changed inside a group"):
+        c.execute(lab["directory"])
+    assert lab["calls"].count("capture") == 1
+
+
+def test_audit_from_changed_measurement_code_is_ignored_and_redone(lab):
+    lab["audit_measurement_dirty"] = ["scripts/collection.py"]
+    with pytest.raises(ValueError, match="audit provenance"):
+        c.execute(lab["directory"])
+    sid = lab["rows"][0]["session_id"]
+    assert not (lab["directory"] / "attempts" / (sid + ".audit.json")).exists()
+    lab["audit_measurement_dirty"] = []
+    c.execute(lab["directory"], stop_after=1)
+    reports = sorted((lab["captures"] / sid).glob("campaign_audit_*.json"))
+    assert len(reports) == 2 and lab["calls"].count("audit") == 2
+    selected = read_json(lab["directory"] / "attempts" / (sid + ".audit.json"))
+    assert selected["path"] == str(reports[1])
+    events = [read_json(e).get("message") or "" for e in (lab["directory"] / "events").glob("*.json")]
+    assert any(m.startswith("ignored audit made from a changed source tree") for m in events)
+
+
+def test_ended_before_measurement_needs_proof_of_no_ram(tmp_path):
+    session = tmp_path / "s"
+    assert not c.ended_before_measurement(session)  # Missing directory.
+    session.mkdir()
+    assert c.ended_before_measurement(session)  # Failed before its metadata existed.
+    write_new(session / "session.json", {})
+    assert not c.ended_before_measurement(session)  # No truthful end record (e.g. SIGKILL).
+    write_new(session / "end.json", {"measurement_started": False})
+    assert c.ended_before_measurement(session)
+    (session / "raw").mkdir()
+    assert not c.ended_before_measurement(session)  # Contradiction: keep it for review.

@@ -243,8 +243,11 @@ zatvorený terminál (SIGHUP) beh riadene ukončí ako neúplný.
 Pilot trvá približne 40 minút zberu plus zahrievanie. Runner vypne iba trvalý
 generátor tohto projektu a spustí vlastný meraný generátor. VM zostáva bežať.
 Pred zahrievaním overí, že nebeží iný generátor, zmeria posun hodín hosťa
-(nad 1 s ich synchronizuje a overí znova) a vykoná funkčnú kontrolu (token,
-katalóg, vytvorenie a čítanie objednávky, spracovanie workerom). Potom uzavrie
+(nad 0,25 s ich synchronizuje a overí znova; audit odmietne viac ako 1 s
+na začiatku aj na konci, nameraný drift bol pod 0,04 s/h), počká, kým
+`/healthz` vráti 200 (krok hodín dopredu krátko zneplatní heartbeat workera),
+a vykoná funkčnú kontrolu (token, katalóg, vytvorenie a čítanie objednávky,
+spracovanie workerom). Potom uzavrie
 segment logov nginx a overí, že sa v ňom nájdu request ID všetkých
 kontrolných požiadaviek. Zaznamená aj stav služieb a databázy. Väčšie logy
 hosťa prenáša až po zbere, mimo meraného intervalu.

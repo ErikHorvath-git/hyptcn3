@@ -29,9 +29,15 @@ install -m 644 nginx.conf /etc/nginx/conf.d/hyptcn-lab.conf
 systemctl daemon-reload
 # Package refreshes and maintenance jobs are not part of the benign workload
 # model; they would change the guest or add unplanned activity mid-campaign.
-for timer in apt-daily.timer apt-daily-upgrade.timer man-db.timer fstrim.timer e2scrub_all.timer; do
+# logrotate/dpkg-db-backup fire at midnight; systemd-tmpfiles-clean (static,
+# 15 min after boot, then daily) can only be masked. The lab's own logs are
+# cut between sessions by the collection runner. The runner records the
+# remaining timers in the guest identity, so a re-enabled one stops a campaign.
+for timer in apt-daily.timer apt-daily-upgrade.timer man-db.timer fstrim.timer e2scrub_all.timer \
+             logrotate.timer dpkg-db-backup.timer; do
     if systemctl list-unit-files "$timer" >/dev/null 2>&1; then systemctl disable --now "$timer" >/dev/null 2>&1 || true; fi
 done
+systemctl mask --now systemd-tmpfiles-clean.timer >/dev/null 2>&1
 systemctl enable hyptcn-lab@auth hyptcn-lab@catalog hyptcn-lab@orders hyptcn-lab@worker
 systemctl restart hyptcn-lab@auth hyptcn-lab@catalog hyptcn-lab@orders hyptcn-lab@worker
 nginx -t

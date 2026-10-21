@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 """Frozen benign collection campaign: reboot, capture, audit, archive, index.
 
-init/status need no root. launch/run need sudo for host eBPF, and use the
-original user's libvirt session. A failed capture or rejected audit stops the
-allocation; retries never silently replace a research session.
+init/status/request-stop/close need no root. launch/run need sudo for host
+eBPF, and use the original user's libvirt session. A failed capture or rejected
+audit stops the allocation; retries never silently replace a research session.
+Only an attempt that ended before its measured phase (no RAM image) is retried.
 """
 import argparse
 from datetime import datetime, timezone
@@ -29,6 +30,11 @@ from scripts.collection_archive import (archive_session, digest, guard_mount, mo
 BASE = ROOT / "data/campaigns"
 COLLECTIONS = ROOT / "data/collections"
 UNIT = "hyptcn-collection.service"
+CAMPAIGN_NAME = r"[a-zA-Z0-9][a-zA-Z0-9_-]{0,63}"
+# Attempts of one assignment that may end before the measured phase (failed
+# preflight, warmup or an operator stop there); the last one stops the campaign.
+MAX_ATTEMPTS = 3
+RETRY_PAUSE_S = 60
 
 
 def stamp():
@@ -149,7 +155,7 @@ def initialize(a):
     if guest_environment(identity) != guest_environment(meta["guest_before"]):
         raise ValueError("guest environment differs from accepted pilot")
     name = a.name or stamp() + "_benign_v2"
-    if not re.fullmatch(r"[a-zA-Z0-9][a-zA-Z0-9_-]{0,63}", name):
+    if not re.fullmatch(CAMPAIGN_NAME, name):
         raise ValueError("invalid campaign name")
     archive_root = Path(a.archive_root).absolute()
     mount = mount_identity(archive_root, allow_system=a.archive_on_system_disk)
@@ -178,11 +184,13 @@ def initialize(a):
     COLLECTIONS.mkdir(exist_ok=True, parents=True)
     archive_root.mkdir(exist_ok=True, parents=True)
     capacity_guard(manifest, p, len(planned["sessions"]))
-    # Reusing group names from another campaign would violate boot isolation.
+    # Group names repeat in every campaign of a protocol. Only a campaign
+    # explicitly closed by the operator releases them (its data stays).
     groups = {r["group"] for r in planned["sessions"]}
     for old in COLLECTIONS.glob("*/session.json"):
-        if read_json(old)["group"] in groups:
-            raise ValueError("planned group already has data; resume its original campaign: " + str(old))
+        doc = read_json(old)
+        if doc["group"] in groups and not closed_campaign(doc.get("campaign_id")):
+            raise ValueError("planned group already has data; resume or close its campaign: " + str(old))
     directory.mkdir(parents=True)
     for child in ("events", "groups", "attempts", "logs"):
         (directory / child).mkdir()
@@ -201,6 +209,11 @@ def initialize(a):
                       "capture_hours": planned["planned_hours"],
                       "archive": str(external)}, indent=2))
     return directory
+
+
+def closed_campaign(campaign_id):
+    return (isinstance(campaign_id, str) and re.fullmatch(CAMPAIGN_NAME, campaign_id) is not None
+            and (BASE / campaign_id / "closed.json").exists())
 
 
 def copy_exclusive(source, destination):
@@ -359,9 +372,16 @@ def ensure_group(directory, manifest, p, row):
     if guest_environment(current) != manifest["guest_environment"]:
         raise ValueError("guest environment changed")
     if ready.exists():
-        if current != read_json(ready)["identity"]:
+        group = read_json(ready)
+        if current != group["identity"]:
             raise ValueError("boot changed inside a group; preserve partial allocation for review")
-        return current
+        # A save/restore keeps the guest boot ID; the QEMU process shows it.
+        qemu = collection.qemu_process(p["domain"])
+        if qemu != group.get("qemu"):
+            raise ValueError(("VM process not found" if qemu is None else
+                              "VM process changed inside a group (restart or restore)")
+                             + "; preserve partial allocation for review")
+        return group
     intent = ready.with_suffix(".reboot-intent.json")
     if intent.exists():
         before = read_json(intent)["previous_boot"]
@@ -381,9 +401,13 @@ def ensure_group(directory, manifest, p, row):
     for existing in COLLECTIONS.glob("*/session.json"):
         if read_json(existing)["guest_before"]["boot_id"] == current["boot_id"]:
             raise ValueError("new group boot already belongs to another session")
-    write_new(ready, {"schema": "hyptcn3/campaign-group/1", "date": now(), "group": row["group"],
-                      "role": row["role"], "identity": current, "previous_boot": before})
-    return current
+    qemu = collection.qemu_process(p["domain"])
+    if qemu is None:
+        raise ValueError("VM process not found after the group reboot")
+    group = {"schema": "hyptcn3/campaign-group/1", "date": now(), "group": row["group"],
+             "role": row["role"], "identity": current, "qemu": qemu, "previous_boot": before}
+    write_new(ready, group)
+    return group
 
 
 def check_session(path, manifest, row, directory):
@@ -391,15 +415,26 @@ def check_session(path, manifest, row, directory):
     for k in ("role", "group", "scenario", "seed", "session_id"):
         if meta[k] != row[k]:
             raise ValueError("session differs from frozen assignment: " + k)
+    # Measurement sources, not the whole worktree: a note written meanwhile is not a different capture.
     if (meta.get("campaign_id") != manifest["id"] or meta["commit"] != manifest["commit"]
-            or meta["commit_dirty"] or meta["protocol_sha256"] != manifest["protocol_sha256"]
+            or meta.get("measurement_dirty") != [] or meta["protocol_sha256"] != manifest["protocol_sha256"]
             or guest_environment(meta["guest_before"]) != manifest["guest_environment"]):
         raise ValueError("session provenance differs from frozen campaign")
     group = read_json(directory / "groups" / (row["group"] + ".json"))
     if meta["guest_before"] != group["identity"]:
         raise ValueError("session boot differs from recorded campaign group")
+    if meta.get("host_context", {}).get("qemu") != group.get("qemu"):
+        raise ValueError("session VM process differs from recorded campaign group")
     end = read_json(path / "end.json") if (path / "end.json").exists() else {}
     return bool(end.get("completed") and end.get("guest_after") == meta["guest_before"])
+
+
+def audit_environment(doc, manifest):
+    """The verdict came from the frozen code; files outside measurement sources do not matter."""
+    v = doc["values"]
+    return (doc["commit"] == manifest["commit"] and doc.get("measurement_dirty") == []
+            and v["protocol_sha256"] == manifest["protocol_sha256"]
+            and v["extractor_sha256"] == manifest["extractor_sha256"])
 
 
 def audit_capture(directory, manifest, p, row, session, guard):
@@ -418,15 +453,22 @@ def audit_capture(directory, manifest, p, row, session, guard):
                 doc = read_json(report)
             except json.JSONDecodeError:
                 continue  # Interrupted write retained; next attempt uses a new path.
-            if doc.get("schema") == "hyptcn3/collection-audit/1":
+            if doc.get("schema") != "hyptcn3/collection-audit/1":
+                continue
+            if audit_environment(doc, manifest):
                 complete.append(report)
+            else:
+                # Written while HEAD or measurement code differed: kept, never selected.
+                # The frozen tree was verified before this call, so a new audit is valid.
+                update_state(directory, status="running", stage="audit", session=session.name,
+                             message="ignored audit made from a changed source tree: " + report.name)
         if len(complete) > 1:
             raise ValueError("multiple campaign audit verdicts require review")
         if complete:
             report = complete[0]
         else:
             report = session / f"campaign_audit_{stamp()}.json"
-            update_state(directory, status="running", stage="audit", session=session.name)
+            update_state(directory, status="running", stage="audit", session=session.name, message=None)
             command = collection.user_command([sys.executable, ROOT / "scripts/collection.py",
                                                "--protocol", directory / "protocol.json",
                                                "audit", session, "--out", report])
@@ -436,8 +478,7 @@ def audit_capture(directory, manifest, p, row, session, guard):
                 raise ValueError("audit did not produce a verdict; see campaign log")
     doc = read_json(report)
     v = doc["values"]
-    if (v["protocol_sha256"] != manifest["protocol_sha256"] or doc["commit"] != manifest["commit"]
-            or doc["commit_dirty"] or v["extractor_sha256"] != manifest["extractor_sha256"]
+    if (not audit_environment(doc, manifest)
             or v["session_dir"] != str(session) or v["role"] != row["role"]
             or v["session_sha256"] != digest(session / "session.json")
             or digest(v["features"]) != v["features_sha256"]):
@@ -445,6 +486,48 @@ def audit_capture(directory, manifest, p, row, session, guard):
     if not pointer.exists():
         write_new(pointer, {"path": str(report), "sha256": digest(report)})
     return report, v
+
+
+def ended_before_measurement(session):
+    """An attempt without measured phase or RAM image (failed preflight/warmup or a stop there)."""
+    if not session.is_dir() or (session / "raw").exists():
+        return False
+    if not (session / "session.json").exists():
+        return not (session / "end.json").exists()  # Failed while preparing its metadata.
+    end = session / "end.json"
+    return end.exists() and read_json(end).get("measurement_started") is False
+
+
+def retire_attempt(directory, manifest, row, session):
+    """Keep an attempt that never measured under a numbered name, so the assignment can run again."""
+    meta = read_json(session / "session.json") if (session / "session.json").exists() else None
+    if meta is not None and (meta.get("campaign_id"), meta.get("session_id")) != (manifest["id"], row["session_id"]):
+        raise ValueError("unexpected metadata in assignment directory: " + str(session))
+    end = read_json(session / "end.json") if (session / "end.json").exists() else {}
+    reason = end.get("error") or ("no session metadata" if meta is None else "no error recorded")
+    numbers = [int(n) for n in (p.name.rsplit("-", 1)[1] for p in session.parent.glob(session.name + ".attempt-*"))
+               if n.isdigit()]
+    number = max(numbers, default=0) + 1
+    target = session.with_name(f"{session.name}.attempt-{number}")
+    os.rename(session, target)
+    sync_dir(session.parent)
+    write_new(directory / "attempts" / f"{session.name}.attempt-{number}.json",
+              {"schema": "hyptcn3/campaign-attempt/1", "session": session.name, "attempt": number,
+               "directory": str(target), "reason": reason, "date": now(),
+               "note": "Ended before the measured phase without a RAM image; the assignment runs again "
+                       "in the same group boot. Kept for review, not part of the corpus."})
+    update_state(directory, status="running", stage="retry", session=session.name,
+                 message=f"attempt {number} ended before measurement: {reason}")
+
+
+def take_stop_request(directory):
+    """Consume an operator request to stop before the next capture."""
+    request = directory / "stop-request.json"
+    if not request.exists():
+        return False
+    os.replace(request, directory / "events" / f"{stamp()}_stop-request.json")
+    sync_dir(directory)
+    return True
 
 
 def archive_capture(directory, manifest, session, p, audit=None):
@@ -461,6 +544,8 @@ def execute(directory, *, stop_after=None):
     manifest, p = load_campaign(directory)
     if os.geteuid() != 0 or os.environ.get("SUDO_USER") != manifest["owner"]["name"]:
         raise ValueError("run with sudo from the campaign owner's account")
+    if (directory / "closed.json").exists():
+        raise ValueError("campaign was closed by the operator: " + read_json(directory / "closed.json")["reason"])
     interrupts = collection.Interrupts()
     owns_lock, inhibitor = False, None
     try:
@@ -472,6 +557,9 @@ def execute(directory, *, stop_after=None):
                 # The lock was free, so that process is gone: SIGKILL, crash or power loss.
                 update_state(directory, status="stopped", stage="unclean-end",
                              message="previous run ended without a final status; its session is incomplete")
+            if (directory / "stop-request.json").exists():
+                # A request is meant for a running campaign; one left by a previous run is not.
+                os.replace(directory / "stop-request.json", directory / "events" / f"{stamp()}_stop-request-stale.json")
             inhibitor = hold_sleep_inhibitor()
             update_state(directory, status="running", stage="preflight", pid=os.getpid(),
                          process_identity=process_identity(os.getpid()), inhibitor_pid=getattr(inhibitor, "pid", None),
@@ -498,19 +586,36 @@ def execute(directory, *, stop_after=None):
                 update_state(directory, status="running", stage="session-preflight", session=session.name,
                              group=row["group"], role=row["role"], scenario=row["scenario"],
                              position=i + 1, total=len(manifest["sessions"]), accepted_archived=len(reports))
-                if not session.exists():
+                if ended_before_measurement(session):
+                    retire_attempt(directory, manifest, row, session)  # Left by a previous run.
+                attempts = 0
+                while not session.exists():
+                    if take_stop_request(directory):
+                        update_state(directory, status="stopped", stage="between-sessions",
+                                     message="operator stop request")
+                        return 0
+                    if attempts:
+                        verify_frozen(directory, manifest, p)
+                    attempts += 1
                     capacity_guard(manifest, p, len(manifest["sessions"]) - i)
-                    identity = ensure_group(directory, manifest, p, row)
-                    update_state(directory, status="running", stage="capture", capture_started_at=now())
+                    group = ensure_group(directory, manifest, p, row)
+                    update_state(directory, status="running", stage="capture", capture_started_at=now(), message=None)
                     command = [sys.executable, ROOT / "scripts/collection.py", "--protocol", directory / "protocol.json",
                                "run", "--role", row["role"], "--group", row["group"], "--scenario", row["scenario"],
                                "--seed", str(row["seed"]), "--pilot-report", directory / "pilot.json",
                                "--session-id", session.name, "--campaign-id", manifest["id"],
-                               "--expected-boot-id", identity["boot_id"]]
+                               "--expected-boot-id", group["identity"]["boot_id"],
+                               "--expected-qemu", json.dumps(group["qemu"])]
                     rc = run_child(command, directory / "logs" / f"capture_{stamp()}.log", lock_fd=lock_fd,
                                    timeout=p["warmup_s"] + p["cycles"] * p["interval_s"] + 300, guard=guard)
                     if rc and not session.exists():
                         raise ValueError("capture could not start; see campaign log")
+                    if ended_before_measurement(session):
+                        if attempts >= MAX_ATTEMPTS:
+                            raise ValueError(f"{attempts} attempts of {session.name} ended before measurement; "
+                                             "see its end.json and the campaign logs")
+                        retire_attempt(directory, manifest, row, session)
+                        time.sleep(RETRY_PAUSE_S)
                 if not check_session(session, manifest, row, directory):
                     archive_capture(directory, manifest, session, p)
                     raise ValueError("incomplete capture archived; allocation stopped, no automatic replacement")
@@ -571,6 +676,8 @@ def launch(directory, stop_after=None):
     manifest, p = load_campaign(directory)
     if os.geteuid() != 0 or os.environ.get("SUDO_USER") != manifest["owner"]["name"]:
         raise ValueError("launch with sudo from the campaign owner's account")
+    if (directory / "closed.json").exists():
+        raise ValueError("campaign was closed by the operator")
     verify_frozen(directory, manifest, p)
     # KillMode=mixed: SIGTERM reaches only the runner, which stops its child in
     # order; anything left after it exits (or after the timeout) gets SIGKILL.
@@ -587,12 +694,50 @@ def launch(directory, stop_after=None):
     print(f"Log: journalctl -fu {UNIT}")
 
 
+def campaign_running(state):
+    return (state.get("status") == "running" and state.get("process_identity") is not None
+            and process_identity(state.get("pid")) == state["process_identity"])
+
+
+def request_stop(directory):
+    """Ask the running campaign to stop before its next capture; the current session is kept."""
+    directory = Path(directory).resolve()
+    load_campaign(directory)
+    if not campaign_running(read_json(directory / "status.json")):
+        raise ValueError("campaign is not running")
+    try:
+        write_new(directory / "stop-request.json", {
+            "schema": "hyptcn3/campaign-stop-request/1", "date": now(), "uid": os.getuid(),
+            "note": "The current session finishes, is audited and archived; no new capture starts."})
+    except FileExistsError:
+        raise ValueError("stop already requested") from None
+    print(f"Stop requested; follow: python3 scripts/campaign.py status {directory}")
+
+
+def close(directory, reason):
+    """Operator decision to end a stopped campaign: its data stays, its group names become reusable."""
+    directory = Path(directory).resolve()
+    manifest, _ = load_campaign(directory)
+    if not reason.strip():
+        raise ValueError("closing a campaign requires a reason")
+    with collection.collection_lock(COLLECTIONS):  # No runner of any campaign may be active.
+        state = read_json(directory / "status.json") if (directory / "status.json").exists() else {}
+        if state.get("status") in ("complete", "closed"):
+            raise ValueError("campaign is already " + state["status"])
+        guard_mount(manifest["archive_root"], manifest["archive_mount"])
+        write_new(directory / "closed.json", {
+            "schema": "hyptcn3/campaign-closed/1", "id": manifest["id"], "date": now(), "reason": reason,
+            "uid": os.getuid(), "status_before": state,
+            "note": "Operator decision. Captured, audited and archived sessions remain; no corpus index."})
+        copy_exclusive(directory / "closed.json", Path(manifest["archive_dir"]) / "closed.json")
+        update_state(directory, status="closed", stage="closed", message=reason)
+
+
 def status(directory):
     directory = Path(directory).resolve()
     manifest, p = load_campaign(directory)
     state = read_json(directory / "status.json")
-    state["running"] = (state.get("status") == "running" and state.get("process_identity") is not None
-                        and process_identity(state.get("pid")) == state["process_identity"])
+    state["running"] = campaign_running(state)
     if state.get("status") == "running" and not state["running"]:
         state["stale"] = True
         state["note"] = ("recorded as running but that process is not alive (SIGKILL, crash or power loss); "
@@ -619,11 +764,13 @@ def main(argv=None):
     init.add_argument("--archive-on-system-disk", action="store_true",
                       help="Explicitly allow an archive on the root filesystem (no second disk)")
     init.add_argument("--archive-compression", choices=["zstd", "none"], default="zstd")
-    for verb in ("run", "launch", "status", "verify-archives"):
+    for verb in ("run", "launch", "status", "verify-archives", "request-stop", "close"):
         cmd = sub.add_parser(verb)
         cmd.add_argument("directory", type=Path)
         if verb in ("run", "launch"):
             cmd.add_argument("--stop-after", type=int, help="Stop after this many newly archived sessions")
+        if verb == "close":
+            cmd.add_argument("--reason", required=True, help="Recorded operator decision")
     a = ap.parse_args(argv)
     if getattr(a, "stop_after", None) is not None and a.stop_after < 1:
         ap.error("stop-after must be positive")
@@ -635,6 +782,10 @@ def main(argv=None):
         launch(a.directory, a.stop_after)
     elif a.command == "run":
         return execute(a.directory, stop_after=a.stop_after)
+    elif a.command == "request-stop":
+        request_stop(a.directory)
+    elif a.command == "close":
+        close(a.directory, a.reason)
     else:
         manifest, _ = load_campaign(a.directory)
         guard_mount(manifest["archive_root"], manifest["archive_mount"])

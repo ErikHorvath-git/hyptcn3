@@ -133,3 +133,70 @@ def test_hangup_interrupts_like_sigterm():
 def test_only_running_generator_scripts_count_as_foreign_traffic(argv, expected):
     from scripts.collection import is_generator
     assert is_generator(argv) is expected
+
+
+def test_measurement_dirty_ignores_notes_reports_and_tests(monkeypatch):
+    from scripts import collection
+    status = (b" M scripts/collection.py\0?? scripts/campaign_report.py\0?? scripts/tests/test_new.py\0"
+              b"R  features/renamed.py\0features/original.py\0 M lab/README.md\0?? vmicollect/new.c\0")
+    calls = []
+    monkeypatch.setattr(collection.subprocess, "check_output", lambda args, **kw: calls.append(args) or status)
+    assert collection.measurement_dirty() == ["features/original.py", "features/renamed.py",
+                                              "scripts/collection.py", "vmicollect/new.c"]
+    assert calls[0][-len(collection.MEASUREMENT_DIRS):] == list(collection.MEASUREMENT_DIRS)
+    monkeypatch.setattr(collection.subprocess, "check_output", lambda args, **kw: b"")
+    assert collection.measurement_dirty() == []
+
+
+def test_working_storage_identity_ignores_device_names(monkeypatch):
+    from scripts import collection
+    seen = []
+    def findmnt(args, **kw):
+        seen.append(args)
+        return json.dumps({"filesystems": [{"target": "/w", "fsroot": "/work", "fstype": "ext4", "uuid": "u"}]})
+    monkeypatch.setattr(collection.subprocess, "check_output", findmnt)
+    assert collection.storage_identity("/w") == {"target": "/w", "fsroot": "/work", "fstype": "ext4", "uuid": "u"}
+    assert "SOURCE" not in seen[0][seen[0].index("-o") + 1]
+
+
+def test_preflight_waits_for_a_healthy_stack_after_a_clock_step(monkeypatch):
+    import io
+    import urllib.error
+    from scripts import collection
+
+    class Reply:
+        status = 200
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *exc):
+            return False
+
+    replies, rids = [503, 503, 200], []
+
+    def urlopen(request, timeout):
+        rids.append(request.get_header("X-request-id"))
+        code = replies.pop(0)
+        if code != 200:
+            raise urllib.error.HTTPError(request.full_url, code, "worker stale", {}, io.BytesIO())
+        return Reply()
+
+    monkeypatch.setattr(collection.urllib.request, "urlopen", urlopen)
+    monkeypatch.setattr(collection.time, "sleep", lambda s: None)
+    assert collection.wait_healthy("http://lab") == 3
+    assert len(set(rids)) == 3 and all(rid.replace("-", "").isalnum() and len(rid) <= 64 for rid in rids)
+
+    def refused(request, timeout):
+        raise ConnectionRefusedError()
+
+    monkeypatch.setattr(collection.urllib.request, "urlopen", refused)
+    with pytest.raises(ValueError, match="not healthy"):
+        collection.wait_healthy("http://lab", timeout=0)
+
+
+def test_clock_sync_margin_covers_a_session_of_measured_drift():
+    from scripts import collection
+    p = protocol(DEFAULT)
+    hours = (p["warmup_s"] + p["cycles"] * p["interval_s"]) / 3600
+    assert collection.CLOCK_SYNC_S + 0.04 * hours * 5 < 1.0  # Five times the drift seen on 2026-10-20.

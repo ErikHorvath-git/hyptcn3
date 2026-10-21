@@ -11,9 +11,10 @@ Runner spúšťa iba benígne profily existujúceho laboratória.
 
 VM aj stack musia byť pripravené podľa [LAB.sk.md](LAB.sk.md), pilot musí mať
 prijatý audit. Zdrojový strom musí byť commitnutý a čistý. `init` zaznamená
-UUID, mountpoint a súborový systém archívu aj pracovného úložiska
-`data/collections`. Pred každou session sa obe identity overia; iný disk
-na rovnakej ceste zastaví beh. Pred začiatkom sa kontroluje priestor pre celý
+UUID, mountpoint, koreň (`FSROOT`) a súborový systém archívu aj pracovného
+úložiska `data/collections`, nie názov zariadenia (`sdX` sa po reštarte môže
+zmeniť). Pred každou session sa obe identity overia; iný disk na rovnakej
+ceste zastaví beh. Pred začiatkom sa kontroluje priestor pre celý
 odhad z pilotu s plánovacou rezervou a samostatnou núdzovou rezervou protokolu.
 
 Rozloženie na zberovom PC (2026-10-20, bez externého disku):
@@ -65,8 +66,16 @@ spolu s runnerom. Služba pokračuje po zatvorení terminálu.
 
 Počas kampane nemeniť commit, protokol, profil, Python balíky ani stack vo VM.
 Nespúšťať druhý generátor, testy laboratória, tréning ani intenzívne hostiteľské
-úlohy. Zdrojová zmena zastaví ďalší krok; nemiešajú sa verzie extraktora.
-Ani úspešné prijatie dát nemeria vplyv samotného detektora na VM.
+úlohy. Nevytvárať ani neupravovať súbory v repozitári (ani poznámky či
+výsledky); na to slúži iný adresár. Pred každým zberom aj auditom sa overí
+celý strom a akákoľvek zmena zastaví ďalší krok; po jej vrátení sa pokračuje
+rovnakým `launch`. Session a audit samy zaznamenávajú `commit_dirty` (celý
+strom, informatívne) a `measurement_dirty` (iba merací kód). Kampaň prijme
+iba `measurement_dirty: []` pri zmrazenom commite. Verdikt auditu, ktorý
+vznikol pri inom commite alebo zmenenom meracom kóde, zostane uložený, ale
+nevyberie sa a audit sa po obnovení zmrazeného stromu zopakuje pod novým
+názvom. Nemiešajú sa verzie extraktora. Ani úspešné prijatie dát nemeria
+vplyv samotného detektora na VM.
 
 ## Priebeh a uložené dáta
 
@@ -140,6 +149,26 @@ pôvodné absolútne cesty v auditoch sa neprepisujú.
 
 ## Zastavenie a pokračovanie
 
+Plánované zastavenie bez straty session (bez roota, na bežiacu kampaň):
+
+```sh
+.venv/bin/python scripts/campaign.py request-stop data/campaigns/<kampaň>
+```
+
+Runner dokončí práve bežiacu session vrátane auditu a archivácie a pred ďalším
+zberom (aj pred reštartom novej skupiny) skončí so stavom
+`stopped/between-sessions` a správou `operator stop request`. Požiadavka sa
+presunie do `events/`. Platí iba pre bežiaci runner; požiadavku, ktorá zostala
+po predchádzajúcom behu, nové spustenie odloží ako `*_stop-request-stale.json`.
+Môže to trvať až jednu session s auditom a archiváciou (odhad okolo 1,5 h,
+zatiaľ nezmeraný). Pri `launch` alebo priamom `run` možno aj vopred pridať
+`--stop-after N`; limit počíta nové dokončené session daného spustenia
+a nemení plán ani pravidlá prijatia. Pokračuje sa rovnakým príkazom
+`launch`. Celú kampaň chráni spoločný zámok aj proti ručne spustenému
+`collection.py run`.
+
+Okamžité zastavenie:
+
 ```sh
 sudo systemctl stop hyptcn-collection.service
 sudo .venv/bin/python scripts/campaign.py launch data/campaigns/<kampaň>
@@ -153,7 +182,10 @@ zapíše `logs_manifest.json` a `end.json` s `completed=false` a dôvodom.
 `stopped/interrupted` aj s prijatými signálmi a uvoľní zámok aj blokovanie
 uspania. Čo po 240 s ešte beží, systemd ukončí cez SIGKILL. Segment nginx
 logu prerušenej session sa neuzatvára hneď. Jeho riadky prevezme segment `pre`
-nasledujúcej session, takže sa nestratia.
+nasledujúcej session, takže sa nestratia. **Okamžité zastavenie počas
+meranej fázy session zneplatní a kampaň sa na nej zastaví** (pozri nižšie);
+na plánované prerušenie slúži `request-stop`. Zastavenie počas auditu alebo
+archivácie je obnoviteľné.
 
 Pôvodná chyba (chýbajúci `end.json`, stav `running` po zastavení) vznikala
 opakovaným SIGTERM: systemd poslal signál všetkým procesom jednotky a runner
@@ -168,8 +200,8 @@ obnovy po reštarte týmto testom overená nie je (UNVERIFIED).
 
 Pri SIGKILL alebo výpadku napájania upratovanie zaručiť nemožno. V súbore
 stavu potom ostane `running`. `status` ho podľa živosti procesu označí ako
-`stale` a ďalšie spustenie zaznamená `unclean-end`. Neúplná session sa
-archivuje ako neúplná a alokácia sa zastaví.
+`stale` a ďalšie spustenie zaznamená `unclean-end`. Session bez `end.json`
+sa považuje za neúplnú session s meraním.
 
 Rovnaký príkaz pokračuje z existujúcich artefaktov, nezačína novú kampaň.
 Dokončené session sa nezbierajú znova. Prerušené kopírovanie a uvoľňovanie
@@ -178,16 +210,47 @@ výstupu, pôvodný čiastočný výstup zostáva. Hotový zamietavý verdikt sa
 obísť opakovaním auditu. Zber sa po prerušení nedopĺňa chýbajúcimi snímkami.
 Neúplný JSON auditu nie je hotovým verdiktom a nezamkne výber ďalšieho auditu.
 
-Ak sa zber nedokončil alebo audit session zamietol, runner uloží jej archív
-a zastaví alokáciu. Nevymení ju automaticky za úspešnejšiu session. Dôvod
-treba preskúmať a metodické rozhodnutie zaznamenať. Rovnako sa automaticky
-nepokračuje po zmene bootu uprostred skupiny. Pri chybe ešte pred vznikom
-metadát sa zachová rozpracovaný adresár na kontrolu.
+### Pokus, ktorý skončil pred meraním
 
-Pre plánované zastavenie na hranici dokončenej session možno pri `launch`
-alebo priamom `run` pridať `--stop-after 1`. Limit počíta nové dokončené
-session daného spustenia; nemení plán ani pravidlá prijatia. Celú kampaň
-chráni spoločný zámok aj proti ručne spustenému `collection.py run`.
+Ak zber skončí ešte pred meranou fázou (napr. zlyhaná funkčná kontrola,
+synchronizácia hodín, uzavretie segmentu logu, zahrievanie alebo zastavenie
+počas nich), `end.json` má `measurement_started: false` a session nemá
+`raw/`, teda ani jeden obraz RAM. Taký pokus nie je výskumná session. Runner
+jeho adresár premenuje na `data/collections/<session>.attempt-<n>`, zapíše
+`attempts/<session>.attempt-<n>.json` s dôvodom a po 60 s spustí rovnaké
+priradenie (rovnaký seed) znova v tom istom boote skupiny. Riadky logov
+neúspešného pokusu sa nestratia: sú v jeho vlastnom segmente `pre`, alebo ich
+prevezme segment `pre` ďalšieho pokusu. V jednom behu
+runnera sú najviac tri pokusy na session; tretí neúspešný pokus zastaví
+kampaň s chybou a jeho adresár ponechá na kontrolu. Po odstránení príčiny
+nové spustenie odloží aj ten a pokračuje. Pokus bez metadát (chyba ešte pred
+`session.json`) sa odloží rovnako. Zber, ktorý dosiahol meranú fázu, sa
+nikdy neopakuje.
+
+### Neúplná alebo zamietnutá session a uzavretie kampane
+
+Ak sa zber po začiatku merania nedokončil alebo audit session zamietol, runner
+uloží jej archív a zastaví alokáciu. Nevymení ju automaticky za úspešnejšiu
+session; každé ďalšie spustenie sa zastaví na tej istej session. Rovnako sa
+automaticky nepokračuje po zmene bootu alebo procesu QEMU uprostred skupiny
+(reštart, uloženie a obnova VM). Pri chybe ešte pred vznikom metadát sa
+zachová rozpracovaný adresár na kontrolu.
+
+Dôvod treba preskúmať a metodické rozhodnutie zaznamenať (`docs/MERANIA.md`,
+`docs/ISSUES.md`). Ak kampaň nemá pokračovať, uzavrie sa:
+
+```sh
+.venv/bin/python scripts/campaign.py close data/campaigns/<kampaň> --reason "<zaznamenané rozhodnutie>"
+```
+
+`close` vyžaduje voľný zámok zberu (nebeží žiadny runner). Zapíše
+`closed.json` s dôvodom a predchádzajúcim stavom lokálne aj do archívu
+a stav `closed`. Session, audity a archívy zostávajú; korpusový index
+nevznikne. Uzavretú kampaň už nemožno spustiť. Až uzavretie uvoľní názvy
+bootových skupín (`train-1` …) pre novú kampaň; `init` inak odmietne
+skupinu, ktorá už má dáta. Nová kampaň potrebuje prijatý pilot so súčasným
+meracím kódom; prijaté session uzavretej kampane sa do jej korpusu
+nepresúvajú.
 
 Úplnú opätovnú kontrolu archivovaných dát možno vykonať mimo merania:
 

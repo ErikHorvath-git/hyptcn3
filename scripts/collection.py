@@ -22,6 +22,7 @@ import signal
 import subprocess
 import sys
 import time
+import urllib.request
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
@@ -55,6 +56,10 @@ COLLECTOR_FSYNC = False
 # 3.3 s to its cycle. The full snapshot's SHA-256 is computed by a collector
 # thread after the cycle; its sidecar appears when the hash is done.
 COLLECTOR_HASH_ASYNC = True
+# The log audit rejects a guest clock offset above 1 s at either end. Measured
+# drift was below 0.04 s/h (2026-10-20), so a session synchronized to 0.25 s
+# keeps that margin for its whole hour.
+CLOCK_SYNC_S = .25
 
 
 def digest(path):
@@ -121,17 +126,40 @@ def user_command(command):
     return list(map(str, command))
 
 
+def is_measurement(name):
+    """Code that captures, checks or archives data (tests and reports excluded)."""
+    path = Path(name)
+    return (path.parts[0] in MEASUREMENT_DIRS and path.suffix in SOURCE_SUFFIXES
+            and "tests" not in path.parts and name not in NOT_MEASUREMENT)
+
+
 def measurement_sources():
-    """Hashes of code that captures, checks or archives data (tests and reports excluded)."""
     files = [f for d in MEASUREMENT_DIRS for f in (ROOT / d).rglob("*")
-             if f.is_file() and f.suffix in SOURCE_SUFFIXES and "tests" not in f.relative_to(ROOT).parts
-             and str(f.relative_to(ROOT)) not in NOT_MEASUREMENT]
+             if f.is_file() and is_measurement(str(f.relative_to(ROOT)))]
     return {str(f.relative_to(ROOT)): digest(f) for f in sorted(files)}
 
 
+def measurement_dirty():
+    """Measurement sources that differ from the commit, including new untracked files.
+
+    Unlike commit_dirty (whole worktree), notes or reports written during a
+    capture or audit do not make its provenance unusable.
+    """
+    entries = subprocess.check_output(["git", "status", "--porcelain=v1", "-z", "--untracked-files=all",
+                                       "--", *MEASUREMENT_DIRS], cwd=ROOT).split(b"\0")
+    names, i = [], 0
+    while i < len(entries) and entries[i]:
+        names.append(entries[i][3:].decode())
+        if set(entries[i][:2]) & set(b"RC"):  # A rename/copy is followed by its source path.
+            i += 1
+            names.append(entries[i].decode())
+        i += 1
+    return sorted({name for name in names if is_measurement(name)})
+
+
 def storage_identity(path):
-    """Filesystem holding a working directory (bind mounts show their source)."""
-    doc = json.loads(subprocess.check_output(["findmnt", "-J", "-T", str(path), "-o", "TARGET,SOURCE,FSTYPE,UUID"],
+    """Filesystem holding a working directory; device names (sdX) may change at boot."""
+    doc = json.loads(subprocess.check_output(["findmnt", "-J", "-T", str(path), "-o", "TARGET,FSROOT,FSTYPE,UUID"],
                                              text=True, timeout=10))
     return doc["filesystems"][0]
 
@@ -164,11 +192,13 @@ def guest_identity(p):
         "uname -r; cat /proc/sys/kernel/random/boot_id; cat /etc/machine-id; "
         "sha256sum /opt/hyptcn-lab/services.py /opt/hyptcn-lab/schema.sql /opt/hyptcn-lab/guest_state.py "
         "/etc/nginx/conf.d/hyptcn-lab.conf /etc/systemd/system/hyptcn-lab@.service && "
-        "dpkg-query -W nginx postgresql python3 python3-psycopg2")
+        "dpkg-query -W nginx postgresql python3 python3-psycopg2 && "
+        # Maintenance timers would add unplanned activity; none may be loaded (lab/install.sh).
+        "echo \"timers: $(systemctl list-timers --all --no-legend | awk '{print $(NF-1)}' | sort | tr '\\n' ' ')\"")
     command = [sys.executable, ROOT / "scripts/labctl.py", "exec", "--domain", p["domain"],
                "--guest-command", identity_command]
     lines = subprocess.check_output(user_command(command), cwd=ROOT, text=True, timeout=150).strip().splitlines()
-    if len(lines) < 12:
+    if len(lines) < 13 or not lines[-1].startswith("timers:"):
         raise ValueError("cannot establish guest identity")
     return {**dict(zip(("kernel", "boot_id", "machine_id"), lines[:3])),
             "stack_sha256": hashlib.sha256("\n".join(lines[3:]).encode()).hexdigest(),
@@ -301,6 +331,25 @@ def write_logs_manifest(out):
     return digest(out / "logs_manifest.json")
 
 
+def wait_healthy(target, timeout=30):
+    """Poll /healthz until 200: a forward clock step briefly makes the worker heartbeat stale."""
+    deadline = time.monotonic() + timeout
+    run_id = "health" + datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S")
+    attempt = 0
+    while True:
+        attempt += 1
+        request = urllib.request.Request(target + "/healthz", headers={"X-Request-ID": f"{run_id}-{attempt:04d}"})
+        try:
+            with urllib.request.urlopen(request, timeout=5) as reply:
+                if reply.status == 200:
+                    return attempt
+        except OSError:  # Includes HTTP errors such as 503 "worker stale".
+            pass
+        if time.monotonic() >= deadline:
+            raise ValueError("lab stack not healthy before the preflight check")
+        time.sleep(1)
+
+
 def smoke_rids(path):
     return {c["rid"]: c["status"] for c in json.loads(Path(path).read_text())["values"]["checks"]}
 
@@ -327,6 +376,12 @@ def run_session(a, p):
         before = guest_identity(p)
         if getattr(a, "expected_boot_id", None) and before["boot_id"] != a.expected_boot_id:
             raise ValueError("guest boot differs from campaign group")
+        qemu = qemu_process(p["domain"])
+        if qemu is None:
+            raise ValueError("VM process not found")
+        # A restore keeps the guest boot ID but starts a new QEMU process.
+        if getattr(a, "expected_qemu", None) and qemu != json.loads(a.expected_qemu):
+            raise ValueError("VM process differs from campaign group (restart or restore)")
         attempt = getattr(a, "group_attempt", 1) or 1
         if a.role not in ("pilot", "diagnostic"):
             assignment = {"role": a.role, "group": a.group, "scenario": a.scenario,
@@ -392,9 +447,10 @@ def run_session(a, p):
                     "metadata_not_model_inputs": ["scenario", "seed", "traffic", "boot_id", "group", "session_id"],
                     "working_storage": storage_identity(base),
                     "host_context": {"host_boot": Path("/proc/sys/kernel/random/boot_id").read_text().strip(),
-                                     "qemu": qemu_process(p["domain"]), "python": sys.executable},
+                                     "qemu": qemu, "python": sys.executable},
                     "commit": subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip(),
                     "commit_dirty": bool(subprocess.check_output(["git", "status", "--porcelain"], cwd=ROOT)),
+                    "measurement_dirty": measurement_dirty(),
                     "host": platform.platform(), "created_unix": time.time()}
         write_json(out / "session.json", metadata)
         subprocess.run(user_command(["virsh", "-c", "qemu:///session", "dumpxml", p["domain"]]),
@@ -428,13 +484,14 @@ def capture_session(p, out, metadata, cycles):
         if generators():
             raise ValueError("another host_traffic.py is running; refusing to mix traffic")
         clock = lab_json(p, "clock", timeout=60)
-        if abs(clock["offset_s"]) > 1.0:
+        if abs(clock["offset_s"]) > CLOCK_SYNC_S:
             synced = lab_json(p, "sync-clock", timeout=60)
             clock = {**synced["after"], "synced_from": synced["before"]}
-            if abs(clock["offset_s"]) > 1.0:
-                raise ValueError("guest clock offset above 1 s after synchronization")
+            if abs(clock["offset_s"]) > CLOCK_SYNC_S:
+                raise ValueError(f"guest clock offset above {CLOCK_SYNC_S} s after synchronization")
         write_guest("clock_before.json", clock)
         step("clock", offset_s=clock["offset_s"], synced="synced_from" in clock)
+        step("health", attempts=wait_healthy(p["target"]))
         smoke = subprocess.run([sys.executable, ROOT / "scripts/lab_smoke.py", "--target", p["target"],
                                 "--out", out / "preflight_smoke.json"], cwd=ROOT, capture_output=True,
                                text=True, timeout=120)
@@ -540,6 +597,8 @@ def capture_session(p, out, metadata, cycles):
             if name in children:
                 status[name] = stop_child(children.pop(name), grace)
         status["signals"] = interrupts.received
+        # No snapshot without the measured phase: the campaign may retry such an attempt.
+        status["measurement_started"] = "measure_start_unix" in status
         if status["interrupted"]:
             status["note"] = ("Interrupted run: the guest log segment was not closed here; the next "
                               "session's pre-segment keeps those nginx lines. Not a usable capture.")
@@ -694,6 +753,7 @@ def audit_session(directory, p, protocol_path, output=None):
     report = {"schema": "hyptcn3/collection-audit/1", "date": datetime.now(timezone.utc).isoformat(),
               "commit": subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip(),
               "commit_dirty": bool(subprocess.check_output(["git", "status", "--porcelain"], cwd=ROOT)),
+              "measurement_dirty": measurement_dirty(),
               "host": platform.platform(), "guest": metadata.get("guest_before"),
               "command": " ".join(sys.argv), "n": len(rows), "values": values}
     write_json(output, report)
@@ -717,6 +777,7 @@ def main(argv=None):
     run.add_argument("--session-id", help="Exclusive output name for a frozen campaign assignment")
     run.add_argument("--campaign-id")
     run.add_argument("--expected-boot-id", help="Refuse a boot change since campaign preflight")
+    run.add_argument("--expected-qemu", help="JSON identity of the group's QEMU process (refuse restart/restore)")
     run.add_argument("--group-attempt", type=int, default=1, help="Campaign group generation after a recorded restart")
     run.add_argument("--collections-dir", type=Path, help="Diagnostic session base under data/diagnostics")
     run.add_argument("--cycles", type=int, help="Diagnostic runs only: number of snapshots")

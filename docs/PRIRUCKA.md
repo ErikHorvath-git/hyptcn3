@@ -1,6 +1,6 @@
 # Príručka k hyptcn3
 
-Vstupný dokument repozitára; stav kódu a artefaktov k 2026-10-20. Súbor je
+Vstupný dokument repozitára; stav kódu a artefaktov k 2026-10-21. Súbor je
 generovaný a needituje sa ručne — ako, hovorí kapitola 10.
 
 ## 1. Čo to je
@@ -31,7 +31,7 @@ python3 -m pytest -q      # testy parsera a príznakov
 ```
 
 `make test` prejde celú cestu zberu nad syntetickým obrazom veľkosti
-16 MiB, ktorý si sám vyrobí. Testov je 580 prešlých a 33 preskočených v `pytest` (spolu 613 zozbieraných; preskočený test nie je prešiel) a 4 v C (`alarm_test`, `hole_test`, `perbin_test`, `retention_test`).
+16 MiB, ktorý si sám vyrobí. Testov je 599 prešlých a 33 preskočených v `pytest` (spolu 632 zozbieraných; preskočený test nie je prešiel) a 4 v C (`alarm_test`, `hole_test`, `perbin_test`, `retention_test`).
 
 ## 4. Ako vznikne snímka
 
@@ -70,13 +70,13 @@ zapíše.
 | adresár | čo rieši | kde začať čítať | súborov spolu / riadkov v `.c .h .py .sh .md` |
 |---|---|---|---|
 | `vmicollect/` | zberač snímok pamäte VM: C a eBPF nad QEMU/KVM | `vmicollect/src/collector.c` | 35 / 10 507 |
-| `guestparse/` | rekonštrukcia procesov, modulov a soketov zo snímky | `guestparse/view.py` | 33 / 6 868 |
-| `features/` | per-bin príznakový vektor (referencia), okná, normalizácia | `features/perbin.py` | 27 / 5 352 |
+| `guestparse/` | rekonštrukcia procesov, modulov a soketov zo snímky | `guestparse/view.py` | 34 / 7 001 |
+| `features/` | per-bin príznakový vektor (referencia), okná, normalizácia | `features/perbin.py` | 27 / 5 369 |
 | `tcn/` | TCN, prediktor normálu, baseliny, tréning a skórovanie snímok | `tcn/score.py` | 15 / 2 610 |
 | `safeguard/` | spoločné príznaky, modely, balík a hostiteľský detektor | `safeguard/cli.py` | 16 / 3 308 |
 | `profiles/` | profil jadra hosťa: symboly a offsety polí štruktúr | `profiles/debian12-6.1.0-42-cloud-amd64/README.md` | jeden adresár na boot hosťa — pozri L17 |
-| `scripts/` | root behy, príkazy v hosťovi, kontroly tvrdení | `scripts/root_run.sh` | 58 / 12 738 |
-| `lab/` | trvalé benígne API služby, PostgreSQL a nginx vo VM | `lab/services.py` | 7 / 465 |
+| `scripts/` | root behy, príkazy v hosťovi, kontroly tvrdení | `scripts/root_run.sh` | 58 / 13 151 |
+| `lab/` | trvalé benígne API služby, PostgreSQL a nginx vo VM | `lab/services.py` | 7 / 471 |
 | `data/` | výsledkové JSONy z meraní (`data/results/`) a pozemná pravda odobratá v hosťovi (`data/sessions/`); samotné snímky `.vmicd` sú mimo gitu (`data/raw/`) | `data/results/2026-09-18_zmrazeny_host/README.md` | rastie s každým meraním, nepočíta sa |
 
 ## 6. Ako to funguje
@@ -250,8 +250,8 @@ znamenalo držať dve znenia toho istého. Nadpisy sú preto dosadené z neho, s
 | `docs/kontroly.md` | kontroly podozrivých vzorcov a validačný príkaz | 255 |
 | `HONESTY.md` | pravidlá pre čísla a slová v texte práce | 272 |
 | `README.md` | rozcestník repozitára a pôvod prevzatého kódu | 76 |
-| `docs/LAB.sk.md` | serverové laboratórium, premávka z hostiteľa a RAM zber | 232 |
-| `docs/METODIKA_ZBERU.sk.md` | protokol zberu, príznaky, rozdelenie korpusu a audit | 357 |
+| `docs/LAB.sk.md` | serverové laboratórium, premávka z hostiteľa a RAM zber | 241 |
+| `docs/METODIKA_ZBERU.sk.md` | protokol zberu, príznaky, rozdelenie korpusu a audit | 360 |
 | `docs/SAFEGUARD.sk.md` | tréning modelového balíka, replay a spustenie detektora | 228 |
 | `vmicollect/README.md` | zberač zvnútra: vrstvy, hooky, formáty | 460 |
 | `guestparse/README.md` | parser zvnútra: preklad adries, prechod zoznamami | 157 |
