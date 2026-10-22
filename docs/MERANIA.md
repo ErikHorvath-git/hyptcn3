@@ -1545,3 +1545,51 @@ auditom; zmenil sa iba záznam kvality snímky 645. Historický verdikt
 kampane sa nemení. Kampaň je uzavretá (`closed.json`); session 1 a 2
 zostávajú v jej archíve a do novej kampane sa nepresúvajú. Zmena meracieho
 kódu vyžaduje nový pilot.
+
+## 2026-10-22 — prijatý pilot 4 s potvrdzovaním krížových rozdielov
+
+Pilot `20261022T073059077133Z_pilot_bursty` (skupina `pilot-4-20261022`,
+commit `d25c027`, profil `bursty`, seed 20261022, nový boot VM) overil merací
+kód s potvrdzovaním krížových rozdielov. Audit ho prijal
+([audit](../data/results/collection_pilot_4_20261022_audit.json)):
+480 {{res:collection_pilot_4_20261022_audit.json:values.snapshots}}
+snímok,
+416 {{res:collection_pilot_4_20261022_audit.json:values.windows}}
+okien a pokrytie
+0.8667 {{res:collection_pilot_4_20261022_audit.json:values.score_coverage}}
+(strop protokolu). Nálezov integrity bolo
+0 {{res:collection_pilot_4_20261022_audit.json:values.quality.integrity_findings}}
+a nepotvrdených krížových rozdielov
+0 {{res:collection_pilot_4_20261022_audit.json:values.quality.integrity_unconfirmed}};
+logový audit nenašiel problém.
+
+[Súhrn časovania](../data/results/collection_pilot_4_20261022_timing.json):
+pred zahrievaním mala QEMU vo swape
+176696 {{res:collection_pilot_4_20261022_timing.json:values.prefault.swap_kb_before}}
+kB (po auditoch a obnove kampane v2); krok `prefault` ich za
+5.105 {{res:collection_pilot_4_20261022_timing.json:values.prefault.seconds}}
+s načítal späť a na konci bolo vo swape
+0 {{res:collection_pilot_4_20261022_timing.json:values.host_memory_after.qemu_swap_kb}}
+kB. Zberač mal
+0 {{res:collection_pilot_4_20261022_timing.json:values.collector_end.missed_slots}}
+zmeškaných slotov. Plné snímky mali
+901.04 {{res:collection_pilot_4_20261022_timing.json:values.full_snapshots.seq_0.mib}}
+a
+902.42 {{res:collection_pilot_4_20261022_timing.json:values.full_snapshots.seq_360.mib}}
+MiB a trvali
+2414.6 {{res:collection_pilot_4_20261022_timing.json:values.full_snapshots.seq_0.cycle_ms}}
+a
+2421.2 {{res:collection_pilot_4_20261022_timing.json:values.full_snapshots.seq_360.cycle_ms}}
+ms; delty mali medián
+959.9 {{res:collection_pilot_4_20261022_timing.json:values.delta_cycle_ms.p50}}
+ms a maximum
+1149.7 {{res:collection_pilot_4_20261022_timing.json:values.delta_cycle_ms.max}}
+ms. Generátor poslal
+122201 {{res:collection_pilot_4_20261022_timing.json:values.traffic.requests}}
+požiadaviek s
+0 {{res:collection_pilot_4_20261022_timing.json:values.traffic.errors}}
+chybami. Najväčšia medzera monitora bola
+1.0 {{res:collection_pilot_4_20261022_timing.json:values.monitor_max_gap_s}}
+s. Audit trval
+792.98 {{res:collection_pilot_4_20261022_timing.json:values.audit_timing.wall_s}}
+s. Pilot je vstupom ďalšej kampane.

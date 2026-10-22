@@ -1,0 +1,91 @@
+{
+  "commit": "d25c0272df0a34e1cfe72c44d7c68047dfb2d896",
+  "commit_dirty": true,
+  "date": "2026-10-22T08:27:24.646153+00:00",
+  "host": "Linux-7.2.9+deb13-amd64-x86_64-with-glibc2.41",
+  "guest": {
+    "kernel": "6.1.0-42-cloud-amd64",
+    "boot_id": "7dfb00a4-30c0-43cd-9a87-9bd38e4d545d",
+    "machine_id": "180ac982142b4714a979599073c96cdd",
+    "stack_sha256": "3fcb9e724f031e3ed24fd3e08fb8f2946c8cd3f04416bc871d8f7dc31b3d46bc",
+    "stack_manifest": [
+      "c346dc8bc1c8c3649fc96064fddfc07172f740f7c82d1830dbb935b16c488271  /opt/hyptcn-lab/services.py",
+      "d7372422553f866333177456ac6daec4847f5660c1c854a646e602d0be0fcf6c  /opt/hyptcn-lab/schema.sql",
+      "a8e5ef8843ebae83eed8691f8eb7e1d186448d36e4be7d4406efeaa96291d5e3  /opt/hyptcn-lab/guest_state.py",
+      "62f55e4374b5db4522d0ce84c911f26ccd580e8f55bc570c09ee63c64be234c6  /etc/nginx/conf.d/hyptcn-lab.conf",
+      "af75eee623f3c7a0b7a1c10a35c2216684c6f4b610d44e46560de137ef3d6962  /etc/systemd/system/hyptcn-lab@.service",
+      "nginx\t1.22.1-9+deb12u10",
+      "postgresql\t15+248+deb12u1",
+      "python3\t3.11.2-1+b1",
+      "python3-psycopg2\t2.9.5-1+b1",
+      "timers:"
+    ]
+  },
+  "command": "data/results/collection_pilot_4_20261022/timing_record.py data/collections/20261022T073059077133Z_pilot_bursty data/collections/20261022T073059077133Z_pilot_bursty/audit_20261022T082702030589Z.json data/results/collection_pilot_4_20261022/audit_time.txt data/results/collection_pilot_4_20261022_timing.json",
+  "n": 480,
+  "values": {
+    "session": "20261022T073059077133Z_pilot_bursty",
+    "group": "pilot-4-20261022",
+    "session_commit": "d25c0272df0a34e1cfe72c44d7c68047dfb2d896",
+    "audit": "audit_20261022T082702030589Z.json",
+    "audit_sha256": "2b3a0de69234934b898dbb10a2648519ccfe9a6b862d360406c7c1407fe1d841",
+    "audit_accepted": true,
+    "host_memory_at_start": {
+      "vm_swappiness": 1,
+      "qemu_swap_kb": 183268
+    },
+    "prefault": {
+      "swap_kb_before": 176696,
+      "swap_kb_after": 0,
+      "seconds": 5.105
+    },
+    "host_memory_after": {
+      "vm_swappiness": 1,
+      "qemu_swap_kb": 0
+    },
+    "full_snapshots": {
+      "seq_0": {
+        "mib": 901.04,
+        "cycle_ms": 2414.6
+      },
+      "seq_360": {
+        "mib": 902.42,
+        "cycle_ms": 2421.2
+      }
+    },
+    "delta_cycle_ms": {
+      "n": 478,
+      "p50": 959.9,
+      "max": 1149.7
+    },
+    "collector_end": {
+      "snapshots": 480,
+      "errors": 0,
+      "missed_slots": 0
+    },
+    "monitor_max_gap_s": 1.0,
+    "monitor_samples": 2534,
+    "traffic": {
+      "requests": 122201,
+      "ok": 122201,
+      "errors": 0,
+      "ok_per_s": 48.493,
+      "log_backpressure_s": 0.0
+    },
+    "audit_timing": {
+      "wall_s": 792.982318913,
+      "rc": 0,
+      "extraction_s_sum": 750.6,
+      "extraction_s_max": 5.18
+    },
+    "inputs_sha256": {
+      "session.json": "1c5891444b655a5e31c39e822c012c92cb230c0972d5e7e3cd568a45d2daa6ad",
+      "end.json": "0ff10931e02aaaf23a31fafdca2f642a5782b6e6fd2e0fee4951ea2f514d7589",
+      "raw/collect.log": "117be8018fd89931dc1051aaea8b31d31ca4520b99bc8ce583e6722150b59f34",
+      "host_monitor.jsonl": "5beccdda1c54354f2ecdb403fcb22219ad1f3088a63e3f161d19db2e331f1a5a",
+      "traffic.json": "2f8550236763c28468dc89876e894c86d08746414b0f498cf37c872ec693a81e",
+      "audit_time": "e19250709455a4e7c219702d4461d2b5be8518f56e83ca8a61d4d529a3ef9e05"
+    },
+    "note": "Pilot evidence summary; the audit report is the verdict. Not a corpus session."
+  }
+}
