@@ -1,0 +1,226 @@
+{
+  "commit": "8498670bfb42e4f325016206d2caea6326b1f588",
+  "commit_dirty": true,
+  "date": "2026-10-22T07:19:16.704803+00:00",
+  "host": "Linux-7.2.9+deb13-amd64-x86_64-with-glibc2.41",
+  "guest": {
+    "kernel": "6.1.0-42-cloud-amd64",
+    "machine_id": "180ac982142b4714a979599073c96cdd",
+    "stack_sha256": "3fcb9e724f031e3ed24fd3e08fb8f2946c8cd3f04416bc871d8f7dc31b3d46bc",
+    "stack_manifest": [
+      "c346dc8bc1c8c3649fc96064fddfc07172f740f7c82d1830dbb935b16c488271  /opt/hyptcn-lab/services.py",
+      "d7372422553f866333177456ac6daec4847f5660c1c854a646e602d0be0fcf6c  /opt/hyptcn-lab/schema.sql",
+      "a8e5ef8843ebae83eed8691f8eb7e1d186448d36e4be7d4406efeaa96291d5e3  /opt/hyptcn-lab/guest_state.py",
+      "62f55e4374b5db4522d0ce84c911f26ccd580e8f55bc570c09ee63c64be234c6  /etc/nginx/conf.d/hyptcn-lab.conf",
+      "af75eee623f3c7a0b7a1c10a35c2216684c6f4b610d44e46560de137ef3d6962  /etc/systemd/system/hyptcn-lab@.service",
+      "nginx\t1.22.1-9+deb12u10",
+      "postgresql\t15+248+deb12u1",
+      "python3\t3.11.2-1+b1",
+      "python3-psycopg2\t2.9.5-1+b1",
+      "timers:"
+    ]
+  },
+  "command": "data/results/collection_campaign_benign_v2_20261022/record.py data/campaigns/benign-v2-20261022 data/results/collection_campaign_benign_v2_20261022/verify_archives.log data/results/collection_campaign_benign_v2_20261022.json",
+  "n": 3,
+  "values": {
+    "campaign": "benign-v2-20261022",
+    "campaign_commit": "813ce125ab09a7d06207d612911700609b6ff360",
+    "planned_sessions": 48,
+    "final_status": {
+      "status": "closed",
+      "stage": "closed",
+      "message": "Session 3 was rejected for one single-snapshot process cross-view difference (postgres pid 450961 only in tasks at seq 645; seq 643, 644, 646 and 647 consistent): a live-read race on a short-lived postmaster child, not hiding. Commit 8498670 confirms cross-view differences with the adjacent snapshot; a new pilot and campaign follow. Sessions 1-2 stay archived and are not moved into the next campaign.",
+      "accepted_archived": 2,
+      "session": "benign-v2-20261022_03_train_bursty"
+    },
+    "closed": {
+      "schema": "hyptcn3/campaign-closed/1",
+      "id": "benign-v2-20261022",
+      "date": "2026-10-22T06:55:46.214699+00:00",
+      "reason": "Session 3 was rejected for one single-snapshot process cross-view difference (postgres pid 450961 only in tasks at seq 645; seq 643, 644, 646 and 647 consistent): a live-read race on a short-lived postmaster child, not hiding. Commit 8498670 confirms cross-view differences with the adjacent snapshot; a new pilot and campaign follow. Sessions 1-2 stay archived and are not moved into the next campaign.",
+      "uid": 1000,
+      "status_before": {
+        "status": "stopped",
+        "stage": "error",
+        "accepted_archived": 2,
+        "total": 48,
+        "updated_at": "2026-10-22T06:10:48.849061+00:00",
+        "pid": 788446,
+        "process_identity": {
+          "host_boot": "eb635e03-638a-4d7c-ab67-9ee1a4d410cf",
+          "start_ticks": "15033756"
+        },
+        "inhibitor_pid": 788460,
+        "message": "audit rejected session; archived without replacement: integrity findings require review before benign admission",
+        "signals": [],
+        "session": "benign-v2-20261022_03_train_bursty",
+        "group": "train-1",
+        "role": "train",
+        "scenario": "bursty",
+        "position": 3,
+        "capture_started_at": "2026-10-22T04:42:33.087007+00:00"
+      },
+      "note": "Operator decision. Captured, audited and archived sessions remain; no corpus index."
+    },
+    "sessions": [
+      {
+        "session": "benign-v2-20261022_01_train_write_heavy",
+        "group": "train-1",
+        "role": "train",
+        "scenario": "write_heavy",
+        "accepted": true,
+        "reasons": [],
+        "snapshots": 720,
+        "windows": 656,
+        "score_coverage": 0.9111111111111111,
+        "logs_accepted": true,
+        "integrity_findings": 0,
+        "collector_end": {
+          "snapshots": 720,
+          "errors": 0,
+          "missed_slots": 0
+        },
+        "full_snapshots_ms": [
+          2090.7,
+          2090.6
+        ],
+        "full_snapshots_mib": [
+          720.71,
+          712.17
+        ],
+        "delta_ms": {
+          "p50": 916.4,
+          "max": 1807.2
+        },
+        "monitor_max_gap_s": 2.0150270462036133,
+        "requests": 60095,
+        "request_errors": 0,
+        "raw_bytes": 12836615256,
+        "archive_stored_bytes": 1949583538,
+        "stage_s": {
+          "session-preflight": 1.3,
+          "reboot": 18.7,
+          "capture": 3740.7,
+          "audit": 927.8,
+          "archive": 463.4,
+          "session-complete": 0.1,
+          "preflight": 0.4
+        },
+        "inputs_sha256": {
+          "audit": "3819a16ccdd860f031d9dfdd6e3dc72fa13fa83bcf468901bb8b2bfcdfc29890",
+          "collect.log": "ee75c13ac72930c0bd57995719fdb05c11b4b4f1c87a9e1fec20cdd7a2125b15",
+          "archive-manifest.json": "d65992df1d6e31b69d93858e1b8e51342f03f7613d3689b484750c209db2f7a0"
+        }
+      },
+      {
+        "session": "benign-v2-20261022_02_train_quiet",
+        "group": "train-1",
+        "role": "train",
+        "scenario": "quiet",
+        "accepted": true,
+        "reasons": [],
+        "snapshots": 720,
+        "windows": 656,
+        "score_coverage": 0.9111111111111111,
+        "logs_accepted": true,
+        "integrity_findings": 0,
+        "collector_end": {
+          "snapshots": 720,
+          "errors": 0,
+          "missed_slots": 0
+        },
+        "full_snapshots_ms": [
+          2052.1,
+          2044.0
+        ],
+        "full_snapshots_mib": [
+          716.82,
+          716.22
+        ],
+        "delta_ms": {
+          "p50": 835.5,
+          "max": 894.9
+        },
+        "monitor_max_gap_s": 1.044783115386963,
+        "requests": 5398,
+        "request_errors": 0,
+        "raw_bytes": 7536233592,
+        "archive_stored_bytes": 1271210343,
+        "stage_s": {
+          "session-preflight": 1.7,
+          "capture": 3739.3,
+          "audit": 799.3,
+          "archive": 289.5,
+          "session-complete": 0.2
+        },
+        "inputs_sha256": {
+          "audit": "1f7ae798b1d10a600b60d3786f540b22b683ac88691f441ca1d94188fbdfe462",
+          "collect.log": "09019b93e078dae7b40780ee198b0cdc25c0e678ed96485836bdb50ed2d53b43",
+          "archive-manifest.json": "9e3419a9b652d283f2a6dd797a8036ece85cf2d045256d23f623d977cb387afc"
+        }
+      },
+      {
+        "session": "benign-v2-20261022_03_train_bursty",
+        "group": "train-1",
+        "role": "train",
+        "scenario": "bursty",
+        "accepted": false,
+        "reasons": [
+          "integrity findings require review before benign admission"
+        ],
+        "snapshots": 720,
+        "windows": 656,
+        "score_coverage": 0.9111111111111111,
+        "logs_accepted": true,
+        "integrity_findings": 1,
+        "collector_end": {
+          "snapshots": 720,
+          "errors": 0,
+          "missed_slots": 0
+        },
+        "full_snapshots_ms": [
+          2105.1,
+          2168.1
+        ],
+        "full_snapshots_mib": [
+          714.32,
+          735.27
+        ],
+        "delta_ms": {
+          "p50": 958.2,
+          "max": 1986.1
+        },
+        "monitor_max_gap_s": 1.9972798824310303,
+        "requests": 181634,
+        "request_errors": 0,
+        "raw_bytes": 15933850704,
+        "archive_stored_bytes": 2411350989,
+        "stage_s": {
+          "session-preflight": 0.6,
+          "capture": 3741.5,
+          "audit": 1001.9,
+          "archive": 552.4
+        },
+        "inputs_sha256": {
+          "audit": "480bfb0d38e559a03e2c68c3ab9b531278ca05fab0845e54def103cc1f016706",
+          "collect.log": "069ff0a603e227881d4cfe02a4432012599be5a70303e919de66e89e4cb0bfc5",
+          "archive-manifest.json": "53bf6a6b04c00ae342bb2a8f9735fb514b0e42f00eab6d59ca9d786231067170"
+        }
+      }
+    ],
+    "verify_archives": {
+      "verified": [
+        "benign-v2-20261022_01_train_write_heavy",
+        "benign-v2-20261022_02_train_quiet",
+        "benign-v2-20261022_03_train_bursty"
+      ],
+      "wall_s": 196.443320641,
+      "rc": 0
+    },
+    "inputs_sha256": {
+      "campaign.json": "b4f2377f02539317bfdf799cb9fd370979bb966dee7b3106becd3d1ed79b7cae",
+      "verify_log": "a6bee755654548148d6ca898a811e4863bc362e8e05f94f1e05aef22ac37805b"
+    },
+    "note": "Closed after the session 3 audit rejection; see collection_crossview_race_20261022.json."
+  }
+}

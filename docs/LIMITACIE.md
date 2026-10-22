@@ -460,6 +460,13 @@ miesta:
 3. **Nulový nález z neuzavretej kontroly nič nedokazuje.** Keď sa prechod zoznamu
    roztrhne (L1), rozdiel dvoch zoznamov nie je dôkaz skrývania. Preto každá kontrola
    hlási, či sa uzavrela, CLI to vypíše a vracia kód 4 namiesto 0.
+4. **Krížový rozdiel kratší než jedna perióda nie je nález.** Aj pri dvoch uzavretých
+   prechodoch živej snímky (L1) môže fork alebo exit krátkeho procesu vytvoriť rozdiel
+   bez skrývania; v benígnej session to raz nastalo
+   ([záznam](../data/results/collection_crossview_race_20261022.json)). Extrakcia,
+   audit a safeguard preto berú krížový rozdiel za nález až vtedy, keď ho ukáže aj
+   bezprostredne predchádzajúca snímka. Objekt skrytý kratšie ako jednu periódu nález
+   nevytvorí a alarm skrytého objektu príde o periódu neskôr.
 
 **Overenie.** Zdôvodnenie je v hlavičke `guestparse/checks.py`. Na meranej snímke sa
 uzavreli všetky tri kontroly a nález bol nulový:
@@ -483,7 +490,9 @@ $ echo $?
 > rozsahová kontrola nevidí; skrytie, ktoré odpojí uzol z oboch porovnávaných štruktúr
 > naraz, nevytvorí rozdiel; a nulový výsledok kontroly, ktorá sa pre neúplný prechod
 > zoznamu neuzavrela, nie je dôkazom čistoty — nástroj takýto prípad označuje samostatne
-> a nehlási ho ako úspech.
+> a nehlási ho ako úspech. Keďže snímka je živá, krížový rozdiel sa za nález považuje až
+> po zopakovaní v nasledujúcej snímke; skrytie kratšie ako jedna perióda zberu sa tak
+> nezistí.
 
 ---
 

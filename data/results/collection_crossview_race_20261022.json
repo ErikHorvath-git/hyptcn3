@@ -1,0 +1,212 @@
+{
+  "commit": "8498670bfb42e4f325016206d2caea6326b1f588",
+  "commit_dirty": true,
+  "date": "2026-10-22T07:22:35.416983+00:00",
+  "host": "Linux-7.2.9+deb13-amd64-x86_64-with-glibc2.41",
+  "guest": {
+    "kernel": "6.1.0-42-cloud-amd64",
+    "boot_id": "94c0cdf2-b241-4ad5-9b0e-3da64a682de5",
+    "machine_id": "180ac982142b4714a979599073c96cdd",
+    "stack_sha256": "3fcb9e724f031e3ed24fd3e08fb8f2946c8cd3f04416bc871d8f7dc31b3d46bc",
+    "stack_manifest": [
+      "c346dc8bc1c8c3649fc96064fddfc07172f740f7c82d1830dbb935b16c488271  /opt/hyptcn-lab/services.py",
+      "d7372422553f866333177456ac6daec4847f5660c1c854a646e602d0be0fcf6c  /opt/hyptcn-lab/schema.sql",
+      "a8e5ef8843ebae83eed8691f8eb7e1d186448d36e4be7d4406efeaa96291d5e3  /opt/hyptcn-lab/guest_state.py",
+      "62f55e4374b5db4522d0ce84c911f26ccd580e8f55bc570c09ee63c64be234c6  /etc/nginx/conf.d/hyptcn-lab.conf",
+      "af75eee623f3c7a0b7a1c10a35c2216684c6f4b610d44e46560de137ef3d6962  /etc/systemd/system/hyptcn-lab@.service",
+      "nginx\t1.22.1-9+deb12u10",
+      "postgresql\t15+248+deb12u1",
+      "python3\t3.11.2-1+b1",
+      "python3-psycopg2\t2.9.5-1+b1",
+      "timers:"
+    ]
+  },
+  "command": "data/results/collection_crossview_race_20261022/record.py data/campaigns/benign-v2-20261022 data/collections/benign-v2-20261022_03_train_bursty data/results/collection_crossview_race_20261022_audit.json data/results/collection_crossview_race_20261022/restore.out data/results/collection_crossview_race_20261022_reaudit.json data/results/collection_crossview_race_20261022.json",
+  "n": 720,
+  "values": {
+    "campaign_halt": {
+      "status": "stopped",
+      "stage": "error",
+      "message": "audit rejected session; archived without replacement: integrity findings require review before benign admission",
+      "accepted_archived": 2,
+      "session": "benign-v2-20261022_03_train_bursty"
+    },
+    "session": "benign-v2-20261022_03_train_bursty",
+    "session_commit": "813ce125ab09a7d06207d612911700609b6ff360",
+    "old_rule_audit": {
+      "accepted": false,
+      "reasons": [
+        "integrity findings require review before benign admission"
+      ],
+      "snapshots": 720,
+      "windows": 656,
+      "score_coverage": 0.9111111111111111,
+      "quality": {
+        "policy": "behavioral-inputs-v1",
+        "behavior_valid_rows": 720,
+        "legacy_valid_rows": 719,
+        "invalid_input_seq": [],
+        "integrity_inconclusive_rows": {
+          "modules": 0,
+          "process_cross_view": 1,
+          "syscall_table": 0,
+          "text_integrity": 720
+        },
+        "integrity_finding_rows": 1,
+        "integrity_findings": 1
+      },
+      "finding_rows": [
+        {
+          "seq": 645,
+          "findings": [
+            {
+              "check": "process_cross_view",
+              "task_va": 18446628112851369984,
+              "pid": 450961,
+              "comm": "postgres",
+              "seen_in": "tasks",
+              "missing_in": "children/sibling"
+            }
+          ]
+        }
+      ],
+      "process_cross_view_inconclusive_seq": [
+        661
+      ]
+    },
+    "probe": {
+      "pid": 450961,
+      "by_seq": [
+        {
+          "seq": 643,
+          "tasks": 109,
+          "tree": 109,
+          "conclusive": true,
+          "findings": 0,
+          "pid_in_tasks": false,
+          "pid_in_tree": false
+        },
+        {
+          "seq": 644,
+          "tasks": 109,
+          "tree": 109,
+          "conclusive": true,
+          "findings": 0,
+          "pid_in_tasks": false,
+          "pid_in_tree": false
+        },
+        {
+          "seq": 645,
+          "tasks": 110,
+          "tree": 109,
+          "conclusive": true,
+          "findings": 1,
+          "pid_in_tasks": true,
+          "pid_in_tree": false
+        },
+        {
+          "seq": 646,
+          "tasks": 109,
+          "tree": 109,
+          "conclusive": true,
+          "findings": 0,
+          "pid_in_tasks": false,
+          "pid_in_tree": false
+        },
+        {
+          "seq": 647,
+          "tasks": 109,
+          "tree": 109,
+          "conclusive": true,
+          "findings": 0,
+          "pid_in_tasks": false,
+          "pid_in_tree": false
+        }
+      ],
+      "task_at_645": {
+        "pid": 450961,
+        "comm": "postgres",
+        "parent_pid": 398,
+        "parent_comm": "postgres",
+        "flags": "0x400040",
+        "exit_state": 0,
+        "state": 0,
+        "pf_exiting": false,
+        "start_time_ns": 14393160499265
+      },
+      "parent_children_at_645": 30
+    },
+    "restore": {
+      "files": 1442,
+      "bytes": 15951490600,
+      "stored_bytes": 2367053356
+    },
+    "confirmation_rule_reaudit": {
+      "accepted": true,
+      "reasons": [],
+      "snapshots": 720,
+      "windows": 656,
+      "score_coverage": 0.9111111111111111,
+      "quality": {
+        "policy": "behavioral-inputs-v1",
+        "behavior_valid_rows": 720,
+        "legacy_valid_rows": 718,
+        "invalid_input_seq": [],
+        "integrity_inconclusive_rows": {
+          "modules": 0,
+          "process_cross_view": 2,
+          "syscall_table": 0,
+          "text_integrity": 720
+        },
+        "integrity_finding_rows": 0,
+        "integrity_findings": 0,
+        "integrity_unconfirmed_seq": [
+          645
+        ],
+        "integrity_unconfirmed": 1
+      },
+      "logs_accepted": true,
+      "matrix_identical_to_old_rule": true,
+      "valid_mask_identical": true,
+      "quality_rows_changed_seq": [
+        645
+      ],
+      "rows_with_unconfirmed_seq": [
+        645
+      ],
+      "chk_crossview_at_645": 1.0,
+      "quality_at_645": {
+        "traversals_complete": true,
+        "behavior_valid": true,
+        "inconclusive": [
+          "process_cross_view",
+          "text_integrity"
+        ],
+        "findings": [],
+        "model_valid": false,
+        "unconfirmed_findings": [
+          {
+            "check": "process_cross_view",
+            "task_va": 18446628112851369984,
+            "pid": 450961,
+            "comm": "postgres",
+            "seen_in": "tasks",
+            "missing_in": "children/sibling"
+          }
+        ],
+        "read_errors": 0,
+        "filled_zero": 0
+      }
+    },
+    "inputs_sha256": {
+      "closed.json": "26ae8d88f6a7bc9fff8ed1db6aacc01efc44370e20a61bdeb22c05bb4fb8ae68",
+      "audit": "480bfb0d38e559a03e2c68c3ab9b531278ca05fab0845e54def103cc1f016706",
+      "audit_features": "51f85347bf11fe3ca5b843bd912f05a481842863318afe8a2972f8c06f2ae921",
+      "probe.jsonl": "79992f0ddc703f9abc80881517c4f0b3edae968ca76266730e186d035498e136",
+      "restore.out": "868a76fbfa765a710a3dba1da5fb34a6f898df661b4beb09cfd03df9d5995203",
+      "reaudit": "c4e18fbf3924cdbe09ec67a6e3e79ec47778d390afdc9045365aa696575120db",
+      "reaudit_features": "dcc8728508ded374dd35d6ffdc146a6637597ee83ad5a3dded2e0521c8bebe7f"
+    },
+    "note": "A live snapshot read the tasks and children/sibling links of a short-lived postmaster child at different moments. The re-audit runs on a restored copy of the archived raw chain; the historical verdict of the campaign stays rejected."
+  }
+}

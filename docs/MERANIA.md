@@ -1458,3 +1458,90 @@ MiB a trvala
 2446.6 {{res:collection_io_interference_20261021.json:values.second_full.read_ms}}
 ms. Prekročenie periódy audit zistí ako zmeškaný slot a kampaň zastaví.
 Stav pripravenosti je v [PRIPRAVENOST_KAMPANE.sk.md](PRIPRAVENOST_KAMPANE.sk.md).
+
+## 2026-10-22 — kampaň benign-v2-20261022 uzavretá po krížovom rozdiele jednej snímky
+
+Kampaň `benign-v2-20261022` (commit `813ce12`, pilot 3,
+48 {{res:collection_campaign_benign_v2_20261022.json:values.planned_sessions}}
+plánovaných session) prijala a archivovala dve session
+([záznam](../data/results/collection_campaign_benign_v2_20261022.json)).
+Session 1 (`write_heavy`) mala
+720 {{res:collection_campaign_benign_v2_20261022.json:values.sessions.0.snapshots}}
+snímok,
+656 {{res:collection_campaign_benign_v2_20261022.json:values.sessions.0.windows}}
+okien a
+0 {{res:collection_campaign_benign_v2_20261022.json:values.sessions.0.collector_end.missed_slots}}
+zmeškaných slotov; plné snímky trvali
+2090.7 {{res:collection_campaign_benign_v2_20261022.json:values.sessions.0.full_snapshots_ms.0}}
+ms a
+2090.6 {{res:collection_campaign_benign_v2_20261022.json:values.sessions.0.full_snapshots_ms.1}}
+ms, najpomalšia delta
+1807.2 {{res:collection_campaign_benign_v2_20261022.json:values.sessions.0.delta_ms.max}}
+ms. Generátor poslal
+60095 {{res:collection_campaign_benign_v2_20261022.json:values.sessions.0.requests}}
+požiadaviek s
+0 {{res:collection_campaign_benign_v2_20261022.json:values.sessions.0.request_errors}}
+chybami. Najväčšia medzera monitora bola
+2.0 {{res:collection_campaign_benign_v2_20261022.json:values.sessions.0.monitor_max_gap_s}}
+s; obe vynechané vzorky padli do spätného zápisu plnej snímky na SSD.
+Audit 720 snímok trval
+927.8 {{res:collection_campaign_benign_v2_20261022.json:values.sessions.0.stage_s.audit}}
+s a archivácia
+463.4 {{res:collection_campaign_benign_v2_20261022.json:values.sessions.0.stage_s.archive}}
+s. Session 2 (`quiet`) mala plné snímky
+2052.1 {{res:collection_campaign_benign_v2_20261022.json:values.sessions.1.full_snapshots_ms.0}}
+ms a
+2044.0 {{res:collection_campaign_benign_v2_20261022.json:values.sessions.1.full_snapshots_ms.1}}
+ms a medzeru monitora
+1.0 {{res:collection_campaign_benign_v2_20261022.json:values.sessions.1.monitor_max_gap_s}}
+s. Po uzavretí kampane `verify-archives` overil dekompresiou všetky tri
+archívy za
+196.4 {{res:collection_campaign_benign_v2_20261022.json:values.verify_archives.wall_s}}
+s.
+
+Session 3 (`bursty`) zberač zachytil bez chyby
+(0 {{res:collection_campaign_benign_v2_20261022.json:values.sessions.2.collector_end.missed_slots}}
+zmeškaných slotov,
+181634 {{res:collection_campaign_benign_v2_20261022.json:values.sessions.2.requests}}
+požiadaviek s
+0 {{res:collection_campaign_benign_v2_20261022.json:values.sessions.2.request_errors}}
+chybami), ale audit ju zamietol pre jeden nález integrity a kampaň sa
+zastavila ([záznam](../data/results/collection_crossview_race_20261022.json),
+[audit](../data/results/collection_crossview_race_20261022_audit.json)).
+V snímke
+645 {{res:collection_crossview_race_20261022.json:values.old_rule_audit.finding_rows.0.seq}}
+bol proces `postgres` s pid
+450961 {{res:collection_crossview_race_20261022.json:values.old_rule_audit.finding_rows.0.findings.0.pid}}
+v zozname `tasks`, ale nie v strome `children`/`sibling`; oba prechody sa
+uzavreli. Rozbor obnoveného reťazca: rodičom bol postmaster (pid
+398 {{res:collection_crossview_race_20261022.json:values.probe.task_at_645.parent_pid}}),
+proces nemal `PF_EXITING` a v zozname potomkov postmastra
+(30 {{res:collection_crossview_race_20261022.json:values.probe.parent_children_at_645}}
+položiek) chýbal. Snímky 643 a 644 mali v oboch pohľadoch
+109 {{res:collection_crossview_race_20261022.json:values.probe.by_seq.1.tasks}}
+procesov, snímka 645
+110 {{res:collection_crossview_race_20261022.json:values.probe.by_seq.2.tasks}}
+oproti
+109 {{res:collection_crossview_race_20261022.json:values.probe.by_seq.2.tree}}
+a snímky 646 a 647 znova
+109 {{res:collection_crossview_race_20261022.json:values.probe.by_seq.3.tree}}
+v oboch. Krátko žijúci potomok postmastra vznikol alebo zanikol medzi
+prečítaním stránok s dvoma spojkami; živá snímka (L1) tak vytvorila rozdiel
+bez skrývania.
+
+Rozhodnutie: commit `8498670` berie krížový rozdiel za nález až vtedy, keď ho
+ukáže aj bezprostredne predchádzajúca snímka tej istej session
+([kontroly.md](kontroly.md), L10 v [LIMITACIE.md](LIMITACIE.md)). Opätovný
+audit tej istej obnovenej session týmto commitom
+([audit](../data/results/collection_crossview_race_20261022_reaudit.json))
+ju prijal:
+0 {{res:collection_crossview_race_20261022.json:values.confirmation_rule_reaudit.quality.integrity_findings}}
+nálezov,
+1 {{res:collection_crossview_race_20261022.json:values.confirmation_rule_reaudit.quality.integrity_unconfirmed}}
+nepotvrdený rozdiel (snímka 645) a
+656 {{res:collection_crossview_race_20261022.json:values.confirmation_rule_reaudit.windows}}
+okien. Matica príznakov a maska platných vstupov sú zhodné s pôvodným
+auditom; zmenil sa iba záznam kvality snímky 645. Historický verdikt
+kampane sa nemení. Kampaň je uzavretá (`closed.json`); session 1 a 2
+zostávajú v jej archíve a do novej kampane sa nepresúvajú. Zmena meracieho
+kódu vyžaduje nový pilot.

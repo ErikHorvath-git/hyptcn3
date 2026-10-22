@@ -84,6 +84,20 @@ kontroly v poli `summary.inconclusive`. Rozdiely neúplných pohľadov na proces
 a moduly sú v `inconclusive_differences`, nie vo `findings`; nevytvárajú preto
 alarm integrity. Nezávislé nálezy (napríklad neprípustné meno modulu alebo hook
 v tabuľke volaní) sa vyhodnocujú aj pri neuzavretej krížovej kontrole.
+
+Uzavreté prechody ešte neznamenajú jeden okamih. Stránky so spojkami `tasks`
+a `children`/`sibling` sa čítajú v rôznom čase, takže fork alebo exit krátkeho
+procesu medzi nimi vytvorí rozdiel bez skrývania. V benígnej session
+`benign-v2-20261022_03_train_bursty` mala snímka 645 navyše v zozname
+`tasks` potomka postmastra (`postgres`, pid 450961), ktorý v strome chýbal;
+snímky 643, 644, 646 a 647 sa zhodovali
+([záznam](../data/results/collection_crossview_race_20261022.json)).
+Príkaz `checks` vypisuje rozdiely jednej snímky. Extrakcia príznakov,
+audit a safeguard ich za nález považujú, až keď ten istý rozdiel ukáže aj
+bezprostredne predchádzajúca snímka tej istej session (`features/snapshot.py`,
+`potvrd_krizove`). Rozdiel jedinej snímky je v `unconfirmed_findings`
+a kontrola je v `inconclusive`. Skrytý objekt zostáva skrytý aj v ďalšej
+snímke; objekt skrytý kratšie ako jednu periódu takto ako nález nevyjde.
 Neúplná kontrola zneplatňuje historický vektor so stĺpcami integrity. Protokol
 server-normal-v2 posudzuje behaviorálne vstupy osobitne; neuzavretá kontrola
 sa vykazuje aj vtedy, keď sú tieto vstupy úplné (pozri `METODIKA_ZBERU.sk.md`).

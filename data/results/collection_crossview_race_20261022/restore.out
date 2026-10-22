@@ -1,0 +1,8 @@
+{
+  "archive": "/home/eh/hyptcn3-archive/campaigns/benign-v2-20261022/collections/benign-v2-20261022_03_train_bursty",
+  "target": "/mnt/ssd/hyptcn3-work/diagnostics/finding-check-20261022/raw",
+  "schema": "hyptcn3/collection-archive/2",
+  "files": 1442,
+  "bytes": 15951490600,
+  "stored_bytes": 2367053356
+}
