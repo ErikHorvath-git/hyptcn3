@@ -81,7 +81,9 @@ snímky na SSD: v session kampaní `benign-v2-20261022` a `benign-v3-20261022`
 vznikli 2 s medzery (najviac 2,04 s, hranica auditu 2,5 s). Oneskorenie
 nastalo až po načítaní čítačov z `/proc`, v rovnakom okamihu, keď sa
 predĺžil zápis delta snímky zberača (session 3 kampane v3, snímka 26:
-čítanie 877 ms, spolu 1904 ms). Od 2026-10-22 preto riadky monitora
+čítanie 877 ms, spolu 1904 ms;
+[záznam](../data/results/collection_campaign_benign_v3_20261022.json)).
+Od 2026-10-22 preto riadky monitora
 zapisuje samostatné vlákno z fronty a vzorkovanie na zápis nečaká.
 
 Limit klienta generátora je od toho istého dňa 10 s namiesto 4 s:

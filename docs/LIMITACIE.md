@@ -72,6 +72,18 @@ Parser s tým počíta: každý prechod zoznamu má strop, detekciu cyklu a kont
 hodnôt, a keď sa preruší, hlási to poľom `truncated` a dôvodom v `stop_reason`. Tichý
 polovičný zoznam by sa nedal odlíšiť od skutočného stavu hosťa.
 
+Uzavretý prechod však ešte nie je správny prechod. V benígnej session
+`benign-v3-20261022_03_train_bursty` (720 snímok, profil `bursty`) sa zoznam `tasks`
+prešiel oboma smermi ([záznam](../data/results/collection_process_walk_race_20261022.json)).
+Dopredu sa neuzavrel iba v snímke 505: `next` posledného vlákna ukazoval na už ukončený
+proces `python3` (`EXIT_DEAD`) so starými ukazovateľmi a prechod sa zacyklil. Dozadu sa
+uzavrel cez tých istých 110 procesov ako susedné snímky. Dozadu sa uzavrela každá snímka,
+v snímke 529 však cez 78 procesov namiesto 110. V piatich snímkach sa smery líšili
+o jeden krátko žijúci proces, čo je bežné rozmazanie živej snímky. Parser preto berie
+zoznam dopredu. Keď sa roztrhne, uzavrie ho iba vtedy, keď prechod dozadu prejde presne
+tie uzly, ktoré prechod dopredu prešiel pred prvým spojením nezhodným s opačným smerom
+(`walk: "prev"`); inak zostáva `truncated`.
+
 **Formulácia do textu práce.**
 
 > Snímka je živá: virtuálny stroj sa počas čítania nezastavuje, pretože použité rozhranie
@@ -80,7 +92,9 @@ polovičný zoznam by sa nedal odlíšiť od skutočného stavu hosťa.
 > pochádzajú z rôznych okamihov a prechod spájaného zoznamu jadra sa môže roztrhnúť.
 > Parser je voči tomu obranný — každý prechod má strop, detekciu cyklu a kontrolu
 > rozumnosti hodnôt — a nekompletný výsledok označuje príznakom `truncated`, takže sa
-> nedá zameniť za skutočný stav hosťa. Merania pauzy sa neuvádzajú, lebo pauza
+> nedá zameniť za skutočný stav hosťa. Samotné uzavretie prechodu nepovažuje za dôkaz
+> správnosti: roztrhnutý zoznam procesov uzavrie iba vtedy, keď prechod v opačnom smere
+> prejde presne tie isté uzly. Merania pauzy sa neuvádzajú, lebo pauza
 > neexistuje: vo všetkých uložených snímkach je `paused = false` a `pause_ms = 0`.
 
 **Čo by to odstránilo.** Backend, ktorý vie vCPU zastaviť (napríklad cez QMP `stop`/`cont`

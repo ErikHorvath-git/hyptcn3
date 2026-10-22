@@ -245,12 +245,12 @@ znamenalo držať dve znenia toho istého. Nadpisy sú preto dosadené z neho, s
 | dokument | čo vlastní | riadkov |
 |---|---|---|
 | `docs/ARCHITEKTURA.md` | rozhrania, formát `.vmicd` a sidecaru, tok dát podrobne | 1166 |
-| `docs/MERANIA.md` | log meraní: čo, kedy, akým príkazom a s akým výsledkom | 1595 |
-| `docs/LIMITACIE.md` | L1 až L18: čo systém nevie a čo z toho plynie pre text | 897 |
+| `docs/MERANIA.md` | log meraní: čo, kedy, akým príkazom a s akým výsledkom | 1711 |
+| `docs/LIMITACIE.md` | L1 až L18: čo systém nevie a čo z toho plynie pre text | 911 |
 | `docs/kontroly.md` | kontroly podozrivých vzorcov a validačný príkaz | 278 |
 | `HONESTY.md` | pravidlá pre čísla a slová v texte práce | 272 |
 | `README.md` | rozcestník repozitára a pôvod prevzatého kódu | 76 |
-| `docs/LAB.sk.md` | serverové laboratórium, premávka z hostiteľa a RAM zber | 280 |
+| `docs/LAB.sk.md` | serverové laboratórium, premávka z hostiteľa a RAM zber | 282 |
 | `docs/METODIKA_ZBERU.sk.md` | protokol zberu, príznaky, rozdelenie korpusu a audit | 372 |
 | `docs/SAFEGUARD.sk.md` | tréning modelového balíka, replay a spustenie detektora | 233 |
 | `vmicollect/README.md` | zberač zvnútra: vrstvy, hooky, formáty | 460 |

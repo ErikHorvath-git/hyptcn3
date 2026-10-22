@@ -1593,3 +1593,119 @@ chybami. Najväčšia medzera monitora bola
 s. Audit trval
 792.98 {{res:collection_pilot_4_20261022_timing.json:values.audit_timing.wall_s}}
 s. Pilot je vstupom ďalšej kampane.
+
+## 2026-10-22 — kampaň benign-v3-20261022 uzavretá po roztrhnutom zozname procesov
+
+Kampaň `benign-v3-20261022` (commit `5cafb46`, pilot 4,
+48 {{res:collection_campaign_benign_v3_20261022.json:values.planned_sessions}}
+plánovaných session) prijala a archivovala dve session
+([záznam](../data/results/collection_campaign_benign_v3_20261022.json)).
+Session 1 (`write_heavy`) mala
+720 {{res:collection_campaign_benign_v3_20261022.json:values.sessions.0.snapshots}}
+snímok,
+656 {{res:collection_campaign_benign_v3_20261022.json:values.sessions.0.windows}}
+okien a
+0 {{res:collection_campaign_benign_v3_20261022.json:values.sessions.0.collector_end.missed_slots}}
+zmeškaných slotov. Plné snímky mali
+897.59 {{res:collection_campaign_benign_v3_20261022.json:values.sessions.0.full_snapshots_mib.0}}
+a
+888.09 {{res:collection_campaign_benign_v3_20261022.json:values.sessions.0.full_snapshots_mib.1}}
+MiB a trvali
+2355.2 {{res:collection_campaign_benign_v3_20261022.json:values.sessions.0.full_snapshots_ms.0}}
+a
+2354.1 {{res:collection_campaign_benign_v3_20261022.json:values.sessions.0.full_snapshots_ms.1}}
+ms. Najpomalšia delta (snímka 376) trvala
+2648.0 {{res:collection_campaign_benign_v3_20261022.json:values.sessions.0.long_cycles.2.total_ms}}
+ms, z toho čítanie
+2579.3 {{res:collection_campaign_benign_v3_20261022.json:values.sessions.0.long_cycles.2.read_ms}}
+ms. Generátor poslal
+60093 {{res:collection_campaign_benign_v3_20261022.json:values.sessions.0.requests}}
+požiadaviek s
+0 {{res:collection_campaign_benign_v3_20261022.json:values.sessions.0.request_errors}}
+chybami; najpomalšia požiadavka meranej fázy trvala
+1691.0 {{res:collection_campaign_benign_v3_20261022.json:values.sessions.0.measure_latency.max_ms}}
+ms. Najväčšia medzera monitora bola
+2.01 {{res:collection_campaign_benign_v3_20261022.json:values.sessions.0.monitor_max_gap_s}}
+s. Audit trval
+1202.0 {{res:collection_campaign_benign_v3_20261022.json:values.sessions.0.stage_s.audit}}
+s a archivácia
+452.8 {{res:collection_campaign_benign_v3_20261022.json:values.sessions.0.stage_s.archive}}
+s. Session 2 (`quiet`) mala plné snímky
+2346.9 {{res:collection_campaign_benign_v3_20261022.json:values.sessions.1.full_snapshots_ms.0}}
+a
+2330.9 {{res:collection_campaign_benign_v3_20261022.json:values.sessions.1.full_snapshots_ms.1}}
+ms, medzeru monitora
+1.04 {{res:collection_campaign_benign_v3_20261022.json:values.sessions.1.monitor_max_gap_s}}
+s a najpomalšiu požiadavku
+773.1 {{res:collection_campaign_benign_v3_20261022.json:values.sessions.1.measure_latency.max_ms}}
+ms. Po uzavretí kampane `verify-archives` overil dekompresiou všetky tri
+archívy za
+198.7 {{res:collection_campaign_benign_v3_20261022.json:values.verify_archives.wall_s}}
+s.
+
+Session 3 (`bursty`) zberač zachytil bez chyby
+(0 {{res:collection_campaign_benign_v3_20261022.json:values.sessions.2.collector_end.missed_slots}}
+zmeškaných slotov,
+180896 {{res:collection_campaign_benign_v3_20261022.json:values.sessions.2.requests}}
+požiadaviek s
+0 {{res:collection_campaign_benign_v3_20261022.json:values.sessions.2.request_errors}}
+chybami), ale audit ju zamietol pre neúplné vstupy modelu a kampaň sa
+zastavila ([záznam](../data/results/collection_process_walk_race_20261022.json),
+[audit](../data/results/collection_process_walk_race_20261022_audit.json)).
+V snímke 505 sa prechod zoznamu `tasks` dopredu zacyklil. Po
+110 {{res:collection_process_walk_race_20261022.json:values.snapshot_505.first_inconsistent_forward_link.at_index}}
+procesoch ukazoval `next` posledného vlákna na proces `python3` s pid
+388899 {{res:collection_process_walk_race_20261022.json:values.snapshot_505.forward_only_task.pid}}
+a `exit_state`
+16 {{res:collection_process_walk_race_20261022.json:values.snapshot_505.forward_only_task.exit_state}}
+(`EXIT_DEAD`). Jeho `prev` neukazoval späť a jeho `next` viedol späť do
+zoznamu. Prechod dozadu sa uzavrel cez
+110 {{res:collection_process_walk_race_20261022.json:values.snapshot_505.backward_count}}
+procesov; snímky 504 a 506 mali oboma smermi
+110 {{res:collection_process_walk_race_20261022.json:values.snapshot_505.neighbors.504.forward_count}}
+procesov. Prechod oboma smermi vo všetkých
+720 {{res:collection_process_walk_race_20261022.json:values.both_directions_all_snapshots.snapshots}}
+snímkach obnovenej session: dopredu sa neuzavrela iba snímka 505, dozadu sa
+uzavreli všetky. V snímke 529 sa však prechod dozadu uzavrel cez
+78 {{res:collection_process_walk_race_20261022.json:values.both_directions_all_snapshots.directions_differ.5.backward}}
+procesov, kým prechod dopredu a susedné snímky mali
+110 {{res:collection_process_walk_race_20261022.json:values.both_directions_all_snapshots.directions_differ.5.forward}}.
+Uzavretý prechod teda sám nie je dôkaz správnosti. V ďalších piatich
+snímkach sa smery líšili o jeden krátko žijúci proces.
+
+Session 3 ukázala aj zmenšujúce sa rezervy. Medzera monitora bola
+2.04 {{res:collection_campaign_benign_v3_20261022.json:values.sessions.2.monitor_max_gap_s}}
+s pri
+3 {{res:collection_campaign_benign_v3_20261022.json:values.sessions.2.monitor_missed_ticks}}
+vynechaných vzorkách (hranica auditu je 2,5 s). Dve z nich padli do snímky
+26, ktorej čítanie trvalo
+877.2 {{res:collection_campaign_benign_v3_20261022.json:values.sessions.2.long_cycles.1.read_ms}}
+ms a celý cyklus
+1903.6 {{res:collection_campaign_benign_v3_20261022.json:values.sessions.2.long_cycles.1.total_ms}}
+ms. Najpomalšia požiadavka trvala
+2348.6 {{res:collection_campaign_benign_v3_20261022.json:values.sessions.2.measure_latency.max_ms}}
+ms a
+19 {{res:collection_campaign_benign_v3_20261022.json:values.sessions.2.measure_latency.over_2s}}
+požiadaviek prekročilo 2 s (limit klienta bol 4 s).
+
+Rozhodnutie: commit `0b61ffd` berie zoznam procesov dopredu. Keď sa
+roztrhne, zoznam tvoria uzly prejdené pred prvým spojením nezhodným
+s opačným smerom, ale iba ak sa prechod dozadu uzavrel cez presne tie isté
+uzly ([kontroly.md](kontroly.md), L1 v [LIMITACIE.md](LIMITACIE.md)).
+Monitor hostiteľa zapisuje riadky z fronty vo vlastnom vlákne a limit klienta
+generátora je 10 s ([LAB.sk.md](LAB.sk.md)). Opätovný audit tej istej
+obnovenej session týmto commitom
+([audit](../data/results/collection_process_walk_race_20261022_reaudit.json))
+ju prijal s
+656 {{res:collection_process_walk_race_20261022.json:values.confirmed_walk_reaudit.windows}}
+oknami,
+0 {{res:collection_process_walk_race_20261022.json:values.confirmed_walk_reaudit.quality.integrity_findings}}
+nálezmi a prechodom dozadu v snímke
+505 {{res:collection_process_walk_race_20261022.json:values.confirmed_walk_reaudit.quality.process_walk_prev_seq.0}}.
+Oproti pôvodnému auditu sa zmenili iba riadky 505 (počty procesov
+110 {{res:collection_process_walk_race_20261022.json:values.reaudit_vs_audit.vector_changed.0.columns.proc_total.1}}
+namiesto
+111 {{res:collection_process_walk_race_20261022.json:values.reaudit_vs_audit.vector_changed.0.columns.proc_total.0}})
+a 506 (má platného predchodcu). Historický verdikt kampane sa nemení.
+Kampaň je uzavretá (`closed.json`); session 1 a 2 zostávajú v jej archíve
+a do novej kampane sa nepresúvajú. Zmena meracieho kódu vyžaduje nový pilot.

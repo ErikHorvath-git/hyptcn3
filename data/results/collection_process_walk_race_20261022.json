@@ -1,0 +1,246 @@
+{
+  "commit": "0b61ffd3c3efad88cc81d540779a799d7250fc31",
+  "commit_dirty": true,
+  "date": "2026-10-22T14:14:42.162417+00:00",
+  "host": "Linux-7.2.9+deb13-amd64-x86_64-with-glibc2.41",
+  "guest": {
+    "kernel": "6.1.0-42-cloud-amd64",
+    "boot_id": "9ad0358b-a0ae-4d3a-9ce5-ccbdfa610d53",
+    "machine_id": "180ac982142b4714a979599073c96cdd",
+    "stack_sha256": "3fcb9e724f031e3ed24fd3e08fb8f2946c8cd3f04416bc871d8f7dc31b3d46bc",
+    "stack_manifest": [
+      "c346dc8bc1c8c3649fc96064fddfc07172f740f7c82d1830dbb935b16c488271  /opt/hyptcn-lab/services.py",
+      "d7372422553f866333177456ac6daec4847f5660c1c854a646e602d0be0fcf6c  /opt/hyptcn-lab/schema.sql",
+      "a8e5ef8843ebae83eed8691f8eb7e1d186448d36e4be7d4406efeaa96291d5e3  /opt/hyptcn-lab/guest_state.py",
+      "62f55e4374b5db4522d0ce84c911f26ccd580e8f55bc570c09ee63c64be234c6  /etc/nginx/conf.d/hyptcn-lab.conf",
+      "af75eee623f3c7a0b7a1c10a35c2216684c6f4b610d44e46560de137ef3d6962  /etc/systemd/system/hyptcn-lab@.service",
+      "nginx\t1.22.1-9+deb12u10",
+      "postgresql\t15+248+deb12u1",
+      "python3\t3.11.2-1+b1",
+      "python3-psycopg2\t2.9.5-1+b1",
+      "timers:"
+    ]
+  },
+  "command": "data/results/collection_process_walk_race_20261022/record.py data/campaigns/benign-v3-20261022 data/collections/benign-v3-20261022_03_train_bursty data/results/collection_process_walk_race_20261022_audit.json data/results/collection_process_walk_race_20261022/restore.out data/results/collection_process_walk_race_20261022_reaudit.json data/results/collection_process_walk_race_20261022.json",
+  "n": 720,
+  "values": {
+    "campaign_halt": {
+      "status": "stopped",
+      "stage": "error",
+      "message": "audit rejected session; archived without replacement: incomplete model inputs under behavioral-inputs-v1",
+      "accepted_archived": 2,
+      "session": "benign-v3-20261022_03_train_bursty"
+    },
+    "forward_walk_audit": {
+      "accepted": false,
+      "reasons": [
+        "incomplete model inputs under behavioral-inputs-v1"
+      ],
+      "windows": 623,
+      "score_coverage": 0.8652777777777778,
+      "quality": {
+        "behavior_valid_rows": 719,
+        "invalid_input_seq": [
+          505
+        ],
+        "integrity_findings": 0,
+        "integrity_unconfirmed_seq": [
+          449,
+          481
+        ],
+        "process_walk_prev_seq": null,
+        "integrity_inconclusive_rows": {
+          "modules": 0,
+          "process_cross_view": 4,
+          "syscall_table": 0,
+          "text_integrity": 720
+        }
+      },
+      "commit": "5cafb4644668c459cc0e1ddde3912b48b27e150a"
+    },
+    "snapshot_505": {
+      "forward_count": 111,
+      "forward_stop": "cycle at node 0xffff8f6f42f13c10 (index 79)",
+      "backward_count": 110,
+      "backward_stop": null,
+      "first_inconsistent_forward_link": {
+        "at_index": 110,
+        "node": "0xffff8f6f68273c10",
+        "pid": 388899,
+        "comm": "python3",
+        "prev": "0xffff8f6f446fbc10",
+        "came_from": "0xffff8f6f441355d0"
+      },
+      "forward_only_task": {
+        "task_va": "0xffff8f6f68273c10",
+        "pid": 388899,
+        "comm": "python3",
+        "mm_null": true,
+        "pf_exiting": true,
+        "exit_state": 16
+      },
+      "neighbors": {
+        "503": {
+          "forward_count": 110,
+          "backward_count": 110,
+          "forward_stop": null,
+          "backward_stop": null
+        },
+        "504": {
+          "forward_count": 110,
+          "backward_count": 110,
+          "forward_stop": null,
+          "backward_stop": null
+        },
+        "506": {
+          "forward_count": 110,
+          "backward_count": 110,
+          "forward_stop": null,
+          "backward_stop": null
+        },
+        "507": {
+          "forward_count": 110,
+          "backward_count": 110,
+          "forward_stop": null,
+          "backward_stop": null
+        }
+      }
+    },
+    "both_directions_all_snapshots": {
+      "snapshots": 720,
+      "forward_stops": {
+        "None": 719,
+        "cycle": 1
+      },
+      "backward_stops": {
+        "None": 720
+      },
+      "forward_inconsistent_link_seq": [
+        505,
+        513
+      ],
+      "directions_differ": [
+        {
+          "seq": 481,
+          "forward": 110,
+          "backward": 109,
+          "only_forward": 1,
+          "only_backward": 0
+        },
+        {
+          "seq": 493,
+          "forward": 111,
+          "backward": 110,
+          "only_forward": 1,
+          "only_backward": 0
+        },
+        {
+          "seq": 505,
+          "forward": 111,
+          "backward": 110,
+          "only_forward": 1,
+          "only_backward": 0
+        },
+        {
+          "seq": 513,
+          "forward": 111,
+          "backward": 110,
+          "only_forward": 1,
+          "only_backward": 0
+        },
+        {
+          "seq": 517,
+          "forward": 110,
+          "backward": 111,
+          "only_forward": 0,
+          "only_backward": 1
+        },
+        {
+          "seq": 529,
+          "forward": 110,
+          "backward": 78,
+          "only_forward": 33,
+          "only_backward": 1
+        }
+      ],
+      "note": "Both walks closed in every snapshot except the forward walk of 505; the backward walk of 529 closed over 78 tasks while the forward walk and the neighbors had 110."
+    },
+    "restore": {
+      "archive": "/home/eh/hyptcn3-archive/campaigns/benign-v3-20261022/collections/benign-v3-20261022_03_train_bursty",
+      "target": "/mnt/ssd/hyptcn3-work/diagnostics/cycle-check-20261022/raw",
+      "schema": "hyptcn3/collection-archive/2",
+      "files": 1442,
+      "bytes": 15976170865,
+      "stored_bytes": 2414286310
+    },
+    "confirmed_walk_reaudit": {
+      "accepted": true,
+      "reasons": [],
+      "windows": 656,
+      "score_coverage": 0.9111111111111111,
+      "quality": {
+        "behavior_valid_rows": 720,
+        "invalid_input_seq": [],
+        "integrity_findings": 0,
+        "integrity_unconfirmed_seq": [
+          449,
+          481
+        ],
+        "process_walk_prev_seq": [
+          505
+        ],
+        "integrity_inconclusive_rows": {
+          "modules": 0,
+          "process_cross_view": 4,
+          "syscall_table": 0,
+          "text_integrity": 720
+        }
+      },
+      "commit": "0b61ffd3c3efad88cc81d540779a799d7250fc31",
+      "commit_dirty": false,
+      "measurement_dirty": []
+    },
+    "reaudit_vs_audit": {
+      "quality_changed_seq": [
+        505
+      ],
+      "vector_changed": [
+        {
+          "seq": 505,
+          "columns": {
+            "proc_total": [
+              111.0,
+              110.0
+            ],
+            "proc_kernel": [
+              61.0,
+              60.0
+            ],
+            "proc_new": [
+              1.0,
+              0.0
+            ]
+          }
+        },
+        {
+          "seq": 506,
+          "columns": {
+            "ma_predchodcu": [
+              0.0,
+              1.0
+            ]
+          }
+        }
+      ]
+    },
+    "inputs_sha256": {
+      "audit": "19a90d341c4cbc7e1acccce467f9f981823a185131275a18a9a9548b75d937bf",
+      "audit_npz": "c870f3c5719b9cbf6624dfee3d0a02e639d6ebadff84ee8e9c517a157f403cb0",
+      "reaudit": "3155a08f3e80ee726da133b76c62ea4adac06b7ee601f7e3ab78be5c41a0d9aa",
+      "reaudit_npz": "35dd0d147a2c4c8bca601b7907815a791c7e93edc6106e3cd0291d96e2463347",
+      "restore_out": "e25701e6ba90b82908a04a4a53359242d7795be7f9432973fcc1b86b41c0b0b2",
+      "walk_probe.jsonl": "27cf5fa201686013ed565aaee9c27881c6c87febafd73e5a72373643f6146b42",
+      "walk_all.jsonl": "f649196eae2e10d65b1e6865c1b01ee4b87be4473aca8ed731f1bd08fc4cc0aa"
+    }
+  }
+}

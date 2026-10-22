@@ -1,0 +1,326 @@
+{
+  "commit": "0b61ffd3c3efad88cc81d540779a799d7250fc31",
+  "commit_dirty": true,
+  "date": "2026-10-22T14:15:00.006082+00:00",
+  "host": "Linux-7.2.9+deb13-amd64-x86_64-with-glibc2.41",
+  "guest": {
+    "kernel": "6.1.0-42-cloud-amd64",
+    "machine_id": "180ac982142b4714a979599073c96cdd",
+    "stack_sha256": "3fcb9e724f031e3ed24fd3e08fb8f2946c8cd3f04416bc871d8f7dc31b3d46bc",
+    "stack_manifest": [
+      "c346dc8bc1c8c3649fc96064fddfc07172f740f7c82d1830dbb935b16c488271  /opt/hyptcn-lab/services.py",
+      "d7372422553f866333177456ac6daec4847f5660c1c854a646e602d0be0fcf6c  /opt/hyptcn-lab/schema.sql",
+      "a8e5ef8843ebae83eed8691f8eb7e1d186448d36e4be7d4406efeaa96291d5e3  /opt/hyptcn-lab/guest_state.py",
+      "62f55e4374b5db4522d0ce84c911f26ccd580e8f55bc570c09ee63c64be234c6  /etc/nginx/conf.d/hyptcn-lab.conf",
+      "af75eee623f3c7a0b7a1c10a35c2216684c6f4b610d44e46560de137ef3d6962  /etc/systemd/system/hyptcn-lab@.service",
+      "nginx\t1.22.1-9+deb12u10",
+      "postgresql\t15+248+deb12u1",
+      "python3\t3.11.2-1+b1",
+      "python3-psycopg2\t2.9.5-1+b1",
+      "timers:"
+    ]
+  },
+  "command": "data/results/collection_campaign_benign_v3_20261022/record.py data/campaigns/benign-v3-20261022 data/results/collection_campaign_benign_v3_20261022/verify_archives.log data/results/collection_campaign_benign_v3_20261022.json",
+  "n": 3,
+  "values": {
+    "campaign": "benign-v3-20261022",
+    "campaign_commit": "5cafb4644668c459cc0e1ddde3912b48b27e150a",
+    "planned_sessions": 48,
+    "final_status": {
+      "status": "closed",
+      "stage": "closed",
+      "message": "Session 3 was rejected for incomplete model inputs: in snapshot 505 the forward walk of init_task.tasks looped through an exited python3 task (pid 388899, EXIT_DEAD) with stale pointers, while the backward walk closed over the same 110 tasks as snapshots 504 and 506. A live-read tear at the list tail, not a guest fault. Commit 0b61ffd accepts a torn list only when the backward walk closes over exactly the nodes passed forward before the first inconsistent link; it also moves host monitor writes to a writer thread and raises the client timeout to 10 s. A new pilot and campaign follow. Sessions 1-2 stay archived and are not moved into the next campaign.",
+      "accepted_archived": 2,
+      "session": "benign-v3-20261022_03_train_bursty"
+    },
+    "closed": {
+      "schema": "hyptcn3/campaign-closed/1",
+      "id": "benign-v3-20261022",
+      "date": "2026-10-22T13:50:18.956013+00:00",
+      "reason": "Session 3 was rejected for incomplete model inputs: in snapshot 505 the forward walk of init_task.tasks looped through an exited python3 task (pid 388899, EXIT_DEAD) with stale pointers, while the backward walk closed over the same 110 tasks as snapshots 504 and 506. A live-read tear at the list tail, not a guest fault. Commit 0b61ffd accepts a torn list only when the backward walk closes over exactly the nodes passed forward before the first inconsistent link; it also moves host monitor writes to a writer thread and raises the client timeout to 10 s. A new pilot and campaign follow. Sessions 1-2 stay archived and are not moved into the next campaign.",
+      "uid": 1000,
+      "status_before": {
+        "status": "stopped",
+        "stage": "error",
+        "accepted_archived": 2,
+        "total": 48,
+        "updated_at": "2026-10-22T13:03:04.371404+00:00",
+        "pid": 1044648,
+        "process_identity": {
+          "host_boot": "eb635e03-638a-4d7c-ab67-9ee1a4d410cf",
+          "start_ticks": "17471076"
+        },
+        "inhibitor_pid": 1044662,
+        "message": "audit rejected session; archived without replacement: incomplete model inputs under behavioral-inputs-v1",
+        "signals": [],
+        "session": "benign-v3-20261022_03_train_bursty",
+        "group": "train-1",
+        "role": "train",
+        "scenario": "bursty",
+        "position": 3,
+        "capture_started_at": "2026-10-22T11:31:17.757335+00:00"
+      },
+      "note": "Operator decision. Captured, audited and archived sessions remain; no corpus index."
+    },
+    "sessions": [
+      {
+        "session": "benign-v3-20261022_01_train_write_heavy",
+        "group": "train-1",
+        "role": "train",
+        "scenario": "write_heavy",
+        "accepted": true,
+        "reasons": [],
+        "snapshots": 720,
+        "windows": 656,
+        "score_coverage": 0.9111111111111111,
+        "logs_accepted": true,
+        "integrity_findings": 0,
+        "invalid_input_seq": [],
+        "integrity_unconfirmed_seq": [],
+        "collector_end": {
+          "snapshots": 720,
+          "errors": 0,
+          "missed_slots": 0
+        },
+        "full_snapshots_ms": [
+          2355.2,
+          2354.1
+        ],
+        "full_snapshots_mib": [
+          897.59,
+          888.09
+        ],
+        "delta_ms": {
+          "p50": 891.8,
+          "max": 2648.0
+        },
+        "long_cycles": [
+          {
+            "seq": 0,
+            "kind": "PLNA",
+            "mib": 897.59,
+            "read_ms": 2355.1,
+            "total_ms": 2355.2
+          },
+          {
+            "seq": 360,
+            "kind": "PLNA",
+            "mib": 888.09,
+            "read_ms": 2353.4,
+            "total_ms": 2354.1
+          },
+          {
+            "seq": 376,
+            "kind": "delta",
+            "mib": 14.89,
+            "read_ms": 2579.3,
+            "total_ms": 2648.0
+          }
+        ],
+        "monitor_max_gap_s": 2.012269973754883,
+        "monitor_missed_ticks": 1,
+        "requests": 60093,
+        "request_errors": 0,
+        "measure_latency": {
+          "n": 58165,
+          "max_ms": 1690.999,
+          "p99_ms": 145.138,
+          "over_1s": 134,
+          "over_2s": 0
+        },
+        "raw_bytes": 12680823312,
+        "archive_stored_bytes": 1977311765,
+        "stage_s": {
+          "session-preflight": 0.9,
+          "reboot": 28.8,
+          "capture": 3740.2,
+          "audit": 1202.0,
+          "archive": 452.8,
+          "session-complete": 0.1,
+          "preflight": 0.3
+        },
+        "inputs_sha256": {
+          "audit": "1edab05d13bab8581787afcc330ebafd8b90a817ccf6b174695e1a5552b82705",
+          "collect.log": "1591bd408315e561126438b4b0dedb03a2d98b3136d418f85deb3ed8098e2578",
+          "traffic_requests.jsonl": "d8ae9dabb862676ff297741a52ad720f45fab9feb23e7542d6a89d943e6e7d16",
+          "archive-manifest.json": "714c68f24f80fe5b1a4c6178ca5b1a7f43edeed192605db00834dfc497dd9dc1"
+        }
+      },
+      {
+        "session": "benign-v3-20261022_02_train_quiet",
+        "group": "train-1",
+        "role": "train",
+        "scenario": "quiet",
+        "accepted": true,
+        "reasons": [],
+        "snapshots": 720,
+        "windows": 656,
+        "score_coverage": 0.9111111111111111,
+        "logs_accepted": true,
+        "integrity_findings": 0,
+        "invalid_input_seq": [],
+        "integrity_unconfirmed_seq": [],
+        "collector_end": {
+          "snapshots": 720,
+          "errors": 0,
+          "missed_slots": 0
+        },
+        "full_snapshots_ms": [
+          2346.9,
+          2330.9
+        ],
+        "full_snapshots_mib": [
+          895.33,
+          894.48
+        ],
+        "delta_ms": {
+          "p50": 827.1,
+          "max": 1089.8
+        },
+        "long_cycles": [
+          {
+            "seq": 0,
+            "kind": "PLNA",
+            "mib": 895.33,
+            "read_ms": 2346.7,
+            "total_ms": 2346.9
+          },
+          {
+            "seq": 360,
+            "kind": "PLNA",
+            "mib": 894.48,
+            "read_ms": 2328.6,
+            "total_ms": 2330.9
+          }
+        ],
+        "monitor_max_gap_s": 1.0428791046142578,
+        "monitor_missed_ticks": 0,
+        "requests": 5381,
+        "request_errors": 0,
+        "measure_latency": {
+          "n": 5202,
+          "max_ms": 773.073,
+          "p99_ms": 131.03,
+          "over_1s": 0,
+          "over_2s": 0
+        },
+        "raw_bytes": 7696851840,
+        "archive_stored_bytes": 1318771810,
+        "stage_s": {
+          "session-preflight": 0.9,
+          "capture": 3735.1,
+          "audit": 950.1,
+          "archive": 295.2,
+          "session-complete": 0.2
+        },
+        "inputs_sha256": {
+          "audit": "601cae5c1778a7176e29bd13c4ff7f0cc7d591b0d34f406d047aed79656d7a7c",
+          "collect.log": "84af062bfc118824e059da55f7880a85b60261f586a3a1204624ebbc1935ef65",
+          "traffic_requests.jsonl": "53bb9602c7cb4388980b6bcdabced52d58e98a16819a2d8f9ccf04147c18ded0",
+          "archive-manifest.json": "013ae747628a08406e479df39568a2946e8cfe2158c332e891891fe7f4479bc2"
+        }
+      },
+      {
+        "session": "benign-v3-20261022_03_train_bursty",
+        "group": "train-1",
+        "role": "train",
+        "scenario": "bursty",
+        "accepted": false,
+        "reasons": [
+          "incomplete model inputs under behavioral-inputs-v1"
+        ],
+        "snapshots": 720,
+        "windows": 623,
+        "score_coverage": 0.8652777777777778,
+        "logs_accepted": true,
+        "integrity_findings": 0,
+        "invalid_input_seq": [
+          505
+        ],
+        "integrity_unconfirmed_seq": [
+          449,
+          481
+        ],
+        "collector_end": {
+          "snapshots": 720,
+          "errors": 0,
+          "missed_slots": 0
+        },
+        "full_snapshots_ms": [
+          2400.6,
+          2458.5
+        ],
+        "full_snapshots_mib": [
+          895.5,
+          917.43
+        ],
+        "delta_ms": {
+          "p50": 954.0,
+          "max": 1903.6
+        },
+        "long_cycles": [
+          {
+            "seq": 0,
+            "kind": "PLNA",
+            "mib": 895.5,
+            "read_ms": 2400.5,
+            "total_ms": 2400.6
+          },
+          {
+            "seq": 26,
+            "kind": "delta",
+            "mib": 19.09,
+            "read_ms": 877.2,
+            "total_ms": 1903.6
+          },
+          {
+            "seq": 360,
+            "kind": "PLNA",
+            "mib": 917.43,
+            "read_ms": 2456.2,
+            "total_ms": 2458.5
+          }
+        ],
+        "monitor_max_gap_s": 2.0417959690093994,
+        "monitor_missed_ticks": 3,
+        "requests": 180896,
+        "request_errors": 0,
+        "measure_latency": {
+          "n": 175172,
+          "max_ms": 2348.643,
+          "p99_ms": 82.34,
+          "over_1s": 253,
+          "over_2s": 19
+        },
+        "raw_bytes": 15958532160,
+        "archive_stored_bytes": 2458513161,
+        "stage_s": {
+          "session-preflight": 0.6,
+          "capture": 3741.3,
+          "audit": 1218.2,
+          "archive": 547.1
+        },
+        "inputs_sha256": {
+          "audit": "19a90d341c4cbc7e1acccce467f9f981823a185131275a18a9a9548b75d937bf",
+          "collect.log": "26bea5c5918754d0ae7084e8e2b456ce3325120c065ad1e8ef5bdef4a482dc74",
+          "traffic_requests.jsonl": "cf281b51c2d566b570044c1e65b0aa2c476dd1ea281fe23fd0b569c2304c775b",
+          "archive-manifest.json": "2a39fb81ca6590237a54f12150311c459a45d64ff011e1c387c654a79e6fa336"
+        }
+      }
+    ],
+    "verify_archives": {
+      "verified": [
+        "benign-v3-20261022_01_train_write_heavy",
+        "benign-v3-20261022_02_train_quiet",
+        "benign-v3-20261022_03_train_bursty"
+      ],
+      "wall_s": 198.678846508,
+      "rc": 0
+    },
+    "inputs_sha256": {
+      "campaign.json": "673ecc16d3c6e51b4d850a8f54277193035c100b95d0cf40f27927069c025180",
+      "verify_log": "43cd472c2b520e65347f31b7570fc0d6ef2b3f5ad923f1522bb50e422c59e678"
+    },
+    "note": "Closed after the session 3 audit rejection; see collection_process_walk_race_20261022.json."
+  }
+}
