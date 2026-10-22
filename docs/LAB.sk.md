@@ -70,7 +70,11 @@ zapísala naraz. Commity databázy hosťa (fsync obrazu disku) čakali v tom
 istom žurnále za týmto zápisom a štyri požiadavky prekročili limit klienta
 4 s ([záznam](../data/results/collection_io_interference_20261021.json)).
 Snímky, logy a príznaky zostávajú na SSD; disk hosťa je teraz na inom
-zariadení aj súborovom systéme.
+zariadení aj súborovom systéme. Rovnaký mechanizmus zastavil aj monitor
+hostiteľa: jeho `fsync` každých 60 s čakal počas takého zápisu a monitor
+vynechal vzorky (medzera 3 s, audit hranicu 2,5 s). Monitor preto počas
+vzorkovania `fsync` nevolá; synchronizuje až koncový záznam. Zapisovač logov
+premávky robí `fsync` vo vlastnom vlákne za frontou 50 000 záznamov.
 
 Hostiteľ má `vm.swappiness = 1` (`/etc/sysctl.d/90-hyptcn3-collection.conf`,
 od 2026-10-21). Pri pôvodnej hodnote 60 a swape na systémovom HDD (`sdb3`)

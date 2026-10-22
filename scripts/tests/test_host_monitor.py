@@ -65,3 +65,22 @@ def test_monitor_refuses_to_overwrite_existing_log(tmp_path):
                              "--duration-s", "0.2"], capture_output=True, text=True, timeout=10)
     assert result.returncode == 3
     assert out.read_text() == "previous measurement\n"
+
+
+def test_sampling_never_waits_for_an_fsync(tmp_path, monkeypatch):
+    """Only the end record is fsynced; 130 s of 1 s ticks run on a fake clock."""
+    from types import SimpleNamespace
+    from scripts import host_monitor
+    clock = {"t": 1000.0}
+    fake = SimpleNamespace(monotonic=lambda: clock["t"], time=time.time,
+                           sleep=lambda s: clock.__setitem__("t", clock["t"] + s))
+    monkeypatch.setattr(host_monitor, "time", fake)
+    calls = []
+    monkeypatch.setattr(host_monitor.os, "fsync", lambda fd: calls.append(fd))
+    out = tmp_path / "monitor.jsonl"
+    args = SimpleNamespace(out=out, interval_s=1.0, duration_s=130, session_id="fake-clock", path=None, disk=None,
+                           pid=None, match=None)
+    assert host_monitor.run(args) == 0
+    records = [json.loads(line) for line in out.read_text().splitlines()]
+    assert records[-1]["type"] == "end" and records[-1]["missed_ticks"] == 0
+    assert sum(r["type"] == "sample" for r in records) >= 130 and len(calls) == 1

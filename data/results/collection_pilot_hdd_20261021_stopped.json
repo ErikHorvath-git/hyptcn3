@@ -1,0 +1,76 @@
+{
+  "commit": "e067d6a6536f16f9b4979d6a11a502f3b57bd6c9",
+  "commit_dirty": true,
+  "date": "2026-10-22T00:25:13.792563+00:00",
+  "host": "Linux-7.2.9+deb13-amd64-x86_64-with-glibc2.41",
+  "guest": {
+    "kernel": "6.1.0-42-cloud-amd64",
+    "boot_id": "9a94eb9c-6f11-412e-8869-469af58f9d9a",
+    "machine_id": "180ac982142b4714a979599073c96cdd",
+    "stack_sha256": "3fcb9e724f031e3ed24fd3e08fb8f2946c8cd3f04416bc871d8f7dc31b3d46bc",
+    "stack_manifest": [
+      "c346dc8bc1c8c3649fc96064fddfc07172f740f7c82d1830dbb935b16c488271  /opt/hyptcn-lab/services.py",
+      "d7372422553f866333177456ac6daec4847f5660c1c854a646e602d0be0fcf6c  /opt/hyptcn-lab/schema.sql",
+      "a8e5ef8843ebae83eed8691f8eb7e1d186448d36e4be7d4406efeaa96291d5e3  /opt/hyptcn-lab/guest_state.py",
+      "62f55e4374b5db4522d0ce84c911f26ccd580e8f55bc570c09ee63c64be234c6  /etc/nginx/conf.d/hyptcn-lab.conf",
+      "af75eee623f3c7a0b7a1c10a35c2216684c6f4b610d44e46560de137ef3d6962  /etc/systemd/system/hyptcn-lab@.service",
+      "nginx\t1.22.1-9+deb12u10",
+      "postgresql\t15+248+deb12u1",
+      "python3\t3.11.2-1+b1",
+      "python3-psycopg2\t2.9.5-1+b1",
+      "timers:"
+    ]
+  },
+  "command": "python3 (inline) over data/collections/20261022T002132864698Z_pilot_bursty: end.json, collect.log",
+  "n": 1,
+  "values": {
+    "session": "20261022T002132864698Z_pilot_bursty",
+    "group": "pilot-hdd-20261021",
+    "session_commit": "e067d6a6536f16f9b4979d6a11a502f3b57bd6c9",
+    "host_memory_at_start": {
+      "vm_swappiness": 1,
+      "qemu_swap_kb": 0
+    },
+    "prefault": {
+      "swap_kb_before": 0,
+      "swap_kb_after": 0,
+      "seconds": 0.0
+    },
+    "first_full": {
+      "seq": 0,
+      "mib": 461.81,
+      "read_ms": 1678.6,
+      "cycle_ms": 1678.7
+    },
+    "stop": {
+      "completed": false,
+      "interrupted": true,
+      "measurement_started": true,
+      "error": "InterruptedError: interrupted by signal 15",
+      "signals": 1,
+      "children": {
+        "collector": {
+          "pid": 560787,
+          "stopped_by": "SIGTERM",
+          "rc": 143
+        },
+        "traffic": {
+          "pid": 560692,
+          "stopped_by": "SIGTERM",
+          "rc": 0
+        },
+        "monitor": {
+          "pid": 560691,
+          "stopped_by": "SIGTERM",
+          "rc": 0
+        }
+      }
+    },
+    "inputs_sha256": {
+      "session.json": "ea0837aab725d9c9969da2ccb6e4cf1cba3bafe56ab8410fd1d423c289463444",
+      "end.json": "552ca146de110019226747b9a839f3aa92df42ae791da3170d7902bf3548f1f4",
+      "raw/collect.log": "25db10a5a4213238378f9d2fb34148543aeeff9382511450e5915578181ef3f4"
+    },
+    "note": "Pilot with the VM disk on the HDD and vm.swappiness=1, stopped by the operator (systemctl stop) right after its first snapshot: the host monitor's periodic fsync had been found to wait for snapshot writeback, so measurement code changed and this pilot could no longer admit a campaign. First full snapshot after a fresh QEMU start; diagnostic only, never a corpus session."
+  }
+}

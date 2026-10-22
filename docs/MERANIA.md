@@ -1391,3 +1391,22 @@ pred zahrievaním načíta späť odswapované rozsahy QEMU (`prefault`) a do
 Disk VM sa vrátil na HDD, teda na iné zariadenie a iný súborový systém ako
 výstup snímok (overená kópia so zhodnou SHA-256). Tento pilot sa nepoužije;
 opatrenia overí nový pilot.
+
+## 2026-10-21 — druhý pilot zastavený pre `fsync` monitora
+
+Pri rozbore prvého pilota sa ukázala ďalšia väzba na spätný zápis snímok:
+monitor hostiteľa volal `fsync` každých 60 s na tom istom súborovom systéme
+SSD a počas zápisu plnej snímky čakal (3 s medzera vzoriek, ktorú logový
+audit odmieta). Monitor sa zmenil, takže druhý pilot
+`20261022T002132864698Z_pilot_bursty` (skupina `pilot-hdd-20261021`, disk VM
+už na HDD, `vm.swappiness = 1`) by kampaň aj tak nemohol otvoriť. Bol riadene
+zastavený cez `systemctl stop` hneď po prvej snímke
+([záznam](../data/results/collection_pilot_hdd_20261021_stopped.json)).
+Zastavenie zapísalo pravdivý koncový záznam (`interrupted`, meraná fáza
+začala, zberač, generátor a monitor zastavené v tomto poradí). Prvá plná
+snímka po čerstvom štarte QEMU mala
+461.81 {{res:collection_pilot_hdd_20261021_stopped.json:values.first_full.mib}}
+MiB a trvala
+1678.6 {{res:collection_pilot_hdd_20261021_stopped.json:values.first_full.read_ms}}
+ms; QEMU nemala nič vo swape, krok `prefault` nemal čo načítať. Ide
+o diagnostiku, nie o korpus ani o prijatý pilot.

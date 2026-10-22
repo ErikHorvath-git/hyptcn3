@@ -226,16 +226,17 @@ def run(args):
               "sensors": sorted(monitor.sensors), "cpufreq_available": bool(monitor.cpus), "metrics": METRICS,
               "note": "Observational host timeline; it does not by itself measure collector overhead."}
     samples = missed = 0
+    # No fsync while sampling: on the working SSD an fsync waited for unrelated
+    # writeback of a full snapshot in the same ext4 journal and the monitor lost
+    # ticks (2026-10-21 pilot: a 3 s sample gap). Line-buffered samples reach the
+    # page cache at once and the kernel writes them back within ~30 s; the end
+    # record is fsynced.
     with open(args.out, "x", buffering=1) as out:
         out.write(json.dumps(header) + "\n")
-        last_sync = time.monotonic()
         tick = 0
         while stop["signal"] is None:
             out.write(json.dumps(monitor.sample(tick, time.monotonic())) + "\n")
             samples += 1
-            if time.monotonic() - last_sync > 60:
-                os.fsync(out.fileno())
-                last_sync = time.monotonic()
             nxt = tick + 1
             due = args.origin + nxt * args.interval_s
             now = time.monotonic()
