@@ -195,6 +195,37 @@ def test_preflight_waits_for_a_healthy_stack_after_a_clock_step(monkeypatch):
         collection.wait_healthy("http://lab", timeout=0)
 
 
+def test_host_memory_records_swap_policy_and_qemu_swap():
+    import os
+    from scripts import collection
+    doc = collection.host_memory({"pid": os.getpid()})
+    assert type(doc["vm_swappiness"]) is int and type(doc["qemu_swap_kb"]) is int
+    assert collection.host_memory(None)["qemu_swap_kb"] is None
+    assert collection.qemu_swap_kb(2 ** 22 + 7) is None  # no such process
+
+
+def test_prefault_reads_only_mappings_with_swapped_pages(monkeypatch):
+    import mmap
+    import os
+    from scripts import collection
+    smaps = ("7f0000000000-7f0000400000 rw-p 00000000 00:00 0 \nSize: 4096 kB\nSwap: 0 kB\nSwapPss: 0 kB\n"
+             "7f0000400000-7f0000800000 rw-p 00000000 00:00 0 \nSize: 4096 kB\nSwap: 12 kB\n"
+             "VmFlags: rd wr mr mw me ac\n"
+             "55d000000000-55d000001000 r--p 00000000 08:02 123 /usr/bin/qemu-system-x86_64\nSwap: 4 kB\n")
+    assert collection.swapped_ranges(smaps) == [(0x7f0000400000, 0x7f0000800000), (0x55d000000000, 0x55d000001000)]
+    assert collection.prefault_swapped(os.getpid())["swap_kb_before"] is not None
+    # The reader on a process it may read (this one): a real mapping and an unmapped range.
+    buffer = mmap.mmap(-1, 3 << 20)
+    buffer[:4] = b"page"
+    import ctypes
+    start = ctypes.addressof(ctypes.c_char.from_buffer(buffer))
+    swaps = iter([64, 0])
+    monkeypatch.setattr(collection, "qemu_swap_kb", lambda pid: next(swaps))
+    monkeypatch.setattr(collection, "swapped_ranges", lambda text: [(start, start + (3 << 20)), (8 << 40, (8 << 40) + 4096)])
+    result = collection.prefault_swapped(os.getpid(), chunk=1 << 20)
+    assert (result["swap_kb_before"], result["swap_kb_after"]) == (64, 0) and result["seconds"] >= 0
+
+
 def test_clock_sync_margin_covers_a_session_of_measured_drift():
     from scripts import collection
     p = protocol(DEFAULT)

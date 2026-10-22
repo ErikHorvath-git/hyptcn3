@@ -1,0 +1,120 @@
+{
+  "commit": "183d1d7f6d57c558142b5e069302659cf89cba13",
+  "commit_dirty": false,
+  "date": "2026-10-22T00:05:39.579809+00:00",
+  "host": "Linux-7.2.9+deb13-amd64-x86_64-with-glibc2.41",
+  "guest": {
+    "kernel": "6.1.0-42-cloud-amd64",
+    "boot_id": "b5192695-bf15-452c-8680-65dd8e60b233",
+    "machine_id": "180ac982142b4714a979599073c96cdd",
+    "stack_sha256": "3fcb9e724f031e3ed24fd3e08fb8f2946c8cd3f04416bc871d8f7dc31b3d46bc",
+    "stack_manifest": [
+      "c346dc8bc1c8c3649fc96064fddfc07172f740f7c82d1830dbb935b16c488271  /opt/hyptcn-lab/services.py",
+      "d7372422553f866333177456ac6daec4847f5660c1c854a646e602d0be0fcf6c  /opt/hyptcn-lab/schema.sql",
+      "a8e5ef8843ebae83eed8691f8eb7e1d186448d36e4be7d4406efeaa96291d5e3  /opt/hyptcn-lab/guest_state.py",
+      "62f55e4374b5db4522d0ce84c911f26ccd580e8f55bc570c09ee63c64be234c6  /etc/nginx/conf.d/hyptcn-lab.conf",
+      "af75eee623f3c7a0b7a1c10a35c2216684c6f4b610d44e46560de137ef3d6962  /etc/systemd/system/hyptcn-lab@.service",
+      "nginx\t1.22.1-9+deb12u10",
+      "postgresql\t15+248+deb12u1",
+      "python3\t3.11.2-1+b1",
+      "python3-psycopg2\t2.9.5-1+b1",
+      "timers:"
+    ]
+  },
+  "command": "/tmp/claude-1000/-home-eh-projects-hyptcn3/07093d58-41fa-4430-9394-40392329f312/scratchpad/swap_stall_record.py data/collections/20261021T230727556324Z_pilot_bursty data/results/collection_io_interference_20261021.json",
+  "n": 480,
+  "values": {
+    "session": "20261021T230727556324Z_pilot_bursty",
+    "inputs_sha256": {
+      "session.json": "529c25a3db75e466a8a7d0c4e1a562c6464dd94ca404d0ec0326435dc53d811c",
+      "end.json": "c105249f4b479200e26fdbdc3dbad8067cef4a2e177e79c354175e8dab9d4cdd",
+      "raw/collect.log": "1bb95e563fee111fe84bb4d6ad5c1ecd9b9d1eb5fdd3c48f00f9d112a63f6577",
+      "host_monitor.jsonl": "82aa418a2a07d14efc81ddeb500383fda4a53c8240f230995074b405e6687312",
+      "traffic_requests.jsonl": "530745c686665cd96f3d4a63edbc531b438f09c11c946a7a8e31933471f87717"
+    },
+    "host": {
+      "vm_swappiness_after_run": 60,
+      "swap_devices_after_run": [
+        "/dev/sdb3                               partition\t16645116\t2459156\t\t-1"
+      ],
+      "working_disk": "sda2 ext4 (SanDisk SDSSDA24): snapshots, session logs and the VM disk (qcow2)",
+      "swap_disk": "sdb3 (Seagate ST500LM021, system HDD)"
+    },
+    "qemu_swap_kb_first_sample": 331228,
+    "qemu_swap_kb_after_first_full": 13876,
+    "first_full": {
+      "seq": 0,
+      "mib": 924.9,
+      "read_ms": 7341.1,
+      "cycle_ms": 7341.3,
+      "end_utc": "2026-10-21T23:09:43.596000+00:00",
+      "swapped_in_mib": 286.1,
+      "iowait_max_pct": 9.814
+    },
+    "second_full": {
+      "seq": 360,
+      "mib": 922.15,
+      "read_ms": 2446.6,
+      "cycle_ms": 2448.9,
+      "end_utc": "2026-10-21T23:39:43.703000+00:00",
+      "swapped_in_mib": 0.0,
+      "iowait_max_pct": 0.824
+    },
+    "missed_slots": 1,
+    "writeback_burst_after_first_full": {
+      "start_utc": "2026-10-21T23:11:56.198320+00:00",
+      "end_utc": "2026-10-21T23:12:02.195597+00:00",
+      "seconds_after_full": 132.6,
+      "duration_s": 7.0,
+      "iowait_max_pct": 46.179,
+      "dirty_mib_before": 914,
+      "dirty_mib_after": 107
+    },
+    "writeback_burst_after_second_full": {
+      "start_utc": "2026-10-21T23:41:35.237730+00:00",
+      "end_utc": "2026-10-21T23:41:46.198245+00:00",
+      "seconds_after_full": 111.5,
+      "duration_s": 12.0,
+      "iowait_max_pct": 51.163,
+      "dirty_mib_before": 815,
+      "dirty_mib_after": 94
+    },
+    "request_failures": {
+      "count": 4,
+      "outcomes": [
+        "timeout"
+      ],
+      "routes": [
+        "POST /api/orders"
+      ],
+      "first_start_utc": "2026-10-21T23:41:36.611704+00:00",
+      "last_start_utc": "2026-10-21T23:41:37.017751+00:00",
+      "client_timeout_ms_observed": 4004.478
+    },
+    "monitor_sample_gaps": [
+      {
+        "after_utc": "2026-10-21T23:28:50.198255+00:00",
+        "seconds": 2.0
+      },
+      {
+        "after_utc": "2026-10-21T23:41:37.198374+00:00",
+        "seconds": 3.0
+      }
+    ],
+    "measure_phase_written_gib": {
+      "sda": 11.684,
+      "sdb": 0.147
+    },
+    "raw_snapshot_gib": 10.729,
+    "note": "Diagnostic of a pilot that the audit rejects; not a corpus session. A full snapshot reads all guest RAM: QEMU memory swapped out on the host was read back from the HDD swap partition and the first full snapshot overran the 5 s period. The ~920 MiB of each full snapshot stayed dirty in the page cache and was then written back in one burst; the guest disk image is on the same ext4 file system, and guest commits waited behind that writeback (request timeouts).",
+    "audit_timing": {
+      "rows": 480,
+      "extraction_s_sum": 702.7,
+      "extraction_s_max": 12.15,
+      "extraction_s_median": 1.433,
+      "wall_s": 756.683,
+      "wall_source": "time(1) around 'collection.py audit' of this session (2026-10-21); only light interactive analysis ran meanwhile",
+      "audit_sha256_of_copy": "1be7d2d9da1918e2a9c720c6abfb429985766493023903cdf09789de74e41a6d"
+    }
+  }
+}

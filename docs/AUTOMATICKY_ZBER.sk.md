@@ -17,13 +17,18 @@ zmeniť). Pred každou session sa obe identity overia; iný disk na rovnakej
 ceste zastaví beh. Pred začiatkom sa kontroluje priestor pre celý
 odhad z pilotu s plánovacou rezervou a samostatnou núdzovou rezervou protokolu.
 
-Rozloženie na zberovom PC (2026-10-20, bez externého disku):
+Rozloženie na zberovom PC (od 2026-10-21, bez externého disku):
 
 | Úložisko | Disk | Účel |
 |---|---|---|
-| `/mnt/ssd/hyptcn3-work/vms/` | SSD (`sda2`, UUID `7d763f4d-…`) | disk VM `hyptcn-lab` |
-| `data/collections`, `data/diagnostics` | rovnaký SSD cez bind mount z `/mnt/ssd/hyptcn3-work/` | vznikajúce snímky, logy a príznaky |
+| `data/collections`, `data/diagnostics` | SSD (`sda2`, UUID `7d763f4d-…`) cez bind mount z `/mnt/ssd/hyptcn3-work/` | vznikajúce snímky, logy a príznaky |
+| `vms/hyptcn-lab.qcow2` | systémový HDD (`sdb2`) | disk VM `hyptcn-lab`, oddelený od výstupu snímok |
 | archív kampane | systémový HDD (`/`) | overené komprimované kópie session |
+
+Disk VM bol od 2026-10-20 na SSD spolu so snímkami. Spätný zápis plnej
+snímky potom brzdil commity databázy hosťa (pozri [LAB.sk.md](LAB.sk.md)),
+preto sa vrátil na HDD. Hostiteľ má `vm.swappiness = 1`; `init` hodnotu
+zmrazí s pilotom a jej zmena kampaň zastaví pred ďalšou session.
 
 Adresáre pod bind mountami majú na HDD príznak `chattr +i`. Ak SSD nie je
 pripojený, zápis do nich zlyhá aj pre roota (overené `Operation not permitted`).

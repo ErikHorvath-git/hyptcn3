@@ -249,7 +249,10 @@ na začiatku aj na konci, nameraný drift bol pod 0,04 s/h), počká, kým
 a vykoná funkčnú kontrolu (token, katalóg, vytvorenie a čítanie objednávky,
 spracovanie workerom). Potom uzavrie
 segment logov nginx a overí, že sa v ňom nájdu request ID všetkých
-kontrolných požiadaviek. Zaznamená aj stav služieb a databázy. Väčšie logy
+kontrolných požiadaviek. Zaznamená aj stav služieb a databázy. Nakoniec,
+ešte pred zahrievaním, načíta späť pamäť procesu QEMU, ktorú hostiteľ odložil
+do swapu (krok `prefault`; plná snímka by ju inak čítala zo swapu a prekročila
+periódu). Väčšie logy
 hosťa prenáša až po zbere, mimo meraného intervalu.
 Nespúšťať druhý generátor, smoke test ani ďalšie úlohy vo VM počas merania.
 Hostiteľské náročné úlohy, spánok hosta a zmeny konfigurácie tiež kontaminujú beh.

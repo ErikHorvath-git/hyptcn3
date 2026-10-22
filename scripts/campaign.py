@@ -61,7 +61,9 @@ def runtime_identity():
     ]), text=True, timeout=30)
     return {"host": platform.platform(), "python": sys.version,
             "packages": json.loads(packages),
-            "collector_sha256": digest(ROOT / "vmicollect/build/vmicollect")}
+            "collector_sha256": digest(ROOT / "vmicollect/build/vmicollect"),
+            # Swapped-out guest RAM stalls full snapshots (docs/LAB.sk.md); frozen with the campaign.
+            "vm_swappiness": int(Path("/proc/sys/vm/swappiness").read_text())}
 
 
 def guest_environment(identity):
@@ -154,6 +156,8 @@ def initialize(a):
     identity = collection.guest_identity(p)
     if guest_environment(identity) != guest_environment(meta["guest_before"]):
         raise ValueError("guest environment differs from accepted pilot")
+    if runtime_identity()["vm_swappiness"] != meta["host_context"].get("memory", {}).get("vm_swappiness"):
+        raise ValueError("host vm.swappiness differs from accepted pilot")
     name = a.name or stamp() + "_benign_v2"
     if not re.fullmatch(CAMPAIGN_NAME, name):
         raise ValueError("invalid campaign name")

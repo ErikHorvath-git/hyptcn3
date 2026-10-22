@@ -305,6 +305,52 @@ def qemu_process(domain):
     return None
 
 
+def qemu_swap_kb(pid):
+    try:
+        return int(re.search(r"^VmSwap:\s+(\d+) kB$", Path(f"/proc/{pid}/status").read_text(), re.M)[1])
+    except (OSError, TypeError):
+        return None
+
+
+def host_memory(qemu):
+    """Swap policy and swapped-out QEMU memory. A full snapshot reads all guest RAM.
+
+    2026-10-21: with vm.swappiness=60 and swap on the system HDD, 322 MiB of QEMU
+    memory were swapped out before a pilot; its first full snapshot then read
+    925 MiB in 7.3 s (period 5 s) and dropped a sampling slot.
+    """
+    return {"vm_swappiness": int(Path("/proc/sys/vm/swappiness").read_text()),
+            "qemu_swap_kb": qemu_swap_kb(qemu["pid"]) if qemu else None}
+
+
+def swapped_ranges(smaps):
+    """Address ranges of mappings that have swapped-out pages, from /proc/PID/smaps."""
+    ranges, current = [], None
+    for line in smaps.splitlines():
+        head = re.match(r"([0-9a-f]+)-([0-9a-f]+) ", line)
+        if head:
+            current = (int(head[1], 16), int(head[2], 16))
+        elif line.startswith("Swap:") and current and int(line.split()[1]) > 0:
+            ranges.append(current)
+    return ranges
+
+
+def prefault_swapped(pid, chunk=8 << 20):
+    """Read swapped-out QEMU memory back in before the measured phase (root; read-only)."""
+    before, started = qemu_swap_kb(pid), time.monotonic()
+    if before:
+        with open(f"/proc/{pid}/mem", "rb", buffering=0) as mem:
+            for start, end in swapped_ranges(Path(f"/proc/{pid}/smaps").read_text()):
+                for offset in range(start, end, chunk):
+                    try:
+                        mem.seek(offset)
+                        mem.read(min(chunk, end - offset))
+                    except OSError:
+                        pass  # An unreadable range stays as it is; the audit sees any stall.
+    return {"swap_kb_before": before, "swap_kb_after": qemu_swap_kb(pid),
+            "seconds": round(time.monotonic() - started, 3)}
+
+
 def file_record(path, base):
     with path.open("rb") as stream:
         sha = hashlib.file_digest(stream, "sha256").hexdigest()
@@ -448,7 +494,7 @@ def run_session(a, p):
                     "metadata_not_model_inputs": ["scenario", "seed", "traffic", "boot_id", "group", "session_id"],
                     "working_storage": storage_identity(base),
                     "host_context": {"host_boot": Path("/proc/sys/kernel/random/boot_id").read_text().strip(),
-                                     "qemu": qemu, "python": sys.executable},
+                                     "qemu": qemu, "memory": host_memory(qemu), "python": sys.executable},
                     "commit": subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip(),
                     "commit_dirty": bool(subprocess.check_output(["git", "status", "--porcelain"], cwd=ROOT)),
                     "measurement_dirty": measurement_dirty(),
@@ -508,6 +554,9 @@ def capture_session(p, out, metadata, cycles):
         if seen != expected:
             raise ValueError("request ID correlation failed for the preflight checks")
         step("pre-segment", lines=pre["files"][0]["lines"], correlated=len(seen))
+        # Before any measured load: swapped guest RAM would stall the first full snapshot.
+        status["prefault"] = prefault_swapped(metadata["host_context"]["qemu"]["pid"])
+        step("prefault", **status["prefault"])
         s = p["scenarios"][metadata["scenario"]]
         children["monitor"] = start_child(
             [sys.executable, ROOT / "scripts/host_monitor.py", "run", "--out", out / "host_monitor.jsonl",
@@ -572,6 +621,7 @@ def capture_session(p, out, metadata, cycles):
             raise ValueError("guest rebooted or changed during capture")
         if qemu_process(p["domain"]) != metadata["host_context"]["qemu"]:
             raise ValueError("VM process restarted during capture")
+        status["host_memory_after"] = host_memory(metadata["host_context"]["qemu"])
         # Larger guest logs only now, between measurements.
         segment = lab_json(p, "segment", "--label", out.name, "--dest", guest)
         write_guest("session_segment.json", segment)

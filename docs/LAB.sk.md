@@ -58,8 +58,29 @@ dlhej kampane. Disk VM potom presunul na pracovný SSD:
 `/mnt/ssd/hyptcn3-work/vms/hyptcn-lab.qcow2` (kópia pri vypnutej VM, zhodná
 SHA-256 aj `qemu-img check`; libvirt definícia ukazuje na novú cestu).
 Kópia z HDD zostala ako `vms/hyptcn-lab.qcow2.hdd-backup-20261020` a už sa
-neaktualizuje. Cesta `vms/hyptcn-lab.qcow2` vyššie platí iba pre nové
-vytvorenie domény cez `labctl`.
+neaktualizuje.
+
+2026-10-21 sa disk VM vrátil na systémový HDD: `vms/hyptcn-lab.qcow2`
+(kópia pri vypnutej VM, zhodná SHA-256, `qemu-img check` bez chýb; libvirt
+definícia ukazuje na túto cestu). Kópia zo SSD zostala ako
+`/mnt/ssd/hyptcn3-work/vms/hyptcn-lab.qcow2.ssd-copy-20261021`. Dôvodom bol
+pilot, v ktorom disk VM zdieľal súborový systém ext4 (`sda2`) so snímkami.
+Plná snímka (~920 MiB) zostala asi dve minúty v page cache a potom sa
+zapísala naraz. Commity databázy hosťa (fsync obrazu disku) čakali v tom
+istom žurnále za týmto zápisom a štyri požiadavky prekročili limit klienta
+4 s ([záznam](../data/results/collection_io_interference_20261021.json)).
+Snímky, logy a príznaky zostávajú na SSD; disk hosťa je teraz na inom
+zariadení aj súborovom systéme.
+
+Hostiteľ má `vm.swappiness = 1` (`/etc/sysctl.d/90-hyptcn3-collection.conf`,
+od 2026-10-21). Pri pôvodnej hodnote 60 a swape na systémovom HDD (`sdb3`)
+jadro počas veľkého I/O (audit, archív, zápis snímok) odložilo nečinnú RAM
+hosťa. Pred tým istým pilotom mala QEMU vo swape 331 228 kB a prvá plná
+snímka ich čítala späť 7,3 s pri perióde 5 s; jeden slot vypadol. Zberový
+runner preto pred zahrievaním načíta späť rozsahy procesu QEMU, ktoré majú
+odswapované stránky (krok `prefault`, iba čítanie cez `/proc/PID/mem` ako
+root; 2 GiB rezidentnej RAM za 0,35 s). Do `session.json` zapisuje
+`vm_swappiness` a swap QEMU; kampaň hodnotu swappiness zmrazí s pilotom.
 
 Libvirt 11 pri vypnutí hostiteľa VM session démona uloží (`reason=saved`
 v `~/.cache/libvirt/qemu/log/hyptcn-lab.log`) a pri ďalšom štarte démona ju

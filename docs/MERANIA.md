@@ -1310,3 +1310,84 @@ v [`collection_preflight_cleanup_20261021.json`](../data/results/collection_pref
 Metadáta, príznaky a pôvodné verdikty ostávajú na pôvodných cestách;
 komprimované RAM dôkazy sú v archíve. Nový korpus tieto skúšobné behy
 neobsahuje. Skript údržby je zachovaný spolu s reportom.
+
+## 2026-10-21 — offline extrakcia s kurzorom reťazca (ChainCursor)
+
+[`chain_cursor_validation_20261021.json`](../data/results/chain_cursor_validation_20261021.json)
+dokladá zmenu offline extrakcie. `features.snapshot.retazec` predtým pre každú
+snímku znovu otváral reťazec od prvej plnej snímky, takže čas na riadok rástol
+s pozíciou v session. Predchádzajúci audit toho istého diagnostického behu trval
+41.8 {{res:chain_cursor_validation_20261021.json:values.previous_audit_total_min}}
+min. `guestparse.image.ChainCursor` načíta každú časť delty raz a pri ďalšej
+plnej snímke index vyprázdni rovnako ako `open_image`.
+
+Overenie prebehlo na obnovenej kópii zamietnutého diagnostického behu
+`20261020T170034679155Z_diagnostic_bursty` s
+400 {{res:chain_cursor_validation_20261021.json:n}}
+snímkami a druhou plnou snímkou pri seq 360. Index fyzickej pamäte sa zhodoval
+s nezávisle otvoreným reťazcom pri všetkých kontrolovaných pozíciách (vrátane
+358–362 a 399). Riadky 0–359 sa bitovo zhodovali s pôvodným auditom a riadky
+360, 361, 380 a 399 s výpočtom bez kurzora. Celý reťazec trval
+684.3 {{res:chain_cursor_validation_20261021.json:values.retazec_s_with_cursor}}
+s. Je to diagnostika mimo korpusu; obnovená pracovná kópia bola potom z SSD
+odstránená, pôvodný archív zostáva.
+
+## 2026-10-21 — pilot zamietnutý: swap hostiteľa a spoločný disk VM a snímok
+
+Pilot `20261021T230727556324Z_pilot_bursty` (skupina `pilot-reset-20261021`,
+commit `183d1d7`, profil `bursty`) zozbieral
+480 {{res:collection_pilot_reset_20261021_audit.json:values.snapshots}}
+snímok a audit ho zamietol
+([audit](../data/results/collection_pilot_reset_20261021_audit.json)).
+Príčiny sú v
+[`collection_io_interference_20261021.json`](../data/results/collection_io_interference_20261021.json)
+a pochádzajú z prostredia hostiteľa, nie z hosťa:
+
+- Swap. Pred zberom mala QEMU vo swape
+  331228 {{res:collection_io_interference_20261021.json:values.qemu_swap_kb_first_sample}}
+  kB (swappiness 60, swap na systémovom HDD). Prvá plná snímka
+  (924.9 {{res:collection_io_interference_20261021.json:values.first_full.mib}} MiB)
+  ich čítala späť
+  7341.1 {{res:collection_io_interference_20261021.json:values.first_full.read_ms}}
+  ms pri perióde 5 s a zberač zahodil
+  1 {{res:collection_io_interference_20261021.json:values.missed_slots}}
+  slot. Druhá plná snímka už bez swapu trvala
+  2446.6 {{res:collection_io_interference_20261021.json:values.second_full.read_ms}}
+  ms.
+- Spoločný disk. Plná snímka zostala v page cache a zapísala sa naraz až po
+  132.6 {{res:collection_io_interference_20261021.json:values.writeback_burst_after_first_full.seconds_after_full}}
+  s, druhá po
+  111.5 {{res:collection_io_interference_20261021.json:values.writeback_burst_after_second_full.seconds_after_full}}
+  s. Druhý taký zápis trval
+  12.0 {{res:collection_io_interference_20261021.json:values.writeback_burst_after_second_full.duration_s}}
+  s pri iowait až
+  51.163 {{res:collection_io_interference_20261021.json:values.writeback_burst_after_second_full.iowait_max_pct}}
+  %. Disk VM bol na tom istom súborovom systéme ext4, takže commity
+  databázy hosťa čakali za týmto zápisom:
+  4 {{res:collection_io_interference_20261021.json:values.request_failures.count}}
+  požiadavky `POST /api/orders` prekročili limit klienta 4 s. Logový audit
+  zamietol ich chýbajúce odpovede, záznamy 499 v nginx, tracebacky služby
+  aj 3 s medzeru monitora hostiteľa.
+
+Ostatné kontroly prešli: všetky riadky majú platné behaviorálne vstupy, audit
+nenašiel nález integrity a korelácia request ID fungovala. Pokrytie bolo
+0.8646 {{res:collection_pilot_reset_20261021_audit.json:values.score_coverage}}
+pri strope
+0.8667 {{res:collection_pilot_reset_20261021_audit.json:values.coverage.ideal_score_coverage}};
+jedna medzera v časovej osi stála jedno okno. Extrakcia 480 riadkov s kurzorom
+trvala spolu
+702.7 {{res:collection_io_interference_20261021.json:values.audit_timing.extraction_s_sum}}
+s (medián
+1.433 {{res:collection_io_interference_20261021.json:values.audit_timing.extraction_s_median}}
+s na riadok), celý audit
+756.683 {{res:collection_io_interference_20261021.json:values.audit_timing.wall_s}}
+s. Hodinová session (720 riadkov) by pri rovnakom tempe trvala okolo 20 min;
+limit kampane je 3 h. Ide o odhad, nie meranie.
+
+Pred ďalším pilotom sa zmenilo prostredie a merací kód: `vm.swappiness = 1`
+v `/etc/sysctl.d/90-hyptcn3-collection.conf`, swap sa raz vyprázdnil, runner
+pred zahrievaním načíta späť odswapované rozsahy QEMU (`prefault`) a do
+`session.json` zapisuje swappiness a swap QEMU. Kampaň swappiness zmrazí.
+Disk VM sa vrátil na HDD, teda na iné zariadenie a iný súborový systém ako
+výstup snímok (overená kópia so zhodnou SHA-256). Tento pilot sa nepoužije;
+opatrenia overí nový pilot.
