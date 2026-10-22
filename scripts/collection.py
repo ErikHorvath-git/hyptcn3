@@ -703,6 +703,9 @@ def analyze_windows(result, p, session, expected_rows=None):
         "integrity_unconfirmed_seq": [seq for seq, q in zip(result["seq"], result["quality"])
                                       if q.get("unconfirmed_findings")],
         "integrity_unconfirmed": sum(len(q.get("unconfirmed_findings", [])) for q in result["quality"]),
+        # Process lists closed only by the backward walk after a torn forward link.
+        "process_walk_prev_seq": [seq for seq, q in zip(result["seq"], result["quality"])
+                                  if q.get("process_walk") == "prev"],
     }
     if detail is not None:
         quality["coverage"] = detail

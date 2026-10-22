@@ -160,6 +160,8 @@ def _print_ps(res):
             "jadro" if p["kernel_thread"] else "pouzivatel"))
     print("spolu: %d procesov%s" % (res["count"],
                                     ", NEUPLNE" if res["truncated"] else ""))
+    if res.get("walk") == "prev":
+        print("zoznam uzavrel prechod dozadu (dopredu: %s)" % res["forward_stop_reason"])
 
 
 def _print_lsmod(res):

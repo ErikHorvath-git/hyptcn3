@@ -12,10 +12,12 @@ import math
 import os
 from pathlib import Path
 import platform
+import queue
 import re
 import signal
 import socket
 import sys
+import threading
 import time
 
 SCHEMA = "hyptcn3/host-monitor/1"
@@ -230,12 +232,26 @@ def run(args):
     # writeback of a full snapshot in the same ext4 journal and the monitor lost
     # ticks (2026-10-21 pilot: a 3 s sample gap). Line-buffered samples reach the
     # page cache at once and the kernel writes them back within ~30 s; the end
-    # record is fsynced.
+    # record is fsynced. A plain write can still block in that writeback
+    # (2026-10-22: single 2 s gaps in campaign sessions), so a writer thread
+    # takes the lines from a queue and the sampling loop never waits for it.
+    lines, failed = queue.SimpleQueue(), []
+
+    def write_lines(out):
+        while (line := lines.get()) is not None:
+            try:
+                out.write(line)
+            except OSError as exc:
+                failed.append(exc)
+                return
+
     with open(args.out, "x", buffering=1) as out:
         out.write(json.dumps(header) + "\n")
+        writer = threading.Thread(target=write_lines, args=(out,), name="monitor-writer", daemon=True)
+        writer.start()
         tick = 0
-        while stop["signal"] is None:
-            out.write(json.dumps(monitor.sample(tick, time.monotonic())) + "\n")
+        while stop["signal"] is None and not failed:
+            lines.put(json.dumps(monitor.sample(tick, time.monotonic())) + "\n")
             samples += 1
             nxt = tick + 1
             due = args.origin + nxt * args.interval_s
@@ -250,6 +266,10 @@ def run(args):
             if args.duration_s and time.monotonic() - args.origin >= args.duration_s:
                 break
             tick = nxt
+        lines.put(None)
+        writer.join()
+        if failed:
+            raise failed[0]
         out.write(json.dumps({"type": "end", "end_utc": utc(), "samples": samples, "missed_ticks": missed,
                               "signal": stop["signal"], "clean": True}) + "\n")
         out.flush()

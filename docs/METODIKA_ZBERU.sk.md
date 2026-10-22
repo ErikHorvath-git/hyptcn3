@@ -134,6 +134,12 @@ Tréning, prehrávanie, audit protokolu v2 a živý safeguard používajú
    modelového skóre ani výsledku kontrol integrity.
 3. Neúplný prechod procesov, modulov alebo soketov nie je normálny počet.
    Taká snímka má `behavior_valid=false` a nesmie vstúpiť do modelového okna.
+   Zoznam procesov je obojsmerný: keď sa prechod dopredu roztrhne, zoznam
+   tvoria uzly prejdené dopredu pred prvým spojením nezhodným s opačným
+   smerom, ak sa prechod dozadu uzavrel cez presne tie isté uzly. Taký riadok
+   je úplný, má `quality.process_walk = "prev"` a audit ho vykazuje
+   v `process_walk_prev_seq`. Samotné uzavretie prechodu nestačí
+   (pozri L1 v [LIMITACIE.md](LIMITACIE.md)).
    Krížový pohľad na procesy/moduly, tabuľky volaní a text jadra nie sú vstupmi
    behaviorálneho modelu: ich `inconclusive` preto nemení jeho platnosť.
    Dostupnosť týchto kontrol a ich nálezy sa vykazujú osobitne v každom audite

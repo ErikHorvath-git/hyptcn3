@@ -286,7 +286,9 @@ def objekty_z_pohladu(view):
 
     Poznamka vznikne vzdy, ked sa nejaky prechod neuzavrel: taky pocet je
     dolna hranica, nie pocet. Do vektora sa zapise, ale v reporte to musi byt
-    vidiet - preto sa vracia von, nie iba do logu.
+    vidiet - preto sa vracia von, nie iba do logu. Poznamku dostane aj
+    snimka, ktorej zoznam procesov uzavrel az prechod dozadu
+    (quality["process_walk"] == "prev"); jej pocty su uplne.
 
     Krizove rozdiely su tu este nepotvrdene; `stav["krizove_kluce"]` ich
     nesie do dalsej snimky a potvrdzuje ich vektor_snimky (potvrd_krizove).
@@ -312,6 +314,9 @@ def objekty_z_pohladu(view):
         if res["truncated"]:
             pozn.append("%s: prechod sa neuzavrel (%s), pocet je dolna hranica"
                         % (meno, res["stop_reason"]))
+    if p.get("walk") == "prev":
+        pozn.append("procesy: zoznam dopredu sa neuzavrel (%s), uzavrel ho prechod dozadu"
+                    % p["forward_stop_reason"])
     if c["summary"]["inconclusive"]:
         pozn.append("neuzavrete kontroly: %s"
                     % ", ".join(c["summary"]["inconclusive"]))
@@ -331,6 +336,8 @@ def objekty_z_pohladu(view):
             # The primary 18-column model uses behavior_valid instead.
             "model_valid": not any(r["truncated"] for r in (p, m, s))
                 and not (set(c["summary"]["inconclusive"]) - {"text_integrity"}),
+            # Smer, ktorym sa zoznam procesov uzavrel (view.processes).
+            "process_walk": p.get("walk"),
         },
     }
     hodnoty = {

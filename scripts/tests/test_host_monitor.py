@@ -84,3 +84,49 @@ def test_sampling_never_waits_for_an_fsync(tmp_path, monkeypatch):
     records = [json.loads(line) for line in out.read_text().splitlines()]
     assert records[-1]["type"] == "end" and records[-1]["missed_ticks"] == 0
     assert sum(r["type"] == "sample" for r in records) >= 130 and len(calls) == 1
+
+
+def test_sampling_continues_while_a_write_blocks(tmp_path, monkeypatch):
+    """A write stuck in writeback must not delay the fixed sampling schedule."""
+    import threading
+    from types import SimpleNamespace
+    from scripts import host_monitor
+    clock = {"t": 1000.0}
+    released = threading.Event()
+
+    def sleep(seconds):
+        clock["t"] += seconds
+        if clock["t"] >= 1030:  # Sampling reached the end while one write was still blocked.
+            released.set()
+    monkeypatch.setattr(host_monitor, "time", SimpleNamespace(monotonic=lambda: clock["t"], time=time.time,
+                                                              sleep=sleep))
+    monkeypatch.setattr(host_monitor.os, "fsync", lambda fd: None)
+
+    class Stalling:
+        def __init__(self, file):
+            self.file, self.writes = file, 0
+
+        def write(self, text):
+            self.writes += 1
+            if self.writes == 3:  # header, first sample, then the blocked one
+                assert released.wait(10), "sampling waited for the blocked write"
+            return self.file.write(text)
+
+        def __getattr__(self, name):
+            return getattr(self.file, name)
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *exc):
+            return self.file.__exit__(*exc)
+
+    monkeypatch.setattr(host_monitor, "open", lambda *a, **kw: Stalling(open(*a, **kw)), raising=False)
+    out = tmp_path / "monitor.jsonl"
+    args = SimpleNamespace(out=out, interval_s=1.0, duration_s=40, session_id="blocked-write", path=None,
+                           disk=None, pid=None, match=None)
+    assert host_monitor.run(args) == 0
+    records = [json.loads(line) for line in out.read_text().splitlines()]
+    samples = [r for r in records if r["type"] == "sample"]
+    assert records[-1]["type"] == "end" and records[-1]["missed_ticks"] == 0
+    assert [s["i"] for s in samples] == list(range(len(samples))) and len(samples) >= 40

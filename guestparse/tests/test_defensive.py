@@ -167,3 +167,74 @@ def test_citanie_mimo_pamate_neda_nuly():
     view, img = _view(INIT_VA + O_TASKS)
     assert view.u64(MEMSIZE - 4) is None
     assert view.cstr(MEMSIZE + 16, 8) == ""
+
+
+# ---------------------------------------------------- prechod dozadu (prev)
+
+DEAD_VA = KBASE + 0x50000           # ukonceny proces so starymi ukazovatelmi
+
+
+def _obojsmerny(next_of_last):
+    """
+    init_task <-> t0 <-> t1 <-> t2 so spravnymi `prev`; `next` posledneho je
+    parameter (init_task = uzavrety zoznam, DEAD_VA = roztrhnute spojenie).
+    """
+    view, img = _view(next_of_last)
+    ring = [INIT_VA] + TASK_VA
+    for i, va in enumerate(ring):
+        img.u64(_pa(va) + O_TASKS + 8, ring[i - 1] + O_TASKS)
+    _task(img, DEAD_VA, 388899, "python3")
+    img.u64(_pa(DEAD_VA) + O_MM, 0)
+    return view, img
+
+
+def test_uzavrety_zoznam_ide_dopredu():
+    view, _ = _obojsmerny(INIT_VA + O_TASKS)
+    res = view.processes()
+    assert res["walk"] == "next" and res["truncated"] is False
+    assert "forward_stop_reason" not in res
+
+
+def test_roztrhnute_spojenie_na_konci_uzavrie_prechod_dozadu():
+    """Snimka 505 session benign-v3-20261022_03_train_bursty v malom."""
+    view, img = _obojsmerny(DEAD_VA + O_TASKS)
+    img.u64(_pa(DEAD_VA) + O_TASKS, TASK_VA[0] + O_TASKS)      # spat dopredu: cyklus
+    img.u64(_pa(DEAD_VA) + O_TASKS + 8, TASK_VA[0] + O_TASKS)  # prev nesedi s t2
+    res = view.processes()
+    assert res["truncated"] is False and res["stop_reason"] is None
+    assert res["walk"] == "prev"
+    assert "cyklus" in res["forward_stop_reason"]
+    assert [p["comm"] for p in res["processes"]] == ["proces0", "proces1", "proces2"]
+    assert res["count"] == 3
+
+
+def test_prechod_dozadu_bez_uzla_zo_zhodnych_spojeni_neplati():
+    """Dozadu uzavrety zoznam, ktoremu chyba t1 dosiahnuty zhodnym spojenim."""
+    view, img = _obojsmerny(DEAD_VA + O_TASKS)
+    img.u64(_pa(DEAD_VA) + O_TASKS, TASK_VA[0] + O_TASKS)
+    img.u64(_pa(TASK_VA[2]) + O_TASKS + 8, TASK_VA[0] + O_TASKS)  # dozadu t2 -> t0
+    res = view.processes()
+    assert res["truncated"] is True and res["walk"] == "next"
+    assert "cyklus" in res["stop_reason"]
+    assert "ine uzly" in res["backward_stop_reason"]
+    assert res["count"] == 4                    # dopredu vratane ukonceneho procesu
+
+
+def test_roztrhnutie_uprostred_prechod_dozadu_nedoplni():
+    """Uzly za roztrhnutym spojenim pozna iba prechod dozadu: zoznam zostava neuplny."""
+    view, img = _obojsmerny(INIT_VA + O_TASKS)
+    img.u64(_pa(TASK_VA[0]) + O_TASKS, DEAD_VA + O_TASKS)      # t0 -> ukonceny proces
+    img.u64(_pa(DEAD_VA) + O_TASKS, TASK_VA[0] + O_TASKS)      # a spat na t0: cyklus
+    res = view.processes()
+    assert res["truncated"] is True and res["walk"] == "next"
+    assert "ine uzly" in res["backward_stop_reason"]
+    assert [p["comm"] for p in res["processes"]] == ["proces0", "python3"]
+
+
+def test_oba_smery_roztrhnute_ostava_dolna_hranica():
+    view, _ = _view(TASK_VA[0] + O_TASKS)      # prev su nuly
+    res = view.processes()
+    assert res["truncated"] is True and res["walk"] == "next"
+    assert "cyklus" in res["stop_reason"]
+    assert "ukazovatel" in res["backward_stop_reason"]
+    assert res["count"] == 3

@@ -98,6 +98,15 @@ bezprostredne predchádzajúca snímka tej istej session (`features/snapshot.py`
 `potvrd_krizove`). Rozdiel jedinej snímky je v `unconfirmed_findings`
 a kontrola je v `inconclusive`. Skrytý objekt zostáva skrytý aj v ďalšej
 snímke; objekt skrytý kratšie ako jednu periódu takto ako nález nevyjde.
+
+Zoznam `tasks` je obojsmerný. Keď sa prechod dopredu roztrhne (v session
+`benign-v3-20261022_03_train_bursty` ukazoval v snímke 505 `next`
+posledného vlákna na už ukončený proces so starými ukazovateľmi), zoznam
+tvoria uzly prejdené dopredu pred prvým spojením nezhodným s opačným smerom,
+ak sa prechod dozadu uzavrel cez presne tie isté uzly (`walk: "prev"`).
+Krížová kontrola nad takým zoznamom beží normálne; keď prechod dozadu zoznam
+nepotvrdí, kontrola zostáva `inconclusive`.
+
 Neúplná kontrola zneplatňuje historický vektor so stĺpcami integrity. Protokol
 server-normal-v2 posudzuje behaviorálne vstupy osobitne; neuzavretá kontrola
 sa vykazuje aj vtedy, keď sú tieto vstupy úplné (pozri `METODIKA_ZBERU.sk.md`).

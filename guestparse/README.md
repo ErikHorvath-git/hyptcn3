@@ -152,6 +152,9 @@ behu vypíše, koľko testov sa preskočilo a prečo. Preskočený test nie je p
 - neprekladá adresy používateľského priestoru (backend nečíta registre vCPU), takže
   obsah pamäte procesov sa neparsuje;
 - nezastavuje VM — snímka je živá, stránky pochádzajú z rôznych okamihov, a preto má
-  každý prechod zoznamu strop, detekciu cyklu a príznak `truncated`;
+  každý prechod zoznamu strop, detekciu cyklu a príznak `truncated`; zoznam procesov
+  sa pri roztrhnutom spojení uzavrie, iba ak prechod dozadu prejde presne tie uzly,
+  ktoré prechod dopredu prešiel pred prvým spojením nezhodným s opačným smerom
+  (`walk: "prev"`);
 - nerobí detekciu malvéru. `checks` porovnáva dva zdroje, ktoré musia sedieť, a nález je
   ich rozdiel — nie skóre a nie odhad.

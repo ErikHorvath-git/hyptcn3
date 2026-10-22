@@ -40,7 +40,10 @@ SIGNAL_POLL_S = .2
 CESTY = ["/auth", "/orders", "/", "/auth?u=%d", "/orders?page=%d"]
 GENERATOR = "hyptcn3 host_traffic 3"
 STATUS_SCHEMA = "hyptcn3/host-traffic/3"
-TIMEOUT_S = 4
+# Benign requests reached 2.35 s (POST /api/orders, bursty, 2026-10-22) while the
+# guest disk sits on the system HDD; a client timeout would itself leave 499s and
+# service tracebacks in the guest, so the limit only catches a stuck server.
+TIMEOUT_S = 10
 QUEUE_SIZE = 50000
 LATENCY_DEFINITION = ("duration_ms: client-side monotonic clock around urlopen + reading the response "
                       "(same measurement as the status-file latency); includes failed requests; "

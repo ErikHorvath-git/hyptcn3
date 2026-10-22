@@ -363,8 +363,24 @@ class GuestView:
         dalsieho task_struct, takze zaciatok struktury je uzol minus offset.
         Prechod konci navratom do init_task alebo na uz videnom uzle.
 
-        Vracia {'processes', 'count', 'truncated', 'stop_reason'}. 'truncated'
-        znamena, ze zoznam sa neuzavrel - vysledok je teda dolna hranica.
+        Ziva snimka cita stranky v roznych okamihoch, takze spojenie moze
+        pochadzat z ineho okamihu nez uzol, na ktory ukazuje (session
+        benign-v3-20261022_03_train_bursty, snimka 505: `next` posledneho
+        vlakna ukazoval na uz ukonceny proces so starymi ukazovatelmi a
+        prechod sa zacyklil). Ked sa zoznam dopredu neuzavrie, prejde sa
+        dozadu cez `prev`. Zoznam potom tvoria uzly, ktore prechod dopredu
+        presiel pred prvym spojenim nezhodnym s opacnym smerom (uzol.prev
+        neukazuje tam, odkial sa k nemu prislo), ale iba ak sa prechod dozadu
+        uzavrel cez presne tie iste uzly. Samotne uzavretie nestaci: v tej
+        istej session sa prechod dozadu v snimke 529 uzavrel cez 78 procesov
+        namiesto 110.
+
+        Vracia {'processes', 'count', 'truncated', 'stop_reason', 'walk'}.
+        'walk' je 'next', alebo 'prev', ked zoznam potvrdil prechod dozadu;
+        vtedy je dovod zastavenia dopredu vo 'forward_stop_reason'.
+        'truncated' znamena, ze zoznam sa neuzavrel - vysledok je dolna
+        hranica z prechodu dopredu a 'backward_stop_reason' hovori, preco ho
+        nepotvrdil prechod dozadu.
         """
         need = ("tasks", "comm", "pid", "tgid", "mm")
         m = {}
@@ -378,10 +394,30 @@ class GuestView:
         if init_pa is None:
             return self._result("processes", [], True, "neznamy posun jadra")
 
+        out, stop, zhodne = self._prechod_tasks(init_pa, init_va, m, 0, limit)
+        if stop is None:
+            return dict(self._result("processes", out, False, None), walk="next")
+        spat, stop_spat, _ = self._prechod_tasks(init_pa, init_va, m, 8, limit)
+        if stop_spat is None and zhodne and ({pr["task_va"] for pr in spat}
+                                             == {pr["task_va"] for pr in out[:zhodne]}):
+            return dict(self._result("processes", out[:zhodne], False, None),
+                        walk="prev", forward_stop_reason=stop)
+        return dict(self._result("processes", out, True, stop), walk="next",
+                    backward_stop_reason=stop_spat
+                    or "prechod dozadu presiel ine uzly ako zhodne spojenia dopredu")
+
+    def _prechod_tasks(self, init_pa, init_va, m, smer, limit):
+        """
+        Jeden smer zoznamu init_task.tasks: `smer` 0 ide cez `next`, 8 cez
+        `prev`. Vracia (procesy v poradi prechodu, dovod zastavenia alebo
+        None, pocet uzlov pred prvym uzlom, ktoreho opacne spojenie
+        neukazuje tam, odkial sa k nemu prislo).
+        """
         head_va = init_va + m["tasks"]
         out, seen = [], set()
         stop = None
-        nxt = self.u64(init_pa + m["tasks"])
+        odkial, zhodne = head_va, None
+        nxt = self.u64(init_pa + m["tasks"] + smer)
         while True:
             if nxt == head_va:
                 break                                  # zoznam sa uzavrel
@@ -409,6 +445,8 @@ class GuestView:
             if not comm:
                 stop = "prazdne comm pri pid %d" % pid
                 break
+            if zhodne is None and self.u64(tpa + m["tasks"] + 8 - smer) != odkial:
+                zhodne = len(out)
             out.append({
                 "pid": pid,
                 "tgid": tgid,
@@ -416,8 +454,9 @@ class GuestView:
                 "kernel_thread": mm == 0,
                 "task_va": nxt - m["tasks"],
             })
-            nxt = self.u64(tpa + m["tasks"])
-        return self._result("processes", out, stop is not None, stop)
+            odkial = nxt
+            nxt = self.u64(tpa + m["tasks"] + smer)
+        return out, stop, len(out) if zhodne is None else zhodne
 
     # ------------------------------------------------------------- moduly
 

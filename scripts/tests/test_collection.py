@@ -72,6 +72,8 @@ def test_pilot_gate_distinguishes_input_loss_from_integrity_gap(primary_complete
             matrix[i + 1][-2] = 0
     # A single-snapshot cross-view difference is reported but never rejects.
     quality[81]["unconfirmed_findings"] = [{"check": "process_cross_view", "pid": 7}]
+    # A process list closed by the backward walk is complete and only reported.
+    quality[200]["process_walk"] = "prev"
     if integrity_finding:
         quality[7]["findings"] = [{"check": "synthetic-hook"}]
     result = {"schema": SCHEMA, "mena": MENA, "matica": matrix, "seq": list(range(len(matrix))),
@@ -89,6 +91,7 @@ def test_pilot_gate_distinguishes_input_loss_from_integrity_gap(primary_complete
     assert report["legacy_valid_rows"] == len(matrix) - 2
     assert report["integrity_finding_rows"] == int(integrity_finding)
     assert report["integrity_unconfirmed_seq"] == [81] and report["integrity_unconfirmed"] == 1
+    assert report["process_walk_prev_seq"] == [200]
     assert len(windows) == (416 if primary_complete else 354)
 
 

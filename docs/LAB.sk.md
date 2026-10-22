@@ -76,6 +76,20 @@ vynechal vzorky (medzera 3 s, audit hranicu 2,5 s). Monitor preto počas
 vzorkovania `fsync` nevolá; synchronizuje až koncový záznam. Zapisovač logov
 premávky robí `fsync` vo vlastnom vlákne za frontou 50 000 záznamov.
 
+Monitor napriek tomu vynechával jednotlivé vzorky počas spätného zápisu plnej
+snímky na SSD: v session kampaní `benign-v2-20261022` a `benign-v3-20261022`
+vznikli 2 s medzery (najviac 2,04 s, hranica auditu 2,5 s). Oneskorenie
+nastalo až po načítaní čítačov z `/proc`, v rovnakom okamihu, keď sa
+predĺžil zápis delta snímky zberača (session 3 kampane v3, snímka 26:
+čítanie 877 ms, spolu 1904 ms). Od 2026-10-22 preto riadky monitora
+zapisuje samostatné vlákno z fronty a vzorkovanie na zápis nečaká.
+
+Limit klienta generátora je od toho istého dňa 10 s namiesto 4 s:
+najpomalšia benígna požiadavka mala 2,35 s
+(`POST /api/orders`, profil `bursty`, disk VM na HDD) a požiadavka prerušená
+klientom by sama zanechala v hosťovi záznam 499 a traceback služby. Limit
+teraz zachytí iba zaseknutý server; latencia každej požiadavky je v logu.
+
 Hostiteľ má `vm.swappiness = 1` (`/etc/sysctl.d/90-hyptcn3-collection.conf`,
 od 2026-10-21). Pri pôvodnej hodnote 60 a swape na systémovom HDD (`sdb3`)
 jadro počas veľkého I/O (audit, archív, zápis snímok) odložilo nečinnú RAM

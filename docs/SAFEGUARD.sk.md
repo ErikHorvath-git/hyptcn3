@@ -63,7 +63,8 @@ potichu na iný vstup modelu.
 Aktuálny kontrakt `hyptcn3/safeguard-features/2` vyžaduje archív
 `hyptcn3/snapshot-vektor/3` s politikou `behavioral-inputs-v1`.
 `behavior_valid` vyjadruje úspešné čítanie RAM a úplné primárne prechody
-procesov, modulov a soketov. Neuzavretá nezávislá kontrola integrity zostáva
+procesov, modulov a soketov. Zoznam procesov môže uzavrieť aj prechod dozadu
+(`quality.process_walk`, pravidlo 3 v [METODIKA_ZBERU.sk.md](METODIKA_ZBERU.sk.md)). Neuzavretá nezávislá kontrola integrity zostáva
 viditeľná v udalosti, ale tieto namerané vstupy nezneplatňuje. Nález integrity
 stále vyvolá alarm nezávisle od modelu. Krížový rozdiel procesov alebo modulov
 je nálezom až vtedy, keď ho ukáže aj bezprostredne predchádzajúca snímka tej
