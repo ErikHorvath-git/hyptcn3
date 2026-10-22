@@ -84,7 +84,7 @@ Archív `hyptcn3/snapshot-vektor/3` uchováva:
 | Procesy | `proc_total`, `proc_user`, `proc_kernel`, `proc_new`, `proc_gone` | Počty a rozdiel množín PID |
 | Moduly | `mod_total`, `mod_delta` | Počet a jeho rozdiel |
 | Sieť | `sock_total`, `sock_listen`, `sock_estab` | Rekonštruované sokety a ich stavy |
-| Integrita | `chk_syscall_hooks`, `chk_crossview` | Počty nálezov; navyše sa uchová celý štruktúrovaný verdikt |
+| Integrita | `chk_syscall_hooks`, `chk_crossview` | Počty nálezov a krížových rozdielov v snímke (pred potvrdením); navyše sa uchová celý štruktúrovaný verdikt |
 | Platnosť riadku | `ma_predchodcu`, `je_plna` | Metadáta, nie predikované správanie |
 
 Lokálny vektor každého binu je v poradí `changed_ratio`, `zero_ratio`,
@@ -138,7 +138,10 @@ Tréning, prehrávanie, audit protokolu v2 a živý safeguard používajú
    behaviorálneho modelu: ich `inconclusive` preto nemení jeho platnosť.
    Dostupnosť týchto kontrol a ich nálezy sa vykazujú osobitne v každom audite
    a pri každom kroku živého detektora. Nález zostáva dôvodom alarmu aj vtedy,
-   keď model ešte nemá okno alebo nemôže skórovať.
+   keď model ešte nemá okno alebo nemôže skórovať. Krížový rozdiel je nálezom
+   až po zopakovaní v bezprostredne nasledujúcej snímke; rozdiel jedinej živej
+   snímky je nepotvrdený (`unconfirmed_findings`, kontrola `inconclusive`),
+   audit ho vykazuje v `integrity_unconfirmed_seq` a benígnu session nezamieta.
 4. Plná snímka, chýbajúci predchodca a neplatný riadok zamedzia skórovaniu okna.
 5. Medzera v sekvencii alebo čase, nová session alebo reťazec prerušia
    modelový kontext a históriu hlasovania alarmu.

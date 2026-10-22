@@ -29,6 +29,11 @@ Kazda kontrola preto hlasi 'conclusive': ked je niektory prechod neuplny,
 rozdiel dvoch zoznamov nie je dokaz skryvania a nesmie sa tak citat. Pri
 kontrole (d) 'conclusive' znamena, ze kazda stranka baseline bola v snimke
 precitana - chybajuca stranka je 'neviem', nie 'ciste'.
+
+Aj dva uzavrete prechody mozu zachytit rozne okamihy (fork alebo exit
+kratkeho procesu medzi citanim dvoch stranok). Tu sa hlasi rozdiel jednej
+snimky; extrakcia, audit a safeguard ho za nalez povazuju az po zopakovani
+v nasledujucej snimke (features/snapshot.py, potvrd_krizove).
 """
 
 import bisect
@@ -287,7 +292,7 @@ def process_cross_view(view, procs=None):
                          % (plist["stop_reason"], tree_stop))
 
     # Neuplny pohlad zachovame na diagnostiku, nie medzi nalezmi, ktore
-    # check_all sumarizuje a safeguard pouziva na okamzity alarm.
+    # check_all sumarizuje a safeguard po potvrdeni dalsou snimkou alarmuje.
     differences = res["findings"] if res["conclusive"] else res["inconclusive_differences"]
     for va in sorted(set(list_va) - tree_va):
         p = list_va[va]

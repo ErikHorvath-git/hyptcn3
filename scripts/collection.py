@@ -699,6 +699,10 @@ def analyze_windows(result, p, session, expected_rows=None):
             name: sum(name in q["inconclusive"] for q in result["quality"]) for name in sorted(checks)},
         "integrity_finding_rows": sum(bool(q["findings"]) for q in result["quality"]),
         "integrity_findings": sum(len(q["findings"]) for q in result["quality"]),
+        # Single-snapshot cross-view differences of the live read; not findings.
+        "integrity_unconfirmed_seq": [seq for seq, q in zip(result["seq"], result["quality"])
+                                      if q.get("unconfirmed_findings")],
+        "integrity_unconfirmed": sum(len(q.get("unconfirmed_findings", [])) for q in result["quality"]),
     }
     if detail is not None:
         quality["coverage"] = detail

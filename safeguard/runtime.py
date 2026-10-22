@@ -74,6 +74,8 @@ def _integrity(frame):
     return {
         "status": "findings" if findings else ("inconclusive" if inconclusive else "no_findings"),
         "findings": findings,
+        # Cross-view differences seen in this snapshot only (no alarm).
+        "unconfirmed": list(quality.get("unconfirmed_findings", [])),
         "inconclusive": sorted(set(inconclusive)),
         "conclusive": not bool(inconclusive),
     }
@@ -126,7 +128,7 @@ class Detector:
             "alarm": False, "alarm_event": False, "model_alarm": False,
             "integrity_alarm": False, "score": None,
             "integrity": {"status": "inconclusive", "conclusive": False,
-                          "findings": [], "inconclusive": ["input_error"]},
+                          "findings": [], "unconfirmed": [], "inconclusive": ["input_error"]},
             "evidence": {"status": "not_requested", "chain_ids": [], "error": None},
         }
 

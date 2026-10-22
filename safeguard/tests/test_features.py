@@ -213,13 +213,14 @@ def test_archive_roundtrip_preserves_frames_and_requires_quality(tmp_path):
 
 @pytest.mark.parametrize("cross_view_complete", [True, False])
 def test_live_extraction_resets_predecessor_on_gap_and_preserves_checks(monkeypatch, tmp_path, cross_view_complete):
-    calls = []
+    calls, keys = [], []
     frame = sample(1)
-    def extract(raw, profile, seq, previous):
+    def extract(raw, profile, seq, previous, predch_krizove=None):
         calls.append(previous)
+        keys.append(predch_krizove)
         row = sample(seq, predecessor=previous is not None)
         state = {"pids": {1, 2}, "mod_total": 1, "quality": deepcopy(row.quality),
-                 "layout": row.layout}
+                 "layout": row.layout, "krizove_kluce": frozenset({f"k{seq}"})}
         if not cross_view_complete:
             state["quality"]["model_valid"] = False
             state["quality"]["inconclusive"].append("process_cross_view")
@@ -246,12 +247,52 @@ def test_live_extraction_resets_predecessor_on_gap_and_preserves_checks(monkeypa
     two, state = features.frame_from_snapshot(tmp_path, "unused", 2, state)
     four, state = features.frame_from_snapshot(tmp_path, "unused", 4, state)
     assert calls[0] is None and calls[1] is not None and calls[2] is None
+    assert keys == [None, frozenset({"k1"}), None]
     assert not one.has_predecessor and two.has_predecessor and not four.has_predecessor
     assert four.quality["process_ids"] == [1, 2]
     assert four.quality["inconclusive"] == (["text_integrity"] if cross_view_complete
                                            else ["text_integrity", "process_cross_view"])
     with pytest.raises(ValueError, match="non-increasing"):
         features.frame_from_snapshot(tmp_path, "unused", 4, state)
+
+
+def _live_sidecars(tmp_path, seqs):
+    layout = sample(1).layout
+    heads = [{"seq": seq, "full": False, "chain_id": "chain-a", "path": str(tmp_path / f"{seq}.vmicd")}
+             for seq in seqs]
+    for head in heads:
+        side = {"schema": "vmicollect/1", "seq": head["seq"], "timestamp_unix": head["seq"] * 5.,
+                "vm": {"memsize": 16384, "num_vcpus": 2},
+                "stats": {"read_errors": 0, "filled_zero": 0},
+                "output": {"full": False, "chain_id": "chain-a", "pages_total": 4,
+                           "pages_changed": 1, "page_size": 4096},
+                "features": {"schema": "hyptcn3/perbin/1", "entropy": True,
+                             "bin_bytes": 8192, "page_size": 4096, "bins_total": 2,
+                             "regions": layout["regions"], "bins": [
+                                 {"bin": 0, "gpa": 0, "pages_total": 2, "pages_changed": 1,
+                                  "changed_ratio": .5, "zero_ratio": .5, "entropy_mean": 2., "has_changed": 1},
+                                 {"bin": 1, "gpa": 8192, "pages_total": 2, "pages_changed": 0,
+                                  "changed_ratio": 0., "zero_ratio": 1., "entropy_mean": 0., "has_changed": 0}]}}
+        (tmp_path / f"{head['seq']}.json").write_text(json.dumps(side))
+    return heads
+
+
+def test_live_extraction_confirms_cross_view_after_invalid_predecessor(monkeypatch, tmp_path):
+    calls = []
+    def extract(raw, profile, seq, previous, predch_krizove=None):
+        calls.append((previous, predch_krizove))
+        row = sample(seq, predecessor=previous is not None, valid=seq != 1)
+        state = {"pids": {1}, "mod_total": 1, "quality": deepcopy(row.quality),
+                 "layout": row.layout, "krizove_kluce": frozenset({"hidden"})}
+        return row.vector, state, []
+    heads = _live_sidecars(tmp_path, (1, 2))
+    monkeypatch.setattr(features, "_vsetky_hlavicky", lambda _: heads)
+    monkeypatch.setattr(features, "vektor_snimky", extract)
+    _, state = features.frame_from_snapshot(tmp_path, "unused", 1)
+    features.frame_from_snapshot(tmp_path, "unused", 2, state)
+    # The invalid predecessor drops out of the model inputs, not out of the
+    # cross-view confirmation.
+    assert calls == [(None, None), (None, frozenset({"hidden"}))]
 
 
 @pytest.mark.parametrize("field,value", [("read_errors", 1), ("filled_zero", 1),

@@ -83,6 +83,20 @@ features/windows.py NEPOSKLADA vobec (nie je to rez - riadok je plnohodnotny
 casovy krok a vyhodit ho by znamenalo okno bez jedneho kroku).
 
 KTO TO POUZIVA, MUSI `ma_predchodcu` A `je_plna` CITAT.
+
+KRIZOVY ROZDIEL POTVRDZUJE AZ DRUHA SNIMKA
+------------------------------------------
+Snimka sa cita bez zastavenia VM. Oba prechody krizovej kontroly sa mozu
+uzavriet, a predsa kazdy zachyti iny okamih: stranka so spojkou `tasks` sa
+precita po forku alebo exite kratkeho procesu a stranka so spojkou
+`children/sibling` pred nim. Tak vznikol rozdiel v session
+benign-v2-20261022_03_train_bursty (potomok postmastra, pid 450961, iba v
+snimke 645). Rozdiel z jednej snimky preto nie je nalez: je v
+quality["unconfirmed_findings"] a jeho kontrola je v `inconclusive`. Nalezom
+sa stane, ked ten isty rozdiel ukaze aj bezprostredne predchadzajuca snimka
+tej istej session; skryty objekt ostava skryty, roztrhnute citanie sa v
+dalsej snimke zahoji. `chk_crossview` ostava pocet rozdielov v tejto snimke
+(pred potvrdenim), aby sa historicke matice nemenili.
 """
 
 import json
@@ -117,6 +131,38 @@ MENA = (
 # oblasti modulov) su iny druh podozrenia a do chk_crossview nepatria.
 KRIZOVE_NALEZY = ("process_cross_view", "module_cross_view",
                   "module_name_mismatch")
+# Kontrola v summary.inconclusive, do ktorej krizovy rozdiel patri.
+KRIZOVA_KONTROLA = {"process_cross_view": "process_cross_view",
+                    "module_cross_view": "modules",
+                    "module_name_mismatch": "modules"}
+_Z_PREDCHODCU = object()
+
+
+def kluc_nalezu(nalez):
+    """Identita rozdielu medzi snimkami: cely zaznam (objekt, pid, smer)."""
+    return json.dumps(nalez, sort_keys=True)
+
+
+def potvrd_krizove(stav, predch_kluce):
+    """
+    Necha medzi nalezmi iba krizove rozdiely, ktore ukazala aj predchadzajuca
+    snimka (`predch_kluce`, None = ziadna); ostatne presunie do
+    quality["unconfirmed_findings"] a ich kontrolu oznaci ako neuzavretu.
+    Ine nalezy (hook v tabulke volani, text jadra) sa nemenia. Vracia
+    nepotvrdene rozdiely.
+    """
+    q = stav["quality"]
+    videne = predch_kluce or frozenset()
+    nepotvrdene = [f for f in q["findings"]
+                   if f["check"] in KRIZOVE_NALEZY and kluc_nalezu(f) not in videne]
+    odlozene = {id(f) for f in nepotvrdene}
+    q["findings"] = [f for f in q["findings"] if id(f) not in odlozene]
+    q["unconfirmed_findings"] = nepotvrdene
+    if nepotvrdene:
+        q["inconclusive"] = sorted(set(q["inconclusive"])
+                                   | {KRIZOVA_KONTROLA[f["check"]] for f in nepotvrdene})
+        q["model_valid"] = False  # historicky vektor: neuzavreta kontrola integrity
+    return nepotvrdene
 
 
 # ------------------------------------------------------------ pomocne vzorce
@@ -241,6 +287,9 @@ def objekty_z_pohladu(view):
     Poznamka vznikne vzdy, ked sa nejaky prechod neuzavrel: taky pocet je
     dolna hranica, nie pocet. Do vektora sa zapise, ale v reporte to musi byt
     vidiet - preto sa vracia von, nie iba do logu.
+
+    Krizove rozdiely su tu este nepotvrdene; `stav["krizove_kluce"]` ich
+    nesie do dalsej snimky a potvrdzuje ich vektor_snimky (potvrd_krizove).
     """
     # The CLI already repairs KASLR changes; library callers (training and
     # online scoring) must do the same before comparing kernel pointers.
@@ -271,6 +320,8 @@ def objekty_z_pohladu(view):
     stav = {
         "pids": frozenset(pr["pid"] for pr in p["processes"]),
         "mod_total": m["count"],
+        "krizove_kluce": frozenset(kluc_nalezu(f) for f in c["findings"]
+                                   if f["check"] in KRIZOVE_NALEZY),
         "quality": {
             "traversals_complete": not any(r["truncated"] for r in (p, m, s)),
             "behavior_valid": not any(r["truncated"] for r in (p, m, s)),
@@ -301,7 +352,8 @@ def objekty_z_pohladu(view):
 # ------------------------------------------------------------ jedna snimka
 
 
-def vektor_snimky(snapshot, profil, seq=None, predch=None, cursor=None):
+def vektor_snimky(snapshot, profil, seq=None, predch=None, cursor=None,
+                  predch_krizove=_Z_PREDCHODCU):
     """
     Vektor jednej snimky retazca. Vracia (vektor, stav, poznamky).
 
@@ -310,6 +362,9 @@ def vektor_snimky(snapshot, profil, seq=None, predch=None, cursor=None):
     `predch` je `stav` z predchadzajucej snimky, alebo None pri prvej.
     `cursor` (guestparse.image.ChainCursor) rekonstruuje pamat inkrementalne;
     vysledok je rovnaky ako bez neho.
+    `predch_krizove` su `krizove_kluce` bezprostredne predchadzajucej snimky
+    (None = ziadna); bez neho sa beru z `predch`. Volajuci ho podava zvlast,
+    lebo potvrdenie rozdielu nezavisi od platnosti vstupov predchodcu.
     """
     heads = _chain_parts(snapshot, until_seq=seq)
     # 'full' je z hlavicky .vmicd suboru tejto snimky, nie z poradia v
@@ -338,6 +393,12 @@ def vektor_snimky(snapshot, profil, seq=None, predch=None, cursor=None):
         stav["quality"]["model_valid"] = False
         stav["quality"]["behavior_valid"] = False
         pozn.append("chyby citania RAM: vektor sa nesmie skorovat")
+    if predch_krizove is _Z_PREDCHODCU:
+        predch_krizove = predch.get("krizove_kluce") if predch is not None else None
+    nepotvrdene = potvrd_krizove(stav, predch_krizove)
+    if nepotvrdene:
+        pozn.append("krizovy rozdiel bez potvrdenia predchadzajucou snimkou: %s"
+                    % ", ".join(sorted({f["check"] for f in nepotvrdene})))
 
     if predch is None:
         proc_new = proc_gone = mod_delta = 0
@@ -426,7 +487,7 @@ def _retazec_cyklus(snapshot, profil, max_medzera_s, quality_policy, heads, curs
     matica, snimky, poznamky, trvania = [], [], [], []
     seqs, casy, quality, perbin, chains = [], [], [], [], []
     biny, layout = None, None
-    predch = None
+    predch = krizove = None
     previous = None
     for h in heads:
         from .contract import validate_sidecar
@@ -444,9 +505,9 @@ def _retazec_cyklus(snapshot, profil, max_medzera_s, quality_policy, heads, curs
         now = float(side["timestamp_unix"])
         if previous is not None and (h["seq"] != previous[0] + 1
                 or not 0 < now - previous[1] <= max_medzera_s):
-            predch = None
+            predch = krizove = None
         t0 = time.monotonic()
-        vektor, stav, pozn = vektor_snimky(snapshot, profil, h["seq"], predch, cursor)
+        vektor, stav, pozn = vektor_snimky(snapshot, profil, h["seq"], predch, cursor, krizove)
         trvania.append(time.monotonic() - t0)
         matica.append(vektor)
         snimky.append(os.path.basename(h["path"])[:-len(".vmicd")])
@@ -466,6 +527,7 @@ def _retazec_cyklus(snapshot, profil, max_medzera_s, quality_policy, heads, curs
         casy.append(now)
         chains.append(str(side["output"]["chain_id"]))
         predch = stav if valid_for(q, quality_policy) else None
+        krizove = stav["krizove_kluce"]
         previous = h["seq"], now
     return {
         "schema": SCHEMA,

@@ -233,6 +233,7 @@ def frame_from_snapshot(raw_dir, profile, seq, previous=None, session_id=None, *
             or str(side["output"]["chain_id"]) != str(head["chain_id"])):
         raise ValueError("sidecar does not match snapshot header")
     timestamp = float(side["timestamp_unix"])
+    cross_view = None
     if previous is not None:
         meta = previous.get("_safeguard")
         if not isinstance(meta, dict):
@@ -243,10 +244,15 @@ def frame_from_snapshot(raw_dir, profile, seq, previous=None, session_id=None, *
             previous = None
         elif seq <= meta["seq"] or timestamp <= meta["timestamp"]:
             raise ValueError("non-increasing snapshot sequence/time")
-        elif (seq != meta["seq"] + 1 or timestamp - meta["timestamp"] > gap
-              or not previous["quality"]["behavior_valid"]):
-            previous = None
-    vector, state, notes = vektor_snimky(raw_dir, str(profile), seq, previous)
+        else:
+            adjacent = seq == meta["seq"] + 1 and timestamp - meta["timestamp"] <= gap
+            # A cross-view difference is confirmed by the adjacent snapshot even
+            # when that snapshot's behavioral inputs were invalid.
+            cross_view = previous.get("krizove_kluce") if adjacent else None
+            if not adjacent or not previous["quality"]["behavior_valid"]:
+                previous = None
+    vector, state, notes = vektor_snimky(raw_dir, str(profile), seq, previous,
+                                         predch_krizove=cross_view)
     ids, local = perbin_zo_sidecaru(sidepath)
     quality = deepcopy(state["quality"])
     quality.update(read_errors=side["stats"]["read_errors"],

@@ -65,7 +65,11 @@ Aktuálny kontrakt `hyptcn3/safeguard-features/2` vyžaduje archív
 `behavior_valid` vyjadruje úspešné čítanie RAM a úplné primárne prechody
 procesov, modulov a soketov. Neuzavretá nezávislá kontrola integrity zostáva
 viditeľná v udalosti, ale tieto namerané vstupy nezneplatňuje. Nález integrity
-stále vyvolá alarm nezávisle od modelu. Staršie archívy alebo manifesty sa
+stále vyvolá alarm nezávisle od modelu. Krížový rozdiel procesov alebo modulov
+je nálezom až vtedy, keď ho ukáže aj bezprostredne predchádzajúca snímka tej
+istej session. Rozdiel z jedinej živej snímky je v `integrity.unconfirmed`
+a kontrola je `inconclusive` (pozri [kontroly.md](kontroly.md)); alarm
+skrytého objektu preto príde o jednu periódu neskôr. Staršie archívy alebo manifesty sa
 odmietnu; vyžadujú novú extrakciu a tréning, nie ručné prepísanie verzie.
 
 Normalizátor vidí iba vhodné riadky role `train`, každý práve raz. Parametre

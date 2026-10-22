@@ -210,6 +210,102 @@ def test_behavior_quality_depends_on_feature_traversals_not_cross_view(monkeypat
     assert state["quality"]["model_valid"] is False
 
 
+HIDDEN = {"check": "process_cross_view", "task_va": 0xffff0000, "pid": 450961, "comm": "postgres",
+          "seen_in": "tasks", "missing_in": "children/sibling"}
+HOOK = {"check": "syscall_hook", "index": 59}
+
+
+def _stav(*findings, inconclusive=("text_integrity",)):
+    return {"quality": {"model_valid": True, "behavior_valid": True, "traversals_complete": True,
+                        "inconclusive": list(inconclusive), "findings": [dict(f) for f in findings]}}
+
+
+def test_single_snapshot_cross_view_difference_is_unconfirmed():
+    from features.snapshot import potvrd_krizove
+    stav = _stav(HIDDEN, HOOK)
+    assert potvrd_krizove(stav, None) == [HIDDEN]
+    q = stav["quality"]
+    assert q["findings"] == [HOOK]          # other checks alarm at once
+    assert q["unconfirmed_findings"] == [HIDDEN]
+    assert q["inconclusive"] == ["process_cross_view", "text_integrity"]
+    assert q["model_valid"] is False and q["behavior_valid"] is True
+
+
+def test_cross_view_difference_confirmed_by_adjacent_snapshot():
+    from features.snapshot import kluc_nalezu, potvrd_krizove
+    stav = _stav(HIDDEN)
+    assert potvrd_krizove(stav, frozenset({kluc_nalezu(HIDDEN)})) == []
+    q = stav["quality"]
+    assert q["findings"] == [HIDDEN] and q["unconfirmed_findings"] == []
+    assert q["inconclusive"] == ["text_integrity"] and q["model_valid"] is True
+
+
+@pytest.mark.parametrize("previous", [
+    dict(HIDDEN, pid=450962),
+    dict(HIDDEN, seen_in="children/sibling", missing_in="tasks"),
+    {"check": "module_cross_view", "module_va": 1, "name": "x", "seen_in": "modules",
+     "missing_in": "module_kset"}])
+def test_other_previous_difference_does_not_confirm(previous):
+    from features.snapshot import kluc_nalezu, potvrd_krizove
+    stav = _stav(HIDDEN)
+    assert potvrd_krizove(stav, frozenset({kluc_nalezu(previous)})) == [HIDDEN]
+
+
+def test_unconfirmed_module_difference_marks_module_check():
+    from features.snapshot import potvrd_krizove
+    module = {"check": "module_name_mismatch", "module_va": 1, "modules_name": "a", "sysfs_name": "b"}
+    stav = _stav(module)
+    potvrd_krizove(stav, frozenset())
+    assert stav["quality"]["inconclusive"] == ["modules", "text_integrity"]
+
+
+def test_object_state_carries_raw_cross_view_keys(monkeypatch):
+    from types import SimpleNamespace
+    from features import snapshot
+    walk = lambda field: {field: [], "count": 0, "truncated": False, "stop_reason": None}
+    view = SimpleNamespace(ktext_shift=1, profile_boot_mismatch=lambda: None,
+                           processes=lambda: walk("processes"), modules=lambda: walk("modules"),
+                           sockets=lambda **kwargs: walk("sockets"))
+    monkeypatch.setattr(snapshot.checks, "check_all", lambda *args, **kwargs: {
+        "summary": {"inconclusive": [], "syscall_hooks": 1}, "findings": [HIDDEN, HOOK]})
+    values, state, _ = objekty_z_pohladu(view)
+    assert state["krizove_kluce"] == frozenset({snapshot.kluc_nalezu(HIDDEN)})
+    assert values["chk_crossview"] == 1     # per-snapshot count, before confirmation
+
+
+def test_chain_threads_cross_view_keys_independent_of_model_validity(monkeypatch, tmp_path):
+    from features import snapshot
+    from features.quality import LEGACY_POLICY
+    regions = [{"gpa": 0, "bytes": 16384}]
+    heads = []
+    for seq in (1, 2, 3, 5):                 # sequence gap before 5
+        path = tmp_path / ("%d.vmicd" % seq)
+        heads.append({"seq": seq, "full": False, "chain_id": "c", "path": str(path)})
+        (tmp_path / ("%d.json" % seq)).write_text(json.dumps({
+            "schema": "vmicollect/1", "seq": seq, "timestamp_unix": seq * 5.,
+            "vm": {"memsize": 16384, "num_vcpus": 2}, "stats": {"read_errors": 0, "filled_zero": 0},
+            "output": {"full": False, "chain_id": "c", "pages_total": 4, "pages_changed": 1,
+                       "page_size": 4096},
+            "features": {"schema": "hyptcn3/perbin/1", "entropy": True, "bin_bytes": 8192,
+                         "page_size": 4096, "bins_total": 2, "regions": regions, "bins": [
+                             {"bin": 0, "gpa": 0, "pages_total": 2, "pages_changed": 1,
+                              "changed_ratio": .5, "zero_ratio": .5, "entropy_mean": 2., "has_changed": 1},
+                             {"bin": 1, "gpa": 8192, "pages_total": 2, "pages_changed": 0,
+                              "changed_ratio": 0., "zero_ratio": 1., "entropy_mean": 0., "has_changed": 0}]}}))
+    calls = []
+
+    def extract(_raw, _profile, seq, predch, _cursor, predch_krizove):
+        calls.append((seq, predch, predch_krizove))
+        quality = _stav(inconclusive=("process_cross_view", "text_integrity"))["quality"]
+        quality["model_valid"] = False      # legacy-invalid: predch is never passed on
+        return [0.] * len(MENA), {"pids": frozenset(), "mod_total": 0, "quality": quality,
+                                  "krizove_kluce": frozenset({"k%d" % seq})}, []
+    monkeypatch.setattr(snapshot, "vektor_snimky", extract)
+    snapshot._retazec_cyklus(str(tmp_path), "unused", 7.5, LEGACY_POLICY, heads, None)
+    assert calls == [(1, None, None), (2, None, frozenset({"k1"})),
+                     (3, None, frozenset({"k2"})), (5, None, None)]
+
+
 def _najdi_retazec():
     """
     Adresar v data/raw/ s aspon dvoma snimkami retazca, ktore maju vedla

@@ -78,6 +78,22 @@ def test_inconclusive_cross_view_is_input_error_without_integrity_alarm():
     assert row["score"] is None
 
 
+def test_unconfirmed_cross_view_difference_is_reported_without_alarm():
+    hidden = {"check": "process_cross_view", "pid": 450961, "seen_in": "tasks",
+              "missing_in": "children/sibling"}
+    detector = runtime.Detector(FakeBundle(scores={0: 0.0, 1: 0.0}), preserve=False)
+    row = frame(0)
+    first = detector.process(replace(row, quality={
+        **row.quality, "model_valid": False, "inconclusive": ["process_cross_view"],
+        "unconfirmed_findings": [hidden]}))
+    assert first["integrity"]["status"] == "inconclusive"
+    assert first["integrity"]["unconfirmed"] == [hidden]
+    assert not first["integrity_alarm"] and not first["alarm"]
+    # The extractor moves the difference to findings once the next snapshot repeats it.
+    second = detector.process(frame(1, findings=[hidden]))
+    assert second["integrity_alarm"] and second["alarm_sources"] == ["kernel_integrity"]
+
+
 @pytest.mark.parametrize("independent_finding", [False, True])
 def test_integrity_gap_preserves_behavior_windows_and_independent_alarm(independent_finding):
     detector = runtime.Detector(FakeBundle(window=2, scores={2: 0.0}), preserve=False)
