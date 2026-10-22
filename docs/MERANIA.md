@@ -1410,3 +1410,51 @@ MiB a trvala
 1678.6 {{res:collection_pilot_hdd_20261021_stopped.json:values.first_full.read_ms}}
 ms; QEMU nemala nič vo swape, krok `prefault` nemal čo načítať. Ide
 o diagnostiku, nie o korpus ani o prijatý pilot.
+
+## 2026-10-22 — prijatý pilot 3
+
+Pilot `20261022T003017919708Z_pilot_bursty` (skupina `pilot-3-20261021`,
+commit `c15cda4`, profil `bursty`, seed 20261021, nový boot VM) bežal
+s opatreniami po prvom pilote: `vm.swappiness = 1`, krok `prefault`, disk
+VM na HDD a monitor bez `fsync` počas vzorkovania. Audit ho prijal
+([audit](../data/results/collection_pilot_3_20261021_audit.json)):
+480 {{res:collection_pilot_3_20261021_audit.json:values.snapshots}}
+snímok,
+416 {{res:collection_pilot_3_20261021_audit.json:values.windows}}
+okien a pokrytie
+0.8667 {{res:collection_pilot_3_20261021_audit.json:values.score_coverage}},
+čo je strop protokolu. Logový audit nenašiel problém a nálezov integrity bolo
+0 {{res:collection_pilot_3_20261021_audit.json:values.quality.integrity_findings}}.
+
+[Súhrn časovania](../data/results/collection_pilot_3_20261021_timing.json):
+zberač mal
+0 {{res:collection_pilot_3_20261021_timing.json:values.collector_end.errors}}
+chýb a
+0 {{res:collection_pilot_3_20261021_timing.json:values.collector_end.missed_slots}}
+zmeškaných slotov. Plné snímky trvali
+1831.0 {{res:collection_pilot_3_20261021_timing.json:values.full_snapshots.seq_0.cycle_ms}}
+ms a
+3483.0 {{res:collection_pilot_3_20261021_timing.json:values.full_snapshots.seq_360.cycle_ms}}
+ms (druhá počas súbežného spätného zápisu), delty mali medián
+966.7 {{res:collection_pilot_3_20261021_timing.json:values.delta_cycle_ms.p50}}
+ms a maximum
+2340.1 {{res:collection_pilot_3_20261021_timing.json:values.delta_cycle_ms.max}}
+ms. Generátor poslal
+122956 {{res:collection_pilot_3_20261021_timing.json:values.traffic.requests}}
+požiadaviek s
+0 {{res:collection_pilot_3_20261021_timing.json:values.traffic.errors}}
+chybami. Najväčšia medzera monitora bola
+1.0 {{res:collection_pilot_3_20261021_timing.json:values.monitor_max_gap_s}}
+s; QEMU nemala nič vo swape na začiatku ani na konci. Audit trval
+563.607 {{res:collection_pilot_3_20261021_timing.json:values.audit_timing.wall_s}}
+s. Vstupná brána kampane (`pilot_gate`) prešla bez zmeny meracieho kódu od
+pilota.
+
+Zostatkové riziko je čas plnej snímky. Po reštarte skupiny ostáva v RAM hosťa
+starý obsah, preto budú plné snímky v kampani väčšie ako v tomto pilote.
+V prvom pilote mala druhá plná snímka bez swapu
+922.15 {{res:collection_io_interference_20261021.json:values.second_full.mib}}
+MiB a trvala
+2446.6 {{res:collection_io_interference_20261021.json:values.second_full.read_ms}}
+ms. Prekročenie periódy audit zistí ako zmeškaný slot a kampaň zastaví.
+Stav pripravenosti je v [PRIPRAVENOST_KAMPANE.sk.md](PRIPRAVENOST_KAMPANE.sk.md).

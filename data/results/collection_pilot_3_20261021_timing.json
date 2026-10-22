@@ -1,0 +1,91 @@
+{
+  "commit": "c15cda4476b68e8a5799eb5b679edb6298a1593e",
+  "commit_dirty": true,
+  "date": "2026-10-22T01:23:07.063898+00:00",
+  "host": "Linux-7.2.9+deb13-amd64-x86_64-with-glibc2.41",
+  "guest": {
+    "kernel": "6.1.0-42-cloud-amd64",
+    "boot_id": "ad6a2cef-b57b-4f7b-83d3-c744757c2d14",
+    "machine_id": "180ac982142b4714a979599073c96cdd",
+    "stack_sha256": "3fcb9e724f031e3ed24fd3e08fb8f2946c8cd3f04416bc871d8f7dc31b3d46bc",
+    "stack_manifest": [
+      "c346dc8bc1c8c3649fc96064fddfc07172f740f7c82d1830dbb935b16c488271  /opt/hyptcn-lab/services.py",
+      "d7372422553f866333177456ac6daec4847f5660c1c854a646e602d0be0fcf6c  /opt/hyptcn-lab/schema.sql",
+      "a8e5ef8843ebae83eed8691f8eb7e1d186448d36e4be7d4406efeaa96291d5e3  /opt/hyptcn-lab/guest_state.py",
+      "62f55e4374b5db4522d0ce84c911f26ccd580e8f55bc570c09ee63c64be234c6  /etc/nginx/conf.d/hyptcn-lab.conf",
+      "af75eee623f3c7a0b7a1c10a35c2216684c6f4b610d44e46560de137ef3d6962  /etc/systemd/system/hyptcn-lab@.service",
+      "nginx\t1.22.1-9+deb12u10",
+      "postgresql\t15+248+deb12u1",
+      "python3\t3.11.2-1+b1",
+      "python3-psycopg2\t2.9.5-1+b1",
+      "timers:"
+    ]
+  },
+  "command": "data/results/collection_pilot_3_20261021/timing_record.py data/collections/20261022T003017919708Z_pilot_bursty data/collections/20261022T003017919708Z_pilot_bursty/audit_20261022T012236704934Z.json data/results/collection_pilot_3_20261021_timing.json",
+  "n": 480,
+  "values": {
+    "session": "20261022T003017919708Z_pilot_bursty",
+    "group": "pilot-3-20261021",
+    "session_commit": "c15cda4476b68e8a5799eb5b679edb6298a1593e",
+    "audit": "audit_20261022T012236704934Z.json",
+    "audit_sha256": "adb1f2259f3223cb69d7d66c8b09612c66d242a046393b4e30c80f7d656bed75",
+    "audit_accepted": true,
+    "host_memory_at_start": {
+      "vm_swappiness": 1,
+      "qemu_swap_kb": 0
+    },
+    "prefault": {
+      "swap_kb_before": 0,
+      "swap_kb_after": 0,
+      "seconds": 0.0
+    },
+    "host_memory_after": {
+      "vm_swappiness": 1,
+      "qemu_swap_kb": 0
+    },
+    "full_snapshots": {
+      "seq_0": {
+        "mib": 544.99,
+        "cycle_ms": 1831.0
+      },
+      "seq_360": {
+        "mib": 630.46,
+        "cycle_ms": 3483.0
+      }
+    },
+    "delta_cycle_ms": {
+      "n": 478,
+      "p50": 966.7,
+      "max": 2340.1
+    },
+    "collector_end": {
+      "snapshots": 480,
+      "errors": 0,
+      "missed_slots": 0
+    },
+    "monitor_max_gap_s": 1.0,
+    "monitor_samples": 2532,
+    "traffic": {
+      "requests": 122956,
+      "ok": 122956,
+      "errors": 0,
+      "ok_per_s": 48.795,
+      "log_backpressure_s": 0.0
+    },
+    "inputs_sha256": {
+      "session.json": "85bdd084a4f0f752d23a6e02558773b7dbaa4ebe968fbe6375d8b438461676c8",
+      "end.json": "459596f05b7cdcfa311fd9bed4ca06703edbebee788ae62e46651fedb2aef811",
+      "raw/collect.log": "0f061958d9ed2abb311fb33cc61e0e9bd76f835edef5bb18bbcb54f395c650b2",
+      "host_monitor.jsonl": "7f56a64ce3b28518f26a41fba62f82494c1123203ca34199061dd8b40c5ae024",
+      "traffic.json": "210d986741642cc226cd26ecd571b887c07a927def8b1149144aefc467288334"
+    },
+    "note": "Pilot evidence summary; the audit report is the verdict. Not a corpus session.",
+    "audit_timing": {
+      "wall_s": 563.607,
+      "wall_source": "time(1) around 'collection.py audit' of this session (2026-10-22 UTC); only light interactive analysis ran meanwhile",
+      "extraction_s_sum": 521.7,
+      "extraction_s_max": 3.33,
+      "rows": 480
+    }
+  }
+}

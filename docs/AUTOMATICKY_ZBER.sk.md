@@ -263,6 +263,25 @@ nepresúvajú.
 .venv/bin/python scripts/campaign.py verify-archives data/campaigns/<kampaň>
 ```
 
+## Report
+
+Súhrn session alebo celej kampane (CSV, JSON a SVG grafy) mimo merania:
+
+```sh
+.venv/bin/python scripts/campaign_report.py campaign data/campaigns/<kampaň> --out <nový-adresár>
+.venv/bin/python scripts/campaign_report.py sessions data/collections/<session> ... --out <nový-adresár>
+```
+
+Report číta iba uložené dôkazy (RAM obrazy neotvára, archív nedekomprimuje)
+a každú hodnotu viaže na vstupný súbor so SHA-256. Chýbajúca hodnota má
+uvedený dôvod, nikdy odhad. Výstupný adresár musí byť nový a mimo vstupov.
+Odložené pokusy (`<session>.attempt-<n>`), žiadosti o zastavenie a uzavretie
+kampane uvádza osobitne. Počas bežiacej kampane ho nespúšťať, lebo zaťaží
+hostiteľa.
+
+Stav pripravenosti pred spustením kampane je v
+[PRIPRAVENOST_KAMPANE.sk.md](PRIPRAVENOST_KAMPANE.sk.md).
+
 ## Dokončenie a rozsah overenia
 
 Po prijatí a archivovaní celého plánu vznikne
