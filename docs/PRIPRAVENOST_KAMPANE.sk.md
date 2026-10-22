@@ -41,7 +41,20 @@ zamietnutí tretej sa uzavrela
 ([záznam](../data/results/collection_campaign_benign_v3_20261022.json),
 [MERANIA.md](MERANIA.md)). Commit `0b61ffd` zmenil merací kód (roztrhnutý
 zoznam procesov potvrdí prechod dozadu, monitor zapisuje vo vlákne, limit
-klienta je 10 s), preto ďalšia kampaň potrebuje nový pilot so súčasným kódom.
+klienta je 10 s), preto ďalšia kampaň vychádza z pilota 5
+`20261022T142659087837Z_pilot_bursty` (skupina `pilot-5-20261022`, commit
+`e774c69` s meracím kódom z `0b61ffd`):
+[audit](../data/results/collection_pilot_5_20261022_audit.json),
+[súhrn časovania](../data/results/collection_pilot_5_20261022_timing.json).
+Audit ho prijal s
+416 {{res:collection_pilot_5_20261022_audit.json:values.windows}}
+oknami,
+0 {{res:collection_pilot_5_20261022_audit.json:values.quality.integrity_findings}}
+nálezmi a plnými snímkami
+2735.9 {{res:collection_pilot_5_20261022_timing.json:values.full_snapshots.seq_360.cycle_ms}}
+ms pri
+271254 {{res:collection_pilot_5_20261022_timing.json:values.full_snapshots.seq_360.pages}}
+stránkach.
 
 ## Zber a dôkazy
 
@@ -55,9 +68,10 @@ klienta je 10 s), preto ďalšia kampaň potrebuje nový pilot so súčasným k�
 | Pamäť hosťa nie je odswapovaná pri plnej snímke | PASS | `vm.swappiness = 1`, krok `prefault`; pilot 3: swap QEMU 0 kB na začiatku aj na konci |
 | Disk VM oddelený od výstupu snímok | PASS | `vms/hyptcn-lab.qcow2` na HDD; pilot 3: 0 {{res:collection_pilot_3_20261021_timing.json:values.traffic.errors}} chybných požiadaviek |
 | Monitor nečaká na `fsync` počas vzorkovania | PASS | test s falošnými hodinami; pilot 3 bez medzery |
-| Monitor nečaká ani na zápis riadku | UNVERIFIED | kampaň v3: 2.01 {{res:collection_campaign_benign_v3_20261022.json:values.sessions.0.monitor_max_gap_s}} s a 2.04 {{res:collection_campaign_benign_v3_20261022.json:values.sessions.2.monitor_max_gap_s}} s pri spätnom zápise; commit `0b61ffd` zapisuje z fronty vo vlákne, test so zablokovaným zápisom; živé overenie príde s pilotom |
-| Rezerva limitu klienta | UNVERIFIED | kampaň v3: najpomalšia požiadavka 2348.6 {{res:collection_campaign_benign_v3_20261022.json:values.sessions.2.measure_latency.max_ms}} ms pri limite 4 s; od commitu `0b61ffd` je limit 10 s |
-| Rezerva plnej snímky voči perióde 5 s | PASS, zostatkové riziko | kampaň v3: najdlhšia plná snímka 2458.5 {{res:collection_campaign_benign_v3_20261022.json:values.sessions.2.full_snapshots_ms.1}} ms pri 917.43 {{res:collection_campaign_benign_v3_20261022.json:values.sessions.2.full_snapshots_mib.1}} MiB; kampaň v2: najdlhšia plná snímka 2168.1 {{res:collection_campaign_benign_v2_20261022.json:values.sessions.2.full_snapshots_ms.1}} ms pri 735.27 {{res:collection_campaign_benign_v2_20261022.json:values.sessions.2.full_snapshots_mib.1}} MiB; pilot 3: 1831.0 {{res:collection_pilot_3_20261021_timing.json:values.full_snapshots.seq_0.cycle_ms}} ms a 3483.0 {{res:collection_pilot_3_20261021_timing.json:values.full_snapshots.seq_360.cycle_ms}} ms (súbežný spätný zápis); po reštarte skupiny ostáva v RAM starý obsah, takže plné snímky v kampani budú väčšie (pilot 1: ~920 MiB). Prekročenie audit zistí a kampaň zastaví |
+| Monitor nečaká ani na zápis riadku | PASS | pilot 5: 0 {{res:collection_pilot_5_20261022_timing.json:values.monitor_missed_ticks}} vynechaných vzoriek; kampaň v3: 2.01 {{res:collection_campaign_benign_v3_20261022.json:values.sessions.0.monitor_max_gap_s}} s a 2.04 {{res:collection_campaign_benign_v3_20261022.json:values.sessions.2.monitor_max_gap_s}} s pri spätnom zápise; commit `0b61ffd` zapisuje z fronty vo vlákne, test so zablokovaným zápisom |
+| Rezerva limitu klienta | PASS | kampaň v3: najpomalšia požiadavka 2348.6 {{res:collection_campaign_benign_v3_20261022.json:values.sessions.2.measure_latency.max_ms}} ms pri limite 4 s; od commitu `0b61ffd` je limit 10 s; pilot 5: najpomalšia 2003.5 {{res:collection_pilot_5_20261022_timing.json:values.measure_latency.max_ms}} ms |
+| Rezerva plnej snímky voči perióde 5 s | PASS, zostatkové riziko | pilot 5: 2735.9 {{res:collection_pilot_5_20261022_timing.json:values.full_snapshots.seq_360.cycle_ms}} ms pri 271254 {{res:collection_pilot_5_20261022_timing.json:values.full_snapshots.seq_360.pages}} stránkach; kampaň v3: najdlhšia plná snímka 2458.5 {{res:collection_campaign_benign_v3_20261022.json:values.sessions.2.full_snapshots_ms.1}} ms pri 917.43 {{res:collection_campaign_benign_v3_20261022.json:values.sessions.2.full_snapshots_mib.1}} MiB; kampaň v2: najdlhšia plná snímka 2168.1 {{res:collection_campaign_benign_v2_20261022.json:values.sessions.2.full_snapshots_ms.1}} ms pri 735.27 {{res:collection_campaign_benign_v2_20261022.json:values.sessions.2.full_snapshots_mib.1}} MiB; pilot 3: 1831.0 {{res:collection_pilot_3_20261021_timing.json:values.full_snapshots.seq_0.cycle_ms}} ms a 3483.0 {{res:collection_pilot_3_20261021_timing.json:values.full_snapshots.seq_360.cycle_ms}} ms (súbežný spätný zápis); po reštarte skupiny ostáva v RAM starý obsah, takže plné snímky v kampani budú väčšie (pilot 1: ~920 MiB). Prekročenie audit zistí a kampaň zastaví |
+| Rast stránok pridelených VM | PASS, zostatkové riziko | [záznam](../data/results/collection_full_snapshot_growth_20261022.json): na jednom procese QEMU rástla plná snímka s reštartmi hosťa zo 117993 {{res:collection_full_snapshot_growth_20261022.json:values.by_guest_boot.0.pages_min}} na 271254 {{res:collection_full_snapshot_growth_20261022.json:values.by_guest_boot.5.pages_max}} stránok; pri všetkých stránkach odhad 4355.3 {{res:collection_full_snapshot_growth_20261022.json:values.estimate_all_pages_ms}} ms. Pred kampaňou nový proces QEMU; 8 reštartov skupín počet stránok znova zvýši |
 | Časovače v hosťovi | PASS | identita hosťa `timers:` je prázdna; zmena zastaví kampaň |
 | Údržba hostiteľa | PASS | aktualizácie vypnuté; `anacron`, `logrotate`, `dpkg-db-backup`, `systemd-tmpfiles-clean` a `e2scrub_all` zostávajú, monitor ich zaznamená |
 | Procesy na pozadí hostiteľa | PASS, zaznamenané | `plymouthd` (zvyšok bootovacej obrazovky) a `dsh-web` bežali aj počas pilota; celkové CPU je v monitore |
@@ -67,7 +81,7 @@ klienta je 10 s), preto ďalšia kampaň potrebuje nový pilot so súčasným k�
 
 | Požiadavka | Stav | Dôkaz a poznámka |
 |---|---|---|
-| Prijatý pilot so súčasným meracím kódom | UNVERIFIED | pilot 4 (commit `d25c027`) platí pre kód pred `0b61ffd`; nový pilot ešte nebežal |
+| Prijatý pilot so súčasným meracím kódom | PASS | pilot 5 (commit `e774c69`, merací kód z `0b61ffd`); `measurement_dirty: []` |
 | Offline extrakcia s kurzorom reťazca | PASS | [overenie](../data/results/chain_cursor_validation_20261021.json) |
 | Trvanie auditu 720 snímok pod limitom 3 h | PASS | kampaň v2: 927.8 {{res:collection_campaign_benign_v2_20261022.json:values.sessions.0.stage_s.audit}} s až 1001.9 {{res:collection_campaign_benign_v2_20261022.json:values.sessions.2.stage_s.audit}} s; kampaň v3: najviac 1218.2 {{res:collection_campaign_benign_v3_20261022.json:values.sessions.2.stage_s.audit}} s |
 | Archív zstd s overením dekompresiou, obnova | PASS | [overenie](../data/results/collection_archive_roundtrip_20261020.json); kampaň v2: `verify-archives` nad 3 session, obnova session 3 (1442 {{res:collection_crossview_race_20261022.json:values.restore.files}} súborov s kontrolou SHA-256); kampaň v3: `verify-archives` nad 3 session za 198.7 {{res:collection_campaign_benign_v3_20261022.json:values.verify_archives.wall_s}} s, obnova session 3 (1442 {{res:collection_process_walk_race_20261022.json:values.restore.files}} súborov) |
@@ -77,7 +91,7 @@ klienta je 10 s), preto ďalšia kampaň potrebuje nový pilot so súčasným k�
 | Reštart alebo obnova procesu QEMU uprostred skupiny zastaví kampaň | UNVERIFIED | testy; obnova libvirtom sa úmyselne nevyvoláva |
 | Uzavretie kampane a nová kampaň (`close`) | PASS | `close` kampaní v2 a v3 zapísal `closed.json` s dôvodom; `init` kampane v3 z pilota 4 prešiel |
 | Krížová kontrola procesov pri živej snímke | FAIL, opravené | [záznam](../data/results/collection_crossview_race_20261022.json): rozdiel jednej snímky zastavil kampaň v2; commit `8498670` ho potvrdzuje susednou snímkou, opätovný audit session prijal; pilot 4 so zmeneným kódom prijatý |
-| Roztrhnutý zoznam procesov pri živej snímke | FAIL, opravené | [záznam](../data/results/collection_process_walk_race_20261022.json): cyklus v zozname `tasks` (snímka 505) zastavil kampaň v3; commit `0b61ffd` ho uzavrie prechodom dozadu cez tie isté uzly, opätovný audit session prijal; pilot so zmeneným kódom ešte nebežal |
+| Roztrhnutý zoznam procesov pri živej snímke | FAIL, opravené | [záznam](../data/results/collection_process_walk_race_20261022.json): cyklus v zozname `tasks` (snímka 505) zastavil kampaň v3; commit `0b61ffd` ho uzavrie prechodom dozadu cez tie isté uzly, opätovný audit session prijal; pilot 5 so zmeneným kódom prijatý |
 | Výpadok napájania alebo reštart hostiteľa počas merania | UNVERIFIED | správanie: neúplná session, kampaň stojí; `close` a nová kampaň |
 | Úložisko | PASS | `init` overí odhad z pilotu pre SSD aj archív na HDD |
 | Regresné testy | PASS | celá sada `pytest` a C testy (počty v [PRIRUCKA.md](PRIRUCKA.md)) |

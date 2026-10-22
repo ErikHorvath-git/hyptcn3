@@ -1,0 +1,413 @@
+{
+  "commit": "e774c6942c9e78d9acd085711a887857359f22d4",
+  "commit_dirty": true,
+  "date": "2026-10-22T15:24:35.221779+00:00",
+  "host": "Linux-7.2.9+deb13-amd64-x86_64-with-glibc2.41",
+  "guest": {
+    "kernel": "6.1.0-42-cloud-amd64",
+    "boot_id": "86d6bda7-1fd9-4c07-acd2-3fecef5eff9f",
+    "machine_id": "180ac982142b4714a979599073c96cdd",
+    "stack_sha256": "3fcb9e724f031e3ed24fd3e08fb8f2946c8cd3f04416bc871d8f7dc31b3d46bc",
+    "stack_manifest": [
+      "c346dc8bc1c8c3649fc96064fddfc07172f740f7c82d1830dbb935b16c488271  /opt/hyptcn-lab/services.py",
+      "d7372422553f866333177456ac6daec4847f5660c1c854a646e602d0be0fcf6c  /opt/hyptcn-lab/schema.sql",
+      "a8e5ef8843ebae83eed8691f8eb7e1d186448d36e4be7d4406efeaa96291d5e3  /opt/hyptcn-lab/guest_state.py",
+      "62f55e4374b5db4522d0ce84c911f26ccd580e8f55bc570c09ee63c64be234c6  /etc/nginx/conf.d/hyptcn-lab.conf",
+      "af75eee623f3c7a0b7a1c10a35c2216684c6f4b610d44e46560de137ef3d6962  /etc/systemd/system/hyptcn-lab@.service",
+      "nginx\t1.22.1-9+deb12u10",
+      "postgresql\t15+248+deb12u1",
+      "python3\t3.11.2-1+b1",
+      "python3-psycopg2\t2.9.5-1+b1",
+      "timers:"
+    ]
+  },
+  "command": "data/results/collection_full_snapshot_growth_20261022/record.py data/results/collection_full_snapshot_growth_20261022.json data/collections/20261022T002132864698Z_pilot_bursty data/collections/20261022T003017919708Z_pilot_bursty data/collections/benign-v2-20261022_01_train_write_heavy data/collections/benign-v2-20261022_02_train_quiet data/collections/benign-v2-20261022_03_train_bursty data/collections/20261022T073059077133Z_pilot_bursty data/collections/benign-v3-20261022_01_train_write_heavy data/collections/benign-v3-20261022_02_train_quiet data/collections/benign-v3-20261022_03_train_bursty data/collections/20261022T142659087837Z_pilot_bursty",
+  "n": 19,
+  "values": {
+    "qemu_processes": [
+      "{\"host_boot\": \"eb635e03-638a-4d7c-ab67-9ee1a4d410cf\", \"pid\": 502385, \"start_ticks\": 13893748}"
+    ],
+    "guest_pages_total": 524353,
+    "fulls": [
+      {
+        "session": "20261022T002132864698Z_pilot_bursty",
+        "guest_boot": "9a94eb9c-6f11-412e-8869-469af58f9d9a",
+        "qemu": {
+          "pid": 502385,
+          "start_ticks": 13893748,
+          "host_boot": "eb635e03-638a-4d7c-ab67-9ee1a4d410cf"
+        },
+        "seq": 0,
+        "t_utc": "2026-10-22T00:23:43.858Z",
+        "pages": 117993,
+        "read_ms": 1678.6,
+        "cycle_ms": 1678.7,
+        "excluded_from_fit": null
+      },
+      {
+        "session": "20261022T003017919708Z_pilot_bursty",
+        "guest_boot": "ad6a2cef-b57b-4f7b-83d3-c744757c2d14",
+        "qemu": {
+          "pid": 502385,
+          "start_ticks": 13893748,
+          "host_boot": "eb635e03-638a-4d7c-ab67-9ee1a4d410cf"
+        },
+        "seq": 0,
+        "t_utc": "2026-10-22T00:32:28.248Z",
+        "pages": 139245,
+        "read_ms": 1830.9,
+        "cycle_ms": 1831.0,
+        "excluded_from_fit": null
+      },
+      {
+        "session": "20261022T003017919708Z_pilot_bursty",
+        "guest_boot": "ad6a2cef-b57b-4f7b-83d3-c744757c2d14",
+        "qemu": {
+          "pid": 502385,
+          "start_ticks": 13893748,
+          "host_boot": "eb635e03-638a-4d7c-ab67-9ee1a4d410cf"
+        },
+        "seq": 360,
+        "t_utc": "2026-10-22T01:02:29.900Z",
+        "pages": 161083,
+        "read_ms": 3480.6,
+        "cycle_ms": 3483.0,
+        "excluded_from_fit": "concurrent writeback (MERANIA: pilot 3)"
+      },
+      {
+        "session": "benign-v2-20261022_01_train_write_heavy",
+        "guest_boot": "94c0cdf2-b241-4ad5-9b0e-3da64a682de5",
+        "qemu": {
+          "pid": 502385,
+          "start_ticks": 13893748,
+          "host_boot": "eb635e03-638a-4d7c-ab67-9ee1a4d410cf"
+        },
+        "seq": 0,
+        "t_utc": "2026-10-22T01:41:03.256Z",
+        "pages": 184142,
+        "read_ms": 2090.5,
+        "cycle_ms": 2090.7,
+        "excluded_from_fit": null
+      },
+      {
+        "session": "benign-v2-20261022_01_train_write_heavy",
+        "guest_boot": "94c0cdf2-b241-4ad5-9b0e-3da64a682de5",
+        "qemu": {
+          "pid": 502385,
+          "start_ticks": 13893748,
+          "host_boot": "eb635e03-638a-4d7c-ab67-9ee1a4d410cf"
+        },
+        "seq": 360,
+        "t_utc": "2026-10-22T02:11:03.256Z",
+        "pages": 181960,
+        "read_ms": 2088.3,
+        "cycle_ms": 2090.6,
+        "excluded_from_fit": null
+      },
+      {
+        "session": "benign-v2-20261022_02_train_quiet",
+        "guest_boot": "94c0cdf2-b241-4ad5-9b0e-3da64a682de5",
+        "qemu": {
+          "pid": 502385,
+          "start_ticks": 13893748,
+          "host_boot": "eb635e03-638a-4d7c-ab67-9ee1a4d410cf"
+        },
+        "seq": 0,
+        "t_utc": "2026-10-22T03:24:21.727Z",
+        "pages": 183149,
+        "read_ms": 2051.9,
+        "cycle_ms": 2052.1,
+        "excluded_from_fit": null
+      },
+      {
+        "session": "benign-v2-20261022_02_train_quiet",
+        "guest_boot": "94c0cdf2-b241-4ad5-9b0e-3da64a682de5",
+        "qemu": {
+          "pid": 502385,
+          "start_ticks": 13893748,
+          "host_boot": "eb635e03-638a-4d7c-ab67-9ee1a4d410cf"
+        },
+        "seq": 360,
+        "t_utc": "2026-10-22T03:54:21.719Z",
+        "pages": 182995,
+        "read_ms": 2041.7,
+        "cycle_ms": 2044.0,
+        "excluded_from_fit": null
+      },
+      {
+        "session": "benign-v2-20261022_03_train_bursty",
+        "guest_boot": "94c0cdf2-b241-4ad5-9b0e-3da64a682de5",
+        "qemu": {
+          "pid": 502385,
+          "start_ticks": 13893748,
+          "host_boot": "eb635e03-638a-4d7c-ab67-9ee1a4d410cf"
+        },
+        "seq": 0,
+        "t_utc": "2026-10-22T04:44:44.276Z",
+        "pages": 182510,
+        "read_ms": 2104.9,
+        "cycle_ms": 2105.1,
+        "excluded_from_fit": null
+      },
+      {
+        "session": "benign-v2-20261022_03_train_bursty",
+        "guest_boot": "94c0cdf2-b241-4ad5-9b0e-3da64a682de5",
+        "qemu": {
+          "pid": 502385,
+          "start_ticks": 13893748,
+          "host_boot": "eb635e03-638a-4d7c-ab67-9ee1a4d410cf"
+        },
+        "seq": 360,
+        "t_utc": "2026-10-22T05:14:44.339Z",
+        "pages": 187863,
+        "read_ms": 2165.7,
+        "cycle_ms": 2168.1,
+        "excluded_from_fit": null
+      },
+      {
+        "session": "20261022T073059077133Z_pilot_bursty",
+        "guest_boot": "7dfb00a4-30c0-43cd-9a87-9bd38e4d545d",
+        "qemu": {
+          "pid": 502385,
+          "start_ticks": 13893748,
+          "host_boot": "eb635e03-638a-4d7c-ab67-9ee1a4d410cf"
+        },
+        "seq": 0,
+        "t_utc": "2026-10-22T07:33:18.865Z",
+        "pages": 230216,
+        "read_ms": 2414.5,
+        "cycle_ms": 2414.6,
+        "excluded_from_fit": null
+      },
+      {
+        "session": "20261022T073059077133Z_pilot_bursty",
+        "guest_boot": "7dfb00a4-30c0-43cd-9a87-9bd38e4d545d",
+        "qemu": {
+          "pid": 502385,
+          "start_ticks": 13893748,
+          "host_boot": "eb635e03-638a-4d7c-ab67-9ee1a4d410cf"
+        },
+        "seq": 360,
+        "t_utc": "2026-10-22T08:03:18.872Z",
+        "pages": 230569,
+        "read_ms": 2418.9,
+        "cycle_ms": 2421.2,
+        "excluded_from_fit": null
+      },
+      {
+        "session": "benign-v3-20261022_01_train_write_heavy",
+        "guest_boot": "9ad0358b-a0ae-4d3a-9ce5-ccbdfa610d53",
+        "qemu": {
+          "pid": 502385,
+          "start_ticks": 13893748,
+          "host_boot": "eb635e03-638a-4d7c-ab67-9ee1a4d410cf"
+        },
+        "seq": 0,
+        "t_utc": "2026-10-22T08:36:27.939Z",
+        "pages": 229335,
+        "read_ms": 2355.1,
+        "cycle_ms": 2355.2,
+        "excluded_from_fit": null
+      },
+      {
+        "session": "benign-v3-20261022_01_train_write_heavy",
+        "guest_boot": "9ad0358b-a0ae-4d3a-9ce5-ccbdfa610d53",
+        "qemu": {
+          "pid": 502385,
+          "start_ticks": 13893748,
+          "host_boot": "eb635e03-638a-4d7c-ab67-9ee1a4d410cf"
+        },
+        "seq": 360,
+        "t_utc": "2026-10-22T09:06:27.938Z",
+        "pages": 226908,
+        "read_ms": 2353.4,
+        "cycle_ms": 2354.1,
+        "excluded_from_fit": null
+      },
+      {
+        "session": "benign-v3-20261022_02_train_quiet",
+        "guest_boot": "9ad0358b-a0ae-4d3a-9ce5-ccbdfa610d53",
+        "qemu": {
+          "pid": 502385,
+          "start_ticks": 13893748,
+          "host_boot": "eb635e03-638a-4d7c-ab67-9ee1a4d410cf"
+        },
+        "seq": 0,
+        "t_utc": "2026-10-22T10:10:30.075Z",
+        "pages": 228757,
+        "read_ms": 2346.7,
+        "cycle_ms": 2346.9,
+        "excluded_from_fit": null
+      },
+      {
+        "session": "benign-v3-20261022_02_train_quiet",
+        "guest_boot": "9ad0358b-a0ae-4d3a-9ce5-ccbdfa610d53",
+        "qemu": {
+          "pid": 502385,
+          "start_ticks": 13893748,
+          "host_boot": "eb635e03-638a-4d7c-ab67-9ee1a4d410cf"
+        },
+        "seq": 360,
+        "t_utc": "2026-10-22T10:40:30.059Z",
+        "pages": 228541,
+        "read_ms": 2328.6,
+        "cycle_ms": 2330.9,
+        "excluded_from_fit": null
+      },
+      {
+        "session": "benign-v3-20261022_03_train_bursty",
+        "guest_boot": "9ad0358b-a0ae-4d3a-9ce5-ccbdfa610d53",
+        "qemu": {
+          "pid": 502385,
+          "start_ticks": 13893748,
+          "host_boot": "eb635e03-638a-4d7c-ab67-9ee1a4d410cf"
+        },
+        "seq": 0,
+        "t_utc": "2026-10-22T11:33:29.297Z",
+        "pages": 228802,
+        "read_ms": 2400.5,
+        "cycle_ms": 2400.6,
+        "excluded_from_fit": null
+      },
+      {
+        "session": "benign-v3-20261022_03_train_bursty",
+        "guest_boot": "9ad0358b-a0ae-4d3a-9ce5-ccbdfa610d53",
+        "qemu": {
+          "pid": 502385,
+          "start_ticks": 13893748,
+          "host_boot": "eb635e03-638a-4d7c-ab67-9ee1a4d410cf"
+        },
+        "seq": 360,
+        "t_utc": "2026-10-22T12:03:29.355Z",
+        "pages": 234403,
+        "read_ms": 2456.2,
+        "cycle_ms": 2458.5,
+        "excluded_from_fit": null
+      },
+      {
+        "session": "20261022T142659087837Z_pilot_bursty",
+        "guest_boot": "86d6bda7-1fd9-4c07-acd2-3fecef5eff9f",
+        "qemu": {
+          "pid": 502385,
+          "start_ticks": 13893748,
+          "host_boot": "eb635e03-638a-4d7c-ab67-9ee1a4d410cf"
+        },
+        "seq": 0,
+        "t_utc": "2026-10-22T14:29:17.569Z",
+        "pages": 269600,
+        "read_ms": 2691.3,
+        "cycle_ms": 2691.4,
+        "excluded_from_fit": null
+      },
+      {
+        "session": "20261022T142659087837Z_pilot_bursty",
+        "guest_boot": "86d6bda7-1fd9-4c07-acd2-3fecef5eff9f",
+        "qemu": {
+          "pid": 502385,
+          "start_ticks": 13893748,
+          "host_boot": "eb635e03-638a-4d7c-ab67-9ee1a4d410cf"
+        },
+        "seq": 360,
+        "t_utc": "2026-10-22T14:59:17.613Z",
+        "pages": 271254,
+        "read_ms": 2733.6,
+        "cycle_ms": 2735.9,
+        "excluded_from_fit": null
+      }
+    ],
+    "by_guest_boot": [
+      {
+        "guest_boot": "9a94eb9c-6f11-412e-8869-469af58f9d9a",
+        "first_session": "20261022T002132864698Z_pilot_bursty",
+        "pages_min": 117993,
+        "pages_max": 117993
+      },
+      {
+        "guest_boot": "ad6a2cef-b57b-4f7b-83d3-c744757c2d14",
+        "first_session": "20261022T003017919708Z_pilot_bursty",
+        "pages_min": 139245,
+        "pages_max": 161083
+      },
+      {
+        "guest_boot": "94c0cdf2-b241-4ad5-9b0e-3da64a682de5",
+        "first_session": "benign-v2-20261022_01_train_write_heavy",
+        "pages_min": 181960,
+        "pages_max": 187863
+      },
+      {
+        "guest_boot": "7dfb00a4-30c0-43cd-9a87-9bd38e4d545d",
+        "first_session": "20261022T073059077133Z_pilot_bursty",
+        "pages_min": 230216,
+        "pages_max": 230569
+      },
+      {
+        "guest_boot": "9ad0358b-a0ae-4d3a-9ce5-ccbdfa610d53",
+        "first_session": "benign-v3-20261022_01_train_write_heavy",
+        "pages_min": 226908,
+        "pages_max": 234403
+      },
+      {
+        "guest_boot": "86d6bda7-1fd9-4c07-acd2-3fecef5eff9f",
+        "first_session": "20261022T142659087837Z_pilot_bursty",
+        "pages_min": 269600,
+        "pages_max": 271254
+      }
+    ],
+    "fit_cycle_ms_per_page": {
+      "n": 18,
+      "slope_ms": 0.006636099824448037,
+      "intercept_ms": 875.6807177808735,
+      "excluded": [
+        {
+          "session": "20261022T003017919708Z_pilot_bursty",
+          "seq": 360,
+          "reason": "concurrent writeback (MERANIA: pilot 3)"
+        }
+      ]
+    },
+    "estimate_all_pages_ms": 4355.339569029675,
+    "note": "Pages are the guest pages the host had allocated and the full snapshot read. They grew across guest reboots on one QEMU process. estimate_all_pages_ms extends the fitted line to every guest page; it is an estimate, not a measurement.",
+    "inputs_sha256": {
+      "20261022T002132864698Z_pilot_bursty": {
+        "session.json": "ea0837aab725d9c9969da2ccb6e4cf1cba3bafe56ab8410fd1d423c289463444",
+        "collect.log": "25db10a5a4213238378f9d2fb34148543aeeff9382511450e5915578181ef3f4"
+      },
+      "20261022T003017919708Z_pilot_bursty": {
+        "session.json": "85bdd084a4f0f752d23a6e02558773b7dbaa4ebe968fbe6375d8b438461676c8",
+        "collect.log": "0f061958d9ed2abb311fb33cc61e0e9bd76f835edef5bb18bbcb54f395c650b2"
+      },
+      "benign-v2-20261022_01_train_write_heavy": {
+        "session.json": "62ad63cc7ef9c1409686bd9f4dfa867e05e4f7fb6259446de55104b3e4d0ad1d",
+        "collect.log": "ee75c13ac72930c0bd57995719fdb05c11b4b4f1c87a9e1fec20cdd7a2125b15"
+      },
+      "benign-v2-20261022_02_train_quiet": {
+        "session.json": "c3d68a8627e57752d66e583b307230acc6512d72232a43dccb8dc62d60f018fb",
+        "collect.log": "09019b93e078dae7b40780ee198b0cdc25c0e678ed96485836bdb50ed2d53b43"
+      },
+      "benign-v2-20261022_03_train_bursty": {
+        "session.json": "ea54137609d51718c0cae8be3fc560bf004e312f39df7b091f664e9f147c2524",
+        "collect.log": "069ff0a603e227881d4cfe02a4432012599be5a70303e919de66e89e4cb0bfc5"
+      },
+      "20261022T073059077133Z_pilot_bursty": {
+        "session.json": "1c5891444b655a5e31c39e822c012c92cb230c0972d5e7e3cd568a45d2daa6ad",
+        "collect.log": "117be8018fd89931dc1051aaea8b31d31ca4520b99bc8ce583e6722150b59f34"
+      },
+      "benign-v3-20261022_01_train_write_heavy": {
+        "session.json": "4910c9fb7a34f056e9cdfa491d8ec1a6b303dfe8101d0a2d6d521c4be09b9616",
+        "collect.log": "1591bd408315e561126438b4b0dedb03a2d98b3136d418f85deb3ed8098e2578"
+      },
+      "benign-v3-20261022_02_train_quiet": {
+        "session.json": "979e661e42ce5a0b134a8c2c8332d4e47ebae45fe4ba91656b717ede7c746ebb",
+        "collect.log": "84af062bfc118824e059da55f7880a85b60261f586a3a1204624ebbc1935ef65"
+      },
+      "benign-v3-20261022_03_train_bursty": {
+        "session.json": "f4fca1a5af8ac8c8a623771d4a4313a60e68331c60ea8446bb4a0c500c086570",
+        "collect.log": "26bea5c5918754d0ae7084e8e2b456ce3325120c065ad1e8ef5bdef4a482dc74"
+      },
+      "20261022T142659087837Z_pilot_bursty": {
+        "session.json": "bfc5dd175fbfd7da59e0201315ca9b3783a40ea6f17298d57b0ce6fec59bd39f",
+        "collect.log": "1862088572f06319a8c68a413da980f373829d226bcf8a63834cf8555554c1f8"
+      }
+    }
+  }
+}

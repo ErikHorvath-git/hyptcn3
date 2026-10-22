@@ -110,6 +110,22 @@ identitu procesu QEMU a pred meraním kontroluje posun hodín hosťa. Kampaň
 identitu procesu uloží pri vzniku bootovej skupiny; obnovená alebo
 reštartovaná VM uprostred skupiny kampaň zastaví pred ďalšou session.
 
+Plná snímka číta všetky stránky, ktoré hostiteľ hosťovi pridelil. Reštart
+hosťa ich hostiteľovi nevráti a nový boot sa dotkne ďalších, takže na jednom
+procese QEMU plná snímka s reštartmi rastie: od 2026-10-22 00:12 UTC zo 118
+na 271 tisíc stránok z 524 tisíc a z 1,7 na 2,7 s
+([záznam](../data/results/collection_full_snapshot_growth_20261022.json)).
+Pred `campaign.py init` sa preto VM vypne a znova spustí, čím vznikne nový
+proces QEMU:
+
+```sh
+.venv/bin/python scripts/labctl.py stop     # potom čakať na `virsh -c qemu:///session domstate hyptcn-lab` = shut off
+.venv/bin/python scripts/labctl.py start
+.venv/bin/python scripts/labctl.py status
+```
+
+Počas kampane to nerobiť: kampaň zmenu procesu uprostred skupiny zastaví.
+
 Požiadavky hostiteľa: KVM, libvirt s používateľskou session, `virsh`,
 `qemu-img`, `passt`, Python a používateľský systemd. Vo VM treba nginx,
 PostgreSQL, Python a `python3-psycopg2`. Chýbajúci databázový ovládač pre Debian

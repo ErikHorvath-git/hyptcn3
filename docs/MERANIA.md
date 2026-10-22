@@ -1709,3 +1709,79 @@ namiesto
 a 506 (má platného predchodcu). Historický verdikt kampane sa nemení.
 Kampaň je uzavretá (`closed.json`); session 1 a 2 zostávajú v jej archíve
 a do novej kampane sa nepresúvajú. Zmena meracieho kódu vyžaduje nový pilot.
+
+## 2026-10-22 — prijatý pilot 5 a rast plnej snímky s reštartmi hosťa
+
+Pilot `20261022T142659087837Z_pilot_bursty` (skupina `pilot-5-20261022`,
+commit `e774c69` s meracím kódom z `0b61ffd`, profil `bursty`, seed
+202610225, nový boot VM) overil potvrdenie roztrhnutého zoznamu procesov
+prechodom dozadu, zapisovanie monitora z fronty vo vlákne a limit klienta
+10 s. Audit ho prijal
+([audit](../data/results/collection_pilot_5_20261022_audit.json)):
+480 {{res:collection_pilot_5_20261022_audit.json:values.snapshots}}
+snímok,
+416 {{res:collection_pilot_5_20261022_audit.json:values.windows}}
+okien a pokrytie
+0.8667 {{res:collection_pilot_5_20261022_audit.json:values.score_coverage}}
+(strop protokolu). Nálezov integrity bolo
+0 {{res:collection_pilot_5_20261022_audit.json:values.quality.integrity_findings}}
+a nepotvrdených krížových rozdielov
+0 {{res:collection_pilot_5_20261022_audit.json:values.quality.integrity_unconfirmed}};
+žiadna snímka nepotrebovala prechod dozadu a logový audit nenašiel problém.
+
+[Súhrn časovania](../data/results/collection_pilot_5_20261022_timing.json):
+pred zahrievaním mala QEMU vo swape
+220912 {{res:collection_pilot_5_20261022_timing.json:values.prefault.swap_kb_before}}
+kB (po obnove a overení archívov kampane v3); krok `prefault` ich za
+6.708 {{res:collection_pilot_5_20261022_timing.json:values.prefault.seconds}}
+s načítal späť a na konci bolo vo swape
+0 {{res:collection_pilot_5_20261022_timing.json:values.host_memory_after.qemu_swap_kb}}
+kB. Zberač mal
+0 {{res:collection_pilot_5_20261022_timing.json:values.collector_end.missed_slots}}
+zmeškaných slotov; delty mali medián
+945.2 {{res:collection_pilot_5_20261022_timing.json:values.delta_cycle_ms.p50}}
+ms a maximum
+1176.6 {{res:collection_pilot_5_20261022_timing.json:values.delta_cycle_ms.max}}
+ms. Generátor poslal
+122001 {{res:collection_pilot_5_20261022_timing.json:values.traffic.requests}}
+požiadaviek s
+0 {{res:collection_pilot_5_20261022_timing.json:values.traffic.errors}}
+chybami; najpomalšia požiadavka meranej fázy trvala
+2003.5 {{res:collection_pilot_5_20261022_timing.json:values.measure_latency.max_ms}}
+ms. Monitor mal
+0 {{res:collection_pilot_5_20261022_timing.json:values.monitor_missed_ticks}}
+vynechaných vzoriek. Audit trval
+826.61 {{res:collection_pilot_5_20261022_timing.json:values.audit_timing.wall_s}}
+s.
+
+Plné snímky boli väčšie ako v predchádzajúcich behoch:
+269600 {{res:collection_pilot_5_20261022_timing.json:values.full_snapshots.seq_0.pages}}
+a
+271254 {{res:collection_pilot_5_20261022_timing.json:values.full_snapshots.seq_360.pages}}
+stránok za
+2691.4 {{res:collection_pilot_5_20261022_timing.json:values.full_snapshots.seq_0.cycle_ms}}
+a
+2735.9 {{res:collection_pilot_5_20261022_timing.json:values.full_snapshots.seq_360.cycle_ms}}
+ms. Všetkých
+19 {{res:collection_full_snapshot_growth_20261022.json:n}}
+plných snímok pilotov a kampaní od 2026-10-22 00:12 UTC prečítal zberač
+z jedného procesu QEMU
+([záznam](../data/results/collection_full_snapshot_growth_20261022.json)).
+Plná snímka číta stránky, ktoré hostiteľ hosťovi pridelil, a tých
+s reštartmi hosťa pribúdalo: pri prvom boote
+117993 {{res:collection_full_snapshot_growth_20261022.json:values.by_guest_boot.0.pages_min}}
+stránok, pri šiestom
+271254 {{res:collection_full_snapshot_growth_20261022.json:values.by_guest_boot.5.pages_max}}
+z
+524353 {{res:collection_full_snapshot_growth_20261022.json:values.guest_pages_total}}.
+Priamka času cyklu podľa počtu stránok (bez plnej snímky pilota 3 so
+súbežným spätným zápisom) má sklon
+0.0066 {{res:collection_full_snapshot_growth_20261022.json:values.fit_cycle_ms_per_page.slope_ms}}
+ms na stránku a posun
+875.7 {{res:collection_full_snapshot_growth_20261022.json:values.fit_cycle_ms_per_page.intercept_ms}}
+ms. Pri všetkých stránkach hosťa by plná snímka trvala okolo
+4355.3 {{res:collection_full_snapshot_growth_20261022.json:values.estimate_all_pages_ms}}
+ms pri perióde 5 s; ide o odhad, nie meranie. Kampaň má 8 skupín a každá
+začína reštartom hosťa. Pred kampaňou sa preto VM vypne a znova spustí
+(nový proces QEMU), aby plné snímky začínali na malom počte stránok.
+Pilot je vstupom ďalšej kampane.
