@@ -23,8 +23,8 @@ ktorý obsahuje slovo `RETRAKCIA`, spolu s commit hashom a vetou, čo ich znepla
 
 Čísla v `vmicollect/README.md` a v hlavičkových komentároch zdrojákov, ktoré slúžia ako
 príklad formátu alebo ako rádový odhad (kapitola 3), nie sú namerané hodnoty. Do textu
-práce sa neprepisujú. Do prevzatej dokumentácie sa buď dopĺňa poznámka „ilustračné“,
-alebo sa nahradia nameranou hodnotou.
+práce sa neprepisujú. Do dokumentácie `vmicollect` zo staršej vetvy projektu sa buď
+dopĺňa poznámka „ilustračné“, alebo sa nahradia nameranou hodnotou.
 
 ### P3 — Každé číslo v texte má značku zdroja
 
@@ -77,11 +77,15 @@ Ak baseline (LogReg, bag-of-frames, GRU) dorovná alebo prekoná TCN, je to v ta
 v závere. Ak padne confound test, výsledok sa označí za neplatný a vysvetlí sa.
 Labely sa po vyhodnotení nemenia.
 
-### P9 — Provenience prevzatého kódu
+### P9 — Proveniencia kódu
 
-Každý prevzatý kus kódu (architektúra TCN, príznaky nad stránkami, predlohy scenárov,
-`vmi_parse.py`, opravy BPF programu) má pôvod uvedený v hlavičke súboru a v
-`docs/ARCHITEKTURA.md`. Autorstvo `vmicollect` sa uvádza ako neznáme, kým sa nezistí.
+Každý prevzatý kus kódu a každý kus kódu, ktorý nadväzuje na skoršiu prácu (architektúra
+TCN, príznaky nad stránkami, predlohy scenárov, `vmi_parse.py`, opravy BPF programu), má
+pôvod uvedený v hlavičke súboru a v `docs/ARCHITEKTURA.md`. Pôvod `vmicollect` sa uvádza
+takto: zberač je autorova práca vzniknutá 2026-08-26 s pomocou jazykového modelu vo
+vlastnom sedení autora; pôvodná cesta cez eBPF nikdy nebola overená proti bežiacemu jadru;
+overenie plus štyri opravy z commitu `178ce4f` sú prácou tejto diplomovej práce.
+Podrobnosti sú v `docs/notebookLM.md`, časť 3.9.
 
 ### P10 — `docs/MERANIA.md` je append-only
 
@@ -140,7 +144,7 @@ zdroja a riadok sa vyjme z kontroly komentárom `<!-- noclaim: dôvod -->`.
 
 ---
 
-## 3. Ilustračné čísla v prevzatej dokumentácii
+## 3. Ilustračné čísla v dokumentácii `vmicollect` zo staršej vetvy
 
 Tieto čísla sú v `vmicollect/README.md` ako príklad formátu alebo rádový odhad. Nikdy
 neboli namerané na tomto stroji. Overené grepom 2026-09-18 (príkaz nižšie), riadky platia
@@ -168,8 +172,9 @@ nemá na čiernej listine — v `thesis/` ich zachytí kontrola „číslo bez z
 Odkedy kontrola pokrýva aj `vmicollect/README.md` a komentáre v zdrojákoch, hlásila by
 čísla z tejto tabuľky na ich vlastnom mieste. Sú preto v poli `EXEMPT`
 v `scripts/check_claims.sh` (štyri položky, každá s dôvodom, vypíšu sa pri každom behu —
-podrobnosti v kapitole 5). Je to dočasné riešenie: prevzaté súbory patria inému kroku
-a poznámka „ilustračné, nie meranie“ priamo pri čísle je lepšia než zoznam vedľa.
+podrobnosti v kapitole 5). Je to dočasné riešenie: súbory `vmicollect` zo staršej vetvy
+patria inému kroku a poznámka „ilustračné, nie meranie“ priamo pri čísle je lepšia než
+zoznam vedľa.
 
 ---
 
@@ -254,7 +259,7 @@ Výnimky v texte (každá je stopa v texte, nie tichý zoznam vedľa):
 | oplotený blok kódu (```` ``` ````) | zakázané čísla **aj** zakázané slová sa v ňom hľadajú — výsledok sa v texte bežne uvádza práve ako ukážka výstupu (`{"f1": 99.70}`) a je to tvrdenie ako každé iné; kontrola „číslo bez značky“ a kontrola značiek sa v ňom naopak nerobia (čísla vo výpise sú legitímne a `{{res:...}}` v bloku je ukážka zápisu) |
 | `thesis/.claims-allow` | regexy tokenov, ktoré číslami tvrdenia nie sú; súbor je verzionovaný, takže je vidieť, čo sa vyňalo |
 
-Výnimka mimo textu je len jedna a platí pre prevzaté súbory: pole `EXEMPT`
+Výnimka mimo textu je len jedna a platí pre súbory `vmicollect` zo staršej vetvy: pole `EXEMPT`
 v `scripts/check_claims.sh`. Každá položka je trojica `súbor | vzor | dôvod`, platí iba pre
 ten jeden súbor (v `thesis/` a `docs/` zostáva to isté číslo nálezom) a skript uplatnené
 výnimky na konci každého behu vypíše, takže vyňatie nie je tiché. Dnes sú v ňom štyri

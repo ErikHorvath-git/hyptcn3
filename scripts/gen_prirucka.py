@@ -1010,7 +1010,7 @@ DOKUMENTY = [
     ("docs/LIMITACIE.md", None),   # popis sa dopocita: rozsah L1..Ln
     ("docs/kontroly.md", "kontroly podozrivých vzorcov a validačný príkaz"),
     ("HONESTY.md", "pravidlá pre čísla a slová v texte práce"),
-    ("README.md", "rozcestník repozitára a pôvod prevzatého kódu"),
+    ("README.md", "rozcestník repozitára a pôvod kódu"),
     ("docs/LAB.sk.md", "serverové laboratórium, premávka z hostiteľa a RAM zber"),
     ("docs/METODIKA_ZBERU.sk.md", "protokol zberu, príznaky, rozdelenie korpusu a audit"),
     ("docs/SAFEGUARD.sk.md", "tréning modelového balíka, replay a spustenie detektora"),

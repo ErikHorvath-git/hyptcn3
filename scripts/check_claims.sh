@@ -48,9 +48,9 @@
 #                                bez znacky (stare cislo ziadny JSON v data/results nema)
 #   thesis/.claims-allow         regexy (jeden na riadok), tokeny ktore su v poriadku
 #
-# Vynimky mimo textu: pole EXEMPT nizsie (subor + vzor + dovod). Su urcene pre
-# prevzate subory, do ktorych sa poznamka dopisat neda alebo sa zatial nedopisala.
-# Skript ich na konci behu vypise, aby nebolo ticho o tom, co sa vynalo.
+# Vynimky mimo textu: pole EXEMPT nizsie (subor + vzor + dovod). Su urcene pre subory
+# vmicollect zo starsej vetvy, do ktorych sa poznamka dopisat neda alebo sa zatial
+# nedopisala. Skript ich na konci behu vypise, aby nebolo ticho o tom, co sa vynalo.
 #
 # Premenna prostredia VMIC_RESULTS_DIR prebije cestu k data/results (pouziva ju test).
 
@@ -110,24 +110,24 @@ FORBIDDEN_WORD=(
 )
 
 # --------------------------------------------------------------------------
-# Vynimky pre prevzate subory: <cesta od korena repa>|<PCRE>|<dovod>
+# Vynimky pre subory zo starsej vetvy: <cesta od korena repa>|<PCRE>|<dovod>
 #
-# PRECO zoznam a nie poznamka priamo v subore: vmicollect/ je prevzaty strom
-# (commit 6b9053d "prevzaty stav k 2026-08-26, bez zmien"). Poznamka "ilustracne"
-# priamo v jeho README.md a v hlavickach .c je spravnejsia - je vidiet na mieste,
-# kde clovek cislo cita - ale meni prevzaty subor. Kym sa to nestane, drzi vynimku
-# tento zoznam: je verzionovany, kazda polozka ma dovod a skript ich na konci
-# vypise, takze vynatie nie je tiche. Polozka plati len pre uvedeny subor,
-# nie globalne; v thesis/ a docs/ tie iste cisla nalezom zostavaju.
+# PRECO zoznam a nie poznamka priamo v subore: vmicollect/ pochadza zo starsej
+# vetvy projektu (do repa vstupil v commite 6b9053d ako stav k 2026-08-26, bez zmien).
+# Poznamka "ilustracne" priamo v jeho README.md a v hlavickach .c je spravnejsia -
+# je vidiet na mieste, kde clovek cislo cita - ale meni subor zo starsej vetvy. Kym
+# sa to nestane, drzi vynimku tento zoznam: je verzionovany, kazda polozka ma dovod
+# a skript ich na konci vypise, takze vynatie nie je tiche. Polozka plati len pre
+# uvedeny subor, nie globalne; v thesis/ a docs/ tie iste cisla nalezom zostavaju.
 #
 # DOROBIT: az sa vmicollect/README.md, src/writer_delta.c a src/retention.c budu
 # menit, dopisat k cislam "(ilustracne, nie meranie)" a polozky odtialto zmazat.
 # --------------------------------------------------------------------------
 EXEMPT=(
-  'vmicollect/README.md|2[.,]8 ?TB|ilustracny radovy odhad v prevzatej dokumentacii (HONESTY kap. 3), nie meranie; nahradit nameranym objemom'
-  'vmicollect/README.md|1043[.,]2|vymysleny priklad JSON sidecaru v prevzatej dokumentacii (HONESTY kap. 3), nie meranie'
-  'vmicollect/src/writer_delta.c|2[.,]8 ?TB|ten isty radovy odhad v hlavicke prevzateho zdrojaku (HONESTY kap. 3)'
-  'vmicollect/src/retention.c|2[.,]8 ?TB|ten isty radovy odhad v hlavicke prevzateho zdrojaku (HONESTY kap. 3)'
+  'vmicollect/README.md|2[.,]8 ?TB|ilustracny radovy odhad v dokumentacii zo starsej vetvy (HONESTY kap. 3), nie meranie; nahradit nameranym objemom'
+  'vmicollect/README.md|1043[.,]2|vymysleny priklad JSON sidecaru v dokumentacii zo starsej vetvy (HONESTY kap. 3), nie meranie'
+  'vmicollect/src/writer_delta.c|2[.,]8 ?TB|ten isty radovy odhad v hlavicke zdrojaku zo starsej vetvy (HONESTY kap. 3)'
+  'vmicollect/src/retention.c|2[.,]8 ?TB|ten isty radovy odhad v hlavicke zdrojaku zo starsej vetvy (HONESTY kap. 3)'
 )
 
 # Zlucene vzory na rychle predsito: jeden grep na riadok namiesto dvadsiatich styroch.

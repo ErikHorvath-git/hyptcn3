@@ -89,14 +89,16 @@ Balík `guestparse` bez testov: 2296 riadkov, s testami 3815 riadkov.
 
 ### 1.2 Prečo „hypervisor modul“
 
-**Pôvod tohto riešenia — najprv to podstatné.** Prístup cez eBPF **nevznikol v tejto práci**.
-Zberač `vmicollect` vrátane oboch programov BPF vstúpil do repozitára ako prevzatý celok
-(`git log --diff-filter=A -- vmicollect/bpf/vmic_kvm.bpf.c` → `6b9053d`, „prevzatý stav, bez
-zmien“) a jeho autorstvo nie je známe (`HONESTY.md`, P9; časť 12 tohto dokumentu). Čo sa
-v tejto práci urobilo: prevzatý program sa **overil** proti bežiacemu jadru — a nenačítal sa;
-štyri príčiny sa našli a opravili (nezhoda BTF pri `bpf_task_from_vpid` a trikrát limit
-verifikátora, riešené cez `bpf_loop()`) a až potom sa dalo merať. Odseky nižšie preto nie sú
-obhajobou vlastnej voľby, ale posúdením, či prevzatý prístup zodpovedá zadaniu a kde má hranice.
+**Pôvod tohto riešenia — najprv to podstatné.** Prístup **navrhol autor práce**: periodický
+zber cez eBPF a len pre KVM. Zberač `vmicollect` vrátane oboch programov BPF vznikol 2026-08-26
+vo vlastnom sedení autora s jazykovým modelom; do repozitára vstúpil ako celok, bez zmien
+(`git log --diff-filter=A -- vmicollect/bpf/vmic_kvm.bpf.c` → `6b9053d`; `HONESTY.md`, P9;
+`docs/notebookLM.md`, časť 3.9; časť 12 tohto dokumentu). Cesta cez eBPF v tomto stave nikdy
+nebola overená proti
+bežiacemu jadru. V tejto práci sa program proti nemu **overil** — a nenačítal sa; štyri príčiny
+sa našli a opravili (nezhoda BTF pri `bpf_task_from_vpid` a trikrát limit verifikátora, riešené
+cez `bpf_loop()`) a až potom sa dalo merať. Odseky nižšie posudzujú, či tento prístup zodpovedá
+zadaniu a kde má hranice.
 
 **Kde beží ktorá časť.** Zadanie žiada „modul postavený na open-source hypervízore“
 (`zadanie-zp_105826.pdf`, Anotácia); formu nepredpisuje. Na tomto hostiteľovi je KVM zavedený
@@ -179,10 +181,11 @@ prečítaním na hostiteľovi reálne alokuje (L2). Rozhranie je pozorovacie, ni
 > `process_vm_readv`: bajty by sa tým získať dali, zvonka sa však nedá zistiť, ktorá časť
 > adresného priestoru monitora zodpovedá ktorej fyzickej adrese hosťa. V kopírovaní bajtov sú si
 > obe cesty rovnocenné, pretože program eBPF používa ten istý mechanizmus prístupu do pamäte
-> cudzieho procesu; prínosom je mapa prečítaná z jadra. Samotný prístup cez eBPF nie je
-> výsledkom tejto práce — zberač bol prevzatý a jeho autorstvo nie je známe; prácou je jeho
-> overenie proti bežiacemu jadru, odstránenie štyroch príčin, pre ktoré sa program nenačítal,
-> a posúdenie hraníc tohto prístupu. Proti vlastnému modulu jadra hovorí, že by sa viazal na
+> cudzieho procesu; prínosom je mapa prečítaná z jadra. Prístup cez eBPF navrhol autor práce;
+> zberač je jeho prácou vzniknutou s pomocou jazykového modelu a pôvodná cesta cez eBPF v ňom
+> nikdy nebola overená proti bežiacemu jadru. Súčasťou práce je aj overenie zberača proti
+> bežiacemu jadru, odstránenie štyroch príčin, pre ktoré sa program nenačítal, a posúdenie
+> hraníc tohto prístupu. Proti vlastnému modulu jadra hovorí, že by sa viazal na
 > konkrétnu verziu jadra a že jeho chyba by zhodila hostiteľa aj so všetkými virtuálnymi strojmi.
 > Čím riešenie nie je: nie je to zavedený modul jadra ani patch hypervízora a nezachytáva udalosti
 > virtuálneho stroja, pretože programy nie sú zavesené na žiadnu udalosť a spúšťa ich zberač
@@ -1147,11 +1150,19 @@ VM, poznámka „jeden adresár = jeden zberač“.
 
 ## 12. Provenienčná poznámka
 
-Podľa `HONESTY.md` P9: autorstvo pôvodného kódu `vmicollect` **nie je známe** a takto sa
-uvádza, kým sa nezistí. Do repozitára vstúpil ako celok (stav 2026-08-26) a jediný súbor
-zmenený oproti prevzatej verzii je `bpf/vmic_kvm.bpf.c` — štyri opravy potrebné na to,
-aby program prešiel verifikátorom. Balík `guestparse` vznikol rozdelením prototypu
-`vmi_parse.py` (2026-09-18) do modulov; poznámka o pôvode je v hlavičke
+Pôvod kódu sa tu uvádza podľa `HONESTY.md` P9. Zberač `vmicollect` je autorova práca:
+vznikol 2026-08-26 vo vlastnom sedení autora s jazykovým modelom, ktoré začalo vetou
+„ten periodický zber potrebujem cez eBPF a len pre KVM“ (`docs/notebookLM.md`,
+časť 3.9). Do repozitára vstúpil ako celok v commite `6b9053d` (stav 2026-08-26, bez
+zmien); slovo „prevzatý“ v správe tohto commitu znamená prenesenie zo staršej vetvy
+projektu, nie cudzie autorstvo. Pôvodná cesta cez eBPF nikdy nebola overená proti bežiacemu
+jadru. Prvá zmena
+zberača po `6b9053d` je commit `178ce4f` v `bpf/vmic_kvm.bpf.c` — štyri opravy potrebné
+na to, aby sa program načítal do jadra a prešiel verifikátorom; overenie proti bežiacemu
+jadru aj tieto opravy sú prácou tejto diplomovej práce. Neskoršie commity zberač
+rozšírili a upravili; všetky commity po `6b9053d`, ktoré sa ho týkajú, vypíše
+`git log --oneline 6b9053d..HEAD -- vmicollect`. Balík `guestparse` vznikol rozdelením
+prototypu `vmi_parse.py` (2026-09-18) do modulov; poznámka o pôvode je v hlavičke
 `guestparse/__init__.py` a `guestparse/image.py`.
 
 Integračný balík `safeguard/` vznikol pre tento projekt. Spája existujúci

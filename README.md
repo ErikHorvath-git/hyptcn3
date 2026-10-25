@@ -54,9 +54,12 @@ v kapitole *Čo je kde* a zoznam ostatných dokumentov v kapitole *Kam ďalej*.
 
 ## Pôvod kódu
 
-`vmicollect/` je prevzatý kód zo staršej vetvy projektu (súbory z 2026-08-25/26);
-autorstvo sa zatiaľ nepodarilo doložiť a uvádza sa ako neznáme. Commit `6b9053d` obsahuje
-tento stav bajt po bajte bez zmien. Commit `178ce4f` mení jediný súbor,
+Zberač `vmicollect/` pochádza zo staršej vetvy projektu (súbory z 2026-08-25/26) a je
+vlastnou prácou autora. Vznikol 2026-08-26 v sedení autora s jazykovým modelom, ktoré autor
+začal zadaním „ten periodický zber potrebujem cez eBPF a len pre KVM“ (podrobne
+v `docs/notebookLM.md`, časť 3.9). Commit `6b9053d` obsahuje stav zo staršej vetvy bajt
+po bajte bez zmien; slovo „prevzatý“ v správe tohto commitu znamená prenesenie zo staršej
+vetvy, nie cudzie autorstvo. Commit `178ce4f` mení jediný súbor,
 `vmicollect/bpf/vmic_kvm.bpf.c`, a opravuje štyri dôvody, prečo sa BPF program nenačítal
 do jadra 7.1 (nezhoda BTF pri `bpf_task_from_vpid` a trikrát limit verifikátora riešený
 `bpf_loop()`). Bez týchto opráv `probe` nad bežiacou VM zlyhával. Rozbor je
