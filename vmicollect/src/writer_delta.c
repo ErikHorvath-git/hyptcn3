@@ -39,6 +39,7 @@
 #define _GNU_SOURCE
 #include "vmic.h"
 #include "internal.h"
+#include "output.h"
 #include "perbin.h"
 #include "log.h"
 #include "util.h"
@@ -68,7 +69,13 @@ typedef struct {
     bool      have_chain;
 
     /* --- stav jednej snimky -------------------------------------- */
-    int       fd;
+    /*
+     * Snimka vznika v pamati (vmic_job_t z output.c), nie v subore: subor,
+     * zapis, rename a SHA-256 robi az vlakno vmic-writer. Vzorkovacie
+     * vlakno tak v cykle nesiahne na disk (pozri output.h).
+     */
+    vmic_job_t *job;
+    uint8_t   hdr[64];
     char      staging[VMIC_PATH_MAX];
     char      final[VMIC_PATH_MAX];
     uint32_t  page_size;
@@ -77,7 +84,6 @@ typedef struct {
     uint64_t  mem_size;
     bool      full;
     bool      active;
-    bool      hashing;
 
     /* --- per-bin priznakovy vektor (perbin.c) --------------------- */
     vmic_features_t feat;
@@ -188,6 +194,19 @@ static int delta_begin(vmic_writer_t *w, vmic_snapshot_t *s)
         sig ^= rlist[i].size;
     }
 
+    /* Zapisovac nevedel zapisat snimku tohto retazca: hashe tu uz pocitaju
+       so stavom, ktory nikde nie je - novy retazec, plna snimka. */
+    vmic_output_t *out = (vmic_output_t *)w->output;
+    if (!out) {
+        LOGE("delta: chyba fronta zapisu (vmic_output_t)");
+        return VMIC_FATAL;
+    }
+    if (p->have_chain && vmic_output_chain_broken(out, p->chain_id)) {
+        LOGW("delta: zapis snimky retazca %" PRIu64 " zlyhal - zacinam novy retazec",
+             p->chain_id);
+        p->have_chain = false;
+    }
+
     p->full = (!p->have_chain) ||
               (sig != p->region_sig) ||
               (cfg->delta_full_every <= 1) ||
@@ -218,36 +237,27 @@ static int delta_begin(vmic_writer_t *w, vmic_snapshot_t *s)
     if (vmic_join(p->final, sizeof(p->final), cfg->dir, name) != 0)
         return VMIC_ERR;
 
-    p->fd = open(p->staging, O_WRONLY | O_CREAT | O_TRUNC | O_CLOEXEC, 0644);
-    if (p->fd < 0) {
-        LOGE("delta: nedaji sa vytvorit '%s': %s", p->staging, strerror(errno));
-        return VMIC_ERR;
+    int jrc = vmic_output_job_new(out, &p->job);
+    if (jrc != VMIC_OK) {
+        p->have_chain = false;        /* hashe sa uz mohli posunut na novy retazec */
+        return jrc;                   /* VMIC_STOP: signal pocas cakania na frontu */
     }
 
-    /* hlavicku zapiseme teraz s nulami a na konci ju prepiseme */
-    uint8_t hdr[DELTA_HDR];
-    memset(hdr, 0, sizeof(hdr));
-    memcpy(hdr, DELTA_MAGIC, 8);
-    put_u32(hdr + 8,  DELTA_VERSION);
-    put_u32(hdr + 12, p->page_size);
-    put_u64(hdr + 16, p->chain_id);
-    put_u64(hdr + 24, s->seq);
-    put_u64(hdr + 48, p->full ? DELTA_FLAG_FULL : 0ull);
-    put_u64(hdr + 56, sig);
-    if (vmic_write_all(p->fd, hdr, sizeof(hdr)) != 0) {
-        LOGE("delta: zapis hlavicky zlyhal: %s", strerror(errno));
-        close(p->fd);
-        p->fd = -1;
-        unlink(p->staging);       /* nenechavat po sebe .part subor */
-        p->have_chain = false;    /* retazec je rozbity - dalsia snimka plna */
-        return VMIC_ERR;
-    }
+    /* Hlavicka: dve polia (velkost pamate, pocet zaznamov) sa doplnia vo
+       finish(), zvysok je znamy uz teraz. Zapise ju az zapisovac. */
+    memset(p->hdr, 0, sizeof(p->hdr));
+    memcpy(p->hdr, DELTA_MAGIC, 8);
+    put_u32(p->hdr + 8,  DELTA_VERSION);
+    put_u32(p->hdr + 12, p->page_size);
+    put_u64(p->hdr + 16, p->chain_id);
+    put_u64(p->hdr + 24, s->seq);
+    put_u64(p->hdr + 48, p->full ? DELTA_FLAG_FULL : 0ull);
+    put_u64(p->hdr + 56, sig);
 
     p->pages_written = 0;
     p->pages_seen    = 0;
     p->mem_size      = 0;
     p->active        = true;
-    p->hashing       = (cfg->hash == VMIC_HASH_SHA256);
 
     /*
      * Priznaky su volitelne a ich zlyhanie NESMIE zhodit zber - snimka je
@@ -322,11 +332,17 @@ static int delta_feed(vmic_writer_t *w, uint64_t paddr,
         if (!changed) continue;
 
         put_u64(rec, idx);
-        if (vmic_write_all(p->fd, rec, sizeof(rec)) != 0 ||
-            vmic_write_all(p->fd, page, ps) != 0) {
-            LOGE("delta: zapis stranky %" PRIu64 " zlyhal: %s",
-                 idx, strerror(errno));
-            return VMIC_ERR;
+        vmic_output_t *out = (vmic_output_t *)w->output;
+        int arc = vmic_output_job_append(out, p->job, rec, sizeof(rec));
+        if (arc == VMIC_OK) arc = vmic_output_job_append(out, p->job, page, ps);
+        if (arc == VMIC_STOP) return VMIC_STOP;
+        if (arc != VMIC_OK) {
+            /* Pool je dimenzovany na plnu snimku zbieranych oblasti; ked ho
+               jedna snimka prerastie, zmenila sa pamat VM a kazda dalsia
+               plna snimka by zlyhala tiez - zber sa radsej ukonci. */
+            LOGE("delta: snimka sa nezmesti do fronty zapisu (output.queue_mib) "
+                 "pri stranke %" PRIu64 " - koncim", idx);
+            return VMIC_FATAL;
         }
         p->pages_written++;
     }
@@ -352,55 +368,8 @@ static int delta_finish(vmic_writer_t *w, vmic_snapshot_t *s)
     p->active = false;
 
     /* doplnime dve polia, ktore sme na zaciatku este nepoznali */
-    /*
-     * KAZDA chybova vetva tu musi zhodit retazec (have_chain = false).
-     * delta_feed() uz totiz posunul p->hash[] na NOVY stav pamate. Ked
-     * subor nevznikne, tie hashe klamu: dalsia delta by porovnavala voci
-     * stavu, ktory nikde nie je zapisany, a zmenene stranky by TICHO
-     * preskocila. Zhodenim retazca vynutime, aby dalsia snimka bola plna.
-     */
-    uint8_t patch[8];
-    put_u64(patch, p->mem_size);
-    if (vmic_pwrite_all(p->fd, patch, 8, 32) != 0) {
-        LOGE("delta: oprava hlavicky zlyhala: %s", strerror(errno));
-        close(p->fd); p->fd = -1; unlink(p->staging);
-        p->have_chain = false;
-        return VMIC_ERR;
-    }
-    put_u64(patch, p->pages_written);
-    if (vmic_pwrite_all(p->fd, patch, 8, 40) != 0) {
-        LOGE("delta: oprava hlavicky zlyhala: %s", strerror(errno));
-        close(p->fd); p->fd = -1; unlink(p->staging);
-        p->have_chain = false;
-        return VMIC_ERR;
-    }
-    /*
-     * output.fsync=false: zapis skonci v page cache a jadro ho zapise na
-     * pozadi. Trvanlivost po vypadku napajania sa potom nezarucuje; chybu
-     * zapisu na pozadi proces nemusi uvidiet. Odhali ju az nove precitanie
-     * suboru proti SHA-256 zo sidecaru (audit). Zlyhany fsync/close pri
-     * zapnutom fsync je chyba snimky, nie varovanie: subor sa nezverejni.
-     */
-    if (w->cfg->fsync && fsync(p->fd) != 0) {
-        LOGE("delta: fsync zlyhal: %s", strerror(errno));
-        close(p->fd); p->fd = -1; unlink(p->staging);
-        p->have_chain = false;
-        return VMIC_ERR;
-    }
-    if (close(p->fd) != 0) {
-        LOGE("delta: close zlyhal: %s", strerror(errno));
-        p->fd = -1; unlink(p->staging);
-        p->have_chain = false;
-        return VMIC_ERR;
-    }
-    p->fd = -1;
-
-    if (rename(p->staging, p->final) != 0) {
-        LOGE("delta: rename zlyhal: %s", strerror(errno));
-        unlink(p->staging);
-        p->have_chain = false;
-        return VMIC_ERR;
-    }
+    put_u64(p->hdr + 32, p->mem_size);
+    put_u64(p->hdr + 40, p->pages_written);
 
     snprintf(s->path, sizeof(s->path), "%s", p->final);
     s->chain_id      = p->chain_id;
@@ -422,30 +391,53 @@ static int delta_finish(vmic_writer_t *w, vmic_snapshot_t *s)
                  "nejde");
     }
     s->bytes_logical = p->mem_size;
-    int64_t on_disk = vmic_file_disk_usage(p->final);
-    s->bytes_on_disk = on_disk > 0 ? (uint64_t)on_disk : 0;
+    /* presna velkost suboru, ktory zapisovac vytvori (hlavicka + zaznamy) */
+    s->bytes_on_disk = DELTA_HDR + p->pages_written * (8ull + p->page_size);
 
     /*
-     * Hash az tu, po odpauzovani VM, a nad KONTAJNEROM (.vmicd) - nie nad
-     * logickym obrazom pamate. Delta subor je maly (typicky jednotky MB),
-     * takze to nic nestoji, a `vmicollect verify` ho vie skontrolovat
-     * rovnako ako raw snimku.
+     * SHA-256 sa pocita nad KONTAJNEROM (.vmicd) - nie nad logickym obrazom
+     * pamate -, aby ho `vmicollect verify` vedel skontrolovat rovnako ako
+     * raw snimku. Pocita ho zapisovac z tych istych bajtov, ktore zapisuje.
      */
-    /* Plna snimka ma stovky MiB a skalarny SHA-256 (CPU bez SHA-NI) by
-       predlzil cyklus nad periodu; pri output.hash_async ho spocita
-       vlakno zberaca a sidecar zapise az potom. */
-    s->hash_deferred = p->hashing && p->full && w->cfg->hash_async;
-    if (p->hashing && !s->hash_deferred && vmic_hash_file(p->final, s->sha256) == 0)
-        s->has_hash = true;
+    s->has_hash         = false;
+    s->hash_deferred    = false;
     s->hash_covers_file = true;
+    s->async_write      = true;
+    s->queue_wait_ms    = vmic_output_job_wait_ms(p->job);
+    return VMIC_OK;
+}
+
+/*
+ * Odovzdanie hotovej snimky zapisovacu. KAZDA chyba tu musi zhodit retazec
+ * (have_chain = false): delta_feed() uz posunul p->hash[] na NOVY stav
+ * pamate. Ked subor nevznikne, tie hashe klamu - dalsia delta by porovnavala
+ * voci stavu, ktory nikde nie je zapisany, a zmenene stranky by TICHO
+ * preskocila. Rovnako postupuje zapisovac pri neskorsej chybe (output.c).
+ */
+static int delta_publish(vmic_writer_t *w, const vmic_snapshot_t *s, double t_start)
+{
+    delta_priv_t *p = (delta_priv_t *)w->priv;
+    vmic_output_t *out = (vmic_output_t *)w->output;
+    if (!p->job) return VMIC_ERR;
+    int rc = vmic_output_job_submit(out, p->job, s, p->hdr, sizeof(p->hdr), p->staging, t_start);
+    if (rc != VMIC_OK) {
+        LOGE("delta: snimku seq=%" PRIu64 " sa nepodarilo zaradit na zapis", s->seq);
+        vmic_output_job_free(out, p->job);
+        p->job = NULL;
+        p->have_chain = false;
+        return rc == VMIC_FATAL ? VMIC_FATAL : VMIC_ERR;
+    }
+    p->job = NULL;                /* odteraz ju vlastni zapisovac */
     return VMIC_OK;
 }
 
 static void delta_abort(vmic_writer_t *w)
 {
     delta_priv_t *p = (delta_priv_t *)w->priv;
-    if (p->fd >= 0) { close(p->fd); p->fd = -1; }
-    if (p->staging[0]) unlink(p->staging);
+    if (p->job) {
+        vmic_output_job_free((vmic_output_t *)w->output, p->job);
+        p->job = NULL;
+    }
     p->active = false;
     /*
      * Prerusena snimka mohla zmenit tabulku hashov, ale jej subor
@@ -459,7 +451,7 @@ static void delta_destroy(vmic_writer_t *w)
 {
     delta_priv_t *p = (delta_priv_t *)w->priv;
     if (!p) return;
-    if (p->fd >= 0) close(p->fd);
+    if (p->job) vmic_output_job_free((vmic_output_t *)w->output, p->job);
     vmic_features_release(&p->feat);
     free(p->chg);
     free(p->hash);
@@ -477,13 +469,13 @@ const vmic_writer_ops_t vmic_writer_delta = {
     .finish  = delta_finish,
     .abort   = delta_abort,
     .destroy = delta_destroy,
+    .publish = delta_publish,
 };
 
 int vmic_writer_delta_alloc(vmic_writer_t *w)
 {
     delta_priv_t *p = calloc(1, sizeof(delta_priv_t));
     if (!p) return VMIC_FATAL;
-    p->fd = -1;
     w->priv = p;
     return VMIC_OK;
 }

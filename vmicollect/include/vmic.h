@@ -30,7 +30,7 @@
 extern "C" {
 #endif
 
-#define VMIC_VERSION       "1.0.0"
+#define VMIC_VERSION       "1.1.0"   /* 1.1: zapis mimo cyklu (output.c) */
 #define VMIC_PATH_MAX      1024
 #define VMIC_NAME_MAX      256
 #define VMIC_MAX_REGIONS   64
@@ -127,7 +127,9 @@ typedef struct {
     uint32_t       delta_page_size;
     uint64_t       delta_full_every;  /* kazdych N snimok plna zaloha */
     bool           fsync;             /* fsync snimky pred rename     */
-    bool           hash_async;        /* SHA-256 plnej snimky vo vlakne */
+    /* Drzi miesto po zrusenom output.hash_async, aby sa neposunuli polia,
+       ktore cita plugin (api->cfg) - ABI pluginu zostava 2. */
+    bool           hash_async_removed;
 
     /* ---- [features] : per-bin priznakovy vektor ------------------- */
     /* Pocita ho delta writer pocas porovnavania stranok (perbin.c) a
@@ -157,6 +159,17 @@ typedef struct {
     bool   log_json;
 
     char   source_path[VMIC_PATH_MAX];/* odkial sa config nacital     */
+
+    /* ---- doplnene na konci (ABI pluginu sa nemeni) ---------------- */
+    /* Writer 'delta' zapisuje vo vlakne vmic-writer z fronty v pamati
+       (src/output.c). queue_mib = velkost tej pamate, 0 = najvacsia mozna
+       plna snimka + 512 MiB. mlock = mlockall() celeho procesu: cyklus
+       nedostane page fault ani swap-in na pamati zberaca (pool, buffre, kod);
+       citanie pamate VM moze swapnute stranky QEMU nacitat aj tak. drain_s =
+       najdlhsie dobehnutie fronty po poslednom cykle (po signale menej). */
+    uint64_t queue_mib;
+    bool     mlock;
+    double   drain_s;
 } vmic_config_t;
 
 /* ------------------------------------------------------------------ */
@@ -278,7 +291,9 @@ typedef struct {
     bool     paused;
 
     /* Oblasti, ktore tato snimka naozaj pokryva. Ukazuje do zberaca a
-       zije po celu dobu cyklu; writer podla nich pozna svoj rozsah. */
+       zije po celu dobu cyklu; writer podla nich pozna svoj rozsah. Hook pri
+       writeri 'delta' dostane kopiu snimky vo vlakne vmic-writer - tam
+       ukazovatele (aj features, vm) platia iba pocas volania hooku. */
     const vmic_region_t *regions;
     size_t               region_count;
 
@@ -288,8 +303,10 @@ typedef struct {
        false = pokryva iba zozbierane oblasti (nesuvisle [capture].regions),
        takze sa neda porovnat s hashom suboru na disku */
     bool     hash_covers_file;
-    /* true = SHA-256 sa pocita az po cykle vo vlakne (output.hash_async,
-       iba plne snimky); sidecar sa zapise, ked je hash hotovy. */
+    /* true = SHA-256 sa pocita az po cykle vo vlakne a sidecar sa zapise,
+       ked je hash hotovy. Pri writeri 'delta' to plati pre kazdu snimku
+       (vlakno vmic-writer); do verzie 1.0 iba pre plne snimky s uz
+       zrusenym output.hash_async. */
     bool     hash_deferred;
 
     /* Per-bin vektor tejto snimky, alebo NULL ked sa nepocital (vypnuty,
@@ -307,6 +324,28 @@ typedef struct {
 
     const vmic_vminfo_t  *vm;
     const vmic_config_t  *cfg;
+
+    /* --- doplnene na konci (ABI pluginu sa nemeni) ------------------- */
+    /* true = snimku zapisalo vlakno vmic-writer (writer 'delta', verzia
+       1.1). Vtedy capture_ms je citanie + porovnanie + priznaky + kopia do
+       pamate + cakanie na pamat fronty (ziadny zapis na disk), total_ms
+       cyklus vzorkovaca az po hotovu snimku, write_ms zapis suboru vo
+       vlakne (vytvorenie, zapis, fsync, close; bez SHA-256). Do verzie 1.0
+       obsahovali capture_ms aj total_ms zapis kazdej zmenenej stranky. */
+    bool     async_write;
+    double   begin_ms;                  /* zaciatok cyklu az po begin writera */
+    double   backend_read_ms;           /* iba volania read_pa backendu   */
+    double   queue_wait_ms;             /* cakanie na pamat/deskriptor fronty */
+    uint64_t queue_bytes;               /* nezapisane data pred touto snimkou */
+    uint64_t queue_jobs;                /* snimky vo fronte pred touto     */
+    uint64_t queue_pool_bytes;          /* velkost poolu fronty            */
+    double   sha_ms;                    /* SHA-256 vo vlakne vmic-writer   */
+    /* zaciatok cyklu -> data zapisane a zavrete (sidecar a obe premenovania
+       nasleduju; cas vlastneho premenovania sidecar obsahovat nemoze) */
+    double   data_closed_ms;
+    /* getrusage(RUSAGE_THREAD) vzorkovaca pocas cyklu */
+    uint64_t ru_majflt, ru_minflt, ru_nvcsw, ru_nivcsw;
+    double   ru_cpu_ms;
 } vmic_snapshot_t;
 
 /* ------------------------------------------------------------------ */
@@ -386,6 +425,13 @@ int   vmic_backend_resume(vmic_backend_t *b);
 int vmic_capture(vmic_backend_t *b, vmic_writer_t *w,
                  const vmic_region_t *regions, size_t region_count,
                  vmic_stats_t *stats, volatile sig_atomic_t *stop);
+/* To iste s vopred alokovanym bufferom `buf` (chunk_size B, zarovnany na
+   4096; NULL = alokuje sa pri kazdom volani) a so suctom casu samotnych
+   volani read_pa v `read_seconds` (moze byt NULL). */
+int vmic_capture_timed(vmic_backend_t *b, vmic_writer_t *w,
+                       const vmic_region_t *regions, size_t region_count,
+                       vmic_stats_t *stats, uint8_t *buf, double *read_seconds,
+                       volatile sig_atomic_t *stop);
 
 /* ------------------------------------------------------------------ */
 /* VRSTVA 2: WRITER                                                    */
@@ -406,12 +452,18 @@ typedef struct {
     int  (*finish)(vmic_writer_t *w, vmic_snapshot_t *s);
     void (*abort) (vmic_writer_t *w);
     void (*destroy)(vmic_writer_t *w);
+    /* Volitelne: odovzdaj hotovu snimku na zapis mimo cyklu (output.c).
+       Zberac ho vola po vypocte total_ms; `t_start` je monotonny zaciatok
+       cyklu (pre data_closed_ms). NULL = writer zapisal subor uz vo finish()
+       a sidecar zapise zberac sam (writer 'raw'). */
+    int  (*publish)(vmic_writer_t *w, const vmic_snapshot_t *s, double t_start);
 } vmic_writer_ops_t;
 
 struct vmic_writer {
     const vmic_writer_ops_t *ops;
     const vmic_config_t     *cfg;
     void                    *priv;
+    void                    *output;  /* vmic_output_t pre 'delta' */
 };
 
 const vmic_writer_ops_t *vmic_writer_find(const char *name);
@@ -550,17 +602,19 @@ typedef struct {
     /* kontext planovaca pre prave prebiehajuci cyklus (nastavuje adapter) */
     double                sched_lateness_s;
     uint64_t              sched_skipped_before;
-    /* odlozeny hash plnej snimky (output.hash_async): najviac jeden naraz */
-    void                 *deferred;
-    uint64_t              deferred_failed;
+    /* zapis mimo cyklu (writer 'delta', src/output.c) */
+    void                 *output;
+    uint8_t              *capture_buf;   /* chunk_size B, alokovany raz */
 } vmic_collector_t;
 
 int  vmic_collector_init(vmic_collector_t *c, const vmic_config_t *cfg,
                          volatile sig_atomic_t *stop);
 int  vmic_collector_cycle(vmic_collector_t *c, vmic_snapshot_t *out);
 void vmic_collector_fini(vmic_collector_t *c);
-/* Pocka na odlozeny hash a zapis sidecaru; vrati pocet zlyhanych. */
-uint64_t vmic_collector_flush(vmic_collector_t *c);
+/* Pocka, kym vlakno vmic-writer zapise vsetky snimky z fronty, najviac
+   `budget_s` sekund (0 = bez limitu); vrati pocet snimok, ktore sa
+   nezverejnili cele (zlyhany zapis, zahodene, nezapisane po limite). */
+uint64_t vmic_collector_flush(vmic_collector_t *c, double budget_s, bool *abandoned);
 
 /* ------------------------------------------------------------------ */
 /* Konfiguracia - config.c                                             */

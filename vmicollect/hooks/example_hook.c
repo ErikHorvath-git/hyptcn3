@@ -17,8 +17,10 @@
  * mas dopisat svoje (parsovanie struktur, extrakcia priznakov, ...).
  *
  * TRI PRAVIDLA PRE HOOK:
- *   1. Bezi SYNCHRONNE v hlavnej slucke. Ked bude trvat dlhsie ako
- *      perioda, zberac zacne zmeskavat sloty. Nieco narocne daj do
+ *   1. Pri writeri 'delta' bezi vo vlakne vmic-writer po zverejneni
+ *      snimky: dlhy hook nezdrzi cyklus, ale oneskori zverejnenie dalsich
+ *      snimok. Pri writeri 'raw' bezi synchronne v hlavnej slucke a hook
+ *      dlhsi ako perioda sposobi zmeskane sloty. Nieco narocne daj do
  *      fronty / iného vlakna.
  *   2. Bezi UZ PO odpauzovani VM. Nespomaluje teda hosta, len zberac.
  *   3. Vrat 0 pri uspechu. Nenulova hodnota znamena chybu - podla

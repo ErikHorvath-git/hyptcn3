@@ -7,6 +7,10 @@ Overuje nad sidecarmi zberaca a (volitelne) nad JSONom z tcn.score:
   1. seq su suvisle (ziadna snimka nezahodena);
   2. sched.skipped_before == 0 pre kazdu snimku (0 zmeskanych slotov);
   3. total_ms kazdej snimky < perioda (latencia cyklu vnutri slotu);
+  3b. pri zberaci 1.1 (output.data_closed_ms v sidecari: subory zapisuje
+     vlakno po cykle) p95 casu od zaciatku cyklu po zapisane data < perioda
+     - je to dolna hranica zverejnenia (sidecar a premenovania nasleduju);
+     cyklus vo vnutri slotu este neznamena, ze snimka je na disku vcas;
   4. latencia snímka -> skóre (z tcn.score, latencia_od_snimky_ms)
      p95 < perioda (soft real-time: spracovanie stíha, kym prichadza
      dalsia snimka).
@@ -82,6 +86,16 @@ def _skontroluj_retazec(sides, perioda_s, score_doc=None):
         chyby.append("cyklus nad periodou: %d z %d (max %.1f ms)"
                      % (len(nad), len(total), max(nad)))
 
+    pub = sorted(d["output"]["data_closed_ms"] for d in sides
+                 if isinstance(d.get("output"), dict) and d["output"].get("data_closed_ms") is not None)
+    zverejnenie = None
+    if pub:
+        p95 = pub[min(len(pub) - 1, -(-95 * len(pub) // 100) - 1)]
+        zverejnenie = {"n": len(pub), "p95_ms": round(p95, 3), "max_ms": round(pub[-1], 3)}
+        if p95 > perioda_s * 1000.0:
+            chyby.append("p95 zapisu dat snimky (dolna hranica zverejnenia) %.1f ms > perioda %.1f s"
+                         % (p95, perioda_s))
+
     lat = None
     if score_doc:
         z = [r for r in score_doc.get("zaznamy", [])
@@ -109,6 +123,7 @@ def _skontroluj_retazec(sides, perioda_s, score_doc=None):
         "cyklov_nad_periodou": len(nad) if total else None,
         "cyklov_celkom": len(total),
         "latencia_skore": lat,
+        "zverejnenie": zverejnenie,
         "verdict": "OK" if not chyby else "NEUSPECH",
         "chyby": chyby,
     }

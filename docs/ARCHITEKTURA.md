@@ -232,14 +232,23 @@ navrhnuté tak, aby bol prípadný čas zastavenia VM čo najkratší. Overené 
 |---:|---|---|
 | 1 | `ops->begin_cycle()` — obnova mapy memslotov | nie |
 | 2 | `refresh_vm()` — prepočet zbieraných oblastí | nie |
-| 3 | `writer.ops->begin()` — vytvorenie súboru | nie |
+| 3 | `writer.ops->begin()` — `delta`: deskriptor snímky z fronty; `raw`: vytvorenie súboru | nie |
 | 4 | `vmic_backend_pause()` | hranica pauzy |
-| 5 | `vmic_capture()` — čítanie pamäte a kŕmenie writera | **áno** |
+| 5 | `vmic_capture_timed()` — čítanie pamäte a kŕmenie writera (`delta`: kópia zmenených stránok do fronty) | **áno** |
 | 6 | `vmic_backend_resume()` | hranica pauzy |
-| 7 | `writer.ops->finish()` — gzip, `fsync`, `rename` | nie |
-| 8 | `vmic_meta_write()` — JSON sidecar | nie |
-| 9 | `vmic_hooks_fire()` — používateľské pluginy | nie |
-| 10 | `vmic_retention_apply()` | nie |
+| 7 | `writer.ops->finish()` — `delta`: hlavička a polia snímky; `raw`: gzip, `fsync`, `rename` | nie |
+| 8 | `writer.ops->publish()` — `delta`: odovzdanie snímky vláknu `vmic-writer` | nie |
+| 9 | `vmic_meta_write()` — JSON sidecar (`raw`; pri `delta` vo vlákne) | nie |
+| 10 | `vmic_hooks_fire()` — používateľské pluginy (`raw`; pri `delta` vo vlákne) | nie |
+| 11 | `vmic_retention_apply()` (`raw`; pri `delta` vo vlákne) | nie |
+
+Pri writeri `delta` (zberač verzie 1.1, `vmicollect/src/output.c`) cyklus na disk
+nesiaha: súbor, `fsync`, SHA-256, sidecar, hooky aj retenciu robí vlákno `vmic-writer`
+v poradí snímok a riadky logu zapisuje vlákno `vmic-log`. Snímka sa zverejní celá,
+alebo vôbec (dáta a sidecar pod bodkovými dočasnými menami, potom dve premenovania
+s `RENAME_NOREPLACE`, najprv dáta). Plánovač totiž započíta do slotu všetko, čo sa
+v cykle stane; kampaň `benign-v4-20261022` stratila slot, keď zápis súboru v cykle
+čakal na SSD.
 
 Kroky 4 a 6 sa vykonajú len vtedy, keď backend pauzu vie. Pri backende `ebpf` je
 `ops->pause == NULL`, takže sa pauza nezapne a nemeria vôbec:
@@ -439,10 +448,14 @@ ostatné si musí urobiť sám zo súboru.
 Tri ďalšie vlastnosti, ktoré z toho vyplývajú (hlavička `hooks.c`, hlavička
 `example_hook.c`):
 
-1. Hook beží **synchrónne v hlavnej slučke**. Keď trvá dlhšie ako perióda, zberač začne
-   zmeškávať sloty.
+1. Pri writeri `delta` (zberač verzie 1.1) beží hook **vo vlákne `vmic-writer`**, až po
+   zverejnení snímky, nad jej kópiou (ukazovatele platia iba počas volania). Dlhý hook
+   cyklus nezdrží, ale oneskorí zverejnenie ďalších snímok (fronta je FIFO) a až po
+   vyčerpaní pamäte fronty aj cyklus. Pri writeri `raw` beží **synchrónne v hlavnej
+   slučke** a hook dlhší ako perióda spôsobí zmeškané sloty (do verzie 1.0 aj pri `delta`).
 2. Hook beží **až po dokončení zápisu snímky** (a keď backend pauzuje, až po odpauzovaní
-   VM). Nespomaľuje teda hosťa, iba zberač.
+   VM). Nespomaľuje teda hosťa, iba zberač. Vlákno `vmic-writer` má zablokované signály
+   SIGINT/SIGTERM/SIGHUP; dieťa spustené z hooku ich zdedí zablokované.
 3. `abi` sa kontroluje v `vmic_hook_init`; keď sa zberač a plugin preložili proti rôznym
    verziám `vmic.h`, plugin má vrátiť nenulovú hodnotu.
 
@@ -667,6 +680,27 @@ Sidecar delta snímky sa líši iba v `capture` a `output`; napríklad druhá sn
 istého behu (`data/raw/20260918T154742Z_run/hyptcn-guest_000001_20260918T154748651Z.json`)
 má `"full": false`, `"pages_changed": 324`, `"changed_ratio": 0.000613`,
 `"capture_ms": 557.064` a `"write_ms": 7.741`.
+
+**Zberač verzie 1.1** (`"version": "1.1.0"`, `output.async: true`; oprava po kampani
+`benign-v4-20261022`) píše súbory vo vlákne `vmic-writer` mimo cyklu, takže niektoré
+polia majú nový význam a pribudli ďalšie (schéma zostáva `vmicollect/1`, nové kľúče
+stoja pred blokom `features`, `path` a prvý `sha256` sú stále v prvých 8 KiB):
+
+| Pole | Význam vo verzii 1.1 |
+|---|---|
+| `capture.capture_ms` | čítanie pamäte + porovnanie stránok + príznaky + kópia zmenených stránok do fronty + prípadné čakanie na jej pamäť; do 1.0 aj zápis každej zmenenej stránky do súboru |
+| `capture.backend_read_ms` | iba volania `read_pa` backendu (nový kľúč; „čítanie“ v starších záznamoch je `capture_ms`) |
+| `capture.begin_ms`, `capture.queue_wait_ms` | začiatok cyklu po `begin` writera; čakanie na pamäť alebo deskriptor fronty (audit ho zamietne vždy) |
+| `capture.rusage` | `getrusage(RUSAGE_THREAD)` vzorkovacieho vlákna počas cyklu: `majflt`, `minflt`, `nvcsw`, `nivcsw`, `cpu_ms` |
+| `capture.write_ms` | vlákno `vmic-writer`: vytvorenie, zápis, `fsync` a `close` súboru (bez SHA-256) |
+| `capture.total_ms` | cyklus vzorkovača od začiatku po hotovú snímku (odovzdanie do fronty a riadok logu nasledujú, plánovač ich započíta do slotu) |
+| `output.bytes_on_disk` | ako predtým `st_blocks × 512` (zapisovač volá `fstat` pred `close`) |
+| `output.hash_deferred` | `true` pri každej snímke: SHA-256 sa počíta po cykle vo vlákne a sidecar vznikne až s ním |
+| `output.mlock`, `output.queue_pool_bytes` | uzamknutie pamäte zberača a veľkosť poolu fronty |
+| `output.queue_jobs`, `output.queue_bytes` | snímky a dáta vo fronte pred touto snímkou (backlog zapisovača) |
+| `output.sha_ms`, `output.data_closed_ms` | SHA-256 vo vlákne; od začiatku cyklu po zapísané a zatvorené dáta (sidecar a obe premenovania nasledujú, je to dolná hranica zverejnenia) |
+
+Hodnoty `capture_ms` a `total_ms` z verzií 1.0 a 1.1 preto nie sú porovnateľné.
 
 ---
 

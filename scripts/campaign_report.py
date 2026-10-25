@@ -170,7 +170,11 @@ DEFINITIONS = {
                       "own end are used and labeled (see http_window)."),
     "cycle_ms": ("Collector cycle time = sidecar capture.total_ms; p50/p95/max are nearest-rank over the snapshots "
                  "of one session. The protocol period is the limit (cycles_at_or_over_period counts total_ms >= "
-                 "period, the audit's rejection rule)."),
+                 "period, the audit's rejection rule). Collector 1.1 (sidecar output.async true) writes files on "
+                 "a writer thread after the cycle, so its total_ms excludes file writes, renames and SHA-256 "
+                 "(output.data_closed_ms in collector_cycles.csv is the time to the written data, a lower bound "
+                 "of publication); up to 1.0 total_ms and capture_ms "
+                 "included the write of every changed page. Values of the two versions are not comparable."),
     "missed_slots": ("Sidecar sched.skipped_before is the collector's running total of skipped sampling slots "
                      "before that snapshot (vmicollect sched.c: st.cycles_skipped), so missed_slots is its value at "
                      "the last snapshot, never a sum over snapshots. Slots skipped after the last snapshot appear "
@@ -225,7 +229,7 @@ SESSION_COLUMNS = (
     "missed_slots", "read_errors", "filled_zero",
     "collector_end_snapshots", "collector_end_errors", "collector_end_missed_slots",
     "cycle_ms_p50", "cycle_ms_p95", "cycle_ms_max", "cycles_at_or_over_period", "full_cycle_ms",
-    "hash_async_setting", "hash_deferred_snapshots", "fsync_setting",
+    "hash_async_setting", "hash_deferred_snapshots", "fsync_setting", "mlock_setting",
     "raw_bytes", "raw_bytes_source", "raw_allocated_bytes", "audit_raw_bytes", "sidecars_differing_from_audit",
     "archive_manifest", "archive_schema", "archive_bytes", "archive_stored_bytes",
     "archive_raw_image_bytes", "archive_raw_image_stored_bytes",
@@ -279,7 +283,8 @@ INTERVAL_COLUMNS = ("session_id", "interval", "phase", "t_start_utc", "t_end_utc
                     "http_error", "timeout", "transport_error", "throughput_rps")
 CYCLE_COLUMNS = ("session_id", "seq", "file", "full", "timestamp", "timestamp_unix", "capture_ms", "write_ms",
                  "total_ms", "bytes_on_disk", "pages_changed", "pages_total", "skipped_before",
-                 "skipped_since_previous_snapshot", "lateness_s", "read_errors", "filled_zero", "hash_deferred")
+                 "skipped_since_previous_snapshot", "lateness_s", "read_errors", "filled_zero", "hash_deferred",
+                 "async", "backend_read_ms", "queue_wait_ms", "data_closed_ms", "queue_jobs", "queue_bytes")
 COVERAGE_COLUMNS = ("session_id", "status", "audit_path", "source", "expected_snapshots", "observed_snapshots",
                     "missing_snapshots", "scorable_windows",
                     *("rows_" + name for name in STATE_ROWS), "rows_other",
@@ -907,6 +912,13 @@ def capture_step(s, inputs, period_ms):
                        "read_errors": integer(part["stats"].get("read_errors")),
                        "filled_zero": integer(part["stats"].get("filled_zero")),
                        "hash_deferred": part["output"].get("hash_deferred"),
+                       # collector 1.1 (output.async): writer-thread evidence, empty for older sidecars
+                       "async": part["output"].get("async"),
+                       "backend_read_ms": number(part["capture"].get("backend_read_ms")),
+                       "queue_wait_ms": number(part["capture"].get("queue_wait_ms")),
+                       "data_closed_ms": number(part["output"].get("data_closed_ms")),
+                       "queue_jobs": integer(part["output"].get("queue_jobs")),
+                       "queue_bytes": integer(part["output"].get("queue_bytes")),
                        "sha256": inputs.sha(path)})
     s.sidecars_read = True
     if not log_seen:
@@ -917,7 +929,7 @@ def capture_step(s, inputs, period_ms):
     row["snapshots_present"] = len(cycles)
     if images != len(cycles):
         s.notes.append(f"{images} images but {len(cycles)} snapshot sidecars (a sidecar appears only after its "
-                       "image is complete and, with hash_async, hashed)")
+                       "image is complete and hashed)")
     if bad_times:
         s.notes.append(f"{bad_times} sidecars have a timestamp_unix that is not a representable time; they are "
                        "left out of the capture interval")
@@ -1802,8 +1814,14 @@ def read_evidence(s, inputs, ctx):
     row.update(campaign_id=meta.get("campaign_id"), role=meta.get("role"), group=meta.get("group"),
                group_attempt=meta.get("group_attempt"), scenario=meta.get("scenario"), seed=meta.get("seed"),
                boot_id=guest.get("boot_id"), session_schema=meta.get("schema"),
-               hash_async_setting=settings.get("hash_async"), fsync_setting=settings.get("fsync"))
-    row.miss(("hash_async_setting", "fsync_setting"),
+               hash_async_setting=settings.get("hash_async"), fsync_setting=settings.get("fsync"),
+               mlock_setting=settings.get("mlock"))
+    if settings.get("writer_thread"):
+        row.na(("hash_async_setting",), "collector writer thread hashes every snapshot before publishing "
+                                       "(no output.hash_async)")
+    elif settings:
+        row.na(("mlock_setting",), "collector predates the writer thread and output.mlock")
+    row.miss(("hash_async_setting", "fsync_setting", "mlock_setting"),
              "session schema 1 records no collector_settings" if schema1 else
              "session.json collector_settings has no such flag (session predates the setting)")
     row.na(("campaign_id",), "not a campaign session (session.json campaign_id is null)")

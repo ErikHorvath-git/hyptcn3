@@ -799,9 +799,11 @@ a `vmic_config_t`.
   nenulová = chyba. Pri `[hooks].strict = true` zberač skončí, inak sa plugin vypne do konca
   behu a zber pokračuje (`vmic_hooks_fire` v `hooks.c`).
 
-**Rozhranie je teda notifikačné.** Hook sa dozvie, že snímka existuje a kde leží. Beží
-synchrónne v hlavnej slučke a až po dokončení zápisu snímky, takže nespomaľuje hosťa, iba
-zberač — ale keď trvá dlhšie než perióda, zberač začne zmeškávať sloty.
+**Rozhranie je teda notifikačné.** Hook sa dozvie, že snímka existuje a kde leží. Beží až
+po dokončení zápisu snímky, takže nespomaľuje hosťa, iba zberač. Od verzie zberača 1.1 beží
+pri writeri `delta` vo vlákne `vmic-writer` po zverejnení snímky: dlhý hook cyklus nezdrží,
+ale oneskorí zverejnenie ďalších snímok. Pri writeri `raw` (a do verzie 1.0 aj pri `delta`)
+beží synchrónne v hlavnej slučke a keď trvá dlhšie než perióda, zberač začne zmeškávať sloty.
 
 Dôsledok pre návrh skórovania: skórovací hook, ktorý by mal vracať výstup modelu späť do
 modulu, nemôže pamäť čítať cez rozhranie hooku. Musí si otvoriť `snap->path` sám (a zaplatiť
@@ -2076,7 +2078,8 @@ s `output.hash=none`.
 ### 8.7 Latencie
 
 **Latencia snímka → príznakový vektor** sa meria od začiatku cyklu zberu po zavretie
-sidecaru s blokom `features` na disku (cez `inotify close_write`). Artefakt
+sidecaru s blokom `features` na disku (cez `inotify close_write`; od zberača 1.1, ktorý
+sidecar zverejňuje premenovaním, aj `moved_to`). Artefakt
 `latency_vector_20260918.json`, spolu n = 78 cyklov, 0 zmeškaných slotov a 0 chýb vo
 všetkých šiestich behoch, značka (Z).
 
@@ -2224,9 +2227,10 @@ jadro/používateľ plus jeden `memcpy` v používateľskom priestore na blok
 
 **L9 — Hook je notifikačný.** `vmic_hook_api_t` má tri polia (`abi`, konfigurácia iba na
 čítanie, `log`) a **neobsahuje `read_pa`** ani inú cestu k pamäti hosťa. Plugin dostane
-cestu k hotovému súboru a časy; ak chce obsah, musí si súbor otvoriť sám. Beží synchrónne
-v hlavnej slučke, takže výpočet dlhší než perióda spôsobí zmeškávanie slotov. Podrobne
-v časti 4.2.
+cestu k hotovému súboru a časy; ak chce obsah, musí si súbor otvoriť sám. Pri writeri
+`delta` (zberač 1.1) beží vo vlákne `vmic-writer` po zverejnení snímky, takže dlhý výpočet
+oneskorí zverejnenie ďalších snímok; pri `raw` beží synchrónne v hlavnej slučke a výpočet
+dlhší než perióda spôsobí zmeškávanie slotov. Podrobne v časti 4.2.
 
 **L10 — Kontroly integrity majú pomenované slepé miesta.** Tri: hook prepísaný na adresu
 **vnútri** rozsahu `[_stext, _etext)` rozsahová kontrola z princípu nevidí; skrytie, ktoré

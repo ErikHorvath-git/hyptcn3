@@ -113,11 +113,23 @@ funkcie. Ked nieco menis, takmer vzdy sa dotknes iba jednej z nich.
 | `src/backend.c` | register backendov + spolocna citacia slucka |
 | `src/writer_raw.c` | raw vystup: riedky zapis, gzip, SHA-256 |
 | `src/writer_delta.c` | inkrementalny zber + obnova retazca |
+| `src/output.c` | zapis 'delta' mimo cyklu: fronta v pamati, vlakno `vmic-writer` |
 | `src/hooks.c` | nacitanie a volanie pluginov |
 | `src/retention.c` | mazanie starych snimok po retazcoch |
 | `src/config.c` | INI parser riadeny tabulkou `FIELDS` |
 | `src/meta.c` | `.json` metadata vedla kazdej snimky |
-| `src/util.c` `src/sha256.c` `src/log.c` | cas, I/O, hashe, logovanie |
+| `src/util.c` `src/sha256.c` `src/log.c` | cas, I/O, hashe, logovanie (`run`: vlakno `vmic-log`) |
+
+**Zapis mimo cyklu (od verzie 1.1).** Pri writeri `delta` cyklus na disk
+nesiaha: zmenene stranky kopiruje do fronty v pamati (`src/output.c`) a subor,
+`fsync`, SHA-256, sidecar, hooky aj retenciu robi vlakno `vmic-writer` v poradi
+snimok; riadky logu zapisuje vlakno `vmic-log`. Snimka sa zverejni cela, alebo
+vobec: data aj sidecar pod bodkovymi docasnymi menami, potom dve premenovania
+s `RENAME_NOREPLACE`. Planovac totiz zapocita do slotu vsetko, co sa v cykle
+stane - ked zapis suboru cakal na disk (SSD pocas zapisu na pozadi), cyklus
+presiahol periodu a slot sa zahodil. Velkost fronty je `output.queue_mib`
+(0 = najvacsia mozna plna snimka + 512 MiB), `output.mlock` uzamkne pamat
+procesu (`mlockall`) a `output.drain_s` obmedzi dobehnutie fronty na konci.
 
 ### Backendy
 
@@ -331,8 +343,10 @@ make hooks
 sudo ./build/vmicollect run -c my.conf -o hooks.load=./build/example_hook.so:/tmp/index.csv
 ```
 
-Hook bezi **synchronne** v hlavnej slucke. Ked bude trvat dlhsie ako perioda,
-zberac zacne zmeskavat sloty - nieco narocne daj do fronty a spracuj mimo.
+Pri writeri `delta` bezi hook vo vlakne `vmic-writer` az po zverejneni snimky,
+nad jej kopiou: dlhy hook nezdrzi cyklus, ale oneskori zverejnenie dalsich
+snimok. Pri writeri `raw` bezi **synchronne** v hlavnej slucke a hook dlhsi
+ako perioda sposobi zmeskane sloty - nieco narocne daj do fronty a spracuj mimo.
 
 ### 2. Alarm (detekcia + reakcia)
 
@@ -406,6 +420,13 @@ co pride po zbere:
 
 `paused` je to, co sa naozaj stalo, nie co si ziadal config: backend `ebpf`
 VM zastavit nevie, takze tam bude vzdy `false` a `pause_ms` 0.
+
+Od verzie 1.1 (`"version": "1.1.0"`, `output.async: true`) je `capture_ms`
+citanie, porovnanie, priznaky a kopia do fronty (bez zapisu na disk),
+`write_ms` zapis suboru vo vlakne `vmic-writer` a pribudli `capture.backend_read_ms`,
+`capture.queue_wait_ms`, `capture.rusage`, `output.data_closed_ms`, `output.sha_ms`
+a stav fronty (`queue_jobs`, `queue_bytes`, `queue_pool_bytes`). Presne
+definicie su v `docs/ARCHITEKTURA.md`, cast 6.
 
 `read_errors` su naozaj chyby - stranky, ktore sa v namapovanom useku
 precitat nepodarilo. Diery medzi memslotmi sa nezbieraju, takze sa v tomto

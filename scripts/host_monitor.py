@@ -36,8 +36,10 @@ METRICS = {
     "cpufreq_mhz": "scaling_cur_freq per CPU in MHz",
     "psi_avg10": "/proc/pressure some avg10 for cpu, memory, io (percent)",
 }
+# Mlocked/Unevictable: the collector locks its queue memory (output.mlock); locked memory cannot be
+# reclaimed, so its size belongs next to the swap and dirty-memory figures.
 MEM_KEYS = ("MemTotal", "MemFree", "MemAvailable", "Buffers", "Cached", "Dirty", "Writeback",
-            "AnonPages", "Shmem", "SwapTotal", "SwapFree", "SwapCached")
+            "AnonPages", "Shmem", "SwapTotal", "SwapFree", "SwapCached", "Mlocked", "Unevictable")
 VM_KEYS = ("pswpin", "pswpout", "pgmajfault", "pgpgin", "pgpgout")
 
 

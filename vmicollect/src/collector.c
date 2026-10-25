@@ -5,34 +5,41 @@
  * parametre VM a pripravi oblasti; cycle() spravi jednu snimku.
  *
  * PORADIE OPERACII V CYKLE JE NAVRHNUTE TAK, ABY BOLA PAUZA VM CO
- * NAJKRATSIA. Vsetko, co sa da spravit pred pauzou (vytvorenie suboru,
- * zostavenie nazvu) alebo po nej (hash na disku, gzip, metadata, hooky,
- * retencia), sa robi mimo pauzy. Vnutri pauzy je IBA citanie pamate
- * a zapis blokov.
+ * NAJKRATSIA. Vsetko, co sa da spravit pred pauzou (zostavenie nazvu)
+ * alebo po nej (metadata, hooky, retencia), sa robi mimo pauzy.
+ *
+ * WRITER 'delta' NAVYSE V CYKLE NESIAHNE NA DISK. Cyklus iba cita pamat,
+ * porovnava stranky a zmenene kopiruje do fronty v pamati; subor, rename,
+ * SHA-256, sidecar, hooky aj retenciu robi vlakno vmic-writer (output.c)
+ * a riadky logu zapisuje vlakno vmic-log. Planovac totiz pripocita cyklu
+ * vsetko, co sa v nom stane: ked zapis na disk cakal sekundy (SSD pocas
+ * zapisu na pozadi), cyklus presiahol periodu a slot sa zahodil.
  *
  *      begin_cycle()-> mimo pauzy (co vlastne zbierame)
  *      begin()      -> mimo pauzy
  *      pause()      -+
  *      capture()     |  <-- iba toto stoji VM cas
  *      resume()     -+
- *      finish()     -> mimo pauzy (gzip, fsync, rename)
- *      meta + hooks -> mimo pauzy
- *      retention    -> mimo pauzy
+ *      finish()     -> mimo pauzy ('raw': gzip, fsync, rename)
+ *      publish()    -> 'delta': odovzdanie snimky zapisovacu
+ *      meta + hooks -> 'raw' tu, 'delta' vo vlakne vmic-writer
+ *      retention    -> to iste
  */
 
 #define _GNU_SOURCE
 #include "vmic.h"
 #include "log.h"
+#include "output.h"
 #include "util.h"
 
 #include <errno.h>
-#include <fcntl.h>
 #include <inttypes.h>
-#include <pthread.h>
+#include <malloc.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <unistd.h>
+#include <sys/mman.h>
+#include <sys/resource.h>
 
 /* ------------------------------------------------------------------ */
 /* Priprava oblasti na citanie                                         */
@@ -145,6 +152,78 @@ static int refresh_vm(vmic_collector_t *c)
     return prepare_regions(c);
 }
 
+/* Hodnota z /proc/self/status v kB (0, ked chyba). Iba pri starte. */
+static uint64_t proc_status_kb(const char *key)
+{
+    FILE *f = fopen("/proc/self/status", "re");
+    if (!f) return 0;
+    char line[256];
+    size_t klen = strlen(key);
+    uint64_t v = 0;
+    while (fgets(line, sizeof(line), f))
+        if (!strncmp(line, key, klen) && line[klen] == ':') {
+            v = strtoull(line + klen + 1, NULL, 10);
+            break;
+        }
+    fclose(f);
+    return v;
+}
+
+/*
+ * Pred uzamknutim poolu: stacia volna pamat na pool, na zvysok pamate VM
+ * a rezervu? Uzamknuta pamat sa neda uvolnit, takze pri nedostatku by jadro
+ * odsuvalo pamat QEMU do swapu - a citanie swapnutej pamate VM z HDD by
+ * cyklus predlzilo nad periodu. Pri OOM ma radsej skoncit zberac nez VM.
+ */
+/* Hodnota z /proc/<pid>/status v kB (0, ked chyba). */
+static uint64_t pid_status_kb(uint64_t pid, const char *key)
+{
+    char path[64];
+    snprintf(path, sizeof(path), "/proc/%" PRIu64 "/status", pid);
+    FILE *f = fopen(path, "re");
+    if (!f) return 0;
+    char line[256];
+    size_t klen = strlen(key);
+    uint64_t v = 0;
+    while (fgets(line, sizeof(line), f))
+        if (!strncmp(line, key, klen) && line[klen] == ':') {
+            v = strtoull(line + klen + 1, NULL, 10);
+            break;
+        }
+    fclose(f);
+    return v;
+}
+
+static int check_memory(const vmic_collector_t *c, uint64_t pool)
+{
+    uint64_t avail = 0;
+    FILE *f = fopen("/proc/meminfo", "re");
+    if (f) {
+        char line[256];
+        while (fgets(line, sizeof(line), f))
+            if (!strncmp(line, "MemAvailable:", 13)) { avail = strtoull(line + 13, NULL, 10) * 1024ull; break; }
+        fclose(f);
+    }
+    /* MemAvailable uz nezahrna pamat, ktoru QEMU ma; rezervuje sa iba zvysok
+       pamate VM, ktory si este moze vziat (vmid je pri backende ebpf pid). */
+    uint64_t guest = c->vm.has_memsize ? c->vm.memsize : 0;
+    uint64_t resident = c->vm.has_vmid ? pid_status_kb(c->vm.vmid, "RssAnon") * 1024ull : 0;
+    uint64_t rest = guest > resident ? guest - resident : 0;
+    uint64_t desc = vmic_output_overhead_bytes(vmic_output_max_bins(c->cfg, c->regions, c->region_count));
+    uint64_t need = pool + desc + rest + (2ull << 30);
+    if (avail < need) {
+        LOGE("output.mlock: volnej pamate je %" PRIu64 " MiB, treba aspon %" PRIu64
+             " MiB (fronta + deskriptory + zvysok pamate VM + 2 GiB rezerva)",
+             avail >> 20, need >> 20);
+        return VMIC_FATAL;
+    }
+    f = fopen("/proc/self/oom_score_adj", "we");
+    if (!f || fputs("800\n", f) < 0)
+        LOGW("output.mlock: oom_score_adj sa nepodarilo nastavit");
+    if (f) fclose(f);
+    return VMIC_OK;
+}
+
 /* ------------------------------------------------------------------ */
 /* Inicializacia                                                       */
 /* ------------------------------------------------------------------ */
@@ -202,122 +281,128 @@ int vmic_collector_init(vmic_collector_t *c, const vmic_config_t *cfg,
         vmic_backend_destroy(&c->backend);
         return VMIC_FATAL;
     }
+
+    /* buffer citania raz na cely beh - v cykle sa uz nic nealokuje */
+    if (posix_memalign((void **)&c->capture_buf, 4096, cfg->chunk_size) != 0) {
+        c->capture_buf = NULL;
+        LOGE("nedostatok pamate na buffer citania %zu B", cfg->chunk_size);
+        vmic_collector_fini(c);
+        return VMIC_FATAL;
+    }
+
+    /*
+     * Halda sa nema zmensovat a znovu rast (kazdy rast je page fault, pri
+     * uzamknutej pamati aj alokacia v jadre): uvolnena pamat zostava
+     * procesu a vacsie bloky idu z haldy, nie z mmap.
+     */
+    mallopt(M_TRIM_THRESHOLD, 1 << 30);
+    mallopt(M_MMAP_THRESHOLD, 64 << 20);
+
+    /* zapis mimo cyklu: fronta v pamati a vlakno vmic-writer (output.c) */
+    uint64_t pool = 0;
+    if (c->writer.ops->publish) {
+        pool = vmic_output_pool_bytes(cfg, c->regions, c->region_count);
+        if (cfg->queue_mib) {
+            /* explicitna fronta musi pobrat aspon plnu snimku so vsetkymi
+               strankami, inak by kazda plna snimka zlyhala */
+            vmic_config_t probe = *cfg;
+            probe.queue_mib = 0;
+            uint64_t worst = vmic_output_pool_bytes(&probe, c->regions, c->region_count) - (512ull << 20);
+            if (pool < worst) {
+                LOGE("output.queue_mib = %" PRIu64 " nestaci: plna snimka moze mat az %" PRIu64 " MiB",
+                     cfg->queue_mib, (worst + (1u << 20) - 1) >> 20);
+                vmic_collector_fini(c);
+                return VMIC_FATAL;
+            }
+        }
+        if (cfg->mlock && check_memory(c, pool) != VMIC_OK) {
+            vmic_collector_fini(c);
+            return VMIC_FATAL;
+        }
+        vmic_output_t *out = NULL;
+        if (vmic_output_create(&out, cfg, c->hooks, pool,
+                               vmic_output_max_bins(cfg, c->regions, c->region_count),
+                               stop) != VMIC_OK) {
+            vmic_collector_fini(c);
+            return VMIC_FATAL;
+        }
+        c->output = out;
+        c->writer.output = out;
+        char pool_h[32];
+        vmic_human_size(pool, pool_h, sizeof(pool_h));
+        LOGI("zapis snimok mimo cyklu: fronta %s", pool_h);
+    }
+
+    /*
+     * output.mlock: uzamknut pamat procesu. MCL_CURRENT hned namapuje
+     * a uzamkne vsetko, co uz existuje (pool fronty, deskriptory, kod,
+     * buffre; okno BPF mapy je pamat jadra a do swapu nejde aj tak);
+     * MCL_FUTURE|MCL_ONFAULT uzamkne aj neskorsie mapovania, ale az pri
+     * prvom dotyku (zasobnik logovacieho vlakna sa tak nenamapuje cely).
+     * Cyklus potom nedostane page fault na tejto pamati a nic z nej nepojde
+     * do swapu - citanie swapnutej pamate z HDD by cyklus predlzilo nad
+     * periodu. Pamat hosta (QEMU) tym chranena nie je, preto sa pred tym
+     * kontroluje volna pamat a OOM killer ma prednostne vybrat zberac.
+     * Zlyhanie je chyba spustenia, nie varovanie.
+     */
+    if (cfg->mlock) {
+        double t0 = vmic_now_mono();
+        if (mlockall(MCL_CURRENT) != 0 || mlockall(MCL_FUTURE | MCL_ONFAULT) != 0) {
+            LOGE("output.mlock: mlockall zlyhal: %s (zber treba spustit pod rootom)",
+                 strerror(errno));
+            vmic_collector_fini(c);
+            return VMIC_FATAL;
+        }
+        /* Navratovy kod mlockall nedokazuje, ze sa pamat naozaj namapovala
+           (chyby pri jej plneni jadro neohlasi) a VmLck pocita velkost
+           uzamknutych oblasti, nie stranky v RAM. Dokazom je VmRSS: pool
+           sam ma `pool` bajtov, takze rezidentnej pamate musi byt aspon tolko. */
+        uint64_t locked = proc_status_kb("VmLck") * 1024ull;
+        uint64_t rss = proc_status_kb("VmRSS") * 1024ull;
+        if (rss < pool) {
+            LOGE("output.mlock: rezidentnych je iba %" PRIu64 " MiB, fronta sama ma %" PRIu64 " MiB",
+                 rss >> 20, pool >> 20);
+            vmic_collector_fini(c);
+            return VMIC_FATAL;
+        }
+        LOGI("pamat procesu uzamknuta za %.1f s: VmRSS %" PRIu64 " MiB, VmLck %" PRIu64 " MiB",
+             vmic_now_mono() - t0, rss >> 20, locked >> 20);
+    }
     return VMIC_OK;
 }
-
-static void deferred_wait(vmic_collector_t *c);
 
 void vmic_collector_fini(vmic_collector_t *c)
 {
     if (!c) return;
-    deferred_wait(c);
+    /* najprv zapisat vsetko z fronty: snimky vo fronte su hotove merania
+       (po vyprsanom limite v cmd_run uz nic necaka) */
+    vmic_output_drain((vmic_output_t *)c->output, c->cfg ? c->cfg->drain_s : 0.0, NULL);
+    vmic_writer_destroy(&c->writer);
+    vmic_output_destroy((vmic_output_t *)c->output);
+    c->output = NULL;
     vmic_hooks_unload(c->hooks);
     c->hooks = NULL;
-    vmic_writer_destroy(&c->writer);
     vmic_backend_destroy(&c->backend);
+    free(c->capture_buf);
+    c->capture_buf = NULL;
 }
 
 /* ------------------------------------------------------------------ */
 /* Jeden cyklus                                                        */
 /* ------------------------------------------------------------------ */
 
-/* ------------------------------------------------------------------ */
-/* Odlozeny hash plnej snimky (output.hash_async)                      */
-/* ------------------------------------------------------------------ */
-/*
- * Sidecar sa vykresli hned v cykle (vsetky ukazovatele su platne) s
- * rezervovanym miestom pre hash. Vlakno spocita SHA-256 hotoveho suboru,
- * doplni ho a sidecar zapise atomicky (tmp + rename). Cyklus tak nemeria
- * hashovanie stoviek MiB. Kym sidecar nie je zapisany, snimka pre
- * spracovanie neexistuje; pri zlyhani chyba sidecar a beh vrati kod 4.
- */
-#define HASH_PLACEHOLDER \
-    "################################################################"
-
-typedef struct {
-    pthread_t thread;
-    char     *buf;
-    size_t    len;
-    size_t    hash_off;
-    char      image[VMIC_PATH_MAX];
-    char      sidecar[VMIC_PATH_MAX];
-    int       rc;
-} deferred_t;
-
-static void *deferred_main(void *arg)
+uint64_t vmic_collector_flush(vmic_collector_t *c, double budget_s, bool *abandoned)
 {
-    deferred_t *d = arg;
-    uint8_t digest[VMIC_SHA256_BYTES];
-    char hex[VMIC_SHA256_BYTES * 2 + 1];
-    char tmp[VMIC_PATH_MAX + 8];
-
-    d->rc = VMIC_ERR;
-    if (vmic_hash_file(d->image, digest) != 0) {
-        LOGE("odlozeny hash '%s' zlyhal: %s", d->image, strerror(errno));
-        return NULL;
-    }
-    vmic_hex(digest, VMIC_SHA256_BYTES, hex);
-    memcpy(d->buf + d->hash_off, hex, VMIC_SHA256_BYTES * 2);
-    if ((size_t)snprintf(tmp, sizeof(tmp), "%s.tmp", d->sidecar) >= sizeof(tmp))
-        return NULL;
-    int fd = open(tmp, O_WRONLY | O_CREAT | O_EXCL | O_CLOEXEC, 0644);
-    if (fd < 0) {
-        LOGE("odlozeny sidecar '%s': %s", tmp, strerror(errno));
-        return NULL;
-    }
-    int bad = vmic_write_all(fd, d->buf, d->len) != 0;
-    if (close(fd) != 0) bad = 1;
-    if (bad || rename(tmp, d->sidecar) != 0) {
-        LOGE("odlozeny sidecar '%s' sa nepodarilo zapisat: %s", d->sidecar, strerror(errno));
-        unlink(tmp);
-        return NULL;
-    }
-    d->rc = VMIC_OK;
-    return NULL;
-}
-
-static void deferred_wait(vmic_collector_t *c)
-{
-    deferred_t *d = c->deferred;
-    if (!d) return;
-    pthread_join(d->thread, NULL);
-    if (d->rc != VMIC_OK) c->deferred_failed++;
-    free(d->buf);
-    free(d);
-    c->deferred = NULL;
-}
-
-static int deferred_start(vmic_collector_t *c, vmic_snapshot_t *snap)
-{
-    deferred_wait(c);                    /* najviac jeden naraz */
-    deferred_t *d = calloc(1, sizeof(*d));
-    if (!d) return VMIC_ERR;
-    if (vmic_meta_render(snap, HASH_PLACEHOLDER, &d->buf, &d->len,
-                         snap->sidecar_path, sizeof(snap->sidecar_path)) != VMIC_OK)
-        goto fail;
-    char *at = memmem(d->buf, d->len, HASH_PLACEHOLDER, VMIC_SHA256_BYTES * 2);
-    if (!at) goto fail;
-    d->hash_off = (size_t)(at - d->buf);
-    snprintf(d->image, sizeof(d->image), "%s", snap->path);
-    snprintf(d->sidecar, sizeof(d->sidecar), "%s", snap->sidecar_path);
-    if (pthread_create(&d->thread, NULL, deferred_main, d) != 0) goto fail;
-    c->deferred = d;
-    return VMIC_OK;
-fail:
-    free(d->buf);
-    free(d);
-    return VMIC_ERR;
-}
-
-uint64_t vmic_collector_flush(vmic_collector_t *c)
-{
-    deferred_wait(c);
-    return c->deferred_failed;
+    return vmic_output_drain((vmic_output_t *)c->output, budget_s, abandoned);
 }
 
 int vmic_collector_cycle(vmic_collector_t *c, vmic_snapshot_t *out)
 {
     const vmic_config_t *cfg = c->cfg;
+
+    /* hook v striktnom rezime zlyhal vo vlakne vmic-writer */
+    if (c->output && vmic_output_fatal((vmic_output_t *)c->output))
+        return VMIC_FATAL;
 
     vmic_snapshot_t snap;
     memset(&snap, 0, sizeof(snap));
@@ -329,6 +414,8 @@ int vmic_collector_cycle(vmic_collector_t *c, vmic_snapshot_t *out)
     vmic_now_real(&snap.wall);
 
     double t_total0 = vmic_now_mono();
+    struct rusage ru0;
+    getrusage(RUSAGE_THREAD, &ru0);
 
     /* --- nazov suboru (mimo pauzy) -------------------------------- */
     char ts[40];
@@ -368,9 +455,10 @@ int vmic_collector_cycle(vmic_collector_t *c, vmic_snapshot_t *out)
     snap.regions      = c->regions;
     snap.region_count = c->region_count;
 
-    /* --- priprava suboru (mimo pauzy) ----------------------------- */
+    /* --- priprava snimky (mimo pauzy) ----------------------------- */
     int rc = c->writer.ops->begin(&c->writer, &snap);
     if (rc != VMIC_OK) return rc;
+    snap.begin_ms = (vmic_now_mono() - t_total0) * 1000.0;
 
     /* --- PAUZA -> CITANIE -> BEH ---------------------------------- */
     /*
@@ -397,8 +485,10 @@ int vmic_collector_cycle(vmic_collector_t *c, vmic_snapshot_t *out)
         }
     }
 
-    rc = vmic_capture(&c->backend, &c->writer,
-                      c->regions, c->region_count, &snap.stats, c->stop);
+    double read_s = 0.0;
+    rc = vmic_capture_timed(&c->backend, &c->writer, c->regions, c->region_count,
+                            &snap.stats, c->capture_buf, &read_s, c->stop);
+    snap.backend_read_ms = read_s * 1000.0;
 
     if (do_pause) {
         /* rozbehnut VM MUSIME aj ked citanie zlyhalo */
@@ -434,17 +524,29 @@ int vmic_collector_cycle(vmic_collector_t *c, vmic_snapshot_t *out)
     }
 
     snap.total_ms = (vmic_now_mono() - t_total0) * 1000.0;
+    struct rusage ru1;
+    getrusage(RUSAGE_THREAD, &ru1);
+    snap.ru_majflt = (uint64_t)(ru1.ru_majflt - ru0.ru_majflt);
+    snap.ru_minflt = (uint64_t)(ru1.ru_minflt - ru0.ru_minflt);
+    snap.ru_nvcsw  = (uint64_t)(ru1.ru_nvcsw - ru0.ru_nvcsw);
+    snap.ru_nivcsw = (uint64_t)(ru1.ru_nivcsw - ru0.ru_nivcsw);
+    snap.ru_cpu_ms = ((double)(ru1.ru_utime.tv_sec - ru0.ru_utime.tv_sec) +
+                      (double)(ru1.ru_stime.tv_sec - ru0.ru_stime.tv_sec)) * 1000.0 +
+                     ((double)(ru1.ru_utime.tv_usec - ru0.ru_utime.tv_usec) +
+                      (double)(ru1.ru_stime.tv_usec - ru0.ru_stime.tv_usec)) / 1000.0;
+
+    /* --- 'delta': zapis, sidecar, hooky a retencia vo vlakne vmic-writer */
+    if (c->writer.ops->publish) {
+        rc = c->writer.ops->publish(&c->writer, &snap, t_total0);
+        if (rc != VMIC_OK) return rc;
+        vmic_output_watch((vmic_output_t *)c->output);
+    }
     c->seq++;
     c->total_bytes += snap.bytes_on_disk;
 
-    /* --- metadata ------------------------------------------------- */
-    if (cfg->sidecar && (!snap.hash_deferred || deferred_start(c, &snap) != VMIC_OK)) {
-        if (snap.hash_deferred) {        /* vlakno sa nespustilo: synchronne */
-            snap.hash_deferred = false;
-            snap.has_hash = vmic_hash_file(snap.path, snap.sha256) == 0;
-        }
+    /* --- metadata ('raw': tu, synchronne) -------------------------- */
+    if (!c->writer.ops->publish && cfg->sidecar)
         vmic_meta_write(&snap, snap.sidecar_path, sizeof(snap.sidecar_path));
-    }
 
     /* --- zhrnutie do logu ----------------------------------------- */
     char disk[32], logical[32];
@@ -471,13 +573,15 @@ int vmic_collector_cycle(vmic_collector_t *c, vmic_snapshot_t *out)
         LOGD("  nenamapovanych blokov: %" PRIu64 " (%" PRIu64 " B vyplnenych nulami)",
              snap.stats.read_errors, snap.stats.filled_zero);
 
-    /* --- pouzivatelske rozsirenia --------------------------------- */
-    rc = vmic_hooks_fire(c->hooks, &snap);
-    if (rc != VMIC_OK) return rc;
+    if (!c->writer.ops->publish) {
+        /* --- pouzivatelske rozsirenia ----------------------------- */
+        rc = vmic_hooks_fire(c->hooks, &snap);
+        if (rc != VMIC_OK) return rc;
 
-    /* --- upratovanie ---------------------------------------------- */
-    /* aktivny retazec chranime podla ID, nie podla casu suboru */
-    vmic_retention_apply(cfg, snap.chain_id);
+        /* --- upratovanie ------------------------------------------ */
+        /* aktivny retazec chranime podla ID, nie podla casu suboru */
+        vmic_retention_apply(cfg, snap.chain_id);
+    }
 
     if (out) *out = snap;
     return VMIC_OK;

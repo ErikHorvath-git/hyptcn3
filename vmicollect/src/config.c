@@ -104,7 +104,9 @@ F("output",   "sidecar",          T_BOOL,      sidecar,          NULL, "zapisova
 F("output",   "delta_page_size",  T_U32,       delta_page_size,  NULL, "granularita porovnavania (mocnina 2)"),
 F("output",   "delta_full_every", T_U64,       delta_full_every, NULL, "kazdych N snimok plna zaloha"),
 F("output",   "fsync",            T_BOOL,      fsync,            NULL, "fsync snimky pred rename; false = zapis cez page cache"),
-F("output",   "hash_async",       T_BOOL,      hash_async,       NULL, "SHA-256 plnej snimky vo vlakne mimo cyklu; sidecar pride neskor"),
+F("output",   "queue_mib",        T_U64,       queue_mib,        NULL, "delta: pamat fronty zapisu v MiB; 0 = plna snimka + 512 MiB"),
+F("output",   "mlock",            T_BOOL,      mlock,            NULL, "uzamknut pamat zberaca (mlockall): bez page faultov a swapu na nej"),
+F("output",   "drain_s",          T_DOUBLE,    drain_s,          NULL, "najdlhsie dobehnutie fronty zapisu po konci zberu (po signale najviac 40 s)"),
 
 F("features", "enable",           T_BOOL,      feat_enable,      NULL, "pocitat per-bin priznakovy vektor do sidecaru"),
 F("features", "bin_bytes",        T_U64,       feat_bin_bytes,   NULL, "velkost binu (mocnina 2, >= delta_page_size)"),
@@ -159,7 +161,9 @@ void vmic_config_defaults(vmic_config_t *cfg)
     cfg->delta_page_size  = 4096;
     cfg->delta_full_every = 20;
     cfg->fsync            = true;
-    cfg->hash_async       = false;
+    cfg->queue_mib        = 0;
+    cfg->mlock            = false;
+    cfg->drain_s          = 240.0;
 
     /* Vektor je vychodzo ZAPNUTY aj s entropiou: neuplny vektor by sa
        neskor tazko rozoznaval od uplneho, a cena je zmerana (MERANIA.md). */
@@ -616,6 +620,8 @@ int vmic_config_validate(vmic_config_t *cfg, bool need_target)
         bad++;
     if (!finite_ok("capture.pause_max_ms", cfg->pause_max_ms, 0.0, 1e9))
         bad++;
+    if (!finite_ok("output.drain_s", cfg->drain_s, 1.0, VMIC_MAX_SECONDS))
+        bad++;
     if (cfg->chunk_size < 4096) {
         LOGE("capture.chunk_size musi byt aspon 4096 B"); bad++;
     }
@@ -626,11 +632,6 @@ int vmic_config_validate(vmic_config_t *cfg, bool need_target)
     }
     if (cfg->delta_full_every < 1) {
         LOGE("output.delta_full_every musi byt aspon 1"); bad++;
-    }
-    if (cfg->hash_async && cfg->hook_count) {
-        /* hooky dostavaju snimku hned po cykle - s odlozenym hashom by
-           videli iny stav nez sidecar */
-        LOGE("output.hash_async sa neda kombinovat s hooks.load"); bad++;
     }
     if (cfg->feat_enable) {
         /* Index binu je gpa >> log2(bin_bytes), takze mocnina 2 nie je

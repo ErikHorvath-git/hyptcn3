@@ -147,8 +147,17 @@ int vmic_capture(vmic_backend_t *b, vmic_writer_t *w,
                  const vmic_region_t *regions, size_t region_count,
                  vmic_stats_t *stats, volatile sig_atomic_t *stop)
 {
+    return vmic_capture_timed(b, w, regions, region_count, stats, NULL, NULL, stop);
+}
+
+int vmic_capture_timed(vmic_backend_t *b, vmic_writer_t *w,
+                       const vmic_region_t *regions, size_t region_count,
+                       vmic_stats_t *stats, uint8_t *buf_in, double *read_seconds,
+                       volatile sig_atomic_t *stop)
+{
     const vmic_config_t *cfg = b->cfg;
     memset(stats, 0, sizeof(*stats));
+    if (read_seconds) *read_seconds = 0.0;
 
     /* --- hromadne backendy: prenechame pracu externemu nastroju --- */
     if (!b->ops->random_access) {
@@ -183,10 +192,13 @@ int vmic_capture(vmic_backend_t *b, vmic_writer_t *w,
      * Zarovnanie na 4096 nie je kozmetika: umoznuje jadru pouzit
      * priamejsiu cestu pri kopirovani a v util.c to nechava rychlu
      * 8-bajtovu vetvu v is_zero()/hash64().
+     *
+     * Zberac posiela buffer alokovany raz pri starte: alokacia v cykle by
+     * mohla skoncit page faultami alebo uvolnovanim pamate v jadre.
      */
     size_t chunk = cfg->chunk_size;
-    uint8_t *buf = NULL;
-    if (posix_memalign((void **)&buf, 4096, chunk) != 0 || !buf) {
+    uint8_t *buf = buf_in;
+    if (!buf && (posix_memalign((void **)&buf, 4096, chunk) != 0 || !buf)) {
         LOGE("nedostatok pamate na buffer %zu B", chunk);
         return VMIC_FATAL;
     }
@@ -209,7 +221,9 @@ int vmic_capture(vmic_backend_t *b, vmic_writer_t *w,
             size_t want = (remain < (uint64_t)chunk) ? (size_t)remain : chunk;
             uint64_t paddr = start + off;
 
+            double tr = read_seconds ? vmic_now_mono() : 0.0;
             int64_t got = b->ops->read_pa(b, paddr, buf, want);
+            if (read_seconds) *read_seconds += vmic_now_mono() - tr;
             stats->chunks++;
             stats->bytes_requested += want;
 
@@ -258,8 +272,10 @@ int vmic_capture(vmic_backend_t *b, vmic_writer_t *w,
             }
             stats->bytes_read += (uint64_t)got;
 
-            if (w->ops->feed(w, paddr, buf, want) != VMIC_OK) {
-                rc = VMIC_ERR;
+            int frc = w->ops->feed(w, paddr, buf, want);
+            if (frc != VMIC_OK) {
+                /* writer cakal na pamat fronty a prisiel signal */
+                rc = (frc == VMIC_STOP || frc == VMIC_FATAL) ? frc : VMIC_ERR;
                 break;
             }
             off += want;
@@ -267,7 +283,7 @@ int vmic_capture(vmic_backend_t *b, vmic_writer_t *w,
     }
 
     stats->read_seconds = vmic_now_mono() - t0;
-    free(buf);
+    if (buf != buf_in) free(buf);
 
     /*
      * Nulovy vytazok pri nenulovej poziadavke je takmer vzdy mrtve

@@ -283,6 +283,16 @@ staré meranie. Čitateľné, ale metodicky nevyhovujúce dáta sa zachovajú pr
 
 Návrhová hranica je aspoň 85 % časových krokov so skórovateľným oknom,
 žiadne chyby čítania, žiadne zmeškané sloty a každý cyklus kratší než perióda.
+Cyklus je od verzie zberača 1.1 (oprava po kampani `benign-v4-20261022`)
+práca vzorkovacieho vlákna: čítanie pamäte, porovnanie stránok, príznaky,
+kópia zmenených stránok do fronty v pamäti a prípadné čakanie na jej pamäť
+(`capture.total_ms` v sidecari); plánovač do slotu započíta aj všetko ostatné,
+čo sa v cykle stane. Súbory, SHA-256, sidecar a log zapisujú vlákna
+`vmic-writer` a `vmic-log` mimo cyklu. Čas po zapísané dáta snímky
+(`output.data_closed_ms`, dolná hranica zverejnenia) audit vykazuje
+v `values.publication`, ale nehodnotí;
+čakanie na pamäť fronty zamietne vždy. Do verzie 1.0 obsahoval cyklus aj zápis
+každej zmenenej stránky, premenovanie a SHA-256 súboru.
 Audit je **offline**: jeho prijatie nepotvrdzuje latenciu živého detektora.
 Pred nahrávaním celej kampane treba ešte skontrolovať distribúciu časov extrakcie
 v audite, odhadnúť priestor celej kampane a pripraviť úložisko. Rezerva disku

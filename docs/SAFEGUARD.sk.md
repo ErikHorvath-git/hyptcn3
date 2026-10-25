@@ -185,6 +185,13 @@ disku a časový limit môžu beh ukončiť ako neúspešný. Prerušenie ukonč
 zberač spustený týmto príkazom; VM a premávka zostávajú pod `labctl`.
 Tento beh nenahrádza plánovaný zber korpusu cez `scripts/collection.py`.
 
+Zberač tu beží s predvolenými nastaveniami výstupu (`output.fsync=true`,
+`output.mlock=false`), nie s nastaveniami kampane. Od verzie 1.1 zapisuje
+súbory vlákno mimo vzorkovacieho cyklu, takže `fsync` predlžuje zverejnenie
+snímky (sidecar), nie cyklus; nasledovník na chýbajúci sidecar čaká najviac
+15 s. Táto kombinácia nebola na zberovom PC meraná. Po SIGTERM dostane zberač
+60 s na zápis snímok z fronty, potom SIGKILL.
+
 ## Stav, alarm a dôkazy
 
 `status` číta uložený JSON priebehu. Po skončení spoločného behu prednostne

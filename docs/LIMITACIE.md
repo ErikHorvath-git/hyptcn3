@@ -420,8 +420,13 @@ k pamäti hosťa, ani ukazovateľ na backend či zberač. Plugin dostane pri ka�
 `const vmic_snapshot_t *` — teda cestu k hotovému súboru, časy a počítadlá — a ak chce
 obsah, musí si súbor otvoriť sám.
 
-Hook beží synchrónne v hlavnej slučke, takže keď trvá dlhšie ako perióda, zberač začne
-zmeškávať sloty.
+Od verzie zberača 1.1 (2026-10-25) beží hook pri writeri `delta` vo vlákne `vmic-writer`,
+až po zverejnení snímky (súbor aj sidecar existujú), nad jej kópiou; ukazovatele v zázname
+platia iba počas volania. Dlhý hook tak cyklus nezdrží, ale oneskorí zverejnenie každej
+ďalšej snímky (fronta je FIFO) a až po vyčerpaní pamäte fronty aj cyklus. Pri writeri `raw`
+beží hook naďalej synchrónne v hlavnej slučke a hook dlhší ako perióda spôsobí zmeškané sloty.
+Do verzie 1.0 platilo toto aj pre `delta`. Vlákno `vmic-writer` má zablokované signály
+SIGINT/SIGTERM/SIGHUP; dieťa spustené z hooku (napr. `system()`) ich zdedí zablokované.
 
 **Overenie.** Celé rozhranie, ktoré plugin dostane, je v `vmicollect/include/vmic.h`:
 
@@ -455,9 +460,10 @@ seq,timestamp_unix,path,bytes_on_disk,pause_ms,capture_ms,total_ms,pages_changed
 > cez `dlopen` a po každej dokončenej snímke dostane záznam s cestou k súboru, časmi
 > jednotlivých fáz cyklu a počítadlami zmenených stránok. **Nedostáva funkciu na čítanie
 > pamäte hosťa ani obsah stránok**; ak potrebuje dáta, musí si uloženú snímku otvoriť sám.
-> Plugin beží synchrónne v hlavnej slučke zberača, takže výpočet dlhší než perióda zberu
-> spôsobí zmeškávanie plánovaných termínov. Návrh skórovacieho komponentu musí s oboma
-> vlastnosťami počítať.
+> Pri inkrementálnom zápise (writer `delta`, zberač verzie 1.1) beží plugin vo vlákne, ktoré
+> súbory zverejňuje mimo vzorkovacieho cyklu: výpočet dlhší než perióda zberu neposunie
+> vzorkovanie, ale oneskorí zverejnenie ďalších snímok a pri dlhodobom zaostávaní vyčerpá
+> pamäť fronty. Návrh skórovacieho komponentu musí s oboma vlastnosťami počítať.
 
 ---
 

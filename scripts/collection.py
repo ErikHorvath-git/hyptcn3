@@ -52,10 +52,13 @@ NOT_MEASUREMENT = {"scripts/campaign_report.py", "scripts/gen_prirucka.py", "scr
 # by the audit and by the fsynced, decompression-verified archive. A crash can
 # lose an unarchived session, which then is incomplete - never silently accepted.
 COLLECTOR_FSYNC = False
-# Without SHA-NI the collector hashes ~230 MB/s; a 716 MiB full snapshot added
-# 3.3 s to its cycle. The full snapshot's SHA-256 is computed by a collector
-# thread after the cycle; its sidecar appears when the hash is done.
-COLLECTOR_HASH_ASYNC = True
+# The collector's sampling cycle does no file I/O: its writer thread creates,
+# writes, hashes and renames snapshots and sidecars, and its log thread writes
+# collect.log (campaign benign-v4-20261022 lost a slot when a cycle waited on SSD
+# writeback). mlockall keeps the collector's own memory (queue, buffers, code)
+# resident, so a cycle takes no page fault or swap-in on it; reading guest RAM can
+# still fault in swapped-out QEMU pages (vm.swappiness 1 and the prefault step).
+COLLECTOR_MLOCK = True
 # The log audit rejects a guest clock offset above 1 s at either end. Measured
 # drift was below 0.04 s/h (2026-10-20), so a session synchronized to 0.25 s
 # keeps that margin for its whole hour.
@@ -351,6 +354,32 @@ def prefault_swapped(pid, chunk=8 << 20):
             "seconds": round(time.monotonic() - started, 3)}
 
 
+def qemu_guest_bytes(pid):
+    """Guest RAM size from the QEMU command line ('-m size=2097152k' as libvirt writes it, or MiB)."""
+    argv = Path(f"/proc/{pid}/cmdline").read_bytes().split(b"\0")
+    value = argv[argv.index(b"-m") + 1].decode() if b"-m" in argv else ""
+    m = re.fullmatch(r"(?:size=)?(\d+)([kKmMgG]?)(?:,.*)?", value)
+    if not m:
+        raise ValueError(f"cannot read the guest RAM size of QEMU {pid}")
+    return int(m[1]) << {"k": 10, "": 20, "m": 20, "g": 30}[m[2].lower()]
+
+
+def collector_memory(pid):
+    """The collector locks its queue memory (output.mlock): pool for a full snapshot of every guest
+    page plus 512 MiB, descriptors, the guest RAM QEMU may still take and a 2 GiB reserve
+    (vmicollect collector.c check_memory). Checked here before the measured phase as well, so a
+    shortfall ends the attempt before measurement (the campaign retries it) and not at collector start."""
+    guest = qemu_guest_bytes(pid)
+    resident = int(re.search(r"^RssAnon:\s+(\d+) kB$", Path(f"/proc/{pid}/status").read_text(), re.M)[1]) << 10
+    chunk = (1 << 20) - 8
+    pool = -(-(guest // 4096) * 4104 // chunk) * (1 << 20) + (512 << 20)
+    need = pool + (64 << 20) + max(0, guest - resident) + (2 << 30)
+    meminfo = Path("/proc/meminfo").read_text()
+    available = int(re.search(r"^MemAvailable:\s+(\d+) kB$", meminfo, re.M)[1]) << 10
+    return {"guest_bytes": guest, "qemu_rss_anon_bytes": resident, "pool_bytes": pool,
+            "need_bytes": need, "available_bytes": available, "ok": available >= need}
+
+
 def file_record(path, base):
     with path.open("rb") as stream:
         sha = hashlib.file_digest(stream, "sha256").hexdigest()
@@ -484,7 +513,7 @@ def run_session(a, p):
                     "profile_sha256": {str(f.relative_to(prof)): digest(f) for f in prof.rglob("*") if f.is_file()},
                     "collector_sha256": digest(ROOT / "vmicollect/build/vmicollect"),
                     "collector_settings": {"writer": "delta", "fsync": COLLECTOR_FSYNC, "hash": "sha256",
-                                           "hash_async": COLLECTOR_HASH_ASYNC,
+                                           "writer_thread": True, "mlock": COLLECTOR_MLOCK,
                                            "interval_s": p["interval_s"], "full_every": p["full_every"],
                                            "bin_bytes": p["bin_bytes"]},
                     "traffic": {"generator": "scripts/host_traffic.py", "profile": "lab", "target": p["target"],
@@ -557,6 +586,10 @@ def capture_session(p, out, metadata, cycles):
         # Before any measured load: swapped guest RAM would stall the first full snapshot.
         status["prefault"] = prefault_swapped(metadata["host_context"]["qemu"]["pid"])
         step("prefault", **status["prefault"])
+        if COLLECTOR_MLOCK:
+            status["collector_memory"] = collector_memory(metadata["host_context"]["qemu"]["pid"])
+            if not status["collector_memory"]["ok"]:
+                raise ValueError("not enough free memory for the collector's locked queue; see end.json")
         s = p["scenarios"][metadata["scenario"]]
         children["monitor"] = start_child(
             [sys.executable, ROOT / "scripts/host_monitor.py", "run", "--out", out / "host_monitor.jsonl",
@@ -589,7 +622,7 @@ def capture_session(p, out, metadata, cycles):
         status["measure_start_unix"] = time.time()
         env = dict(os.environ, VMIC_DOMAIN=p["domain"], VMIC_INTERVAL=str(p["interval_s"]),
                    VMIC_FULL_EVERY=str(p["full_every"]), VMIC_OUT=str(out / "raw"), VMIC_FSYNC=str(COLLECTOR_FSYNC).lower(),
-                   VMIC_HASH_ASYNC=str(COLLECTOR_HASH_ASYNC).lower(),
+                   VMIC_MLOCK=str(COLLECTOR_MLOCK).lower(),
                    VMIC_MANAGED_SESSION="1")
         status["capture_started_unix"] = time.time()
         children["collector"] = start_child(["bash", "scripts/lab_capture.sh", str(cycles)], out / "capture.log", env)
@@ -735,6 +768,11 @@ def audit_session(directory, p, protocol_path, output=None):
                 or capture["values"]["full_every"] != p["full_every"]
                 or capture["values"]["interval_s"] != p["interval_s"]):
             reasons.append("collector binary or temporal settings mismatch")
+    settings = metadata.get("collector_settings") or {}
+    # Sessions with the writer-thread collector also record memory locking; the flag passed to the
+    # collector (capture.json) and the one in every sidecar must match the session settings.
+    if native and "mlock" in settings and capture["values"].get("mlock") != settings["mlock"]:
+        reasons.append("collector memory locking differs from session settings")
     sidecars = []
     for path in raw.glob("*.json"):
         doc = json.loads(path.read_text())
@@ -771,6 +809,12 @@ def audit_session(directory, p, protocol_path, output=None):
             reasons.append("read errors/fill/missed slots: " + image.name)
         if side["capture"]["total_ms"] >= p["interval_s"] * 1000:
             reasons.append("collector cycle exceeded period")
+        if native and "mlock" in settings and side["output"].get("mlock") != settings["mlock"]:
+            reasons.append("collector memory locking differs from session settings")
+        # A wait for queue memory happens inside the live read and stretches it; it means the writer
+        # thread fell far behind. Strict: never accepted, even when the cycle stayed below the period.
+        if side["capture"].get("queue_wait_ms", 0) > 0:
+            reasons.append("collector waited for queue memory: " + image.name)
     result = retazec(str(raw), str(directory / "profile" if native else ROOT / p["profile"]),
                     p["max_gap_s"], quality_policy=protocol_policy(p))
     rows, windows, coverage, quality_reasons, quality = analyze_windows(result, p, directory.name, expected)
@@ -783,6 +827,18 @@ def audit_session(directory, p, protocol_path, output=None):
     if abs(span - (len(rows) - 1) * p["interval_s"]) > p["interval_s"]:
         reasons.append("sampling period differs from protocol")
     logs = audit_logs(directory, snapshot_times=result["casy"]) if native else None
+    # Publication runs on the collector's writer thread after the cycle: reported, not a gate (the
+    # offline corpus depends on the sampling instants only; live latency is a separate experiment).
+    # The p95 is nearest rank, as in soft_rt_check and campaign_report.
+    closed = sorted(d["output"]["data_closed_ms"] for _, d in sidecars if "data_closed_ms" in d["output"])
+    publication = None if not closed else {
+        # data_closed_ms: cycle start to the snapshot data written and closed; the sidecar and both
+        # renames follow, so this is a lower bound of the publication time.
+        "snapshots": len(closed), "data_closed_ms_max": closed[-1],
+        "data_closed_ms_p95": closed[-(-95 * len(closed) // 100) - 1],
+        "queue_bytes_max": max(d["output"].get("queue_bytes", 0) for _, d in sidecars),
+        "queue_jobs_max": max(d["output"].get("queue_jobs", 0) for _, d in sidecars),
+        "queue_wait_ms_max": max(d["capture"].get("queue_wait_ms", 0) for _, d in sidecars)}
     if logs is not None:
         reasons.extend("logs: " + problem for problem in logs["problems"])
     stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")
@@ -792,7 +848,7 @@ def audit_session(directory, p, protocol_path, output=None):
     values = {"accepted": not reasons, "reasons": sorted(set(reasons)),
               "role": metadata.get("role"), "protocol_sha256": digest(protocol_path),
               "snapshots": len(rows), "windows": len(windows), "score_coverage": coverage,
-              "coverage": quality.pop("coverage", None), "logs": logs,
+              "coverage": quality.pop("coverage", None), "logs": logs, "publication": publication,
               "auditor_sha256": {str(f.relative_to(ROOT)): digest(f) for f in
                                   (Path(__file__), ROOT / "scripts/collection_logs.py",
                                    ROOT / "scripts/traffic_log.py", ROOT / "scripts/host_monitor.py",

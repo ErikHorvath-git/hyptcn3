@@ -32,15 +32,35 @@ zmrazí s pilotom a jej zmena kampaň zastaví pred ďalšou session.
 
 Adresáre pod bind mountami majú na HDD príznak `chattr +i`. Ak SSD nie je
 pripojený, zápis do nich zlyhá aj pre roota (overené `Operation not permitted`).
-Zber zapisuje bez `fsync` a SHA-256 plnej snímky počíta vlákno zberača až
-po cykle (`output.hash_async`). S `fsync` trvali plné snímky na tomto SSD
-4,7–10,7 s po súvislom zápise delt (diagnostika 2026-10-20, profily
-`write_heavy` a `bursty`), na HDD už samotný zápis 370 MB 4,6–5,8 s; perióda
-je 5 s. Ani bez `fsync` cyklus nestačil (716 MiB, 5,46 s). Procesor i5-8400
-nemá SHA-NI, takže skalárny SHA-256 spracuje ~230 MB/s a plné snímky
-s pamäťou hosťa rastú. Sidecar plnej snímky vznikne až s hotovým hashom
-(`hash_deferred: true`). Zberač pred skončením na hash počká; ak zlyhá,
-sidecar chýba, zberač vráti kód 4 a audit zber zamietne.
+Vzorkovací cyklus zberača (verzia 1.1) na disk nesiaha: zmenené stránky
+kopíruje do fronty v pamäti a súbor, `rename`, SHA-256, sidecar, hooky aj
+retenciu robí vlákno `vmic-writer`, log zapisuje vlákno `vmic-log`. Kampaň
+`benign-v4-20261022` totiž zamietla session 37, keď jeden cyklus 5,08 s čakal
+na SSD, ktorý práve zapisoval stovky MB snímok z page cache (perióda 5 s);
+predtým cyklus vytváral, zapisoval, premenúval a hašoval súbory sám.
+Zber zapisuje bez `fsync`: s ním trvali plné snímky na tomto SSD 4,7–10,7 s
+po súvislom zápise delt (diagnostika 2026-10-20, profily `write_heavy`
+a `bursty`), na HDD už samotný zápis 370 MB 4,6–5,8 s. Procesor i5-8400 nemá
+SHA-NI, takže skalárny SHA-256 spracuje ~230 MB/s; zapisovač ho počíta z tých
+istých bajtov, ktoré zapisuje, a sidecar vznikne až s hotovým hashom
+(`hash_deferred: true` pri každej snímke). Snímka sa zverejní celá, alebo
+vôbec: dáta aj sidecar sa zapíšu pod bodkovými dočasnými menami a premenujú
+sa hneď po sebe bez prepisu (`RENAME_NOREPLACE`). Čas od začiatku cyklu po
+zapísané dáta je v sidecari `output.data_closed_ms` (sidecar a premenovania
+nasledujú, je to dolná hranica zverejnenia); najdlhšie celé zverejnenie
+a najdlhšiu operáciu zapisovača uvádza súhrn na konci `collect.log`.
+Fronta má predvolene veľkosť najväčšej možnej plnej snímky + 512 MiB (pri VM
+s 2 GiB asi 2,5 GiB) a kampaň ju s `output.mlock` uzamkne (`mlockall`), aby
+cyklus nedostal page fault ani swap-in na pamäti zberača (čítanie pamäte VM
+môže odswapované stránky QEMU načítať aj tak; proti tomu je `vm.swappiness = 1`
+a krok `prefault`). Pred meranou fázou runner a pri štarte aj zberač overia,
+že voľnej pamäte je aspoň na frontu, zvyšok pamäte VM, ktorý si QEMU ešte môže
+vziať, a 2 GiB rezervy; inak pokus skončí pred meraním. Dočasné súbory testov
+v `/tmp` (tmpfs) túto pamäť zaberajú, preto sa pred zberom mažú. Keď zapisovač zaostane
+tak, že pamäť fronty dôjde, cyklus čaká (`queue_wait_ms`) a audit session
+zamietne. Pred skončením zberač zapíše celú frontu (najviac `output.drain_s`,
+v kampani 180 s, a po signále najviac 40 s); čo nestihne alebo nezapíše, je
+chyba: chýba, zberač vráti kód 4 a audit zber zamietne.
 Snímka sa zverejní z page cache. Jej SHA-256 zo sidecaru znovu overí audit
 aj archivácia, ktorá kópie zapisuje s `fsync` a overuje dekompresiou. Pád PC
 môže stratiť ešte nearchivovanú session; tá je potom neúplná, nikdy potichu

@@ -59,7 +59,10 @@ def failing_fsync(tmp_path):
 
 @pytest.mark.skipif(not BIN.exists(), reason="vmicollect is not built (make -C vmicollect)")
 def test_failed_fsync_fails_the_snapshot_and_restarts_the_chain(tmp_path, failing_fsync):
-    """A failed fsync is never a published snapshot; the next one must be full."""
+    """A failed fsync is never a published snapshot; the next one must be full.
+
+    The writer thread fsyncs after the cycle, so the failed snapshot keeps its seq (1) and the
+    sampler starts a new full chain at the next cycle once it sees the broken chain."""
     image = tmp_path / "img.raw"
     image.write_bytes(bytes(range(256)) * (2 * 16 * 4096))
     out = tmp_path / "out"
@@ -69,10 +72,11 @@ def test_failed_fsync_fails_the_snapshot_and_restarts_the_chain(tmp_path, failin
                              "-o", "output.delta_full_every=100", "-o", "schedule.interval_s=1",
                              "-o", "schedule.max_cycles=3", "-o", "features.bin_bytes=16777216"],
                             capture_output=True, text=True, timeout=60, env=env)
-    assert result.returncode == 4, result.stderr  # some cycles failed: not a complete run
-    assert "fsync zlyhal" in result.stderr
+    assert result.returncode == 4, result.stderr  # one snapshot failed: not a complete run
+    assert "fsync" in result.stderr and " ERROR " in result.stderr
+    assert "koniec: 2 snimok, 1 chyb, 0 zmeskanych slotov" in result.stderr
     sidecars = sorted((json.loads(p.read_text()) for p in out.glob("*.json")), key=lambda d: d["seq"])
-    assert [s["seq"] for s in sidecars] == [0, 1]  # 3 slots, one failed and unpublished
+    assert [s["seq"] for s in sidecars] == [0, 2]  # 3 slots, seq 1 failed and unpublished
     assert [s["output"]["full"] for s in sidecars] == [True, True]  # chain restarted after the failure
     assert len(list(out.glob("*.vmicd"))) == 2 and not list(out.glob(".*"))
     subprocess.run([BIN, "verify", out], check=True, capture_output=True, timeout=60)
@@ -93,27 +97,24 @@ def test_disabled_fsync_never_calls_fsync(tmp_path, failing_fsync):
 
 
 @pytest.mark.skipif(not BIN.exists(), reason="vmicollect is not built (make -C vmicollect)")
-def test_deferred_full_snapshot_hash_yields_complete_verified_sidecars(tmp_path):
-    """output.hash_async: full snapshots hash in a thread; every sidecar still carries the file SHA-256."""
+def test_writer_thread_hashes_every_snapshot_before_publishing(tmp_path):
+    """Full and delta sidecars carry the SHA-256 of the published file; nothing is hashed later."""
     image = tmp_path / "img.raw"
     image.write_bytes(bytes(range(256)) * (2 * 16 * 4096))
     out = tmp_path / "out"
     subprocess.run([BIN, "run", "-o", "vm.backend=file", "-o", f"vm.image_path={image}",
                     "-o", f"output.dir={out}", "-o", "output.writer=delta", "-o", "output.fsync=false",
-                    "-o", "output.hash_async=true", "-o", "output.delta_full_every=2",
+                    "-o", "output.delta_full_every=2",
                     "-o", "schedule.interval_s=1", "-o", "schedule.max_cycles=4",
                     "-o", "features.bin_bytes=16777216"], check=True, capture_output=True, timeout=60)
     sidecars = sorted((json.loads(p.read_text()) for p in out.glob("*.json")), key=lambda d: d["seq"])
     assert [s["seq"] for s in sidecars] == [0, 1, 2, 3]
     assert [s["output"]["full"] for s in sidecars] == [True, False, True, False]
-    assert [s["output"]["hash_deferred"] for s in sidecars] == [True, False, True, False]
+    # The writer thread hashes after the cycle and writes the sidecar once the hash is done.
+    assert [s["output"]["hash_deferred"] for s in sidecars] == [True] * 4
+    assert all(s["output"]["async"] and s["version"] == "1.1.0" for s in sidecars)
     assert all(len(s["output"]["sha256"]) == 64 and "#" not in s["output"]["sha256"] for s in sidecars)
+    # bytes_on_disk keeps its meaning: allocated space (st_blocks x 512) of the published file.
+    assert all(s["output"]["bytes_on_disk"] == (out / Path(s["path"]).name).stat().st_blocks * 512 for s in sidecars)
     assert not list(out.glob("*.tmp"))
     subprocess.run([BIN, "verify", out], check=True, capture_output=True, timeout=60)
-
-
-@pytest.mark.skipif(not BIN.exists(), reason="vmicollect is not built (make -C vmicollect)")
-def test_deferred_hash_is_refused_with_hooks(tmp_path):
-    result = subprocess.run([BIN, "config", "-o", "output.hash_async=true", "-o", f"hooks.load={tmp_path}/none.so"],
-                            capture_output=True, text=True, timeout=30)
-    assert result.returncode != 0 and "hash_async" in result.stderr

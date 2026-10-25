@@ -28,10 +28,15 @@
  * spracovanie snimok bez toho, aby si prekladal (a znovu spustal) zberac.
  * Presne sem neskor zavesis parsovanie struktur a extrakciu priznakov.
  *
- * POZOR NA CAS: hook bezi SYNCHRONNE v hlavnej slucke, uz po odpauzovani
- * VM, ale este pred dalsim cyklom. Ked bude trvat dlhsie ako perioda,
- * zberac zacne zmeskavat sloty. Nieco narocne (ML inferencia) preto
- * radsej zapis do fronty a spracuj mimo.
+ * POZOR NA CAS: pri writeri 'delta' bezi hook vo vlakne vmic-writer, az
+ * po zverejneni snimky (subor aj sidecar existuju), nad jej kopiou -
+ * ukazovatele v snimke platia iba pocas volania. Pomaly hook tak nezdrzi
+ * cyklus, ale oneskori zverejnenie kazdej dalsej snimky (fronta je FIFO)
+ * a po zaplneni pamate fronty aj cyklus. Pri writeri 'raw' bezi hook
+ * synchronne v hlavnej slucke pred dalsim cyklom. Vlakno vmic-writer ma
+ * zablokovane signaly SIGINT/SIGTERM/SIGHUP - dieta spustene z hooku (napr.
+ * system()) ich zdedi zablokovane; plugin ma deti spustat s prazdnou
+ * maskou (posix_spawnattr_setsigmask).
  */
 
 #define _GNU_SOURCE

@@ -140,7 +140,15 @@ static void meta_emit(FILE *f, const vmic_snapshot_t *s, const char *hex)
     fprintf(f, "    \"paused\": %s,\n", s->paused ? "true" : "false");
     fprintf(f, "    \"pause_ms\": %.3f,\n", s->pause_ms);
     fprintf(f, "    \"pause_exceeded\": %s,\n", s->pause_exceeded ? "true" : "false");
+    /* Vyznam casov pri zapise mimo cyklu (output.async, verzia 1.1) je
+       v vmic.h pri vmic_snapshot_t.async_write. */
     fprintf(f, "    \"capture_ms\": %.3f,\n", s->capture_ms);
+    fprintf(f, "    \"backend_read_ms\": %.3f,\n", s->backend_read_ms);
+    fprintf(f, "    \"begin_ms\": %.3f,\n", s->begin_ms);
+    fprintf(f, "    \"queue_wait_ms\": %.3f,\n", s->queue_wait_ms);
+    fprintf(f, "    \"rusage\": {\"majflt\": %" PRIu64 ", \"minflt\": %" PRIu64
+               ", \"nvcsw\": %" PRIu64 ", \"nivcsw\": %" PRIu64 ", \"cpu_ms\": %.3f},\n",
+            s->ru_majflt, s->ru_minflt, s->ru_nvcsw, s->ru_nivcsw, s->ru_cpu_ms);
     fprintf(f, "    \"write_ms\": %.3f,\n", s->write_ms);
     fprintf(f, "    \"total_ms\": %.3f\n", s->total_ms);
     fprintf(f, "  },\n");
@@ -167,6 +175,15 @@ static void meta_emit(FILE *f, const vmic_snapshot_t *s, const char *hex)
     fprintf(f, "    \"writer\": ");  json_str(f, cfg->writer); fprintf(f, ",\n");
     fprintf(f, "    \"full\": %s,\n", s->is_full ? "true" : "false");
     fprintf(f, "    \"fsync\": %s,\n", cfg->fsync ? "true" : "false");
+    fprintf(f, "    \"async\": %s,\n", s->async_write ? "true" : "false");
+    fprintf(f, "    \"mlock\": %s,\n", cfg->mlock ? "true" : "false");
+    if (s->async_write) {
+        fprintf(f, "    \"queue_pool_bytes\": %" PRIu64 ",\n", s->queue_pool_bytes);
+        fprintf(f, "    \"queue_jobs\": %" PRIu64 ",\n", s->queue_jobs);
+        fprintf(f, "    \"queue_bytes\": %" PRIu64 ",\n", s->queue_bytes);
+        fprintf(f, "    \"sha_ms\": %.3f,\n", s->sha_ms);
+        fprintf(f, "    \"data_closed_ms\": %.3f,\n", s->data_closed_ms);
+    }
     if (s->chain_id)
         fprintf(f, "    \"chain_id\": %" PRIu64 ",\n", s->chain_id);
     fprintf(f, "    \"bytes_logical\": %" PRIu64 ",\n", s->bytes_logical);

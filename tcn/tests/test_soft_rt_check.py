@@ -62,3 +62,19 @@ def test_viac_retazcov_sa_nezmiesa():
     assert res["verdict"] == "OK"
     assert res["snimok"] == 4            # najvacsi retazec
     assert res["retazcov_v_adresari"] == 2
+
+
+def test_neskore_zverejnenie_je_neuspech_aj_pri_kratkom_cykle():
+    """Collector 1.1 writes files after the cycle: a cycle inside the slot is not a published snapshot."""
+    sides = [_side(i) for i in range(20)]
+    for d in sides:
+        d["output"]["data_closed_ms"] = 7500.0 if d["seq"] % 2 else 300.0
+    res = skontroluj(sides, perioda_s=5.0)
+    assert res["verdict"] == "NEUSPECH" and res["cyklov_nad_periodou"] == 0
+    assert res["zverejnenie"] == {"n": 20, "p95_ms": 7500.0, "max_ms": 7500.0}
+    assert any("zverejnenia" in c for c in res["chyby"])  # "dolna hranica zverejnenia"
+
+
+def test_bez_data_closed_ms_sa_zverejnenie_nehodnoti():
+    res = skontroluj([_side(i) for i in range(6)], perioda_s=5.0)
+    assert res["verdict"] == "OK" and res["zverejnenie"] is None

@@ -19,6 +19,7 @@
 #define _GNU_SOURCE
 #include "vmic.h"
 #include "log.h"
+#include "output.h"
 #include "sha256.h"
 #include "util.h"
 
@@ -220,7 +221,10 @@ static int cycle_adapter(uint64_t seq, double deadline,
 
 static int cmd_run(const args_t *a, bool once)
 {
-    vmic_config_t cfg;
+    /* static: po vyprsanom dobehnuti fronty moze vlakno vmic-writer este
+       chvilu bezat, kym proces skonci, a cita konfiguraciu - nesmie byt
+       na zasobniku funkcie, ktora uz vratila. */
+    static vmic_config_t cfg;
     if (build_config(a, &cfg, true) != 0) return 2;
 
     if (once) {
@@ -228,33 +232,86 @@ static int cmd_run(const args_t *a, bool once)
         cfg.duration_s = 0;
     }
 
-    vmic_collector_t col;
+    static vmic_collector_t col;
     int rc = vmic_collector_init(&col, &cfg, &g_stop);
     if (rc != VMIC_OK) return 3;
+
+    /* Od tejto chvile zapisuje log vlakno vmic-log: cyklus nesmie cakat
+       na zapis riadku do suboru (log je na tom istom disku ako snimky). */
+    if (vmic_log_async_start() != 0) {
+        LOGE("log: zapis logu mimo cyklu sa nepodarilo spustit");
+        vmic_collector_fini(&col);
+        vmic_log_close();
+        return 3;
+    }
 
     LOGI("zacinam zber: perioda %.3f s, writer '%s', vystup '%s'",
          cfg.interval_s, cfg.writer, cfg.dir);
 
     vmic_sched_stats_t st;
     rc = vmic_sched_run(&cfg, cycle_adapter, &col, &g_stop, &st);
-    uint64_t deferred_failed = vmic_collector_flush(&col);
-    if (deferred_failed)
-        LOGE("odlozeny hash/sidecar zlyhal pri %" PRIu64 " plnych snimkach", deferred_failed);
+    bool stopped = (rc == VMIC_STOP) || g_stop;
 
+    /*
+     * Snimky vo fronte su hotove merania: zapisu sa vsetky, az potom koniec.
+     * Nikdy nie v poslednom cykle - planovac by cakanie zapocital ako
+     * zmeskany slot. Limit: output.drain_s, po signale (aj pocas dobehnutia)
+     * najviac 40 s - collection.py aj safeguard posielaju SIGKILL o 60 s.
+     * Po vyprsani sa zvysok zapocita ako chyba.
+     */
+    double budget = stopped && cfg.drain_s > 40.0 ? 40.0 : cfg.drain_s;
+    double t_drain = vmic_now_mono();
+    bool abandoned = false;
+    uint64_t lost = vmic_collector_flush(&col, budget, &abandoned);
+    t_drain = vmic_now_mono() - t_drain;
+    stopped = stopped || g_stop;
+    bool hook_fatal = vmic_output_fatal(col.output);
+
+    vmic_output_stats_t os;
+    vmic_output_get_stats(col.output, &os);
+
+    /* Posledne riadky idu este cez vlakno logu (v poradi za vsetkym, smu
+       pouzit rezervu buffera); potom sa vlakno zastavi. */
+    vmic_log_final();
+    if (col.output) {
+        char queue[32];
+        vmic_human_size(os.max_queue_bytes, queue, sizeof(queue));
+        LOGI("zapisovac: %" PRIu64 " zverejnenych, %" PRIu64 " zlyhanych, %" PRIu64
+             " zahodenych, %" PRIu64 " nezapisanych, najvacsia fronta %" PRIu64 " snimok (%s), "
+             "najdlhsie zverejnenie %.3f s, cakanie na pamat fronty %.1f ms v %" PRIu64
+             " cykloch, dobehnutie %.3f s",
+             os.published, os.failed, os.dropped, os.abandoned, os.max_queue_jobs, queue,
+             os.max_publish_ms / 1000.0, os.wait_ms, os.wait_cycles, t_drain);
+        char ops[256];
+        size_t n = 0;
+        for (int i = 0; i < VMIC_OUTPUT_OPS && n < sizeof(ops); i++)
+            n += (size_t)snprintf(ops + n, sizeof(ops) - n, "%s%s %.3f s", i ? ", " : "",
+                                  vmic_output_op_name(i), os.op_max_s[i]);
+        LOGI("zapisovac: najdlhsie operacie: %s", ops);
+    }
+    if (lost)
+        LOGE("zapis: %" PRIu64 " snimok sa nezverejnilo cele", lost);
+
+    /* N = zverejnene snimky, E = zlyhane cykly + nezverejnene snimky;
+       N + E = vsetky cykly, ktore sa skoncili (OK alebo ERR). */
+    uint64_t published = col.output ? os.published : st.cycles_done;
+    uint64_t bytes = col.output ? os.published_bytes : col.total_bytes;
     char human[32];
-    vmic_human_size(col.total_bytes, human, sizeof(human));
+    vmic_human_size(bytes, human, sizeof(human));
     LOGI("koniec: %" PRIu64 " snimok, %" PRIu64 " chyb, %" PRIu64
          " zmeskanych slotov, najvacsie meskanie %.3f s, spolu %s",
-         st.cycles_done, st.cycles_failed, st.cycles_skipped,
+         published, st.cycles_failed + lost, st.cycles_skipped,
          st.worst_lateness_s, human);
+    uint64_t log_lost = vmic_log_async_stop(stopped ? 5.0 : 60.0);
 
-    vmic_collector_fini(&col);
+    if (!abandoned) vmic_collector_fini(&col);
     vmic_log_close();
 
-    if (rc == VMIC_FATAL) return 3;
-    if (!st.cycles_done) return 1;
-    /* Aj jeden neuspesny cyklus znamena, ze beh nema vsetky snimky. */
-    return (st.cycles_failed || deferred_failed) ? 4 : 0;
+    if (rc == VMIC_FATAL || hook_fatal) return 3;
+    if (!published) return 1;
+    /* Aj jeden neuspesny cyklus alebo strateny riadok logu znamena, ze beh
+       nema vsetky snimky alebo celu evidenciu. */
+    return (st.cycles_failed || lost || log_lost) ? 4 : 0;
 }
 
 /* ------------------------------------------------------------------ */

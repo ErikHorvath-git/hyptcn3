@@ -39,7 +39,10 @@ def collector_command(binary, raw, domain, protocol, cycles):
                "features.bin_bytes": protocol["bin_bytes"],
                "retention.max_snapshots": 0, "retention.max_bytes": 0,
                "retention.max_age_s": 0, "schedule.interval_s": protocol["interval_s"],
-               "schedule.max_cycles": cycles}
+               "schedule.max_cycles": cycles,
+               # The collector runs as root here: lock its queue memory like the campaign does,
+               # and keep its final drain below the run deadline grace.
+               "output.mlock": "true", "output.drain_s": 90}
     return [str(binary), "run", *[argument for k, v in options.items()
                                   for argument in ("-o", f"{k}={v}")]]
 
@@ -48,7 +51,9 @@ def stop_child(process):
     if process.poll() is None:
         process.terminate()
         try:
-            process.wait(timeout=10)
+            # After SIGTERM the collector still publishes its queued snapshots (at most 40 s) and
+            # stops its log thread (at most 5 s); a shorter grace would kill it mid-publication.
+            process.wait(timeout=60)
         except subprocess.TimeoutExpired:
             process.kill()
             process.wait(timeout=5)

@@ -11,7 +11,9 @@
 #   1) latencia cyklu zvonku - od zaciatku cyklu (sidecar.timestamp_unix, teda
 #      okamih, kedy si zberac vzal cas cyklu) po okamih, kedy je sidecar
 #      s blokom "features" zapisany a zavrety na disku. Zavretie chyta
-#      inotifywait (udalost close_write), cas sa berie z bash EPOCHREALTIME.
+#      inotifywait (udalost close_write, a moved_to pre sidecar, ktory
+#      zapisovacie vlakno zverejnuje premenovanim z .tmp), cas sa berie
+#      z bash EPOCHREALTIME.
 #      PRECO zvonku a nie iba z total_ms: collector meria total_ms v
 #      collector.c skor, nez sa sidecar zapise (vmic_meta_write az za
 #      meranim), takze total_ms zapis sidecaru NEOBSAHUJE - a prave sidecar
@@ -127,7 +129,7 @@ run_one()
     mkdir -p "$dir"
     : > "$watch"
 
-    ( stdbuf -oL inotifywait -m -q -e close_write --format '%f' "$dir" |
+    ( stdbuf -oL inotifywait -m -q -e close_write -e moved_to --format '%f' "$dir" |
       while IFS= read -r f; do printf '%s %s\n' "$EPOCHREALTIME" "$f"; done \
     ) >> "$watch" 2>/dev/null &
     sleep 1          # nech je sledovanie nastavene skor, nez padne prva snimka
@@ -148,7 +150,7 @@ run_one()
     local rc=$?
 
     sleep 1          # posledny close_write este musi prejst rurou
-    pkill -f "inotifywait -m -q -e close_write --format %f $dir" 2>/dev/null
+    pkill -f "inotifywait -m -q -e close_write -e moved_to --format %f $dir" 2>/dev/null
 
     [ $rc -ne 0 ] && echo "  POZOR: beh $idx skoncil kodom $rc (log: $log)" >&2
 
@@ -416,8 +418,11 @@ values = {
     "schema": "hyptcn3/latencia-vektor/1",
     "co_sa_meria": (
         "latencia od zaciatku cyklu zberu (sidecar.timestamp_unix) po zavretie "
-        "sidecaru s blokom features na disku (inotify close_write). total_ms zo "
-        "sidecaru zapis sidecaru neobsahuje - meria sa v collector.c pred nim."),
+        "sidecaru s blokom features na disku (inotify close_write/moved_to). total_ms zo "
+        "sidecaru zapis sidecaru neobsahuje - meria sa v collector.c pred nim. Od zberaca "
+        "1.1 (output.async) zapisuje subory vlakno mimo cyklu, takze sidecar_a_rezia_ms "
+        "(latencia - total_ms) je cele zverejnenie: cakanie vo fronte, zapis dat, SHA-256, "
+        "sidecar a premenovania; zberac sam meria output.data_closed_ms (po zapisane data)."),
     "nastavenie": {
         "writer": "delta", "hash": "none", "bin_bytes": bin_bytes,
         "entropy": True, "cyklov_na_beh": cycles,
