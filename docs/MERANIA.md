@@ -1785,3 +1785,395 @@ ms pri perióde 5 s; ide o odhad, nie meranie. Kampaň má 8 skupín a každá
 začína reštartom hosťa. Pred kampaňou sa preto VM vypne a znova spustí
 (nový proces QEMU), aby plné snímky začínali na malom počte stránok.
 Pilot je vstupom ďalšej kampane.
+
+## 2026-10-25 — kampaň benign-v4-20261022 uzavretá po zmeškanom slote pri spätnom zápise na SSD
+
+Kampaň `benign-v4-20261022` (commit `cbea764`, pilot 5,
+48 {{res:collection_campaign_benign_v4_20261022.json:values.planned_sessions}}
+plánovaných session) prijala a archivovala
+36 {{res:collection_campaign_benign_v4_20261022.json:values.summary.accepted_sessions}}
+session ([záznam](../data/results/collection_campaign_benign_v4_20261022.json)).
+Každá prijatá mala
+656 {{res:collection_campaign_benign_v4_20261022.json:values.summary.windows_min}}
+okien; spolu mali
+0 {{res:collection_campaign_benign_v4_20261022.json:values.summary.integrity_findings}}
+nálezov integrity,
+0 {{res:collection_campaign_benign_v4_20261022.json:values.summary.accepted_missed_slots}}
+zmeškaných slotov a
+0 {{res:collection_campaign_benign_v4_20261022.json:values.summary.accepted_collector_errors}}
+chýb zberača. Plné snímky mali
+129609 {{res:collection_campaign_benign_v4_20261022.json:values.summary.full_pages_min}}
+až
+323173 {{res:collection_campaign_benign_v4_20261022.json:values.summary.full_pages_max}}
+stránok a trvali
+1745.1 {{res:collection_campaign_benign_v4_20261022.json:values.summary.full_ms_min}}
+až
+3022.7 {{res:collection_campaign_benign_v4_20261022.json:values.summary.full_ms_max}}
+ms. Vo všetkých
+37 {{res:collection_campaign_benign_v4_20261022.json:n}}
+session (vrátane zamietnutej session 37) poslal generátor
+2494474 {{res:collection_campaign_benign_v4_20261022.json:values.summary.requests}}
+požiadaviek s
+0 {{res:collection_campaign_benign_v4_20261022.json:values.summary.request_errors}}
+chybami; najpomalšia požiadavka meranej fázy trvala
+2252.5 {{res:collection_campaign_benign_v4_20261022.json:values.summary.measure_latency_max_ms}}
+ms. Najväčšia medzera monitora bola
+1.05 {{res:collection_campaign_benign_v4_20261022.json:values.summary.monitor_max_gap_s}}
+s pri
+0 {{res:collection_campaign_benign_v4_20261022.json:values.summary.monitor_missed_ticks}}
+vynechaných vzorkách. Po uzavretí kampane `verify-archives` overil
+dekompresiou všetkých
+37 {{res:collection_campaign_benign_v4_20261022.json:values.verify_archives.n_verified}}
+archívov za
+2800.0 {{res:collection_campaign_benign_v4_20261022.json:values.verify_archives.wall_s}}
+s.
+
+Kampaň mala tri prevádzkové odchýlky. Obe zastavenia runnera cez
+`request-stop` sú v `operator_stop_requests` a `stopped_states` (tam je
+navyše zastavenie po session 1 na hranici `--stop-after` a záverečný stav
+`error`) a nový proces QEMU v `groups`; časy žiadostí o zastavenie a samotných
+zastavení sú strojové záznamy (`operator_stop_requests[].date`,
+`stopped_states[].updated_at`). Dôvody zastavení, časy vypnutia VM
+a `fstrim` a zmeškaný reštart sú vyjadrenia operátora z logu relácie,
+zapísané iba v poznámke záznamu (`values.note`). Plné snímky rástli
+s vekom procesu QEMU (pozri opravu nižšie), preto operátor so súhlasom
+zadávateľa plánoval reštart VM na hraniciach skupín. Reštart pred skupinou
+`calibration-2` (po session 30) nestihol, takže skupiny `train-1` až
+`calibration-2` bežali na jednom procese QEMU. Po session 33 runner zastavil
+cez `request-stop` iba kvôli `fstrim` SSD, bez zásahu do VM. Po session 36 ho
+zastavil pred skupinou `test_benign-1`, VM korektne vypol a spustil (nový
+proces QEMU
+1838642 {{res:collection_campaign_benign_v4_20261022.json:values.groups.test_benign-1.qemu.pid}},
+studený boot) a znovu spustil `fstrim`.
+
+Session 37 (`test_benign`, `mixed`, prvá na novom procese QEMU) audit
+zamietol a kampaň sa zastavila
+([záznam](../data/results/collection_writeback_stall_20261024.json),
+[audit](../data/results/collection_writeback_stall_20261024_audit.json)).
+Cyklus 369 trval
+5082.8 {{res:collection_writeback_stall_20261024.json:values.events_over_4500_ms.benign-v4-20261022_37_test_benign_mixed#369.total_ms}}
+ms pri perióde 5 s, plánovač zahodil
+1 {{res:collection_campaign_benign_v4_20261022.json:values.sessions.36.scheduler_skips.0.slots}}
+slot a audit session zamietol pre cyklus dlhší než perióda a zmeškaný slot.
+Cyklus začal
+43.2 {{res:collection_writeback_stall_20261024.json:values.events_over_4500_ms.benign-v4-20261022_37_test_benign_mixed#369.seconds_after_full}}
+s po plnej snímke so
+574.95 {{res:collection_campaign_benign_v4_20261022.json:values.sessions.36.full_snapshots.1.mib}}
+MiB. Vo všetkých
+4 {{res:collection_writeback_stall_20261024.json:values.events_over_4500_ms.benign-v4-20261022_37_test_benign_mixed#369.samples_whole_interval}}
+vzorkách monitora hostiteľa, ktorých celý interval ležal v cykle, bolo SSD
+(`sda`) vyťažené na
+99.2 {{res:collection_writeback_stall_20261024.json:values.events_over_4500_ms.benign-v4-20261022_37_test_benign_mixed#369.series.26.sda_util_pct}}
+až
+100 {{res:collection_writeback_stall_20261024.json:values.events_over_4500_ms.benign-v4-20261022_37_test_benign_mixed#369.sda_util_max_pct}}
+% pri zápise
+4.19 {{res:collection_writeback_stall_20261024.json:values.events_over_4500_ms.benign-v4-20261022_37_test_benign_mixed#369.sda_write_mb_s_min}}
+až
+8.39 {{res:collection_writeback_stall_20261024.json:values.events_over_4500_ms.benign-v4-20261022_37_test_benign_mixed#369.sda_write_mb_s_max}}
+MB/s. Zberač mal v prvej z nich
+12 {{res:collection_writeback_stall_20261024.json:values.events_over_4500_ms.benign-v4-20261022_37_test_benign_mixed#369.series.26.collector_cpu_pct}}
+% CPU a v ďalších troch
+0 {{res:collection_writeback_stall_20261024.json:values.events_over_4500_ms.benign-v4-20261022_37_test_benign_mixed#369.collector_cpu_min_pct}}
+%: jadro práve zapisovalo neuložené dáta snímok z page cache. Zberač verzie
+1.0 vytváral, zapisoval a premenúval súbory snímok a hašoval delta súbory
+vo vzorkovacom vlákne v meranom cykle, takže čakanie disku sa pripočítalo
+k cyklu (SHA-256 plnej snímky počítalo pri `output.hash_async` samostatné
+vlákno po cykle). Sidecar delty a riadok logu zapisovalo to isté vlákno až
+po zmeraní cyklu, takže cyklus nepredĺžili; plánovač ich započítal iba do
+slotu. Z
+26640 {{res:collection_writeback_stall_20261024.json:n}}
+cyklov kampane bolo
+25 {{res:collection_writeback_stall_20261024.json:values.long_delta_cycles}}
+delta cyklov dlhších než 2 s. V
+22 {{res:collection_writeback_stall_20261024.json:values.long_delta_cycles_with_sda_util_ge_99}}
+z nich mal SSD vyťaženie 99 % a viac vo vzorke monitora, ktorej celý
+interval ležal v cykle. V zvyšných troch (session 14 cyklus 54, session 26
+cyklus 417, session 36 cyklus 563) mala 99 % a viac iba vzorka, ktorej
+interval začal pred cyklom a do cyklu zasahoval
+0.407 {{res:collection_writeback_stall_20261024.json:values.cycles.17.boundary.in_cycle_s}}
+až
+0.865 {{res:collection_writeback_stall_20261024.json:values.cycles.23.boundary.in_cycle_s}}
+s; vzorky celé v cykle tam mali
+66.8 {{res:collection_writeback_stall_20261024.json:values.cycles.23.sda_util_max_pct}}
+až
+88.4 {{res:collection_writeback_stall_20261024.json:values.cycles.17.sda_util_max_pct}}
+% a vzorka, ktorej interval presahoval koniec cyklu, najviac
+22 {{res:collection_writeback_stall_20261024.json:values.cycles.5.end_boundary.sda_util_pct}}
+%. Najbližšie k limitu
+bola predtým session 35 s
+4680.1 {{res:collection_campaign_benign_v4_20261022.json:values.summary.delta_ms_max_accepted}}
+ms. Ktoré volanie v cykle čakalo, záznam nezachytáva.
+
+Rozhodnutie: commit `625d8f9` (zberač 1.1) presúva všetku prácu so
+súbormi a s logom mimo vzorkovacieho cyklu: zmenené stránky sa kopírujú do
+uzamknutej fronty v pamäti a súbory, SHA-256, sidecar, hooky a retenciu
+robí vlákno `vmic-writer`, log vlákno `vmic-log` ([AUTOMATICKY_ZBER.sk.md](AUTOMATICKY_ZBER.sk.md),
+[METODIKA_ZBERU.sk.md](METODIKA_ZBERU.sk.md)). Podmienky prijatia sa
+nemenia; audit navyše zamietne každé čakanie na pamäť fronty. Opätovný audit
+session 37 nie je možný - zmeškaný slot je v nameraných dátach. Historický
+verdikt kampane sa nemení. Kampaň je uzavretá (`closed.json`); session 1 až
+36 zostávajú v jej archíve a do novej kampane sa nepresúvajú. Zmena
+meracieho kódu vyžaduje nový pilot.
+
+## 2026-10-25 — oprava: plná snímka rástla aj v rámci jedného bootu hosťa
+
+Záznam „2026-10-22 — prijatý pilot 5 a rast plnej snímky s reštartmi hosťa“
+pripisuje rast plnej snímky reštartom hosťa na jednom procese QEMU. Kampaň
+`benign-v4-20261022` ukázala, že rastie aj v rámci jedného bootu
+([záznam](../data/results/collection_campaign_benign_v4_20261022.json),
+`values.summary.by_group`): skupina `train-1` (jeden boot) začala na
+129609 {{res:collection_campaign_benign_v4_20261022.json:values.summary.by_group.train-1.first_full_pages}}
+stránkach a skončila na
+252248 {{res:collection_campaign_benign_v4_20261022.json:values.summary.by_group.train-1.last_full_pages}},
+skupina `train-2` začala na
+263336 {{res:collection_campaign_benign_v4_20261022.json:values.summary.by_group.train-2.first_full_pages}}
+a skončila na
+284782 {{res:collection_campaign_benign_v4_20261022.json:values.summary.by_group.train-2.last_full_pages}}.
+Skupina `train-3` klesla na
+289920 {{res:collection_campaign_benign_v4_20261022.json:values.sessions.14.full_snapshots.1.pages}}
+stránok a skončila na
+294716 {{res:collection_campaign_benign_v4_20261022.json:values.summary.by_group.train-3.last_full_pages}},
+len o málo vyššie, než začala. V skupinách `dev-1`, `calibration-1`
+a `calibration-2` už v rámci bootu nerástol (každá skončila nižšie, než
+začala; skupina `dev-1` začala na
+306095 {{res:collection_campaign_benign_v4_20261022.json:values.summary.by_group.dev-1.first_full_pages}}
+a skončila na
+303119 {{res:collection_campaign_benign_v4_20261022.json:values.summary.by_group.dev-1.last_full_pages}}
+stránkach), no po každom reštarte hosťa začala skupina vyššie, než skončila
+predchádzajúca: `train-3` na
+294419 {{res:collection_campaign_benign_v4_20261022.json:values.summary.by_group.train-3.first_full_pages}},
+`dev-1` na
+306095 {{res:collection_campaign_benign_v4_20261022.json:values.summary.by_group.dev-1.first_full_pages}},
+`calibration-1` na
+319482 {{res:collection_campaign_benign_v4_20261022.json:values.summary.by_group.calibration-1.first_full_pages}}
+a `calibration-2` na
+323173 {{res:collection_campaign_benign_v4_20261022.json:values.summary.by_group.calibration-2.first_full_pages}}
+stránkach. Lineárny model a odhad pre všetky stránky z pôvodného záznamu
+zostávajú; pôvodný záznam aj jeho JSON zostávajú zachované. Plná snímka
+teda rastie v rámci bootu (v tejto kampani na prvom procese QEMU
+v skupinách `train-1` a `train-2`, v `train-3` len o málo) aj s reštartmi
+hosťa a závisí od veku procesu QEMU, nielen od počtu reštartov
+hosťa (dôsledok pre príznaky je v L13 v [LIMITACIE.md](LIMITACIE.md)).
+
+## 2026-10-25 — oprava: „čítanie“ zberača do verzie 1.0 zahŕňalo zápis stránok
+
+Záznamy kampaní a pilotov uvádzajú hodnotu `citanie` z logu zberača
+(v súhrnoch `read_ms`) ako čas čítania pamäte, napríklad „z toho čítanie
+2579.3 ms“ v zázname „2026-10-22 — kampaň benign-v3-20261022 uzavretá po
+roztrhnutom zozname procesov“. Do verzie zberača 1.0 to bol čas celej
+čítacej slučky vrátane dvoch volaní `write()` pre každú zmenenú stránku
+(delta writer, `vmicollect/src/writer_delta.c` v commite `cbea764`), takže
+dlhé „čítanie“ mohlo byť čakanie na zápis na disk. Rozdiel medzi celým
+cyklom a „čítaním“ preto nebol čas zápisu stránok, ale práca cyklu pred
+čítacou slučkou a po nej: obnova memslotov a parametrov VM, vytvorenie
+súboru `.part` so zápisom hlavičky (`delta_begin`), oprava hlavičky dvoma
+`pwrite()`, `close`, premenovanie, `stat` a SHA-256 delty (`delta_finish`).
+
+Rovnako to platí pre záznamy z 2026-09-18, ktoré nie sú kampane ani piloty:
+„2026-09-18 — prvý beh zberača `vmicollect` nad bežiacou doménou“ (časti
+„once, writer `raw`“, „run, writer `delta`“, „Plná snímka naprieč všetkými
+behmi dňa“ a „Výkonová chyba v raw writeri a jej odstránenie“), časť 3
+záznamu „2026-09-18 — doplnenia a retrakcie k prvému behu, prvé merania
+binárkou z repa (K06)“ a časť „Optimalizácia: kontrolný súčet“ záznamu
+„2026-09-18 — meranie na zmrazenom hosťovi (bez agenta v hosťovi)“. Ich
+„čítanie“, `capture_ms` a `read_mib_s` obsahujú aj prácu writera vo
+`feed()`: delta writer v ňom volal dvakrát `write()` na zmenenú stránku,
+raw writer `pwrite()` pre každý nenulový blok (`vmicollect/src/writer_raw.c`
+v commite `178ce4f`). Nie sú to teda čisté časy ani rýchlosti čítania
+pamäte. Na rozdiel od kampaní volal `finish()` v týchto behoch vždy
+`fsync()`, takže ich „zápis“ (rozdiel celého cyklu a čítania) obsahoval aj
+zápis na disk.
+
+Od verzie 1.1 je čistý čas čítania
+pamäte v sidecari `capture.backend_read_ms`. Pri delta writeri
+(`output.async: true`, kampane a piloty) `capture_ms` už neobsahuje
+žiadny zápis na disk ([ARCHITEKTURA.md](ARCHITEKTURA.md), časť 6); pri raw
+writeri `capture_ms` aj vo verzii 1.1 obsahuje zápis blokov (`pwrite()`
+vo `feed()`, `vmicollect/src/writer_raw.c` v commite `625d8f9`). Pôvodné
+záznamy zostávajú zachované.
+
+## 2026-10-25 — diagnostika zberača 1.1 pri umelej záťaži SSD
+
+Diagnostický beh `20261025T042258276904Z_diagnostic_write_heavy` (skupina `diag-writer-20261025`, commit
+`625d8f9`, profil `write_heavy`, seed
+20261025 {{res:collection_writer_diagnostic_20261025_timing.json:values.seed}},
+480 cyklov, mimo korpusu)
+overil zberač 1.1 so zápisom vo vlákne na zberovom PC
+([súhrn](../data/results/collection_writer_diagnostic_20261025_timing.json),
+[audit](../data/results/collection_writer_diagnostic_20261025_audit.json)). Audit ho prijal:
+480 {{res:collection_writer_diagnostic_20261025_audit.json:values.snapshots}}
+snímok a
+416 {{res:collection_writer_diagnostic_20261025_audit.json:values.windows}}
+okien. Zberač si pred meraním uzamkol pamäť za
+1.1 {{res:collection_writer_diagnostic_20261025_timing.json:values.collector_mlock.seconds}}
+s (VmRSS
+2596 {{res:collection_writer_diagnostic_20261025_timing.json:values.collector_mlock.vmrss_mib}}
+MiB, fronta
+2689597440 {{res:collection_writer_diagnostic_20261025_timing.json:values.writer.pool_bytes}}
+bajtov). Plné snímky mali
+177839 {{res:collection_writer_diagnostic_20261025_timing.json:values.full_snapshots.seq_0.pages}}
+a
+185293 {{res:collection_writer_diagnostic_20261025_timing.json:values.full_snapshots.seq_360.pages}}
+stránok a cyklus trval
+1509.2 {{res:collection_writer_diagnostic_20261025_timing.json:values.full_snapshots.seq_0.total_ms}}
+a
+1539.6 {{res:collection_writer_diagnostic_20261025_timing.json:values.full_snapshots.seq_360.total_ms}}
+ms. Delta cykly mali medián
+823.1 {{res:collection_writer_diagnostic_20261025_timing.json:values.delta_total_ms.p50}}
+ms a maximum
+870.8 {{res:collection_writer_diagnostic_20261025_timing.json:values.delta_total_ms.max}}
+ms. Čakanie na pamäť fronty bolo najviac
+0.0 {{res:collection_writer_diagnostic_20261025_timing.json:values.queue_wait_ms_max}}
+ms a zberač skončil s
+480 {{res:collection_writer_diagnostic_20261025_timing.json:values.collector_end.snapshots}}
+snímkami,
+0 {{res:collection_writer_diagnostic_20261025_timing.json:values.collector_end.errors}}
+chybami a
+0 {{res:collection_writer_diagnostic_20261025_timing.json:values.collector_end.missed_slots}}
+zmeškanými slotmi; fronta na konci dobehla bez straty
+(`zapisovac: 480 zverejnenych, 0 zlyhanych, 0 zahodenych, 0 nezapisanych, najvacsia fronta 0 snimok (0 B), najdlhsie zverejnenie 4.971 s, cakanie na pamat fronty 0.0 ms v 0 cykloch, dobehnutie 0.068 s`).
+
+Vlákno `vmic-writer` malo dáta zapísané a zatvorené
+(`data_closed_ms`, od začiatku cyklu; sidecar a obe premenovania nasledujú,
+takže je to dolná hranica zverejnenia) v mediáne za
+898.1 {{res:collection_writer_diagnostic_20261025_timing.json:values.data_closed_ms.p50}}
+ms a najneskôr za
+4971.3 {{res:collection_writer_diagnostic_20261025_timing.json:values.data_closed_ms.max}}
+ms pri druhej plnej snímke (seq
+360 {{res:collection_writer_diagnostic_20261025_timing.json:values.data_closed_ms.max_seq}}); najdlhšie operácie vlákna boli
+`vytvorenie 0.648 s, zapis 3.432 s, fsync 0.000 s, sidecar 0.006 s, rename 1.048 s, hook 0.000 s, retencia 0.000 s`. Tento čas cyklus nepredlžuje.
+
+Po druhej plnej snímke zapísal skript `ballast.sh` (v adresári
+záznamu) na ten istý súborový systém SSD 6 GiB náhodných dát s jedným
+`fdatasync`, aby disk zahltil podobne ako spätný zápis v kampani
+`benign-v4-20261022`. Záťaž trvala
+71.7 {{res:collection_writer_diagnostic_20261025_timing.json:values.ballast.duration_s}}
+s; monitor v nej mal
+72 {{res:collection_writer_diagnostic_20261025_timing.json:values.ballast.monitor_samples}}
+vzoriek, z toho
+65 {{res:collection_writer_diagnostic_20261025_timing.json:values.ballast.samples_sda_util_ge_99}}
+s vyťažením `sda` aspoň 99 %, zápis pri plnom vyťažení klesal až na
+4.2 {{res:collection_writer_diagnostic_20261025_timing.json:values.ballast.sda_write_mb_s_min_when_saturated}}
+MB/s a `Dirty` vystúpilo na
+1877 {{res:collection_writer_diagnostic_20261025_timing.json:values.ballast.dirty_mib_max}}
+MiB. Zberač v tom čase dokončil
+14 {{res:collection_writer_diagnostic_20261025_timing.json:values.ballast.cycles}}
+cyklov, najdlhší za
+860.8 {{res:collection_writer_diagnostic_20261025_timing.json:values.ballast.cycle_total_ms_max}}
+ms (medián
+836.1 {{res:collection_writer_diagnostic_20261025_timing.json:values.ballast.cycle_total_ms_p50}}
+ms). Čas po zapísané a zatvorené dáta (`data_closed_ms`) mal v záťaži
+medián
+933.5 {{res:collection_writer_diagnostic_20261025_timing.json:values.ballast.data_closed_ms_p50}}
+ms a najviac
+1588.1 {{res:collection_writer_diagnostic_20261025_timing.json:values.ballast.data_closed_ms_max}}
+ms; po záťaži mal pri
+100 {{res:collection_writer_diagnostic_20261025_timing.json:values.ballast.after_snapshots}}
+snímkach medián
+897.5 {{res:collection_writer_diagnostic_20261025_timing.json:values.ballast.after_data_closed_ms_p50}}
+ms a najviac
+940.8 {{res:collection_writer_diagnostic_20261025_timing.json:values.ballast.after_data_closed_ms_max}}
+ms. Celé zverejnenie (so sidecarom a premenovaniami) záznam pre jednotlivé
+snímky nemá, súhrn zapisovača uvádza iba maximum za celý beh. Počas zberu
+bolo QEMU vo swape najviac
+2588 {{res:collection_writer_diagnostic_20261025_timing.json:values.during_capture.qemu_swap.max_kb}}
+kB, stránok odsunutých do swapu pribudlo
+4471 {{res:collection_writer_diagnostic_20261025_timing.json:values.during_capture.pswpout_delta}}
+a `Mlocked` hostiteľa bolo najviac
+2609 {{res:collection_writer_diagnostic_20261025_timing.json:values.during_capture.mlocked_mib_max}}
+MiB. Monitor mal najväčšiu medzeru
+1.00 {{res:collection_writer_diagnostic_20261025_timing.json:values.monitor_max_gap_s}}
+s a generátor
+0 {{res:collection_writer_diagnostic_20261025_timing.json:values.traffic.errors}}
+chýb. Audit trval
+582.1 {{res:collection_writer_diagnostic_20261025_timing.json:values.audit_timing.wall_s}}
+s.
+
+Kritériá diagnostiky boli určené pred behom v pracovných poznámkach mimo
+repozitára; v repozitári ani v zázname nie sú, takže to, že vznikli pred
+behom, repozitár nedokladá. Bolo ich sedem: (1) každý cyklus kratší než 4 s
+(0,8 periódy, hranica tejto diagnostiky; audit zamieta až cyklus, ktorý
+dosiahne periódu 5 s), (2) dĺžka cyklu nesleduje vyťaženie SSD, (3) nulové
+čakanie na pamäť fronty, (4) koniec s toľkými snímkami, koľko bolo cyklov,
+bez chýb, zmeškaných slotov a riadkov `ERROR` v logu
+(0 {{res:collection_writer_diagnostic_20261025_timing.json:values.log_error_lines}}),
+(5) čas po zapísané dáta (`data_closed_ms`) sa pri záťaži predĺži a po nej
+vráti, (6) zaznamenané dobehnutie fronty a (7) QEMU bez swapu (swap QEMU
+0 kB a žiadne nové odsunuté stránky). Beh splnil kritériá 1 až 6 a
+nesplnil kritérium 7. Kritérium 3 sa nemohlo porušiť, lebo fronta pri
+žiadnej snímke nedržala čakajúcu snímku (najviac
+0 {{res:collection_writer_diagnostic_20261025_timing.json:values.writer.queue_jobs_max}}
+úloh); kapacitu fronty pri nahromadení zápisu teda beh neoveril. Kritérium 5
+dokladá záznam iba dolnou hranicou zverejnenia.
+
+Počas záťaže, ktorá trvala
+71.7 {{res:collection_writer_diagnostic_20261025_timing.json:values.ballast.duration_s}}
+s, jadro odsunulo do swapu
+4468 {{res:collection_writer_diagnostic_20261025_qemu_swap.json:values.monitor.pswpout_delta_in_ballast}}
+stránok (rozdiel `pswpout` za celé okno záťaže; kedy v ňom, záznam
+neuvádza), z toho
+2588 {{res:collection_writer_diagnostic_20261025_qemu_swap.json:values.monitor.first_sample_qemu_swap_kb}}
+kB pamäte QEMU naraz medzi dvoma vzorkami (prvá vzorka so swapom QEMU
+o 04:55:44 UTC, záťaž začala o 04:55:34 UTC; potom swap QEMU už nerástol),
+hoci `vm.swappiness` je 1 a `MemAvailable` neklesla pod
+10208 {{res:collection_writer_diagnostic_20261025_timing.json:values.during_capture.mem_available_mib_min}}
+MiB; page cache klesla z
+7902 {{res:collection_writer_diagnostic_20261025_qemu_swap.json:values.monitor.cached_mib_before_ballast}}
+MiB pred záťažou najnižšie na
+3556 {{res:collection_writer_diagnostic_20261025_qemu_swap.json:values.monitor.cached_mib_min_in_ballast}}
+MiB v okne záťaže. Pred záťažou pribudli
+3 {{res:collection_writer_diagnostic_20261025_qemu_swap.json:values.monitor.pswpout_delta_before_ballast}}
+odsunuté stránky, po nej
+0 {{res:collection_writer_diagnostic_20261025_qemu_swap.json:values.monitor.pswpout_delta_after_ballast}}.
+Podľa `/proc/PID/smaps` prečítaného po zbere
+([záznam](../data/results/collection_writer_diagnostic_20261025_qemu_swap.json))
+ležalo všetkých
+2580 {{res:collection_writer_diagnostic_20261025_qemu_swap.json:values.swapped_kb_outside_guest_ram}}
+kB odsunutej pamäte QEMU v
+31 {{res:collection_writer_diagnostic_20261025_qemu_swap.json:n}}
+iných mapovaniach (anonymné oblasti a súkromné stránky binárky QEMU
+a jej knižníc);
+mapovanie pamäte hosťa malo vo swape
+0 {{res:collection_writer_diagnostic_20261025_qemu_swap.json:values.guest_ram_mapping.swap_kb}}
+kB. Zberač číta každú stránku hosťa v každom cykle cez
+`access_process_vm`, ktoré odsunutú stránku vráti zo swapu (režim `swap`
+testu `gup_fault_check.c` nižšie), takže 0 kB po zbere nevylučuje, že jadro
+stránku hosťa počas záťaže na chvíľu odsunulo; či čítanie zberača stránky
+hosťa pred odsunutím chráni, záznam nemeria. Najdlhší cyklus v záťaži bol
+kratší než najdlhší delta cyklus behu
+(860.8 {{res:collection_writer_diagnostic_20261025_timing.json:values.ballast.cycle_total_ms_max}}
+ms proti
+870.8 {{res:collection_writer_diagnostic_20261025_timing.json:values.delta_total_ms.max}}
+ms), medián v záťaži bol
+836.1 {{res:collection_writer_diagnostic_20261025_timing.json:values.ballast.cycle_total_ms_p50}}
+ms proti
+823.1 {{res:collection_writer_diagnostic_20261025_timing.json:values.delta_total_ms.p50}}
+ms za celý beh. Vzorkovacie vlákno, ktoré stránky hosťa číta, nemalo
+v žiadnom cykle veľký výpadok stránky (`majflt` najviac
+0 {{res:collection_writer_diagnostic_20261025_timing.json:values.rusage_max.majflt}}).
+Veľký výpadok, pri ktorom jadro číta stránku z disku, pripisuje pri čítaní
+cez `access_process_vm` čítajúcemu vláknu; test `gup_fault_check.c`
+s [výstupom](../data/results/collection_writer_diagnostic_20261025/gup_fault_check.txt)
+v adresári záznamu to overil pre stránky súboru mimo page cache (`majflt`
++1 pri 256 stránkach načítaných z disku). Pamäť hosťa je anonymná a z disku
+by sa vracala zo swapu na HDD; ten prípad test neoveril (v režime `swap`
+mal `majflt` +0 a nezaznamenal, či stránky prišli zo swap cache alebo
+z disku) a že ho jadro počíta ako veľký výpadok čítajúceho vlákna, sa
+opiera iba o kód jadra. Nulový `majflt` teda ukazuje nanajvýš to, že
+vzorkovacie vlákno samo nespustilo čítanie stránky hosťa zo swapu, nie že
+na disk nečakalo: podľa kódu jadra je malým výpadkom aj stránka, ktorú zo
+swapu už načítava iné vlákno (napríklad vlákno vCPU QEMU), aj stránka
+vrátená zo swap cache bez čítania z disku.
+Odsunutie pamäte QEMU nie je nové:
+v kampani `benign-v4-20261022` ho monitor zachytil v session 14 (najviac
+5744 {{res:collection_campaign_benign_v4_20261022.json:values.sessions.13.qemu_swap_during.kb_max}}
+kB, [záznam](../data/results/collection_campaign_benign_v4_20261022.json)). Keby jadro odsunulo stránku hosťa,
+zberač ju načíta zo swapu na HDD a cyklus sa predĺži; dlhý cyklus audit
+zistí.
+
+Diagnostika nenahrádza pilot: trvala 40 minút, záťaž iba
+71.7 {{res:collection_writer_diagnostic_20261025_timing.json:values.ballast.duration_s}}
+s a degradáciu SSD po hodinách zápisu nenapodobňuje. Ak by disk dlhodobo
+zapisoval pomalšie, než zberač produkuje dáta, fronta sa zaplní a audit
+session zamietne pre čakanie na pamäť fronty. Podmienky prijatia overí
+pilot 6.

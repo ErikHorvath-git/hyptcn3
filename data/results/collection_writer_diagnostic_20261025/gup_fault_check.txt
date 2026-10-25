@@ -1,0 +1,14 @@
+date 2026-10-25T06:55:23Z
+kernel 7.2.9+deb13-amd64
+gcc 14.2.0
+source sha256 6cf2785229ae2dc6462e39d7311ae8329b0cdbbd04a7645435098928fcc3b99c
+command: gup_fault_check /var/tmp/hyptcn3_gup_fault_check.bin (three runs)
+file: 0 of 256 pages in the page cache before the read
+file: read 1048576 B, content ok, child VmSwap 0 -> 0 kB, reader thread majflt +1 minflt +273
+swap: read 1048576 B, content ok, child VmSwap 1024 -> 0 kB, reader thread majflt +0 minflt +479
+file: 0 of 256 pages in the page cache before the read
+file: read 1048576 B, content ok, child VmSwap 0 -> 0 kB, reader thread majflt +1 minflt +272
+swap: read 1048576 B, content ok, child VmSwap 1024 -> 0 kB, reader thread majflt +0 minflt +479
+file: 0 of 256 pages in the page cache before the read
+file: read 1048576 B, content ok, child VmSwap 0 -> 0 kB, reader thread majflt +1 minflt +274
+swap: read 1048576 B, content ok, child VmSwap 1024 -> 0 kB, reader thread majflt +0 minflt +479

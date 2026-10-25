@@ -69,7 +69,7 @@ zapíše.
 
 | adresár | čo rieši | kde začať čítať | súborov spolu / riadkov v `.c .h .py .sh .md` |
 |---|---|---|---|
-| `vmicollect/` | zberač snímok pamäte VM: C a eBPF nad QEMU/KVM | `vmicollect/src/collector.c` | 37 / 12 016 |
+| `vmicollect/` | zberač snímok pamäte VM: C a eBPF nad QEMU/KVM | `vmicollect/src/collector.c` | 37 / 12 017 |
 | `guestparse/` | rekonštrukcia procesov, modulov a soketov zo snímky | `guestparse/view.py` | 34 / 7 121 |
 | `features/` | per-bin príznakový vektor (referencia), okná, normalizácia | `features/perbin.py` | 27 / 5 553 |
 | `tcn/` | TCN, prediktor normálu, baseliny, tréning a skórovanie snímok | `tcn/score.py` | 15 / 2 626 |
@@ -245,8 +245,8 @@ znamenalo držať dve znenia toho istého. Nadpisy sú preto dosadené z neho, s
 | dokument | čo vlastní | riadkov |
 |---|---|---|
 | `docs/ARCHITEKTURA.md` | rozhrania, formát `.vmicd` a sidecaru, tok dát podrobne | 1207 |
-| `docs/MERANIA.md` | log meraní: čo, kedy, akým príkazom a s akým výsledkom | 1787 |
-| `docs/LIMITACIE.md` | L1 až L18: čo systém nevie a čo z toho plynie pre text | 917 |
+| `docs/MERANIA.md` | log meraní: čo, kedy, akým príkazom a s akým výsledkom | 2179 |
+| `docs/LIMITACIE.md` | L1 až L18: čo systém nevie a čo z toho plynie pre text | 944 |
 | `docs/kontroly.md` | kontroly podozrivých vzorcov a validačný príkaz | 278 |
 | `HONESTY.md` | pravidlá pre čísla a slová v texte práce | 276 |
 | `README.md` | rozcestník repozitára a pôvod kódu | 77 |

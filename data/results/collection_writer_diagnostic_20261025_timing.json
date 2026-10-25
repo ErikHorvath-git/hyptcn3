@@ -1,0 +1,213 @@
+{
+  "commit": "625d8f9d967424cb61a514554187aae3f84598a8",
+  "commit_dirty": true,
+  "commit_note": "HEAD when this record was generated. The record script data/results/collection_writer_diagnostic_20261025/timing_record.py is not part of this commit; it is committed together with this file. The measured collector is the one of values.session_commit.",
+  "date": "2026-10-25T07:53:38.249452+00:00",
+  "host": "Linux-7.2.9+deb13-amd64-x86_64-with-glibc2.41",
+  "guest": {
+    "kernel": "6.1.0-42-cloud-amd64",
+    "boot_id": "de2cb41c-192a-431c-abfb-6114763bf6ce",
+    "machine_id": "180ac982142b4714a979599073c96cdd",
+    "stack_sha256": "3fcb9e724f031e3ed24fd3e08fb8f2946c8cd3f04416bc871d8f7dc31b3d46bc",
+    "stack_manifest": [
+      "c346dc8bc1c8c3649fc96064fddfc07172f740f7c82d1830dbb935b16c488271  /opt/hyptcn-lab/services.py",
+      "d7372422553f866333177456ac6daec4847f5660c1c854a646e602d0be0fcf6c  /opt/hyptcn-lab/schema.sql",
+      "a8e5ef8843ebae83eed8691f8eb7e1d186448d36e4be7d4406efeaa96291d5e3  /opt/hyptcn-lab/guest_state.py",
+      "62f55e4374b5db4522d0ce84c911f26ccd580e8f55bc570c09ee63c64be234c6  /etc/nginx/conf.d/hyptcn-lab.conf",
+      "af75eee623f3c7a0b7a1c10a35c2216684c6f4b610d44e46560de137ef3d6962  /etc/systemd/system/hyptcn-lab@.service",
+      "nginx\t1.22.1-9+deb12u10",
+      "postgresql\t15+248+deb12u1",
+      "python3\t3.11.2-1+b1",
+      "python3-psycopg2\t2.9.5-1+b1",
+      "timers:"
+    ]
+  },
+  "command": "data/results/collection_writer_diagnostic_20261025/timing_record.py data/diagnostics/writer-thread-20261025/20261025T042258276904Z_diagnostic_write_heavy data/results/collection_writer_diagnostic_20261025_audit.json data/results/collection_writer_diagnostic_20261025/audit_time.txt data/results/collection_writer_diagnostic_20261025_timing.json data/results/collection_writer_diagnostic_20261025/ballast.log",
+  "n": 480,
+  "values": {
+    "session": "20261025T042258276904Z_diagnostic_write_heavy",
+    "role": "diagnostic",
+    "group": "diag-writer-20261025",
+    "scenario": "write_heavy",
+    "seed": 20261025,
+    "session_commit": "625d8f9d967424cb61a514554187aae3f84598a8",
+    "collector_settings": {
+      "writer": "delta",
+      "fsync": false,
+      "hash": "sha256",
+      "writer_thread": true,
+      "mlock": true,
+      "interval_s": 5,
+      "full_every": 360,
+      "bin_bytes": 16777216
+    },
+    "audit": "collection_writer_diagnostic_20261025_audit.json",
+    "audit_sha256": "3004bc24f5bab530ecac6fbd886fa1d77db392e955450c13e7697e1017008cef",
+    "audit_accepted": true,
+    "audit_reasons": [],
+    "audit_publication": {
+      "snapshots": 480,
+      "data_closed_ms_max": 4971.291,
+      "data_closed_ms_p95": 937.838,
+      "queue_bytes_max": 0,
+      "queue_jobs_max": 0,
+      "queue_wait_ms_max": 0.0
+    },
+    "host_memory_at_start": {
+      "vm_swappiness": 1,
+      "qemu_swap_kb": 0
+    },
+    "prefault": {
+      "swap_kb_before": 0,
+      "swap_kb_after": 0,
+      "seconds": 0.0
+    },
+    "host_memory_after": {
+      "vm_swappiness": 1,
+      "qemu_swap_kb": 2588
+    },
+    "collector_mlock": {
+      "seconds": 1.1,
+      "vmrss_mib": 2596
+    },
+    "full_snapshots": {
+      "seq_0": {
+        "mib": 696.04,
+        "pages": 177839,
+        "capture_ms": 1509.1,
+        "total_ms": 1509.2
+      },
+      "seq_360": {
+        "mib": 725.21,
+        "pages": 185293,
+        "capture_ms": 1538.6,
+        "total_ms": 1539.6
+      }
+    },
+    "full_backend_read_ms": {
+      "seq_0": 304.714,
+      "seq_360": 312.009
+    },
+    "delta_total_ms": {
+      "n": 478,
+      "p50": 823.1,
+      "p99": 861.9,
+      "max": 870.8
+    },
+    "cycle_total_ms_max": 1539.6,
+    "queue_wait_ms_max": 0.0,
+    "skipped_before_max": 0,
+    "rusage_max": {
+      "majflt": 0,
+      "minflt": 2049,
+      "nvcsw": 2,
+      "nivcsw": 94,
+      "cpu_ms": 1537.087
+    },
+    "data_closed_ms": {
+      "p50": 898.131,
+      "p95": 938.858,
+      "max": 4971.291,
+      "max_seq": 360
+    },
+    "writer": {
+      "summary": "zapisovac: 480 zverejnenych, 0 zlyhanych, 0 zahodenych, 0 nezapisanych, najvacsia fronta 0 snimok (0 B), najdlhsie zverejnenie 4.971 s, cakanie na pamat fronty 0.0 ms v 0 cykloch, dobehnutie 0.068 s",
+      "longest_operations": "vytvorenie 0.648 s, zapis 3.432 s, fsync 0.000 s, sidecar 0.006 s, rename 1.048 s, hook 0.000 s, retencia 0.000 s",
+      "sha_ms_max": 3285.44,
+      "write_ms_max": 652.93,
+      "queue_jobs_max": 0,
+      "queue_bytes_max": 0,
+      "pool_bytes": 2689597440
+    },
+    "collector_end": {
+      "snapshots": 480,
+      "errors": 0,
+      "missed_slots": 0
+    },
+    "log_error_lines": 0,
+    "long_cycles": [
+      {
+        "seq": 0,
+        "kind": "PLNA",
+        "mib": 696.04,
+        "capture_ms": 1509.1,
+        "total_ms": 1509.2
+      },
+      {
+        "seq": 360,
+        "kind": "PLNA",
+        "mib": 725.21,
+        "capture_ms": 1538.6,
+        "total_ms": 1539.6
+      }
+    ],
+    "during_capture": {
+      "qemu_swap": {
+        "min_kb": 0,
+        "max_kb": 2588
+      },
+      "pswpout_delta": 4471,
+      "mem_available_mib_min": 10208,
+      "mlocked_mib_max": 2609,
+      "sda_util_ge_99_samples": 70
+    },
+    "ballast": {
+      "start_utc": "2026-10-25T04:55:34.530000+00:00",
+      "end_utc": "2026-10-25T04:56:46.239000+00:00",
+      "duration_s": 71.7,
+      "monitor_samples": 72,
+      "samples_sda_util_ge_99": 65,
+      "sda_write_mb_s_min_when_saturated": 4.1946,
+      "dirty_mib_max": 1877,
+      "iowait_max_pct": 63.727,
+      "cycles": 14,
+      "cycle_total_ms_max": 860.8,
+      "cycle_total_ms_p50": 836.1,
+      "data_closed_ms_max": 1588.096,
+      "data_closed_ms_p50": 933.54,
+      "after_snapshots": 100,
+      "after_data_closed_ms_p50": 897.533,
+      "after_data_closed_ms_max": 940.773,
+      "queue_bytes_max": 0,
+      "qemu_swap": {
+        "min_kb": 0,
+        "max_kb": 2588
+      }
+    },
+    "monitor_max_gap_s": 1.0,
+    "monitor_samples": 2530,
+    "monitor_missed_ticks": 0,
+    "measure_latency": {
+      "n": 38638,
+      "max_ms": 2317.122,
+      "over_1s": 217,
+      "over_2s": 33,
+      "over_4s": 0
+    },
+    "clock_offset_s": 0.012754678726196289,
+    "traffic": {
+      "requests": 40573,
+      "ok": 40573,
+      "errors": 0,
+      "ok_per_s": 16.092,
+      "log_backpressure_s": 0.0
+    },
+    "audit_timing": {
+      "wall_s": 582.1,
+      "rc": 0,
+      "extraction_s_sum": 549.6,
+      "extraction_s_max": 3.25
+    },
+    "inputs_sha256": {
+      "session.json": "c99f7cdd7a33691e2e4038b1831dce1aa906cb1741235291cce2933ebb08f44f",
+      "end.json": "cee0067ac9ac6206df7a46d9db418565dbf528a14bcd2dd3388a94815106546d",
+      "raw/collect.log": "cbdc13e77a137427d6bfd1e6a34874ce1d56768695566055e6dea3266293d204",
+      "host_monitor.jsonl": "868e24b1d00ec2316f0efeb54bb6dc13c727ac945be101a88e4472523afea0dd",
+      "traffic.json": "849998df03ab1a4321c8b33bd6f5384994d4ae04607f5837232e9ae93f8ccc78",
+      "traffic_requests.jsonl": "23e32dd559ef66d40e88ae36c98ca98ebd5b65dbf4018bca24d2cd6ef5ed3441",
+      "audit_time": "f7da75a5c9091e9a31acdf1ab73b6b20d9884eb5593591b0bf39ebb6340e7a66",
+      "ballast_log": "95a8f9218635a578d3d5c3b4c1fefe5eea68d7d80cbb8cc89fae7b48a6789daf"
+    },
+    "note": "Evidence summary of a capture with the writer-thread collector; the audit report is the verdict. Not a corpus session."
+  }
+}

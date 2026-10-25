@@ -1,0 +1,315 @@
+{
+  "commit": "625d8f9d967424cb61a514554187aae3f84598a8",
+  "commit_dirty": true,
+  "commit_note": "HEAD when this record was generated. The record script data/results/collection_writer_diagnostic_20261025/qemu_swap_record.py is not part of this commit; it is committed together with this file. The measured collector is 625d8f9 (the diagnostic's session commit). values.qemu_start_ticks, vm_swap_kb, vm_rss_kb, guest_ram_mapping, swapped_kb_outside_guest_ram, swapped_mappings and n are a one-time live read of /proc/PID/stat, /proc/PID/smaps and /proc/PID/status of the diagnostic's QEMU process at values.smaps_read_utc and cannot be regenerated (the script exits once that process is gone); values.monitor is computed from the saved host_monitor.jsonl and ballast.log. values.monitor.pswpin_delta_capture is the host-wide /proc/vmstat delta over the whole host-monitor run (started before the 120 s warmup, stopped after the guest-evidence step), not only over the capture. This note was added to the header after generation; values are unchanged.",
+  "date": "2026-10-25T05:31:08.408655+00:00",
+  "host": "Linux-7.2.9+deb13-amd64-x86_64-with-glibc2.41",
+  "guest": {
+    "kernel": "6.1.0-42-cloud-amd64",
+    "boot_id": "de2cb41c-192a-431c-abfb-6114763bf6ce",
+    "machine_id": "180ac982142b4714a979599073c96cdd",
+    "stack_sha256": "3fcb9e724f031e3ed24fd3e08fb8f2946c8cd3f04416bc871d8f7dc31b3d46bc",
+    "stack_manifest": [
+      "c346dc8bc1c8c3649fc96064fddfc07172f740f7c82d1830dbb935b16c488271  /opt/hyptcn-lab/services.py",
+      "d7372422553f866333177456ac6daec4847f5660c1c854a646e602d0be0fcf6c  /opt/hyptcn-lab/schema.sql",
+      "a8e5ef8843ebae83eed8691f8eb7e1d186448d36e4be7d4406efeaa96291d5e3  /opt/hyptcn-lab/guest_state.py",
+      "62f55e4374b5db4522d0ce84c911f26ccd580e8f55bc570c09ee63c64be234c6  /etc/nginx/conf.d/hyptcn-lab.conf",
+      "af75eee623f3c7a0b7a1c10a35c2216684c6f4b610d44e46560de137ef3d6962  /etc/systemd/system/hyptcn-lab@.service",
+      "nginx\t1.22.1-9+deb12u10",
+      "postgresql\t15+248+deb12u1",
+      "python3\t3.11.2-1+b1",
+      "python3-psycopg2\t2.9.5-1+b1",
+      "timers:"
+    ]
+  },
+  "command": "data/results/collection_writer_diagnostic_20261025/qemu_swap_record.py data/diagnostics/writer-thread-20261025/20261025T042258276904Z_diagnostic_write_heavy data/results/collection_writer_diagnostic_20261025/ballast.log data/results/collection_writer_diagnostic_20261025_qemu_swap.json",
+  "n": 31,
+  "values": {
+    "session": "20261025T042258276904Z_diagnostic_write_heavy",
+    "qemu_pid": 1838642,
+    "qemu_start_ticks": 39467685,
+    "smaps_read_utc": "2026-10-25T05:31:08.408655+00:00",
+    "vm_swap_kb": 2580,
+    "vm_rss_kb": 965320,
+    "guest_ram_mapping": {
+      "range": "7f9affe00000-7f9b7fe00000",
+      "perms": "rw-p",
+      "path": null,
+      "size_kb": 2097152,
+      "rss_kb": 839680,
+      "swap_kb": 0,
+      "guest_memory_kb": 2097152
+    },
+    "swapped_kb_outside_guest_ram": 2580,
+    "swapped_mappings": [
+      {
+        "range": "7f9af8000000-7f9afa20d000",
+        "perms": "rw-p",
+        "path": null,
+        "size_kb": 34868,
+        "rss_kb": 28684,
+        "swap_kb": 2056
+      },
+      {
+        "range": "5583a4556000-5583a5143000",
+        "perms": "r--p",
+        "path": "/usr/bin/qemu-system-x86_64",
+        "size_kb": 12212,
+        "rss_kb": 1484,
+        "swap_kb": 156
+      },
+      {
+        "range": "7f9b8d274000-7f9b8d400000",
+        "perms": "rw-p",
+        "path": null,
+        "size_kb": 1584,
+        "rss_kb": 1504,
+        "swap_kb": 80
+      },
+      {
+        "range": "7f9b92ba4000-7f9b92ce6000",
+        "perms": "r--p",
+        "path": "/usr/lib/x86_64-linux-gnu/libcapstone.so.5",
+        "size_kb": 1288,
+        "rss_kb": 1212,
+        "swap_kb": 76
+      },
+      {
+        "range": "5583a5143000-5583a5246000",
+        "perms": "rw-p",
+        "path": "/usr/bin/qemu-system-x86_64",
+        "size_kb": 1036,
+        "rss_kb": 992,
+        "swap_kb": 40
+      },
+      {
+        "range": "7f9b8ce00000-7f9b8ce40000",
+        "perms": "rw-p",
+        "path": null,
+        "size_kb": 256,
+        "rss_kb": 240,
+        "swap_kb": 16
+      },
+      {
+        "range": "7f9b8cf37000-7f9b8d200000",
+        "perms": "rw-p",
+        "path": null,
+        "size_kb": 2852,
+        "rss_kb": 2836,
+        "swap_kb": 16
+      },
+      {
+        "range": "7f9b909b2000-7f9b90a35000",
+        "perms": "r--p",
+        "path": "/usr/lib/x86_64-linux-gnu/libcrypto.so.3",
+        "size_kb": 524,
+        "rss_kb": 508,
+        "swap_kb": 16
+      },
+      {
+        "range": "7f9b92ebb000-7f9b92ec3000",
+        "perms": "r--p",
+        "path": "/usr/lib/x86_64-linux-gnu/libpixman-1.so.0.44.0",
+        "size_kb": 32,
+        "rss_kb": 16,
+        "swap_kb": 16
+      },
+      {
+        "range": "5583d397a000-5583d57a5000",
+        "perms": "rw-p",
+        "path": "[heap]",
+        "size_kb": 30892,
+        "rss_kb": 29308,
+        "swap_kb": 12
+      },
+      {
+        "range": "7f9af0000000-7f9af20da000",
+        "perms": "rw-p",
+        "path": null,
+        "size_kb": 33640,
+        "rss_kb": 30820,
+        "swap_kb": 12
+      },
+      {
+        "range": "7f9b90f0e000-7f9b90f1b000",
+        "perms": "rw-p",
+        "path": "/usr/lib/x86_64-linux-gnu/libp11-kit.so.0.4.1",
+        "size_kb": 52,
+        "rss_kb": 44,
+        "swap_kb": 8
+      },
+      {
+        "range": "7f9b9027d000-7f9b90283000",
+        "perms": "r--p",
+        "path": "/usr/lib/x86_64-linux-gnu/libblkid.so.1.1.0",
+        "size_kb": 24,
+        "rss_kb": 20,
+        "swap_kb": 4
+      },
+      {
+        "range": "7f9b902bc000-7f9b902bd000",
+        "perms": "r--p",
+        "path": "/usr/lib/x86_64-linux-gnu/libelf-0.192.so",
+        "size_kb": 4,
+        "rss_kb": 0,
+        "swap_kb": 4
+      },
+      {
+        "range": "7f9b903ff000-7f9b90400000",
+        "perms": "rw-p",
+        "path": "/usr/lib/x86_64-linux-gnu/libpcre2-8.so.0.14.0",
+        "size_kb": 4,
+        "rss_kb": 0,
+        "swap_kb": 4
+      },
+      {
+        "range": "7f9b90a73000-7f9b90a74000",
+        "perms": "r--p",
+        "path": "/usr/lib/x86_64-linux-gnu/libatomic.so.1.2.0",
+        "size_kb": 4,
+        "rss_kb": 0,
+        "swap_kb": 4
+      },
+      {
+        "range": "7f9b90b25000-7f9b90b26000",
+        "perms": "rw-p",
+        "path": "/usr/lib/x86_64-linux-gnu/libmount.so.1.1.0",
+        "size_kb": 4,
+        "rss_kb": 0,
+        "swap_kb": 4
+      },
+      {
+        "range": "7f9b90b32000-7f9b90b33000",
+        "perms": "r--p",
+        "path": "/usr/lib/x86_64-linux-gnu/libdaxctl.so.1.1.6",
+        "size_kb": 4,
+        "rss_kb": 0,
+        "swap_kb": 4
+      },
+      {
+        "range": "7f9b90d47000-7f9b90d48000",
+        "perms": "rw-p",
+        "path": "/usr/lib/x86_64-linux-gnu/libunistring.so.5.2.0",
+        "size_kb": 4,
+        "rss_kb": 0,
+        "swap_kb": 4
+      },
+      {
+        "range": "7f9b90d79000-7f9b90d7a000",
+        "perms": "r--p",
+        "path": "/usr/lib/x86_64-linux-gnu/libidn2.so.0.4.0",
+        "size_kb": 4,
+        "rss_kb": 0,
+        "swap_kb": 4
+      },
+      {
+        "range": "7f9b911fe000-7f9b911ff000",
+        "perms": "r--p",
+        "path": "/usr/lib/x86_64-linux-gnu/libm.so.6",
+        "size_kb": 4,
+        "rss_kb": 0,
+        "swap_kb": 4
+      },
+      {
+        "range": "7f9b91a4f000-7f9b91a50000",
+        "perms": "r--p",
+        "path": "/usr/lib/x86_64-linux-gnu/libffi.so.8.1.4",
+        "size_kb": 4,
+        "rss_kb": 0,
+        "swap_kb": 4
+      },
+      {
+        "range": "7f9b91a50000-7f9b91a51000",
+        "perms": "rw-p",
+        "path": "/usr/lib/x86_64-linux-gnu/libffi.so.8.1.4",
+        "size_kb": 4,
+        "rss_kb": 0,
+        "swap_kb": 4
+      },
+      {
+        "range": "7f9b91b78000-7f9b91b7b000",
+        "perms": "r--p",
+        "path": "/usr/lib/x86_64-linux-gnu/libnettle.so.8.10",
+        "size_kb": 12,
+        "rss_kb": 8,
+        "swap_kb": 4
+      },
+      {
+        "range": "7f9b91b7b000-7f9b91b7c000",
+        "perms": "rw-p",
+        "path": "/usr/lib/x86_64-linux-gnu/libnettle.so.8.10",
+        "size_kb": 4,
+        "rss_kb": 0,
+        "swap_kb": 4
+      },
+      {
+        "range": "7f9b9228e000-7f9b9228f000",
+        "perms": "r--p",
+        "path": "/usr/lib/x86_64-linux-gnu/libslirp.so.0.4.0",
+        "size_kb": 4,
+        "rss_kb": 0,
+        "swap_kb": 4
+      },
+      {
+        "range": "7f9b92331000-7f9b92334000",
+        "perms": "r--p",
+        "path": "/usr/lib/x86_64-linux-gnu/libgobject-2.0.so.0.8400.4",
+        "size_kb": 12,
+        "rss_kb": 8,
+        "swap_kb": 4
+      },
+      {
+        "range": "7f9b92334000-7f9b92335000",
+        "perms": "rw-p",
+        "path": "/usr/lib/x86_64-linux-gnu/libgobject-2.0.so.0.8400.4",
+        "size_kb": 4,
+        "rss_kb": 0,
+        "swap_kb": 4
+      },
+      {
+        "range": "7f9b92dda000-7f9b92ddb000",
+        "perms": "r--p",
+        "path": "/usr/lib/x86_64-linux-gnu/libz.so.1.3.1",
+        "size_kb": 4,
+        "rss_kb": 0,
+        "swap_kb": 4
+      },
+      {
+        "range": "7f9b92ddb000-7f9b92ddc000",
+        "perms": "rw-p",
+        "path": "/usr/lib/x86_64-linux-gnu/libz.so.1.3.1",
+        "size_kb": 4,
+        "rss_kb": 0,
+        "swap_kb": 4
+      },
+      {
+        "range": "7f9b92ed7000-7f9b92ed8000",
+        "perms": "rw-p",
+        "path": null,
+        "size_kb": 4,
+        "rss_kb": 0,
+        "swap_kb": 4
+      }
+    ],
+    "monitor": {
+      "first_sample_qemu_swap_utc": "2026-10-25T04:55:44.989485+00:00",
+      "first_sample_qemu_swap_kb": 2588,
+      "qemu_swap_kb_max_before_ballast": 0,
+      "pswpout_delta_before_ballast": 3,
+      "pswpout_delta_in_ballast": 4468,
+      "pswpout_delta_after_ballast": 0,
+      "pswpin_delta_capture": 334,
+      "cached_mib_before_ballast": 7902,
+      "cached_mib_min_in_ballast": 3556,
+      "memfree_mib_before_ballast": 2564,
+      "memfree_mib_max_in_ballast": 7024
+    },
+    "inputs_sha256": {
+      "session.json": "c99f7cdd7a33691e2e4038b1831dce1aa906cb1741235291cce2933ebb08f44f",
+      "domain.xml": "3165fae6c7d0eb64bca55087837191676eb9836951f41884171de8dc5a9a83a5",
+      "host_monitor.jsonl": "868e24b1d00ec2316f0efeb54bb6dc13c727ac945be101a88e4472523afea0dd",
+      "ballast_log": "95a8f9218635a578d3d5c3b4c1fefe5eea68d7d80cbb8cc89fae7b48a6789daf"
+    },
+    "note": "Read after the capture with the guest idle; QEMU kept running since the capture. Swapped pages return only by a swap-in, and the collector reads every guest page in each cycle through access_process_vm, which would swap a guest RAM page back in (pswpin)."
+  }
+}

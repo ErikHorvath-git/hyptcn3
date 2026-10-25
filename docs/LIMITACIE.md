@@ -539,14 +539,17 @@ identitu domény.
 
 **Fakt.** Nasledujúce veličiny **nemajú v tejto práci uložené meranie** a do textu sa
 nesmú dostať ako výsledok. Podľa `HONESTY.md` P5 a P7 sú označené `UNVERIFIED`, kým
-nevznikne artefakt v `data/results/`.
+nevznikne artefakt v `data/results/`. Výnimkou je pamäť zberača v riadku „vplyv zberu
+na hostiteľa“: tá je zmeraná (diagnostika 2026-10-25); CPU zberača monitor hostiteľa
+zaznamenáva, žiadny záznam v `data/results/` ho však ako spotrebu nevyhodnocuje
+(`collection_writeback_stall_20261024.json` ho uvádza iba vo vzorkách okolo dlhých cyklov).
 
 | Veličina | Stav | Čo na ňu treba |
 |---|---|---|
 | živá latencia snímka → skóre modelu | `UNVERIFIED` | meranie počas bežiaceho zberu: `tcn/score.py` pripojený na beh `vmicollect run`, latencia od konca cyklu po vypočítané skóre, medián a p95 z aspoň 12 cyklov |
 | vplyv zberu na výkon vnútri hosťa | `UNVERIFIED` | benchmark s pevne daným objemom práce v hosťovi, schéma A/B/A, medián a IQR z aspoň 12 opakovaní |
-| vplyv zberu na hostiteľa | `UNVERIFIED` | meranie spotreby CPU a pamäte procesu zberača počas behu |
-| dlhý beh s retenciou | `UNVERIFIED` | beh rádovo v hodinách: zmeškané sloty, rast obsadeného miesta, správanie pri reštarte domény |
+| vplyv zberu na hostiteľa | `UNVERIFIED` (pamäť zmeraná, CPU zaznamenané, nevyhodnotené) | pamäť: zberač 1.1 s `output.mlock` drží frontu uzamknutú v RAM (najväčšia možná plná snímka + 512 MiB), monitor kampane ju zaznamenáva (`Mlocked`); diagnostika 2026-10-25 pri VM s 2 GiB: VmRSS po uzamknutí 2596 {{res:collection_writer_diagnostic_20261025_timing.json:values.collector_mlock.vmrss_mib}} MiB, `Mlocked` hostiteľa počas zberu najviac 2609 {{res:collection_writer_diagnostic_20261025_timing.json:values.during_capture.mlocked_mib_max}} MiB ([záznam](../data/results/collection_writer_diagnostic_20261025_timing.json), [MERANIA.md](MERANIA.md) 2026-10-25; jeden 40-minútový beh mimo korpusu); chýba vyhodnotená spotreba CPU celého procesu (monitor hostiteľa ju zaznamenáva po 1 s za všetky vlákna spolu, teda aj za `vmic-writer` so SHA-256 a `vmic-log`, ako `procs.vmicollect.cpu_pct` v `host_monitor.jsonl`; záznam diagnostiky ju nevyhodnocuje a má iba maximum vzorkovacieho vlákna na cyklus, `rusage_max.cpu_ms`), priemer za celý beh a vplyv na ostatnú záťaž hostiteľa |
+| dlhý beh s retenciou | `UNVERIFIED` | beh jedného procesu zberača rádovo v hodinách s retenciou: zmeškané sloty, rast obsadeného miesta, správanie pri reštarte domény počas behu; zatiaľ existujú iba hodinové behy bez retencie: kampaň `benign-v4-20261022` mala 37 {{res:collection_campaign_benign_v4_20261022.json:n}} samostatných behov zberača po 720 {{res:collection_campaign_benign_v4_20261022.json:values.sessions.0.collector_end.snapshots}} cykloch (nový proces zberača v každej session, reštart hosťa na hraniciach skupín), spolu 26640 {{res:collection_writeback_stall_20261024.json:n}} cyklov a jeden zmeškaný slot pri spätnom zápise na SSD (zberač 1.0, [záznam](../data/results/collection_campaign_benign_v4_20261022.json), [MERANIA.md](MERANIA.md) 2026-10-25); zberač 1.1 v kampani ešte nebežal |
 | správanie pri periódach iných než 2 s a 5 s | `UNVERIFIED` | sweep periódy a veľkosti bloku |
 | presnosť detekcie voči reálnym malvérovým vzorkám | **nebude zmeraná** | vzorky nie sú dostupné; nenahrádza sa ničím — podrobne v [L16](#l16--presnosť-detekcie-malvéru-nebola-meraná-a-v-tejto-verzii-sa-merať-nedá) |
 
@@ -573,9 +576,14 @@ without BTF.` Mapa sa vytvorí aj bez BTF a zber funguje, ale príčina nebola z
 
 > Práca uvádza latenciu od zosnímania pamäte po príznakový vektor, ale neuvádza latenciu
 > po skóre modelu meranú počas bežiaceho zberu — zmerané je len spracovanie nad uloženou
-> snímkou. Neuvádza ani vplyv zberu na výkon hosťa, vplyv na hostiteľa a správanie pri
-> dlhodobom behu.
-> Nejde o vynechanie: tieto veličiny neboli v rámci tejto práce namerané, a formulácie
+> snímkou. Neuvádza ani vplyv zberu na výkon hosťa, spotrebu procesora zberačom na
+> hostiteľovi a správanie pri dlhodobom behu jedného procesu zberača. Z nárokov na
+> hostiteľa je vyhodnotená iba pamäť: zberač drží frontu snímok uzamknutú v RAM, pri
+> virtuálnom stroji s 2 GiB to v jednom diagnostickom behu bolo
+> 2596 {{res:collection_writer_diagnostic_20261025_timing.json:values.collector_mlock.vmrss_mib}} MiB rezidentnej pamäte.
+> Spotrebu procesora celým procesom zberača monitor hostiteľa počas zberu zaznamenával
+> každú sekundu, v práci však vyhodnotená nie je.
+> Pri ostatných veličinách nejde o vynechanie: v rámci tejto práce neboli namerané, a formulácie
 > typu „minimálny vplyv na virtuálny stroj“ alebo „spracovanie v reálnom čase“ by preto
 > boli tvrdením bez podkladu. Tam, kde je to potrebné, sa namiesto nich uvádza konkrétna
 > perióda zberu a namerané trvanie jednotlivých fáz cyklu, ktoré uložené artefakty majú.
@@ -615,6 +623,25 @@ do pevnej dĺžky.
 **Vektor sa meral iba na jednej doméne.** Geometria s inou veľkosťou binu (1 MiB) je overená
 testom nad synteticky deravým obrazom, nie nad druhou skutočnou VM. Správanie pri hotplugu
 pamäte za behu je v kóde ošetrené podpisom oblastí, ale nebolo odskúšané behom.
+
+**`zero_ratio` a `mem_zero_ratio` závisia od veku procesu QEMU.** Stránka, ktorej sa proces
+QEMU ešte nedotkol, sa číta ako nulová. Počet nenulových stránok preto rastie s vekom procesu:
+v kampani `benign-v4-20261022` z ~130 tisíc na ~320 tisíc stránok. Po každom reštarte hosťa
+začala skupina vyššie, než skončila predchádzajúca; v rámci bootu počet na prvom procese QEMU
+rástol iba v prvých dvoch skupinách, v `train-3` sa takmer nezmenil a v `dev-1`, `calibration-1`
+a `calibration-2` klesol; na novom procese QEMU v jedinej session skupiny `test_benign-1` vzrástol
+zo 134873 {{res:collection_campaign_benign_v4_20261022.json:values.summary.by_group.test_benign-1.first_full_pages}} na
+146900 {{res:collection_campaign_benign_v4_20261022.json:values.summary.by_group.test_benign-1.last_full_pages}} stránok
+([MERANIA.md](MERANIA.md), oprava z 2026-10-25). Tieto príznaky sú vstupom modelu, takže
+skupiny zozbierané neskôr na tom istom procese majú systematicky iné hodnoty než skupiny
+zozbierané skôr - a v pláne kampane nasledujú tréningové skupiny pred testovacími. Kampaň
+`benign-v5` má bežať na jednom procese QEMU spustenom pred `init` (bez reštartov VM počas
+kampane); vek procesu bude teda súbežný s poradím skupín a pri vyhodnotení ho treba brať ako
+možný zmätočný faktor (napr. porovnať rozdelenie `mem_zero_ratio` medzi skupinami).
+
+**Formulácia do textu práce:** „Podiel nulových stránok závisí aj od toho, koľko pamäte hosťa už
+hypervízor alokoval; keďže skupiny korpusu vznikali postupne na jednom procese virtuálneho
+stroja, tento príznak sa medzi skupinami posúva aj bez zmeny správania hosťa."
 
 ---
 

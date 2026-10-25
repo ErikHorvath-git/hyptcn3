@@ -23,7 +23,8 @@ static const char *const LEVEL_NAMES[] = { "DEBUG", "INFO", "WARN", "ERROR", "NO
 /*
  * Asynchronny rezim (zberovy beh). Vzorkovacie vlakno nesmie zapisovat do
  * suboru: log je na tom istom ext4 ako snimky a zapis tam pri zaseknutom
- * zapise na pozadi caka sekundy (kampan benign-v4: cyklus 369 session 37).
+ * zapise na pozadi moze cakat sekundy (riziko; v kampani benign-v4 sa cyklus
+ * 369 session 37 predlzil pri spatnom zapise este pred riadkom logu).
  * Riadok sa preto poskladá v pamati volajuceho (cas sa berie v okamihu
  * volania) a pod mutexom iba skopiruje do kruhoveho buffera; do suboru ho
  * zapise vlakno vmic-log mimo mutexu. Mutex sa nikdy nedrzi pocas write().
