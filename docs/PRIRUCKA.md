@@ -1,6 +1,6 @@
 # Príručka k hyptcn3
 
-Vstupný dokument repozitára; stav kódu a artefaktov k 2026-10-22. Súbor je
+Vstupný dokument repozitára; stav kódu a artefaktov k 2026-10-25. Súbor je
 generovaný a needituje sa ručne — ako, hovorí kapitola 10.
 
 ## 1. Čo to je
@@ -244,12 +244,12 @@ znamenalo držať dve znenia toho istého. Nadpisy sú preto dosadené z neho, s
 
 | dokument | čo vlastní | riadkov |
 |---|---|---|
-| `docs/ARCHITEKTURA.md` | rozhrania, formát `.vmicd` a sidecaru, tok dát podrobne | 1177 |
+| `docs/ARCHITEKTURA.md` | rozhrania, formát `.vmicd` a sidecaru, tok dát podrobne | 1173 |
 | `docs/MERANIA.md` | log meraní: čo, kedy, akým príkazom a s akým výsledkom | 1787 |
 | `docs/LIMITACIE.md` | L1 až L18: čo systém nevie a čo z toho plynie pre text | 911 |
 | `docs/kontroly.md` | kontroly podozrivých vzorcov a validačný príkaz | 278 |
-| `HONESTY.md` | pravidlá pre čísla a slová v texte práce | 277 |
-| `README.md` | rozcestník repozitára a pôvod kódu | 79 |
+| `HONESTY.md` | pravidlá pre čísla a slová v texte práce | 276 |
+| `README.md` | rozcestník repozitára a pôvod kódu | 77 |
 | `docs/LAB.sk.md` | serverové laboratórium, premávka z hostiteľa a RAM zber | 298 |
 | `docs/METODIKA_ZBERU.sk.md` | protokol zberu, príznaky, rozdelenie korpusu a audit | 372 |
 | `docs/SAFEGUARD.sk.md` | tréning modelového balíka, replay a spustenie detektora | 233 |

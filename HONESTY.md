@@ -82,10 +82,9 @@ Labely sa po vyhodnotení nemenia.
 Každý prevzatý kus kódu a každý kus kódu, ktorý nadväzuje na skoršiu prácu (architektúra
 TCN, príznaky nad stránkami, predlohy scenárov, `vmi_parse.py`, opravy BPF programu), má
 pôvod uvedený v hlavičke súboru a v `docs/ARCHITEKTURA.md`. Pôvod `vmicollect` sa uvádza
-takto: zberač je autorova práca vzniknutá 2026-08-26 s pomocou jazykového modelu vo
-vlastnom sedení autora; pôvodná cesta cez eBPF nikdy nebola overená proti bežiacemu jadru;
-overenie plus štyri opravy z commitu `178ce4f` sú prácou tejto diplomovej práce.
-Podrobnosti sú v `docs/notebookLM.md`, časť 3.9.
+takto: zberač je vlastná práca autora zo staršej vetvy projektu (stav k 2026-08-26,
+commit `6b9053d`); cesta cez eBPF v tom stave nebola overená proti bežiacemu jadru;
+overenie a štyri opravy z commitu `178ce4f` sú prácou tejto diplomovej práce.
 
 ### P10 — `docs/MERANIA.md` je append-only
 
