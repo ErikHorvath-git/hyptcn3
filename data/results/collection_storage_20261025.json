@@ -1,0 +1,102 @@
+{
+  "commit": "e25431d5a79029c4ca43d4f1b73cdc0819ddafcd",
+  "commit_dirty": true,
+  "commit_note": "HEAD when this record was generated. The record script data/results/collection_storage_20261025/record.py and the archival script archive_pilots.py are not part of this commit; they are committed together with this file. Free space is read live from the host.",
+  "date": "2026-10-25T11:04:20.031765+00:00",
+  "host": "Linux-7.2.9+deb13-amd64-x86_64-with-glibc2.41",
+  "guest": {
+    "domain": "hyptcn-lab",
+    "new_capture": false
+  },
+  "command": "data/results/collection_storage_20261025/record.py data/results/collection_storage_20261025/archive_start.txt data/results/collection_storage_20261025/verify_pilots.log data/results/collection_storage_20261025.json",
+  "n": 2,
+  "values": {
+    "archive_root": "/home/eh/hyptcn3-archive",
+    "archival_started_utc": "2026-10-25T10:47:20Z",
+    "working_free_before": 53140938752,
+    "space_after": {
+      "working": {
+        "total": 234622398464,
+        "used": 147208335360,
+        "free": 75421343744
+      },
+      "archive": {
+        "total": 473321816064,
+        "used": 123984809984,
+        "free": 325218344960
+      }
+    },
+    "campaign_rule": {
+      "min_free_gib": 30,
+      "pilot_raw_bytes": 11140457736,
+      "estimated_session_bytes_with_reserve": 25066029906.0,
+      "required_free_before_each_session": 57278284626.0,
+      "short_before_archival": 4137345874.0,
+      "margin_after_archival": 18143059118.0
+    },
+    "gib": {
+      "working_free_before": 49.49,
+      "working_free_after": 70.24,
+      "required_free_before_each_session": 53.34,
+      "short_before_archival": 3.85,
+      "margin_after_archival": 16.9,
+      "reclaimed": 20.75
+    },
+    "reclaimed_bytes": 22278068104,
+    "sessions": [
+      {
+        "session": "20261021T230727556324Z_pilot_bursty",
+        "group": "pilot-reset-20261021",
+        "source": "/home/eh/projects/hyptcn3/data/collections/20261021T230727556324Z_pilot_bursty",
+        "destination": "/home/eh/hyptcn3-archive/pilots/20261021T230727556324Z_pilot_bursty",
+        "archive_manifest_sha256": "2d38de026325bd87511ff8cf8baf24c0f3a8b437c26126458a153b9810fcdfde",
+        "receipt_matches_manifest": true,
+        "raw_is_link_to_archive": true,
+        "files": 996,
+        "source_bytes": 11637136177,
+        "stored_bytes": 1826500321,
+        "raw_files": 962,
+        "raw_bytes": 11531474994,
+        "raw_stored_bytes": 1789860765,
+        "manifest_note": "SHA-256 verified copy; zstd members verified by decompression. Not an additional independent capture.",
+        "receipt": {
+          "schema": "hyptcn3/collection-archive-receipt/1",
+          "source": "/home/eh/projects/hyptcn3/data/collections/20261021T230727556324Z_pilot_bursty",
+          "destination": "/home/eh/hyptcn3-archive/pilots/20261021T230727556324Z_pilot_bursty",
+          "manifest_sha256": "2d38de026325bd87511ff8cf8baf24c0f3a8b437c26126458a153b9810fcdfde"
+        },
+        "independent_verify": {
+          "rc": 0,
+          "seconds": 75.8
+        }
+      },
+      {
+        "session": "20261022T003017919708Z_pilot_bursty",
+        "group": "pilot-3-20261021",
+        "source": "/home/eh/projects/hyptcn3/data/collections/20261022T003017919708Z_pilot_bursty",
+        "destination": "/home/eh/hyptcn3-archive/pilots/20261022T003017919708Z_pilot_bursty",
+        "archive_manifest_sha256": "935dbc0d23a6cd8c38b364193fc04a10d1be068babc7abe2f0f4a76059f4d7b6",
+        "receipt_matches_manifest": true,
+        "raw_is_link_to_archive": true,
+        "files": 996,
+        "source_bytes": 10850887423,
+        "stored_bytes": 1633130491,
+        "raw_files": 962,
+        "raw_bytes": 10746593110,
+        "raw_stored_bytes": 1596397274,
+        "manifest_note": "SHA-256 verified copy; zstd members verified by decompression. Not an additional independent capture.",
+        "receipt": {
+          "schema": "hyptcn3/collection-archive-receipt/1",
+          "source": "/home/eh/projects/hyptcn3/data/collections/20261022T003017919708Z_pilot_bursty",
+          "destination": "/home/eh/hyptcn3-archive/pilots/20261022T003017919708Z_pilot_bursty",
+          "manifest_sha256": "935dbc0d23a6cd8c38b364193fc04a10d1be068babc7abe2f0f4a76059f4d7b6"
+        },
+        "independent_verify": {
+          "rc": 0,
+          "seconds": 67.4
+        }
+      }
+    ],
+    "note": "Approved by the user on 2026-10-25 ('Archivovat 2 stare piloty'). The capacity check of campaign init (free working space >= estimated session bytes + min_free_gib) would have failed: computed from pilot 6 before init was run (campaign_rule.short_before_archival). The two oldest pilot sessions were archived with the verified steps of scripts/collection_archive.py (publish_archive with zstd members checked by decompression, bind_audit against each pilot's audit, reclaim_raw). Metadata, audits and logs stay at their original paths; raw/ links to the archive, and collection_archive.py restore re-extracts it. The archive is now the only copy of these RAM images, not a second backup."
+  }
+}

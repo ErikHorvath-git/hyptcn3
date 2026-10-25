@@ -143,6 +143,32 @@ nekomprimovanú session; HDD uchováva komprimovaný korpus. Ide o odhad zo
 starého workloadu, ktorý treba porovnať s novým prijatým pilotom a náročnými
 profilmi. `campaign.py init` vykoná vlastný prepočet a kontrolu voľného miesta.
 
+## Úložisko pred kampaňou benign-v5
+
+`campaign.py init` a runner pred každou session vyžadujú na pracovnom SSD
+voľné miesto aspoň vo výške odhadu session z prijatého pilota (surové dáta
+pilota × 720/480 × 1,5) a rezervy protokolu 30 GiB. Z pilota 6 to bolo
+53.34 {{res:collection_storage_20261025.json:values.gib.required_free_before_each_session}}
+GiB, voľných však bolo
+49.49 {{res:collection_storage_20261025.json:values.gib.working_free_before}}
+GiB (prepočet pred spustením `init`). So súhlasom zadávateľa sa preto
+2026-10-25 surové dáta dvoch najstarších pilotov
+(`20261021T230727556324Z_pilot_bursty` a pilot 3
+`20261022T003017919708Z_pilot_bursty`) archivovali do
+`/home/eh/hyptcn3-archive/pilots/` tými istými overenými krokmi ako session
+kampane: SHA-256, komprimované členy overené dekompresiou, väzba na audit
+pilota a nezávislé `collection_archive verify`
+([záznam](../data/results/collection_storage_20261025.json)). Uvoľnilo sa
+20.75 {{res:collection_storage_20261025.json:values.gib.reclaimed}}
+GiB a pred `init` bolo voľných
+70.24 {{res:collection_storage_20261025.json:values.gib.working_free_after}}
+GiB, o
+16.9 {{res:collection_storage_20261025.json:values.gib.margin_after_archival}}
+GiB viac, než pravidlo kampane vyžaduje. Metadáta, audity a logy oboch
+pilotov zostali na pôvodných cestách, `raw/` odkazuje do archívu a obnoví
+ho `collection_archive.py restore`. Archív je odteraz jedinou kópiou týchto
+snímok, nie druhou zálohou.
+
 ## Reset pamäte pri ďalšej plnej snímke
 
 Kontrola pred ostrým zberom odhalila chybu Python čítača: pri rekonštrukcii

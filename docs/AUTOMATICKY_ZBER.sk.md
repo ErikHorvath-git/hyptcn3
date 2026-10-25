@@ -159,9 +159,10 @@ obnovili sa všetky snímky a vedľajšie súbory, príznaky prvého súvislého
 úseku sa zhodovali s pôvodným NPZ. Report uvádza presný rozsah porovnania;
 opätovná extrakcia celého behu sa v tomto overení nevykonávala.
 Automatická kampaň neuvoľňuje pôvodné piloty ani cudzie adresáre.
-Pri používateľom povolenej archivácii starých diagnostík zostávajú metadáta
-a výsledky na pôvodných cestách, `raw/` odkazuje do overeného archívu
-`/home/eh/hyptcn3-archive/diagnostics/`. Na nové parsovanie sa použije obnova
+Pri používateľom povolenej archivácii starých diagnostík a pilotov zostávajú
+metadáta a výsledky na pôvodných cestách, `raw/` odkazuje do overeného archívu
+`/home/eh/hyptcn3-archive/diagnostics/` alebo `/home/eh/hyptcn3-archive/pilots/`
+([KONTROLA_ZBERU.sk.md](KONTROLA_ZBERU.sk.md)). Na nové parsovanie sa použije obnova
 vyššie; komprimované snímky parser priamo nečíta.
 Režim presunu povoľuje iba session patriace danej kampani.
 

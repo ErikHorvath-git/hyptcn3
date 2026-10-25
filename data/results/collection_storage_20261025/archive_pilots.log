@@ -1,0 +1,6 @@
+archive mount {"target": "/", "fstype": "ext4", "uuid": "c9d694b9-61a8-4918-aa6d-6379cd1b8b03", "system_disk": true}
+20261021T230727556324Z_pilot_bursty files 996 bytes 11637136177 stored 1826500321 receipt 2d38de026325bd87511ff8cf8baf24c0f3a8b437c26126458a153b9810fcdfde
+20261022T003017919708Z_pilot_bursty files 996 bytes 10850887423 stored 1633130491 receipt 935dbc0d23a6cd8c38b364193fc04a10d1be068babc7abe2f0f4a76059f4d7b6
+rc=0
+2026-10-25T11:01:00Z
+/dev/sda2       219G  138G   71G  67% /mnt/ssd
