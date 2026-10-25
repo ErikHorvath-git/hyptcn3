@@ -2177,3 +2177,100 @@ s a degradáciu SSD po hodinách zápisu nenapodobňuje. Ak by disk dlhodobo
 zapisoval pomalšie, než zberač produkuje dáta, fronta sa zaplní a audit
 session zamietne pre čakanie na pamäť fronty. Podmienky prijatia overí
 pilot 6.
+
+## 2026-10-25 — pilot 6 so zberačom 1.1
+
+Pilot `20261025T083820398613Z_pilot_bursty` (skupina `pilot-6-20261025`, commit
+`cd67470` so zberačom 1.1, profil `bursty`, seed
+202610256 {{res:collection_pilot_6_20261025_timing.json:values.seed}},
+nový boot hosťa na procese QEMU
+1838642 {{res:collection_pilot_6_20261025_timing.json:values.qemu.pid}},
+na ktorom bežala aj session 37 kampane v4) overil zberač, ktorý robí prácu
+so súbormi a s logom mimo vzorkovacieho cyklu. Audit ho prijal
+([audit](../data/results/collection_pilot_6_20261025_audit.json)):
+480 {{res:collection_pilot_6_20261025_audit.json:values.snapshots}}
+snímok,
+416 {{res:collection_pilot_6_20261025_audit.json:values.windows}}
+okien a pokrytie
+0.8667 {{res:collection_pilot_6_20261025_audit.json:values.score_coverage}}
+(strop protokolu). Nálezov integrity bolo
+0 {{res:collection_pilot_6_20261025_audit.json:values.quality.integrity_findings}}
+a nepotvrdených krížových rozdielov
+0 {{res:collection_pilot_6_20261025_audit.json:values.quality.integrity_unconfirmed}}.
+
+[Súhrn časovania](../data/results/collection_pilot_6_20261025_timing.json): pred zahrievaním mal proces QEMU
+vo swape
+4132 {{res:collection_pilot_6_20261025_timing.json:values.prefault.swap_kb_before}}
+kB; krok `prefault` ich za
+0.728 {{res:collection_pilot_6_20261025_timing.json:values.prefault.seconds}}
+s načítal späť. Počas zberu bolo QEMU vo swape najviac
+0 {{res:collection_pilot_6_20261025_timing.json:values.during_capture.qemu_swap.max_kb}}
+kB a na konci
+0 {{res:collection_pilot_6_20261025_timing.json:values.host_memory_after.qemu_swap_kb}}
+kB. Zberač si pred meraním uzamkol pamäť (VmRSS
+2596 {{res:collection_pilot_6_20261025_timing.json:values.collector_mlock.vmrss_mib}}
+MiB, `Mlocked` hostiteľa počas zberu najviac
+2609 {{res:collection_pilot_6_20261025_timing.json:values.during_capture.mlocked_mib_max}}
+MiB) a skončil s
+480 {{res:collection_pilot_6_20261025_timing.json:values.collector_end.snapshots}}
+snímkami,
+0 {{res:collection_pilot_6_20261025_timing.json:values.collector_end.errors}}
+chybami a
+0 {{res:collection_pilot_6_20261025_timing.json:values.collector_end.missed_slots}}
+zmeškanými slotmi; riadkov `ERROR` v logu bolo
+0 {{res:collection_pilot_6_20261025_timing.json:values.log_error_lines}}.
+Najdlhší cyklus trval
+1579.9 {{res:collection_pilot_6_20261025_timing.json:values.cycle_total_ms_max}}
+ms pri perióde 5 s. Plné snímky mali
+186537 {{res:collection_pilot_6_20261025_timing.json:values.full_snapshots.seq_0.pages}}
+a
+187360 {{res:collection_pilot_6_20261025_timing.json:values.full_snapshots.seq_360.pages}}
+stránok a cyklus trval
+1572.5 {{res:collection_pilot_6_20261025_timing.json:values.full_snapshots.seq_0.total_ms}}
+a
+1579.9 {{res:collection_pilot_6_20261025_timing.json:values.full_snapshots.seq_360.total_ms}}
+ms, z toho čítanie pamäte
+320.2 {{res:collection_pilot_6_20261025_timing.json:values.full_backend_read_ms.seq_0}}
+a
+311.9 {{res:collection_pilot_6_20261025_timing.json:values.full_backend_read_ms.seq_360}}
+ms. Delta cykly mali medián
+860.9 {{res:collection_pilot_6_20261025_timing.json:values.delta_total_ms.p50}}
+ms a maximum
+884.5 {{res:collection_pilot_6_20261025_timing.json:values.delta_total_ms.max}}
+ms. Čakanie na pamäť fronty bolo najviac
+0.0 {{res:collection_pilot_6_20261025_timing.json:values.queue_wait_ms_max}}
+ms a fronta pri odovzdaní snímky najviac
+0 {{res:collection_pilot_6_20261025_timing.json:values.writer.queue_jobs_max}}
+úloh. Vlákno `vmic-writer` malo dáta zapísané a zatvorené
+(`data_closed_ms`, dolná hranica zverejnenia) v mediáne za
+950.0 {{res:collection_pilot_6_20261025_timing.json:values.data_closed_ms.p50}}
+ms a najneskôr za
+5125.6 {{res:collection_pilot_6_20261025_timing.json:values.data_closed_ms.max}}
+ms pri plnej snímke seq
+0 {{res:collection_pilot_6_20261025_timing.json:values.data_closed_ms.max_seq}},
+teda dlhšie než perióda, ale mimo vzorkovacieho cyklu. Keďže fronta pri
+žiadnom odovzdaní nedržala nedokončenú úlohu, zápis plnej snímky skončil
+skôr, než prišla nasledujúca snímka. Súhrn zapisovača:
+`zapisovac: 480 zverejnenych, 0 zlyhanych, 0 zahodenych, 0 nezapisanych, najvacsia fronta 0 snimok (0 B), najdlhsie zverejnenie 5.126 s, cakanie na pamat fronty 0.0 ms v 0 cykloch, dobehnutie 0.108 s`.
+
+Generátor poslal
+121655 {{res:collection_pilot_6_20261025_timing.json:values.traffic.requests}}
+požiadaviek s
+0 {{res:collection_pilot_6_20261025_timing.json:values.traffic.errors}}
+chybami; najpomalšia požiadavka meranej fázy trvala
+2073.8 {{res:collection_pilot_6_20261025_timing.json:values.measure_latency.max_ms}}
+ms. Monitor mal najväčšiu medzeru
+1.00 {{res:collection_pilot_6_20261025_timing.json:values.monitor_max_gap_s}}
+s a
+0 {{res:collection_pilot_6_20261025_timing.json:values.monitor_missed_ticks}}
+vynechaných vzoriek; SSD bolo vyťažené na 99 % a viac v
+12 {{res:collection_pilot_6_20261025_timing.json:values.during_capture.sda_util_ge_99_samples}}
+vzorkách monitora počas zberu. Audit trval
+651.5 {{res:collection_pilot_6_20261025_timing.json:values.audit_timing.wall_s}}
+s.
+
+Podmienky prijatia pilota (každý cyklus kratší než perióda, žiadny
+zmeškaný slot) sa oproti pilotu 5 nezmenili. Pilot je vstupom kampane
+`benign-v5`; pred jej `campaign.py init` sa VM vypne a znova spustí (nový
+proces QEMU) a počas kampane sa nereštartuje (L13 v
+[LIMITACIE.md](LIMITACIE.md)).
