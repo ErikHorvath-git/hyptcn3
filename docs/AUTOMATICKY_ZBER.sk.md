@@ -186,8 +186,15 @@ zberom (aj pred reštartom novej skupiny) skončí so stavom
 `stopped/between-sessions` a správou `operator stop request`. Požiadavka sa
 presunie do `events/`. Platí iba pre bežiaci runner; požiadavku, ktorá zostala
 po predchádzajúcom behu, nové spustenie odloží ako `*_stop-request-stale.json`.
-Môže to trvať až jednu session s auditom a archiváciou (odhad okolo 1,5 h,
-zatiaľ nezmeraný). Pri `launch` alebo priamom `run` možno aj vopred pridať
+Môže to trvať až jednu session s auditom a archiváciou (najdlhšia session
+kampane v4, session 23: zber
+3740.1 {{res:collection_campaign_benign_v4_20261022.json:values.sessions.22.stage_s.capture}}
+s, audit
+3522.4 {{res:collection_campaign_benign_v4_20261022.json:values.sessions.22.stage_s.audit}}
+s a archivácia
+522.5 {{res:collection_campaign_benign_v4_20261022.json:values.sessions.22.stage_s.archive}}
+s; časy dvoch žiadostí a zastavení sú v `operator_stop_requests` a
+`stopped_states` toho [záznamu](../data/results/collection_campaign_benign_v4_20261022.json)). Pri `launch` alebo priamom `run` možno aj vopred pridať
 `--stop-after N`; limit počíta nové dokončené session daného spustenia
 a nemení plán ani pravidlá prijatia. Pokračuje sa rovnakým príkazom
 `launch`. Celú kampaň chráni spoločný zámok aj proti ručne spustenému

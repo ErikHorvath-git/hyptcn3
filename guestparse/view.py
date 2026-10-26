@@ -392,7 +392,8 @@ class GuestView:
         miesto vodcu, takze vtedy vodca v zozname nie je. Taka stranka je
         teda z ineho okamihu nez spojenia, ktore na uzol vedu. Zoznam potom
         tvoria uzly pred nim, ktorych spojenia sa zhoduju v oboch smeroch;
-        novy proces pribudne v dalsej snimke.
+        novy proces pribudne v dalsej snimke. Zvyskove riziko (exec vedlajsieho
+        vlakna procesu na konci zoznamu) je v L1 v docs/LIMITACIE.md.
 
         Vracia {'processes', 'count', 'truncated', 'stop_reason', 'walk'}.
         'walk' je 'next', 'prev', ked zoznam potvrdil prechod dozadu, alebo

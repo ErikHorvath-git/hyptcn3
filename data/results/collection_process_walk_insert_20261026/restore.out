@@ -1,0 +1,8 @@
+{
+  "archive": "/home/eh/hyptcn3-archive/campaigns/benign-v5-20261025/collections/benign-v5-20261025_18_train_quiet",
+  "target": "/home/eh/projects/hyptcn3/data/diagnostics/torn-walk-20261026/s18-raw",
+  "schema": "hyptcn3/collection-archive/2",
+  "files": 1442,
+  "bytes": 8286235798,
+  "stored_bytes": 1369553136
+}

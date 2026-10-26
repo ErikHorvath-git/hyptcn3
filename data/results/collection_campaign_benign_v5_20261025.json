@@ -1,0 +1,2879 @@
+{
+  "commit": "b065ee410feb0dc2a620ae8cca54c603bab5c226",
+  "commit_dirty": true,
+  "commit_note": "HEAD when this record was generated. The record script data/results/collection_campaign_benign_v5_20261025/record.py is not part of this commit; it is committed together with this file. The campaign was captured with the code of commit 6170545 (values.campaign_commit, collector 1.1), not with the code of this commit.",
+  "date": "2026-10-26T15:41:35.752590+00:00",
+  "host": "Linux-7.2.9+deb13-amd64-x86_64-with-glibc2.41",
+  "guest": {
+    "kernel": "6.1.0-42-cloud-amd64",
+    "machine_id": "180ac982142b4714a979599073c96cdd",
+    "stack_sha256": "3fcb9e724f031e3ed24fd3e08fb8f2946c8cd3f04416bc871d8f7dc31b3d46bc",
+    "stack_manifest": [
+      "c346dc8bc1c8c3649fc96064fddfc07172f740f7c82d1830dbb935b16c488271  /opt/hyptcn-lab/services.py",
+      "d7372422553f866333177456ac6daec4847f5660c1c854a646e602d0be0fcf6c  /opt/hyptcn-lab/schema.sql",
+      "a8e5ef8843ebae83eed8691f8eb7e1d186448d36e4be7d4406efeaa96291d5e3  /opt/hyptcn-lab/guest_state.py",
+      "62f55e4374b5db4522d0ce84c911f26ccd580e8f55bc570c09ee63c64be234c6  /etc/nginx/conf.d/hyptcn-lab.conf",
+      "af75eee623f3c7a0b7a1c10a35c2216684c6f4b610d44e46560de137ef3d6962  /etc/systemd/system/hyptcn-lab@.service",
+      "nginx\t1.22.1-9+deb12u10",
+      "postgresql\t15+248+deb12u1",
+      "python3\t3.11.2-1+b1",
+      "python3-psycopg2\t2.9.5-1+b1",
+      "timers:"
+    ]
+  },
+  "command": "data/results/collection_campaign_benign_v5_20261025/record.py data/campaigns/benign-v5-20261025 data/results/collection_campaign_benign_v5_20261025/verify_archives.log data/results/collection_campaign_benign_v5_20261025.json",
+  "n": 18,
+  "values": {
+    "campaign": "benign-v5-20261025",
+    "campaign_commit": "617054574510b42e89393656e561d3f552ae017d",
+    "planned_sessions": 48,
+    "accepted_sessions": 17,
+    "rejected_sessions": [
+      "benign-v5-20261025_18_train_quiet"
+    ],
+    "final_status": {
+      "status": "closed",
+      "stage": "closed",
+      "message": "Session 18 (benign-v5-20261025_18_train_quiet) was rejected by the audit: row seq 613 had an incomplete process list (behavioral-inputs-v1). A torn tasks walk from a tail insertion: a new kernel thread was linked into a recycled task_struct whose page was read before its initialization. The backward-walk rule of 0b61ffd correctly refused it. The operator (user decision 2026-10-26) closes the campaign; the walk gets a confirmation rule for this shape, then a new pilot and campaign v6.",
+      "accepted_archived": 17,
+      "session": "benign-v5-20261025_18_train_quiet",
+      "corpus": null
+    },
+    "closed": {
+      "schema": "hyptcn3/campaign-closed/1",
+      "id": "benign-v5-20261025",
+      "date": "2026-10-26T13:48:05.615598+00:00",
+      "reason": "Session 18 (benign-v5-20261025_18_train_quiet) was rejected by the audit: row seq 613 had an incomplete process list (behavioral-inputs-v1). A torn tasks walk from a tail insertion: a new kernel thread was linked into a recycled task_struct whose page was read before its initialization. The backward-walk rule of 0b61ffd correctly refused it. The operator (user decision 2026-10-26) closes the campaign; the walk gets a confirmation rule for this shape, then a new pilot and campaign v6.",
+      "uid": 1000,
+      "status_before": {
+        "status": "stopped",
+        "stage": "error",
+        "accepted_archived": 17,
+        "total": 48,
+        "updated_at": "2026-10-26T13:30:33.719975+00:00",
+        "pid": 2610163,
+        "process_identity": {
+          "host_boot": "eb635e03-638a-4d7c-ab67-9ee1a4d410cf",
+          "start_ticks": "44299806"
+        },
+        "inhibitor_pid": 2610176,
+        "message": "audit rejected session; archived without replacement: incomplete model inputs under behavioral-inputs-v1",
+        "signals": [],
+        "session": "benign-v5-20261025_18_train_quiet",
+        "group": "train-3",
+        "role": "train",
+        "scenario": "quiet",
+        "position": 18,
+        "capture_started_at": "2026-10-26T12:05:36.707005+00:00"
+      },
+      "note": "Operator decision. Captured, audited and archived sessions remain; no corpus index."
+    },
+    "corpus": null,
+    "summary": {
+      "accepted_sessions": 17,
+      "windows_min": 656,
+      "windows_max": 656,
+      "integrity_findings": 0,
+      "accepted_missed_slots": 0,
+      "accepted_collector_errors": 0,
+      "log_error_lines": 0,
+      "scheduler_skips": 0,
+      "full_pages_min": 122354,
+      "full_pages_max": 264999,
+      "full_ms_min": 1322.1,
+      "full_ms_max": 1821.1,
+      "cycle_total_ms_max": 1821.1,
+      "cycle_total_ms_max_session": "benign-v5-20261025_14_train_bursty",
+      "delta_ms_max_accepted": 894.8,
+      "delta_ms_max_accepted_session": "benign-v5-20261025_07_train_write_heavy",
+      "delta_ms_max_all": 894.8,
+      "long_delta_cycles": {
+        "over_1500_ms": 0,
+        "over_2000_ms": 0,
+        "over_3000_ms": 0,
+        "over_4000_ms": 0,
+        "over_5000_ms": 0
+      },
+      "writer_queue_jobs_max": 1,
+      "writer_queue_wait_ms_max": 0.0,
+      "data_closed_ms_max": 6735.382,
+      "data_closed_ms_max_session": "benign-v5-20261025_14_train_bursty",
+      "data_closed_ms_max_seq": 360,
+      "rusage_majflt_max": 0,
+      "monitor_max_gap_s": 1.0494039058685303,
+      "monitor_missed_ticks": 0,
+      "qemu_swap_kb_max": 0,
+      "qemu_swap_sessions": [],
+      "qemu_swap_at_start_count": 8,
+      "qemu_swap_kb_at_start_max": 25824,
+      "sda_util_ge_99_samples": 337,
+      "requests": 1207766,
+      "request_errors": 0,
+      "measure_latency_max_ms": 2732.073,
+      "measure_latency_over_2s": 164,
+      "measure_latency_over_4s": 0,
+      "process_walk_prev_rows": 0,
+      "integrity_unconfirmed_rows": 2,
+      "by_group": {
+        "train-1": {
+          "guest_boots": [
+            "d4ee38ff-644f-47a1-9dc0-4b633d234124"
+          ],
+          "qemu_pids": [
+            2594525
+          ],
+          "sessions": 6,
+          "first_full_pages": 122354,
+          "last_full_pages": 238818,
+          "max_full_pages": 238881
+        },
+        "train-2": {
+          "guest_boots": [
+            "6f8bd271-d0bd-4dfa-953e-38e8b512c46f"
+          ],
+          "qemu_pids": [
+            2594525
+          ],
+          "sessions": 6,
+          "first_full_pages": 247856,
+          "last_full_pages": 256274,
+          "max_full_pages": 256274
+        },
+        "train-3": {
+          "guest_boots": [
+            "1ca44c9e-add0-411c-93c1-2f0e956b293b"
+          ],
+          "qemu_pids": [
+            2594525
+          ],
+          "sessions": 6,
+          "first_full_pages": 264999,
+          "last_full_pages": 263438,
+          "max_full_pages": 264999
+        }
+      }
+    },
+    "groups": {
+      "train-1": {
+        "qemu": {
+          "pid": 2594525,
+          "start_ticks": 43771089,
+          "host_boot": "eb635e03-638a-4d7c-ab67-9ee1a4d410cf"
+        },
+        "previous_boot": "b9ab1fe1-f8cc-420f-9f73-7755d6c7b1b6",
+        "boot_id": "d4ee38ff-644f-47a1-9dc0-4b633d234124",
+        "date": "2026-10-25T11:13:48.436835+00:00"
+      },
+      "train-2": {
+        "qemu": {
+          "pid": 2594525,
+          "start_ticks": 43771089,
+          "host_boot": "eb635e03-638a-4d7c-ab67-9ee1a4d410cf"
+        },
+        "previous_boot": "d4ee38ff-644f-47a1-9dc0-4b633d234124",
+        "boot_id": "6f8bd271-d0bd-4dfa-953e-38e8b512c46f",
+        "date": "2026-10-25T19:47:11.161788+00:00"
+      },
+      "train-3": {
+        "qemu": {
+          "pid": 2594525,
+          "start_ticks": 43771089,
+          "host_boot": "eb635e03-638a-4d7c-ab67-9ee1a4d410cf"
+        },
+        "previous_boot": "6f8bd271-d0bd-4dfa-953e-38e8b512c46f",
+        "boot_id": "1ca44c9e-add0-411c-93c1-2f0e956b293b",
+        "date": "2026-10-26T04:35:56.332156+00:00"
+      }
+    },
+    "qemu_processes": [
+      [
+        2594525,
+        43771089
+      ]
+    ],
+    "operator_stop_requests": [],
+    "stopped_states": [
+      {
+        "updated_at": "2026-10-25T12:36:31.171149+00:00",
+        "stage": "between-sessions",
+        "position": 1,
+        "session": "benign-v5-20261025_01_train_write_heavy",
+        "message": "requested stop-after boundary"
+      },
+      {
+        "updated_at": "2026-10-26T13:30:33.719975+00:00",
+        "stage": "error",
+        "position": 18,
+        "session": "benign-v5-20261025_18_train_quiet",
+        "message": "audit rejected session; archived without replacement: incomplete model inputs under behavioral-inputs-v1"
+      }
+    ],
+    "sessions": [
+      {
+        "session": "benign-v5-20261025_01_train_write_heavy",
+        "group": "train-1",
+        "role": "train",
+        "scenario": "write_heavy",
+        "group_attempt": 1,
+        "guest_boot": "d4ee38ff-644f-47a1-9dc0-4b633d234124",
+        "qemu": {
+          "pid": 2594525,
+          "start_ticks": 43771089,
+          "host_boot": "eb635e03-638a-4d7c-ab67-9ee1a4d410cf"
+        },
+        "measurement_dirty": [],
+        "qemu_swap_kb_at_start": 0,
+        "host_monitor": {
+          "qemu_swap_kb_max": 0,
+          "qemu_swap_samples_over_0": 0,
+          "pswpout_delta": 5493,
+          "sda_util_ge_99_samples": 8,
+          "mem_available_mib_min": 10507,
+          "samples": 3734
+        },
+        "accepted": true,
+        "reasons": [],
+        "snapshots": 720,
+        "windows": 656,
+        "score_coverage": 0.9111111111111111,
+        "logs_accepted": true,
+        "integrity_findings": 0,
+        "invalid_input_seq": [],
+        "integrity_unconfirmed_seq": [],
+        "process_walk_prev_seq": [],
+        "collector_end": {
+          "snapshots": 720,
+          "errors": 0,
+          "missed_slots": 0
+        },
+        "collector_mlock": {
+          "seconds": 0.6,
+          "vmrss_mib": 2596
+        },
+        "log_error_lines": 0,
+        "scheduler_skips": [],
+        "full_snapshots": [
+          {
+            "seq": 0,
+            "pages": 122354,
+            "bytes": 502140880,
+            "mib": 478.88,
+            "logged_size": "478.88 MiB",
+            "capture_ms": 1322.0,
+            "backend_read_ms": 300.689,
+            "total_ms": 1322.1
+          },
+          {
+            "seq": 360,
+            "pages": 134827,
+            "bytes": 553330072,
+            "mib": 527.7,
+            "logged_size": "527.70 MiB",
+            "capture_ms": 1339.3,
+            "backend_read_ms": 301.5,
+            "total_ms": 1341.4
+          }
+        ],
+        "cycle_total_ms_max": 1341.4,
+        "delta_ms": {
+          "n": 718,
+          "p50": 827.7,
+          "p99": 867.6,
+          "max": 889.1
+        },
+        "long_cycles": [],
+        "writer": {
+          "summary": "zapisovac: 720 zverejnenych, 0 zlyhanych, 0 zahodenych, 0 nezapisanych, najvacsia fronta 0 snimok (0 B), najdlhsie zverejnenie 3.827 s, cakanie na pamat fronty 0.0 ms v 0 cykloch, dobehnutie 0.067 s",
+          "longest_operations": "vytvorenie 0.000 s, zapis 2.485 s, fsync 0.000 s, sidecar 0.006 s, rename 0.006 s, hook 0.000 s, retencia 0.000 s",
+          "queue_jobs_max": 0,
+          "queue_bytes_max": 0,
+          "queue_wait_ms_max": 0.0,
+          "data_closed_ms": {
+            "p50": 903.218,
+            "max": 3826.347,
+            "max_seq": 360
+          },
+          "sha_ms_max": 2381.287,
+          "write_ms_max": 103.615
+        },
+        "rusage_majflt_max": 0,
+        "skipped_before_max": 0,
+        "monitor_max_gap_s": 1.044546127319336,
+        "monitor_missed_ticks": 0,
+        "requests": 59936,
+        "request_errors": 0,
+        "measure_latency": {
+          "n": 57966,
+          "max_ms": 2170.552,
+          "p99_ms": 191.992,
+          "over_1s": 174,
+          "over_2s": 1,
+          "over_4s": 0
+        },
+        "raw_bytes": 12362270832,
+        "archive_stored_bytes": 1834804314,
+        "stage_s": {
+          "session-preflight": 0.7,
+          "reboot": 10.8,
+          "capture": 3742.8,
+          "audit": 745.5,
+          "archive": 474.0,
+          "session-complete": 0.2,
+          "preflight": 0.3
+        },
+        "inputs_sha256": {
+          "audit": "4ec4efc587fafddd7b53b0730efd8ae7667bdd1f64cd8c0889ce47747f4d322e",
+          "session.json": "acfb3659fb8d71aba92fe9e387fce0dadb735e5596fabe9a503229a0e898f97f",
+          "collect.log": "e997ed0913038e36a1185b19c794b744a83669b6883dd555e73ae50090a560fb",
+          "traffic.json": "295ffbb3ed5d9798886fde10ab000dbf3b9aea6aa2252d4d6b24edc54a4afe0b",
+          "traffic_requests.jsonl": "3cb0e78a1ceec220b42267952253865a9c240ce218acbc854f39ad49fed7ca41",
+          "host_monitor.jsonl": "623f99831766d844d9d154effbfe100a7ffa01a1f0792912f2595e3aff9a5df6",
+          "archive-manifest.json": "76d8097ff063088a9fd4cf5d8442faf112575b73c50f394cdf8cbe4741e54b62"
+        }
+      },
+      {
+        "session": "benign-v5-20261025_02_train_quiet",
+        "group": "train-1",
+        "role": "train",
+        "scenario": "quiet",
+        "group_attempt": 1,
+        "guest_boot": "d4ee38ff-644f-47a1-9dc0-4b633d234124",
+        "qemu": {
+          "pid": 2594525,
+          "start_ticks": 43771089,
+          "host_boot": "eb635e03-638a-4d7c-ab67-9ee1a4d410cf"
+        },
+        "measurement_dirty": [],
+        "qemu_swap_kb_at_start": 3760,
+        "host_monitor": {
+          "qemu_swap_kb_max": 0,
+          "qemu_swap_samples_over_0": 0,
+          "pswpout_delta": 0,
+          "sda_util_ge_99_samples": 12,
+          "mem_available_mib_min": 10419,
+          "samples": 3726
+        },
+        "accepted": true,
+        "reasons": [],
+        "snapshots": 720,
+        "windows": 656,
+        "score_coverage": 0.9111111111111111,
+        "logs_accepted": true,
+        "integrity_findings": 0,
+        "invalid_input_seq": [],
+        "integrity_unconfirmed_seq": [],
+        "process_walk_prev_seq": [],
+        "collector_end": {
+          "snapshots": 720,
+          "errors": 0,
+          "missed_slots": 0
+        },
+        "collector_mlock": {
+          "seconds": 0.2,
+          "vmrss_mib": 2596
+        },
+        "log_error_lines": 0,
+        "scheduler_skips": [],
+        "full_snapshots": [
+          {
+            "seq": 0,
+            "pages": 168483,
+            "bytes": 691454296,
+            "mib": 659.42,
+            "logged_size": "659.42 MiB",
+            "capture_ms": 1452.9,
+            "backend_read_ms": 296.108,
+            "total_ms": 1452.9
+          },
+          {
+            "seq": 360,
+            "pages": 168583,
+            "bytes": 691864696,
+            "mib": 659.81,
+            "logged_size": "659.81 MiB",
+            "capture_ms": 1430.9,
+            "backend_read_ms": 298.808,
+            "total_ms": 1431.6
+          }
+        ],
+        "cycle_total_ms_max": 1452.9,
+        "delta_ms": {
+          "n": 718,
+          "p50": 791.9,
+          "p99": 834.9,
+          "max": 837.8
+        },
+        "long_cycles": [],
+        "writer": {
+          "summary": "zapisovac: 720 zverejnenych, 0 zlyhanych, 0 zahodenych, 0 nezapisanych, najvacsia fronta 0 snimok (0 B), najdlhsie zverejnenie 4.554 s, cakanie na pamat fronty 0.0 ms v 0 cykloch, dobehnutie 0.046 s",
+          "longest_operations": "vytvorenie 0.000 s, zapis 3.101 s, fsync 0.000 s, sidecar 0.000 s, rename 0.000 s, hook 0.000 s, retencia 0.000 s",
+          "queue_jobs_max": 0,
+          "queue_bytes_max": 0,
+          "queue_wait_ms_max": 0.0,
+          "data_closed_ms": {
+            "p50": 827.966,
+            "max": 4554.141,
+            "max_seq": 0
+          },
+          "sha_ms_max": 2971.634,
+          "write_ms_max": 129.563
+        },
+        "rusage_majflt_max": 0,
+        "skipped_before_max": 0,
+        "monitor_max_gap_s": 1.0434870719909668,
+        "monitor_missed_ticks": 0,
+        "requests": 5390,
+        "request_errors": 0,
+        "measure_latency": {
+          "n": 5211,
+          "max_ms": 533.072,
+          "p99_ms": 136.521,
+          "over_1s": 0,
+          "over_2s": 0,
+          "over_4s": 0
+        },
+        "raw_bytes": 7305822720,
+        "archive_stored_bytes": 1182161907,
+        "stage_s": {
+          "session-preflight": 0.7,
+          "capture": 3735.3,
+          "audit": 761.3,
+          "archive": 303.1,
+          "session-complete": 0.3
+        },
+        "inputs_sha256": {
+          "audit": "3ad98be9555c908e1f36bf1b34a9e35234fe762e1e3517395d902f6f11a0f986",
+          "session.json": "d2dfcb3c00466022d256f39343eed53c33300df4455c4b7fa43a000d36058559",
+          "collect.log": "9d03a4f1f55e33398743495445268166b6237ba8c6c9a33a8e0a1a6af7f14d51",
+          "traffic.json": "308b8622c2b4636d43112725027c6be1a714ab25e0b195c580ecf07168bbe6bc",
+          "traffic_requests.jsonl": "dc8292442fa6463090c400af758f003003e648327e15dde3513cd5f1fd7d1ba3",
+          "host_monitor.jsonl": "453e2a4ec603d8bcacd67e31a7650f3ca11b99bd29484f1f4c3eb3cb3e546241",
+          "archive-manifest.json": "b1224cc98f807b9cf5cf63613021ca1957d1c1574e1a05b778440d825b969991"
+        }
+      },
+      {
+        "session": "benign-v5-20261025_03_train_bursty",
+        "group": "train-1",
+        "role": "train",
+        "scenario": "bursty",
+        "group_attempt": 1,
+        "guest_boot": "d4ee38ff-644f-47a1-9dc0-4b633d234124",
+        "qemu": {
+          "pid": 2594525,
+          "start_ticks": 43771089,
+          "host_boot": "eb635e03-638a-4d7c-ab67-9ee1a4d410cf"
+        },
+        "measurement_dirty": [],
+        "qemu_swap_kb_at_start": 0,
+        "host_monitor": {
+          "qemu_swap_kb_max": 0,
+          "qemu_swap_samples_over_0": 0,
+          "pswpout_delta": 5,
+          "sda_util_ge_99_samples": 18,
+          "mem_available_mib_min": 10344,
+          "samples": 3733
+        },
+        "accepted": true,
+        "reasons": [],
+        "snapshots": 720,
+        "windows": 656,
+        "score_coverage": 0.9111111111111111,
+        "logs_accepted": true,
+        "integrity_findings": 0,
+        "invalid_input_seq": [],
+        "integrity_unconfirmed_seq": [],
+        "process_walk_prev_seq": [],
+        "collector_end": {
+          "snapshots": 720,
+          "errors": 0,
+          "missed_slots": 0
+        },
+        "collector_mlock": {
+          "seconds": 0.2,
+          "vmrss_mib": 2596
+        },
+        "log_error_lines": 0,
+        "scheduler_skips": [],
+        "full_snapshots": [
+          {
+            "seq": 0,
+            "pages": 168680,
+            "bytes": 692262784,
+            "mib": 660.19,
+            "logged_size": "660.19 MiB",
+            "capture_ms": 1491.7,
+            "backend_read_ms": 309.986,
+            "total_ms": 1491.8
+          },
+          {
+            "seq": 360,
+            "pages": 195379,
+            "bytes": 801835480,
+            "mib": 764.69,
+            "logged_size": "764.69 MiB",
+            "capture_ms": 1555.7,
+            "backend_read_ms": 306.703,
+            "total_ms": 1557.8
+          }
+        ],
+        "cycle_total_ms_max": 1557.8,
+        "delta_ms": {
+          "n": 718,
+          "p50": 852.9,
+          "p99": 873.5,
+          "max": 887.7
+        },
+        "long_cycles": [
+          {
+            "seq": 360,
+            "kind": "PLNA",
+            "bytes": 801835480,
+            "mib": 764.69,
+            "logged_size": "764.69 MiB",
+            "capture_ms": 1555.7,
+            "total_ms": 1557.8,
+            "since_full": 0,
+            "end_utc": "2026-10-25T14:31:55.286Z"
+          }
+        ],
+        "writer": {
+          "summary": "zapisovac: 720 zverejnenych, 0 zlyhanych, 0 zahodenych, 0 nezapisanych, najvacsia fronta 0 snimok (0 B), najdlhsie zverejnenie 5.227 s, cakanie na pamat fronty 0.0 ms v 0 cykloch, dobehnutie 0.092 s",
+          "longest_operations": "vytvorenie 0.820 s, zapis 3.664 s, fsync 0.000 s, sidecar 0.005 s, rename 0.006 s, hook 0.000 s, retencia 0.000 s",
+          "queue_jobs_max": 0,
+          "queue_bytes_max": 0,
+          "queue_wait_ms_max": 0.0,
+          "data_closed_ms": {
+            "p50": 942.608,
+            "max": 5222.257,
+            "max_seq": 360
+          },
+          "sha_ms_max": 3513.139,
+          "write_ms_max": 825.932
+        },
+        "rusage_majflt_max": 0,
+        "skipped_before_max": 0,
+        "monitor_max_gap_s": 1.044090986251831,
+        "monitor_missed_ticks": 0,
+        "requests": 179258,
+        "request_errors": 0,
+        "measure_latency": {
+          "n": 173490,
+          "max_ms": 2270.675,
+          "p99_ms": 83.01,
+          "over_1s": 416,
+          "over_2s": 35,
+          "over_4s": 0
+        },
+        "raw_bytes": 16134039720,
+        "archive_stored_bytes": 2422263517,
+        "stage_s": {
+          "session-preflight": 0.7,
+          "capture": 3741.3,
+          "audit": 981.6,
+          "archive": 560.1,
+          "session-complete": 0.5
+        },
+        "inputs_sha256": {
+          "audit": "a4074a9bc5cd275747ed9567c4cf3737b72d6696fc14c7e58e7d0e9561dfe1e5",
+          "session.json": "efc7e88c8a54d911e555cdb7ca17fcf3736b421c0d83b6663b2335b75e06a23f",
+          "collect.log": "1b3f1bd9e816fd614c286ae808c2026a02389ef10987db2b40ec9c4fe1548299",
+          "traffic.json": "bde375d473360f0ece393813b7120a5a05f8352b33b55f0c1408f06234e91890",
+          "traffic_requests.jsonl": "0786055d7a0ce83c8df2a0b6eb54154081112afe695b4409da44b961f0021a85",
+          "host_monitor.jsonl": "63457558ca49170632ddef19454011867162ccc4bd3c4b3775a14077f3c96b6b",
+          "archive-manifest.json": "5a089709ca23cedd8ca4713ae0cfa5c35e032fdfbbe7fed7efa1f98150457d46"
+        }
+      },
+      {
+        "session": "benign-v5-20261025_04_train_mixed",
+        "group": "train-1",
+        "role": "train",
+        "scenario": "mixed",
+        "group_attempt": 1,
+        "guest_boot": "d4ee38ff-644f-47a1-9dc0-4b633d234124",
+        "qemu": {
+          "pid": 2594525,
+          "start_ticks": 43771089,
+          "host_boot": "eb635e03-638a-4d7c-ab67-9ee1a4d410cf"
+        },
+        "measurement_dirty": [],
+        "qemu_swap_kb_at_start": 13048,
+        "host_monitor": {
+          "qemu_swap_kb_max": 0,
+          "qemu_swap_samples_over_0": 0,
+          "pswpout_delta": 0,
+          "sda_util_ge_99_samples": 16,
+          "mem_available_mib_min": 10280,
+          "samples": 3730
+        },
+        "accepted": true,
+        "reasons": [],
+        "snapshots": 720,
+        "windows": 656,
+        "score_coverage": 0.9111111111111111,
+        "logs_accepted": true,
+        "integrity_findings": 0,
+        "invalid_input_seq": [],
+        "integrity_unconfirmed_seq": [],
+        "process_walk_prev_seq": [],
+        "collector_end": {
+          "snapshots": 720,
+          "errors": 0,
+          "missed_slots": 0
+        },
+        "collector_mlock": {
+          "seconds": 0.1,
+          "vmrss_mib": 2596
+        },
+        "log_error_lines": 0,
+        "scheduler_skips": [],
+        "full_snapshots": [
+          {
+            "seq": 0,
+            "pages": 229030,
+            "bytes": 939939184,
+            "mib": 896.4,
+            "logged_size": "896.40 MiB",
+            "capture_ms": 1661.1,
+            "backend_read_ms": 316.082,
+            "total_ms": 1661.1
+          },
+          {
+            "seq": 360,
+            "pages": 229499,
+            "bytes": 941863960,
+            "mib": 898.23,
+            "logged_size": "898.23 MiB",
+            "capture_ms": 1665.4,
+            "backend_read_ms": 310.762,
+            "total_ms": 1667.5
+          }
+        ],
+        "cycle_total_ms_max": 1667.5,
+        "delta_ms": {
+          "n": 718,
+          "p50": 816.2,
+          "p99": 853.8,
+          "max": 869.2
+        },
+        "long_cycles": [
+          {
+            "seq": 0,
+            "kind": "PLNA",
+            "bytes": 939939184,
+            "mib": 896.4,
+            "logged_size": "896.40 MiB",
+            "capture_ms": 1661.1,
+            "total_ms": 1661.1,
+            "since_full": 0,
+            "end_utc": "2026-10-25T15:30:02.633Z"
+          },
+          {
+            "seq": 360,
+            "kind": "PLNA",
+            "bytes": 941863960,
+            "mib": 898.23,
+            "logged_size": "898.23 MiB",
+            "capture_ms": 1665.4,
+            "total_ms": 1667.5,
+            "since_full": 0,
+            "end_utc": "2026-10-25T16:00:02.640Z"
+          }
+        ],
+        "writer": {
+          "summary": "zapisovac: 720 zverejnenych, 0 zlyhanych, 0 zahodenych, 0 nezapisanych, najvacsia fronta 1 snimok (24.24 MiB), najdlhsie zverejnenie 5.925 s, cakanie na pamat fronty 0.0 ms v 0 cykloch, dobehnutie 0.066 s",
+          "longest_operations": "vytvorenie 1.958 s, zapis 4.257 s, fsync 0.000 s, sidecar 0.000 s, rename 0.000 s, hook 0.000 s, retencia 0.000 s",
+          "queue_jobs_max": 1,
+          "queue_bytes_max": 25415464,
+          "queue_wait_ms_max": 0.0,
+          "data_closed_ms": {
+            "p50": 890.038,
+            "max": 5924.452,
+            "max_seq": 360
+          },
+          "sha_ms_max": 4075.31,
+          "write_ms_max": 1961.728
+        },
+        "rusage_majflt_max": 0,
+        "skipped_before_max": 0,
+        "monitor_max_gap_s": 1.0444037914276123,
+        "monitor_missed_ticks": 0,
+        "requests": 67319,
+        "request_errors": 0,
+        "measure_latency": {
+          "n": 65017,
+          "max_ms": 1583.409,
+          "p99_ms": 121.007,
+          "over_1s": 119,
+          "over_2s": 0,
+          "over_4s": 0
+        },
+        "raw_bytes": 12850979256,
+        "archive_stored_bytes": 1988971387,
+        "stage_s": {
+          "session-preflight": 1.6,
+          "capture": 3740.0,
+          "audit": 1043.9,
+          "archive": 492.0,
+          "session-complete": 1.2
+        },
+        "inputs_sha256": {
+          "audit": "ce7b74ae886bad339f4d9a50b129c9636b444212330dbeda71099cfb5e622465",
+          "session.json": "66a88ba1f983e1b33937991a3c14b5d03d91f2dcf31c2cc870a347aeb8c6016a",
+          "collect.log": "0dcdf0a317489983e40ead1be263b305e1ff574015392a6f679895c4bfb7edce",
+          "traffic.json": "cddbba65bd2b9795734a3ba2c839df31e89f381d06c064334d2a43574ae2a4ea",
+          "traffic_requests.jsonl": "9ff8897ebbbd606ed372b5565ef3c0978c8c01e76f92de6b531ab0b22bc8bf78",
+          "host_monitor.jsonl": "bea41d741b108eabf5f6ec4cbf4d6bf6f3f9d8997aa6eaf79d5e754c8c07697b",
+          "archive-manifest.json": "ccd4d79d51889bbb21e2c99f32a02a022b8ec9ef463573294ed02a3e5a77271e"
+        }
+      },
+      {
+        "session": "benign-v5-20261025_05_train_read_heavy",
+        "group": "train-1",
+        "role": "train",
+        "scenario": "read_heavy",
+        "group_attempt": 1,
+        "guest_boot": "d4ee38ff-644f-47a1-9dc0-4b633d234124",
+        "qemu": {
+          "pid": 2594525,
+          "start_ticks": 43771089,
+          "host_boot": "eb635e03-638a-4d7c-ab67-9ee1a4d410cf"
+        },
+        "measurement_dirty": [],
+        "qemu_swap_kb_at_start": 25824,
+        "host_monitor": {
+          "qemu_swap_kb_max": 0,
+          "qemu_swap_samples_over_0": 0,
+          "pswpout_delta": 0,
+          "sda_util_ge_99_samples": 17,
+          "mem_available_mib_min": 10273,
+          "samples": 3728
+        },
+        "accepted": true,
+        "reasons": [],
+        "snapshots": 720,
+        "windows": 656,
+        "score_coverage": 0.9111111111111111,
+        "logs_accepted": true,
+        "integrity_findings": 0,
+        "invalid_input_seq": [],
+        "integrity_unconfirmed_seq": [],
+        "process_walk_prev_seq": [],
+        "collector_end": {
+          "snapshots": 720,
+          "errors": 0,
+          "missed_slots": 0
+        },
+        "collector_mlock": {
+          "seconds": 0.1,
+          "vmrss_mib": 2596
+        },
+        "log_error_lines": 0,
+        "scheduler_skips": [],
+        "full_snapshots": [
+          {
+            "seq": 0,
+            "pages": 230378,
+            "bytes": 945471376,
+            "mib": 901.67,
+            "logged_size": "901.67 MiB",
+            "capture_ms": 1653.2,
+            "backend_read_ms": 299.282,
+            "total_ms": 1653.3
+          },
+          {
+            "seq": 360,
+            "pages": 231068,
+            "bytes": 948303136,
+            "mib": 904.37,
+            "logged_size": "904.37 MiB",
+            "capture_ms": 1640.5,
+            "backend_read_ms": 301.751,
+            "total_ms": 1642.6
+          }
+        ],
+        "cycle_total_ms_max": 1653.3,
+        "delta_ms": {
+          "n": 718,
+          "p50": 797.7,
+          "p99": 842.0,
+          "max": 859.8
+        },
+        "long_cycles": [
+          {
+            "seq": 0,
+            "kind": "PLNA",
+            "bytes": 945471376,
+            "mib": 901.67,
+            "logged_size": "901.67 MiB",
+            "capture_ms": 1653.2,
+            "total_ms": 1653.3,
+            "since_full": 0,
+            "end_utc": "2026-10-25T16:58:01.082Z"
+          },
+          {
+            "seq": 360,
+            "kind": "PLNA",
+            "bytes": 948303136,
+            "mib": 904.37,
+            "logged_size": "904.37 MiB",
+            "capture_ms": 1640.5,
+            "total_ms": 1642.6,
+            "since_full": 0,
+            "end_utc": "2026-10-25T17:28:01.071Z"
+          }
+        ],
+        "writer": {
+          "summary": "zapisovac: 720 zverejnenych, 0 zlyhanych, 0 zahodenych, 0 nezapisanych, najvacsia fronta 1 snimok (24.68 MiB), najdlhsie zverejnenie 5.914 s, cakanie na pamat fronty 0.0 ms v 0 cykloch, dobehnutie 0.065 s",
+          "longest_operations": "vytvorenie 0.003 s, zapis 4.266 s, fsync 0.000 s, sidecar 0.012 s, rename 0.000 s, hook 0.000 s, retencia 0.000 s",
+          "queue_jobs_max": 1,
+          "queue_bytes_max": 25877176,
+          "queue_wait_ms_max": 0.0,
+          "data_closed_ms": {
+            "p50": 856.91,
+            "max": 5913.445,
+            "max_seq": 0
+          },
+          "sha_ms_max": 4093.259,
+          "write_ms_max": 694.095
+        },
+        "rusage_majflt_max": 0,
+        "skipped_before_max": 0,
+        "monitor_max_gap_s": 1.043529987335205,
+        "monitor_missed_ticks": 0,
+        "requests": 63427,
+        "request_errors": 0,
+        "measure_latency": {
+          "n": 61334,
+          "max_ms": 1667.551,
+          "p99_ms": 45.965,
+          "over_1s": 15,
+          "over_2s": 0,
+          "over_4s": 0
+        },
+        "raw_bytes": 10858076856,
+        "archive_stored_bytes": 1711800704,
+        "stage_s": {
+          "session-preflight": 1.1,
+          "capture": 3737.9,
+          "audit": 993.5,
+          "archive": 404.6,
+          "session-complete": 0.3
+        },
+        "inputs_sha256": {
+          "audit": "c135041f9056a0a0f1c85a69570bbf2699189134f14a56fb16407acdd6883cd1",
+          "session.json": "4a5c4f189b1ede91c5f316983561c02a433e80e0ee2e7b6b835762a80b657f7c",
+          "collect.log": "4bfacb0350625f3954ab1ca891badd8ba817ec091b71ac38b432a6e244e9a008",
+          "traffic.json": "1b4ce4e513a9ffae96a9bbddaa597c97784df5268eff11e217678faf65ad355e",
+          "traffic_requests.jsonl": "ce0636934a6bc7f6e40ab38044022e54f89f2a8f1505c747db2c6a2dac8ee63a",
+          "host_monitor.jsonl": "b9e920eba79ceb0fb485306c7a8dfae8299577a175b4eb1c49f7b5a4fc08ce6e",
+          "archive-manifest.json": "2c36fcc1695b3b7b395efd2b466284faf428d1dd8e272c187fffff60a69f5bb9"
+        }
+      },
+      {
+        "session": "benign-v5-20261025_06_train_steady",
+        "group": "train-1",
+        "role": "train",
+        "scenario": "steady",
+        "group_attempt": 1,
+        "guest_boot": "d4ee38ff-644f-47a1-9dc0-4b633d234124",
+        "qemu": {
+          "pid": 2594525,
+          "start_ticks": 43771089,
+          "host_boot": "eb635e03-638a-4d7c-ab67-9ee1a4d410cf"
+        },
+        "measurement_dirty": [],
+        "qemu_swap_kb_at_start": 0,
+        "host_monitor": {
+          "qemu_swap_kb_max": 0,
+          "qemu_swap_samples_over_0": 0,
+          "pswpout_delta": 0,
+          "sda_util_ge_99_samples": 24,
+          "mem_available_mib_min": 10271,
+          "samples": 3727
+        },
+        "accepted": true,
+        "reasons": [],
+        "snapshots": 720,
+        "windows": 656,
+        "score_coverage": 0.9111111111111111,
+        "logs_accepted": true,
+        "integrity_findings": 0,
+        "invalid_input_seq": [],
+        "integrity_unconfirmed_seq": [],
+        "process_walk_prev_seq": [],
+        "collector_end": {
+          "snapshots": 720,
+          "errors": 0,
+          "missed_slots": 0
+        },
+        "collector_mlock": {
+          "seconds": 0.1,
+          "vmrss_mib": 2596
+        },
+        "log_error_lines": 0,
+        "scheduler_skips": [],
+        "full_snapshots": [
+          {
+            "seq": 0,
+            "pages": 238881,
+            "bytes": 980367688,
+            "mib": 934.95,
+            "logged_size": "934.95 MiB",
+            "capture_ms": 1675.0,
+            "backend_read_ms": 300.919,
+            "total_ms": 1675.0
+          },
+          {
+            "seq": 360,
+            "pages": 238818,
+            "bytes": 980109136,
+            "mib": 934.7,
+            "logged_size": "934.70 MiB",
+            "capture_ms": 1663.8,
+            "backend_read_ms": 300.945,
+            "total_ms": 1665.9
+          }
+        ],
+        "cycle_total_ms_max": 1675.0,
+        "delta_ms": {
+          "n": 718,
+          "p50": 792.2,
+          "p99": 836.5,
+          "max": 840.2
+        },
+        "long_cycles": [
+          {
+            "seq": 0,
+            "kind": "PLNA",
+            "bytes": 980367688,
+            "mib": 934.95,
+            "logged_size": "934.95 MiB",
+            "capture_ms": 1675.0,
+            "total_ms": 1675.0,
+            "since_full": 0,
+            "end_utc": "2026-10-25T18:23:36.435Z"
+          },
+          {
+            "seq": 360,
+            "kind": "PLNA",
+            "bytes": 980109136,
+            "mib": 934.7,
+            "logged_size": "934.70 MiB",
+            "capture_ms": 1663.8,
+            "total_ms": 1665.9,
+            "since_full": 0,
+            "end_utc": "2026-10-25T18:53:36.426Z"
+          }
+        ],
+        "writer": {
+          "summary": "zapisovac: 720 zverejnenych, 0 zlyhanych, 0 zahodenych, 0 nezapisanych, najvacsia fronta 1 snimok (56.96 MiB), najdlhsie zverejnenie 6.060 s, cakanie na pamat fronty 0.0 ms v 0 cykloch, dobehnutie 0.045 s",
+          "longest_operations": "vytvorenie 0.356 s, zapis 4.385 s, fsync 0.000 s, sidecar 0.003 s, rename 0.000 s, hook 0.000 s, retencia 0.000 s",
+          "queue_jobs_max": 1,
+          "queue_bytes_max": 59724920,
+          "queue_wait_ms_max": 0.0,
+          "data_closed_ms": {
+            "p50": 843.416,
+            "max": 6059.791,
+            "max_seq": 0
+          },
+          "sha_ms_max": 4205.2,
+          "write_ms_max": 360.309
+        },
+        "rusage_majflt_max": 0,
+        "skipped_before_max": 0,
+        "monitor_max_gap_s": 1.043891191482544,
+        "monitor_missed_ticks": 0,
+        "requests": 27965,
+        "request_errors": 0,
+        "measure_latency": {
+          "n": 27042,
+          "max_ms": 983.108,
+          "p99_ms": 133.358,
+          "over_1s": 0,
+          "over_2s": 0,
+          "over_4s": 0
+        },
+        "raw_bytes": 10211688648,
+        "archive_stored_bytes": 1625870191,
+        "stage_s": {
+          "session-preflight": 0.6,
+          "capture": 3735.6,
+          "audit": 999.6,
+          "archive": 389.8,
+          "session-complete": 0.3
+        },
+        "inputs_sha256": {
+          "audit": "9446831fcd82ba3ce1f80a870bc087e5507fef98f8b3c84281117300c1dc853a",
+          "session.json": "f289ff86c53f6222d0478b1b4787b96f10ac9e2fd7cc56d33ca4111e90f9fb39",
+          "collect.log": "efbd6e8e7e0ff2d7b6f5bf1f499af3e2876e614a6b52528c54cda0af0fe28638",
+          "traffic.json": "8c8fdb7db4e3a609270987e9e440c9d6901ecc7491b5553f90917dbad5634001",
+          "traffic_requests.jsonl": "8c2e285d384ce23cdf37b2584ffa51f0fdb703c50ac80196d731381e02c1b928",
+          "host_monitor.jsonl": "1268b9e10136cd1c3a3c6714704f4fd7fd0c5ff91dfde20d0be67b5aab5e050e",
+          "archive-manifest.json": "b095be88169a05e3e4fcde354ab47640700f697b1d98de5855fb408250c4cfa3"
+        }
+      },
+      {
+        "session": "benign-v5-20261025_07_train_write_heavy",
+        "group": "train-2",
+        "role": "train",
+        "scenario": "write_heavy",
+        "group_attempt": 1,
+        "guest_boot": "6f8bd271-d0bd-4dfa-953e-38e8b512c46f",
+        "qemu": {
+          "pid": 2594525,
+          "start_ticks": 43771089,
+          "host_boot": "eb635e03-638a-4d7c-ab67-9ee1a4d410cf"
+        },
+        "measurement_dirty": [],
+        "qemu_swap_kb_at_start": 0,
+        "host_monitor": {
+          "qemu_swap_kb_max": 0,
+          "qemu_swap_samples_over_0": 0,
+          "pswpout_delta": 0,
+          "sda_util_ge_99_samples": 10,
+          "mem_available_mib_min": 10184,
+          "samples": 3732
+        },
+        "accepted": true,
+        "reasons": [],
+        "snapshots": 720,
+        "windows": 656,
+        "score_coverage": 0.9111111111111111,
+        "logs_accepted": true,
+        "integrity_findings": 0,
+        "invalid_input_seq": [],
+        "integrity_unconfirmed_seq": [],
+        "process_walk_prev_seq": [],
+        "collector_end": {
+          "snapshots": 720,
+          "errors": 0,
+          "missed_slots": 0
+        },
+        "collector_mlock": {
+          "seconds": 0.1,
+          "vmrss_mib": 2596
+        },
+        "log_error_lines": 0,
+        "scheduler_skips": [],
+        "full_snapshots": [
+          {
+            "seq": 0,
+            "pages": 247856,
+            "bytes": 1017201088,
+            "mib": 970.08,
+            "logged_size": "970.08 MiB",
+            "capture_ms": 1745.8,
+            "backend_read_ms": 319.781,
+            "total_ms": 1745.8
+          },
+          {
+            "seq": 360,
+            "pages": 245799,
+            "bytes": 1008759160,
+            "mib": 962.03,
+            "logged_size": "962.03 MiB",
+            "capture_ms": 1725.2,
+            "backend_read_ms": 313.484,
+            "total_ms": 1727.3
+          }
+        ],
+        "cycle_total_ms_max": 1745.8,
+        "delta_ms": {
+          "n": 718,
+          "p50": 813.6,
+          "p99": 853.3,
+          "max": 894.8
+        },
+        "long_cycles": [
+          {
+            "seq": 0,
+            "kind": "PLNA",
+            "bytes": 1017201088,
+            "mib": 970.08,
+            "logged_size": "970.08 MiB",
+            "capture_ms": 1745.8,
+            "total_ms": 1745.8,
+            "since_full": 0,
+            "end_utc": "2026-10-25T19:49:22.865Z"
+          },
+          {
+            "seq": 360,
+            "kind": "PLNA",
+            "bytes": 1008759160,
+            "mib": 962.03,
+            "logged_size": "962.03 MiB",
+            "capture_ms": 1725.2,
+            "total_ms": 1727.3,
+            "since_full": 0,
+            "end_utc": "2026-10-25T20:19:22.846Z"
+          }
+        ],
+        "writer": {
+          "summary": "zapisovac: 720 zverejnenych, 0 zlyhanych, 0 zahodenych, 0 nezapisanych, najvacsia fronta 1 snimok (112.09 MiB), najdlhsie zverejnenie 6.357 s, cakanie na pamat fronty 0.0 ms v 0 cykloch, dobehnutie 0.058 s",
+          "longest_operations": "vytvorenie 0.007 s, zapis 4.611 s, fsync 0.000 s, sidecar 0.005 s, rename 0.000 s, hook 0.000 s, retencia 0.000 s",
+          "queue_jobs_max": 1,
+          "queue_bytes_max": 117529680,
+          "queue_wait_ms_max": 0.0,
+          "data_closed_ms": {
+            "p50": 887.726,
+            "max": 6356.804,
+            "max_seq": 0
+          },
+          "sha_ms_max": 4417.977,
+          "write_ms_max": 1327.828
+        },
+        "rusage_majflt_max": 0,
+        "skipped_before_max": 0,
+        "monitor_max_gap_s": 1.0452840328216553,
+        "monitor_missed_ticks": 0,
+        "requests": 59415,
+        "request_errors": 0,
+        "measure_latency": {
+          "n": 57441,
+          "max_ms": 2236.836,
+          "p99_ms": 285.113,
+          "over_1s": 329,
+          "over_2s": 20,
+          "over_4s": 0
+        },
+        "raw_bytes": 13185717912,
+        "archive_stored_bytes": 2008641694,
+        "stage_s": {
+          "session-preflight": 0.7,
+          "reboot": 20.7,
+          "capture": 3739.9,
+          "audit": 1098.1,
+          "archive": 510.3,
+          "session-complete": 0.6
+        },
+        "inputs_sha256": {
+          "audit": "b06e5f19482a38169893e9ffe56d100fabbc03129864554b89008806534904a1",
+          "session.json": "f2fc4e60390b69af05e9b91b5ca2e05e08bb8928425d73b94ad908e7d7e97885",
+          "collect.log": "d666dc35ddbae4d2274672d6145f436f33df8c25616b197c0f81a60d37101a4e",
+          "traffic.json": "60d96e9bd020be3cddfe7bab1d4b3d1a1e72485e70d9d1a5f0ae7bdfb40dd398",
+          "traffic_requests.jsonl": "97e85b74a6bd7df38311bb4fb26950f745d71e0131f92329b16718a4e43364c7",
+          "host_monitor.jsonl": "a6ee0c306dc472ee800153bda3b8710743db01aede6b7e443d2bfe44b4caf68a",
+          "archive-manifest.json": "0d2fa9ac9ee1ca08f0105d0d4504fbb1a6d29fadd45cf7f7fef89d5e6363e187"
+        }
+      },
+      {
+        "session": "benign-v5-20261025_08_train_quiet",
+        "group": "train-2",
+        "role": "train",
+        "scenario": "quiet",
+        "group_attempt": 1,
+        "guest_boot": "6f8bd271-d0bd-4dfa-953e-38e8b512c46f",
+        "qemu": {
+          "pid": 2594525,
+          "start_ticks": 43771089,
+          "host_boot": "eb635e03-638a-4d7c-ab67-9ee1a4d410cf"
+        },
+        "measurement_dirty": [],
+        "qemu_swap_kb_at_start": 0,
+        "host_monitor": {
+          "qemu_swap_kb_max": 0,
+          "qemu_swap_samples_over_0": 0,
+          "pswpout_delta": 0,
+          "sda_util_ge_99_samples": 21,
+          "mem_available_mib_min": 10187,
+          "samples": 3727
+        },
+        "accepted": true,
+        "reasons": [],
+        "snapshots": 720,
+        "windows": 656,
+        "score_coverage": 0.9111111111111111,
+        "logs_accepted": true,
+        "integrity_findings": 0,
+        "invalid_input_seq": [],
+        "integrity_unconfirmed_seq": [
+          42
+        ],
+        "process_walk_prev_seq": [],
+        "collector_end": {
+          "snapshots": 720,
+          "errors": 0,
+          "missed_slots": 0
+        },
+        "collector_mlock": {
+          "seconds": 0.1,
+          "vmrss_mib": 2596
+        },
+        "log_error_lines": 0,
+        "scheduler_skips": [],
+        "full_snapshots": [
+          {
+            "seq": 0,
+            "pages": 245451,
+            "bytes": 1007330968,
+            "mib": 960.67,
+            "logged_size": "960.67 MiB",
+            "capture_ms": 1699.5,
+            "backend_read_ms": 303.378,
+            "total_ms": 1699.5
+          },
+          {
+            "seq": 360,
+            "pages": 245461,
+            "bytes": 1007372008,
+            "mib": 960.7,
+            "logged_size": "960.70 MiB",
+            "capture_ms": 1691.4,
+            "backend_read_ms": 301.685,
+            "total_ms": 1693.4
+          }
+        ],
+        "cycle_total_ms_max": 1699.5,
+        "delta_ms": {
+          "n": 718,
+          "p50": 788.9,
+          "p99": 819.5,
+          "max": 829.4
+        },
+        "long_cycles": [
+          {
+            "seq": 0,
+            "kind": "PLNA",
+            "bytes": 1007330968,
+            "mib": 960.67,
+            "logged_size": "960.67 MiB",
+            "capture_ms": 1699.5,
+            "total_ms": 1699.5,
+            "since_full": 0,
+            "end_utc": "2026-10-25T21:18:33.720Z"
+          },
+          {
+            "seq": 360,
+            "kind": "PLNA",
+            "bytes": 1007372008,
+            "mib": 960.7,
+            "logged_size": "960.70 MiB",
+            "capture_ms": 1691.4,
+            "total_ms": 1693.4,
+            "since_full": 0,
+            "end_utc": "2026-10-25T21:48:33.714Z"
+          }
+        ],
+        "writer": {
+          "summary": "zapisovac: 720 zverejnenych, 0 zlyhanych, 0 zahodenych, 0 nezapisanych, najvacsia fronta 1 snimok (85.67 MiB), najdlhsie zverejnenie 6.192 s, cakanie na pamat fronty 0.0 ms v 0 cykloch, dobehnutie 0.039 s",
+          "longest_operations": "vytvorenie 0.000 s, zapis 4.493 s, fsync 0.000 s, sidecar 0.228 s, rename 0.001 s, hook 0.000 s, retencia 0.000 s",
+          "queue_jobs_max": 1,
+          "queue_bytes_max": 89833904,
+          "queue_wait_ms_max": 0.0,
+          "data_closed_ms": {
+            "p50": 825.066,
+            "max": 6192.068,
+            "max_seq": 0
+          },
+          "sha_ms_max": 4310.102,
+          "write_ms_max": 190.056
+        },
+        "rusage_majflt_max": 0,
+        "skipped_before_max": 0,
+        "monitor_max_gap_s": 1.0450160503387451,
+        "monitor_missed_ticks": 0,
+        "requests": 5517,
+        "request_errors": 0,
+        "measure_latency": {
+          "n": 5333,
+          "max_ms": 532.097,
+          "p99_ms": 127.774,
+          "over_1s": 0,
+          "over_2s": 0,
+          "over_4s": 0
+        },
+        "raw_bytes": 8112656808,
+        "archive_stored_bytes": 1329074674,
+        "stage_s": {
+          "session-preflight": 1.1,
+          "capture": 3735.3,
+          "audit": 1001.6,
+          "archive": 330.2,
+          "session-complete": 0.3
+        },
+        "inputs_sha256": {
+          "audit": "10f36f0bf90f4c53930b0a13ae4f89e42047106e24751dd9dfec76e911b72e20",
+          "session.json": "10747d8b6aa2455baef6feb4a735e31bc49c8b277eb7fc0bb2ed414e505fd6b4",
+          "collect.log": "86b478db31e11578e86f5470221417ea292827344aff48588236852d1293bb48",
+          "traffic.json": "2b31b9176f140500cae2572aea897cd3e5ecd46492d4441b050ca6ba6770b956",
+          "traffic_requests.jsonl": "98ec586e46dca4441e92ec282d3e70804bf7a3fadb313a459d7640a6386783ab",
+          "host_monitor.jsonl": "8dd3e671ad9e2f30fc7300f7cf0ff2474a9b3f3f6314779d8826224cb9d0bd5b",
+          "archive-manifest.json": "273eb491263a99e60c76ad1bc4bfeeeea71764b513ad914e29fdb0b26f9e3079"
+        }
+      },
+      {
+        "session": "benign-v5-20261025_09_train_read_heavy",
+        "group": "train-2",
+        "role": "train",
+        "scenario": "read_heavy",
+        "group_attempt": 1,
+        "guest_boot": "6f8bd271-d0bd-4dfa-953e-38e8b512c46f",
+        "qemu": {
+          "pid": 2594525,
+          "start_ticks": 43771089,
+          "host_boot": "eb635e03-638a-4d7c-ab67-9ee1a4d410cf"
+        },
+        "measurement_dirty": [],
+        "qemu_swap_kb_at_start": 0,
+        "host_monitor": {
+          "qemu_swap_kb_max": 0,
+          "qemu_swap_samples_over_0": 0,
+          "pswpout_delta": 0,
+          "sda_util_ge_99_samples": 18,
+          "mem_available_mib_min": 10185,
+          "samples": 3730
+        },
+        "accepted": true,
+        "reasons": [],
+        "snapshots": 720,
+        "windows": 656,
+        "score_coverage": 0.9111111111111111,
+        "logs_accepted": true,
+        "integrity_findings": 0,
+        "invalid_input_seq": [],
+        "integrity_unconfirmed_seq": [],
+        "process_walk_prev_seq": [],
+        "collector_end": {
+          "snapshots": 720,
+          "errors": 0,
+          "missed_slots": 0
+        },
+        "collector_mlock": {
+          "seconds": 0.2,
+          "vmrss_mib": 2596
+        },
+        "log_error_lines": 0,
+        "scheduler_skips": [],
+        "full_snapshots": [
+          {
+            "seq": 0,
+            "pages": 246192,
+            "bytes": 1010372032,
+            "mib": 963.57,
+            "logged_size": "963.57 MiB",
+            "capture_ms": 1745.1,
+            "backend_read_ms": 319.173,
+            "total_ms": 1745.2
+          },
+          {
+            "seq": 360,
+            "pages": 246146,
+            "bytes": 1010183248,
+            "mib": 963.39,
+            "logged_size": "963.39 MiB",
+            "capture_ms": 1712.0,
+            "backend_read_ms": 304.841,
+            "total_ms": 1714.1
+          }
+        ],
+        "cycle_total_ms_max": 1745.2,
+        "delta_ms": {
+          "n": 718,
+          "p50": 801.6,
+          "p99": 844.4,
+          "max": 850.1
+        },
+        "long_cycles": [
+          {
+            "seq": 0,
+            "kind": "PLNA",
+            "bytes": 1010372032,
+            "mib": 963.57,
+            "logged_size": "963.57 MiB",
+            "capture_ms": 1745.1,
+            "total_ms": 1745.2,
+            "since_full": 0,
+            "end_utc": "2026-10-25T22:43:00.994Z"
+          },
+          {
+            "seq": 360,
+            "kind": "PLNA",
+            "bytes": 1010183248,
+            "mib": 963.39,
+            "logged_size": "963.39 MiB",
+            "capture_ms": 1712.0,
+            "total_ms": 1714.1,
+            "since_full": 0,
+            "end_utc": "2026-10-25T23:13:00.963Z"
+          }
+        ],
+        "writer": {
+          "summary": "zapisovac: 720 zverejnenych, 0 zlyhanych, 0 zahodenych, 0 nezapisanych, najvacsia fronta 1 snimok (101.39 MiB), najdlhsie zverejnenie 6.282 s, cakanie na pamat fronty 0.0 ms v 0 cykloch, dobehnutie 0.051 s",
+          "longest_operations": "vytvorenie 0.517 s, zapis 4.568 s, fsync 0.000 s, sidecar 0.000 s, rename 0.000 s, hook 0.000 s, retencia 0.000 s",
+          "queue_jobs_max": 1,
+          "queue_bytes_max": 106317568,
+          "queue_wait_ms_max": 0.0,
+          "data_closed_ms": {
+            "p50": 859.598,
+            "max": 6281.858,
+            "max_seq": 360
+          },
+          "sha_ms_max": 4373.254,
+          "write_ms_max": 519.875
+        },
+        "rusage_majflt_max": 0,
+        "skipped_before_max": 0,
+        "monitor_max_gap_s": 1.0439400672912598,
+        "monitor_missed_ticks": 0,
+        "requests": 62715,
+        "request_errors": 0,
+        "measure_latency": {
+          "n": 60737,
+          "max_ms": 1453.062,
+          "p99_ms": 50.571,
+          "over_1s": 26,
+          "over_2s": 0,
+          "over_4s": 0
+        },
+        "raw_bytes": 10607113152,
+        "archive_stored_bytes": 1661732167,
+        "stage_s": {
+          "session-preflight": 0.6,
+          "capture": 3737.9,
+          "audit": 1068.4,
+          "archive": 426.8,
+          "session-complete": 0.7
+        },
+        "inputs_sha256": {
+          "audit": "cfbaceec74508a0b09c0276dbe9e6ce862bc687cd2969ea850120695902b8223",
+          "session.json": "c26617390cd1c46ba5a455bb7480fc9efac2861dc3a54c7179fb7fab300988fc",
+          "collect.log": "274cdc45329cce51e62248406a97b5359856d5db88d921a6e39e2ad0c985887c",
+          "traffic.json": "671854d628266da16be7f691251a464c2c074710c1975872939ce47f3cade645",
+          "traffic_requests.jsonl": "e612d9407999848e73790ae0268234a26825c2f6b66e21c3bb84b328319af409",
+          "host_monitor.jsonl": "6fb6a67d0808e7e81de49fa56c969f469566e2abd9b2216aa4601302a3fff3a5",
+          "archive-manifest.json": "d6363269fc2351d173ff5f52307dc1266d9c0195113c3716e595e66856af2379"
+        }
+      },
+      {
+        "session": "benign-v5-20261025_10_train_mixed",
+        "group": "train-2",
+        "role": "train",
+        "scenario": "mixed",
+        "group_attempt": 1,
+        "guest_boot": "6f8bd271-d0bd-4dfa-953e-38e8b512c46f",
+        "qemu": {
+          "pid": 2594525,
+          "start_ticks": 43771089,
+          "host_boot": "eb635e03-638a-4d7c-ab67-9ee1a4d410cf"
+        },
+        "measurement_dirty": [],
+        "qemu_swap_kb_at_start": 0,
+        "host_monitor": {
+          "qemu_swap_kb_max": 0,
+          "qemu_swap_samples_over_0": 0,
+          "pswpout_delta": 0,
+          "sda_util_ge_99_samples": 13,
+          "mem_available_mib_min": 10188,
+          "samples": 3731
+        },
+        "accepted": true,
+        "reasons": [],
+        "snapshots": 720,
+        "windows": 656,
+        "score_coverage": 0.9111111111111111,
+        "logs_accepted": true,
+        "integrity_findings": 0,
+        "invalid_input_seq": [],
+        "integrity_unconfirmed_seq": [
+          255
+        ],
+        "process_walk_prev_seq": [],
+        "collector_end": {
+          "snapshots": 720,
+          "errors": 0,
+          "missed_slots": 0
+        },
+        "collector_mlock": {
+          "seconds": 0.2,
+          "vmrss_mib": 2596
+        },
+        "log_error_lines": 0,
+        "scheduler_skips": [],
+        "full_snapshots": [
+          {
+            "seq": 0,
+            "pages": 246041,
+            "bytes": 1009752328,
+            "mib": 962.97,
+            "logged_size": "962.97 MiB",
+            "capture_ms": 1769.7,
+            "backend_read_ms": 317.982,
+            "total_ms": 1769.9
+          },
+          {
+            "seq": 360,
+            "pages": 247165,
+            "bytes": 1014365224,
+            "mib": 967.37,
+            "logged_size": "967.37 MiB",
+            "capture_ms": 1753.5,
+            "backend_read_ms": 311.229,
+            "total_ms": 1755.6
+          }
+        ],
+        "cycle_total_ms_max": 1769.9,
+        "delta_ms": {
+          "n": 718,
+          "p50": 812.2,
+          "p99": 850.8,
+          "max": 855.4
+        },
+        "long_cycles": [
+          {
+            "seq": 0,
+            "kind": "PLNA",
+            "bytes": 1009752328,
+            "mib": 962.97,
+            "logged_size": "962.97 MiB",
+            "capture_ms": 1769.7,
+            "total_ms": 1769.9,
+            "since_full": 0,
+            "end_utc": "2026-10-26T00:10:16.869Z"
+          },
+          {
+            "seq": 360,
+            "kind": "PLNA",
+            "bytes": 1014365224,
+            "mib": 967.37,
+            "logged_size": "967.37 MiB",
+            "capture_ms": 1753.5,
+            "total_ms": 1755.6,
+            "since_full": 0,
+            "end_utc": "2026-10-26T00:40:16.855Z"
+          }
+        ],
+        "writer": {
+          "summary": "zapisovac: 720 zverejnenych, 0 zlyhanych, 0 zahodenych, 0 nezapisanych, najvacsia fronta 1 snimok (113.38 MiB), najdlhsie zverejnenie 6.342 s, cakanie na pamat fronty 0.0 ms v 0 cykloch, dobehnutie 0.075 s",
+          "longest_operations": "vytvorenie 0.005 s, zapis 4.575 s, fsync 0.000 s, sidecar 0.004 s, rename 0.000 s, hook 0.000 s, retencia 0.000 s",
+          "queue_jobs_max": 1,
+          "queue_bytes_max": 118888088,
+          "queue_wait_ms_max": 0.0,
+          "data_closed_ms": {
+            "p50": 884.477,
+            "max": 6341.607,
+            "max_seq": 0
+          },
+          "sha_ms_max": 4381.851,
+          "write_ms_max": 1983.105
+        },
+        "rusage_majflt_max": 0,
+        "skipped_before_max": 0,
+        "monitor_max_gap_s": 1.0445530414581299,
+        "monitor_missed_ticks": 0,
+        "requests": 67427,
+        "request_errors": 0,
+        "measure_latency": {
+          "n": 65199,
+          "max_ms": 2175.924,
+          "p99_ms": 124.435,
+          "over_1s": 122,
+          "over_2s": 2,
+          "over_4s": 0
+        },
+        "raw_bytes": 12547533600,
+        "archive_stored_bytes": 1954840801,
+        "stage_s": {
+          "session-preflight": 1.1,
+          "capture": 3740.2,
+          "audit": 1118.5,
+          "archive": 505.4,
+          "session-complete": 0.6
+        },
+        "inputs_sha256": {
+          "audit": "acc276d572cb36ec2d650bdcc1765f24909293ddf3b5c6cc2cf62938cc7f7569",
+          "session.json": "9a3c1bd05a13a3d56e8933025c669f9d8a8fe33d2948c452e685154b1481b7a5",
+          "collect.log": "c35ee1435e2789979febadc43be3bd619ba65481d0f28f5d8b0b534b541d3fab",
+          "traffic.json": "397963b6d37e3977cf81af1b7203e72c2adc53dd57b941b1d51af64da26a0932",
+          "traffic_requests.jsonl": "fc37b7a3226e64db3ad07d92467efe886d6ecf12af24458ee996f4c32251298f",
+          "host_monitor.jsonl": "52e52a3fb56c9d76757af22f94462f18dbd4a05aec85212f1b99c4820eb2dbcc",
+          "archive-manifest.json": "8d7a077e31ef400efd50b838cea3c073c6d9294ef4707c256315cba734e27db4"
+        }
+      },
+      {
+        "session": "benign-v5-20261025_11_train_bursty",
+        "group": "train-2",
+        "role": "train",
+        "scenario": "bursty",
+        "group_attempt": 1,
+        "guest_boot": "6f8bd271-d0bd-4dfa-953e-38e8b512c46f",
+        "qemu": {
+          "pid": 2594525,
+          "start_ticks": 43771089,
+          "host_boot": "eb635e03-638a-4d7c-ab67-9ee1a4d410cf"
+        },
+        "measurement_dirty": [],
+        "qemu_swap_kb_at_start": 13232,
+        "host_monitor": {
+          "qemu_swap_kb_max": 0,
+          "qemu_swap_samples_over_0": 0,
+          "pswpout_delta": 0,
+          "sda_util_ge_99_samples": 16,
+          "mem_available_mib_min": 10165,
+          "samples": 3735
+        },
+        "accepted": true,
+        "reasons": [],
+        "snapshots": 720,
+        "windows": 656,
+        "score_coverage": 0.9111111111111111,
+        "logs_accepted": true,
+        "integrity_findings": 0,
+        "invalid_input_seq": [],
+        "integrity_unconfirmed_seq": [],
+        "process_walk_prev_seq": [],
+        "collector_end": {
+          "snapshots": 720,
+          "errors": 0,
+          "missed_slots": 0
+        },
+        "collector_mlock": {
+          "seconds": 0.2,
+          "vmrss_mib": 2596
+        },
+        "log_error_lines": 0,
+        "scheduler_skips": [],
+        "full_snapshots": [
+          {
+            "seq": 0,
+            "pages": 246288,
+            "bytes": 1010766016,
+            "mib": 963.94,
+            "logged_size": "963.94 MiB",
+            "capture_ms": 1761.9,
+            "backend_read_ms": 327.221,
+            "total_ms": 1761.9
+          },
+          {
+            "seq": 360,
+            "pages": 248680,
+            "bytes": 1020582784,
+            "mib": 973.3,
+            "logged_size": "973.30 MiB",
+            "capture_ms": 1751.6,
+            "backend_read_ms": 327.355,
+            "total_ms": 1753.7
+          }
+        ],
+        "cycle_total_ms_max": 1761.9,
+        "delta_ms": {
+          "n": 718,
+          "p50": 854.1,
+          "p99": 871.8,
+          "max": 881.8
+        },
+        "long_cycles": [
+          {
+            "seq": 0,
+            "kind": "PLNA",
+            "bytes": 1010766016,
+            "mib": 963.94,
+            "logged_size": "963.94 MiB",
+            "capture_ms": 1761.9,
+            "total_ms": 1761.9,
+            "since_full": 0,
+            "end_utc": "2026-10-26T01:39:44.957Z"
+          },
+          {
+            "seq": 360,
+            "kind": "PLNA",
+            "bytes": 1020582784,
+            "mib": 973.3,
+            "logged_size": "973.30 MiB",
+            "capture_ms": 1751.6,
+            "total_ms": 1753.7,
+            "since_full": 0,
+            "end_utc": "2026-10-26T02:09:44.948Z"
+          }
+        ],
+        "writer": {
+          "summary": "zapisovac: 720 zverejnenych, 0 zlyhanych, 0 zahodenych, 0 nezapisanych, najvacsia fronta 1 snimok (124.31 MiB), najdlhsie zverejnenie 6.417 s, cakanie na pamat fronty 0.0 ms v 0 cykloch, dobehnutie 0.084 s",
+          "longest_operations": "vytvorenie 0.000 s, zapis 4.663 s, fsync 0.000 s, sidecar 0.000 s, rename 0.013 s, hook 0.000 s, retencia 0.000 s",
+          "queue_jobs_max": 1,
+          "queue_bytes_max": 130348488,
+          "queue_wait_ms_max": 0.0,
+          "data_closed_ms": {
+            "p50": 941.072,
+            "max": 6416.48,
+            "max_seq": 360
+          },
+          "sha_ms_max": 4468.824,
+          "write_ms_max": 193.911
+        },
+        "rusage_majflt_max": 0,
+        "skipped_before_max": 0,
+        "monitor_max_gap_s": 1.0455570220947266,
+        "monitor_missed_ticks": 0,
+        "requests": 178330,
+        "request_errors": 0,
+        "measure_latency": {
+          "n": 172519,
+          "max_ms": 2732.073,
+          "p99_ms": 79.675,
+          "over_1s": 467,
+          "over_2s": 77,
+          "over_4s": 0
+        },
+        "raw_bytes": 16354207008,
+        "archive_stored_bytes": 2491652369,
+        "stage_s": {
+          "session-preflight": 1.7,
+          "capture": 3745.6,
+          "audit": 1186.4,
+          "archive": 598.7,
+          "session-complete": 1.2
+        },
+        "inputs_sha256": {
+          "audit": "0a13a1b635654f674df226314fa981f787ecc4f3179371d67913efa6e8c2b1d7",
+          "session.json": "06dcfa8aa1dc6e7fcc553d0cc43dcb5c77dd8a16b50aa4043f4250f96f83e1f8",
+          "collect.log": "11a36a448136d9acffa2425237aa20ea3e2f516c444e259a1800ff01f6bac063",
+          "traffic.json": "bfaebee9baf7b7a1df8c44212d9db8906ee4b6cec73c62feac620b9afbc05a02",
+          "traffic_requests.jsonl": "4ba07845d65e8cffd7d4bb417c5f6284f706e9e3196b1de09568f8e83dddca74",
+          "host_monitor.jsonl": "518033eb1850a3f09af3b148672f83826d5359f143a1d45953418ee9b7d91062",
+          "archive-manifest.json": "8bb87d91d98ee869828052a71d6dbacb4f6264ea9b0e7a6b6a935bb4270ba93a"
+        }
+      },
+      {
+        "session": "benign-v5-20261025_12_train_steady",
+        "group": "train-2",
+        "role": "train",
+        "scenario": "steady",
+        "group_attempt": 1,
+        "guest_boot": "6f8bd271-d0bd-4dfa-953e-38e8b512c46f",
+        "qemu": {
+          "pid": 2594525,
+          "start_ticks": 43771089,
+          "host_boot": "eb635e03-638a-4d7c-ab67-9ee1a4d410cf"
+        },
+        "measurement_dirty": [],
+        "qemu_swap_kb_at_start": 328,
+        "host_monitor": {
+          "qemu_swap_kb_max": 0,
+          "qemu_swap_samples_over_0": 0,
+          "pswpout_delta": 0,
+          "sda_util_ge_99_samples": 23,
+          "mem_available_mib_min": 10159,
+          "samples": 3729
+        },
+        "accepted": true,
+        "reasons": [],
+        "snapshots": 720,
+        "windows": 656,
+        "score_coverage": 0.9111111111111111,
+        "logs_accepted": true,
+        "integrity_findings": 0,
+        "invalid_input_seq": [],
+        "integrity_unconfirmed_seq": [],
+        "process_walk_prev_seq": [],
+        "collector_end": {
+          "snapshots": 720,
+          "errors": 0,
+          "missed_slots": 0
+        },
+        "collector_mlock": {
+          "seconds": 0.2,
+          "vmrss_mib": 2596
+        },
+        "log_error_lines": 0,
+        "scheduler_skips": [],
+        "full_snapshots": [
+          {
+            "seq": 0,
+            "pages": 255190,
+            "bytes": 1047299824,
+            "mib": 998.78,
+            "logged_size": "998.78 MiB",
+            "capture_ms": 1722.8,
+            "backend_read_ms": 310.25,
+            "total_ms": 1722.8
+          },
+          {
+            "seq": 360,
+            "pages": 256274,
+            "bytes": 1051748560,
+            "mib": 1003.03,
+            "logged_size": "1003.03 MiB",
+            "capture_ms": 1722.7,
+            "backend_read_ms": 311.644,
+            "total_ms": 1724.8
+          }
+        ],
+        "cycle_total_ms_max": 1724.8,
+        "delta_ms": {
+          "n": 718,
+          "p50": 795.0,
+          "p99": 835.4,
+          "max": 842.2
+        },
+        "long_cycles": [
+          {
+            "seq": 0,
+            "kind": "PLNA",
+            "bytes": 1047299824,
+            "mib": 998.78,
+            "logged_size": "998.78 MiB",
+            "capture_ms": 1722.8,
+            "total_ms": 1722.8,
+            "since_full": 0,
+            "end_utc": "2026-10-26T03:11:57.162Z"
+          },
+          {
+            "seq": 360,
+            "kind": "PLNA",
+            "bytes": 1051748560,
+            "mib": 1003.03,
+            "logged_size": "1003.03 MiB",
+            "capture_ms": 1722.7,
+            "total_ms": 1724.8,
+            "since_full": 0,
+            "end_utc": "2026-10-26T03:41:57.164Z"
+          }
+        ],
+        "writer": {
+          "summary": "zapisovac: 720 zverejnenych, 0 zlyhanych, 0 zahodenych, 0 nezapisanych, najvacsia fronta 1 snimok (133.03 MiB), najdlhsie zverejnenie 6.426 s, cakanie na pamat fronty 0.0 ms v 0 cykloch, dobehnutie 0.046 s",
+          "longest_operations": "vytvorenie 0.006 s, zapis 4.701 s, fsync 0.000 s, sidecar 0.000 s, rename 0.000 s, hook 0.000 s, retencia 0.000 s",
+          "queue_jobs_max": 1,
+          "queue_bytes_max": 139494336,
+          "queue_wait_ms_max": 0.0,
+          "data_closed_ms": {
+            "p50": 845.696,
+            "max": 6425.674,
+            "max_seq": 360
+          },
+          "sha_ms_max": 4509.68,
+          "write_ms_max": 193.139
+        },
+        "rusage_majflt_max": 0,
+        "skipped_before_max": 0,
+        "monitor_max_gap_s": 1.0439000129699707,
+        "monitor_missed_ticks": 0,
+        "requests": 28015,
+        "request_errors": 0,
+        "measure_latency": {
+          "n": 27091,
+          "max_ms": 989.413,
+          "p99_ms": 126.371,
+          "over_1s": 0,
+          "over_2s": 0,
+          "over_4s": 0
+        },
+        "raw_bytes": 10151515800,
+        "archive_stored_bytes": 1602759800,
+        "stage_s": {
+          "session-preflight": 1.7,
+          "capture": 3737.8,
+          "audit": 1041.6,
+          "archive": 367.1,
+          "session-complete": 0.3
+        },
+        "inputs_sha256": {
+          "audit": "2e31a636b5dd398dfbadd1803d2c56568b2ba78070fe2ad619cfe97f229b64ab",
+          "session.json": "36e7b67a4027eaceb2090202f9d52331328c1e1df72c8ab830a877ef9e013fd8",
+          "collect.log": "c32f097139222a48c60581313a1b98f61457b8e010b04eedd98c0b3968500f5a",
+          "traffic.json": "27d68630bd9453f08256d55dae7954681ba23af654a12d00e182d147c04c7790",
+          "traffic_requests.jsonl": "9fa1f48a553a94faec4473aa41cd9c7dddc90ddd307ffc5a03125a3bb57ff969",
+          "host_monitor.jsonl": "dbd83c6e205b94ff2866c44a9309cb14670aa29c28c8a9a611c3051d99eb8817",
+          "archive-manifest.json": "97ad7dce386e6bc99a84d2ebf6ba972dba0868c7a41cf4aab21910758227f28a"
+        }
+      },
+      {
+        "session": "benign-v5-20261025_13_train_read_heavy",
+        "group": "train-3",
+        "role": "train",
+        "scenario": "read_heavy",
+        "group_attempt": 1,
+        "guest_boot": "1ca44c9e-add0-411c-93c1-2f0e956b293b",
+        "qemu": {
+          "pid": 2594525,
+          "start_ticks": 43771089,
+          "host_boot": "eb635e03-638a-4d7c-ab67-9ee1a4d410cf"
+        },
+        "measurement_dirty": [],
+        "qemu_swap_kb_at_start": 0,
+        "host_monitor": {
+          "qemu_swap_kb_max": 0,
+          "qemu_swap_samples_over_0": 0,
+          "pswpout_delta": 0,
+          "sda_util_ge_99_samples": 31,
+          "mem_available_mib_min": 10121,
+          "samples": 3735
+        },
+        "accepted": true,
+        "reasons": [],
+        "snapshots": 720,
+        "windows": 656,
+        "score_coverage": 0.9111111111111111,
+        "logs_accepted": true,
+        "integrity_findings": 0,
+        "invalid_input_seq": [],
+        "integrity_unconfirmed_seq": [],
+        "process_walk_prev_seq": [],
+        "collector_end": {
+          "snapshots": 720,
+          "errors": 0,
+          "missed_slots": 0
+        },
+        "collector_mlock": {
+          "seconds": 0.3,
+          "vmrss_mib": 2596
+        },
+        "log_error_lines": 0,
+        "scheduler_skips": [],
+        "full_snapshots": [
+          {
+            "seq": 0,
+            "pages": 264999,
+            "bytes": 1087555960,
+            "mib": 1037.17,
+            "logged_size": "1.01 GiB",
+            "capture_ms": 1779.3,
+            "backend_read_ms": 310.106,
+            "total_ms": 1779.3
+          },
+          {
+            "seq": 360,
+            "pages": 264307,
+            "bytes": 1084715992,
+            "mib": 1034.47,
+            "logged_size": "1.01 GiB",
+            "capture_ms": 1780.3,
+            "backend_read_ms": 315.218,
+            "total_ms": 1780.9
+          }
+        ],
+        "cycle_total_ms_max": 1780.9,
+        "delta_ms": {
+          "n": 718,
+          "p50": 804.4,
+          "p99": 844.5,
+          "max": 850.1
+        },
+        "long_cycles": [
+          {
+            "seq": 0,
+            "kind": "PLNA",
+            "bytes": 1087555960,
+            "mib": 1037.17,
+            "logged_size": "1.01 GiB",
+            "capture_ms": 1779.3,
+            "total_ms": 1779.3,
+            "since_full": 0,
+            "end_utc": "2026-10-26T04:38:09.763Z"
+          },
+          {
+            "seq": 360,
+            "kind": "PLNA",
+            "bytes": 1084715992,
+            "mib": 1034.47,
+            "logged_size": "1.01 GiB",
+            "capture_ms": 1780.3,
+            "total_ms": 1780.9,
+            "since_full": 0,
+            "end_utc": "2026-10-26T05:08:09.764Z"
+          }
+        ],
+        "writer": {
+          "summary": "zapisovac: 720 zverejnenych, 0 zlyhanych, 0 zahodenych, 0 nezapisanych, najvacsia fronta 1 snimok (186.18 MiB), najdlhsie zverejnenie 6.672 s, cakanie na pamat fronty 0.0 ms v 0 cykloch, dobehnutie 0.051 s",
+          "longest_operations": "vytvorenie 0.804 s, zapis 4.893 s, fsync 0.000 s, sidecar 0.056 s, rename 0.006 s, hook 0.000 s, retencia 0.000 s",
+          "queue_jobs_max": 1,
+          "queue_bytes_max": 195224528,
+          "queue_wait_ms_max": 0.0,
+          "data_closed_ms": {
+            "p50": 862.085,
+            "max": 6672.258,
+            "max_seq": 0
+          },
+          "sha_ms_max": 4692.061,
+          "write_ms_max": 807.467
+        },
+        "rusage_majflt_max": 0,
+        "skipped_before_max": 0,
+        "monitor_max_gap_s": 1.044159173965454,
+        "monitor_missed_ticks": 0,
+        "requests": 63680,
+        "request_errors": 0,
+        "measure_latency": {
+          "n": 61644,
+          "max_ms": 1697.996,
+          "p99_ms": 43.548,
+          "over_1s": 42,
+          "over_2s": 0,
+          "over_4s": 0
+        },
+        "raw_bytes": 10862882640,
+        "archive_stored_bytes": 1699460658,
+        "stage_s": {
+          "session-preflight": 0.7,
+          "reboot": 24.7,
+          "capture": 3744.2,
+          "audit": 1142.1,
+          "archive": 444.9,
+          "session-complete": 0.9
+        },
+        "inputs_sha256": {
+          "audit": "e9d97daef24a2b6494dfe2e54e00a750eb77e9a1626ec7047cf9e5a82bf60bee",
+          "session.json": "9175ac8f978035b6703aa52ef1dd224f961f32a09dc8c8a9d4132b47fa2d2262",
+          "collect.log": "bd836faeb7ca137540a773b20cb99497b4fe8bfcb51792351301ed11be434ac0",
+          "traffic.json": "29dd96c3d52b61cced4d1c09d1736087276b889a6f85b9c853cabb3691781736",
+          "traffic_requests.jsonl": "6566da8fec80857cc63ae1de618f2d6af73800c82a6a73dbdddee14c26db8ed3",
+          "host_monitor.jsonl": "22ac550f3317e5316be6773f8f954d7207210b48a4fef618748cad6f7e5c1e04",
+          "archive-manifest.json": "1d503f11a868e875380a3083ba57202b71fa7b9af084d29e46323f10bfe73cda"
+        }
+      },
+      {
+        "session": "benign-v5-20261025_14_train_bursty",
+        "group": "train-3",
+        "role": "train",
+        "scenario": "bursty",
+        "group_attempt": 1,
+        "guest_boot": "1ca44c9e-add0-411c-93c1-2f0e956b293b",
+        "qemu": {
+          "pid": 2594525,
+          "start_ticks": 43771089,
+          "host_boot": "eb635e03-638a-4d7c-ab67-9ee1a4d410cf"
+        },
+        "measurement_dirty": [],
+        "qemu_swap_kb_at_start": 0,
+        "host_monitor": {
+          "qemu_swap_kb_max": 0,
+          "qemu_swap_samples_over_0": 0,
+          "pswpout_delta": 0,
+          "sda_util_ge_99_samples": 10,
+          "mem_available_mib_min": 10101,
+          "samples": 3734
+        },
+        "accepted": true,
+        "reasons": [],
+        "snapshots": 720,
+        "windows": 656,
+        "score_coverage": 0.9111111111111111,
+        "logs_accepted": true,
+        "integrity_findings": 0,
+        "invalid_input_seq": [],
+        "integrity_unconfirmed_seq": [],
+        "process_walk_prev_seq": [],
+        "collector_end": {
+          "snapshots": 720,
+          "errors": 0,
+          "missed_slots": 0
+        },
+        "collector_mlock": {
+          "seconds": 0.3,
+          "vmrss_mib": 2596
+        },
+        "log_error_lines": 0,
+        "scheduler_skips": [],
+        "full_snapshots": [
+          {
+            "seq": 0,
+            "pages": 262237,
+            "bytes": 1076220712,
+            "mib": 1026.36,
+            "logged_size": "1.00 GiB",
+            "capture_ms": 1795.1,
+            "backend_read_ms": 314.809,
+            "total_ms": 1795.1
+          },
+          {
+            "seq": 360,
+            "pages": 261784,
+            "bytes": 1074361600,
+            "mib": 1024.59,
+            "logged_size": "1.00 GiB",
+            "capture_ms": 1819.0,
+            "backend_read_ms": 333.949,
+            "total_ms": 1821.1
+          }
+        ],
+        "cycle_total_ms_max": 1821.1,
+        "delta_ms": {
+          "n": 718,
+          "p50": 847.7,
+          "p99": 866.4,
+          "max": 869.3
+        },
+        "long_cycles": [
+          {
+            "seq": 0,
+            "kind": "PLNA",
+            "bytes": 1076220712,
+            "mib": 1026.36,
+            "logged_size": "1.00 GiB",
+            "capture_ms": 1795.1,
+            "total_ms": 1795.1,
+            "since_full": 0,
+            "end_utc": "2026-10-26T06:07:03.103Z"
+          },
+          {
+            "seq": 360,
+            "kind": "PLNA",
+            "bytes": 1074361600,
+            "mib": 1024.59,
+            "logged_size": "1.00 GiB",
+            "capture_ms": 1819.0,
+            "total_ms": 1821.1,
+            "since_full": 0,
+            "end_utc": "2026-10-26T06:37:03.129Z"
+          }
+        ],
+        "writer": {
+          "summary": "zapisovac: 720 zverejnenych, 0 zlyhanych, 0 zahodenych, 0 nezapisanych, najvacsia fronta 1 snimok (188.60 MiB), najdlhsie zverejnenie 6.736 s, cakanie na pamat fronty 0.0 ms v 0 cykloch, dobehnutie 0.084 s",
+          "longest_operations": "vytvorenie 0.015 s, zapis 4.914 s, fsync 0.000 s, sidecar 0.005 s, rename 0.000 s, hook 0.000 s, retencia 0.000 s",
+          "queue_jobs_max": 1,
+          "queue_bytes_max": 197758688,
+          "queue_wait_ms_max": 0.0,
+          "data_closed_ms": {
+            "p50": 933.466,
+            "max": 6735.382,
+            "max_seq": 360
+          },
+          "sha_ms_max": 4709.406,
+          "write_ms_max": 232.539
+        },
+        "rusage_majflt_max": 0,
+        "skipped_before_max": 0,
+        "monitor_max_gap_s": 1.0444669723510742,
+        "monitor_missed_ticks": 0,
+        "requests": 179563,
+        "request_errors": 0,
+        "measure_latency": {
+          "n": 173938,
+          "max_ms": 2698.431,
+          "p99_ms": 81.327,
+          "over_1s": 289,
+          "over_2s": 20,
+          "over_4s": 0
+        },
+        "raw_bytes": 16276021704,
+        "archive_stored_bytes": 2432978143,
+        "stage_s": {
+          "session-preflight": 1.8,
+          "capture": 3744.4,
+          "audit": 1219.1,
+          "archive": 596.4,
+          "session-complete": 1.0
+        },
+        "inputs_sha256": {
+          "audit": "0c366996e5139e888714de983a55d42ee2cb9aa9555f5b2310eecba4cc4a72b7",
+          "session.json": "476006efd58e367be09668a476517e31f3c36f70661140d02475caddd13af7ef",
+          "collect.log": "cadfc3541799e135b23169055b0d28fb528cc67b584a00551e0b9439b5049919",
+          "traffic.json": "ab12750096451c07524f18ce68a5ec305ca677fb4ed176842dd31489b5fed8be",
+          "traffic_requests.jsonl": "ee2698476c2320a339cbcccc82ad2071058231a7f190b0afbca8c3ee4392402e",
+          "host_monitor.jsonl": "41adafb93cd39777eeb33e2b15437f04d1f65fa9448e626b2d4b68b627a29e0d",
+          "archive-manifest.json": "0a8b2fa939cc51f9acaede3b95384b5c8f15853533a6c1e9769545661c78a038"
+        }
+      },
+      {
+        "session": "benign-v5-20261025_15_train_write_heavy",
+        "group": "train-3",
+        "role": "train",
+        "scenario": "write_heavy",
+        "group_attempt": 1,
+        "guest_boot": "1ca44c9e-add0-411c-93c1-2f0e956b293b",
+        "qemu": {
+          "pid": 2594525,
+          "start_ticks": 43771089,
+          "host_boot": "eb635e03-638a-4d7c-ab67-9ee1a4d410cf"
+        },
+        "measurement_dirty": [],
+        "qemu_swap_kb_at_start": 2428,
+        "host_monitor": {
+          "qemu_swap_kb_max": 0,
+          "qemu_swap_samples_over_0": 0,
+          "pswpout_delta": 0,
+          "sda_util_ge_99_samples": 23,
+          "mem_available_mib_min": 10146,
+          "samples": 3731
+        },
+        "accepted": true,
+        "reasons": [],
+        "snapshots": 720,
+        "windows": 656,
+        "score_coverage": 0.9111111111111111,
+        "logs_accepted": true,
+        "integrity_findings": 0,
+        "invalid_input_seq": [],
+        "integrity_unconfirmed_seq": [],
+        "process_walk_prev_seq": [],
+        "collector_end": {
+          "snapshots": 720,
+          "errors": 0,
+          "missed_slots": 0
+        },
+        "collector_mlock": {
+          "seconds": 0.1,
+          "vmrss_mib": 2596
+        },
+        "log_error_lines": 0,
+        "scheduler_skips": [],
+        "full_snapshots": [
+          {
+            "seq": 0,
+            "pages": 261900,
+            "bytes": 1074837664,
+            "mib": 1025.05,
+            "logged_size": "1.00 GiB",
+            "capture_ms": 1743.9,
+            "backend_read_ms": 307.375,
+            "total_ms": 1744.0
+          },
+          {
+            "seq": 360,
+            "pages": 261777,
+            "bytes": 1074332872,
+            "mib": 1024.56,
+            "logged_size": "1.00 GiB",
+            "capture_ms": 1784.9,
+            "backend_read_ms": 323.06,
+            "total_ms": 1787.0
+          }
+        ],
+        "cycle_total_ms_max": 1787.0,
+        "delta_ms": {
+          "n": 718,
+          "p50": 817.3,
+          "p99": 853.8,
+          "max": 859.5
+        },
+        "long_cycles": [
+          {
+            "seq": 0,
+            "kind": "PLNA",
+            "bytes": 1074837664,
+            "mib": 1025.05,
+            "logged_size": "1.00 GiB",
+            "capture_ms": 1743.9,
+            "total_ms": 1744.0,
+            "since_full": 0,
+            "end_utc": "2026-10-26T07:39:47.134Z"
+          },
+          {
+            "seq": 360,
+            "kind": "PLNA",
+            "bytes": 1074332872,
+            "mib": 1024.56,
+            "logged_size": "1.00 GiB",
+            "capture_ms": 1784.9,
+            "total_ms": 1787.0,
+            "since_full": 0,
+            "end_utc": "2026-10-26T08:09:47.177Z"
+          }
+        ],
+        "writer": {
+          "summary": "zapisovac: 720 zverejnenych, 0 zlyhanych, 0 zahodenych, 0 nezapisanych, najvacsia fronta 1 snimok (175.57 MiB), najdlhsie zverejnenie 6.646 s, cakanie na pamat fronty 0.0 ms v 0 cykloch, dobehnutie 0.065 s",
+          "longest_operations": "vytvorenie 0.392 s, zapis 4.859 s, fsync 0.000 s, sidecar 0.000 s, rename 0.000 s, hook 0.000 s, retencia 0.000 s",
+          "queue_jobs_max": 1,
+          "queue_bytes_max": 184098576,
+          "queue_wait_ms_max": 0.0,
+          "data_closed_ms": {
+            "p50": 895.392,
+            "max": 6645.618,
+            "max_seq": 360
+          },
+          "sha_ms_max": 4658.914,
+          "write_ms_max": 619.816
+        },
+        "rusage_majflt_max": 0,
+        "skipped_before_max": 0,
+        "monitor_max_gap_s": 1.0494039058685303,
+        "monitor_missed_ticks": 0,
+        "requests": 59646,
+        "request_errors": 0,
+        "measure_latency": {
+          "n": 57635,
+          "max_ms": 2050.099,
+          "p99_ms": 188.655,
+          "over_1s": 222,
+          "over_2s": 1,
+          "over_4s": 0
+        },
+        "raw_bytes": 13660608168,
+        "archive_stored_bytes": 2112033930,
+        "stage_s": {
+          "session-preflight": 1.7,
+          "capture": 3742.3,
+          "audit": 1163.9,
+          "archive": 542.1,
+          "session-complete": 0.8
+        },
+        "inputs_sha256": {
+          "audit": "f0c3283b2444a13c9483761c458036173ee5aa42b9eea10b565cec027cb2dece",
+          "session.json": "f29141b28cf3ac9f307de277e5c03f12c09f526aa9c19ba7d20808e23dde7135",
+          "collect.log": "07c588eb3d50625051aa1238618b1e53c3f1cea563c5484666bf3ce24316b331",
+          "traffic.json": "804a3886eaef9d21f655602f5173e7af2afe7adf4e15fef517c35fe31210ed70",
+          "traffic_requests.jsonl": "0cde6478417a3e1533e5b9343bb768deca3c761f273228c2697515c78d9181cc",
+          "host_monitor.jsonl": "91d7513ab7e2844cc5f7f82898e47e0a11da16fe438c1edd4cb7b0844a9df8b6",
+          "archive-manifest.json": "7fe2543223edb407319036a4e70d5c84803077256a74346beecc62dfb6f5c553"
+        }
+      },
+      {
+        "session": "benign-v5-20261025_16_train_steady",
+        "group": "train-3",
+        "role": "train",
+        "scenario": "steady",
+        "group_attempt": 1,
+        "guest_boot": "1ca44c9e-add0-411c-93c1-2f0e956b293b",
+        "qemu": {
+          "pid": 2594525,
+          "start_ticks": 43771089,
+          "host_boot": "eb635e03-638a-4d7c-ab67-9ee1a4d410cf"
+        },
+        "measurement_dirty": [],
+        "qemu_swap_kb_at_start": 1500,
+        "host_monitor": {
+          "qemu_swap_kb_max": 0,
+          "qemu_swap_samples_over_0": 0,
+          "pswpout_delta": 0,
+          "sda_util_ge_99_samples": 25,
+          "mem_available_mib_min": 10090,
+          "samples": 3730
+        },
+        "accepted": true,
+        "reasons": [],
+        "snapshots": 720,
+        "windows": 656,
+        "score_coverage": 0.9111111111111111,
+        "logs_accepted": true,
+        "integrity_findings": 0,
+        "invalid_input_seq": [],
+        "integrity_unconfirmed_seq": [],
+        "process_walk_prev_seq": [],
+        "collector_end": {
+          "snapshots": 720,
+          "errors": 0,
+          "missed_slots": 0
+        },
+        "collector_mlock": {
+          "seconds": 0.2,
+          "vmrss_mib": 2596
+        },
+        "log_error_lines": 0,
+        "scheduler_skips": [],
+        "full_snapshots": [
+          {
+            "seq": 0,
+            "pages": 262137,
+            "bytes": 1075810312,
+            "mib": 1025.97,
+            "logged_size": "1.00 GiB",
+            "capture_ms": 1755.3,
+            "backend_read_ms": 303.008,
+            "total_ms": 1755.5
+          },
+          {
+            "seq": 360,
+            "pages": 261289,
+            "bytes": 1072330120,
+            "mib": 1022.65,
+            "logged_size": "1022.65 MiB",
+            "capture_ms": 1754.3,
+            "backend_read_ms": 312.343,
+            "total_ms": 1756.4
+          }
+        ],
+        "cycle_total_ms_max": 1756.4,
+        "delta_ms": {
+          "n": 718,
+          "p50": 796.4,
+          "p99": 837.6,
+          "max": 841.1
+        },
+        "long_cycles": [
+          {
+            "seq": 0,
+            "kind": "PLNA",
+            "bytes": 1075810312,
+            "mib": 1025.97,
+            "logged_size": "1.00 GiB",
+            "capture_ms": 1755.3,
+            "total_ms": 1755.5,
+            "since_full": 0,
+            "end_utc": "2026-10-26T09:10:37.579Z"
+          },
+          {
+            "seq": 360,
+            "kind": "PLNA",
+            "bytes": 1072330120,
+            "mib": 1022.65,
+            "logged_size": "1022.65 MiB",
+            "capture_ms": 1754.3,
+            "total_ms": 1756.4,
+            "since_full": 0,
+            "end_utc": "2026-10-26T09:40:37.580Z"
+          }
+        ],
+        "writer": {
+          "summary": "zapisovac: 720 zverejnenych, 0 zlyhanych, 0 zahodenych, 0 nezapisanych, najvacsia fronta 1 snimok (168.98 MiB), najdlhsie zverejnenie 6.580 s, cakanie na pamat fronty 0.0 ms v 0 cykloch, dobehnutie 0.057 s",
+          "longest_operations": "vytvorenie 1.267 s, zapis 4.824 s, fsync 0.000 s, sidecar 0.000 s, rename 0.000 s, hook 0.000 s, retencia 0.000 s",
+          "queue_jobs_max": 1,
+          "queue_bytes_max": 177187472,
+          "queue_wait_ms_max": 0.0,
+          "data_closed_ms": {
+            "p50": 849.281,
+            "max": 6579.693,
+            "max_seq": 0
+          },
+          "sha_ms_max": 4629.389,
+          "write_ms_max": 1269.206
+        },
+        "rusage_majflt_max": 0,
+        "skipped_before_max": 0,
+        "monitor_max_gap_s": 1.0450379848480225,
+        "monitor_missed_ticks": 0,
+        "requests": 27792,
+        "request_errors": 0,
+        "measure_latency": {
+          "n": 26892,
+          "max_ms": 1466.038,
+          "p99_ms": 156.634,
+          "over_1s": 80,
+          "over_2s": 0,
+          "over_4s": 0
+        },
+        "raw_bytes": 10506844224,
+        "archive_stored_bytes": 1707905423,
+        "stage_s": {
+          "session-preflight": 1.6,
+          "capture": 3740.0,
+          "audit": 1067.6,
+          "archive": 401.6,
+          "session-complete": 0.9
+        },
+        "inputs_sha256": {
+          "audit": "8cd48bc6c551b4bb0041106aa397b36e80bcd939748724380347674c18fd6cda",
+          "session.json": "1c5ab41419b9f93f48691f13c26710fa5939b99fbd3018bd461b002d76abb78a",
+          "collect.log": "9be10b891313279381b2adea8db87270aa37a86306d6c33be2c73b90de513f80",
+          "traffic.json": "d94f5b587945977f4159396cc91da63caba70534152304f90ee202ffe607efb4",
+          "traffic_requests.jsonl": "d984300e31031639bb0186909657b98a2ac6f39b3e18ce7da6d32335e5f153f9",
+          "host_monitor.jsonl": "d4bcf3e8328f6b1611cef226799f4f98daab0c086d0fa1fd4a0dd6ef0e0bacfa",
+          "archive-manifest.json": "cb24a9fc2df5abe3385b87471caededb70e5386edce70e2e143f88d007bc6c20"
+        }
+      },
+      {
+        "session": "benign-v5-20261025_17_train_mixed",
+        "group": "train-3",
+        "role": "train",
+        "scenario": "mixed",
+        "group_attempt": 1,
+        "guest_boot": "1ca44c9e-add0-411c-93c1-2f0e956b293b",
+        "qemu": {
+          "pid": 2594525,
+          "start_ticks": 43771089,
+          "host_boot": "eb635e03-638a-4d7c-ab67-9ee1a4d410cf"
+        },
+        "measurement_dirty": [],
+        "qemu_swap_kb_at_start": 0,
+        "host_monitor": {
+          "qemu_swap_kb_max": 0,
+          "qemu_swap_samples_over_0": 0,
+          "pswpout_delta": 0,
+          "sda_util_ge_99_samples": 22,
+          "mem_available_mib_min": 10165,
+          "samples": 3731
+        },
+        "accepted": true,
+        "reasons": [],
+        "snapshots": 720,
+        "windows": 656,
+        "score_coverage": 0.9111111111111111,
+        "logs_accepted": true,
+        "integrity_findings": 0,
+        "invalid_input_seq": [],
+        "integrity_unconfirmed_seq": [],
+        "process_walk_prev_seq": [],
+        "collector_end": {
+          "snapshots": 720,
+          "errors": 0,
+          "missed_slots": 0
+        },
+        "collector_mlock": {
+          "seconds": 0.3,
+          "vmrss_mib": 2596
+        },
+        "log_error_lines": 0,
+        "scheduler_skips": [],
+        "full_snapshots": [
+          {
+            "seq": 0,
+            "pages": 261819,
+            "bytes": 1074505240,
+            "mib": 1024.73,
+            "logged_size": "1.00 GiB",
+            "capture_ms": 1785.7,
+            "backend_read_ms": 319.069,
+            "total_ms": 1785.8
+          },
+          {
+            "seq": 360,
+            "pages": 262306,
+            "bytes": 1076503888,
+            "mib": 1026.63,
+            "logged_size": "1.00 GiB",
+            "capture_ms": 1802.8,
+            "backend_read_ms": 321.232,
+            "total_ms": 1804.9
+          }
+        ],
+        "cycle_total_ms_max": 1804.9,
+        "delta_ms": {
+          "n": 718,
+          "p50": 806.7,
+          "p99": 845.1,
+          "max": 868.7
+        },
+        "long_cycles": [
+          {
+            "seq": 0,
+            "kind": "PLNA",
+            "bytes": 1074505240,
+            "mib": 1024.73,
+            "logged_size": "1.00 GiB",
+            "capture_ms": 1785.7,
+            "total_ms": 1785.8,
+            "since_full": 0,
+            "end_utc": "2026-10-26T10:37:29.263Z"
+          },
+          {
+            "seq": 360,
+            "kind": "PLNA",
+            "bytes": 1076503888,
+            "mib": 1026.63,
+            "logged_size": "1.00 GiB",
+            "capture_ms": 1802.8,
+            "total_ms": 1804.9,
+            "since_full": 0,
+            "end_utc": "2026-10-26T11:07:29.283Z"
+          }
+        ],
+        "writer": {
+          "summary": "zapisovac: 720 zverejnenych, 0 zlyhanych, 0 zahodenych, 0 nezapisanych, najvacsia fronta 1 snimok (182.64 MiB), najdlhsie zverejnenie 6.671 s, cakanie na pamat fronty 0.0 ms v 0 cykloch, dobehnutie 0.061 s",
+          "longest_operations": "vytvorenie 0.301 s, zapis 4.866 s, fsync 0.000 s, sidecar 0.000 s, rename 0.000 s, hook 0.000 s, retencia 0.000 s",
+          "queue_jobs_max": 1,
+          "queue_bytes_max": 191512432,
+          "queue_wait_ms_max": 0.0,
+          "data_closed_ms": {
+            "p50": 879.432,
+            "max": 6671.093,
+            "max_seq": 360
+          },
+          "sha_ms_max": 4663.953,
+          "write_ms_max": 763.058
+        },
+        "rusage_majflt_max": 0,
+        "skipped_before_max": 0,
+        "monitor_max_gap_s": 1.044842004776001,
+        "monitor_missed_ticks": 0,
+        "requests": 66971,
+        "request_errors": 0,
+        "measure_latency": {
+          "n": 64773,
+          "max_ms": 2335.671,
+          "p99_ms": 122.534,
+          "over_1s": 158,
+          "over_2s": 8,
+          "over_4s": 0
+        },
+        "raw_bytes": 12930514776,
+        "archive_stored_bytes": 2004493804,
+        "stage_s": {
+          "session-preflight": 1.7,
+          "capture": 3740.3,
+          "audit": 1155.8,
+          "archive": 521.5,
+          "session-complete": 1.0
+        },
+        "inputs_sha256": {
+          "audit": "15541b1c7a4e475504981332422762f066ebfceff4570bcbb8d3b9b41146e242",
+          "session.json": "276b5a561ff5b775786c0a36c7cb2c827f2132ad8830148318e0491b0584ba41",
+          "collect.log": "af74fd387d41320fed2dc71593b027e3effe23a86e1b1e9fd4602ab99b7b2bc0",
+          "traffic.json": "d6c33f877e2b12939799943f538b3610baf3b7be6962c90154cf2e60a1e7d5ec",
+          "traffic_requests.jsonl": "254d25766ec32e24ee3fb42434224cc1240aec31a86d88bb480a55ba7fea8ee4",
+          "host_monitor.jsonl": "89a23e6a3ed24142706617fa5e808bee81b4f94400cfcd0f2bb90240ef26575e",
+          "archive-manifest.json": "c9b6f585d4615be4e0872dd611e6dffbbd127cdcc51259dcca926a0d6c512a25"
+        }
+      },
+      {
+        "session": "benign-v5-20261025_18_train_quiet",
+        "group": "train-3",
+        "role": "train",
+        "scenario": "quiet",
+        "group_attempt": 1,
+        "guest_boot": "1ca44c9e-add0-411c-93c1-2f0e956b293b",
+        "qemu": {
+          "pid": 2594525,
+          "start_ticks": 43771089,
+          "host_boot": "eb635e03-638a-4d7c-ab67-9ee1a4d410cf"
+        },
+        "measurement_dirty": [],
+        "qemu_swap_kb_at_start": 14216,
+        "host_monitor": {
+          "qemu_swap_kb_max": 0,
+          "qemu_swap_samples_over_0": 0,
+          "pswpout_delta": 0,
+          "sda_util_ge_99_samples": 30,
+          "mem_available_mib_min": 10151,
+          "samples": 3726
+        },
+        "accepted": false,
+        "reasons": [
+          "incomplete model inputs under behavioral-inputs-v1"
+        ],
+        "snapshots": 720,
+        "windows": 623,
+        "score_coverage": 0.8652777777777778,
+        "logs_accepted": true,
+        "integrity_findings": 0,
+        "invalid_input_seq": [
+          613
+        ],
+        "integrity_unconfirmed_seq": [],
+        "process_walk_prev_seq": [],
+        "collector_end": {
+          "snapshots": 720,
+          "errors": 0,
+          "missed_slots": 0
+        },
+        "collector_mlock": {
+          "seconds": 0.2,
+          "vmrss_mib": 2596
+        },
+        "log_error_lines": 0,
+        "scheduler_skips": [],
+        "full_snapshots": [
+          {
+            "seq": 0,
+            "pages": 263502,
+            "bytes": 1081412272,
+            "mib": 1031.32,
+            "logged_size": "1.01 GiB",
+            "capture_ms": 1784.8,
+            "backend_read_ms": 308.868,
+            "total_ms": 1784.9
+          },
+          {
+            "seq": 360,
+            "pages": 263438,
+            "bytes": 1081149616,
+            "mib": 1031.06,
+            "logged_size": "1.01 GiB",
+            "capture_ms": 1766.5,
+            "backend_read_ms": 308.299,
+            "total_ms": 1767.2
+          }
+        ],
+        "cycle_total_ms_max": 1784.9,
+        "delta_ms": {
+          "n": 718,
+          "p50": 784.6,
+          "p99": 821.7,
+          "max": 830.2
+        },
+        "long_cycles": [
+          {
+            "seq": 0,
+            "kind": "PLNA",
+            "bytes": 1081412272,
+            "mib": 1031.32,
+            "logged_size": "1.01 GiB",
+            "capture_ms": 1784.8,
+            "total_ms": 1784.9,
+            "since_full": 0,
+            "end_utc": "2026-10-26T12:07:51.037Z"
+          },
+          {
+            "seq": 360,
+            "kind": "PLNA",
+            "bytes": 1081149616,
+            "mib": 1031.06,
+            "logged_size": "1.01 GiB",
+            "capture_ms": 1766.5,
+            "total_ms": 1767.2,
+            "since_full": 0,
+            "end_utc": "2026-10-26T12:37:51.020Z"
+          }
+        ],
+        "writer": {
+          "summary": "zapisovac: 720 zverejnenych, 0 zlyhanych, 0 zahodenych, 0 nezapisanych, najvacsia fronta 1 snimok (177.32 MiB), najdlhsie zverejnenie 6.622 s, cakanie na pamat fronty 0.0 ms v 0 cykloch, dobehnutie 0.032 s",
+          "longest_operations": "vytvorenie 0.000 s, zapis 4.838 s, fsync 0.000 s, sidecar 0.000 s, rename 0.000 s, hook 0.000 s, retencia 0.000 s",
+          "queue_jobs_max": 1,
+          "queue_bytes_max": 185935136,
+          "queue_wait_ms_max": 0.0,
+          "data_closed_ms": {
+            "p50": 820.525,
+            "max": 6621.501,
+            "max_seq": 0
+          },
+          "sha_ms_max": 4639.145,
+          "write_ms_max": 199.422
+        },
+        "rusage_majflt_max": 0,
+        "skipped_before_max": 0,
+        "monitor_max_gap_s": 1.0427141189575195,
+        "monitor_missed_ticks": 0,
+        "requests": 5400,
+        "request_errors": 0,
+        "measure_latency": {
+          "n": 5218,
+          "max_ms": 739.709,
+          "p99_ms": 155.319,
+          "over_1s": 0,
+          "over_2s": 0,
+          "over_4s": 0
+        },
+        "raw_bytes": 8268366672,
+        "archive_stored_bytes": 1391656925,
+        "stage_s": {
+          "session-preflight": 2.5,
+          "capture": 3737.4,
+          "audit": 1055.6,
+          "archive": 304.0
+        },
+        "inputs_sha256": {
+          "audit": "70383d22f4488de28d09fbb97cffb06ad070c3a08f1b3ae4b04eaab4ca8da3af",
+          "session.json": "af88f5e09213a449a78b111ea42ab7cbe62a3371d5eeea1534f9731df365248f",
+          "collect.log": "3140a4f5fd7d10230ec156d0e4488a56849d77ca7487f6bd66f119f121ac217d",
+          "traffic.json": "71fded4995b0e1fe00530bacbab0842dd1dce3fb43dc4c1837bbd3e481069e1e",
+          "traffic_requests.jsonl": "0b044f69f5e4b99657c35fb6514121d6656cb1a1563b5a73075c0a52c5de9ba2",
+          "host_monitor.jsonl": "94bfb4adf6900fd2113e366e950dd701069c5e9801a5674c20215e36c7cf4107",
+          "archive-manifest.json": "d1b201d61523828d8684e03e82d3a3bfc6d500eebcf088cd7df0bdf8b6342de1"
+        }
+      }
+    ],
+    "verify_archives": {
+      "verified": [
+        "benign-v5-20261025_01_train_write_heavy",
+        "benign-v5-20261025_02_train_quiet",
+        "benign-v5-20261025_03_train_bursty",
+        "benign-v5-20261025_04_train_mixed",
+        "benign-v5-20261025_05_train_read_heavy",
+        "benign-v5-20261025_06_train_steady",
+        "benign-v5-20261025_07_train_write_heavy",
+        "benign-v5-20261025_08_train_quiet",
+        "benign-v5-20261025_09_train_read_heavy",
+        "benign-v5-20261025_10_train_mixed",
+        "benign-v5-20261025_11_train_bursty",
+        "benign-v5-20261025_12_train_steady",
+        "benign-v5-20261025_13_train_read_heavy",
+        "benign-v5-20261025_14_train_bursty",
+        "benign-v5-20261025_15_train_write_heavy",
+        "benign-v5-20261025_16_train_steady",
+        "benign-v5-20261025_17_train_mixed",
+        "benign-v5-20261025_18_train_quiet"
+      ],
+      "n_verified": 18,
+      "wall_s": 1377.368327293,
+      "rc": 0
+    },
+    "inputs_sha256": {
+      "campaign.json": "9a5c817e9fb2ea9a867994e47670b1ac5dbdbefba418b4ae1cad7fae47a77e04",
+      "verify_log": "7564e90957ba49a4df6b2e6c499dbba3cd8b87e8648e7d68a5bb77e3d409dc2c",
+      "status.json": "df443b59944fbb3a24d7d5a1654fa9aa0058a6c6c5b6e7abcbcd0c04f06bfbb2",
+      "closed.json": "ea1df1f254125838745e1af32fed5e182dd5ad8986efc31793538649f9c94ce7",
+      "events": {
+        "20261025T111305324169Z_a1821d7e.json": "b8ffcb6c6e254d401572844b7e92b27a4b7818ee1eb95c972ffc363eef9118d6",
+        "20261025T111336905841Z_871e21b3.json": "06da59967f093ccec880d734b8e57aa34352e5c1e086b9bde7f2e82e76cf90a9",
+        "20261025T111337189167Z_70c5249c.json": "b15d3196b21043484c3d3a5fe2dab0a18089096d2d5cc3743e362edce49a0dd1",
+        "20261025T111337904845Z_6cd60457.json": "6416f56320b94b014982e0017e94d732789aeb2dddf0346ff29c10148cfe6a54",
+        "20261025T111348723282Z_f3ba777a.json": "051c76888c1d7911830127cd69608fc579c8f47f5fffeec07aa7d131601914d9",
+        "20261025T121611553616Z_3bfca90d.json": "a8167f0cf597cbf42fa69a7ba818553cbfa624ff5b0fbff1101ba665c495c454",
+        "20261025T122837070529Z_5dbcf1cf.json": "88b349c7d5bd8cf8b2acc8d0f856e656cde8cf8b19c199268e53c672ff28697f",
+        "20261025T123631082164Z_502077bc.json": "15b1136dab6b3fd290fa301fe12cac8f6644696088b373cb3b92c726d8e6d77b",
+        "20261025T123631288003Z_9926c644.json": "9bb84f40cbe7d437c40322983ac11d7ee32c7f3eb8bab3de2ab9aae08c3a3393",
+        "20261025T123942776755Z_7f3204db.json": "b5cdd28a013d1b6bc067c114b1fb4b9112a7bd822bd0ab1a6a1b91b40c6d08c7",
+        "20261025T123943070049Z_01dbf6c3.json": "7facc3eba287d51c76c7e284f728ff8bfae1b7cfabb82f352c3a82a9cc9f4f27",
+        "20261025T123943752188Z_44eeccba.json": "eb90b1de04630ed246dcf548cdf6d26e4ca8b3ce33849c9550e750b6da594f2f",
+        "20261025T134159076278Z_faa2c362.json": "1c319d57bbee1317890e7807a394f77770f1c14aa149c161ccf4c4634da65307",
+        "20261025T135440323773Z_16737b3e.json": "9d66b674e320e73b87ea7bd2ce4d485272a266f7b8b503257a73953dfd465950",
+        "20261025T135943458157Z_12f3fe14.json": "6d8c488516010ce57699eb4c9ca62e55894b331330e1f690ca7cc2e3a747b58c",
+        "20261025T135943758498Z_2beb9bb5.json": "1a5b6ba45a3e76f3e83a57fa0c6c9fb8266a85d7e5c67f8396c0f3d8372fa3e9",
+        "20261025T135944399111Z_7208d1ff.json": "91680d4485aeb993fcd2d86d10e26cabb276361524795078f8f4e3a411cff6e5",
+        "20261025T150205734175Z_ef6b2ea9.json": "344e6782d1cd9660aaf5b598db4d19632d1614a2c54e6e3b1409c865ed2c9d15",
+        "20261025T151827373923Z_80ab1df9.json": "5fb6bb95e678f967ea0d1e516eed54cd367d916a065f7d527198beb9a2b53356",
+        "20261025T152747520870Z_0ff4a495.json": "55efb59c983594e14bc5812156d4744b1bf718fa161b09036dccb60d3cb3fb8b",
+        "20261025T152748086915Z_925a58df.json": "1ea0784ec4cc8207afae66e2ac4f7fc1798018fcd8be81a034c2adc645d0bedc",
+        "20261025T152749641302Z_ccb2b46f.json": "dcebe55926e723ed6b7208b91f7850890a354fb507a4e84b2a35c492ab4fe820",
+        "20261025T163009606735Z_a4a42e25.json": "0bac88975ad2f31de167e4d769816a5c2d17e3e43c446b2ee439975df5d77044",
+        "20261025T164733482694Z_a5aad93d.json": "5945f03324fb536ab2d8d986b92cdacd54b7248ea3a26b030038ace055d6a0d5",
+        "20261025T165545514613Z_27781698.json": "3d55cd25ec6f0b4e67c182adad6791bf81f23cee82f436c124cb0c6e9d86b9b3",
+        "20261025T165546695613Z_104904bd.json": "7f295c7387af1f83a7cb8ea58fcc909a7f9f622979d8e6f2bcf9d5880c4a0e2f",
+        "20261025T165547802947Z_0ab73e13.json": "d2d184dcdd8efa6bfa1195b6b950513a8e2a6beb6818d7f1b5b4d6312c41b1d3",
+        "20261025T175805684826Z_9749250e.json": "2935fbc8f0395c63a117b292f5ecf25d5f00b53b5884d2eb853c18ed770b6b7b",
+        "20261025T181439162537Z_b6f6e28a.json": "fd7ac82a91de764c3b4de23fe352baae72b09a843532318b8ede50e153625e19",
+        "20261025T182123765658Z_1073f176.json": "f8d162790ddcef37e40c52bee54c53b97d49a9e4d3efc63dd54a16e210a1c4f2",
+        "20261025T182124040955Z_6311f0b7.json": "3f05b27535bb5e913d376d79b5cee937d5e80cbcaad77463941d848271942a4c",
+        "20261025T182124623499Z_ee6fbce7.json": "8fb7206f9a71550e074096cbcc0364fada853322f3b2f95ce1aeb00b72ee5162",
+        "20261025T192340262161Z_f1d73801.json": "2ae01d25da6a2ac68d908096fe231d2caa0520bdf35c12708551a3836abc7007",
+        "20261025T194019802964Z_edffc22e.json": "77756ba70f9f66f5bdbfd618666ce1c4f56efc43bb1d5c11350c3edf4fc08d88",
+        "20261025T194649599794Z_5a0bb1ca.json": "d4c1e0423d350a83eee60c855a22e132af5754e6ca0b1b63f3507620f787b2c7",
+        "20261025T194649875036Z_d46f4fd6.json": "076591236154acd379eda3312be5f678bee3f388526fbdee608072791a5cf458",
+        "20261025T194650565904Z_da08b2b6.json": "372fcae14b758af31f86e764bf177005641948f4620b8169318d5c1bcb36cefe",
+        "20261025T194711290510Z_8cd177dc.json": "72350bcb6a65b20fa836d736fcac5f0cd094dd6a931c280a3e677c57cd65df93",
+        "20261025T204931138905Z_b1321ac8.json": "2fac2b9176a0ec680070ee4d32459cf04a0dea309186aef5cb78d617bb92fa22",
+        "20261025T210749314128Z_4b5eac7f.json": "eef456c797e183e702fcae7a4607e4588f7eed2ee6f46f044d1f67a6783a6ad0",
+        "20261025T211619582104Z_3d98fc0d.json": "f23b1904afb0fdbc94fac2feefe96e1ee3bba94a5228bdfedcd30216bb4cbeea",
+        "20261025T211620231717Z_23a97195.json": "7dff538b65a4136553a5aafaf5e3e3dff8803829ad5302b55bd06987b597c4dc",
+        "20261025T211621314256Z_1fdb328c.json": "1d9cc30165d52989eb4ddc204673b194c487e326abe8231afbb6bd02ba6e0dec",
+        "20261025T221836663367Z_0d3fa8bf.json": "05e6a9bd6b193e7e46d8c54e1f25ffe3faeed173935a9b79285b7f6acbd236bc",
+        "20261025T223518226525Z_1d38fee1.json": "cad42cca95eba88635a0d46d2fd1374de9104da181af6617893229be16f2b6e3",
+        "20261025T224048436216Z_3c7b44ce.json": "f135893c09c128a4275bad88479c96fb0bcc1b92ff6a29214f74b8638c0d80a1",
+        "20261025T224048711614Z_875dba14.json": "b6010fc6afae6f2a6abff3ddb1251b96669959865badaaee9cbef9ef6f41ec80",
+        "20261025T224049343907Z_01457d77.json": "18377288b4703542c589b259a5a46266f5d3ac128c1ea5b5175a02c595b22542",
+        "20261025T234307246277Z_36662f19.json": "d7aab337810ba0366330950777f2c860101c1d65cecbe1afa1a88123834dba64",
+        "20261026T000055618957Z_a62d1b82.json": "b12fddbce2528f3a0ef7fb8e8b121b4c8a88de32ef01c850ee44ce03710133ff",
+        "20261026T000802448441Z_4e400b84.json": "bd7fcd38298e287d2e52f09dcc509ce254cc56326d0cf85eeac2c904be4af516",
+        "20261026T000803139160Z_56cc4541.json": "993ed9998c9e6c4b42cf6017f6246c564317a70025bccc0cdd7f880fb3f9a81e",
+        "20261026T000804236694Z_b8ff5872.json": "c9d8356469e4a5e31ef19e7c6cc290043fdc68fcf0702bde99368be8183d5c15",
+        "20261026T011024476895Z_af0427d8.json": "2adab3ba1b8e38d233cf2eae336449b412b9fe4b3008a3e832c7cbd6966fc80a",
+        "20261026T012902986531Z_3103d0f3.json": "ca5fce15791c16fe14bcf0855919c4fa3bd777699552853de43f158fdee6edef",
+        "20261026T013728404745Z_22769f2b.json": "d5ce4c8158f30b18d5a3e49579ed0fa182ca3e8fca1ff8d26677484c7f000c52",
+        "20261026T013729037173Z_18a4d9e2.json": "afa23b648630dca5d390d84308964b47b50148b251ba0f50903f87e7c1d196be",
+        "20261026T013730716263Z_c6db2986.json": "a2b070e632fa1cfc3248c2ccc6ef1cce408aadb73c29915596a1b8c64fc3c353",
+        "20261026T023956309655Z_5ea35174.json": "6c4847cf43f50f571304da3a0d919e7d9a0656bedfd961d9f285677a61f2813f",
+        "20261026T025942657592Z_e5f31031.json": "b6a3157e67d0bcb261bcac4450106f39d91fef20b4f77318fad8093c56baa487",
+        "20261026T030941369717Z_836b159b.json": "7033ffd5a5459718014ff95918a049fbef3e6ff6e27c6f957c23978857d302f7",
+        "20261026T030942558950Z_2dbdc05b.json": "46f36ae4e756616a95e69e0eab0c77d0d97ecad48413f5b2f3baa6f4ad9aea6c",
+        "20261026T030944272788Z_0e60a675.json": "857e8253b71fd69d2e8ae8bf310084deec116aafbe6c8c070253050d8d04e60e",
+        "20261026T041202040969Z_532b42e3.json": "d34e28587fa622b351c37eadc139e49d6a07648b8db3138e3f66046ec8ca75a7",
+        "20261026T042923644399Z_d99ec3c2.json": "134cbc686d56ce0dc8922dd0727a3c9ee13f3fb98db00198d00ca2c6cae10a74",
+        "20261026T043530761278Z_596fedd2.json": "fd0c518817e15e75090f40f2cc5b1c1a3b0a1a4f98183c99aad878937b5c6608",
+        "20261026T043531046226Z_ce9165c7.json": "89e2f9295b7311ed630d60b57f2a9ffcd983016ba199bca91b1e98628cbe5e78",
+        "20261026T043531762027Z_9f1ccf0a.json": "35ec2af14cfacfb275662978c053588d8c1c972aecf712daa938bef69b879281",
+        "20261026T043556488804Z_47885d75.json": "fef41357a36bd0aae277c201b08bee1fd407c22cb47822adec6d09097adb90bf",
+        "20261026T053820737622Z_7b6b16a5.json": "b4cb271b49f4b7c679c3590f8f91f955f8b2e5f62255dca80f088a1a00443139",
+        "20261026T055722858539Z_d2e7740b.json": "8d81405c3a20e02e64f6845617a5bc159dbb2547abd911b65d80756931bb45b6",
+        "20261026T060447773401Z_287edd1a.json": "ae86ade44529fabf5e5e4bfed2d3fb2ec1c209f7f60fcde9a6c1080e0c1c74ee",
+        "20261026T060448681283Z_421e8478.json": "76bd1d678ccc5e6d58208719e610eff9f75dd449c10cd70218c79ef9ee938c23",
+        "20261026T060450476625Z_b4141fe9.json": "b96e8efa766c8fe4963670f96884884e0dffb70fe2dce1f826770dbb15288bb0",
+        "20261026T070714880971Z_9c012bef.json": "001f548e7bbcb006ab7b05859b4a4180a86d67c93307d908929a89ded96fb296",
+        "20261026T072733885872Z_e536b44d.json": "901e96788290412999e7f98081924a25c50cfa6f83192d05703ee02422113f98",
+        "20261026T073730331532Z_b21135b4.json": "a32ca4f2b5f85a6ca4b30993dbbb4ff339d7e4e0b787990af86afcb3a77e6d6b",
+        "20261026T073731304693Z_2c95f5b0.json": "12dcb2a1ea969c2b4894479ccb60251aca67d25bbe53ce5ca12488462a96f145",
+        "20261026T073732983895Z_db17693a.json": "10b3f162a380e46b5d32fb784974cdd2e7dfb93ac47f45ca176b073b2dab6c95",
+        "20261026T083955291257Z_8f04e2ae.json": "2e04370d93a14b451caf1dc879744c9b32c54b17b409b0eaaf288a2d8501470e",
+        "20261026T085919176460Z_2ccfc98c.json": "dbde0dd0fafada74bd7337681d6858948c84a0ac2582e1f12d99e7cefaafc0d1",
+        "20261026T090821294684Z_c9418a71.json": "080d5548603d93f7c927d2ef27154eec38ef048ae5947a7a5f9868d8933e2a27",
+        "20261026T090822153029Z_237101db.json": "392e43f1dd0cc0098b47a618350b18ef252041a261dcbe95d7aa9f244835ca49",
+        "20261026T090823956820Z_24afcfdd.json": "1e9344460b385ea27b5d6d284e33ae4b63b23be3483560cbe951be5de652c640",
+        "20261026T101043788414Z_1a5e2127.json": "3e3006c7487d1b68cc087cd1b03471b6a163ad01028c9adb2e4a746461e3fda0",
+        "20261026T102831434315Z_6b621ea8.json": "fe4cfd8c5be6a1c584d7dce5b41dbcc6ab6ad97dfad8d87bbcacde628fc69863",
+        "20261026T103513033678Z_0040cbcd.json": "d5365a19e8c9840a54626d07ca6c7ab6b1440a88605bf35a1362ea7afe1d6f8c",
+        "20261026T103513956938Z_3e1684e8.json": "00456b3e805db6fb3b91f2b27150aad47fef1fca455770a22f4b91a8ec9265ce",
+        "20261026T103515644270Z_ba5f24a0.json": "097881dca9f9166068aae0887ba57d3b5946b9f8e74923068d8bcd742ccbd25e",
+        "20261026T113735947039Z_9c2cc906.json": "5ba0caa904457107cb4ef1e89e1e14a9a2341bec2928c499666d7312101ebe37",
+        "20261026T115651771894Z_eb9cbc35.json": "075f3493b1fe8e5dc47bd98e0e2ec617a0d6f568a5234d8810c143f3148dfa15",
+        "20261026T120533275627Z_b84dcc59.json": "5692adae29dd350aafb1ed6d15f8166dcb179522c532b33ffc4779f7fa36e6bc",
+        "20261026T120534290394Z_393d012a.json": "40aa3b872d52cf6650f71114297c8a0aae32972df93d634fa6fe15d59dec4562",
+        "20261026T120536851242Z_83d4e5ba.json": "e34cfbcd2f84fa1f07b76403d56b5f72a8652bde581b50a6a702c15e7a5fedd7",
+        "20261026T130754183698Z_41a63eb5.json": "bdcd3c6a183f8a34c3e1e2c0e86f22f22563b41d5c9f9182a51eb3f3d60d758d",
+        "20261026T132529753412Z_31eb8cbb.json": "5ac87dc4207882fcc15792abe6f220db375a034653e981f13ae51c2ab1edbfc8",
+        "20261026T133033801816Z_0d31a45d.json": "6088e2f2adfdd43f474fc2d37a21ba23fd485b7d96efc678489859aa19458e6d",
+        "20261026T134805848706Z_16789ecc.json": "b0e2a32cad3eecf817de6b8d6f4042f5ff9cca03da3732a96bbf08f9bab2dcd4"
+      },
+      "groups": {
+        "train-1.json": "2722adbdcabaf100c80638c04e5cb3e9a01c4fcb3bfd2fcc7a92151dfcffe25a",
+        "train-2.json": "0f3b5f5c25e2199ab554647f5d13d695b575008cd7bf5f429de7cba272e27d1c",
+        "train-3.json": "ef6ad4686c16a774aa188dcc79e119e91851940935712b1633bb745d91d57b40"
+      }
+    },
+    "note": "Closed after the session 18 audit rejection (row seq 613: a torn process list from a tail insertion, see collection_process_walk_insert_20261026.json). The operator launched the campaign with --stop-after 1 at 2026-10-25T11:13:35Z, checked session 1 (audit, collector timing and an independent `collection_archive verify` of its archive from 12:37:56Z to 12:39:08Z, rc 0) and relaunched it without a limit at 12:39:40Z. There were no operator stop requests, no VM restarts and no fstrim during the campaign. Groups train-1 to train-3 ran on one QEMU process started by the VM power-cycle before init (2026-10-25, 11:11:24Z to 11:11:48Z), with a guest reboot at the start of each group. On the user's decision the operator closed the campaign at 2026-10-26T13:48:05Z with the reason in values.closed. The launch and relaunch times, the session 1 check, the absence of fstrim and the power-cycle times are operator statements from the session log, not machine records."
+  }
+}

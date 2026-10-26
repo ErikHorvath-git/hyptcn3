@@ -1,0 +1,473 @@
+{
+  "commit": "b065ee410feb0dc2a620ae8cca54c603bab5c226",
+  "commit_dirty": true,
+  "commit_note": "HEAD when this record was generated. The record script data/results/collection_process_walk_insert_20261026/record.py and its probe outputs are not part of this commit; they are committed together with this file. The re-audit ran on the commit in values.tail_walk_reaudit.commit.",
+  "date": "2026-10-26T15:40:56.708390+00:00",
+  "host": "Linux-7.2.9+deb13-amd64-x86_64-with-glibc2.41",
+  "guest": {
+    "kernel": "6.1.0-42-cloud-amd64",
+    "boot_id": "1ca44c9e-add0-411c-93c1-2f0e956b293b",
+    "machine_id": "180ac982142b4714a979599073c96cdd",
+    "stack_sha256": "3fcb9e724f031e3ed24fd3e08fb8f2946c8cd3f04416bc871d8f7dc31b3d46bc",
+    "stack_manifest": [
+      "c346dc8bc1c8c3649fc96064fddfc07172f740f7c82d1830dbb935b16c488271  /opt/hyptcn-lab/services.py",
+      "d7372422553f866333177456ac6daec4847f5660c1c854a646e602d0be0fcf6c  /opt/hyptcn-lab/schema.sql",
+      "a8e5ef8843ebae83eed8691f8eb7e1d186448d36e4be7d4406efeaa96291d5e3  /opt/hyptcn-lab/guest_state.py",
+      "62f55e4374b5db4522d0ce84c911f26ccd580e8f55bc570c09ee63c64be234c6  /etc/nginx/conf.d/hyptcn-lab.conf",
+      "af75eee623f3c7a0b7a1c10a35c2216684c6f4b610d44e46560de137ef3d6962  /etc/systemd/system/hyptcn-lab@.service",
+      "nginx\t1.22.1-9+deb12u10",
+      "postgresql\t15+248+deb12u1",
+      "python3\t3.11.2-1+b1",
+      "python3-psycopg2\t2.9.5-1+b1",
+      "timers:"
+    ]
+  },
+  "command": "data/results/collection_process_walk_insert_20261026/record.py data/campaigns/benign-v5-20261025 data/diagnostics/torn-walk-20261026/benign-v5-20261025_18_train_quiet data/results/collection_process_walk_insert_20261026_audit.json data/results/collection_process_walk_insert_20261026/restore.out data/results/collection_process_walk_insert_20261026_reaudit.json data/results/collection_process_walk_insert_20261026.json",
+  "n": 720,
+  "values": {
+    "campaign_halt": {
+      "status": "stopped",
+      "stage": "error",
+      "message": "audit rejected session; archived without replacement: incomplete model inputs under behavioral-inputs-v1",
+      "accepted_archived": 17,
+      "session": "benign-v5-20261025_18_train_quiet"
+    },
+    "campaign_close": {
+      "date": "2026-10-26T13:48:05.615598+00:00",
+      "reason": "Session 18 (benign-v5-20261025_18_train_quiet) was rejected by the audit: row seq 613 had an incomplete process list (behavioral-inputs-v1). A torn tasks walk from a tail insertion: a new kernel thread was linked into a recycled task_struct whose page was read before its initialization. The backward-walk rule of 0b61ffd correctly refused it. The operator (user decision 2026-10-26) closes the campaign; the walk gets a confirmation rule for this shape, then a new pilot and campaign v6."
+    },
+    "campaign_audit": {
+      "accepted": false,
+      "reasons": [
+        "incomplete model inputs under behavioral-inputs-v1"
+      ],
+      "windows": 623,
+      "score_coverage": 0.8652777777777778,
+      "quality": {
+        "behavior_valid_rows": 719,
+        "invalid_input_seq": [
+          613
+        ],
+        "integrity_findings": 0,
+        "integrity_unconfirmed_seq": [],
+        "process_walk_prev_seq": [],
+        "process_walk_tail_seq": null,
+        "integrity_inconclusive_rows": {
+          "modules": 0,
+          "process_cross_view": 1,
+          "syscall_table": 0,
+          "text_integrity": 720
+        }
+      },
+      "commit": "617054574510b42e89393656e561d3f552ae017d"
+    },
+    "snapshot_613": {
+      "timestamp": "2026-10-26T12:58:54.252Z",
+      "full": false,
+      "paused": false,
+      "capture_ms": 791.882,
+      "backend_read_ms": 306.539,
+      "chunk_bytes": 1048576,
+      "chunks": 2050,
+      "forward_count": 110,
+      "forward_stop": "cycle at node 0xffff925743e98890 (index 79)",
+      "backward_count": 79,
+      "backward_stop": null,
+      "first_inconsistent_forward_link": {
+        "at_index": 109,
+        "node": "0xffff925741262250",
+        "pid": 740794,
+        "comm": "python3",
+        "prev": "0xffff925745ca0890",
+        "came_from": "0xffff92574558d5d0"
+      },
+      "forward_only": 31,
+      "backward_only": 0,
+      "page_read_order": {
+        "x_task_struct": {
+          "pa": "0x12619c0",
+          "chunk": 18
+        },
+        "tail_task_struct": {
+          "pa": "0x558cd40",
+          "chunk": 85
+        },
+        "init_task": {
+          "pa": "0x5161aa40",
+          "chunk": 1302
+        }
+      },
+      "init_task_links": {
+        "612": {
+          "pa": "0x5161aa40",
+          "tasks_next": "0xffff925741213c10",
+          "tasks_prev": "0xffff92574558d5d0"
+        },
+        "613": {
+          "pa": "0x5161aa40",
+          "tasks_next": "0xffff925741213c10",
+          "tasks_prev": "0xffff925741262250"
+        },
+        "614": {
+          "pa": "0x5161aa40",
+          "tasks_next": "0xffff925741213c10",
+          "tasks_prev": "0xffff925741262250"
+        }
+      },
+      "node_x": {
+        "612": {
+          "node": "0xffff925741262250",
+          "pa": "0x12619c0",
+          "pid": 740786,
+          "tgid": 427,
+          "comm": "python3",
+          "next": "0xffff925743e98890",
+          "prev": "0xffff925745ca0890",
+          "real_parent_pid": 1,
+          "flags": "0x40804c",
+          "exit_state": 16,
+          "mm_null": true,
+          "start_time": 30192761526110
+        },
+        "613": {
+          "node": "0xffff925741262250",
+          "pa": "0x12619c0",
+          "pid": 740794,
+          "tgid": 427,
+          "comm": "python3",
+          "next": "0xffff925743e98890",
+          "prev": "0xffff925745ca0890",
+          "real_parent_pid": 1,
+          "flags": "0x40804c",
+          "exit_state": 16,
+          "mm_null": true,
+          "start_time": 30196853029535
+        },
+        "614": {
+          "node": "0xffff925741262250",
+          "pa": "0x12619c0",
+          "pid": 740796,
+          "tgid": 740796,
+          "comm": "kworker/u4:3",
+          "next": "0xffffffff8f61b2d0",
+          "prev": "0xffff92574558d5d0",
+          "real_parent_pid": 2,
+          "flags": "0x4208060",
+          "exit_state": 0,
+          "mm_null": true,
+          "start_time": 30197860825166
+        }
+      },
+      "tail_node": {
+        "612": {
+          "node": "0xffff92574558d5d0",
+          "pa": "0x558cd40",
+          "pid": 739422,
+          "tgid": 739422,
+          "comm": "kworker/u4:1",
+          "next": "0xffffffff8f61b2d0",
+          "prev": "0xffff925745eb3c10",
+          "real_parent_pid": 2,
+          "flags": "0x4208060",
+          "exit_state": 0,
+          "mm_null": true,
+          "start_time": 29686884306610
+        },
+        "613": {
+          "node": "0xffff92574558d5d0",
+          "pa": "0x558cd40",
+          "pid": 739422,
+          "tgid": 739422,
+          "comm": "kworker/u4:1",
+          "next": "0xffff925741262250",
+          "prev": "0xffff925745eb3c10",
+          "real_parent_pid": 2,
+          "flags": "0x4208060",
+          "exit_state": 0,
+          "mm_null": true,
+          "start_time": 29686884306610
+        },
+        "614": {
+          "node": "0xffff92574558d5d0",
+          "pa": "0x558cd40",
+          "pid": 739422,
+          "tgid": 739422,
+          "comm": "kworker/u4:1",
+          "next": "0xffff925741262250",
+          "prev": "0xffff925745eb3c10",
+          "real_parent_pid": 2,
+          "flags": "0x4208060",
+          "exit_state": 0,
+          "mm_null": true,
+          "start_time": 29686884306610
+        }
+      },
+      "neighbors": {
+        "611": {
+          "forward_count": 109,
+          "backward_count": 109,
+          "forward_stop": null,
+          "backward_stop": null
+        },
+        "612": {
+          "forward_count": 109,
+          "backward_count": 109,
+          "forward_stop": null,
+          "backward_stop": null
+        },
+        "614": {
+          "forward_count": 110,
+          "backward_count": 110,
+          "forward_stop": null,
+          "backward_stop": null
+        },
+        "615": {
+          "forward_count": 110,
+          "backward_count": 110,
+          "forward_stop": null,
+          "backward_stop": null
+        }
+      }
+    },
+    "snapshot_70": {
+      "forward_count": 108,
+      "forward_stop": null,
+      "backward_count": 78,
+      "backward_stop": null,
+      "asymmetric_forward_links": 0,
+      "page_read_order": {
+        "x_task_struct": {
+          "pa": "0x5eb0000",
+          "chunk": 94
+        },
+        "tail_task_struct": {
+          "pa": "0x5588000",
+          "chunk": 85
+        },
+        "init_task": {
+          "pa": "0x5161aa40",
+          "chunk": 1302
+        }
+      },
+      "init_task_links": {
+        "69": {
+          "pa": "0x5161aa40",
+          "tasks_next": "0xffff925741213c10",
+          "tasks_prev": "0xffff925745588890"
+        },
+        "70": {
+          "pa": "0x5161aa40",
+          "tasks_next": "0xffff925741213c10",
+          "tasks_prev": "0xffff925745eb0890"
+        },
+        "71": {
+          "pa": "0x5161aa40",
+          "tasks_next": "0xffff925741213c10",
+          "tasks_prev": "0xffff925745eb0890"
+        }
+      },
+      "node_x": {
+        "69": {
+          "node": "0xffff925745eb0890",
+          "pa": "0x5eb0000",
+          "pid": 733702,
+          "tgid": 425,
+          "comm": "python3",
+          "next": "0xffff925745ca0890",
+          "prev": "0xffff92577726d5d0",
+          "real_parent_pid": 1,
+          "flags": "0x40804c",
+          "exit_state": 16,
+          "mm_null": true,
+          "start_time": 27472124343494
+        },
+        "70": {
+          "node": "0xffff925745eb0890",
+          "pa": "0x5eb0000",
+          "pid": 733725,
+          "tgid": 426,
+          "comm": "python3",
+          "next": "0xffff925745ca3c10",
+          "prev": "0xffff925745ca2250",
+          "real_parent_pid": 1,
+          "flags": "0x40804c",
+          "exit_state": 16,
+          "mm_null": true,
+          "start_time": 27482052144066
+        },
+        "71": {
+          "node": "0xffff925745eb0890",
+          "pa": "0x5eb0000",
+          "pid": 733726,
+          "tgid": 733726,
+          "comm": "kworker/u4:0",
+          "next": "0xffffffff8f61b2d0",
+          "prev": "0xffff925745588890",
+          "real_parent_pid": 2,
+          "flags": "0x4208060",
+          "exit_state": 0,
+          "mm_null": true,
+          "start_time": 27483236155145
+        }
+      },
+      "tail_node": {
+        "69": {
+          "node": "0xffff925745588890",
+          "pa": "0x5588000",
+          "pid": 732527,
+          "tgid": 732527,
+          "comm": "kworker/0:2",
+          "next": "0xffffffff8f61b2d0",
+          "prev": "0xffff925743e9d5d0",
+          "real_parent_pid": 2,
+          "flags": "0x4208060",
+          "exit_state": 0,
+          "mm_null": true,
+          "start_time": 27034160130356
+        },
+        "70": {
+          "node": "0xffff925745588890",
+          "pa": "0x5588000",
+          "pid": 732527,
+          "tgid": 732527,
+          "comm": "kworker/0:2",
+          "next": "0xffffffff8f61b2d0",
+          "prev": "0xffff925743e9d5d0",
+          "real_parent_pid": 2,
+          "flags": "0x4208060",
+          "exit_state": 0,
+          "mm_null": true,
+          "start_time": 27034160130356
+        },
+        "71": {
+          "node": "0xffff925745588890",
+          "pa": "0x5588000",
+          "pid": 732527,
+          "tgid": 732527,
+          "comm": "kworker/0:2",
+          "next": "0xffff925745eb0890",
+          "prev": "0xffff925743e9d5d0",
+          "real_parent_pid": 2,
+          "flags": "0x4208060",
+          "exit_state": 0,
+          "mm_null": true,
+          "start_time": 27034160130356
+        }
+      }
+    },
+    "both_directions_all_snapshots": {
+      "snapshots": 720,
+      "forward_stops": {
+        "None": 719,
+        "cycle": 1
+      },
+      "backward_stops": {
+        "None": 720
+      },
+      "forward_inconsistent_link_seq": [
+        613
+      ],
+      "directions_differ": [
+        {
+          "seq": 70,
+          "forward": 108,
+          "backward": 78,
+          "only_forward": 31,
+          "only_backward": 1
+        },
+        {
+          "seq": 613,
+          "forward": 110,
+          "backward": 79,
+          "only_forward": 31,
+          "only_backward": 0
+        }
+      ]
+    },
+    "restore": {
+      "archive": "/home/eh/hyptcn3-archive/campaigns/benign-v5-20261025/collections/benign-v5-20261025_18_train_quiet",
+      "target": "/home/eh/projects/hyptcn3/data/diagnostics/torn-walk-20261026/s18-raw",
+      "schema": "hyptcn3/collection-archive/2",
+      "files": 1442,
+      "bytes": 8286235798,
+      "stored_bytes": 1369553136
+    },
+    "tail_walk_reaudit": {
+      "accepted": true,
+      "reasons": [],
+      "windows": 656,
+      "score_coverage": 0.9111111111111111,
+      "quality": {
+        "behavior_valid_rows": 720,
+        "invalid_input_seq": [],
+        "integrity_findings": 0,
+        "integrity_unconfirmed_seq": [],
+        "process_walk_prev_seq": [],
+        "process_walk_tail_seq": [
+          613
+        ],
+        "integrity_inconclusive_rows": {
+          "modules": 0,
+          "process_cross_view": 1,
+          "syscall_table": 0,
+          "text_integrity": 720
+        }
+      },
+      "commit": "b065ee410feb0dc2a620ae8cca54c603bab5c226",
+      "commit_dirty": true,
+      "measurement_dirty": []
+    },
+    "reaudit_vs_audit": {
+      "quality_changed_seq": [
+        613
+      ],
+      "vector_changed": [
+        {
+          "seq": 613,
+          "columns": {
+            "proc_total": [
+              110.0,
+              109.0
+            ],
+            "proc_kernel": [
+              60.0,
+              59.0
+            ],
+            "proc_new": [
+              1.0,
+              0.0
+            ]
+          }
+        },
+        {
+          "seq": 614,
+          "columns": {
+            "proc_new": [
+              0.0,
+              1.0
+            ],
+            "ma_predchodcu": [
+              0.0,
+              1.0
+            ]
+          }
+        }
+      ]
+    },
+    "inputs_sha256": {
+      "audit": "70383d22f4488de28d09fbb97cffb06ad070c3a08f1b3ae4b04eaab4ca8da3af",
+      "audit_npz": "9c9d746dc8595df3274b0e9d1e697122fe556eb0b51caf90e40ab2e6627142ee",
+      "reaudit": "b4574840c487b48b4060766ed6327ce5ff6ee94c83aa4f94e71e692cc102fbfa",
+      "reaudit_npz": "6e9976d5043c23659ee9d92f99432be473b2fdc4f986ec21cf9851b6bf6feb0d",
+      "restore_out": "28b0e9e3f92ffa2f30c24fb5534f41a9d107af20f7d3f92f50760b1632a671b4",
+      "closed.json": "ea1df1f254125838745e1af32fed5e182dd5ad8986efc31793538649f9c94ce7",
+      "sidecar_613": "bd2d56068d67183d58ecf77f7e772285d1739d01a13423dcac6058db98a131f8",
+      "walk_probe.jsonl": "0c5b3d8a438b97e30c5a79335dacdf24d9fc18b27865a023107c1d40f4682f85",
+      "node_probe.jsonl": "fdaa43d6cdd1ee8e5007a71f6b0fce0ce9beb40a54446ed4fc1fe51066afff28",
+      "walk_probe_70.jsonl": "77e992147967ce05738bc4ccb8902a31bac551a90b65c88b2bf84b6b5f0dfc23",
+      "node_probe_70.jsonl": "116614b6f06bea4f1a200fd9c3838fde375102a0b33fe49a5fe3b6a5cfbb447b",
+      "walk_all.jsonl": "ff91cb70fb476d6f8ea9a2952a13658cddcb1ac1e9212b4e934f28a0a6068dcf"
+    },
+    "note": "Evidence of the torn process list that stopped campaign benign-v5-20261025. The probes and the re-audit read a copy of session 18 restored from its verified archive (values.restore). The restored directory was then moved to data/diagnostics/torn-walk-20261026/benign-v5-20261025_18_train_quiet/raw, next to copies of the session's metadata files, because the parser takes the guest boot identity from session.json beside raw/; the session directory and the archive of the campaign are unchanged. page_read_order relies on the collector reading guest physical memory in ascending order in chunk_bytes pieces (vmicollect/src/backend.c, vmic_capture_timed). node_x and tail_node hold the task_struct fields as read from each snapshot image: in snapshot 613 node_x is the stale page, not the task linked there. The re-audit ran on the clean measurement code of its commit (measurement_dirty empty); its commit_dirty is true because untracked record files were already in data/results. It checks the rule on the failing session and does not change the campaign verdict."
+  }
+}

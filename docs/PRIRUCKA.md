@@ -1,6 +1,6 @@
 # Príručka k hyptcn3
 
-Vstupný dokument repozitára; stav kódu a artefaktov k 2026-10-25. Súbor je
+Vstupný dokument repozitára; stav kódu a artefaktov k 2026-10-26. Súbor je
 generovaný a needituje sa ručne — ako, hovorí kapitola 10.
 
 ## 1. Čo to je
@@ -70,8 +70,8 @@ zapíše.
 | adresár | čo rieši | kde začať čítať | súborov spolu / riadkov v `.c .h .py .sh .md` |
 |---|---|---|---|
 | `vmicollect/` | zberač snímok pamäte VM: C a eBPF nad QEMU/KVM | `vmicollect/src/collector.c` | 37 / 12 017 |
-| `guestparse/` | rekonštrukcia procesov, modulov a soketov zo snímky | `guestparse/view.py` | 34 / 7 231 |
-| `features/` | per-bin príznakový vektor (referencia), okná, normalizácia | `features/perbin.py` | 27 / 5 578 |
+| `guestparse/` | rekonštrukcia procesov, modulov a soketov zo snímky | `guestparse/view.py` | 34 / 7 232 |
+| `features/` | per-bin príznakový vektor (referencia), okná, normalizácia | `features/perbin.py` | 27 / 5 580 |
 | `tcn/` | TCN, prediktor normálu, baseliny, tréning a skórovanie snímok | `tcn/score.py` | 15 / 2 626 |
 | `safeguard/` | spoločné príznaky, modely, balík a hostiteľský detektor | `safeguard/cli.py` | 16 / 3 378 |
 | `profiles/` | profil jadra hosťa: symboly a offsety polí štruktúr | `profiles/debian12-6.1.0-42-cloud-amd64/README.md` | jeden adresár na boot hosťa — pozri L17 |
@@ -245,13 +245,13 @@ znamenalo držať dve znenia toho istého. Nadpisy sú preto dosadené z neho, s
 | dokument | čo vlastní | riadkov |
 |---|---|---|
 | `docs/ARCHITEKTURA.md` | rozhrania, formát `.vmicd` a sidecaru, tok dát podrobne | 1207 |
-| `docs/MERANIA.md` | log meraní: čo, kedy, akým príkazom a s akým výsledkom | 2276 |
-| `docs/LIMITACIE.md` | L1 až L18: čo systém nevie a čo z toho plynie pre text | 950 |
+| `docs/MERANIA.md` | log meraní: čo, kedy, akým príkazom a s akým výsledkom | 2429 |
+| `docs/LIMITACIE.md` | L1 až L18: čo systém nevie a čo z toho plynie pre text | 976 |
 | `docs/kontroly.md` | kontroly podozrivých vzorcov a validačný príkaz | 284 |
 | `HONESTY.md` | pravidlá pre čísla a slová v texte práce | 276 |
-| `README.md` | rozcestník repozitára a pôvod kódu | 77 |
+| `README.md` | rozcestník repozitára a pôvod kódu | 78 |
 | `docs/LAB.sk.md` | serverové laboratórium, premávka z hostiteľa a RAM zber | 298 |
-| `docs/METODIKA_ZBERU.sk.md` | protokol zberu, príznaky, rozdelenie korpusu a audit | 387 |
+| `docs/METODIKA_ZBERU.sk.md` | protokol zberu, príznaky, rozdelenie korpusu a audit | 388 |
 | `docs/SAFEGUARD.sk.md` | tréning modelového balíka, replay a spustenie detektora | 241 |
 | `vmicollect/README.md` | zberač zvnútra: vrstvy, hooky, formáty | 481 |
 | `guestparse/README.md` | parser zvnútra: preklad adries, prechod zoznamami | 162 |

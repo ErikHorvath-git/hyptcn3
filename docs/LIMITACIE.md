@@ -88,6 +88,22 @@ prvý nezhodný uzol a jeho obsah je vlákno (tgid ≠ pid) procesu spomedzi tý
 pochádza z iného okamihu ako spojenia, ktoré na uzol vedú. Inak zoznam zostáva
 `truncated`.
 
+V kampani `benign-v5-20261025` sa zoznam roztrhol opačne
+([záznam](../data/results/collection_process_walk_insert_20261026.json)). V snímke 613
+session 18 ukazovali `next` posledného procesu aj `init_task.prev` na nové vlákno jadra,
+ktoré `kthreadd` vložil do recyklovaného `task_struct`. Jeho stránka sa však prečítala
+skôr a mala ešte obsah ukončeného vlákna procesu `python3` so spojeniami skopírovanými
+od vodcu skupiny. Prechod dopredu sa preto zacyklil a prechod dozadu prešiel iba 79
+zo 110 uzlov. V snímke 70 tej istej session ten istý jav zasiahol iba prechod dozadu.
+Pravidlo `tail` takú snímku uzavrie bez nového uzla a ten pribudne v ďalšej snímke.
+Zvyšné riziko: z jedného obrazu sa nedá vylúčiť, že `task_struct` vodcu, ktorého
+vedľajšie vlákno práve robí `exec` na konci zoznamu, sa po uvoľnení recykluje na vlákno
+iného procesu zo zoznamu skôr, ako sa jeho stránka prečíta. Riadok by potom bol bez
+procesu, ktorý v zozname bol celý čas. Vyžaduje to `exec` z vedľajšieho vlákna
+najnovšieho procesu počas čítania jednej snímky, čo služby laboratória nerobia. Iné tvary
+roztrhnutia, napríklad obsah ukončeného vodcu skupiny namiesto vlákna, riadok naďalej
+zneplatnia a session zamietnu.
+
 **Formulácia do textu práce.**
 
 > Snímka je živá: virtuálny stroj sa počas čítania nezastavuje, pretože použité rozhranie
@@ -95,12 +111,16 @@ pochádza z iného okamihu ako spojenia, ktoré na uzol vedú. Inak zoznam zost�
 > (`vmic_backend_ops_t.pause == NULL` v `backend_ebpf.c`). Stránky jednej snímky preto
 > pochádzajú z rôznych okamihov a prechod spájaného zoznamu jadra sa môže roztrhnúť.
 > Parser je voči tomu obranný — každý prechod má strop, detekciu cyklu a kontrolu
-> rozumnosti hodnôt — a nekompletný výsledok označuje príznakom `truncated`, takže sa
+> rozumnosti hodnôt — a nekompletný výsledok označuje príznakom `truncated` (s výnimkou
+> zvyškového rizika pravidla pre koniec zoznamu nižšie), takže sa
 > nedá zameniť za skutočný stav hosťa. Samotné uzavretie prechodu nepovažuje za dôkaz
 > správnosti: roztrhnutý zoznam procesov uzavrie iba vtedy, keď prechod v opačnom smere
 > prejde presne tie isté uzly, alebo keď koniec zoznamu (`init_task.prev`) ukazuje práve
 > na prvý nezhodný uzol, ktorého obsah je vlákno procesu zo zoznamu, teda stránka
-> z iného okamihu. Merania pauzy sa neuvádzajú, lebo pauza
+> z iného okamihu. Toto pravidlo má zvyškové riziko: ak vedľajšie vlákno najnovšieho
+> procesu počas čítania jednej snímky urobí `exec` a `task_struct` jeho vodcu sa stihne
+> recyklovať na vlákno iného procesu zo zoznamu, riadok je bez tohto procesu a príznak
+> `truncated` nemá. Merania pauzy sa neuvádzajú, lebo pauza
 > neexistuje: vo všetkých uložených snímkach je `paused = false` a `pause_ms = 0`.
 
 **Čo by to odstránilo.** Backend, ktorý vie vCPU zastaviť (napríklad cez QMP `stop`/`cont`
@@ -555,7 +575,7 @@ zaznamenáva, žiadny záznam v `data/results/` ho však ako spotrebu nevyhodnoc
 | živá latencia snímka → skóre modelu | `UNVERIFIED` | meranie počas bežiaceho zberu: `tcn/score.py` pripojený na beh `vmicollect run`, latencia od konca cyklu po vypočítané skóre, medián a p95 z aspoň 12 cyklov |
 | vplyv zberu na výkon vnútri hosťa | `UNVERIFIED` | benchmark s pevne daným objemom práce v hosťovi, schéma A/B/A, medián a IQR z aspoň 12 opakovaní |
 | vplyv zberu na hostiteľa | `UNVERIFIED` (pamäť zmeraná, CPU zaznamenané, nevyhodnotené) | pamäť: zberač 1.1 s `output.mlock` drží frontu uzamknutú v RAM (najväčšia možná plná snímka + 512 MiB), monitor kampane ju zaznamenáva (`Mlocked`); diagnostika 2026-10-25 pri VM s 2 GiB: VmRSS po uzamknutí 2596 {{res:collection_writer_diagnostic_20261025_timing.json:values.collector_mlock.vmrss_mib}} MiB, `Mlocked` hostiteľa počas zberu najviac 2609 {{res:collection_writer_diagnostic_20261025_timing.json:values.during_capture.mlocked_mib_max}} MiB ([záznam](../data/results/collection_writer_diagnostic_20261025_timing.json), [MERANIA.md](MERANIA.md) 2026-10-25; jeden 40-minútový beh mimo korpusu); chýba vyhodnotená spotreba CPU celého procesu (monitor hostiteľa ju zaznamenáva po 1 s za všetky vlákna spolu, teda aj za `vmic-writer` so SHA-256 a `vmic-log`, ako `procs.vmicollect.cpu_pct` v `host_monitor.jsonl`; záznam diagnostiky ju nevyhodnocuje a má iba maximum vzorkovacieho vlákna na cyklus, `rusage_max.cpu_ms`), priemer za celý beh a vplyv na ostatnú záťaž hostiteľa |
-| dlhý beh s retenciou | `UNVERIFIED` | beh jedného procesu zberača rádovo v hodinách s retenciou: zmeškané sloty, rast obsadeného miesta, správanie pri reštarte domény počas behu; zatiaľ existujú iba hodinové behy bez retencie: kampaň `benign-v4-20261022` mala 37 {{res:collection_campaign_benign_v4_20261022.json:n}} samostatných behov zberača po 720 {{res:collection_campaign_benign_v4_20261022.json:values.sessions.0.collector_end.snapshots}} cykloch (nový proces zberača v každej session, reštart hosťa na hraniciach skupín), spolu 26640 {{res:collection_writeback_stall_20261024.json:n}} cyklov a jeden zmeškaný slot pri spätnom zápise na SSD (zberač 1.0, [záznam](../data/results/collection_campaign_benign_v4_20261022.json), [MERANIA.md](MERANIA.md) 2026-10-25); zberač 1.1 v kampani ešte nebežal |
+| dlhý beh s retenciou | `UNVERIFIED` | beh jedného procesu zberača rádovo v hodinách s retenciou: zmeškané sloty, rast obsadeného miesta, správanie pri reštarte domény počas behu; zatiaľ existujú iba hodinové behy bez retencie: kampaň `benign-v4-20261022` mala 37 {{res:collection_campaign_benign_v4_20261022.json:n}} samostatných behov zberača po 720 {{res:collection_campaign_benign_v4_20261022.json:values.sessions.0.collector_end.snapshots}} cykloch (nový proces zberača v každej session, reštart hosťa na hraniciach skupín), spolu 26640 {{res:collection_writeback_stall_20261024.json:n}} cyklov a jeden zmeškaný slot pri spätnom zápise na SSD (zberač 1.0, [záznam](../data/results/collection_campaign_benign_v4_20261022.json), [MERANIA.md](MERANIA.md) 2026-10-25); zberač 1.1 bežal v kampani `benign-v5-20261025` tiež iba v hodinových behoch bez retencie: 18 {{res:collection_campaign_benign_v5_20261025.json:n}} behov po 720 {{res:collection_campaign_benign_v5_20261025.json:values.sessions.0.collector_end.snapshots}} cykloch (nový proces zberača v každej session), 0 {{res:collection_campaign_benign_v5_20261025.json:values.summary.scheduler_skips}} hlásení plánovača o zahodenom slote ([záznam](../data/results/collection_campaign_benign_v5_20261025.json), [MERANIA.md](MERANIA.md) 2026-10-26) |
 | správanie pri periódach iných než 2 s a 5 s | `UNVERIFIED` | sweep periódy a veľkosti bloku |
 | presnosť detekcie voči reálnym malvérovým vzorkám | **nebude zmeraná** | vzorky nie sú dostupné; nenahrádza sa ničím — podrobne v [L16](#l16--presnosť-detekcie-malvéru-nebola-meraná-a-v-tejto-verzii-sa-merať-nedá) |
 
@@ -641,9 +661,15 @@ zo 134873 {{res:collection_campaign_benign_v4_20261022.json:values.summary.by_gr
 ([MERANIA.md](MERANIA.md), oprava z 2026-10-25). Tieto príznaky sú vstupom modelu, takže
 skupiny zozbierané neskôr na tom istom procese majú systematicky iné hodnoty než skupiny
 zozbierané skôr - a v pláne kampane nasledujú tréningové skupiny pred testovacími. Kampaň
-`benign-v5` má bežať na jednom procese QEMU spustenom pred `init` (bez reštartov VM počas
-kampane); vek procesu bude teda súbežný s poradím skupín a pri vyhodnotení ho treba brať ako
-možný zmätočný faktor (napr. porovnať rozdelenie `mem_zero_ratio` medzi skupinami).
+`benign-v5-20261025` bežala na jednom procese QEMU spustenom pred `init` (bez reštartov VM
+počas kampane): v skupine `train-1` rástol počet zo
+122354 {{res:collection_campaign_benign_v5_20261025.json:values.summary.by_group.train-1.first_full_pages}} na
+238818 {{res:collection_campaign_benign_v5_20261025.json:values.summary.by_group.train-1.last_full_pages}} stránok
+a v `train-3` bol najviac
+264999 {{res:collection_campaign_benign_v5_20261025.json:values.summary.by_group.train-3.max_full_pages}}.
+Rovnako má bežať kampaň `benign-v6`; vek procesu bude teda súbežný s poradím skupín a pri
+vyhodnotení ho treba brať ako možný zmätočný faktor (napr. porovnať rozdelenie
+`mem_zero_ratio` medzi skupinami).
 
 **Formulácia do textu práce:** „Podiel nulových stránok závisí aj od toho, koľko pamäte hosťa už
 hypervízor alokoval; keďže skupiny korpusu vznikali postupne na jednom procese virtuálneho

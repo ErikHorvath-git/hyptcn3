@@ -2274,3 +2274,156 @@ zmeškaný slot) sa oproti pilotu 5 nezmenili. Pilot je vstupom kampane
 `benign-v5`; pred jej `campaign.py init` sa VM vypne a znova spustí (nový
 proces QEMU) a počas kampane sa nereštartuje (L13 v
 [LIMITACIE.md](LIMITACIE.md)).
+
+## 2026-10-26 — kampaň benign-v5-20261025 uzavretá po roztrhnutom zozname procesov pri vložení na koniec
+
+Kampaň `benign-v5-20261025` (commit `6170545` so zberačom 1.1, pilot 6,
+48 {{res:collection_campaign_benign_v5_20261025.json:values.planned_sessions}}
+plánovaných session) prijala a archivovala
+17 {{res:collection_campaign_benign_v5_20261025.json:values.accepted_sessions}}
+session v skupinách `train-1` až `train-3`
+([záznam](../data/results/collection_campaign_benign_v5_20261025.json)).
+Každá prijatá session mala
+656 {{res:collection_campaign_benign_v5_20261025.json:values.summary.windows_min}}
+okien; zmeškaných slotov bolo
+0 {{res:collection_campaign_benign_v5_20261025.json:values.summary.accepted_missed_slots}},
+chýb zberača
+0 {{res:collection_campaign_benign_v5_20261025.json:values.summary.accepted_collector_errors}}
+a riadkov `ERROR` v logu
+0 {{res:collection_campaign_benign_v5_20261025.json:values.summary.log_error_lines}}.
+Vo všetkých
+18 {{res:collection_campaign_benign_v5_20261025.json:n}}
+session (vrátane zamietnutej session 18) trval najdlhší cyklus zberača
+1821.1 {{res:collection_campaign_benign_v5_20261025.json:values.summary.cycle_total_ms_max}}
+ms (plná snímka), plné snímky mali
+122354 {{res:collection_campaign_benign_v5_20261025.json:values.summary.full_pages_min}}
+až
+264999 {{res:collection_campaign_benign_v5_20261025.json:values.summary.full_pages_max}}
+stránok a najdlhšia delta trvala
+894.8 {{res:collection_campaign_benign_v5_20261025.json:values.summary.delta_ms_max_all}}
+ms. Fronta zapisovača držala pri odovzdaní snímky najviac
+1 {{res:collection_campaign_benign_v5_20261025.json:values.summary.writer_queue_jobs_max}}
+úlohu, vzorkovací cyklus na pamäť fronty čakal najviac
+0.0 {{res:collection_campaign_benign_v5_20261025.json:values.summary.writer_queue_wait_ms_max}}
+ms a `data_closed_ms` (dolná hranica zverejnenia) bolo najviac
+6735.4 {{res:collection_campaign_benign_v5_20261025.json:values.summary.data_closed_ms_max}}
+ms pri plnej snímke. Počas behu monitora (od zahrievania po zber dôkazov
+z hosťa) malo QEMU vo swape najviac
+0 {{res:collection_campaign_benign_v5_20261025.json:values.summary.qemu_swap_kb_max}}
+kB; pred krokom `prefault` malo QEMU časť pamäte vo swape na začiatku
+8 {{res:collection_campaign_benign_v5_20261025.json:values.summary.qemu_swap_at_start_count}}
+session, najviac
+25824 {{res:collection_campaign_benign_v5_20261025.json:values.summary.qemu_swap_kb_at_start_max}}
+kB. Generátor poslal
+1207766 {{res:collection_campaign_benign_v5_20261025.json:values.summary.requests}}
+požiadaviek s
+0 {{res:collection_campaign_benign_v5_20261025.json:values.summary.request_errors}}
+chybami; najpomalšia požiadavka meranej fázy trvala
+2732.1 {{res:collection_campaign_benign_v5_20261025.json:values.summary.measure_latency_max_ms}}
+ms a v meranej fáze
+164 {{res:collection_campaign_benign_v5_20261025.json:values.summary.measure_latency_over_2s}}
+požiadaviek prekročilo 2 s a
+0 {{res:collection_campaign_benign_v5_20261025.json:values.summary.measure_latency_over_4s}}
+4 s. Najväčšia medzera monitora bola
+1.05 {{res:collection_campaign_benign_v5_20261025.json:values.summary.monitor_max_gap_s}}
+s. Nálezov integrity bolo
+0 {{res:collection_campaign_benign_v5_20261025.json:values.summary.integrity_findings}}
+a nepotvrdené krížové rozdiely mali
+2 {{res:collection_campaign_benign_v5_20261025.json:values.summary.integrity_unconfirmed_rows}}
+riadky (session 8 a 10).
+Všetky session bežali na jednom procese QEMU (`qemu_processes`, `groups`);
+runner sa po session 1 zastavil na hranici `--stop-after` (`stopped_states`)
+a pokračoval ďalšími session. Vypnutie a zapnutie VM pred `init`, kontrola
+session 1 a opätovné spustenie sú vyjadrenia operátora z logu relácie
+(`values.note`). Po uzavretí kampane `verify-archives` overil dekompresiou
+18 {{res:collection_campaign_benign_v5_20261025.json:values.verify_archives.n_verified}}
+archívov za
+1377.4 {{res:collection_campaign_benign_v5_20261025.json:values.verify_archives.wall_s}}
+s.
+
+Session 18 (`quiet`) zberač zachytil bez chyby
+(720 {{res:collection_campaign_benign_v5_20261025.json:values.sessions.17.collector_end.snapshots}}
+snímok,
+0 {{res:collection_campaign_benign_v5_20261025.json:values.sessions.17.collector_end.missed_slots}}
+zmeškaných slotov), ale audit ju zamietol pre neúplné vstupy modelu
+a kampaň sa zastavila
+([záznam](../data/results/collection_process_walk_insert_20261026.json),
+[audit](../data/results/collection_process_walk_insert_20261026_audit.json)).
+Platných riadkov bolo
+719 {{res:collection_process_walk_insert_20261026.json:values.campaign_audit.quality.behavior_valid_rows}}
+zo 720; neplatný bol riadok snímky
+613 {{res:collection_process_walk_insert_20261026.json:values.campaign_audit.quality.invalid_input_seq.0}}.
+V nej sa prechod zoznamu `tasks` dopredu zacyklil po
+110 {{res:collection_process_walk_insert_20261026.json:values.snapshot_613.forward_count}}
+uzloch a prechod dozadu sa uzavrel cez
+79 {{res:collection_process_walk_insert_20261026.json:values.snapshot_613.backward_count}}.
+Prvé nezhodné spojenie viedlo z posledného procesu (`kworker/u4:1`) na uzol,
+ktorý v tej snímke vyzeral ako ukončené vlákno `python3` s pid
+740794 {{res:collection_process_walk_insert_20261026.json:values.snapshot_613.node_x.613.pid}},
+tgid
+427 {{res:collection_process_walk_insert_20261026.json:values.snapshot_613.node_x.613.tgid}}
+a `exit_state`
+16 {{res:collection_process_walk_insert_20261026.json:values.snapshot_613.node_x.613.exit_state}}
+(`EXIT_DEAD`). Jeho spojenia boli kópiou spojení vodcu skupiny (pid 427) a
+viedli doprostred zoznamu. V nasledujúcej snímke je na tom istom uzle nové
+vlákno jadra `kworker/u4:3` s pid
+740796 {{res:collection_process_walk_insert_20261026.json:values.snapshot_613.node_x.614.pid}}
+zapojené na koniec zoznamu; v predchádzajúcej tam bolo iné ukončené vlákno
+toho istého procesu (pid
+740786 {{res:collection_process_walk_insert_20261026.json:values.snapshot_613.node_x.612.pid}}).
+Zberač číta RAM vzostupne po kúskoch po 1 MiB: stránku nového uzla prečítal
+v kúsku
+18 {{res:collection_process_walk_insert_20261026.json:values.snapshot_613.page_read_order.x_task_struct.chunk}},
+posledný proces v kúsku
+85 {{res:collection_process_walk_insert_20261026.json:values.snapshot_613.page_read_order.tail_task_struct.chunk}}
+a `init_task` v kúsku
+1302 {{res:collection_process_walk_insert_20261026.json:values.snapshot_613.page_read_order.init_task.chunk}}
+z
+2050 {{res:collection_process_walk_insert_20261026.json:values.snapshot_613.chunks}}
+(zachytenie snímky trvalo
+791.9 {{res:collection_process_walk_insert_20261026.json:values.snapshot_613.capture_ms}}
+ms, z toho čítanie pamäte
+306.5 {{res:collection_process_walk_insert_20261026.json:values.snapshot_613.backend_read_ms}}
+ms). `kthreadd` medzitým vložil nové vlákno do recyklovaného `task_struct`,
+takže spojenia naň boli novšie ako jeho obsah. Pravidlo z `0b61ffd` riadok
+správne neprijalo, lebo prechod dozadu neprešiel tie isté uzly. Prechod
+oboma smermi vo všetkých
+720 {{res:collection_process_walk_insert_20261026.json:values.both_directions_all_snapshots.snapshots}}
+snímkach obnovenej session: dopredu sa neuzavrela iba snímka 613, dozadu sa
+uzavreli všetky. V snímke 70 ten istý jav zasiahol iba prechod dozadu:
+`init_task.prev` už ukazoval na nové vlákno jadra (v snímke 71 `kworker/u4:0`),
+ktorého stránka mala ešte obsah ukončeného vlákna procesu `python3` s pid
+426 {{res:collection_process_walk_insert_20261026.json:values.snapshot_70.node_x.70.tgid}},
+ale posledný proces (kúsok
+85 {{res:collection_process_walk_insert_20261026.json:values.snapshot_70.page_read_order.tail_task_struct.chunk}})
+sa prečítal pred vložením. Prechod dopredu sa preto uzavrel bez nového uzla
+cez
+108 {{res:collection_process_walk_insert_20261026.json:values.snapshot_70.forward_count}}
+uzlov bez nezhodného spojenia a prechod dozadu cez
+78 {{res:collection_process_walk_insert_20261026.json:values.snapshot_70.backward_count}}.
+
+Rozhodnutie (používateľ, 2026-10-26): kampaň uzavrieť, opraviť prechod a
+spustiť nový pilot a kampaň v6. Commit `b065ee4` berie aj pravidlo `tail`:
+keď `init_task.prev` ukazuje práve na prvý nezhodný uzol a jeho obsah je
+vlákno (tgid ≠ pid) procesu spomedzi uzlov pred ním, zoznam tvoria tie uzly
+([kontroly.md](kontroly.md), L1 v [LIMITACIE.md](LIMITACIE.md)). Existujúci
+negatívny test ukázal, že samotné `init_task.prev` by prijalo zoznam, ktorý
+nikdy neexistoval, a revízia (workflow `wf_2eab4838-3b7`), že samotná
+podmienka vlákna by vynechala proces, ktorého vedľajšie vlákno robí `exec`
+na konci zoznamu; testy pokrývajú oba prípady. Opätovný
+audit tej istej obnovenej session týmto commitom
+([audit](../data/results/collection_process_walk_insert_20261026_reaudit.json))
+ju prijal s
+656 {{res:collection_process_walk_insert_20261026.json:values.tail_walk_reaudit.windows}}
+oknami,
+720 {{res:collection_process_walk_insert_20261026.json:values.tail_walk_reaudit.quality.behavior_valid_rows}}
+platnými riadkami a pravidlom `tail` v snímke
+613 {{res:collection_process_walk_insert_20261026.json:values.tail_walk_reaudit.quality.process_walk_tail_seq.0}}.
+Oproti pôvodnému auditu sa zmenili iba riadky 613 (procesov
+109 {{res:collection_process_walk_insert_20261026.json:values.reaudit_vs_audit.vector_changed.0.columns.proc_total.1}}
+namiesto
+110 {{res:collection_process_walk_insert_20261026.json:values.reaudit_vs_audit.vector_changed.0.columns.proc_total.0}},
+ako v snímke 612) a 614 (má platného predchodcu a nové vlákno v nej pribudne).
+Historický verdikt kampane sa nemení. Kampaň je uzavretá (`closed.json`);
+jej session zostávajú v jej archíve a do novej kampane sa nepresúvajú. Zmena
+meracieho kódu vyžaduje nový pilot.

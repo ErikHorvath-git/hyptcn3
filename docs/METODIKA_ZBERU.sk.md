@@ -140,8 +140,9 @@ Tréning, prehrávanie, audit protokolu v2 a živý safeguard používajú
    je úplný, má `quality.process_walk = "prev"` a audit ho vykazuje
    v `process_walk_prev_seq`. Tie isté uzly tvoria zoznam aj vtedy, keď
    `init_task.prev` ukazuje práve na prvý nezhodný uzol a jeho obsah je
-   vlákno (tgid ≠ pid) procesu spomedzi nich: stránka nového posledného uzla
-   je z času pred jeho zapojením. Taký riadok má
+   vlákno (tgid ≠ pid) procesu spomedzi nich: stránka toho uzla je z iného
+   okamihu ako spojenia naň (zvyškové riziko, keď taký riadok vynechá proces,
+   je v L1 v [LIMITACIE.md](LIMITACIE.md)). Taký riadok má
    `quality.process_walk = "tail"` a audit ho vykazuje
    v `process_walk_tail_seq`. Samotné uzavretie prechodu nestačí
    (pozri L1 v [LIMITACIE.md](LIMITACIE.md)).

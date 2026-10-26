@@ -27,7 +27,8 @@ ich kontrolné súčty a priebeh merania. Obe kontroly sú súčasťou úplného
 
 **Automatická kampaň:** [`docs/AUTOMATICKY_ZBER.sk.md`](docs/AUTOMATICKY_ZBER.sk.md).
 `scripts/campaign.py` riadi reštarty skupín, zber, audit a overený presun RAM
-na externý disk. Na konci vytvorí index pre tréning; stav kampane rozlišuje
+do archívu na systémovom HDD (rozloženie v [`docs/AUTOMATICKY_ZBER.sk.md`](docs/AUTOMATICKY_ZBER.sk.md)).
+Na konci vytvorí index pre tréning; stav kampane rozlišuje
 naplánované, rozpracované a prijaté dáta.
 
 **Serverové laboratórium:** `make lab-up` spustí samostatnú VM s nginx,

@@ -290,7 +290,9 @@ def objekty_z_pohladu(view):
     snimka, ktorej zoznam procesov uzavrel az prechod dozadu
     (quality["process_walk"] == "prev") alebo ho skratil pred poslednym
     uzlom podla init_task.prev, ktoreho stranka je z ineho okamihu
-    (quality["process_walk"] == "tail"); jej pocty su uplne.
+    (quality["process_walk"] == "tail"); jej pocty su uplne, pri 'tail' az na
+    zvyskove riziko z L1 v docs/LIMITACIE.md (exec vedlajsieho vlakna procesu
+    na konci zoznamu).
 
     Krizove rozdiely su tu este nepotvrdene; `stav["krizove_kluce"]` ich
     nesie do dalsej snimky a potvrdzuje ich vektor_snimky (potvrd_krizove).
