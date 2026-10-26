@@ -162,6 +162,9 @@ def _print_ps(res):
                                     ", NEUPLNE" if res["truncated"] else ""))
     if res.get("walk") == "prev":
         print("zoznam uzavrel prechod dozadu (dopredu: %s)" % res["forward_stop_reason"])
+    elif res.get("walk") == "tail":
+        print("zoznam je bez posledneho uzla so strankou z ineho okamihu (dopredu: %s)"
+              % res["forward_stop_reason"])
 
 
 def _print_lsmod(res):

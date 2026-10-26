@@ -375,12 +375,33 @@ class GuestView:
         istej session sa prechod dozadu v snimke 529 uzavrel cez 78 procesov
         namiesto 110.
 
+        Opacny pripad je vlozenie na koniec (session
+        benign-v5-20261025_18_train_quiet, snimka 613): kthreadd vlozil nove
+        vlakno do recyklovaneho task_struct, ktoreho stranka sa precitala
+        pred jeho inicializaciou - drzala ukonceny thread so spojeniami
+        skopirovanymi od vodcu skupiny. `next` posledneho uzla aj `prev`
+        init_task, precitane neskor, uz ukazovali na novy uzol, takze prechod
+        dopredu z neho skocil doprostred zoznamu a zacyklil sa a prechod
+        dozadu presiel iba 79 zo 110 uzlov. Ked init_task.prev ukazuje prave
+        na prvy nezhodny uzol, je to posledny uzol zoznamu podla oboch
+        spojeni, ktore nanho vedu. To samo nestaci (rovnaky obraz da aj
+        uzol, pred ktorym sa medzi citaniami odstranili ine), preto musi byt
+        jeho obsah vlakno (tgid != pid), ktoreho vodca je medzi zhodnymi
+        uzlmi pred nim. copy_process vklada do init_task.tasks iba vodcov
+        skupin; de_thread pri exec z vedlajsieho vlakna dava to vlakno na
+        miesto vodcu, takze vtedy vodca v zozname nie je. Taka stranka je
+        teda z ineho okamihu nez spojenia, ktore na uzol vedu. Zoznam potom
+        tvoria uzly pred nim, ktorych spojenia sa zhoduju v oboch smeroch;
+        novy proces pribudne v dalsej snimke.
+
         Vracia {'processes', 'count', 'truncated', 'stop_reason', 'walk'}.
-        'walk' je 'next', alebo 'prev', ked zoznam potvrdil prechod dozadu;
-        vtedy je dovod zastavenia dopredu vo 'forward_stop_reason'.
-        'truncated' znamena, ze zoznam sa neuzavrel - vysledok je dolna
-        hranica z prechodu dopredu a 'backward_stop_reason' hovori, preco ho
-        nepotvrdil prechod dozadu.
+        'walk' je 'next', 'prev', ked zoznam potvrdil prechod dozadu, alebo
+        'tail', ked prvy nezhodny uzol je podla init_task.prev posledny a
+        jeho obsah je vlakno procesu zo zoznamu;
+        pri 'prev' a 'tail' je dovod zastavenia dopredu vo
+        'forward_stop_reason'. 'truncated' znamena, ze zoznam sa neuzavrel -
+        vysledok je dolna hranica z prechodu dopredu a 'backward_stop_reason'
+        hovori, preco ho nepotvrdil prechod dozadu.
         """
         need = ("tasks", "comm", "pid", "tgid", "mm")
         m = {}
@@ -402,6 +423,12 @@ class GuestView:
                                              == {pr["task_va"] for pr in out[:zhodne]}):
             return dict(self._result("processes", out[:zhodne], False, None),
                         walk="prev", forward_stop_reason=stop)
+        posledny = out[zhodne] if 0 < zhodne < len(out) else None
+        if (posledny is not None and posledny["tgid"] != posledny["pid"]
+                and posledny["tgid"] in {pr["pid"] for pr in out[:zhodne]}
+                and self.u64(init_pa + m["tasks"] + 8) == posledny["task_va"] + m["tasks"]):
+            return dict(self._result("processes", out[:zhodne], False, None),
+                        walk="tail", forward_stop_reason=stop)
         return dict(self._result("processes", out, True, stop), walk="next",
                     backward_stop_reason=stop_spat
                     or "prechod dozadu presiel ine uzly ako zhodne spojenia dopredu")

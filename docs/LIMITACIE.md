@@ -80,9 +80,13 @@ proces `python3` (`EXIT_DEAD`) so starými ukazovateľmi a prechod sa zacyklil. 
 uzavrel cez tých istých 110 procesov ako susedné snímky. Dozadu sa uzavrela každá snímka,
 v snímke 529 však cez 78 procesov namiesto 110. V piatich snímkach sa smery líšili
 o jeden krátko žijúci proces, čo je bežné rozmazanie živej snímky. Parser preto berie
-zoznam dopredu. Keď sa roztrhne, uzavrie ho iba vtedy, keď prechod dozadu prejde presne
-tie uzly, ktoré prechod dopredu prešiel pred prvým spojením nezhodným s opačným smerom
-(`walk: "prev"`); inak zostáva `truncated`.
+zoznam dopredu. Keď sa roztrhne, zoznam tvoria uzly, ktoré prechod dopredu prešiel pred
+prvým spojením nezhodným s opačným smerom, a to iba v dvoch prípadoch. Buď prechod
+dozadu prejde presne tie uzly (`walk: "prev"`). Alebo `init_task.prev` ukazuje práve na
+prvý nezhodný uzol a jeho obsah je vlákno (tgid ≠ pid) procesu spomedzi tých uzlov
+(`walk: "tail"`): jadro do zoznamu `tasks` zapája iba vodcov skupín, takže taká stránka
+pochádza z iného okamihu ako spojenia, ktoré na uzol vedú. Inak zoznam zostáva
+`truncated`.
 
 **Formulácia do textu práce.**
 
@@ -94,7 +98,9 @@ tie uzly, ktoré prechod dopredu prešiel pred prvým spojením nezhodným s opa
 > rozumnosti hodnôt — a nekompletný výsledok označuje príznakom `truncated`, takže sa
 > nedá zameniť za skutočný stav hosťa. Samotné uzavretie prechodu nepovažuje za dôkaz
 > správnosti: roztrhnutý zoznam procesov uzavrie iba vtedy, keď prechod v opačnom smere
-> prejde presne tie isté uzly. Merania pauzy sa neuvádzajú, lebo pauza
+> prejde presne tie isté uzly, alebo keď koniec zoznamu (`init_task.prev`) ukazuje práve
+> na prvý nezhodný uzol, ktorého obsah je vlákno procesu zo zoznamu, teda stránka
+> z iného okamihu. Merania pauzy sa neuvádzajú, lebo pauza
 > neexistuje: vo všetkých uložených snímkach je `paused = false` a `pause_ms = 0`.
 
 **Čo by to odstránilo.** Backend, ktorý vie vCPU zastaviť (napríklad cez QMP `stop`/`cont`

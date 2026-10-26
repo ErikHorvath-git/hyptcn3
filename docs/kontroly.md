@@ -104,8 +104,14 @@ Zoznam `tasks` je obojsmerný. Keď sa prechod dopredu roztrhne (v session
 posledného vlákna na už ukončený proces so starými ukazovateľmi), zoznam
 tvoria uzly prejdené dopredu pred prvým spojením nezhodným s opačným smerom,
 ak sa prechod dozadu uzavrel cez presne tie isté uzly (`walk: "prev"`).
-Krížová kontrola nad takým zoznamom beží normálne; keď prechod dozadu zoznam
-nepotvrdí, kontrola zostáva `inconclusive`.
+Opačný prípad je vloženie na koniec (session `benign-v5-20261025_18_train_quiet`,
+snímka 613): `next` posledného procesu aj `prev` v `init_task` už ukazovali na
+nové vlákno jadra, ale jeho `task_struct` sa prečítal skôr, ešte s obsahom
+ukončeného vlákna iného procesu. Keď `init_task.prev` ukazuje práve na prvý
+nezhodný uzol a jeho obsah je vlákno (tgid ≠ pid) procesu spomedzi uzlov
+pred ním, zoznam tvoria tie uzly (`walk: "tail"`); jadro do zoznamu `tasks`
+zapája iba vodcov skupín. Krížová kontrola nad takým zoznamom beží normálne;
+keď ho nepotvrdí ani jedno pravidlo, kontrola zostáva `inconclusive`.
 
 Neúplná kontrola zneplatňuje historický vektor so stĺpcami integrity. Protokol
 server-normal-v2 posudzuje behaviorálne vstupy osobitne; neuzavretá kontrola

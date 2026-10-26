@@ -229,6 +229,25 @@ def test_backward_closed_process_list_is_complete_with_note(monkeypatch):
     assert any("uzavrel ho prechod dozadu" in n and "cyklus" in n for n in notes)
 
 
+def test_process_list_cut_before_tail_insertion_is_complete_with_note(monkeypatch):
+    from types import SimpleNamespace
+    from features import snapshot
+    procs = [{"pid": 1, "tgid": 1, "comm": "systemd", "kernel_thread": False, "task_va": 1}]
+    walk = lambda field: {field: [], "count": 0, "truncated": False, "stop_reason": None}
+    view = SimpleNamespace(
+        ktext_shift=1, profile_boot_mismatch=lambda: None,
+        processes=lambda: {"processes": procs, "count": 1, "truncated": False, "stop_reason": None,
+                           "walk": "tail", "forward_stop_reason": "cyklus v zozname"},
+        modules=lambda: walk("modules"), sockets=lambda **kwargs: walk("sockets"))
+    monkeypatch.setattr(snapshot.checks, "check_all", lambda *args, **kwargs: {
+        "summary": {"inconclusive": [], "syscall_hooks": 0}, "findings": []})
+    values, state, notes = objekty_z_pohladu(view)
+    assert values["proc_total"] == 1
+    assert state["quality"]["process_walk"] == "tail"
+    assert state["quality"]["behavior_valid"] is True
+    assert any("init_task.prev" in n and "cyklus" in n for n in notes)
+
+
 HIDDEN = {"check": "process_cross_view", "task_va": 0xffff0000, "pid": 450961, "comm": "postgres",
           "seen_in": "tasks", "missing_in": "children/sibling"}
 HOOK = {"check": "syscall_hook", "index": 59}

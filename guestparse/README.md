@@ -153,8 +153,10 @@ behu vypíše, koľko testov sa preskočilo a prečo. Preskočený test nie je p
   obsah pamäte procesov sa neparsuje;
 - nezastavuje VM — snímka je živá, stránky pochádzajú z rôznych okamihov, a preto má
   každý prechod zoznamu strop, detekciu cyklu a príznak `truncated`; zoznam procesov
-  sa pri roztrhnutom spojení uzavrie, iba ak prechod dozadu prejde presne tie uzly,
-  ktoré prechod dopredu prešiel pred prvým spojením nezhodným s opačným smerom
-  (`walk: "prev"`);
+  tvoria pri roztrhnutom spojení uzly, ktoré prechod dopredu prešiel pred prvým
+  spojením nezhodným s opačným smerom, iba ak prechod dozadu prejde presne tie uzly
+  (`walk: "prev"`), alebo ak `init_task.prev` ukazuje práve na prvý nezhodný uzol
+  a jeho obsah je vlákno procesu spomedzi tých uzlov (`walk: "tail"`: stránka
+  posledného uzla je z iného okamihu ako spojenia naň);
 - nerobí detekciu malvéru. `checks` porovnáva dva zdroje, ktoré musia sedieť, a nález je
   ich rozdiel — nie skóre a nie odhad.

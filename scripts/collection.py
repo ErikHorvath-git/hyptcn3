@@ -739,6 +739,10 @@ def analyze_windows(result, p, session, expected_rows=None):
         # Process lists closed only by the backward walk after a torn forward link.
         "process_walk_prev_seq": [seq for seq, q in zip(result["seq"], result["quality"])
                                   if q.get("process_walk") == "prev"],
+        # Process lists cut before a tail node that init_task.prev already named but whose
+        # own links were read before it was linked in.
+        "process_walk_tail_seq": [seq for seq, q in zip(result["seq"], result["quality"])
+                                  if q.get("process_walk") == "tail"],
     }
     if detail is not None:
         quality["coverage"] = detail

@@ -288,7 +288,9 @@ def objekty_z_pohladu(view):
     dolna hranica, nie pocet. Do vektora sa zapise, ale v reporte to musi byt
     vidiet - preto sa vracia von, nie iba do logu. Poznamku dostane aj
     snimka, ktorej zoznam procesov uzavrel az prechod dozadu
-    (quality["process_walk"] == "prev"); jej pocty su uplne.
+    (quality["process_walk"] == "prev") alebo ho skratil pred poslednym
+    uzlom podla init_task.prev, ktoreho stranka je z ineho okamihu
+    (quality["process_walk"] == "tail"); jej pocty su uplne.
 
     Krizove rozdiely su tu este nepotvrdene; `stav["krizove_kluce"]` ich
     nesie do dalsej snimky a potvrdzuje ich vektor_snimky (potvrd_krizove).
@@ -316,6 +318,10 @@ def objekty_z_pohladu(view):
                         % (meno, res["stop_reason"]))
     if p.get("walk") == "prev":
         pozn.append("procesy: zoznam dopredu sa neuzavrel (%s), uzavrel ho prechod dozadu"
+                    % p["forward_stop_reason"])
+    if p.get("walk") == "tail":
+        pozn.append("procesy: zoznam dopredu sa neuzavrel (%s), stranka posledneho uzla podla "
+                    "init_task.prev je z ineho okamihu (obsah vlakna); zoznam je bez neho"
                     % p["forward_stop_reason"])
     if c["summary"]["inconclusive"]:
         pozn.append("neuzavrete kontroly: %s"

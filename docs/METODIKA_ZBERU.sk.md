@@ -138,7 +138,12 @@ Tréning, prehrávanie, audit protokolu v2 a živý safeguard používajú
    tvoria uzly prejdené dopredu pred prvým spojením nezhodným s opačným
    smerom, ak sa prechod dozadu uzavrel cez presne tie isté uzly. Taký riadok
    je úplný, má `quality.process_walk = "prev"` a audit ho vykazuje
-   v `process_walk_prev_seq`. Samotné uzavretie prechodu nestačí
+   v `process_walk_prev_seq`. Tie isté uzly tvoria zoznam aj vtedy, keď
+   `init_task.prev` ukazuje práve na prvý nezhodný uzol a jeho obsah je
+   vlákno (tgid ≠ pid) procesu spomedzi nich: stránka nového posledného uzla
+   je z času pred jeho zapojením. Taký riadok má
+   `quality.process_walk = "tail"` a audit ho vykazuje
+   v `process_walk_tail_seq`. Samotné uzavretie prechodu nestačí
    (pozri L1 v [LIMITACIE.md](LIMITACIE.md)).
    Krížový pohľad na procesy/moduly, tabuľky volaní a text jadra nie sú vstupmi
    behaviorálneho modelu: ich `inconclusive` preto nemení jeho platnosť.

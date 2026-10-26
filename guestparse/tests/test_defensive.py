@@ -238,3 +238,81 @@ def test_oba_smery_roztrhnute_ostava_dolna_hranica():
     assert "cyklus" in res["stop_reason"]
     assert "ukazovatel" in res["backward_stop_reason"]
     assert res["count"] == 3
+
+
+# ------------------------------------------- vlozenie na koniec (tail)
+
+def _vkladany_na_konci():
+    """
+    Snimka 613 session benign-v5-20261025_18_train_quiet v malom: t2.next aj
+    init_task.prev uz ukazuju na novy uzol, ale jeho stranka je z casu pred
+    vlozenim - ukonceny thread procesu t1 so spojeniami skopirovanymi od
+    neho (prev t0, next t2), ako thread pid 740794 procesu 427 so
+    spojeniami 426 <- 427 -> 428.
+    """
+    view, img = _obojsmerny(DEAD_VA + O_TASKS)
+    img.u64(_pa(INIT_VA) + O_TASKS + 8, DEAD_VA + O_TASKS)
+    img.u64(_pa(DEAD_VA) + O_TASKS, TASK_VA[2] + O_TASKS)
+    img.u64(_pa(DEAD_VA) + O_TASKS + 8, TASK_VA[0] + O_TASKS)
+    img.write(_pa(DEAD_VA) + O_TGID, struct.pack("<i", 2))
+    return view, img
+
+
+def test_vkladany_posledny_uzol_potvrdi_init_task_prev():
+    view, _ = _vkladany_na_konci()
+    res = view.processes()
+    assert res["truncated"] is False and res["stop_reason"] is None
+    assert res["walk"] == "tail"
+    assert "cyklus" in res["forward_stop_reason"]
+    assert [p["comm"] for p in res["processes"]] == ["proces0", "proces1", "proces2"]
+    assert res["count"] == 3
+
+
+def test_vkladany_uzol_bez_zhodnej_predpony_neplati():
+    """init_task.prev ukazuje na nezhodny uzol, ale prve nezhodne spojenie je skor (t1.prev)."""
+    view, img = _vkladany_na_konci()
+    img.u64(_pa(TASK_VA[1]) + O_TASKS + 8, INIT_VA + O_TASKS)
+    res = view.processes()
+    assert res["truncated"] is True and res["walk"] == "next"
+    assert "cyklus" in res["stop_reason"]
+    assert res["count"] == 4
+
+
+def test_vkladany_uzol_s_obsahom_vodcu_skupiny_nepotvrdi():
+    """Bez obsahu vlakna moze ist o uzol, pred ktorym sa medzi citaniami odstranili ine."""
+    view, img = _vkladany_na_konci()
+    img.write(_pa(DEAD_VA) + O_TGID, struct.pack("<i", 388899))
+    res = view.processes()
+    assert res["truncated"] is True and res["walk"] == "next"
+    assert "cyklus" in res["stop_reason"]
+
+
+def test_vlakno_bez_vodcu_v_zozname_nepotvrdi():
+    """
+    Exec z vedlajsieho vlakna (de_thread): vlakno nahradilo vodcu na konci
+    zoznamu a jeho stranka je z casu pred exec. Vodca (pid 4) v zozname nie
+    je a proces tam bol cely cas, takze zoznam bez uzla by bol nespravny.
+    """
+    view, img = _vkladany_na_konci()
+    img.write(_pa(DEAD_VA) + O_TGID, struct.pack("<i", 4))
+    res = view.processes()
+    assert res["truncated"] is True and res["walk"] == "next"
+    assert "cyklus" in res["stop_reason"]
+
+
+def test_init_task_prev_na_inom_uzle_vkladanie_nepotvrdi():
+    view, img = _vkladany_na_konci()
+    img.u64(_pa(INIT_VA) + O_TASKS + 8, TASK_VA[1] + O_TASKS)
+    res = view.processes()
+    assert res["truncated"] is True and res["walk"] == "next"
+    assert "ine uzly" in res["backward_stop_reason"]
+
+
+def test_neprecitatelny_vkladany_uzol_nepotvrdi():
+    """Uzol, ktory sa neda precitat ako proces, nie je dokaz vkladania na koniec."""
+    view, img = _vkladany_na_konci()
+    img.write(_pa(DEAD_VA) + O_COMM, b"\0" * 16)
+    res = view.processes()
+    assert res["truncated"] is True and res["walk"] == "next"
+    assert "comm" in res["stop_reason"]
+    assert res["count"] == 3
