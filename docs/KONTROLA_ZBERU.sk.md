@@ -169,6 +169,28 @@ pilotov zostali na pôvodných cestách, `raw/` odkazuje do archívu a obnoví
 ho `collection_archive.py restore`. Archív je odteraz jedinou kópiou týchto
 snímok, nie druhou zálohou.
 
+## Úložisko pred kampaňou benign-v6
+
+Z pilota 7 vyžaduje pravidlo kampane pred každou session
+54.62 {{res:collection_storage_20261026.json:values.gib.required_free_before_each_session}}
+GiB voľného miesta na pracovnom SSD a voľných bolo
+57.94 {{res:collection_storage_20261026.json:values.gib.working_free_before}}
+GiB. Každá session však na SSD nechá svoje metadáta (odhad z voľného miesta
+pred kampaňou v5 a po nej: asi 70 MB), takže pri 48 session by rezerva
+nestačila. So súhlasom zadávateľa sa preto 2026-10-26 tými istými overenými
+krokmi archivovali surové dáta pilota 4 `20261022T073059077133Z_pilot_bursty`
+do `/home/eh/hyptcn3-archive/pilots/`, vrátane nezávislého
+`collection_archive verify` ([záznam](../data/results/collection_storage_20261026.json)). Uvoľnilo sa
+10.7 {{res:collection_storage_20261026.json:values.gib.reclaimed}}
+GiB a pred `init` bolo voľných
+68.64 {{res:collection_storage_20261026.json:values.gib.working_free_after}}
+GiB, o
+14.02 {{res:collection_storage_20261026.json:values.gib.margin_after_archival}}
+GiB viac, než pravidlo vyžaduje. Metadáta, audit a logy pilota zostali na
+pôvodných cestách, `raw/` odkazuje do archívu a obnoví ho
+`collection_archive.py restore`. Archív je odteraz jedinou kópiou týchto
+snímok.
+
 ## Reset pamäte pri ďalšej plnej snímke
 
 Kontrola pred ostrým zberom odhalila chybu Python čítača: pri rekonštrukcii

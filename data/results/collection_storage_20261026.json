@@ -1,0 +1,76 @@
+{
+  "commit": "1b348332bc03998e725f8fda1c63056561ee4188",
+  "commit_dirty": true,
+  "commit_note": "HEAD when this record was generated. The record script data/results/collection_storage_20261026/record.py and the archival script archive_pilots.py are not part of this commit; they are committed together with this file. Free space is read live from the host.",
+  "date": "2026-10-26T17:12:29.105147+00:00",
+  "host": "Linux-7.2.9+deb13-amd64-x86_64-with-glibc2.41",
+  "guest": {
+    "domain": "hyptcn-lab",
+    "new_capture": false
+  },
+  "command": "data/results/collection_storage_20261026/record.py data/results/collection_storage_20261026/archive_start.txt data/results/collection_storage_20261026/verify_pilots.log data/results/collection_storage_20261026.json",
+  "n": 1,
+  "values": {
+    "archive_root": "/home/eh/hyptcn3-archive",
+    "archival_started_utc": "2026-10-26T17:04:20Z",
+    "working_free_before": 62215151616,
+    "space_after": {
+      "working": {
+        "total": 234622398464,
+        "used": 148923146240,
+        "free": 73706532864
+      },
+      "archive": {
+        "total": 473321816064,
+        "used": 159901147136,
+        "free": 289302007808
+      }
+    },
+    "campaign_rule": {
+      "min_free_gib": 30,
+      "pilot_raw_bytes": 11748953712,
+      "estimated_session_bytes_with_reserve": 26435145852.0,
+      "required_free_before_each_session": 58647400572.0,
+      "short_before_archival": -3567751044.0,
+      "margin_after_archival": 15059132292.0
+    },
+    "gib": {
+      "working_free_before": 57.94,
+      "working_free_after": 68.64,
+      "required_free_before_each_session": 54.62,
+      "short_before_archival": -3.32,
+      "margin_after_archival": 14.02,
+      "reclaimed": 10.7
+    },
+    "reclaimed_bytes": 11490213276,
+    "sessions": [
+      {
+        "session": "20261022T073059077133Z_pilot_bursty",
+        "group": "pilot-4-20261022",
+        "source": "/home/eh/projects/hyptcn3/data/collections/20261022T073059077133Z_pilot_bursty",
+        "destination": "/home/eh/hyptcn3-archive/pilots/20261022T073059077133Z_pilot_bursty",
+        "archive_manifest_sha256": "ba1695127faea9cf738c543357d3c22949b27b23f658835a15e16df4a062f55f",
+        "receipt_matches_manifest": true,
+        "raw_is_link_to_archive": true,
+        "files": 996,
+        "source_bytes": 11593686670,
+        "stored_bytes": 1785153783,
+        "raw_files": 962,
+        "raw_bytes": 11490213276,
+        "raw_stored_bytes": 1748894616,
+        "manifest_note": "SHA-256 verified copy; zstd members verified by decompression. Not an additional independent capture.",
+        "receipt": {
+          "schema": "hyptcn3/collection-archive-receipt/1",
+          "source": "/home/eh/projects/hyptcn3/data/collections/20261022T073059077133Z_pilot_bursty",
+          "destination": "/home/eh/hyptcn3-archive/pilots/20261022T073059077133Z_pilot_bursty",
+          "manifest_sha256": "ba1695127faea9cf738c543357d3c22949b27b23f658835a15e16df4a062f55f"
+        },
+        "independent_verify": {
+          "rc": 0,
+          "seconds": 68.0
+        }
+      }
+    ],
+    "note": "Approved by the user on 2026-10-26 ('Archivovat pilot 4'). From pilot 7 the free working space was 3.3 GiB above the rule of the capacity check that campaign init and the runner apply before every session (estimated session bytes + min_free_gib), and each session leaves about 70 MB of metadata on the working SSD, so 48 sessions would have reached the limit. The raw data of pilot 4, the oldest pilot still on the SSD, were archived with the verified steps of scripts/collection_archive.py (publish_archive with zstd members checked by decompression, bind_audit against the pilot's audit, reclaim_raw). Metadata, audit and logs stay at their original paths; raw/ links to the archive, and collection_archive.py restore re-extracts it. The archive is now the only copy of these RAM images, not a second backup. campaign_rule.short_before_archival is negative here: the rule was met, only with a small margin."
+  }
+}
