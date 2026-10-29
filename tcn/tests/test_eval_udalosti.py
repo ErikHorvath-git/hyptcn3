@@ -16,15 +16,19 @@ import shutil
 import pytest
 
 from tcn import eval as ev
-from tcn.eval import _hlavny, far, poissonov_interval, suhrn_relacie, vyhodnot_far
+from tcn.eval import _hlavny, far, klasifikacia_aktivit, poissonov_interval, suhrn_relacie, vyhodnot_far
 
 PROTOKOL = {"interval_s": 5.0, "max_gap_s": 7.5, "window_rows": 32}
 
 
-def riadok(t, score=0.1, alarm_event=False, sources=(), model_state="monitoring", conclusive=True):
-    return {"schema": "hyptcn3/safeguard-events/1", "timestamp": t, "score": score,
-            "alarm_event": alarm_event, "alarm_sources": list(sources), "model_state": model_state,
-            "integrity": {"conclusive": conclusive, "inconclusive": [] if conclusive else ["text_integrity"]}}
+def riadok(t, score=0.1, alarm_event=False, sources=(), model_state="monitoring", conclusive=True,
+           activity="steady"):
+    r = {"schema": "hyptcn3/safeguard-events/1", "timestamp": t, "score": score,
+         "alarm_event": alarm_event, "alarm_sources": list(sources), "model_state": model_state,
+         "integrity": {"conclusive": conclusive, "inconclusive": [] if conclusive else ["text_integrity"]}}
+    if score is not None:
+        r["activity"] = activity
+    return r
 
 
 def test_poissonov_interval_pri_nule_a_jednej_udalosti():
@@ -116,6 +120,7 @@ def _prehratie(tmp_path, korpus, zaznam, weights="w1", diagnostic=False, udalost
     out = tmp_path / ("replay_" + zaznam["id"] + "_" + weights)
     out.mkdir()
     manifest = {"diagnostic": diagnostic, "weights": {"predictor": weights}, "calibration": {"threshold": 1.0},
+                "classes": ["quiet", "steady"],
                 "created_utc": "2026-10-29T00:00:00+00:00",
                 "feature_contract": {"max_gap_s": 7.5, "window_rows": 32},
                 "training": {"seed": 0, "epochs": 10, "batch_size": 32},
@@ -149,8 +154,9 @@ def test_prikaz_far_zapise_hlavicku_a_vysledok(tmp_path):
     assert v["merane"]["spolu"]["spolu"]["udalosti_model"] == 1
     assert set(v["merane"]["skupiny"]) == {"dev-0", "dev-1"}
     assert set(v["relacie"]) == {"s0", "s1"}
-    assert "nie je drzane bokom" in v["poznamka"]
+    assert "nie su drzane bokom" in v["poznamka"]
     assert v["kampan"]["zaznam"] is None and v["predpoklady"]
+    assert v["klasifikacia_aktivit"]["relacie"]["spolu"] == 2
     with pytest.raises(FileExistsError):              # vysledok sa nikdy neprepise
         _hlavny(["far", "--corpus", str(korpus), "--role", "dev",
                  "--replay", *map(str, prehratia), "--out", str(out)])
@@ -232,3 +238,18 @@ def test_final_vyzaduje_commitnuty_kod_a_pusti_sa_raz(tmp_path, monkeypatch):
     with pytest.raises(FileExistsError):              # druhe zaverecne FAR toho isteho korpusu
         _hlavny(argv + ["--out", str(tmp_path / "c.json")])
     assert not (tmp_path / "c.json").exists()
+
+
+def test_klasifikacia_aktivit_na_oknach_a_relaciach():
+    a = suhrn_relacie([riadok(5.0 * i, activity="steady" if i < 3 else "quiet") for i in range(4)], 5.0, 7.5)
+    b = suhrn_relacie([riadok(5.0 * i, activity="quiet") for i in range(4)], 5.0, 7.5)
+    relacie = {"a": dict(a, scenario="steady"), "b": dict(b, scenario="steady")}
+    k = klasifikacia_aktivit(relacie, ["quiet", "steady"])
+    assert k["okna"]["n"] == 8 and k["okna"]["presnost"] == pytest.approx(3 / 8)
+    assert k["okna"]["confusion"] == [[0, 0], [5, 3]]          # riadok = skutocna trieda
+    assert k["relacie"]["spravnych"] == 1 and k["relacie"]["spolu"] == 2
+    assert k["relacie"]["na_relaciu"]["b"]["vacsinova_predikcia"] == "quiet"
+    dolna, horna = k["relacie"]["interval"]
+    assert 0 < dolna < 0.5 < horna < 1
+    with pytest.raises(ValueError, match="nie je triedou"):
+        klasifikacia_aktivit({"a": dict(a, scenario="bursty")}, ["quiet", "steady"])

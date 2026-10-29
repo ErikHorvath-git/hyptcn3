@@ -36,7 +36,9 @@ korpusu nulove uz z prijatia (scripts/collection.py audit), preto idu do casti
 'dane_prijatim_korpusu' bez intervalu. test_benign je zaverecny test (kap. 5):
 prikaz ho pusti iba s --final, nad commitnutym tcn/eval.py a iba raz na korpus
 (zaznam '<corpus>.test_benign-final.json' vedla indexu). Detekciu utokov ani
-cas do detekcie z toho odvodit nemozno.
+cas do detekcie z toho odvodit nemozno. Ten isty prikaz vyhodnoti aj
+klasifikator profilu zataze (trieda okna = scenar relacie), aby jedno
+zaverecne spustenie na test_benign dalo oboje.
 """
 
 import argparse
@@ -174,7 +176,7 @@ def uloz(vysledky, data, cesta, prikaz, synteticke=False):
 # ------------------------------------------------------------- udalosti safeguardu
 
 ROLY_FAR = ("dev", "test_benign")
-SCHEMA_FAR = "hyptcn3/safeguard-far/1"
+SCHEMA_FAR = "hyptcn3/safeguard-far/2"
 SCHEMA_KORPUS = "hyptcn3/corpus-index/1"
 SCHEMA_KONFIGURACIA = "hyptcn3/safeguard-configuration/1"
 SCHEMA_STAV = "hyptcn3/safeguard-run/1"
@@ -247,6 +249,8 @@ def suhrn_relacie(riadky, perioda_s, max_medzera_s):
         "integrita_uzavretych_riadkov": sum(bool(r["integrity"]["conclusive"]) for r in riadky),
         "integrita_neuzavrete": dict(sorted(collections.Counter(
             c for r in riadky for c in r["integrity"]["inconclusive"]).items())),
+        "predikcie_aktivity": dict(sorted(collections.Counter(
+            r["activity"] for r in riadky if r["score"] is not None).items())),
     }
 
 
@@ -277,6 +281,53 @@ def far(suhrny, alfa=0.05):
         df = len(suhrny) - 1
         disperzia = {"x2": float(x2), "df": df, "p": float(chi2.sf(x2, df)), "dovod": None}
     return {"spolu": spolu, "far_h": far_h, "disperzia": disperzia}
+
+
+def klasifikacia_aktivit(relacie, triedy, alfa=0.05):
+    """Presnost klasifikatora profilu zataze; trieda okna = scenar jeho relacie.
+
+    Okna jednej relacie maju tu istu znacku a nie su nezavisle, preto sa okrem
+    metrik na okna uvadza aj pocet relacii, ktorych vacsinova predikcia sedi,
+    s exaktnym (Clopperovym-Pearsonovym) intervalom.
+    """
+    from scipy.stats import beta
+    alfa = _alfa(alfa)
+    ind = {t: i for i, t in enumerate(triedy)}
+    y_true, y_pred, na_relaciu = [], [], {}
+    for sid, s in sorted(relacie.items()):
+        if s["scenario"] not in ind:
+            raise ValueError("scenar %s nie je triedou balika" % s["scenario"])
+        pocty = s["predikcie_aktivity"]
+        for trieda, n in pocty.items():
+            y_true += [ind[s["scenario"]]] * n
+            y_pred += [ind[trieda]] * n
+        vacsina = max(sorted(pocty), key=lambda t: pocty[t]) if pocty else None
+        na_relaciu[sid] = {"scenar": s["scenario"], "vacsinova_predikcia": vacsina,
+                           "spravne_okna_podiel": (pocty.get(s["scenario"], 0) / sum(pocty.values())
+                                                   if pocty else None)}
+    if not y_true:
+        raise ValueError("ziadne skorovane okno s predikciou aktivity")
+    pritomne = sorted(set(y_true))
+    p, r, f1, n = precision_recall_fscore_support(y_true, y_pred, labels=list(range(len(triedy))),
+                                                  zero_division=0)
+    spravne = sum(v["vacsinova_predikcia"] == v["scenar"] for v in na_relaciu.values())
+    m = len(na_relaciu)
+    dolna = 0.0 if spravne == 0 else float(beta.ppf(alfa / 2, spravne, m - spravne + 1))
+    horna = 1.0 if spravne == m else float(beta.ppf(1 - alfa / 2, spravne + 1, m - spravne))
+    return {
+        "triedy": list(triedy),
+        "okna": {"n": len(y_true), "presnost": float(np.mean(np.array(y_true) == np.array(y_pred))),
+                 "f1_macro": float(np.mean([f1[i] for i in pritomne])),
+                 "f1_macro_nad_triedami": [triedy[i] for i in pritomne],
+                 "na_triedu": {triedy[i]: {"precision": float(p[i]), "recall": float(r[i]),
+                                           "f1": float(f1[i]), "n": int(n[i])} for i in pritomne},
+                 "confusion": confusion_matrix(y_true, y_pred, labels=list(range(len(triedy)))).tolist()},
+        "relacie": {"spravnych": spravne, "spolu": m, "presnost": spravne / m,
+                    "interval": [dolna, horna], "interval_metoda": "Clopper-Pearson",
+                    "na_relaciu": na_relaciu},
+        "poznamka": ("trieda je zaznamenane nastavenie zataze session, nie skodlivost ani rodina malveru; "
+                     "okna jednej relacie nie su nezavisle, nezavislou jednotkou je relacia"),
+    }
 
 
 def _digest(cesta):
@@ -374,8 +425,9 @@ def vyhodnot_far(korpus, rola, prehratia, alfa=0.05, final=False, kampan=None):
     poznamka = ("FAR z alarmovych udalosti benigneho behu prijatych relacii; nehovori nic o detekcii "
                 "utokov ani o presnosti voci malveru (HONESTY P4).")
     if rola == "dev":
-        poznamka += (" Rola dev vyberala checkpoint (checkpoint_selection_role), toto FAR preto nie je "
-                     "drzane bokom; zaverecne FAR je iba test_benign (--final).")
+        poznamka += (" Rola dev vyberala checkpointy prediktora aj klasifikatora (checkpoint_selection_role), "
+                     "toto FAR ani presnost klasifikacie preto nie su drzane bokom; zaverecne su iba na "
+                     "test_benign (--final).")
     return {
         "schema": SCHEMA_FAR, "rola": rola, "final": bool(final), "alfa": alfa,
         "korpus": os.path.realpath(korpus), "korpus_sha256": korpus_sha, "kampan": kampan_v,
@@ -396,6 +448,7 @@ def vyhodnot_far(korpus, rola, prehratia, alfa=0.05, final=False, kampan=None):
                          "alebo neplatnym riadkom (scripts/collection.py audit), takze tieto hodnoty nie su "
                          "meranim detektora; vypadky senzora a integritu bez vyberu meria safeguard run"),
         },
+        "klasifikacia_aktivit": klasifikacia_aktivit(relacie, balik["classes"], alfa),
         "relacie": relacie, "zdroje_udalosti": zdroje, "predpoklady": PREDPOKLADY, "poznamka": poznamka,
     }, balik
 
@@ -461,8 +514,12 @@ def _hlavny(argv=None):
     with open(a.out, "x", encoding="utf-8") as fh:
         fh.write(text)
     spolu = values["merane"]["spolu"]
+    klas = values["klasifikacia_aktivit"]
     print(json.dumps({"rola": a.role, "relacii": doc["n"], "udalosti_model": spolu["spolu"]["udalosti_model"],
-                      "far_model_skorovany_h": spolu["far_h"]["skorovany"]}, ensure_ascii=False))
+                      "far_model_skorovany_h": spolu["far_h"]["skorovany"],
+                      "aktivity_okna_presnost": klas["okna"]["presnost"],
+                      "aktivity_relacie": [klas["relacie"]["spravnych"], klas["relacie"]["spolu"]]},
+                     ensure_ascii=False))
     return 0
 
 
