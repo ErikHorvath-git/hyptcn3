@@ -130,8 +130,8 @@ manifestu, aby na testovacích dátach platili tie isté. Podrobnosti v `feature
 **6. Model a skóre** — `tcn/model.py` (kauzálne dilatované konvolúcie, reziduálne bloky),
 baseliny `tcn/baselines.py`, metriky `tcn/eval.py`. Okno vojde, jedno číslo vyjde.
 `tcn/train.py` beží nad uloženými oknami, `tcn/score.py` nad adresárom, do ktorého píše
-`vmicollect run`. **Model natrénovaný nie je** — váhy sú náhodné, korpus neexistuje
-(`docs/LIMITACIE.md`, L16), takže číslo hovorí len to, že cesta beží ako celok.
+`vmicollect run`. **Model natrénovaný nie je** — váhy sú náhodné a model sa na korpuse
+`benign-v6-20261026` zatiaľ netrénoval (`docs/LIMITACIE.md`, L16), takže číslo hovorí len to, že cesta beží ako celok.
 
 **Príkazy zberača**
 
@@ -210,7 +210,7 @@ Commity, z ktorých merania pochádzajú:
 ## 8. Čo nefunguje a čo ešte nie je
 
 Balík `safeguard/` spája tréning, normalizáciu, načítanie a detektor (`docs/SAFEGUARD.sk.md`).
-Model pre serverový lab ešte vyžaduje plánovaný korpus a nezávislé vyhodnotenie.
+Model pre serverový lab ešte vyžaduje tréning nad korpusom `benign-v6-20261026` a nezávislé vyhodnotenie.
 Živá latencia snímka → skóre, teda meraná počas zberu, meraná nie je; odmerané
 je len spracovanie nad uloženou snímkou (`data/results/latency_score_20260919.json`).
 Slovo „real-time“ v názve práce preto znamená periodický zber s meraným časom cyklu.
@@ -245,14 +245,14 @@ znamenalo držať dve znenia toho istého. Nadpisy sú preto dosadené z neho, s
 | dokument | čo vlastní | riadkov |
 |---|---|---|
 | `docs/ARCHITEKTURA.md` | rozhrania, formát `.vmicd` a sidecaru, tok dát podrobne | 1207 |
-| `docs/MERANIA.md` | log meraní: čo, kedy, akým príkazom a s akým výsledkom | 2523 |
-| `docs/LIMITACIE.md` | L1 až L18: čo systém nevie a čo z toho plynie pre text | 976 |
+| `docs/MERANIA.md` | log meraní: čo, kedy, akým príkazom a s akým výsledkom | 2817 |
+| `docs/LIMITACIE.md` | L1 až L18: čo systém nevie a čo z toho plynie pre text | 987 |
 | `docs/kontroly.md` | kontroly podozrivých vzorcov a validačný príkaz | 284 |
 | `HONESTY.md` | pravidlá pre čísla a slová v texte práce | 276 |
-| `README.md` | rozcestník repozitára a pôvod kódu | 78 |
+| `README.md` | rozcestník repozitára a pôvod kódu | 79 |
 | `docs/LAB.sk.md` | serverové laboratórium, premávka z hostiteľa a RAM zber | 298 |
-| `docs/METODIKA_ZBERU.sk.md` | protokol zberu, príznaky, rozdelenie korpusu a audit | 388 |
-| `docs/SAFEGUARD.sk.md` | tréning modelového balíka, replay a spustenie detektora | 241 |
+| `docs/METODIKA_ZBERU.sk.md` | protokol zberu, príznaky, rozdelenie korpusu a audit | 393 |
+| `docs/SAFEGUARD.sk.md` | tréning modelového balíka, replay a spustenie detektora | 245 |
 | `vmicollect/README.md` | zberač zvnútra: vrstvy, hooky, formáty | 481 |
 | `guestparse/README.md` | parser zvnútra: preklad adries, prechod zoznamami | 162 |
 | `features/PERBIN.md` | definícia príznakov a ich kontrakt | 163 |

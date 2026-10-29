@@ -91,7 +91,9 @@ spolu s runnerom. Služba pokračuje po zatvorení terminálu.
 
 Počas kampane nemeniť commit, protokol, profil, Python balíky ani stack vo VM.
 Nespúšťať druhý generátor, testy laboratória, tréning ani intenzívne hostiteľské
-úlohy. Nevytvárať ani neupravovať súbory v repozitári (ani poznámky či
+úlohy. Neprechádzať rekurzívne repozitár ani archív (napríklad `grep -r` z koreňa repozitára
+číta živé adresáre v `data/` aj súbory na HDD, kde je disk VM).
+Nevytvárať ani neupravovať súbory v repozitári (ani poznámky či
 výsledky); na to slúži iný adresár. Pred každým zberom aj auditom sa overí
 celý strom a akákoľvek zmena zastaví ďalší krok; po jej vrátení sa pokračuje
 rovnakým `launch`. Session a audit samy zaznamenávajú `commit_dirty` (celý

@@ -1686,11 +1686,13 @@ istým splitom (`tcn/baselines.py`).
 
 ### 6.8 Čo sa netvrdí
 
-**Model nie je natrénovaný. Korpus neexistuje. Žiadna presnosť detekcie sa v tejto práci
-netvrdí.**
+**Model nie je natrénovaný. Žiadna presnosť detekcie sa v tejto práci netvrdí.** Benígny
+korpus `benign-v6-20261026` je nazbieraný (`docs/MERANIA.md`, 2026-10-29); tréning normálu nad
+ním ešte neprebehol.
 
-Dôvod je vstup, nie kód. Na stroji, na ktorom práca vznikla, nie sú žiadne reálne malvérové
-vzorky. Bez nich niet čo označiť a niet na čom trénovať (`docs/LIMITACIE.md`, L16).
+Presnosť detekcie chýba pre vstup, nie pre kód. Na stroji, na ktorom práca vznikla, nie sú žiadne
+reálne malvérové vzorky. Bez nich niet čo označiť a presnosť detekcie sa nedá zmerať
+(`docs/LIMITACIE.md`, L16).
 
 Šesť syntetických scenárov správania (`cpu_burn`, `mass_file_rewrite`, `proc_scan`,
 `anon_exec`, `fork_storm`, `idle`) bolo napísaných a odskúšaných, ale na tréning sa
@@ -2144,8 +2146,9 @@ takže stav `UNVERIFIED` obstojí, ale veta musí znieť „nie je uložený art
 
 ### 8.8 Čo nemáme
 
-**Natrénovaný model a presnosť detekcie.** Model má náhodné váhy so seedom 0. Dôvod je
-jediný a nie je technický: na stroji, kde práca vznikla, nie sú reálne malvérové vzorky.
+**Natrénovaný model a presnosť detekcie.** Model má náhodné váhy so seedom 0. Benígny korpus
+`benign-v6-20261026` je nazbieraný, tréning normálu nad ním ešte neprebehol; presnosť detekcie
+sa nedá zmerať, lebo na stroji, kde práca vznikla, nie sú reálne malvérové vzorky.
 Podrobne v časti 6.8 a v L16.
 
 **Vplyv zberu na bežiacu VM.** Nezmerané, `UNVERIFIED`. Chýba benchmark s pevne daným

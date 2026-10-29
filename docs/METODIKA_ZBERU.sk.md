@@ -302,7 +302,12 @@ každej zmenenej stránky, premenovanie a SHA-256 súboru.
 Audit je **offline**: jeho prijatie nepotvrdzuje latenciu živého detektora.
 Pred nahrávaním celej kampane treba ešte skontrolovať distribúciu časov extrakcie
 v audite, odhadnúť priestor celej kampane a pripraviť úložisko. Rezerva disku
-je núdzové zastavenie, nie dôkaz, že sa celá kampaň zmestí.
+je núdzové zastavenie, nie dôkaz, že sa celá kampaň zmestí. V kampani
+`benign-v6-20261026` bol medián extrakcie na snímku v prvom reťazci najviac
+1.808 {{res:collection_campaign_benign_v6_20261026.json:values.summary.extraction_chain_0_p50_s_max}} s; druhý reťazec bol pomalší v session 40 a 46 a miernejšie
+v 26 a 28 (extrakcia pri každej snímke prečíta celý rekonštruovaný obraz; čakanie na jeho čítanie
+zo SSD je pravdepodobná, no neoverená príčina) a audit trval najviac 4659.8 {{res:collection_campaign_benign_v6_20261026.json:values.summary.audit_s_max}} s pri limite 3 h ([záznam](../data/results/collection_campaign_benign_v6_20261026.json),
+[MERANIA.md](MERANIA.md) 2026-10-29).
 
 Pre ďalšie behy sa z výpisu plánu preberú presné `role`, `group`, `scenario`
 a `seed`; navyše sa zadá `--pilot-report <prijatý-audit.json>`. Runner overí

@@ -102,7 +102,10 @@ iného procesu zo zoznamu skôr, ako sa jeho stránka prečíta. Riadok by potom
 procesu, ktorý v zozname bol celý čas. Vyžaduje to `exec` z vedľajšieho vlákna
 najnovšieho procesu počas čítania jednej snímky, čo služby laboratória nerobia. Iné tvary
 roztrhnutia, napríklad obsah ukončeného vodcu skupiny namiesto vlákna, riadok naďalej
-zneplatnia a session zamietnu.
+zneplatnia a session zamietnu. V kampani `benign-v6-20261026` audit použil pravidlo `tail`
+v 3 {{res:collection_campaign_benign_v6_20261026.json:values.summary.process_walk_tail_rows}} riadkoch a pravidlo `prev` v 11 {{res:collection_campaign_benign_v6_20261026.json:values.summary.process_walk_prev_rows}}
+riadkoch; počet procesov v nich ležal v rozsahu susedných snímok (porovnanie počtov,
+nie zoznamov) a audit prijal všetky session ([záznam](../data/results/collection_campaign_benign_v6_20261026.json), [MERANIA.md](MERANIA.md) 2026-10-29).
 
 **Formulácia do textu práce.**
 
@@ -509,7 +512,10 @@ miesta:
 4. **Krížový rozdiel kratší než jedna perióda nie je nález.** Aj pri dvoch uzavretých
    prechodoch živej snímky (L1) môže fork alebo exit krátkeho procesu vytvoriť rozdiel
    bez skrývania; v benígnej session to raz nastalo
-   ([záznam](../data/results/collection_crossview_race_20261022.json)). Extrakcia,
+   ([záznam](../data/results/collection_crossview_race_20261022.json)) a v kampani
+   `benign-v6-20261026` malo taký rozdiel 16 {{res:collection_campaign_benign_v6_20261026.json:values.summary.integrity_unconfirmed_rows}} riadkov v
+   8 {{res:collection_campaign_benign_v6_20261026.json:values.summary.integrity_unconfirmed_sessions}} z 48 {{res:collection_campaign_benign_v6_20261026.json:n}} session, všetky pri procesoch `postgres`,
+   pri 0 {{res:collection_campaign_benign_v6_20261026.json:values.summary.integrity_findings}} potvrdených nálezoch ([záznam](../data/results/collection_campaign_benign_v6_20261026.json)). Extrakcia,
    audit a safeguard preto berú krížový rozdiel za nález až vtedy, keď ho ukáže aj
    bezprostredne predchádzajúca snímka. Objekt skrytý kratšie ako jednu periódu nález
    nevytvorí a alarm skrytého objektu príde o periódu neskôr.
@@ -575,7 +581,7 @@ zaznamenáva, žiadny záznam v `data/results/` ho však ako spotrebu nevyhodnoc
 | živá latencia snímka → skóre modelu | `UNVERIFIED` | meranie počas bežiaceho zberu: `tcn/score.py` pripojený na beh `vmicollect run`, latencia od konca cyklu po vypočítané skóre, medián a p95 z aspoň 12 cyklov |
 | vplyv zberu na výkon vnútri hosťa | `UNVERIFIED` | benchmark s pevne daným objemom práce v hosťovi, schéma A/B/A, medián a IQR z aspoň 12 opakovaní |
 | vplyv zberu na hostiteľa | `UNVERIFIED` (pamäť zmeraná, CPU zaznamenané, nevyhodnotené) | pamäť: zberač 1.1 s `output.mlock` drží frontu uzamknutú v RAM (najväčšia možná plná snímka + 512 MiB), monitor kampane ju zaznamenáva (`Mlocked`); diagnostika 2026-10-25 pri VM s 2 GiB: VmRSS po uzamknutí 2596 {{res:collection_writer_diagnostic_20261025_timing.json:values.collector_mlock.vmrss_mib}} MiB, `Mlocked` hostiteľa počas zberu najviac 2609 {{res:collection_writer_diagnostic_20261025_timing.json:values.during_capture.mlocked_mib_max}} MiB ([záznam](../data/results/collection_writer_diagnostic_20261025_timing.json), [MERANIA.md](MERANIA.md) 2026-10-25; jeden 40-minútový beh mimo korpusu); chýba vyhodnotená spotreba CPU celého procesu (monitor hostiteľa ju zaznamenáva po 1 s za všetky vlákna spolu, teda aj za `vmic-writer` so SHA-256 a `vmic-log`, ako `procs.vmicollect.cpu_pct` v `host_monitor.jsonl`; záznam diagnostiky ju nevyhodnocuje a má iba maximum vzorkovacieho vlákna na cyklus, `rusage_max.cpu_ms`), priemer za celý beh a vplyv na ostatnú záťaž hostiteľa |
-| dlhý beh s retenciou | `UNVERIFIED` | beh jedného procesu zberača rádovo v hodinách s retenciou: zmeškané sloty, rast obsadeného miesta, správanie pri reštarte domény počas behu; zatiaľ existujú iba hodinové behy bez retencie: kampaň `benign-v4-20261022` mala 37 {{res:collection_campaign_benign_v4_20261022.json:n}} samostatných behov zberača po 720 {{res:collection_campaign_benign_v4_20261022.json:values.sessions.0.collector_end.snapshots}} cykloch (nový proces zberača v každej session, reštart hosťa na hraniciach skupín), spolu 26640 {{res:collection_writeback_stall_20261024.json:n}} cyklov a jeden zmeškaný slot pri spätnom zápise na SSD (zberač 1.0, [záznam](../data/results/collection_campaign_benign_v4_20261022.json), [MERANIA.md](MERANIA.md) 2026-10-25); zberač 1.1 bežal v kampani `benign-v5-20261025` tiež iba v hodinových behoch bez retencie: 18 {{res:collection_campaign_benign_v5_20261025.json:n}} behov po 720 {{res:collection_campaign_benign_v5_20261025.json:values.sessions.0.collector_end.snapshots}} cykloch (nový proces zberača v každej session), 0 {{res:collection_campaign_benign_v5_20261025.json:values.summary.scheduler_skips}} hlásení plánovača o zahodenom slote ([záznam](../data/results/collection_campaign_benign_v5_20261025.json), [MERANIA.md](MERANIA.md) 2026-10-26) |
+| dlhý beh s retenciou | `UNVERIFIED` | beh jedného procesu zberača rádovo v hodinách s retenciou: zmeškané sloty, rast obsadeného miesta, správanie pri reštarte domény počas behu; zatiaľ existujú iba hodinové behy bez retencie: kampaň `benign-v4-20261022` mala 37 {{res:collection_campaign_benign_v4_20261022.json:n}} samostatných behov zberača po 720 {{res:collection_campaign_benign_v4_20261022.json:values.sessions.0.collector_end.snapshots}} cykloch (nový proces zberača v každej session, reštart hosťa na hraniciach skupín), spolu 26640 {{res:collection_writeback_stall_20261024.json:n}} cyklov a jeden zmeškaný slot pri spätnom zápise na SSD (zberač 1.0, [záznam](../data/results/collection_campaign_benign_v4_20261022.json), [MERANIA.md](MERANIA.md) 2026-10-25); zberač 1.1 bežal v kampani `benign-v5-20261025` tiež iba v hodinových behoch bez retencie: 18 {{res:collection_campaign_benign_v5_20261025.json:n}} behov po 720 {{res:collection_campaign_benign_v5_20261025.json:values.sessions.0.collector_end.snapshots}} cykloch (nový proces zberača v každej session), 0 {{res:collection_campaign_benign_v5_20261025.json:values.summary.scheduler_skips}} hlásení plánovača o zahodenom slote ([záznam](../data/results/collection_campaign_benign_v5_20261025.json), [MERANIA.md](MERANIA.md) 2026-10-26); v kampani `benign-v6-20261026` 48 {{res:collection_campaign_benign_v6_20261026.json:n}} behov po 720 {{res:collection_campaign_benign_v6_20261026.json:values.sessions.0.collector_end.snapshots}} cykloch, 0 {{res:collection_campaign_benign_v6_20261026.json:values.summary.scheduler_skips}} hlásení plánovača o zahodenom slote ([záznam](../data/results/collection_campaign_benign_v6_20261026.json), [MERANIA.md](MERANIA.md) 2026-10-29) |
 | správanie pri periódach iných než 2 s a 5 s | `UNVERIFIED` | sweep periódy a veľkosti bloku |
 | presnosť detekcie voči reálnym malvérovým vzorkám | **nebude zmeraná** | vzorky nie sú dostupné; nenahrádza sa ničím — podrobne v [L16](#l16--presnosť-detekcie-malvéru-nebola-meraná-a-v-tejto-verzii-sa-merať-nedá) |
 
@@ -667,7 +673,12 @@ počas kampane): v skupine `train-1` rástol počet zo
 238818 {{res:collection_campaign_benign_v5_20261025.json:values.summary.by_group.train-1.last_full_pages}} stránok
 a v `train-3` bol najviac
 264999 {{res:collection_campaign_benign_v5_20261025.json:values.summary.by_group.train-3.max_full_pages}}.
-Rovnako má bežať kampaň `benign-v6`; vek procesu bude teda súbežný s poradím skupín a pri
+Rovnako bežala kampaň `benign-v6-20261026`: v skupine `train-1` rástol počet zo
+131986 {{res:collection_campaign_benign_v6_20261026.json:values.summary.by_group.train-1.first_full_pages}} na
+251451 {{res:collection_campaign_benign_v6_20261026.json:values.summary.by_group.train-1.last_full_pages}} stránok
+a v `test_benign-1` bol najviac
+318946 {{res:collection_campaign_benign_v6_20261026.json:values.summary.by_group.test_benign-1.max_full_pages}}.
+Vek procesu je teda súbežný s poradím skupín a pri
 vyhodnotení ho treba brať ako možný zmätočný faktor (napr. porovnať rozdelenie
 `mem_zero_ratio` medzi skupinami).
 

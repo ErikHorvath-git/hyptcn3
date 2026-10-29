@@ -2521,3 +2521,297 @@ Podmienky prijatia pilota sa oproti pilotu 6 nezmenili. Pilot je vstupom
 kampane `benign-v6`; pred jej `campaign.py init` sa VM vypne a znova spustí
 (nový proces QEMU) a počas kampane sa nereštartuje (L13 v
 [LIMITACIE.md](LIMITACIE.md)).
+
+## 2026-10-29 — kampaň benign-v6-20261026: všetkých 48 session prijatých
+
+Kampaň `benign-v6-20261026` (commit `01c2088` so zberačom 1.1 a pravidlom `tail`
+z `b065ee4`, pilot 7) prijala a archivovala
+48 {{res:collection_campaign_benign_v6_20261026.json:values.accepted_sessions}}
+z
+48 {{res:collection_campaign_benign_v6_20261026.json:values.planned_sessions}}
+plánovaných session v ôsmich skupinách
+([záznam](../data/results/collection_campaign_benign_v6_20261026.json)); podľa rolí `train`
+18 {{res:collection_campaign_benign_v6_20261026.json:values.summary.sessions_by_role.train}},
+`dev`
+6 {{res:collection_campaign_benign_v6_20261026.json:values.summary.sessions_by_role.dev}},
+`calibration`
+12 {{res:collection_campaign_benign_v6_20261026.json:values.summary.sessions_by_role.calibration}}
+a `test_benign`
+12 {{res:collection_campaign_benign_v6_20261026.json:values.summary.sessions_by_role.test_benign}}.
+Runner skončil stavom `complete` a index korpusu (`corpus.json`) má
+48 {{res:collection_campaign_benign_v6_20261026.json:values.corpus.sessions}}
+session bez nesúladu v pridelení rolí. Každá session mala
+656 {{res:collection_campaign_benign_v6_20261026.json:values.summary.windows_min}}
+okien a
+720 {{res:collection_campaign_benign_v6_20261026.json:values.summary.behavior_valid_rows_min}}
+platných riadkov zo 720; zmeškaných slotov bolo
+0 {{res:collection_campaign_benign_v6_20261026.json:values.summary.accepted_missed_slots}},
+chýb zberača
+0 {{res:collection_campaign_benign_v6_20261026.json:values.summary.accepted_collector_errors}},
+riadkov `ERROR` v logu
+0 {{res:collection_campaign_benign_v6_20261026.json:values.summary.log_error_lines}}
+a nálezov integrity
+0 {{res:collection_campaign_benign_v6_20261026.json:values.summary.integrity_findings}};
+žiadna session nemala `measurement_dirty`. Najdlhší cyklus zberača trval
+2009.0 {{res:collection_campaign_benign_v6_20261026.json:values.summary.cycle_total_ms_max}}
+ms (plná snímka v session 42), plné snímky mali
+131986 {{res:collection_campaign_benign_v6_20261026.json:values.summary.full_pages_min}}
+až
+318946 {{res:collection_campaign_benign_v6_20261026.json:values.summary.full_pages_max}}
+stránok a trvali
+1367.4 {{res:collection_campaign_benign_v6_20261026.json:values.summary.full_ms_min}}
+až
+2009.0 {{res:collection_campaign_benign_v6_20261026.json:values.summary.full_ms_max}}
+ms, najdlhšia delta trvala
+897.3 {{res:collection_campaign_benign_v6_20261026.json:values.summary.delta_ms_max_all}}
+ms. Fronta zapisovača držala pri odovzdaní snímky najviac
+2 {{res:collection_campaign_benign_v6_20261026.json:values.summary.writer_queue_jobs_max}}
+úlohy (session 42) a vzorkovací cyklus
+na pamäť fronty čakal najviac
+0.0 {{res:collection_campaign_benign_v6_20261026.json:values.summary.writer_queue_wait_ms_max}}
+ms. `data_closed_ms` (dolná hranica zverejnenia) bolo najviac
+11518.7 {{res:collection_campaign_benign_v6_20261026.json:values.summary.data_closed_ms_max}}
+ms (session 42, snímka
+0 {{res:collection_campaign_benign_v6_20261026.json:values.summary.data_closed_ms_max_seq}}),
+teda dlhšie než perióda, ale mimo vzorkovacieho cyklu. Generátor poslal
+3225975 {{res:collection_campaign_benign_v6_20261026.json:values.summary.requests}}
+požiadaviek s
+0 {{res:collection_campaign_benign_v6_20261026.json:values.summary.request_errors}}
+chybami; najpomalšia požiadavka meranej fázy trvala
+2598.1 {{res:collection_campaign_benign_v6_20261026.json:values.summary.measure_latency_max_ms}}
+ms, 2 s prekročilo
+165 {{res:collection_campaign_benign_v6_20261026.json:values.summary.measure_latency_over_2s}}
+a 4 s
+0 {{res:collection_campaign_benign_v6_20261026.json:values.summary.measure_latency_over_4s}}
+požiadaviek. Najväčšia medzera monitora bola
+1.05 {{res:collection_campaign_benign_v6_20261026.json:values.summary.monitor_max_gap_s}}
+s a vynechaných vzoriek bolo
+0 {{res:collection_campaign_benign_v6_20261026.json:values.summary.monitor_missed_ticks}};
+SSD bolo vyťažené na 99 % a viac v
+1286 {{res:collection_campaign_benign_v6_20261026.json:values.summary.sda_util_ge_99_samples}}
+vzorkách monitora. Po skončení kampane `verify-archives` overil dekompresiou
+48 {{res:collection_campaign_benign_v6_20261026.json:values.verify_archives.n_verified}}
+archívov za
+3373.3 {{res:collection_campaign_benign_v6_20261026.json:values.verify_archives.wall_s}}
+s.
+
+Všetky session bežali na jednom procese QEMU spustenom pred `init` (`qemu_processes`,
+`groups`); na začiatku každej skupiny runner reštartoval hosťa. Runner sa po session 1
+zastavil na hranici `--stop-after` (`stopped_states`) a po kontrole operátora pokračoval;
+žiadosť `request-stop` nebola. Vypnutie a zapnutie VM pred `init`, kontrola session 1
+a opätovné spustenie sú vyjadrenia operátora z logu relácie (`values.note`). Plné snímky
+na tom istom procese rástli: skupina `train-1` z
+131986 {{res:collection_campaign_benign_v6_20261026.json:values.summary.by_group.train-1.first_full_pages}}
+na
+251451 {{res:collection_campaign_benign_v6_20261026.json:values.summary.by_group.train-1.last_full_pages}}
+stránok, skupina `test_benign-1` najviac
+318946 {{res:collection_campaign_benign_v6_20261026.json:values.summary.by_group.test_benign-1.max_full_pages}}
+(L13 v [LIMITACIE.md](LIMITACIE.md)). Počas behu monitora (od zahrievania po zber dôkazov
+z hosťa) malo QEMU časť pamäte vo swape v session 23, 26 a 30,
+najviac
+26832 {{res:collection_campaign_benign_v6_20261026.json:values.summary.qemu_swap_kb_max}}
+kB; najdlhší cyklus týchto session trval
+1936.4 {{res:collection_campaign_benign_v6_20261026.json:values.summary.qemu_swap_sessions_cycle_total_ms_max}}
+ms a najdlhšia delta
+897.3 {{res:collection_campaign_benign_v6_20261026.json:values.summary.qemu_swap_sessions_delta_ms_max}}
+ms. Vzorkovacie vlákno zberača malo veľké výpadky stránok (`majflt`) iba v session
+23, najviac
+67 {{res:collection_campaign_benign_v6_20261026.json:values.summary.rusage_majflt_max}}
+v jednom cykle (`rusage_majflt_max`). Podľa záznamu 2026-10-25 o diagnostike zberača 1.1
+taký výpadok znamená čítanie stránky z disku a jadro ho pri čítaní cez `access_process_vm`
+pripisuje čítajúcemu vláknu; pre anonymnú pamäť hosťa, teda zo swapu na HDD, sa to opiera
+iba o kód jadra. V ktorom cykle výpadky nastali, záznam neurčuje (`rusage_majflt_max` je
+maximum za session).
+Najdlhší cyklus session 23 trval
+1872.0 {{res:collection_campaign_benign_v6_20261026.json:values.sessions.22.cycle_total_ms_max}}
+ms. Pred krokom `prefault` malo QEMU časť pamäte vo swape na začiatku
+21 {{res:collection_campaign_benign_v6_20261026.json:values.summary.qemu_swap_at_start_count}}
+session, najviac
+107192 {{res:collection_campaign_benign_v6_20261026.json:values.summary.qemu_swap_kb_at_start_max}}
+kB. Operátor spustil dva diagnostické samplery (`operator_diagnostics`): sampler `/proc`
+od session 41 (`proc_sampler_utc`) a sampler `/proc/diskstats` od session 47
+(`disk_sampler_utc`), takže počítadlá diskov počas auditu a archivácie session 46
+a starších nie sú (monitor hostiteľa ich zaznamenáva iba od zahrievania po zber dôkazov
+z hosťa). Sampler
+`/proc` zachytil rast swapu QEMU medzi poslednou vzorkou pred archiváciou a jej koncom pri session
+41, 42, 43 a 48, napríklad pri session 43 počas archivácie z
+0 {{res:collection_campaign_benign_v6_20261026.json:values.operator_diagnostics.stages.5.proc.qemu_swap_mib_first}}
+na
+104 {{res:collection_campaign_benign_v6_20261026.json:values.operator_diagnostics.stages.5.proc.qemu_swap_mib_last}}
+MiB; pri session 44, 45, 46 a 47 swap QEMU nestúpol.
+
+Pri zozname procesov audit použil pravidlo `prev` v
+11 {{res:collection_campaign_benign_v6_20261026.json:values.summary.process_walk_prev_rows}}
+riadkoch a pravidlo `tail` v
+3 {{res:collection_campaign_benign_v6_20261026.json:values.summary.process_walk_tail_rows}}
+riadkoch (session 4 snímka 204, session 22 snímka 598, session 27 snímka 521), spolu v
+8 {{res:collection_campaign_benign_v6_20261026.json:values.summary.process_walk_sessions}}
+session (`process_walk_prev_seq`, `process_walk_tail_seq`, `marked_rows`). Vo všetkých
+14 {{res:collection_campaign_benign_v6_20261026.json:values.summary.walk_rows_proc_total_within_neighbours}}
+týchto riadkoch leží počet procesov (`proc_total`) v rozsahu susedných snímok; je to
+porovnanie počtov, nie zoznamov procesov. Nepotvrdené krížové rozdiely malo
+16 {{res:collection_campaign_benign_v6_20261026.json:values.summary.integrity_unconfirmed_rows}}
+riadkov v
+8 {{res:collection_campaign_benign_v6_20261026.json:values.summary.integrity_unconfirmed_sessions}}
+session; audit ich nepočíta ako nálezy, iba nechá v riadku kontrolu `process_cross_view`
+neuzavretú. Všetkých
+16 {{res:collection_campaign_benign_v6_20261026.json:values.summary.unconfirmed_findings}}
+rozdielov sa týka procesov `postgres`. V
+12 {{res:collection_campaign_benign_v6_20261026.json:values.summary.unconfirmed_tasks_only_rows}}
+riadkoch bol proces v zozname `tasks`, ale nie v zozname potomkov rodiča, a riadok rátal
+presne o jeden proces viac než obe susedné snímky
+(12 {{res:collection_campaign_benign_v6_20261026.json:values.summary.unconfirmed_tasks_only_rows_one_above_both_neighbours}}
+riadkov); v
+4 {{res:collection_campaign_benign_v6_20261026.json:values.summary.unconfirmed_children_only_rows}}
+riadkoch bol proces iba v zozname potomkov a počet procesov sa rovnal obom susedným
+snímkam
+(4 {{res:collection_campaign_benign_v6_20261026.json:values.summary.unconfirmed_children_only_rows_equal_to_both_neighbours}}
+riadky). Taký rozdiel vzniká, keď proces počas čítania snímky vznikne alebo zanikne
+([kontroly.md](kontroly.md)). Medzery medzi nepotvrdenými riadkami tej istej session boli
+vo všetkých
+8 {{res:collection_campaign_benign_v6_20261026.json:values.summary.unconfirmed_gaps_multiple_of_12}}
+prípadoch násobkom 12 snímok (60 s). To zodpovedá krátko žijúcemu procesu databázy, ktorý
+vzniká v minútových odstupoch, napríklad pracovníkovi autovacuum (predvolený
+`autovacuum_naptime` PostgreSQL je 1 min na databázu, jeden pracovník za minútu teda vzniká
+iba pri jedinej databáze) alebo procesu nového pripojenia k databáze. Počet databáz ani
+nastavenie PostgreSQL v hosťovi sa nezistili a vysvetlenie sa v hosťovi neoverilo.
+
+Audit trval
+781.4 {{res:collection_campaign_benign_v6_20261026.json:values.summary.audit_s_min}}
+až
+4659.8 {{res:collection_campaign_benign_v6_20261026.json:values.summary.audit_s_max}}
+s (medián
+1207.9 {{res:collection_campaign_benign_v6_20261026.json:values.summary.audit_s_p50}}
+s). Limit runnera je `max(600, cycles*15)` s, teda 3 h; jeho prekročenie by audit ukončilo
+a kampaň zastavilo (stav `stopped`, fáza `error`). Dĺžka auditu inak nie je podmienkou
+prijatia. Dlhšie než
+1800 {{res:collection_campaign_benign_v6_20261026.json:values.summary.slow_audit_threshold_s}}
+s trvali audity session 40
+(4659.8 {{res:collection_campaign_benign_v6_20261026.json:values.summary.slow_audits.0.audit_s}}
+s) a 46
+(3489.1 {{res:collection_campaign_benign_v6_20261026.json:values.summary.slow_audits.1.audit_s}}
+s). Vlastný časovač auditu na snímku (`feature_extraction_s`) ukazuje, že spomalenie leží
+v druhom reťazci (od plnej snímky 360): medián na snímku bol v prvom reťazci
+1.808 {{res:collection_campaign_benign_v6_20261026.json:values.summary.slow_audits.0.chain_0_p50_s}}
+a
+1.784 {{res:collection_campaign_benign_v6_20261026.json:values.summary.slow_audits.1.chain_0_p50_s}}
+s, v druhom
+11.355 {{res:collection_campaign_benign_v6_20261026.json:values.summary.slow_audits.0.chain_1_p50_s}}
+a
+7.939 {{res:collection_campaign_benign_v6_20261026.json:values.summary.slow_audits.1.chain_1_p50_s}}
+s. Vo všetkých session bol medián v prvom reťazci najviac
+1.808 {{res:collection_campaign_benign_v6_20261026.json:values.summary.extraction_chain_0_p50_s_max}}
+s a v druhom reťazci ostatných session najviac
+2.290 {{res:collection_campaign_benign_v6_20261026.json:values.summary.extraction_chain_1_p50_s_max_not_slow}}
+s (session 26). Pomer súčtu časovača v druhom a prvom reťazci
+(`extraction_chain_ratio_top`) bol v session 40
+5.990 {{res:collection_campaign_benign_v6_20261026.json:values.summary.extraction_chain_ratio_top.0.ratio}},
+v session 46
+4.300 {{res:collection_campaign_benign_v6_20261026.json:values.summary.extraction_chain_ratio_top.1.ratio}},
+miernejšie aj v session 28
+1.683 {{res:collection_campaign_benign_v6_20261026.json:values.summary.extraction_chain_ratio_top.2.ratio}}
+a 26
+1.605 {{res:collection_campaign_benign_v6_20261026.json:values.summary.extraction_chain_ratio_top.3.ratio}}
+(audit
+1633.0 {{res:collection_campaign_benign_v6_20261026.json:values.summary.extraction_chain_ratio_top.2.audit_s}}
+a
+1662.1 {{res:collection_campaign_benign_v6_20261026.json:values.summary.extraction_chain_ratio_top.3.audit_s}}
+s, pod hranicou) a v ostatných session najviac
+1.146 {{res:collection_campaign_benign_v6_20261026.json:values.summary.extraction_chain_ratio_top.4.ratio}}.
+Extrakcia pri každej snímke prečíta všetky prítomné stránky rekonštruovaného obrazu:
+`vektor_snimky` volá pre každú snímku `build_view` a `GuestView.resolve` hľadá banner
+jadra cez celý obraz (`guestparse/view.py`). Každá snímka tak prechádza takmer celou plnou
+snímkou reťazca s deltami; ak ju page cache neudrží, číta sa pri každej snímke zo SSD
+a čas auditu rastie s veľkosťou plnej snímky. Audity session 26, 28 a 40 bežali pred
+spustením samplerov. Pri audite session 46 sampler `/proc` ukazuje zmenu v odhadnutom
+začiatku druhého reťazca (`chain_1_start_estimate_utc`). Pred ním
+proces auditu využil
+0.949 {{res:collection_campaign_benign_v6_20261026.json:values.operator_diagnostics.stages.10.proc_before_chain_1.audit_cpu_share}}
+CPU (sekúnd procesora za sekundu), podiel času s čakaním na IO (`/proc/pressure/io`,
+some) bol
+0.041 {{res:collection_campaign_benign_v6_20261026.json:values.operator_diagnostics.stages.10.proc_before_chain_1.io_some_share}}
+a jadro (kswapd) uvoľnilo najmenej
+19.4 {{res:collection_campaign_benign_v6_20261026.json:values.operator_diagnostics.stages.10.proc_before_chain_1.pgsteal_kswapd_gb}}
+GB pamäte. V druhom reťazci využil
+0.447 {{res:collection_campaign_benign_v6_20261026.json:values.operator_diagnostics.stages.10.proc_chain_1.audit_cpu_share}}
+CPU, podiel čakania na IO bol
+0.334 {{res:collection_campaign_benign_v6_20261026.json:values.operator_diagnostics.stages.10.proc_chain_1.io_some_share}},
+proces bol v stave D v
+55 {{res:collection_campaign_benign_v6_20261026.json:values.operator_diagnostics.stages.10.proc_chain_1.audit_states.D}}
+z
+92 {{res:collection_campaign_benign_v6_20261026.json:values.operator_diagnostics.stages.10.proc_chain_1.samples}}
+vzoriek a jadro uvoľnilo najmenej
+372.2 {{res:collection_campaign_benign_v6_20261026.json:values.operator_diagnostics.stages.10.proc_chain_1.pgsteal_kswapd_gb}}
+GB (`pgsteal_kswapd`, celý systém; medzi vzorkami tesne mimo reťazca najviac
+380.6 {{res:collection_campaign_benign_v6_20261026.json:values.operator_diagnostics.stages.10.proc_chain_1.pgsteal_kswapd_gb_outer}}
+GB), teda
+1.03 {{res:collection_campaign_benign_v6_20261026.json:values.operator_diagnostics.stages.10.pgsteal_kswapd_gb_per_chain_1_snapshot}}
+až
+1.06 {{res:collection_campaign_benign_v6_20261026.json:values.operator_diagnostics.stages.10.pgsteal_kswapd_gb_per_chain_1_snapshot_outer}}
+GB na snímku pri plnej snímke 360
+(1283324968 {{res:collection_campaign_benign_v6_20261026.json:values.sessions.45.full_snapshots.1.bytes}}
+B); do swapu pritom odsunulo
+0 {{res:collection_campaign_benign_v6_20261026.json:values.operator_diagnostics.stages.10.proc_chain_1.pswpout_pages}}
+stránok, uvoľňovalo teda page cache. Pri ostatných auditoch, ktoré sampler zachytil, bola
+táto dolná hranica najviac
+21.4 {{res:collection_campaign_benign_v6_20261026.json:values.operator_diagnostics.stages.14.proc.pgsteal_kswapd_gb}}
+GB za celý audit (session 48). Počas auditu session 48 sa zo SSD prečítalo
+najmenej
+19036.7 {{res:collection_campaign_benign_v6_20261026.json:values.operator_diagnostics.stages.14.disks.sda.read_mb}}
+MB (počítadlá celého disku zo samplera `/proc/diskstats`), viac než surové dáta session
+(14399237880 {{res:collection_campaign_benign_v6_20261026.json:values.sessions.47.raw_bytes}}
+B): audit každý surový súbor najprv celý zahašuje (SHA-256) a potom ho pri extrakcii číta.
+Proces auditu pritom využil
+0.965 {{res:collection_campaign_benign_v6_20261026.json:values.operator_diagnostics.stages.14.proc.audit_cpu_share}}
+CPU pri podiele čakania na IO
+0.031 {{res:collection_campaign_benign_v6_20261026.json:values.operator_diagnostics.stages.14.proc.io_some_share}}.
+Že pomalé audity čakali na čítanie surových snímok v druhom reťazci, je inferencia
+(samplery zaznamenávajú počítadlá systému a diskov a stavy procesov, nie súbory, ktoré
+audit číta); prečo bol druhý reťazec pomalší v session 40 a 46 (a miernejšie v 26 a 28,
+kde je jediným údajom časovač extrakcie), a nie napríklad v session 36 s rovnakým scenárom
+a podobným objemom surových dát (session 36:
+16866328752 {{res:collection_campaign_benign_v6_20261026.json:values.sessions.35.raw_bytes}}
+B, audit
+1340.8 {{res:collection_campaign_benign_v6_20261026.json:values.sessions.35.stage_s.audit}}
+s; session 40:
+16891395984 {{res:collection_campaign_benign_v6_20261026.json:values.sessions.39.raw_bytes}}
+B), nie je určené. Časovač extrakcie meria čas na stene okolo `vektor_snimky` vrátane
+čítania snímky, takže prípadné čakanie na disk je jeho súčasťou.
+
+Podľa logov relácií operátora a agentov (vyjadrenia operátora v `operator_incidents`)
+bolo počas kampane päť rekurzívnych prechodov repozitára alebo archívu, všetky iba na
+čítanie. Tri spustil agent workflowu počas merania session 14, v rozpore s pravidlom
+operátora pre agentov; posledný z nich čítal aj súbory JSON v `data/` vrátane sidecarov
+bežiacej session. V okne od 60 s pred ním do 120 s po ňom mali delta cykly medián
+845.0 {{res:collection_campaign_benign_v6_20261026.json:values.operator_incidents.3.delta_ms_near.p50}}
+ms a maximum
+862.6 {{res:collection_campaign_benign_v6_20261026.json:values.operator_incidents.3.delta_ms_near.max}}
+ms, vo zvyšku merania
+849.4 {{res:collection_campaign_benign_v6_20261026.json:values.operator_incidents.3.delta_ms_rest.p50}}
+a
+889.2 {{res:collection_campaign_benign_v6_20261026.json:values.operator_incidents.3.delta_ms_rest.max}}
+ms; požiadavky v okne mali p99
+94.6 {{res:collection_campaign_benign_v6_20261026.json:values.operator_incidents.3.requests_ms_near.p99}}
+ms a maximum
+1857.0 {{res:collection_campaign_benign_v6_20261026.json:values.operator_incidents.3.requests_ms_near.max}}
+ms, vo zvyšku merania
+91.1 {{res:collection_campaign_benign_v6_20261026.json:values.operator_incidents.3.requests_ms_rest.p99}}
+a
+2305.4 {{res:collection_campaign_benign_v6_20261026.json:values.operator_incidents.3.requests_ms_rest.max}}
+ms. Najdlhšia delta v oknách prvých dvoch prechodov trvala
+871.3 {{res:collection_campaign_benign_v6_20261026.json:values.operator_incidents.1.delta_ms_near.max}}
+a
+872.6 {{res:collection_campaign_benign_v6_20261026.json:values.operator_incidents.2.delta_ms_near.max}}
+ms a vzorkovací cyklus v žiadnom z troch okien nečakal na pamäť fronty. Zvyšné dva
+prechody (session 5 a 16) skončili
+82.8 {{res:collection_campaign_benign_v6_20261026.json:values.operator_incidents.0.seconds_before_measure_start}}
+a
+31.1 {{res:collection_campaign_benign_v6_20261026.json:values.operator_incidents.4.seconds_before_measure_start}}
+s pred začiatkom merania.
+
+Podmienky prijatia sa oproti pilotu 7 nezmenili. Surové snímky kampane majú spolu
+586817420688 {{res:collection_campaign_benign_v6_20261026.json:values.summary.raw_bytes_total}}
+B; archív kampane zaberá
+93508924898 {{res:collection_campaign_benign_v6_20261026.json:values.summary.archive_stored_bytes_total}}
+B uložených dát a v čase tohto záznamu je jedinou kópiou surových snímok, na systémovom
+HDD (`/home/eh/hyptcn3-archive/campaigns/benign-v6-20261026`) spolu s OS, swapom a diskom VM.

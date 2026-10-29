@@ -9,7 +9,8 @@ Zadanie je v `zadanie-zp_105826.pdf`.
 **Integrovaný safeguard:** [`docs/SAFEGUARD.sk.md`](docs/SAFEGUARD.sk.md).
 `python3 -m safeguard` poskytuje tréning, načítanie, prehrávanie a spoločný
 beh zberača s detektorom. `smoke` overuje mechaniku na syntetických dátach;
-nový korpus, živý spoločný beh a účinnosť detekcie zostávajú na overenie.
+tréning nad novým korpusom `benign-v6-20261026`, živý spoločný beh a účinnosť detekcie
+zostávajú na overenie.
 
 **Metodika zberu a príznakov:** [`docs/METODIKA_ZBERU.sk.md`](docs/METODIKA_ZBERU.sk.md).
 `make collection-plan` vypíše pridelenie behov do tréningu, vývoja, kalibrácie

@@ -7,10 +7,14 @@ dát a nový beh nad VM. Diagnostický model nie je modelom natrénovaným na
 serverovom korpuse. Účinnosť proti útokom, falošné alarmy pri dlhšej prevádzke
 a vplyv celého detektora na VM ešte neboli touto integráciou vyhodnotené.
 
-Pilot podľa [`METODIKA_ZBERU.sk.md`](METODIKA_ZBERU.sk.md) má
-[prijatý audit](../data/results/collection_pilot_v2_20261013_reaudit.json).
-Nový benígny korpus zostáva podmienkou tréningu a ďalšej experimentálnej etapy.
-Jeho automatický zber a archiváciu riadi
+Pilot pôvodného PC podľa [`METODIKA_ZBERU.sk.md`](METODIKA_ZBERU.sk.md) má
+[prijatý audit](../data/results/collection_pilot_v2_20261013_reaudit.json); pre zberové PC sa nepoužije.
+Benígny korpus `benign-v6-20261026` vyšiel na zberovom PC z pilota 7
+([audit](../data/results/collection_pilot_7_20261026_audit.json)) a je nazbieraný: audit prijal
+48 {{res:collection_campaign_benign_v6_20261026.json:values.summary.accepted_sessions}}
+session ([záznam](../data/results/collection_campaign_benign_v6_20261026.json), [MERANIA.md](MERANIA.md)); tréning nad ním
+a ďalšia experimentálna etapa zostávajú.
+Automatický zber a archiváciu korpusu riadi
 [`scripts/campaign.py`](../scripts/campaign.py); postup je v
 [`AUTOMATICKY_ZBER.sk.md`](AUTOMATICKY_ZBER.sk.md).
 Nový spoločný beh `run` s hostiteľským eBPF zberom je
@@ -115,8 +119,8 @@ súborov oproti manifestu; neoverujú pôvod balíka od neznámeho autora.
 
 Príkazy sa spúšťajú z koreňa repozitára. Pri vytváraní výstupu musí `--out`
 označovať nový adresár; `status` číta existujúci výstup. Cesty v ukážkach
-sú názvy plánovaných výstupov; neznamenajú, že už
-existuje prijatý korpus alebo model z jeho tréningu.
+sú ilustračné; index prijatého korpusu `benign-v6-20261026` je
+`data/campaigns/benign-v6-20261026/corpus.json` a model z jeho tréningu zatiaľ neexistuje.
 
 **Skúška bez VM a bez roota:**
 
@@ -184,7 +188,7 @@ Beh je konečný: počet cyklov preberá z protokolu, prípadne z `--cycles`.
 Zdieľa zámok s výskumným runnerom a nesmie s ním súbežne zbierať. Rezerva
 disku a časový limit môžu beh ukončiť ako neúspešný. Prerušenie ukončí iba
 zberač spustený týmto príkazom; VM a premávka zostávajú pod `labctl`.
-Tento beh nenahrádza plánovaný zber korpusu cez `scripts/collection.py`.
+Tento beh nenahrádza zber korpusu kampaňou (`scripts/campaign.py`, `scripts/collection.py`).
 
 Zberač tu beží s predvolenými nastaveniami výstupu (`output.fsync=true`,
 `output.mlock=false`), nie s nastaveniami kampane. Od verzie 1.1 zapisuje
@@ -230,8 +234,8 @@ dlhodobé meranie časovania, spotreby zdrojov a vplyvu na služby hosťa.
 
 ## Čo zostáva experimentálne overiť
 
-- Nazbierať benígny korpus s oddelenými bootmi a rolami; pilotný audit je prijatý.
-- Natrénovať modely nad touto prevádzkou a zmraziť kalibráciu pred testami.
+- Natrénovať modely nad nazbieraným benígnym korpusom s oddelenými bootmi a rolami
+  (kampaň `benign-v6-20261026`) a zmraziť kalibráciu pred testami.
 - Overiť spoločný hostiteľský zber a detektor vrátane dlhého reťazca a backlogu.
 - Porovnať TCN s alternatívami a vyhodnotiť klasifikáciu aj falošné alarmy.
 - V oddelenom izolovanom prostredí vyhodnotiť aktivované útoky a reálny malvér.

@@ -127,8 +127,8 @@ manifestu, aby na testovacích dátach platili tie isté. Podrobnosti v `feature
 **6. Model a skóre** — `tcn/model.py` (kauzálne dilatované konvolúcie, reziduálne bloky),
 baseliny `tcn/baselines.py`, metriky `tcn/eval.py`. Okno vojde, jedno číslo vyjde.
 `tcn/train.py` beží nad uloženými oknami, `tcn/score.py` nad adresárom, do ktorého píše
-`vmicollect run`. **Model natrénovaný nie je** — váhy sú náhodné, korpus neexistuje
-(`docs/LIMITACIE.md`, L16), takže číslo hovorí len to, že cesta beží ako celok.
+`vmicollect run`. **Model natrénovaný nie je** — váhy sú náhodné a model sa na korpuse
+`benign-v6-20261026` zatiaľ netrénoval (`docs/LIMITACIE.md`, L16), takže číslo hovorí len to, že cesta beží ako celok.
 
 **Príkazy zberača**
 
@@ -176,7 +176,7 @@ Commity, z ktorých merania pochádzajú:
 ## 8. Čo nefunguje a čo ešte nie je
 
 Balík `safeguard/` spája tréning, normalizáciu, načítanie a detektor (`docs/SAFEGUARD.sk.md`).
-Model pre serverový lab ešte vyžaduje plánovaný korpus a nezávislé vyhodnotenie.
+Model pre serverový lab ešte vyžaduje tréning nad korpusom `benign-v6-20261026` a nezávislé vyhodnotenie.
 Živá latencia snímka → skóre, teda meraná počas zberu, meraná nie je; odmerané
 je len spracovanie nad uloženou snímkou (`data/results/latency_score_20260919.json`).
 Slovo „real-time“ v názve práce preto znamená periodický zber s meraným časom cyklu.
