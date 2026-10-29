@@ -21,7 +21,6 @@ NAVRATOVE KODY: 0 = prebehlo, 2 = chyba vstupov alebo spracovania.
 """
 
 import argparse
-import collections
 import json
 import os
 import sys

@@ -21,8 +21,8 @@ ANOMALNE (blok F - predikcia normalu, bez stitkov):
    parametrov s TCNPrediktorom.
 
 Vsetky anomálne modely fitnu IBA na benígnych trenovacích oknách a ich skóre
-sa kalibruje rovnakym postupom (tcn/kalibracia.py) - preto su v jednej
-tabulke s TCN. Skóre nie je detekcia: co je alarm, urci az kalibracny prah.
+sa ma kalibrovat rovnakym postupom ako skore TCN - preto patria do jednej
+tabulky s TCN. Skóre nie je detekcia: co je alarm, urci az kalibracny prah.
 
 Rozhranie je zamerne uzke: sklearn baseliny maju fit/proba (klasifikacia)
 alebo fit/skore (anomalia), siete su nn.Module s forward -> logity alebo
@@ -30,7 +30,6 @@ predikcia a treninguje ich trenuj_siet()/trenuj_prediktor() v train.py.
 """
 
 import numpy as np
-import torch
 from sklearn.ensemble import IsolationForest
 from sklearn.linear_model import LogisticRegression
 from torch import nn
@@ -53,8 +52,6 @@ def _rozsir(p, triedy_modelu, tried):
 class LogRegPriemer:
     """Logisticka regresia nad priemerom okna cez cas."""
 
-    meno = "logreg_priemer"
-
     def __init__(self, tried, seed=0):
         self.tried = tried
         self.m = LogisticRegression(max_iter=2000, random_state=seed)
@@ -74,16 +71,12 @@ class LogRegPriemer:
 class BagOfFrames(LogRegPriemer):
     """Priemer + odchylka cez cas: model, ktory poradie snimok nevidi."""
 
-    meno = "bag_of_frames"
-
     def vstup(self, X):
         return np.concatenate([X.mean(axis=1), X.std(axis=1)], axis=1)
 
 
 class GRU(nn.Module):
     """Jednovrstvove GRU, klasifikuje posledny krok okna (ako TCN)."""
-
-    meno = "gru"
 
     def __init__(self, priznakov, tried, skryte):
         super().__init__()
@@ -126,8 +119,6 @@ class ZScoreAnomalia:
     TCN. Ked TCN toto neprekona, sekvencna informacia nepomaha (P8).
     """
 
-    meno = "zscore"
-
     def __init__(self, priznaky, indikatory=INDIKATORY):
         self.priznaky = tuple(priznaky)
         self.indikatory = tuple(indikatory)
@@ -156,10 +147,8 @@ class IsolationForestAnomalia:
     Isolation Forest nad rozvinutymi oknami (blok F).
 
     contamination='auto': les si spociatocny prah urci sam, ale SKORE je len
-    surova miera - prah alarmu urci az kalibracia (E3), rovnako ako pre TCN.
+    surova miera - prah alarmu urci az kalibracia, rovnako ako pre TCN.
     """
-
-    meno = "iforest"
 
     def __init__(self, seed=0):
         self.m = IsolationForest(n_estimators=200, max_samples="auto",
@@ -180,8 +169,6 @@ class IsolationForestAnomalia:
 
 class GRUPrediktor(nn.Module):
     """GRU s regresnou hlavou - prediktor normalu, porovnatelny s TCN (F)."""
-
-    meno = "gru_prediktor"
 
     def __init__(self, priznakov, skryte):
         super().__init__()

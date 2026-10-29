@@ -48,3 +48,11 @@ def test_missing_snapshot_resets_model_window(monkeypatch, tmp_path):
     assert rc == 0
     assert all(e["stav"] == "zahrievanie" for e in events)
     assert not (tmp_path / "HOLD").exists()
+
+
+def test_alarm_pravidlo_k_z_n():
+    s = [0.1, 0.1, 0.9, 0.9, 0.9]
+    assert detektor.alarm_pravidlo(s[:4], 0.5, 3, 5) is False      # okno nie je plne
+    assert detektor.alarm_pravidlo(s, 0.5, 3, 5) is True           # 3 z 5
+    s2 = [0.1, 0.1, 0.9, 0.9, 0.1]
+    assert detektor.alarm_pravidlo(s2, 0.5, 3, 5) is False         # 2 z 5

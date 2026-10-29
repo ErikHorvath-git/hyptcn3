@@ -73,8 +73,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from features.normalize import Normalizer                   # noqa: E402
 from features.snapshot import MENA                          # noqa: E402
 from features.windows import (DLZKA_OKNA, DOVOD_PLNA,       # noqa: E402
-                              DOVOD_PREDCHODCA, okna,
-                              snimky_z_matice)
+                              DOVOD_PREDCHODCA, okna)
 from tcn import eval as ev                                  # noqa: E402
 from tcn.baselines import (GRU, GRUPrediktor, BagOfFrames,   # noqa: E402
                            IsolationForestAnomalia, LogRegPriemer,
@@ -412,8 +411,8 @@ def beh_predikcia(data, seed=0, epochy=60, priznaky=MENA):
     parametrov); z-score a Isolation Forest fitnu na benígnych oknach a ich
     skore su popisne. Referencia 'predpovedaj stred' (nula po z-score):
     mse_na_var < 1 znamena, ze sa model nieco naucil. Detekcne porovnanie
-    vsetkych modelov robi az kalibracia (E3) na benígnej validácii - tam sa
-    dostanu do jednej tabulky.
+    vsetkych modelov si vyzaduje kalibraciu prahu na benígnej validácii;
+    tato diagnosticka cesta ju nerobi.
     """
     nastav_seed(seed)
     F_ = data["X_train"].shape[2]
@@ -466,9 +465,6 @@ def beh_predikcia(data, seed=0, epochy=60, priznaky=MENA):
 # detekcia dala postaviť len na tom, ze sa VM proste ZATAZI (mem_* priznaky
 # rastu s akoukoľvek aktivitou), alarm by nehovoril o anomálii, ale o zatazi.
 # Tento beh to overi: ten isty model, len orezana podmnozina priznakov.
-
-MEM_PRIZNAKY = tuple(m for m in MENA if m.startswith("mem_"))
-
 
 def podskupina(data, mena):
     """X/y okna orezane na podmnozinu priznakov (rovnaka dlzka okna)."""

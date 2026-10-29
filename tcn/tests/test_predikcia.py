@@ -1,18 +1,16 @@
 """
-Testy predikcie normalu (E1/E2) a kalibracie (E3).
+Testy predikcie normalu (E1/E2) a anomalnych baselinov (F).
 
 Overuje sa MECHANIKA na syntetike - ziadne cislo tu nie je vysledok detekcie
 (HONESTY P4): kauzalita prediktora, posun vstup/ciel (ciel NESMIE byt v
 okne - inak sa uloha zdegeneruje na kopirovanie), pokles MSE pod rozptyl
-ciela na predpovedatelnej syntetike, vylucenie indikatorov zo skore a
-kvantilova kalibracia s rozpoctom FP.
+ciela na predpovedatelnej syntetike a vylucenie indikatorov zo skore.
 """
 
 import numpy as np
 import pytest
 import torch
 
-from tcn.kalibracia import kalibracia, okien_za_den, skore_okna_z_chyb
 from tcn.model import TCNPrediktor
 from tcn.train import (beh_predikcia, chyba_predikcie, priprav_predikcia,
                        syn_sessions_predikcia)
@@ -74,54 +72,6 @@ def test_priprav_predikcia_odmietne_sedenia_bez_peciatky():
     sessions[0]["meno"] = "bez_peciatky"
     with pytest.raises(ValueError):
         priprav_predikcia(sessions)
-
-
-# ---------------------------------------------------------------- E3
-
-
-def test_okien_za_den_zakladne_periody():
-    assert okien_za_den(1.0) == 86400
-    assert okien_za_den(5.0) == 17280
-    assert okien_za_den(2.0) == 43200
-
-
-def test_kalibracia_kvantil_a_rozpocet():
-    """FPR okna zmerany na validacii musi sediet s rozpoctom (kvantil)."""
-    rng = np.random.default_rng(0)
-    chyby = rng.exponential(1.0, size=17280)      # den benígnych okien pri 5 s
-    res = kalibracia(chyby, perioda_s=5.0, fp_za_den=1.0, k=2, n=4)
-    assert res["fpr_okno_rozpocet"] == pytest.approx(1.0 / 17280)
-    # zmerane: ~1 okno z 17280 je nad prahom (kvantil z konstrukcie)
-    assert 0 < res["fpr_okno_odmerane"] <= 5e-4
-    assert res["alarm_k_z_n"] == [2, 4]
-    assert res["far_h_odhad"] is not None and res["far_h_odhad"] >= 0
-
-
-def test_kalibracia_k_z_n_neprepocitava_nezavisle_okna():
-    """Okna sa prekryvaju - teoreticka binomicka veta sa NEPOUZIVA, alarmy
-    sa meraju na validacii (toto drzi kontrakt rozhrania, nie cislo)."""
-    rng = np.random.default_rng(1)
-    chyby = rng.exponential(1.0, size=2000)
-    # 2000 okien pri 1 s = 0,023 dna; rozpočet 200 FP/den da ~4,6 okna nad
-    # prahom - kvantil ma z coho byt kvantilom
-    res = kalibracia(chyby, perioda_s=1.0, fp_za_den=200.0, k=3, n=5)
-    assert res["alarmov_odmerane"] >= 0
-    assert res["n_okien"] == 2000
-
-
-def test_kalibracia_odmietne_malu_validaciu():
-    with pytest.raises(ValueError):
-        kalibracia(np.ones(50), perioda_s=5.0)
-
-
-def test_kalibracia_odmietne_rozpocet_bez_okna_nad_prahom():
-    with pytest.raises(ValueError):
-        kalibracia(np.ones(100), perioda_s=5.0, fp_za_den=1e-9)
-
-
-def test_skore_okna_z_chyb_priemeruje():
-    chyby = np.array([[1.0, 2.0], [3.0, 5.0]])
-    assert np.allclose(skore_okna_z_chyb(chyby), [1.5, 4.0])
 
 
 # ---------------------------------------------------------------- E2
