@@ -13,7 +13,9 @@ preklep: taky udaj zostarne ticho.
 CO SA DOSADZUJE
 ---------------
   strom adresarov a pocty riadkov      git ls-files + wc -l
-  prikazy, prepinace, podprikazy       --help zostavenej binarky a balikov
+  prikazy, prepinace, podprikazy       --help zostavenej binarky, balikov guestparse,
+                                       features a safeguard a skriptov
+                                       scripts/collection.py a scripts/campaign.py
   konfiguracne kluce                   vmicollect config --keys
   vychodzie hodnoty klucov             vmicollect config (efektivna konfiguracia)
   velkost obrazu v selftest            vmicollect/src/main.c
@@ -55,7 +57,9 @@ ulozene merania (pole "commit" v JSONoch) - tie sa menia az s novym meranim.
 
 CO GENERATOR POTREBUJE
 ----------------------
-Zostavenu binarku (make -C vmicollect) a Python. Binarku nielen cita: spusti ju
+Zostavenu binarku (make -C vmicollect) a Python s balikmi z requirements.txt:
+pytest kvoli poctu testov, NumPy a PyTorch kvoli napovede 'python3 -m safeguard'
+a skriptov zberu. Binarku nielen cita: spusti ju
 ('--help', 'config', a kvoli sidecaru aj 'once' nad docasnym obrazom v subore).
 Bezicu domenu, roota ani siet nie - backend 'file' je obycajny subor a docasny
 adresar sa po sebe upratuje.
@@ -206,30 +210,50 @@ def bin_vmicollect():
 # v kode, ani v texte nic nezmenilo. Navod na pouzitie si tak sam rozbije
 # kontrolu. Take adresare maju namiesto poctu vetu o tom, co v nich je.
 #
-# Tyka sa to data/ (results/ aj sessions/ rastu kazdym meranim; raw/ je mimo gitu,
-# takze do poctu nesla nikdy) a profiles/, do ktoreho prida adresar kazde spustenie
-# scripts/get_profile.sh nad hostom s inou verziou jadra - a to je tiez prikaz
-# z kapitoly 4.
+# Tyka sa to data/ (results/ aj sessions/ rastu kazdym meranim; raw/ a collections/
+# su mimo gitu, takze do poctu nesli nikdy) a profiles/, do ktoreho prida adresar
+# kazde spustenie scripts/get_profile.sh nad hostom s inou verziou jadra - a to je
+# tiez prikaz z kapitoly 4.
+#
+# config/ ma v stlpci riadkov nulu zamerne: protokoly su JSON, ktory sa do riadkov
+# v .c .h .py .sh .md nepocita, a pocet suborov sa meni iba s novym protokolom.
+#
+# Popisy tcn/, scripts/ a harness/ menuju aj starsiu diagnosticku cestu (trening
+# a skorovanie v tcn/, sedenia nad hyptcn-guest). V repozitari ostava do konca
+# experimentov; integrovana detekcna cesta je safeguard/.
 ADRESARE = [
     ("vmicollect/", "zberač snímok pamäte VM: C a eBPF nad QEMU/KVM",
      "vmicollect/src/collector.c", None),
-    ("guestparse/", "rekonštrukcia procesov, modulov a soketov zo snímky",
+    ("guestparse/", "rekonštrukcia procesov, modulov a soketov zo snímky; kontroly "
+     "integrity",
      "guestparse/view.py", None),
-    ("features/", "per-bin príznakový vektor (referencia), okná, normalizácia",
+    ("features/", "per-bin referencia k C, vektor snímky, okná, kvalita riadkov, archív "
+     "sedenia a index korpusu; staršia normalizácia pre `tcn/`",
      "features/perbin.py", None),
-    ("tcn/", "TCN, prediktor normálu, baseliny, tréning a skórovanie snímok",
-     "tcn/score.py", None),
-    ("safeguard/", "spoločné príznaky, modely, balík a hostiteľský detektor",
+    ("tcn/", "TCN bloky pre `safeguard/model.py`, baseliny a metriky; staršia "
+     "diagnostická cesta tréningu a skórovania (`tcn/train.py`, `tcn/score.py`)",
+     "tcn/model.py", None),
+    ("safeguard/", "integrovaná detekčná cesta: okná a normalizácia, modely, kalibrácia, "
+     "balík a hostiteľský detektor",
      "safeguard/cli.py", None),
     ("profiles/", "profil jadra hosťa: symboly a offsety polí štruktúr",
-     "profiles/*/README.md", "jeden adresár na boot hosťa — pozri L17"),
-    ("scripts/", "root behy, príkazy v hosťovi, kontroly tvrdení",
-     "scripts/root_run.sh", None),
-    ("lab/", "trvalé benígne API služby, PostgreSQL a nginx vo VM",
+     "profiles/*/README.md",
+     "jeden adresár na verziu jadra hosťa; nový boot rieši preukotvenie (L17)"),
+    ("scripts/", "zber a audit sedenia, kampaň (`scripts/campaign.py`), laboratórium "
+     "a premávka, root behy, PoC techniky na validáciu citlivosti (`scripts/poc/`), "
+     "kontroly tvrdení; "
+     "staršie diagnostické sedenia a detektor (`scripts/session.sh`, `scripts/detektor.py`)",
+     "scripts/collection.py", None),
+    ("lab/", "trvalé benígne API služby, PostgreSQL a nginx vo VM `hyptcn-lab`",
      "lab/services.py", None),
+    ("harness/", "zlatý obraz hosťa, šablóna domény `hyptcn-guest`, izolovaná sieť bez "
+     "NAT a manifesty starších sedení",
+     "harness/README.md", None),
+    ("config/", "zmrazené protokoly zberu korpusu: doména, perióda, okná, roly a scenáre",
+     "config/collection-v2.json", None),
     ("data/", "výsledkové JSONy z meraní (`data/results/`) a pozemná pravda "
-     "odobratá v hosťovi (`data/sessions/`); samotné snímky `.vmicd` sú mimo "
-     "gitu (`data/raw/`)",
+     "odobratá v hosťovi (`data/sessions/`); samotné snímky sú mimo gitu "
+     "(`data/raw/`, zber korpusu `data/collections/<session>/`)",
      "data/results/2026-09-18_zmrazeny_host/README.md",
      "rastie s každým meraním, nepočíta sa"),
 ]
@@ -303,7 +327,10 @@ def _rozdel(text):
         return cast[0].strip(), cast[1].strip()
     slova = text.split()
     i = 1
-    while i < len(slova) and (slova[i].startswith("[") or slova[i].startswith("-")):
+    # Aj '<': 'hold <dir> <id>... oznac ...' ma za argumentmi jedinu medzeru.
+    # Bez toho skoncilo '<dir> <id>...' v popise mimo spatnych apostrofov, kde
+    # ho Markdown cita ako HTML znacky a z vysledku zmizne.
+    while i < len(slova) and slova[i].startswith(("[", "-", "<")):
         i += 1
     return " ".join(slova[:i]), " ".join(slova[i:])
 
@@ -380,9 +407,38 @@ def podprikazy_balika(modul):
             riadky.append(r)
     if not riadky:
         raise Chyba("napoveda 'python3 -m %s' nema zoznam podprikazov" % modul)
+    # argparse zalamuje dlhy popis podprikazu do dalsich, hlbsie odsadenych
+    # riadkov. Su to pokracovania VETY, nie tvar volania ako pri vmicollect,
+    # preto sa pripoja medzerou. _polozky() by z nich urobil kusy kodu
+    # a popis 'textbaseline' by sa rozpadol na tri `...` uprostred vety.
+    spojene = []
+    for r in riadky:
+        if spojene and len(r) - len(r.lstrip()) > 4:
+            spojene[-1] += " " + r.strip()
+        else:
+            spojene.append(r)
     return ", ".join(
-        "`%s` %s" % (t, p) for t, p in _polozky(riadky, odsadenie=4)
+        "`%s` %s" % (t, p) for t, p in _polozky(spojene, odsadenie=4)
     )
+
+
+def mena_podprikazov(cmd, meno):
+    """Iba MENA podprikazov z riadku '{a,b,c}' napovedy argparse.
+
+    Popisy sa tu neberu zamerne: safeguard, collection.py aj campaign.py maju
+    help= iba pri niektorych podprikazoch a argparse ostatne vypise bez popisu.
+    Zoznam 'nazov popis' by potom pri vacsine podprikazov tvrdil, ze nerobia nic.
+    Co ktory robi, vlastni dokument, na ktory sablona pri zozname odkazuje.
+    """
+    ber = False
+    for r in spusti(cmd).splitlines():
+        if r.startswith("positional arguments:"):
+            ber = True
+            continue
+        s = r.strip()
+        if ber and s.startswith("{") and s.endswith("}"):
+            return ", ".join("`%s`" % m for m in s[1:-1].split(","))
+    raise Chyba("napoveda '%s' nema riadok {podprikazy}" % meno)
 
 
 # --------------------------------------------------- 3. konfiguracne kluce
@@ -507,17 +563,21 @@ def limitacie_nadpisy():
     nieco, co uz neplati.
     """
     riadky = []
-    for cislo_, znenie in _limitacie():
+    # Poradie podla cisla, nie podla polohy v dokumente: L18 stala v
+    # docs/LIMITACIE.md pred L17 a prirucka ich v tom poradi vypisovala.
+    for cislo_, znenie in sorted(_limitacie()):
         # z 'L7 — Confidential VM ...' ostane samotne tvrdenie; cislo uz je
-        # v tucnom prefixe a opakovat ho by ubralo miesto zneniu
-        _, oddelovac, zvysok = znenie.partition("—")
-        text = (zvysok if oddelovac else znenie).strip()
+        # v tucnom prefixe a opakovat ho by ubralo miesto zneniu. Oddelovac
+        # moze byt aj '-' alebo ':' (nadpis 'L18 - A3: ...' do 2026-10-29); inak
+        # by sa cislo v riadku zopakovalo ('**L18** — L18 - A3: ...').
+        text = re.sub(r"^L%d\b\s*[—–:-]?\s*" % cislo_, "", znenie).strip()
         # Nadpis vyriesenej limitacie konci znackou '— VYRIESENE <datum>'.
         # Skratenie na LIMITACIA_ZNAKOV ju odrezalo, takze prirucka vypisovala
         # vyriesenu limitaciu medzi platnymi. Znacka sa preto odoberie pred
         # skratenim a pripoji sa az za skrateny text - skratit sa smie tvrdenie,
-        # nie to, ci vobec plati.
-        m = re.search(r"\s*[—-]\s*(VYRIEŠENÉ\b.*)$", text)
+        # nie to, ci vobec plati. To iste plati pre '— CIASTOCNE ODSTRANENE'
+        # (L4), z ktorej po skrateni ostavalo 'CIASTOCNE ODSTR...'.
+        m = re.search(r"\s*[—-]\s*((?:VYRIEŠENÉ|ČIASTOČNE ODSTRÁNENÉ)\b.*)$", text)
         znacka = ""
         if m:
             znacka = " — **%s**" % m.group(1).strip()
@@ -611,12 +671,15 @@ def sidecar():
         raise Chyba("sidecar sa nepodarilo vyrobit: %s" % exc)
     finally:
         shutil.rmtree(prac, ignore_errors=True)
-    for blok in ("output", "features"):
+    # Blok 'capture' nesie casy cyklu (total_ms, od verzie 1.1 aj backend_read_ms
+    # a queue_wait_ms); audit zberu z nich rozhoduje o prijati session
+    # (scripts/collection.py), takze aj on je vstupom dalsich krokov.
+    for blok in ("capture", "output", "features"):
         if not isinstance(doc.get(blok), dict):
             raise Chyba("cerstvy sidecar nema blok '%s'" % blok)
     riadky = [
-        "- `output` — %s" % ", ".join(doc["output"].keys()),
-        "- `features` — %s" % ", ".join(doc["features"].keys()),
+        "- `%s` — %s" % (blok, ", ".join(doc[blok].keys()))
+        for blok in ("capture", "output", "features")
     ]
     biny = doc["features"].get("bins")
     if not (isinstance(biny, list) and biny and isinstance(biny[0], dict)):
@@ -720,9 +783,17 @@ def r_domena(d):
 
 
 def r_plna(d):
+    """capture_ms nie je samotne citanie: v commite 178ce4f, z ktoreho artefakt
+    pochadza, meral slucku vmic_capture() vo vmicollect/src/backend.c, ktora
+    volala writer->feed(), a delta_feed() v nej zapisoval kazdu zmenenu stranku.
+    write_ms bol finish(): fsync, rename a pri zapnutom hashi (beh mal
+    output.hash=sha256) SHA-256 hotoveho suboru. Popis 'citanie' a 'zapis'
+    preto klamal (oprava v docs/MERANIA.md z 2026-10-25). Zberac 1.1 meria
+    cistu dobu citania zvlast (capture.backend_read_ms v sidecari)."""
     v = kluc(d, "values.run_delta_perioda_5s.plna_snimka_cyklus_0", ZMRAZENY)
     return (
-        "čítanie %s ms, zápis %s ms, spolu %s ms; %s z %s stránok"
+        "čítacia slučka vrátane zápisu stránok %s ms, dokončenie súboru "
+        "(fsync, SHA-256) %s ms, spolu %s ms; %s z %s stránok"
         % (
             cislo(v["capture_ms"]),
             cislo(v["write_ms"]),
@@ -907,10 +978,14 @@ def datumy_merani():
     return ", ".join(_datumy())
 
 
-# Adresare, v ktorych zmena znamena zmenu KODU (nie prozy dokumentov). Datum
-# stavu sa berie aj z nich, inak by hlavicka prirucky tvrdila datum posledneho
-# MERANIA aj vtedy, ked sa kod odvtedy zmenil.
-KOD_CESTY = ("vmicollect", "guestparse", "features", "tcn", "scripts")
+# Adresare (a Makefile), v ktorych zmena znamena zmenu KODU (nie prozy dokumentov).
+# Datum stavu sa berie aj z nich, inak by hlavicka prirucky tvrdila datum
+# posledneho MERANIA aj vtedy, ked sa kod odvtedy zmenil. Do 2026-10-29 tu chybali
+# safeguard/, lab/, harness/ a config/, takze zmena detektora, laboratoria alebo
+# protokolu zberu datum stavu neposunula. Makefile nesie ciele 'make lab-up'
+# a 'make lab-test', ktore prirucka uvadza.
+KOD_CESTY = ("vmicollect", "guestparse", "features", "tcn", "safeguard", "scripts",
+             "lab", "harness", "config", "Makefile")
 
 
 def _datum_kodu():
@@ -1005,14 +1080,18 @@ def prostredie_merani():
 # ------------------------------------------------------------ 9. dokumenty
 
 DOKUMENTY = [
+    ("docs/STAV.sk.md", "stav voči zadaniu, otvorené body, legenda blokov A1..H, prostredia"),
     ("docs/ARCHITEKTURA.md", "rozhrania, formát `.vmicd` a sidecaru, tok dát podrobne"),
     ("docs/MERANIA.md", "log meraní: čo, kedy, akým príkazom a s akým výsledkom"),
     ("docs/LIMITACIE.md", None),   # popis sa dopocita: rozsah L1..Ln
     ("docs/kontroly.md", "kontroly podozrivých vzorcov a validačný príkaz"),
     ("HONESTY.md", "pravidlá pre čísla a slová v texte práce"),
-    ("README.md", "rozcestník repozitára a pôvod kódu"),
+    ("README.md", "rozcestník repozitára, preklad a testy, pôvod kódu"),
     ("docs/LAB.sk.md", "serverové laboratórium, premávka z hostiteľa a RAM zber"),
     ("docs/METODIKA_ZBERU.sk.md", "protokol zberu, príznaky, rozdelenie korpusu a audit"),
+    ("docs/KONTROLA_ZBERU.sk.md", "pokrytie okien, kontrola logov a úložisko uloženého zberu"),
+    ("docs/AUTOMATICKY_ZBER.sk.md", "kampaň: spustenie, uložené dáta, zastavenie, archív, report"),
+    ("docs/PRIPRAVENOST_KAMPANE.sk.md", "pripravenosť kampane a zvyškové riziká (PASS/FAIL/UNVERIFIED)"),
     ("docs/SAFEGUARD.sk.md", "tréning modelového balíka, replay a spustenie detektora"),
     ("vmicollect/README.md", "zberač zvnútra: vrstvy, hooky, formáty"),
     ("guestparse/README.md", "parser zvnútra: preklad adries, prechod zoznamami"),
@@ -1119,6 +1198,17 @@ def main():
             "PODPRIKAZY_GUESTPARSE", lambda: podprikazy_balika("guestparse")),
         "PODPRIKAZY_FEATURES": lambda: fakty(
             "PODPRIKAZY_FEATURES", lambda: podprikazy_balika("features")),
+        "PODPRIKAZY_SAFEGUARD": lambda: fakty(
+            "PODPRIKAZY_SAFEGUARD", lambda: mena_podprikazov(
+                [sys.executable, "-m", "safeguard", "--help"], "python3 -m safeguard")),
+        "PODPRIKAZY_COLLECTION": lambda: fakty(
+            "PODPRIKAZY_COLLECTION", lambda: mena_podprikazov(
+                [sys.executable, str(REPO / "scripts" / "collection.py"), "--help"],
+                "scripts/collection.py")),
+        "PODPRIKAZY_CAMPAIGN": lambda: fakty(
+            "PODPRIKAZY_CAMPAIGN", lambda: mena_podprikazov(
+                [sys.executable, str(REPO / "scripts" / "campaign.py"), "--help"],
+                "scripts/campaign.py")),
         "KONFIG": lambda: fakty("KONFIG", konfiguracne_kluce),
         "VYCHODZIE": lambda: fakty("VYCHODZIE", vychodzie_zhrnutie),
         "BIN": lambda: fakty("BIN", bin_velkost),

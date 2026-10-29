@@ -1,6 +1,6 @@
 # Príručka k hyptcn3
 
-Vstupný dokument repozitára; stav kódu a artefaktov k 2026-10-26. Súbor je
+Vstupný dokument repozitára; stav kódu a artefaktov k 2026-10-29. Súbor je
 generovaný a needituje sa ručne — ako, hovorí kapitola 10.
 
 ## 1. Čo to je
@@ -9,75 +9,75 @@ Program číta pamäť bežiaceho virtuálneho stroja zvonku, z hostiteľa, a pe
 ukladá snímky. Druhý program zo snímky poskladá zoznam procesov, modulov jadra a sieťových
 spojení tak, ako ich v tej chvíli videl hosťovaný systém. Z každej snímky sa počíta krátky
 číselný vektor o tom, kde a ako sa pamäť oproti predchádzajúcej zmenila; vektory idú za
-sebou do okien pre TCN prediktor normálu. Tréning na krátkych benígnych idle sedeniach
-je uložený v artefaktoch; skóre pre nové serverové prostredie zatiaľ nie je kalibrované.
+sebou do okien pre TCN prediktor normálu v balíku `safeguard/` (`python3 -m safeguard`), ktorý z chyby
+predikcie a z kontrol integrity robí alarm. Model nad serverovým korpusom zatiaľ natrénovaný nie je.
 
 ## 2. Čo treba mať
 
 - hostiteľ s KVM, QEMU a libvirt a na ňom doména so sledovaným systémom;
-- `clang` s podporou cieľa BPF, `libbpf`, `zlib`, `libdl`, GNU `make`, Python 3;
+- C prekladač, `clang` s cieľom BPF, `pkg-config`, `libbpf`, `zlib`, `libdl`, GNU `make`; Python 3 s balíkmi z `requirements.txt`;
 - root na hostiteľovi — iba na čítanie pamäte VM (`CAP_BPF`, `CAP_PERFMON`);
 - profil jadra hosťa v `profiles/` (kapitola 4); bez neho parser neurobí ani krok.
 
-Vnútri hosťa netreba nič inštalovať. `qemu-guest-agent` alebo ssh potrebuje odber
-profilu a pozemnej pravdy, teda príprava a overovanie — nie samotný zber.
+Vnútri hosťa netreba pre zber nič inštalovať. `qemu-guest-agent` alebo ssh slúži na odber
+profilu a pozemnej pravdy a v laboratóriu aj na orchestráciu a overenie identity prostredia.
 
 ## 3. Preklad a testy (bez VM a bez roota)
 
 ```bash
 make -C vmicollect        # -> ./vmicollect/build/vmicollect
 make -C vmicollect test   # plná snímka, tri delty, obnova reťazca, kontrolný súčet
-python3 -m pytest -q      # testy parsera a príznakov
+python3 -m pytest -q      # parser, príznaky, tcn, safeguard a skripty zberu
 ```
 
-`make test` prejde celú cestu zberu nad syntetickým obrazom veľkosti
-16 MiB, ktorý si sám vyrobí. Testov je 690 prešlých a 33 preskočených v `pytest` (spolu 723 zozbieraných; preskočený test nie je prešiel) a 4 v C (`alarm_test`, `hole_test`, `perbin_test`, `retention_test`).
+`make test` prejde celú cestu zberu nad syntetickým obrazom veľkosti 16 MiB, ktorý si sám vyrobí. Testov je 684 prešlých a 24 preskočených v `pytest` (spolu 708 zozbieraných; preskočený test nie je prešiel) a 4 v C (`alarm_test`, `hole_test`, `perbin_test`, `retention_test`).
 
 ## 4. Ako vznikne snímka
 
-Skripty pracujú s doménou `hyptcn-guest`; inú zadáš prepínačom `-d/--domain` alebo
-premennou `VMIC_DOMAIN`. Profil jadra hosťa (symboly z `kallsyms`, offsety polí štruktúr
-z BTF) **pre túto doménu už v repozitári je** — priznaná vstupná závislosť, rovnako ako
-profil pri LibVMI alebo Volatility.
+`scripts/root_run.sh` pracuje s doménou `hyptcn-guest` (inú zadáš `-d/--domain` alebo
+`VMIC_DOMAIN`), laboratórium a zber korpusu s jej kópiou `hyptcn-lab` (`config/collection-v2.json`).
+Profil jadra hosťa (symboly z `kallsyms`, offsety polí z BTF) pre jadro oboch domén **už
+v repozitári je** — priznaná vstupná závislosť, rovnako ako profil pri LibVMI alebo Volatility.
 
 **Pozor na boot.** Adresy v `kallsyms` sú randomizované pri každom štarte hosťa (KASLR);
-offsety polí z BTF reštart prežijú.
-Nesúlad sa neprehliadne a od A2 sa aj sám opraví: pri nesúlade sa profil **preukotví**
-(posun sa zmeria z tabuliek stránok, kotvy `init_task` + `linux_banner`); až keď to nejde
-(FGKASLR, chýbajúce stranky), nástroj vypíše `NESULAD PROFILU` a skončí kódom 5.
+offsety polí z BTF reštart prežijú. Pri nesúlade sa profil sám **preukotví** (blok A2
+v `docs/STAV.sk.md`; posun sa zmeria z tabuliek stránok, kotvy `init_task` + `linux_banner`);
+až keď to nejde (FGKASLR, chýbajúce stránky), nástroj vypíše `NESULAD PROFILU` a skončí kódom 5.
 
 ```bash
-scripts/get_profile.sh -f root@192.168.122.100  # po reštarte hosťa; -f prepíše starý profil
-sudo scripts/root_run.sh probe                  # vidno doménu a jej memsloty?
-sudo scripts/root_run.sh run -w delta -i 5 -N 6 # šesť cyklov, perióda 5 s
-python3 -m guestparse ps --snapshot data/raw/<stamp>_run --profile profiles/debian12-6.1.0-42-cloud-amd64
-python3 -m features perbin --snapshot data/raw/<stamp>_run
+scripts/get_profile.sh -f root@192.168.122.100  # nové jadro hosťa alebo kód 5
+sudo scripts/root_run.sh probe                  # prvý beh: vidno doménu a jej memsloty?
+make lab-up && make lab-test                    # VM hyptcn-lab, služby a premávka
+sudo python3 scripts/collection.py run --role pilot --group <skupina> --scenario steady --seed <seed>
+python3 scripts/collection.py audit data/collections/<session>
+python3 -m guestparse ps --snapshot data/collections/<session>/raw --profile profiles/debian12-6.1.0-42-cloud-amd64
 ```
 
-`sudo` sa na heslo spýta interaktívne; root treba iba na tie dva riadky, teda na samotné
-čítanie pamäte. Tretí príkaz zapíše snímky do `data/raw/<stamp>_run/` (mimo gitu) a súhrn
-behu do `data/results/run_<stamp>.json`. Jedna snímka je súbor `.vmicd`: hlavička, rozsahy
-fyzických adries a ich obsah, celý alebo iba zmenené stránky. `--snapshot` berie taký
-súbor aj celý adresár s reťazcom snímok.
-
-Merania sa nespúšťajú ručne, ale cez `scripts/root_run.sh probe|once|run|validate`, ktorý
-do každého výstupu zapíše commit, dátum, presný príkaz a SHA-256 binárky. „`probe` nič
-nezapisuje“ v kapitole 6 platí o binárke; skript okolo nej `data/results/probe_<stamp>.json`
-zapíše.
+`sudo` sa na heslo spýta interaktívne; root treba iba na eBPF zber (`probe`, `run`). Pilot zapíše
+snímky so sidecarmi a logy do `data/collections/<session>/` (mimo gitu) a `audit` z nich bez roota
+vyextrahuje príznaky a rozhodne o prijatí (`docs/METODIKA_ZBERU.sk.md`); kampaň z prijatého pilota
+vykoná `scripts/campaign.py` (`docs/AUTOMATICKY_ZBER.sk.md`). Na zberovom PC sa namiesto `python3`
+používa interpreter z `.venv`. Snímka writera `delta` je súbor `.vmicd`: hlavička a záznamy
+„index stránky + obsah“. Merania sa nespúšťajú ručne poskladanými príkazmi: `scripts/root_run.sh`
+(`probe|once|run|validate`) aj skripty zberu zapíšu do výstupu commit a SHA-256 binárky zberača;
+podpríkazy `session|batch` spúšťajú staršie diagnostické sedenia (`harness/README.md`). „`probe`
+nič nezapisuje“ v kapitole 6 platí o binárke; skript okolo nej `data/results/probe_<stamp>.json` zapíše.
 
 ## 5. Čo je kde
 
 | adresár | čo rieši | kde začať čítať | súborov spolu / riadkov v `.c .h .py .sh .md` |
 |---|---|---|---|
-| `vmicollect/` | zberač snímok pamäte VM: C a eBPF nad QEMU/KVM | `vmicollect/src/collector.c` | 37 / 12 017 |
-| `guestparse/` | rekonštrukcia procesov, modulov a soketov zo snímky | `guestparse/view.py` | 34 / 7 232 |
-| `features/` | per-bin príznakový vektor (referencia), okná, normalizácia | `features/perbin.py` | 27 / 5 580 |
-| `tcn/` | TCN, prediktor normálu, baseliny, tréning a skórovanie snímok | `tcn/score.py` | 15 / 2 626 |
-| `safeguard/` | spoločné príznaky, modely, balík a hostiteľský detektor | `safeguard/cli.py` | 16 / 3 378 |
-| `profiles/` | profil jadra hosťa: symboly a offsety polí štruktúr | `profiles/debian12-6.1.0-42-cloud-amd64/README.md` | jeden adresár na boot hosťa — pozri L17 |
-| `scripts/` | root behy, príkazy v hosťovi, kontroly tvrdení | `scripts/root_run.sh` | 61 / 18 735 |
-| `lab/` | trvalé benígne API služby, PostgreSQL a nginx vo VM | `lab/services.py` | 7 / 471 |
-| `data/` | výsledkové JSONy z meraní (`data/results/`) a pozemná pravda odobratá v hosťovi (`data/sessions/`); samotné snímky `.vmicd` sú mimo gitu (`data/raw/`) | `data/results/2026-09-18_zmrazeny_host/README.md` | rastie s každým meraním, nepočíta sa |
+| `vmicollect/` | zberač snímok pamäte VM: C a eBPF nad QEMU/KVM | `vmicollect/src/collector.c` | 37 / 12 178 |
+| `guestparse/` | rekonštrukcia procesov, modulov a soketov zo snímky; kontroly integrity | `guestparse/view.py` | 34 / 7 257 |
+| `features/` | per-bin referencia k C, vektor snímky, okná, kvalita riadkov, archív sedenia a index korpusu; staršia normalizácia pre `tcn/` | `features/perbin.py` | 27 / 5 611 |
+| `tcn/` | TCN bloky pre `safeguard/model.py`, baseliny a metriky; staršia diagnostická cesta tréningu a skórovania (`tcn/train.py`, `tcn/score.py`) | `tcn/model.py` | 11 / 1 993 |
+| `safeguard/` | integrovaná detekčná cesta: okná a normalizácia, modely, kalibrácia, balík a hostiteľský detektor | `safeguard/cli.py` | 16 / 3 378 |
+| `profiles/` | profil jadra hosťa: symboly a offsety polí štruktúr | `profiles/debian12-6.1.0-42-cloud-amd64/README.md` | jeden adresár na verziu jadra hosťa; nový boot rieši preukotvenie (L17) |
+| `scripts/` | zber a audit sedenia, kampaň (`scripts/campaign.py`), laboratórium a premávka, root behy, PoC techniky na validáciu citlivosti (`scripts/poc/`), kontroly tvrdení; staršie diagnostické sedenia a detektor (`scripts/session.sh`, `scripts/detektor.py`) | `scripts/collection.py` | 61 / 18 825 |
+| `lab/` | trvalé benígne API služby, PostgreSQL a nginx vo VM `hyptcn-lab` | `lab/services.py` | 7 / 471 |
+| `harness/` | zlatý obraz hosťa, šablóna domény `hyptcn-guest`, izolovaná sieť bez NAT a manifesty starších sedení | `harness/README.md` | 15 / 264 |
+| `config/` | zmrazené protokoly zberu korpusu: doména, perióda, okná, roly a scenáre | `config/collection-v2.json` | 2 / 0 |
+| `data/` | výsledkové JSONy z meraní (`data/results/`) a pozemná pravda odobratá v hosťovi (`data/sessions/`); samotné snímky sú mimo gitu (`data/raw/`, zber korpusu `data/collections/<session>/`) | `data/results/2026-09-18_zmrazeny_host/README.md` | rastie s každým meraním, nepočíta sa |
 
 ## 6. Ako to funguje
 
@@ -86,16 +86,14 @@ pamäť bežiacej VM
   │  vmicollect  (eBPF nad KVM, beží na hostiteľovi)
   ▼
 snímka .vmicd  +  sidecar .json (metadáta snímky vedľa nej)
-  ├─► guestparse ──► procesy, moduly, sokety hosťa
+  ├─► guestparse ──► procesy, moduly, sokety hosťa a kontroly integrity
   └─► perbin.c   ──► per-bin vektor (zapísaný do sidecaru)
-                       │  features/snapshot.py + features/windows.py
+                       │  features/snapshot.py → safeguard/features.py
                        ▼
-                     okná (okno, čas, bin, príznak)
-                       │  tcn/model.py — TCN
+                     okno: príznaky snímky + čas × bin × príznak binu
+                       │  safeguard/model.py — TCN z tcn/model.py
                        ▼
-                     skóre: jedno číslo na okno
-                     tcn/score.py nad bežiacim zberom, tcn/train.py nad uloženými
-                     oknami; bez kalibrácie skóre nie je dôkaz detekcie
+                     skóre odchýlky a profil záťaže → prah, k z n → alarm a HOLD
 ```
 
 **1. Čítanie pamäte** — `vmicollect/src/backend_ebpf.c`, slučka `vmicollect/src/backend.c`.
@@ -103,11 +101,12 @@ KVM drží pamäť hosťa ako zoznam blokov; blok sa volá **memslot** a hovorí
 fyzických adries hosťa leží na ktorej adrese v procese QEMU. Zberač číta iba memsloty —
 priestor medzi nimi je diera bez pamäte, nie nuly. VM sa pritom nezastavuje.
 
-**2. Zápis snímky** — `vmicollect/src/writer_raw.c` uloží celú pamäť,
-`vmicollect/src/writer_delta.c` iba stránky zmenené od predchádzajúcej (porovnáva sa ich
-hash). Plná je prvá snímka reťazca a potom každá N-tá podľa `output.delta_full_every`
-(východzie 20) a je referenciou pre delty za ňou. Pri `output.sidecar`
-(východzie `true`) vzniká vedľa snímky sidecar `.json`; robí ho `meta.c`.
+**2. Zápis snímky** — `vmicollect/src/writer_raw.c` uloží celú pamäť, `vmicollect/src/writer_delta.c`
+iba stránky zmenené od predchádzajúcej (porovnáva sa ich hash). Plná je prvá snímka reťazca a potom
+každá N-tá podľa `output.delta_full_every` (východzie 20) a je referenciou pre delty za ňou.
+Pri `output.sidecar` (východzie `true`) vzniká vedľa snímky sidecar `.json`; robí ho `meta.c`.
+Od verzie 1.1 snímku writera `delta`, jej SHA-256 aj sidecar zapisuje vlákno `vmic-writer`
+(`vmicollect/src/output.c`); vzorkovací cyklus zmenené stránky namiesto zápisu kopíruje do fronty.
 
 **3. Rekonštrukcia objektov hosťa** — `guestparse/view.py`. V snímke sú iba bajty; že na
 istej adrese začína zoznam procesov a meno procesu leží istý počet bajtov od jeho začiatku,
@@ -122,26 +121,25 @@ stránok, priemerná entropia zmenených stránok a príznak, či sa bin zmenil.
 adresa delená veľkosťou binu, takže ten istý bin je v každej snímke ten istý kus pamäte;
 bin bez memslotu nevzniká. To isté počíta C aj Python a `features crosscheck` ich porovná.
 
-**5. Okná a normalizácia** — `features/windows.py` skladá po sebe idúce vektory do poľa
-tvaru `(okno, čas, bin, príznak)`. `features/normalize.py` preškáluje každý príznak na
-z-score; priemer a odchýlku počíta iba zo záznamov bez škodlivého správania a uloží ich do
-manifestu, aby na testovacích dátach platili tie isté. Podrobnosti v `features/PERBIN.md`.
+**5. Okná a normalizácia** — `safeguard/features.py` skladá okná z príznakov správania celej
+snímky (`features/snapshot.py`) a z per-bin bloku `čas × bin × príznak`. Normalizácia sa fituje
+iba na riadkoch role `train` a pri prehrávaní ani živom skórovaní sa znova nefituje
+(`docs/SAFEGUARD.sk.md`). Príznaky a ich kontrakt opisuje `features/PERBIN.md`.
 
-**6. Model a skóre** — `tcn/model.py` (kauzálne dilatované konvolúcie, reziduálne bloky),
-baseliny `tcn/baselines.py`, metriky `tcn/eval.py`. Okno vojde, jedno číslo vyjde.
-`tcn/train.py` beží nad uloženými oknami, `tcn/score.py` nad adresárom, do ktorého píše
-`vmicollect run`. **Model natrénovaný nie je** — váhy sú náhodné a model sa na korpuse
-`benign-v6-20261026` zatiaľ netrénoval (`docs/LIMITACIE.md`, L16), takže číslo hovorí len to, že cesta beží ako celok.
+**6. Model a skóre** — `safeguard/model.py`: globálna a zdieľaná per-bin TCN z blokov `tcn/model.py`
+(kauzálne dilatované konvolúcie, reziduálne bloky) predpovedajú posledný krok okna a chyba predikcie
+je skóre; samostatný klasifikátor určí profil záťaže. Kalibrovaný prah s pravidlom k z n robí zo
+skóre alarm, nález integrity ho vyvolá sám (`safeguard/runtime.py`). Staršia diagnostická cesta
+(`tcn/train.py`, `tcn/score.py`, `scripts/detektor.py`) zostáva do konca experimentov; jej prediktor
+sa trénoval iba na krátkych benígnych sedeniach, nad korpusom `benign-v6-20261026` zatiaľ nič (L16).
 
-**Príkazy zberača**
-
-| príkaz | čo robí |
+| príkaz zberača | čo robí |
 |---|---|
 | `run` | periodicky zber (Ctrl-C korektne ukonci) |
 | `once` | jedna snimka a koniec |
 | `probe` | pripoj sa a vypis parametre VM (nic nezapisuje) |
 | `restore` | poskladaj plny obraz z delta retazca — `--dir D --out F [--chain ID] [--until SEQ]` |
-| `hold` | <dir> <id>... oznac retazce markerom HOLD (retencia ich nezmaže) — `<id> = chain_id (delta zber) alebo meno suboru` |
+| `hold <dir> <id>...` | oznac retazce markerom HOLD (retencia ich nezmaže) — `<id> = chain_id (delta zber) alebo meno suboru` |
 | `verify [adresar]` | over kontrolne sucty snimok podla .json |
 | `config` | vypis efektivnu konfiguraciu; s `--keys` vypis vsetky nastavitelne parametre |
 | `backends` | zoznam dostupnych backendov |
@@ -149,7 +147,7 @@ baseliny `tcn/baselines.py`, metriky `tcn/eval.py`. Okno vojde, jedno číslo vy
 
 Prepínače: `-c, --config F` konfiguracny subor (INI), `-o, --set K=V` prebi jeden parameter (da sa opakovat), `-v, --verbose` log na urovni DEBUG, `-q, --quiet` log iba ERROR.
 
-Podpríkazy: `python3 -m guestparse` — `ps` zoznam procesov z init_task.tasks, `lsmod` zoznam nacitanych modulov, `ss` sietove spojenia (IPv4 aj IPv6), `info` profil, posun jadra a krizova kontrola prekladu adries, `checks` kontroly podozrivych vzorcov, `validate` porovnanie s pozemnou pravdou z hosta, `textbaseline` baseline textu jadra (kontrola (d); zapise — `text_baseline.json do profilu). Bez --vmlinux ide o` — `baseline z cistej snimky, s --vmlinux z linkovaneho` — `obrazu (silnejsia, boot-independent).`, `procmap` ktoremu procesu patria zmenene stranky binov (A4); `python3 -m features` — `perbin` spocitaj vektor jednej snimky, `crosscheck` porovnaj referenciu s vektorom z C modulu, `session` pamat aj objekty hosta do jedneho vektora na snimku.
+Podpríkazy: `python3 -m guestparse` — `ps` zoznam procesov z init_task.tasks, `lsmod` zoznam nacitanych modulov, `ss` sietove spojenia (IPv4 aj IPv6), `info` profil, posun jadra a krizova kontrola prekladu adries, `checks` kontroly podozrivych vzorcov, `validate` porovnanie s pozemnou pravdou z hosta, `textbaseline` baseline textu jadra (kontrola (d); zapise text_baseline.json do profilu). Bez --vmlinux ide o baseline z cistej snimky, s --vmlinux z linkovaneho obrazu (silnejsia, boot-independent)., `procmap` ktoremu procesu patria zmenene stranky binov (A4); `python3 -m features` — `perbin` spocitaj vektor jednej snimky, `crosscheck` porovnaj referenciu s vektorom z C modulu, `session` pamat aj objekty hosta do jedneho vektora na snimku; `python3 -m safeguard` (`docs/SAFEGUARD.sk.md`) — `train`, `inspect`, `replay`, `watch`, `run`, `status`, `smoke`; `scripts/collection.py` (`docs/METODIKA_ZBERU.sk.md`) — `plan`, `run`, `audit`, `coverage`; `scripts/campaign.py` (`docs/AUTOMATICKY_ZBER.sk.md`) — `init`, `run`, `launch`, `status`, `verify-archives`, `request-stop`, `close`.
 
 **Konfiguračné kľúče** (`vmicollect config --keys`, prebijú sa cez `-o sekcia.kluc=hodnota`):
 
@@ -166,6 +164,7 @@ Východzie hodnoty kľúčov, ktoré text spomína: `schedule.interval_s` = `5`,
 
 **Polia sidecaru**, ktoré sú vstupom ďalších krokov:
 
+- `capture` — regions, chunk_size, paused, pause_ms, pause_exceeded, capture_ms, backend_read_ms, begin_ms, queue_wait_ms, rusage, write_ms, total_ms
 - `output` — writer, full, fsync, async, mlock, queue_pool_bytes, queue_jobs, queue_bytes, sha_ms, data_closed_ms, chain_id, bytes_logical, bytes_on_disk, pages_total, pages_changed, page_size, changed_ratio, sha256_covers_file, hash_deferred, sha256
 - `features` — schema, bin_bytes, page_size, entropy, compute_ms, bins_total, regions, bins
 - jeden bin v `features.bins` — bin, gpa, pages_total, pages_changed, changed_ratio, zero_ratio, entropy_mean, has_changed
@@ -173,12 +172,13 @@ Východzie hodnoty kľúčov, ktoré text spomína: `schedule.interval_s` = `5`,
 
 ## 7. Namerané čísla
 
-Merané 2026-09-18 na doméne `hyptcn-guest` v zmrazenom stave (bez agenta v hosťovi).
+Merané 2026-09-18 na vývojovom hostiteľovi, doména `hyptcn-guest` v zmrazenom stave (bez agenta
+v hosťovi). Piloty a kampane na zberovom PC vlastní `docs/MERANIA.md`.
 
 | čo | hodnota | n | artefakt |
 |---|---|---|---|
 | Doména, na ktorej sa meralo | 10 memslotov, 2,02 GiB RAM, 2 vCPU | 1 | `data/results/2026-09-18_zmrazeny_host/summary.json` |
-| Plná snímka (cyklus #0, delta writer) | čítanie 922,0 ms, zápis 1 638,7 ms, spolu 2 560,8 ms; 123 845 z 528 417 stránok | 1 | `data/results/2026-09-18_zmrazeny_host/summary.json` |
+| Plná snímka (cyklus #0, delta writer) | čítacia slučka vrátane zápisu stránok 922,0 ms, dokončenie súboru (fsync, SHA-256) 1 638,7 ms, spolu 2 560,8 ms; 123 845 z 528 417 stránok | 1 | `data/results/2026-09-18_zmrazeny_host/summary.json` |
 | Prírastková snímka, nečinná VM | medián 245 stránok (212–265) zmenených, teda 0,0464 % pamäte; 7 z 11 prírastkových cyklov behu — tie, počas ktorých v hosťovi nebola prihlasovacia relácia | 7 | `data/results/2026-09-18_zmrazeny_host/summary.json` |
 | Beh s periódou 5 s | 12 cyklov, 0 chýb, 0 zmeškaných slotov, najväčšie meškanie 0,0 s | 1 | `data/results/2026-09-18_zmrazeny_host/run_delta_5s.json` |
 | Latencia snímka → vektor, perióda 2 s, príznaky zapnuté | medián 604,3 ms, p95 612,6 ms | 12 | `data/results/latency_vector_20260918.json` |
@@ -193,9 +193,6 @@ Stabilná množina procesov sú tie, ktoré boli v `ps` pred snímkou aj po nej.
 „navyše“ nie sú falošné pozitíva: `ss -tulpn` vypisuje iba počúvajúce sokety, zo snímky
 je vidieť aj nenaviazaný UDP soket a dopyt na DNS.
 
-Staršie číslo pre cyklus so zapnutým kontrolným súčtom už neplatí: SHA-256 sa vtedy
-počítal v `finish()` nad celým riedkym súborom, dnes v `feed()` (`docs/MERANIA.md`).
-
 Prostredie, na ktorom merania bežali (z artefaktov, nie z tohto stroja dnes):
 
 - hostiteľ: Fedora Linux 43 (Workstation Edition), jadro `7.1.13-100.fc43.x86_64`, QEMU emulator version 10.1.5 (qemu-10.1.5-1.fc43), libvirt 11.6.0;
@@ -209,14 +206,16 @@ Commity, z ktorých merania pochádzajú:
 
 ## 8. Čo nefunguje a čo ešte nie je
 
-Balík `safeguard/` spája tréning, normalizáciu, načítanie a detektor (`docs/SAFEGUARD.sk.md`).
-Model pre serverový lab ešte vyžaduje tréning nad korpusom `benign-v6-20261026` a nezávislé vyhodnotenie.
-Živá latencia snímka → skóre, teda meraná počas zberu, meraná nie je; odmerané
-je len spracovanie nad uloženou snímkou (`data/results/latency_score_20260919.json`).
-Slovo „real-time“ v názve práce preto znamená periodický zber s meraným časom cyklu.
-Presnosť voči reálnym malvérovým vzorkám zatiaľ nebola meraná; syntetický scenár
-sa za také meranie nevydáva. Plán ďalšej etapy je v `docs/METODIKA_ZBERU.sk.md`. Pri
-načítaní BPF programu sa objaví nefatálne `libbpf: Error in bpf_create_map_xattr(pages): -EINVAL. Retrying without BTF.` — zber funguje, príčina neznáma.
+Detekčná cesta `safeguard/` je implementovaná, **model nad serverovým korpusom však natrénovaný
+nie je**: korpus `benign-v6-20261026` je nazbieraný, tréning a nezávislé vyhodnotenie zostávajú
+a `smoke` overuje iba mechaniku (`docs/SAFEGUARD.sk.md`, L16). Vyhodnocovač FAR/h a času do
+detekcie zatiaľ nie je; otvorené body voči zadaniu vlastní `docs/STAV.sk.md`. Živá latencia
+snímka → skóre počas zberu meraná nie je, len spracovanie uložených snímok (napr. staršou
+cestou `tcn.score`, `data/results/latency_score_20260919.json`; L12). Slovo „real-time“ v názve
+práce preto znamená periodický zber s meraným časom cyklu (kapitola 7). Presnosť voči reálnym
+malvérovým vzorkám zatiaľ nebola meraná; syntetický scenár sa za také meranie nevydáva. Plán
+ďalšej etapy je v `docs/METODIKA_ZBERU.sk.md`. Pri načítaní BPF programu sa objaví nefatálne
+`libbpf: Error in bpf_create_map_xattr(pages): -EINVAL. Retrying without BTF.` — zber funguje, príčina neznáma.
 
 Ostatné obmedzenia vlastní `docs/LIMITACIE.md` (L1 až L18); prerozprávať ich tu by
 znamenalo držať dve znenia toho istého. Nadpisy sú preto dosadené z neho, skrátené:
@@ -224,7 +223,7 @@ znamenalo držať dve znenia toho istého. Nadpisy sú preto dosadené z neho, s
 - **L1** — Živá snímka: VM sa nezastavuje
 - **L2** — Čítanie nie je úplne pasívne
 - **L3** — Profil jadra hosťa je vstupná závislosť získaná z hosťa
-- **L4** — Parsuje sa pamäť jadra, nie pamäť procesov — ČIASTOČNE ODSTR…
+- **L4** — Parsuje sa pamäť jadra, nie pamäť procesov — **ČIASTOČNE ODSTRÁNENÉ 2026-10-05 (A4)**
 - **L5** — `hole_test` netestuje BPF vetvu
 - **L6** — Injekčný test je injekcia do kópie snímky
 - **L7** — Confidential VM (SEV-SNP, TDX) sa takto prečítať nedá
@@ -236,26 +235,30 @@ znamenalo držať dve znenia toho istého. Nadpisy sú preto dosadené z neho, s
 - **L13** — Príznakový vektor: čo o ňom treba vedieť pred tým, než sa na…
 - **L14** — Procesy, moduly a sokety do príznakového vektora nevstupujú — **VYRIEŠENÉ 2026-09-19**
 - **L15** — Časové rozlíšenie: proces kratší než perióda zberu je nevidi…
-- **L16** — Presnosť detekcie malvéru nebola meraná a v tejto verzii sa…
-- **L18** — L18 - A3: zvyskovy rozdiel textu medzi bootmi
+- **L16** — Presnosť detekcie malvéru nebola meraná
 - **L17** — Profil jadra hosťa platí pre jeden boot, nie pre verziu jadr… — **VYRIEŠENÉ 2026-10-05 (preukotvenie, blok A2)**
+- **L18** — Kontrola textu jadra: rozdiel medzi bootmi, baseline nesedí
 
 ## 9. Kam ďalej
 
 | dokument | čo vlastní | riadkov |
 |---|---|---|
-| `docs/ARCHITEKTURA.md` | rozhrania, formát `.vmicd` a sidecaru, tok dát podrobne | 1207 |
+| `docs/STAV.sk.md` | stav voči zadaniu, otvorené body, legenda blokov A1..H, prostredia | 155 |
+| `docs/ARCHITEKTURA.md` | rozhrania, formát `.vmicd` a sidecaru, tok dát podrobne | 1606 |
 | `docs/MERANIA.md` | log meraní: čo, kedy, akým príkazom a s akým výsledkom | 2817 |
-| `docs/LIMITACIE.md` | L1 až L18: čo systém nevie a čo z toho plynie pre text | 987 |
-| `docs/kontroly.md` | kontroly podozrivých vzorcov a validačný príkaz | 284 |
-| `HONESTY.md` | pravidlá pre čísla a slová v texte práce | 276 |
-| `README.md` | rozcestník repozitára a pôvod kódu | 79 |
-| `docs/LAB.sk.md` | serverové laboratórium, premávka z hostiteľa a RAM zber | 298 |
-| `docs/METODIKA_ZBERU.sk.md` | protokol zberu, príznaky, rozdelenie korpusu a audit | 393 |
-| `docs/SAFEGUARD.sk.md` | tréning modelového balíka, replay a spustenie detektora | 245 |
-| `vmicollect/README.md` | zberač zvnútra: vrstvy, hooky, formáty | 481 |
-| `guestparse/README.md` | parser zvnútra: preklad adries, prechod zoznamami | 162 |
-| `features/PERBIN.md` | definícia príznakov a ich kontrakt | 163 |
+| `docs/LIMITACIE.md` | L1 až L18: čo systém nevie a čo z toho plynie pre text | 1244 |
+| `docs/kontroly.md` | kontroly podozrivých vzorcov a validačný príkaz | 338 |
+| `HONESTY.md` | pravidlá pre čísla a slová v texte práce | 298 |
+| `README.md` | rozcestník repozitára, preklad a testy, pôvod kódu | 100 |
+| `docs/LAB.sk.md` | serverové laboratórium, premávka z hostiteľa a RAM zber | 331 |
+| `docs/METODIKA_ZBERU.sk.md` | protokol zberu, príznaky, rozdelenie korpusu a audit | 412 |
+| `docs/KONTROLA_ZBERU.sk.md` | pokrytie okien, kontrola logov a úložisko uloženého zberu | 222 |
+| `docs/AUTOMATICKY_ZBER.sk.md` | kampaň: spustenie, uložené dáta, zastavenie, archív, report | 347 |
+| `docs/PRIPRAVENOST_KAMPANE.sk.md` | pripravenosť kampane a zvyškové riziká (PASS/FAIL/UNVERIFIED) | 140 |
+| `docs/SAFEGUARD.sk.md` | tréning modelového balíka, replay a spustenie detektora | 270 |
+| `vmicollect/README.md` | zberač zvnútra: vrstvy, hooky, formáty | 642 |
+| `guestparse/README.md` | parser zvnútra: preklad adries, prechod zoznamami | 180 |
+| `features/PERBIN.md` | definícia príznakov a ich kontrakt | 194 |
 
 ## 10. Ako sa táto príručka udržiava
 
@@ -267,14 +270,10 @@ python3 scripts/gen_prirucka.py     # prepíše docs/PRIRUCKA.md zo šablóny
 scripts/check_prirucka.sh           # ohlási, že sa príručka s kódom rozišla
 ```
 
-**Čo na tomto súbore drží kontrola.** Generátor dosadí z kódu strom adresárov a počty
-riadkov, príkazy, prepínače a podpríkazy z `--help`, konfiguračné kľúče a ich východzie
-hodnoty, veľkosť obrazu v selfteste, polia sidecaru (z čerstvého sidecaru vyrobeného práve
-preloženou binárkou), počet testov a znenia nadpisov limitácií; z artefaktov len to, čo sa
-bez merania zistiť nedá. Próza je ručná a overuje sa pri nej jediné: že každá cesta
-k súboru v texte existuje — vecne zlú vetu bez čísla kontrola nezachytí.
-
-`scripts/check_prirucka.sh` si volá aj `scripts/check_claims.sh`, takže zastaraná príručka je
-nález ako každý iný; kód si najprv preloží, aby videla zmenu v zdrojáku, nie v starej binárke.
-Bežiacu doménu ani roota generátor nepotrebuje, zostavenú binárku áno — bez nej dá na
-miesto faktu `NEZISTENE (dôvod)` a skončí nenulovým kódom; taký súbor sa necommituje.
+**Čo na tomto súbore drží kontrola.** Čísla, príkazy, prepínače, podpríkazy, konfiguračné kľúče, polia
+sidecaru (z čerstvého sidecaru práve preloženej binárky), strom adresárov, testy a nadpisy limitácií
+dosadí generátor z kódu a artefaktov. Pri ručnej próze overí iba to, že každá cesta k súboru v texte
+existuje — vecne zlú vetu bez čísla nezachytí. `scripts/check_claims.sh` bez argumentov volá aj
+`scripts/check_prirucka.sh`, ktorý kód najprv preloží, príručku pregeneruje a porovná, takže zastaraná
+príručka je nález ako každý iný. Bežiacu doménu ani roota generátor nepotrebuje, zostavenú binárku
+áno — bez nej dá na miesto faktu `NEZISTENE (dôvod)` a skončí nenulovým kódom; taký súbor sa necommituje.
