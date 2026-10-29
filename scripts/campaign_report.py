@@ -349,20 +349,12 @@ def unix_of(text):
         return None
 
 
-def nearest_rank(values, q):
-    """traffic_log.percentile's definition: the value at rank ceil(q * n) of an ascending sequence."""
-    if not len(values):
-        return None
-    value = values[max(1, math.ceil(q * len(values))) - 1]
-    return value.item() if hasattr(value, "item") else value
-
-
 def distribution(values):
     """n/min/nearest-rank median/max of per-session values (not a pooled percentile)."""
     values = sorted(v for v in values if v is not None)
     if not values:
         return {"n": 0, "min": None, "median": None, "max": None}
-    return {"n": len(values), "min": values[0], "median": nearest_rank(values, .5), "max": values[-1]}
+    return {"n": len(values), "min": values[0], "median": traffic_log.percentile(values, .5), "max": values[-1]}
 
 
 def ratio(numerator, denominator, digits=6):
@@ -493,7 +485,6 @@ class Inputs:
 
 class LogScan:
     """One generator JSONL log: header, phase markers, end record and record numbering."""
-    LIMIT = 10
 
     def __init__(self, schema):
         self.schema = schema
@@ -501,17 +492,7 @@ class LogScan:
         self.markers = []
         self.records = 0
         self.previous = None
-        self.counts = Counter()
-        self.details = []
-
-    def problem(self, key, detail=None):
-        self.counts[key] += 1
-        if self.counts[key] <= self.LIMIT:
-            self.details.append(key if detail is None else f"{key}:{detail}")
-
-    def problems(self):
-        return self.details + [f"{key}:more:{count - self.LIMIT}"
-                               for key, count in sorted(self.counts.items()) if count > self.LIMIT]
+        self.problems = traffic_log.Problems()
 
     def feed(self, lineno, line):
         try:
@@ -519,26 +500,26 @@ class LogScan:
             if not isinstance(record, dict):
                 raise ValueError("not an object")
         except ValueError:
-            self.problem("corrupt_line", lineno)
+            self.problems.add("corrupt_line", lineno)
             return
         self.records += 1
         n = record.get("n")
         if type(n) is not int or n != (0 if self.previous is None else self.previous + 1):
-            self.problem("n_discontinuous", lineno)
+            self.problems.add("n_discontinuous", lineno)
         if type(n) is int:
             self.previous = n
         if record.get("schema") != self.schema:
-            self.problem("schema_mismatch", lineno)
+            self.problems.add("schema_mismatch", lineno)
         if self.end is not None:
-            self.problem("record_after_end", lineno)
+            self.problems.add("record_after_end", lineno)
         kind = record.get("type")
         if self.records == 1 and kind != "header":
-            self.problem("missing_header")
+            self.problems.add("missing_header")
         if kind == "header":
             if self.records == 1:
                 self.header = record
             else:
-                self.problem("unexpected_header", lineno)
+                self.problems.add("unexpected_header", lineno)
         elif kind == "phase":
             self.markers.append(record)
         elif kind == "end":
@@ -551,16 +532,16 @@ class LogScan:
 
     def finish(self, tail, size):
         if not size:
-            self.problem("empty_file")
+            self.problems.add("empty_file")
         if tail:
-            self.problem("torn_last_line")
+            self.problems.add("torn_last_line")
         if self.end is None:
-            self.problem("end_missing")
+            self.problems.add("end_missing")
         else:
             if not self.end.get("clean") or self.end.get("write_errors"):
-                self.problem("end_not_clean")
+                self.problems.add("end_not_clean")
             if self.end.get("records") != self.records:
-                self.problem("records_mismatch", f"{self.end.get('records')}!={self.records}")
+                self.problems.add("records_mismatch", f"{self.end.get('records')}!={self.records}")
 
 
 class RequestScan(LogScan):
@@ -580,14 +561,14 @@ class RequestScan(LogScan):
 
     def item(self, record, lineno):
         if record.get("type") != "request":
-            self.problem("unknown_record_type", lineno)
+            self.problems.add("unknown_record_type", lineno)
             return
         self.requests += 1
         phase, outcome = record.get("phase"), record.get("outcome")
         if phase not in traffic_log.PHASES:
-            self.problem("request_phase_unknown", lineno)
+            self.problems.add("request_phase_unknown", lineno)
         if outcome not in traffic_log.OUTCOMES:
-            self.problem("request_outcome_unknown", lineno)
+            self.problems.add("request_outcome_unknown", lineno)
         counts = self.phases[phase]
         counts["requests"] += 1
         counts[outcome] += 1
@@ -599,11 +580,11 @@ class RequestScan(LogScan):
             self.route_names.append(route)
         duration = number(record.get("duration_ms"))
         if duration is None or duration < 0:
-            self.problem("request_duration_invalid", lineno)
+            self.problems.add("request_duration_invalid", lineno)
             duration = math.nan
         start = unix_of(record.get("t_start_utc"))
         if start is None:
-            self.problem("request_start_invalid", lineno)
+            self.problems.add("request_start_invalid", lineno)
             start = math.nan
         self.starts.append(start)
         self.durations.append(duration)
@@ -615,10 +596,10 @@ class RequestScan(LogScan):
         if self.end is not None:
             for key in ("requests_logged", "requests_started"):
                 if self.end.get(key) != self.requests:
-                    self.problem(key + "_mismatch", f"{self.end.get(key)}!={self.requests}")
+                    self.problems.add(key + "_mismatch", f"{self.end.get(key)}!={self.requests}")
             for key in ("in_flight_at_stop", "worker_errors"):
                 if self.end.get(key):
-                    self.problem(key, self.end[key])
+                    self.problems.add(key, self.end[key])
 
 
 class IntervalScan(LogScan):
@@ -630,11 +611,11 @@ class IntervalScan(LogScan):
 
     def item(self, record, lineno):
         if record.get("type") != "interval":
-            self.problem("unknown_record_type", lineno)
+            self.problems.add("unknown_record_type", lineno)
             return
         index = record.get("interval")
         if index != len(self.rows):
-            self.problem("interval_index", f"{len(self.rows)}!={index}")
+            self.problems.add("interval_index", f"{len(self.rows)}!={index}")
         self.rows.append({"interval": index, "phase": record.get("phase"),
                           "t_start_utc": record.get("t_start_utc"), "t_end_utc": record.get("t_end_utc"),
                           "duration_s": number(record.get("duration_s")),
@@ -644,12 +625,13 @@ class IntervalScan(LogScan):
 
 
 def latency_stats(values):
-    """Exact nearest-rank p50/p95/p99/max of one session's durations (sorted once, in memory)."""
-    ordered = np.sort(np.asarray(values, dtype=np.float64)) if len(values) else []
+    """Exact nearest-rank p50/p95/p99/max of one session's durations (sorted once, in memory). Python floats,
+    not NumPy: traffic_log.percentile tests the list for emptiness and the CSV cells repr() the values."""
+    ordered = np.sort(np.asarray(values, dtype=np.float64)).tolist()
     stats = {"n": len(ordered)}
     for name, q in QUANTILES:
-        stats[name] = nearest_rank(ordered, q)
-    stats["max"] = nearest_rank(ordered, 1.0)
+        stats[name] = traffic_log.percentile(ordered, q)
+    stats["max"] = traffic_log.percentile(ordered, 1.0)
     return stats
 
 
@@ -742,11 +724,6 @@ def guarded(session, name, fields, function, *args):
         session.row.miss(fields, clean_text(problem))
 
 
-def optional_json(session, inputs, name, kind):
-    """A JSON object in the session directory; None when absent or unreadable."""
-    return read_optional(session, inputs, name, kind)[0]
-
-
 def read_optional(session, inputs, name, kind):
     """(document, state) with state 'absent', 'read' or 'unreadable' (an unreadable file is never 'absent')."""
     path = session.dir / name
@@ -760,7 +737,7 @@ def read_optional(session, inputs, name, kind):
         return None, "unreadable"
 
 
-def expected_snapshots(session, meta, protocol, plan_row):
+def expected_snapshots(meta, protocol, plan_row):
     cycles = integer(meta.get("cycles"))
     if cycles is not None:
         return cycles, "session.json cycles"
@@ -972,7 +949,8 @@ def capture_step(s, inputs, period_ms):
             row[field] = sum(c[field] for c in cycles)
     totals = sorted(c["total_ms"] for c in cycles if c["total_ms"] is not None)
     if totals:
-        row["cycle_ms_p50"], row["cycle_ms_p95"] = nearest_rank(totals, .5), nearest_rank(totals, .95)
+        row["cycle_ms_p50"] = traffic_log.percentile(totals, .5)
+        row["cycle_ms_p95"] = traffic_log.percentile(totals, .95)
         row["cycle_ms_max"] = totals[-1]
         if len(totals) < count:
             s.notes.append(f"cycle_ms: {count - len(totals)} sidecars lack capture.total_ms")
@@ -1047,8 +1025,8 @@ def traffic_step(s, inputs):
     header = scan.header or {}
     config = header.get("config") if isinstance(header.get("config"), dict) else {}
     if header.get("session_id") not in (None, s.sid):
-        scan.problem("session_id_mismatch", header.get("session_id"))
-    problems = scan.problems()
+        scan.problems.add("session_id_mismatch", header.get("session_id"))
+    problems = scan.problems.result()
     if intervals is None:
         problems.append("intervals:file_missing")
     else:
@@ -1057,7 +1035,7 @@ def traffic_step(s, inputs):
         key = lambda m: (m.get("phase"), m.get("interval"))  # noqa: E731
         if [key(m) for m in intervals.markers] != [key(m) for m in scan.markers]:
             problems.append("intervals:phase_marker_mismatch")
-        problems += ["intervals:" + p for p in intervals.problems()]
+        problems += ["intervals:" + p for p in intervals.problems.result()]
         s.intervals = intervals.rows
     initial = config.get("initial_phase")
     gen_end = timestamp(unix_of((scan.end or {}).get("end_utc")))
@@ -1121,7 +1099,7 @@ def traffic_step(s, inputs):
             m_end, end_src = last_interval_end(measure_ivs), LAST_INTERVAL
     s.times.update(gen_start=start, measure_start=m_start, measure_end=m_end, gen_end=gen_end)
     s.window_sources = {"start": start_src, "end": end_src}
-    row["requests_log_complete"] = scan.header is not None and scan.end is not None and not scan.counts
+    row["requests_log_complete"] = scan.header is not None and scan.end is not None and not scan.problems.counts
     total_measure = scan.phases["measure"]["requests"]
     logged = sum(iv["requests"] or 0 for iv in measure_ivs)
     if measure_ivs and logged != total_measure:
@@ -1832,7 +1810,7 @@ def read_evidence(s, inputs, ctx):
     if meta.get("session_id") not in (None, s.sid):
         s.provenance.append(f"session.json session_id {meta.get('session_id')!r} differs from the directory name")
     plan_row = ctx.get("plan_row")
-    s.protocol = optional_json(s, inputs, "protocol.json", "protocol") or ctx.get("protocol")
+    s.protocol = read_optional(s, inputs, "protocol.json", "protocol")[0] or ctx.get("protocol")
     if not (s.dir / "protocol.json").exists() and ctx.get("protocol"):
         s.notes.append("protocol: campaign protocol.json (no session copy)")
     set_gate(s, s.protocol)
@@ -1850,7 +1828,7 @@ def read_evidence(s, inputs, ctx):
     row.miss(("session_created_utc", "session_wall_s"),
              "session.json created_unix is not a representable time" if meta.get("created_unix") is not None
              else "session.json has no created_unix")
-    expected, source = expected_snapshots(s, meta, s.protocol, plan_row)
+    expected, source = expected_snapshots(meta, s.protocol, plan_row)
     row["snapshots_expected"], row["snapshots_expected_source"] = expected, source
     if expected is None:
         row.miss(("snapshots_expected", "snapshots_expected_source", "snapshots_missing"),
@@ -2917,6 +2895,23 @@ def plot_throughput(report, order):
                      sessions, [panel], [("bar", color[sc], sc) for sc in present])
 
 
+def range_markers(column, last, detail):
+    """Panel drawer and legend of p50 / p95 / `last` markers joined by a line (latency.svg, cycles.svg):
+    column.format(q) names the sessions.csv column, detail(s) ends each marker's tooltip."""
+    kinds = (("p50", "circle", ORDINAL[0]), ("p95", "square", ORDINAL[1]), (last, "diamond", ORDINAL[2]))
+
+    def draw(svg, s, yc, scale):
+        points = [(q, s.row[column.format(q)]) for q, _, _ in kinds]
+        if any(v is None for _, v in points):
+            return missing_reason(s, column.format("p50"))
+        svg.line(scale(points[0][1]), yc, scale(points[-1][1]), yc, AXIS, 2)
+        for (q, kind, fill), (_, value) in zip(kinds, points):
+            svg.marker(kind, scale(value), yc, fill, tip=f"{s.sid}: {q} {value} ms {detail(s)}")
+        return None
+
+    return draw, [(kind, fill, q) for q, kind, fill in kinds]
+
+
 def plot_latency(report):
     sessions = report["sessions"]
     values = [s.row[f"latency_all_{q}_ms"] for s in sessions for q in ("p50", "p95", "p99")]
@@ -2924,23 +2919,13 @@ def plot_latency(report):
     lo = 10 ** math.floor(math.log10(min(values))) if values else 1
     hi = 10 ** math.ceil(math.log10(max(values))) if values else 10
     hi = hi if hi > lo else lo * 10
-    kinds = (("p50", "circle", ORDINAL[0]), ("p95", "square", ORDINAL[1]), ("p99", "diamond", ORDINAL[2]))
-
-    def draw(svg, s, yc, scale):
-        points = [(q, s.row[f"latency_all_{q}_ms"]) for q, _, _ in kinds]
-        if any(v is None for _, v in points):
-            return missing_reason(s, "latency_all_p50_ms")
-        svg.line(scale(points[0][1]), yc, scale(points[-1][1]), yc, AXIS, 2)
-        for (q, kind, fill), (_, value) in zip(kinds, points):
-            svg.marker(kind, scale(value), yc, fill, tip=f"{s.sid}: {q} {value} ms (n={s.row['latency_all_n']})")
-        return None
-
+    draw, legend_items = range_markers("latency_all_{}_ms", "p99", lambda s: f"(n={s.row['latency_all_n']})")
     panel = {"lo": lo, "hi": hi, "log": True, "ticks": log_ticks(lo, hi),
              "axis": "request latency, ms (log scale)", "draw": draw}
     return row_chart("HTTP latency per session",
                      "Exact nearest-rank p50 / p95 / p99 over all measure-phase request records of each session, "
                      "failed requests included\n(ok-only values are in sessions.csv). Never averaged from "
-                     "intervals.", sessions, [panel], [(kind, fill, q) for q, kind, fill in kinds])
+                     "intervals.", sessions, [panel], legend_items)
 
 
 def plot_cycles(report):
@@ -2949,25 +2934,14 @@ def plot_cycles(report):
     period = number(protocol.get("interval_s"))
     values = [s.row["cycle_ms_max"] for s in sessions if s.row["cycle_ms_max"] is not None]
     hi = max(values + ([period * 1000] if period else []) + [1]) * 1.08
-    kinds = (("p50", "circle", ORDINAL[0]), ("p95", "square", ORDINAL[1]), ("max", "diamond", ORDINAL[2]))
-
-    def draw(svg, s, yc, scale):
-        points = [(q, s.row[f"cycle_ms_{q}"]) for q, _, _ in kinds]
-        if any(v is None for _, v in points):
-            return missing_reason(s, "cycle_ms_p50")
-        svg.line(scale(points[0][1]), yc, scale(points[-1][1]), yc, AXIS, 2)
-        for (q, kind, fill), (_, value) in zip(kinds, points):
-            svg.marker(kind, scale(value), yc, fill,
-                       tip=f"{s.sid}: {q} {value} ms over {s.row['snapshots_present']} snapshots")
-        return None
-
+    draw, legend_items = range_markers("cycle_ms_{}", "max", lambda s: f"over {s.row['snapshots_present']} snapshots")
     refs = [(period * 1000, f"period {period:g} s")] if period else []
     panel = {"lo": 0, "hi": hi, "ticks": nice_ticks(0, hi), "axis": "collector cycle time, ms (capture.total_ms)",
              "draw": draw, "refs": refs}
     return row_chart("Collector cycle time per session",
                      "Nearest-rank p50 / p95 and the maximum of sidecar capture.total_ms per session; full-snapshot "
                      "cycle times are listed in sessions.csv.\nThe vertical line is the protocol sampling period.",
-                     sessions, [panel], [(kind, fill, q) for q, kind, fill in kinds])
+                     sessions, [panel], legend_items)
 
 
 def plot_coverage(report):

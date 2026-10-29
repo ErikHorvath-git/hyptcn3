@@ -993,15 +993,6 @@ def test_planned_row_with_running_status_is_in_progress(tmp_path, monkeypatch):
 
 # ---------------------------------------------------------------- regressions of the verified review findings
 
-def sessions_report(tmp_path, *names_kinds, out="out", **extra):
-    """Sessions-mode report over freshly built sessions; returns (rows by id, summary, readme, out dir)."""
-    work = tmp_path / "work"
-    work.mkdir(exist_ok=True)
-    for offset, (name, kind) in enumerate(names_kinds):
-        make_session(work, name, start=T0 + 1000 * offset, kind=kind, **extra.get(name, {}))
-    return work
-
-
 def report_of(argv, out):
     assert run_report([*argv, "--out", out]) == 0
     return (by_id(read_csv(out / "sessions.csv")), json.loads((out / "summary.json").read_text()),

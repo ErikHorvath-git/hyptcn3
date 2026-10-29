@@ -30,11 +30,10 @@
 # Predtym to bolo iba thesis/ a docs/, takze korenovy README.md - subor
 # s hlavnymi namerannymi cislami - sa nekontroloval nikdy.
 #
-# PRECO AJ features/ A tcn/: prave v nich stoji upozornenie "model nie je
-# natrenovany" (tcn/score.py, tcn/__init__.py, features/PERBIN.md). Su to
-# komentare o tom, co cislo znamena - teda presne ten druh textu, ktory tato
-# kontrola strazi. Do 2026-09-19 boli oba adresare mimo rozsahu, takze zakazane
-# cislo ani zakazane slovo v nich nikto nehladal.
+# PRECO AJ features/ A tcn/: komentare v nich hovoria, co cislo znamena - teda
+# presne ten druh textu, ktory tato kontrola strazi. Do 2026-09-19 boli oba
+# adresare mimo rozsahu, takze zakazane cislo ani zakazane slovo v nich nikto
+# nehladal.
 #
 # Co sa v zdrojaku kontroluje: iba text komentarov (// /* */ #), nie kod. Cislo
 # v kode je konstanta, nie tvrdenie; hodnota 0.86 v algoritme nie je metrika
@@ -52,7 +51,8 @@
 # vmicollect zo starsej vetvy, do ktorych sa poznamka dopisat neda alebo sa zatial
 # nedopisala. Skript ich na konci behu vypise, aby nebolo ticho o tom, co sa vynalo.
 #
-# Premenna prostredia VMIC_RESULTS_DIR prebije cestu k data/results (pouziva ju test).
+# Premenne prostredia VMIC_RESULTS_DIR a VMIC_ALLOW_FILE prebiju cestu k data/results
+# a k thesis/.claims-allow.
 
 set -uo pipefail
 
@@ -323,7 +323,7 @@ check_md() {
   local file="$1" rel
   rel="$(relpath "$file")"
   local in_thesis=0 in_code=0 in_prevzate=0 lineno=0
-  # thesis/ sa pozna z cesty; druhy vzor je kvoli spusteniu nad kopiou mimo repa (test)
+  # thesis/ sa pozna z cesty; druhy vzor je kvoli spusteniu nad kopiou mimo repa
   case "$rel" in thesis/*|*/thesis/*) in_thesis=1 ;; esac
 
   while IFS= read -r line || [ -n "$line" ]; do
@@ -484,15 +484,12 @@ skip = set(sys.argv[3:])
 # znamenalo siahat na data kvoli kozmetike.
 need = ["commit", "date", "host", "guest", "command", "n"]
 
-# schema -> kluce, ktore v tej scheme nesu namerane hodnoty
+# schema -> kluce, ktore v tej scheme nesu namerane hodnoty (schema mimo zoznamu: DEFAULT_PAYLOAD)
 PAYLOAD_BY_SCHEMA = {
     "hyptcn3/guestparse-validate/1": ["processes", "modules", "sockets", "checks"],
-    "hyptcn3/vysledok-hlavicka/1": ["values"],
     "hyptcn3/once/1": ["summary", "values"],
     "hyptcn3/run/1": ["summary", "values"],
-    "hyptcn3/probe/1": ["values"],
     "hyptcn3/env/1": ["values", "vmicollect", "prikazy"],
-    "hyptcn3/summary/1": ["values"],
     "hyptcn3/snapshots/1": ["values", "snapshots"],
     "hyptcn3/optim/1": ["values", "pred", "po"],
 }
