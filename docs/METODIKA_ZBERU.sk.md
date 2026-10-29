@@ -6,7 +6,8 @@ je `pilot_required`: dlhý zber nesmie začať bez prijatého pilotného auditu.
 Účinnosť safeguardu, online latencia a vplyv na VM sa merajú v ďalšej etape.
 
 Strojovo čitateľná konfigurácia: [`config/collection-v2.json`](../config/collection-v2.json).
-Orchestrácia a audit: [`scripts/collection.py`](../scripts/collection.py).
+Zber a audit jednej session: [`scripts/collection.py`](../scripts/collection.py);
+celá kampaň: [`scripts/campaign.py`](../scripts/campaign.py).
 Implementovaný tréning, načítanie a detektor:
 [`SAFEGUARD.sk.md`](SAFEGUARD.sk.md), CLI `python3 -m safeguard`.
 Rozhodnutia platia pre jednu konfiguráciu Linux/QEMU/KVM; prenos na iné jadro,
@@ -22,8 +23,17 @@ Pilot z pôvodného PC má [prijatý audit](../data/results/collection_pilot_v2_
 po oprave výberu aktuálneho jadra z RAM; priebeh a pôvodné zamietnutia zachováva
 `MERANIA.md`. Tento audit nedokazuje pripravenosť zberového PC z 2026-10-20:
 iný hostiteľ, disky, VM, logovanie aj kód runnera. Kampaň na ňom potrebuje nový
-pilot s vlastným auditom. Konfigurácia sa neprepisuje na `accepted`: splnenie
-podmienky sa dokladá konkrétnym auditom, ktorý sa podá cez `--pilot-report`.
+pilot s vlastným auditom. Na zberovom PC audit prijal piloty 3 až 7 (posledný
+[pilot 7](../data/results/collection_pilot_7_20261026_audit.json)); z pilota 7
+vyšla kampaň `benign-v6-20261026`, ktorá prijala všetkých
+48 {{res:collection_campaign_benign_v6_20261026.json:values.accepted_sessions}}
+session plánu a vytvorila úplný index korpusu
+([záznam](../data/results/collection_campaign_benign_v6_20261026.json),
+[MERANIA.md](MERANIA.md) 2026-10-29). Po zmene meracieho kódu `pilot_gate`
+v `scripts/campaign.py` starší pilot odmietne a treba nový (stav
+v [`PRIPRAVENOST_KAMPANE.sk.md`](PRIPRAVENOST_KAMPANE.sk.md)).
+Konfigurácia sa neprepisuje na `accepted`: splnenie podmienky sa dokladá
+konkrétnym auditom, ktorý sa podá cez `--pilot-report`.
 
 ## 1. Otázky experimentu a jednotka merania
 
@@ -236,30 +246,37 @@ sa vypíše osobitne. `test_benign` sa použije raz na záverečné FAR, nie na 
 `features.dataset` odmietne zdieľaný boot/skupinu, duplicitný archív, zmenené
 hashe, zmiešané rozloženie alebo časovo premiešané roly.
 
-Existujúce CLI `tcn.train --data` a `tcn.hodnotenie` majú historický automatický
-split. Slúžia na diagnostiku. `python3 -m safeguard train` už číta explicitné
-roly z nového indexu, overuje provenienciu a nepoužíva testové polia pri fitovaní.
+Staršie CLI `tcn.train --data` má historický automatický split a slúži iba na
+diagnostiku; CLI `tcn.hodnotenie` bolo 2026-10-29 odstránené.
+`python3 -m safeguard train` už číta explicitné roly z nového indexu, overuje
+provenienciu a nepoužíva testové polia pri fitovaní.
 Spoločný balík modelov uchová normalizáciu, oba modely, kalibráciu aj kontrakt
 vstupu. Diagnostický syntetický model sa nesmie zameniť za finálny tréning.
+Záverečné vyhodnotenie na `test_benign` a detekčné metriky z časti 7 zatiaľ
+implementované nie sú.
 
 ## 6. Spustenie pilotu a prijatie dát
 
 ```sh
 make lab-up
 make lab-test
-make collection-plan
-sudo .venv/bin/python scripts/collection.py --protocol config/collection-v2.json run --role pilot --group <pilot-skupina> --scenario steady --seed <seed>
+.venv/bin/python scripts/collection.py plan
+sudo .venv/bin/python scripts/collection.py --protocol config/collection-v2.json run --role pilot --group <pilot-skupina> --scenario bursty --seed <seed>
 ```
 
 Systémový `python3` na zberovom PC nemá NumPy, preto sa používa interpreter
-z `.venv`. Ručný beh treba spustiť v `tmux` alebo ako dočasnú systémovú službu;
-zatvorený terminál (SIGHUP) beh riadene ukončí ako neúplný.
+z `.venv`; cieľ `make collection-plan` volá systémový `python3`. Piloty na
+zberovom PC bežali s profilom `bursty`. Z pilota `campaign.py init` odhaduje
+priestor celej kampane; náročnejší profil môže tento odhad prekročiť. Ručný
+beh treba spustiť v `tmux` alebo ako dočasnú systémovú službu; zatvorený
+terminál (SIGHUP) beh riadene ukončí ako neúplný.
 
 Pilot trvá približne 40 minút zberu plus zahrievanie. Runner vypne iba trvalý
 generátor tohto projektu a spustí vlastný meraný generátor. VM zostáva bežať.
 Pred zahrievaním overí, že nebeží iný generátor, zmeria posun hodín hosťa
 (nad 0,25 s ich synchronizuje a overí znova; audit odmietne viac ako 1 s
-na začiatku aj na konci, nameraný drift bol pod 0,04 s/h), počká, kým
+na začiatku aj na konci; drift pod 0,04 s/h z diagnostiky 2026-10-20 uvádza
+iba komentár v `scripts/collection.py`, artefakt sa neuložil), počká, kým
 `/healthz` vráti 200 (krok hodín dopredu krátko zneplatní heartbeat workera),
 a vykoná funkčnú kontrolu (token, katalóg, vytvorenie a čítanie objednávky,
 spracovanie workerom). Potom uzavrie
@@ -301,8 +318,10 @@ v `values.publication`, ale nehodnotí;
 každej zmenenej stránky, premenovanie a SHA-256 súboru.
 Audit je **offline**: jeho prijatie nepotvrdzuje latenciu živého detektora.
 Pred nahrávaním celej kampane treba ešte skontrolovať distribúciu časov extrakcie
-v audite, odhadnúť priestor celej kampane a pripraviť úložisko. Rezerva disku
-je núdzové zastavenie, nie dôkaz, že sa celá kampaň zmestí. V kampani
+v audite, odhadnúť priestor celej kampane a pripraviť úložisko. Odhad priestoru
+počíta `campaign.py init` z prijatého pilota a runner ho kontroluje pred každou
+session. Rezerva disku je núdzové zastavenie, nie dôkaz, že sa celá kampaň
+zmestí. V kampani
 `benign-v6-20261026` bol medián extrakcie na snímku v prvom reťazci najviac
 1.808 {{res:collection_campaign_benign_v6_20261026.json:values.summary.extraction_chain_0_p50_s_max}} s; druhý reťazec bol pomalší v session 40 a 46 a miernejšie
 v 26 a 28 (extrakcia pri každej snímke prečíta celý rekonštruovaný obraz; čakanie na jeho čítanie
@@ -346,7 +365,7 @@ python3 -m safeguard train --corpus data/corpus-v2.json --out data/models/server
 python3 -m safeguard inspect --bundle data/models/server-v2
 ```
 
-Pred korpusom možno mechaniku overiť príkazom
+Bez korpusu možno mechaniku overiť príkazom
 `python3 -m safeguard smoke --out data/safeguard/smoke-01`.
 Ten používa syntetické dáta a nepreukazuje
 latenciu živého zberu ani účinnosť detekcie. Spoločný `safeguard run` nad

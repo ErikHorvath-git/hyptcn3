@@ -42,10 +42,15 @@ zamietnutý verdikt. Kontrola pokrytia zo zachovaného NPZ obnovu RAM nepotrebuj
 ```
 
 Obsahuje kontrolu logov v `values.logs`, rozpis pokrytia v `values.coverage`
-a verdikt v `values.accepted`. Existujúce audity sa nemenia. Nové spravované
-sessions schémy `/2` potrebujú prijatú kontrolu logov aj pri zostavení korpusu,
-tréningu a prijatí pilotu do kampane. Historická schéma `/1` zostáva čitateľná;
-nedostáva tým dodatočné tvrdenie o logoch, ktoré nezaznamenala.
+a verdikt v `values.accepted`. Existujúce audity sa nemenia. Audit zaznamená
+hashe extraktora (`values.extractor_sha256`); `pilot_gate` v `scripts/campaign.py`
+aj `safeguard train` bez `--diagnostic` prijmú iba audit so súčasným kódom
+`features/` a `guestparse/`. Po zmene tohto kódu treba session znovu auditovať
+do nového výstupu (predvolený názov `audit_<čas>.json` alebo nová cesta `--out`).
+Nové spravované sessions schémy `/2` potrebujú prijatú kontrolu logov aj pri
+zostavení korpusu, tréningu a prijatí pilotu do kampane. Historická schéma
+`/1` zostáva čitateľná; nedostáva tým dodatočné tvrdenie o logoch, ktoré
+nezaznamenala.
 
 ## Čo znamená skórovateľné okno
 
@@ -122,12 +127,15 @@ Kód teraz uchováva všetkých 12 spojení pre catalog/orders a jedno pre
 workera. Ide o úpravu serverového workloadu s novou identitou stacku.
 Nasadenie vo VM prebehlo 2026-10-20; funkčná kontrola je uložená ako
 [`lab_smoke_pool_20261020.json`](../data/results/lab_smoke_pool_20261020.json).
-Doterajšie snímky ani verdikty sa tým neopravujú. Zlepšenie RAM pokrytia
-touto zmenou ešte nebolo merané; zostáva hypotézou na overenie novým
-pilotom. Rovnaké nastavenie má platiť pre všetky profily záťaže a neskoršie
+Doterajšie snímky ani verdikty sa tým neopravujú. Piloty 3 až 7 po zmene
+dosiahli strop 416 okien z 480; párované porovnanie so starým poolom sa
+nevykonalo, takže podiel tejto zmeny na pokrytí zmeraný nie je. Krátko žijúci
+proces PostgreSQL sa v snímke objavil aj po zmene (kampaň v2, session 3,
+snímka 645: [záznam](../data/results/collection_crossview_race_20261022.json)).
+Rovnaké nastavenie má platiť pre všetky profily záťaže a neskoršie
 testovacie scenáre.
 
-## Úložisko pred novým pilotom
+## Úložisko pred pilotmi na zberovom PC (2026-10-20)
 
 [`collection_storage_20261020.json`](../data/results/collection_storage_20261020.json)
 obsahuje namerané pôvodné a komprimované objemy starých diagnostík, identity
@@ -139,9 +147,10 @@ zachovávajú svoj pôvodný stav.
 Plánovací odhad používa najväčší hodinový objem z úplných diagnostických
 behov, násobí ho počtom pridelených session a plánovacou rezervou. K tomu
 pripočítava núdzovú rezervu protokolu. Pracovný SSD potrebuje miesto na
-nekomprimovanú session; HDD uchováva komprimovaný korpus. Ide o odhad zo
-starého workloadu, ktorý treba porovnať s novým prijatým pilotom a náročnými
-profilmi. `campaign.py init` vykoná vlastný prepočet a kontrolu voľného miesta.
+nekomprimovanú session; HDD uchováva komprimovaný korpus. Bol to odhad zo
+starého workloadu. Kampane odhadujú priestor z prijatého pilota
+(`campaign.py init`) a runner ho kontroluje pred každou session; tento odhad
+zo starých diagnostík sa už nepoužíva.
 
 ## Úložisko pred kampaňou benign-v5
 

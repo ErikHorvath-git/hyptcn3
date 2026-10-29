@@ -1,11 +1,19 @@
 # Kontroly podozrivých vzorcov v pamäti a validačný príkaz
 
-Krok K11 plánu a validačná časť K09. Modul `guestparse/checks.py`, porovnanie s pozemnou
-pravdou `guestparse/validate.py`, test `guestparse/tests/test_injection.py`.
+Kontroly integrity nad snímkou (`guestparse/checks.py`), porovnanie s pozemnou pravdou
+(`guestparse/validate.py`) a injekčné testy (`guestparse/tests/test_injection.py`,
+`guestparse/tests/test_text_integrity.py`). Pôvodne kroky K11 a K09 pracovného plánu,
+ktorý v repozitári nie je.
 
-Všetky čísla nižšie pochádzajú z behov zaznamenaných v
-`data/results/k11_beh_20260918.log` a z artefaktov `data/results/checks_*.json`
-a `data/results/validate_*.json`.
+Čísla nižšie pochádzajú z behov zaznamenaných v
+`data/results/k11_beh_20260918.log`, z artefaktov `data/results/checks_*.json`
+a `data/results/validate_*.json` a pri krížových rozdieloch a roztrhnutom zozname procesov
+z artefaktov `data/results/collection_crossview_race_20261022.json`,
+`data/results/collection_process_walk_race_20261022.json` (benígne kampane z 2026-10-22)
+a `data/results/collection_process_walk_insert_20261026.json` (kampaň `benign-v5-20261025`).
+Snímky `/var/tmp/vmic-val` a `/var/tmp/vmic-delta`, nad ktorými behy z 2026-09-18 bežali,
+boli mimo repozitára a na tomto stroji už nie sú (overené 2026-10-29); ich výsledky
+zostávajú v uvedených artefaktoch.
 
 ## Čo sa kontroluje a prečo práve toto
 
@@ -52,28 +60,49 @@ Navyše sa pri každom module overuje, že meno je tlačiteľný ASCII reťazec 
 
 ### (d) Text jadra sa nemení
 
-Obsah každej stranky `[_stext, _etext)` sa porovná so SHA-256 **baseline z čistej
-snímky toho istého bootu** (súbor `text_baseline.json` v profile). Text sa po boote
-nesmie meniť, takže každá zmenená stranka je nález — práve toto chytí inline hook,
-ktorý smeruje **do vnútra** textu a kontrola (a) ho nevidí (tá overuje len kam
-ukazuje tabuľka, nie čo v texte je).
+Obsah každej stranky `[_stext, _etext)` sa porovná so SHA-256 **baseline v profile**
+(súbor `text_baseline.json`). Text sa po boote nesmie meniť, takže každá zmenená
+stranka je nález — práve toto chytí inline hook, ktorý smeruje **do vnútra** textu
+a kontrola (a) ho nevidí (tá overuje len kam ukazuje tabuľka, nie čo v texte je).
+Pri hašovaní sa maskujú miesta, ktoré jadro pri štarte legitímne patchuje: static keys
+z `__jump_table` a pri baseline vyrobenej s `vmlinux` aj absolútne relokácie,
+alternatives a static calls. Pri snímke z iného bootu sa baseline posúva o posun
+preukotvenia (`docs/LIMITACIE.md`, L17); rozsah baseline musí po tom istom posune sedieť
+s `_stext` a `_etext` preukotveného profilu, teda baseline musí byť v súradniciach
+profilu, inak je kontrola nedostupná. Zvyšok rozdielu medzi bootmi, ktorý maskovanie
+nepokryje, opisuje L18.
 
 Baseline vzniká z čistej snímky príkazom:
 
 ```sh
 python3 -m guestparse textbaseline --snapshot <cista_snimka> \
-        --profile profiles/debian12-6.1.0-42-cloud-amd64
+        --profile profiles/debian12-6.1.0-42-cloud-amd64 \
+        [--vmlinux data/raw/profile-assets/vmlinux-6.1.0-42-cloud-amd64] [--force]
 ```
 
-a zapíše sa do adresára profilu. Z **neúplnej** snímky sa vyrobiť nedá — príkaz sa
-odmietne, lebo baseline, ktorej časť chýba, by kontrolu umelo zúžila (hook v
-chýbajúcej stranke by bol neviditeľný). Rovnako sa odmietne profil z iného bootu.
+a zapíše sa do adresára profilu. Bez `--vmlinux` sa použije
+`data/raw/profile-assets/vmlinux-<release>`, ak existuje (súbor mimo gitu; na tomto
+stroji `vmlinux` so symbolmi a ladiacimi informáciami, podľa správy commitu `9ec44db`
+z Debian balíka dbg; `scripts/get_vmlinux.sh` má do tej cesty rozbaliť `vmlinux`
+z `vmlinuz` hosťa, ten však sekcie relokácií nemá, overené 2026-10-29); existujúcu
+baseline príkaz bez `--force` neprepíše. Z **neúplnej** snímky sa
+vyrobiť nedá — príkaz sa odmietne, lebo baseline, ktorej časť chýba, by kontrolu umelo
+zúžila (hook v chýbajúcej stranke by bol neviditeľný). Profil z iného bootu sa najprv
+preukotví a baseline sa odmietne vyrobiť iba vtedy, keď preukotvenie zlyhá. Baseline
+z preukotveného pohľadu však nesie adresy toho bootu, nie súradnice profilu, a kontrola
+ju potom odmieta; vyrábať ju treba zo snímky z bootu profilu.
 
 Známe obmedzenie: `jump labels`/`static keys` text jadra za behu naozaj prepisujú
-(prepínanie vetiev cez `text_poke`). Nález sa preto hlási **s najbližším symbolom**
-a vyhodnocuje sa v kontexte — jeden prepis na známej adrese jump labelu sa nevykladá
-ako útok skôr, než sa vylúči táto legitímna príčina. Overuje to meranie na čistom
-hosťovi (koľko stránok sa medzi dvoma snímkami zmení bez akéhokoľvek zásahu).
+(prepínanie vetiev cez `text_poke`). Tieto miesta sa maskujú; nález sa hlási
+**s najbližším symbolom** (`nearest_symbol`). Meranie na čistom hosťovi (koľko stránok
+sa medzi dvoma snímkami zmení bez zásahu) uložený artefakt nemá; čísla zo správy commitu
+`9ec44db` uvádza L18.
+
+**Stav 2026-10-29 (commit `709ee7f`).** Baseline v profile nesedí so súradnicami
+profilu (`stext` `0xffffffff90400000` oproti `_stext` `0xffffffffb0800000`, L18), preto
+je kontrola (d) pri každej snímke nedostupná a `checks` končí kódom 4 — aj pri snímke
+z bootu profilu (`data/raw/20260919T110017Z_run`, mimo gitu). V kópiách auditov pilotov
+a session kampaní v `data/results/` zostala neuzavretá vo všetkých riadkoch.
 
 ### Čo kontrola nehovorí
 
@@ -113,7 +142,9 @@ pred ním, zoznam tvoria tie uzly (`walk: "tail"`); jadro do zoznamu `tasks`
 zapája iba vodcov skupín. Krížová kontrola nad takým zoznamom beží normálne;
 keď ho nepotvrdí ani jedno pravidlo, kontrola zostáva `inconclusive`.
 
-Neúplná kontrola zneplatňuje historický vektor so stĺpcami integrity. Protokol
+Neuzavretá kontrola tabuľky volaní, procesov alebo modulov zneplatňuje historický
+22-stĺpcový vektor so stĺpcami integrity (`model_valid` vo `features/snapshot.py`,
+politika `legacy-vector-v1`); neuzavretá kontrola textu jadra ho nezneplatňuje. Protokol
 server-normal-v2 posudzuje behaviorálne vstupy osobitne; neuzavretá kontrola
 sa vykazuje aj vtedy, keď sú tieto vstupy úplné (pozri `METODIKA_ZBERU.sk.md`).
 Pri kontrole (d) `conclusive` znamená, že
@@ -133,7 +164,11 @@ nie „čisté“.
 Vo všetkých troch behoch bolo `summary.inconclusive` prázdne, teda vtedajšie tri kontroly
 sa uzavreli. (Štvrtá kontrola — text jadra — vtedy ešte neexistovala; potrebuje
 baseline z čistej snímky, pozri (d).)
-Artefakty: `data/results/checks_20260918_{val,delta,session}.json`.
+Artefakty: `data/results/checks_20260918_{val,delta,session}.json`. Prvé dve snímky už
+neexistujú (pozri úvod). Tretia, ktorej súbor `.vmicd` je mimo gitu iba na tomto stroji,
+dáva pri dnešnom kóde (2026-10-29) po preukotvení profilu rovnaké počty v prvých troch
+kontrolách, kontrola textu jadra je však nedostupná a príkaz skončí kódom 4
+(`docs/LIMITACIE.md`, L10).
 
 ## Injekčný test — čo to je a čo to NIE je
 
@@ -141,17 +176,24 @@ Kontrola, ktorá na čistom hosťovi vždy vráti nulu, je na nerozoznanie od fu
 vždy vracia nulu. Preto k negatívnemu prípadu patrí aj pozitívny.
 
 **Ide o injekciu do kópie snímkového súboru, nie o skutočný rootkit v hosťovi.**
-Test (`guestparse/tests/test_injection.py`) si urobí kópiu reálnej snímky, v kópii prepíše
+Test (`guestparse/tests/test_injection.py`) si urobí kópiu snímky, v kópii prepíše
 8 bajtov jednej položky `sys_call_table` na adresu v oblasti modulov
-(`0xffffffffc0001000`) a spustí detektor nad kópiou. V hosťovi sa nemení nič, žiadny
-modul sa nikam nenačítava. Do hosťa by sa to ani načítať nedalo — nemá `gcc` ani hlavičky
-jadra, takže vlastný modul sa v ňom preložiť nedá. Test teda dokazuje presne jedno:
+(`0xffffffffc0001000`) a spustí detektor nad kópiou. Kopíruje vždy
+`guestparse/tests/data/mini.vmicd` z repa (27-stránkový výrez reálnej snímky
+z 2026-09-19) a navyše reálnu snímku, ak je na stroji (`GUESTPARSE_VAL`, značka
+`realsnap`); bez nej sa tri testy nad reálnou snímkou preskočia, ako na tomto stroji
+2026-10-29 (3 prešli, 3 preskočené). V hosťovi sa nemení nič, žiadny modul sa nikam
+nenačítava. V meraniach sa do hosťa žiadny modul jadra nezaviedol: pôvodný hosť nemal
+`gcc` ani hlavičky jadra a pripravený PoC so skutočným rootkitom
+(`scripts/poc/diamorphine.sh`, spúšťa ho starý harness `scripts/session.sh`) nemá
+doložený beh (`UNVERIFIED`, `docs/LIMITACIE.md`, L6). Test teda dokazuje presne jedno:
 že detektor takýto zápis nájde, správne ho zaradí a pomenuje index položky. Nedokazuje
 nič o detekcii skutočného malvéru.
 
 Prepisuje sa položka s indexom 59 (`__NR_execve` na x86_64) — typický cieľ hookovania.
-Originál vo `/var/tmp` sa nikdy neotvára na zápis; test to má aj ako samostatnú poistku
-(`test_original_snimka_je_len_na_citanie`).
+Originál sa nikdy neotvára na zápis; test to má aj ako samostatnú poistku
+(`test_original_snimka_je_len_na_citanie`, pri reálnej snímke); nemennosť `mini.vmicd`
+overuje `test_mini_snimka_sa_nemeni` (SHA-256 proti `mini.json`).
 
 Výsledok behu (`data/results/k11_beh_20260918.log`):
 
@@ -205,7 +247,9 @@ hlási pole `stable_name_identical`.
 
 ### Namerané: snímka `/var/tmp/vmic-val`
 
-Pozemná pravda: `ps` pred a po (scratchpad, ten istý pár, z ktorého vznikla snímka).
+Pozemná pravda: `ps` pred a po (ten istý pár, z ktorého vznikla snímka; v čase merania
+uložený v dočasnom adresári mimo repa, ktorého cesta je v poli `command` artefaktu
+a ktorý už neexistuje).
 `lsmod` a `ss` k tejto snímke uložené nie sú, takže sa neporovnávali — v JSONe je to
 napísané (`"compared": false`), nie vynechané.
 
@@ -264,16 +308,26 @@ Artefakty: `data/results/validate_20260918T154914Z_ssbefore.json`,
 sa uzavreli, a **4**, keď nenašiel nič, ale aspoň jedna kontrola sa neuzavrela. Príkaz sa
 dá zaradiť do skriptu a „našiel som hook" sa nesmie stratiť v úspešnom návratovom kóde.
 
-`validate` končí 0, keď prebehol; čísla nezhody sú výsledok, nie chyba behu. Jedna výnimka:
-keď je profil z iného štartu jadra než snímka (KASLR, `docs/LIMITACIE.md`, L17), `validate`
-sa **vôbec nespustí**, skončí kódom **5** a súbor `--out` nezapíše — porovnanie s pozemnou
-pravdou nad profilom, ktorý k snímke nepatrí, nie je nezhoda, ale chyba vstupu, a nesmie po
-sebe nechať výsledok v `data/results`. To isté zisťovanie beží pred každým podpríkazom;
-čítacie podpríkazy výpis vypíšu, označia ho `NEUPLNE` a takisto skončia kódom 5.
+`validate` končí 0, keď prebehol; čísla nezhody sú výsledok, nie chyba behu. Keď je
+profil z iného štartu jadra než snímka (KASLR, `docs/LIMITACIE.md`, L17), `validate` aj
+čítacie podpríkazy najprv skúsia profil preukotviť; pri úspechu to oznámia na stderr
+a bežia ďalej. Overené 2026-10-29 (bez artefaktu v `data/results/`, L17): `validate` nad
+`data/sessions/20260918T154914Z_validate` s profilom z 19. 9. (`ps` pred aj po, `lsmod`
+a `ss` pred snímkou) skončil po preukotvení kódom 0 (80/80 procesov, moduly 51/0/0,
+sokety 11/1/1, rovnako ako v tabuľke vyššie). Jedna výnimka zostáva: keď sa
+preukotvenie nepodarí (napr. FGKASLR alebo chýbajúce stránky), `validate` sa **vôbec
+nespustí**, skončí kódom **5** a súbor `--out` nezapíše — porovnanie s pozemnou pravdou
+nad profilom, ktorý k snímke nepatrí, nie je nezhoda, ale chyba vstupu, a nesmie po sebe
+nechať výsledok v `data/results`. Čítacie podpríkazy vtedy výpis vypíšu, označia ho
+`NEUPLNE` a takisto skončia kódom 5.
 
 ## Čo z tohto NIE JE dokázané
 
-- Detekcia skutočného rootkitu. Overený je jeden syntetický zápis do kópie snímky.
+- Detekcia skutočného rootkitu. Overené sú dva syntetické zápisy do kópie snímky
+  (`sys_call_table`: `data/results/k11_beh_20260918.log`; text jadra:
+  `data/results/a3_pozitivny_20261005.json`, nález s `nearest_symbol` `startup_64`)
+  a simulácia zápisu do používateľskej pamäte procesu `sshd`, ktorú kontroly nevidia,
+  ale per-bin vektor a `procmap` áno (`data/results/g1_citlivost_sim_20261005.json`).
 - Detekcia hooku, ktorý ukazuje **do** textu jadra (napr. prepísaná položka na inú,
   legitímnu adresu vnútri `[_stext, _etext)`). Rozsahová kontrola taký zápis z princípu
   nevidí; na to by bolo treba porovnanie s očakávaným symbolom pre daný index.

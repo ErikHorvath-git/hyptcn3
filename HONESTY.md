@@ -1,7 +1,8 @@
 # HONESTY.md — pravidlá proti nafukovaniu
 
 Tento dokument je záväzný pre všetok text a kód v tomto repozitári (`thesis/`, `docs/`,
-`README.md`, komentáre v zdrojákoch). Vznikol preto, že predchádzajúca iterácia projektu
+`README.md`, komentáre v zdrojákoch; adresár `thesis/` s textom práce v repozitári zatiaľ
+nie je). Vznikol preto, že predchádzajúca iterácia projektu
 (`hypTcn002`) vyprodukovala čísla, ktoré neobstáli pri kontrole — a nešlo o preklep,
 ale o systematickú chybu v metodike. Pravidlá nižšie sú zápisom toho, čo sa nesmie zopakovať.
 
@@ -36,8 +37,9 @@ v texte a hodnotou v JSON.
 
 ### P4 — Scenár správania nie je reálna malvérová vzorka
 
-Výsledky syntetických scenárov sa pomenúvajú podľa správania (`cpu_burn`,
-`mass_file_rewrite`, `proc_scan`, `anon_exec`, `idle`, `mixed_work`), nie podľa
+Výsledky syntetických scenárov sa pomenúvajú podľa správania (napr. `encrypt_files`
+a `memfd_exec` zo `scripts/poc/`; staršie scenáre `cpu_burn`, `mass_file_rewrite`,
+`proc_scan`, `anon_exec` a `idle` odstránil commit `b574b8d`), nie podľa
 rodín malvéru. Výsledok nad reálnymi vzorkami sa smie uviesť až s doloženým
 pôvodom, hashom, izolovaným behom, overenou aktiváciou a nezávislým testom.
 Neaktivovaná vzorka sa nepočíta ako detegovaná. Kým také merania neexistujú,
@@ -50,7 +52,7 @@ Tvrdenie o funkčnosti platí len vtedy, keď existuje uložený výstup behu bi
 zostavenej z tohto repozitára. Čo nikdy nebežalo, je označené `UNVERIFIED`. Konkrétne
 známe prípady, ktoré sa nesmú preháňať:
 
-- `tests/hole_test.c` testuje kontrakt collectora s *fake* backendom — netestuje BPF vetvu
+- `vmicollect/tests/hole_test.c` testuje kontrakt collectora s *fake* backendom — netestuje BPF vetvu
   `KIND_HOLE`;
 - hook API je notifikačné (nemá `read_pa`);
 - prenos cez mmap je „jedno prekročenie hranice jadro/používateľ + jeden `memcpy`
@@ -102,9 +104,9 @@ navyše *výrazne* a *revolučný*. Nahrádza sa buď číslom, alebo sa veta š
 
 Keď sa text a kód nezhodujú, platí kód a opraví sa text. Doložené prípady zastaranej
 dokumentácie z predchádzajúcich iterácií: dokumentácia uvádzala jadro hosťa `6.1.0-44`,
-kým v hosťovi bežalo `6.1.0-42`; systemd unit `hyptcn_guest_ag` bol `inactive`, hoci
-proces bežal; `ARCHITECTURE.md` v `hypTcn002` popisoval Poissonovské plánovanie, kým kód
-mal pevný ticker.
+kým v hosťovi bežalo `6.1.0-42`; systemd jednotka `hyptcn-guest-agent.service` bola
+`inactive`, hoci jej proces `hyptcn_guest_ag` bežal; `ARCHITECTURE.md` v `hypTcn002`
+popisoval Poissonovské plánovanie, kým kód mal pevný ticker.
 
 ---
 
@@ -147,33 +149,36 @@ zdroja a riadok sa vyjme z kontroly komentárom `<!-- noclaim: dôvod -->`.
 
 Tieto čísla sú v `vmicollect/README.md` ako príklad formátu alebo rádový odhad. Nikdy
 neboli namerané na tomto stroji. Overené grepom 2026-09-18 (príkaz nižšie), riadky platia
-pre stav repozitára v commite `178ce4f`:
+pre stav repozitára v commite `178ce4f`; aktuálne čísla riadkov vypíše ten istý príkaz:
 
 | Číslo | Súbor : riadok | Čo to v skutočnosti je | Čím sa nahrádza |
 |---|---|---|---|
 | `"read_mib_s": 1043.2` | `vmicollect/README.md:360` | vymyslený príklad JSON sidecaru (doména `win10`, `read_errors: 3`, `memsize` 4 GiB) | nameranou rýchlosťou čítania z konkrétneho behu |
 | `"pages_changed": 812` | `vmicollect/README.md:362` | ten istý vymyslený príklad | nameraným počtom zmenených stránok zo sidecaru |
 | `2,8 TB za hodinu` | `vmicollect/README.md:260` | rádový odhad „4 GiB VM každých 5 s“, nie meranie; to isté je v `src/writer_delta.c:5` a `src/retention.c:5` | nameraným objemom: plná delta snímka 276,25 MiB, delta snímka 1,06–1,28 MiB pri perióde 5 s (VM 2,02 GiB) |
-| `0,5-5 % stránok` | `vmicollect/README.md:261` | rádový odhad; to isté v `src/writer_delta.c:6` | nameranou zmenou 0,05–0,06 % stránok medzi snímkami nečinnej VM |
+| `0,5-5 % stránok` | `vmicollect/README.md:261` | rádový odhad; to isté v `src/writer_delta.c:6` | nameranou zmenou 0,04–0,06 % stránok medzi snímkami nečinnej VM |
 
 ```sh
 grep -n -E '1043\.2|"pages_changed": 812|2,8 TB|0,5-5 %' vmicollect/README.md
 ```
 
 **Rýchlosť čítania zo selftestu nie je rýchlosť introspekcie.** `make -C vmicollect test`
-vypisuje MiB/s pre `file` backend, teda čítanie súboru z page cache; v behu 2026-09-18 to
+vypisuje MiB/s pre `file` backend, teda čítanie súboru z page cache spolu s prácou writera
+vo `feed()` (oprava „čítania“ v `docs/MERANIA.md` z 2026-10-25); v behu 2026-09-18 to
 bolo 3642 MiB/s, v inom behu 3745 MiB/s. Číslo kolíše podľa stavu cache a nemá vzťah
 k čítaniu pamäte bežiacej VM. Do textu nepatrí.
 
 Číslo `812` a rozsah `0,5-5 %` sú na grep príliš všeobecné, preto ich `check_claims.sh`
-nemá na čiernej listine — v `thesis/` ich zachytí kontrola „číslo bez značky zdroja“.
+nemá na čiernej listine — v `thesis/` zachytí kontrola „číslo bez značky zdroja“ rozsah
+`0,5-5 %`; celé číslo bez jednotky času, veľkosti alebo percent, ako `812`, nezachytí
+(kapitola 5).
 
 Odkedy kontrola pokrýva aj `vmicollect/README.md` a komentáre v zdrojákoch, hlásila by
 čísla z tejto tabuľky na ich vlastnom mieste. Sú preto v poli `EXEMPT`
-v `scripts/check_claims.sh` (štyri položky, každá s dôvodom, vypíšu sa pri každom behu —
-podrobnosti v kapitole 5). Je to dočasné riešenie: súbory `vmicollect` zo staršej vetvy
-patria inému kroku a poznámka „ilustračné, nie meranie“ priamo pri čísle je lepšia než
-zoznam vedľa.
+v `scripts/check_claims.sh` (štyri položky, každá s dôvodom; uplatnené položky skript
+vypíše na konci behu — podrobnosti v kapitole 5). Je to dočasné riešenie: súbory
+`vmicollect` zo staršej vetvy patria inému kroku a poznámka „ilustračné, nie meranie“
+priamo pri čísle je lepšia než zoznam vedľa.
 
 ---
 
@@ -186,14 +191,14 @@ Formát:
 ```
 
 - `subor.json` — názov súboru v `data/results/` (dá sa uviesť aj podadresár,
-  napr. `2026-09-18_prvy_beh/probe.json`);
+  napr. `2026-09-18_zmrazeny_host/probe.json`);
 - `kluc` — cesta ku kľúču v JSON, úrovne oddelené bodkou, index poľa číslom
   (`values.cycle_ms.0`).
 
 Značka sa píše **hneď za číslo**, na ten istý riadok, aj s jednotkou:
 
 ```markdown
-Čítanie plnej snímky trvalo 430,6 ms {{res:2026-09-18_prvy_beh/once_raw.json:capture.capture_ms}}.
+Medián capture_ms plnej raw snímky bez hashu bol 393,9 ms {{res:2026-09-18_zmrazeny_host/summary.json:values.once_raw_hash_none.capture_ms.median}}.
 ```
 
 Čo `scripts/check_claims.sh` overí:
@@ -203,9 +208,12 @@ Značka sa píše **hneď za číslo**, na ten istý riadok, aj s jednotkou:
 3. číslo napísané pred značkou sa po zaokrúhlení na rovnaký počet desatinných miest
    zhoduje s hodnotou v JSON. Ak sa nezhoduje, je to nález — text sa opraví, JSON nikdy.
 
-Každý JSON v `data/results/` má hlavičku `{commit, date, host, guest, command, n, values}`,
-aby sa dalo dohľadať, ktorá binárka a ktorý stroj číslo vyrobili. Pôvodný výstup nástroja
-je celý pod kľúčom `values`; hlavička sa dopĺňa okolo neho, nie doňho.
+Každý JSON v `data/results/` má hlavičku `{commit, date, host, guest, command, n}` a blok
+hodnôt, aby sa dalo dohľadať, ktorá binárka a ktorý stroj číslo vyrobili. Pôvodný výstup
+nástroja je celý v bloku hodnôt — predvolene pod kľúčom `values`; schémy, ktoré ho majú pod
+vlastnými kľúčmi (napr. `processes`, `modules`, `sockets` a `checks` v
+`hyptcn3/guestparse-validate/1`), vymenúva zoznam `PAYLOAD_BY_SCHEMA`
+v `scripts/check_claims.sh`. Hlavička sa dopĺňa okolo výstupu, nie doňho.
 
 Túto hlavičku strojovo kontroluje `scripts/check_claims.sh --json-hlavicky` (kontrola E,
 kód nálezu `JSON-HLAVICKA`); spúšťa sa aj pri behu bez argumentov. Nekontrolujú sa dva
@@ -222,15 +230,24 @@ nikdy sa nedopĺňa odhadom. Keď `commit` neurčuje kód, ktorý súbor vyrobil
 ## 5. Spustenie kontroly
 
 ```sh
-scripts/check_claims.sh            # východzí rozsah (nižšie), návratový kód 0 = čisté, 1 = nálezy
-scripts/check_claims.sh thesis/09_testovanie.md
+scripts/check_claims.sh            # východzí rozsah (nižšie) a kontroly E a F
+scripts/check_claims.sh docs/MERANIA.md README.md   # zadané súbory alebo adresáre, bez E a F
 scripts/check_claims.sh --json-hlavicky   # iba kontrola hlavičiek v data/results/
 ```
 
-Východzí rozsah zodpovedá prvej vete tohto dokumentu: `thesis/`, `docs/`, `README.md`
-v koreni, `vmicollect/README.md` a komentáre v zdrojákoch (`vmicollect/{src,include,bpf,hooks,tests}`,
-`guestparse/`, `scripts/`). Do 2026-09-18 bol rozsah iba `thesis/` a `docs/` — koreňový
-`README.md`, teda súbor s hlavnými nameranými číslami, sa nekontroloval nikdy.
+Skript robí šesť kontrol: A zakázané čísla, B číslo bez značky, C značky zdroja, D zakázané
+slová, E hlavičky JSON, F aktuálnosť `docs/PRIRUCKA.md`. Návratový kód je 0 = čisté,
+1 = nálezy, 2 = chyba použitia (zadaná cesta neexistuje).
+
+Východzí rozsah zodpovedá prvej vete tohto dokumentu: `thesis/` (ak existuje), `docs/`,
+koreňový `README.md` a adresáre `vmicollect/` (bez `build/`), `guestparse/`, `scripts/`,
+`features/`, `tcn/` a `safeguard/`. Z nich sa berú súbory `*.md`, `*.c`, `*.h`, `*.py`,
+`*.sh` a `Makefile`; `__pycache__/`, `build/` a skryté adresáre sa preskakujú. `lab/`,
+`harness/`, `config/` ani `profiles/` sa nekontrolujú. Beh bez argumentov pridá kontrolu
+hlavičiek JSON (E, kapitola 4) a aktuálnosť `docs/PRIRUCKA.md` (F): tú overí
+`scripts/check_prirucka.sh`, ktorý najprv preloží `vmicollect`. Do 2026-09-18 bol rozsah
+iba `thesis/` a `docs/` — koreňový `README.md`, teda súbor s hlavnými nameranými číslami,
+sa nekontroloval nikdy; `features/` a `tcn/` pribudli 2026-09-19, `safeguard/` 2026-10-13.
 
 V zdrojáku sa kontroluje **text komentárov**, nie kód: konštanta `0.86` v algoritme nie je
 metrika z `hypTcn002`, kým tá istá hodnota vo vete v komentári tvrdením je.
@@ -240,13 +257,15 @@ Kódy nálezov:
 | Kód | Znamená |
 |---|---|
 | `ZAKAZANE-CISLO` | číslo z čiernej listiny (kapitola 2) mimo riadku s `RETRAKCIA` |
-| `BEZ-ZNACKY` | číslo v `thesis/` bez značky `{{res:...}}` |
+| `BEZ-ZNACKY` | číslo v súbore `.md` pod `thesis/` bez značky `{{res:...}}` |
 | `ZNACKA-TVAR` | značka nemá tvar `{{res:subor.json:kluc}}` |
 | `ZNACKA-SUBOR` | súbor v `data/results/` neexistuje alebo sa nedá prečítať |
 | `ZNACKA-KLUC` | kľúč v JSON nie je |
 | `ZNACKA-HODNOTA` | hodnota v texte sa nezhoduje s hodnotou v JSON |
+| `ZNACKA-CHYBA` | kontrola značky vrátila neočakávanú odpoveď (poistka skriptu) |
 | `ZAKAZANE-SLOVO` | slovo z P11 |
 | `JSON-HLAVICKA` | JSON v `data/results/` bez hlavičky z kapitoly 4 |
+| `PRIRUCKA` | iba beh bez argumentov: `docs/PRIRUCKA.md` sa rozišla s kódom alebo sa jej aktuálnosť nedala overiť, prípadne `scripts/check_prirucka.sh` chýba alebo nie je spustiteľný |
 
 Výnimky v texte (každá je stopa v texte, nie tichý zoznam vedľa):
 
@@ -256,21 +275,24 @@ Výnimky v texte (každá je stopa v texte, nie tichý zoznam vedľa):
 | `<!-- noclaim: dôvod -->` | riadok sa preskočí vo všetkých kontrolách; dôvod je povinný |
 | `<!-- prevzate:start -->` … `<!-- prevzate:end -->` | prevzatá tabuľka s vlastnou citáciou; kontrola „číslo bez značky“ sa v nej nerobí |
 | oplotený blok kódu (```` ``` ````) | zakázané čísla **aj** zakázané slová sa v ňom hľadajú — výsledok sa v texte bežne uvádza práve ako ukážka výstupu (`{"f1": 99.70}`) a je to tvrdenie ako každé iné; kontrola „číslo bez značky“ a kontrola značiek sa v ňom naopak nerobia (čísla vo výpise sú legitímne a `{{res:...}}` v bloku je ukážka zápisu) |
-| `thesis/.claims-allow` | regexy tokenov, ktoré číslami tvrdenia nie sú; súbor je verzionovaný, takže je vidieť, čo sa vyňalo |
+| `thesis/.claims-allow` | regexy tokenov (jeden na riadok), ktoré číslami tvrdenia nie sú; súbor bude verzionovaný, takže bude vidieť, čo sa vyňalo. Zatiaľ neexistuje |
 
-Výnimka mimo textu je len jedna a platí pre súbory `vmicollect` zo staršej vetvy: pole `EXEMPT`
-v `scripts/check_claims.sh`. Každá položka je trojica `súbor | vzor | dôvod`, platí iba pre
-ten jeden súbor (v `thesis/` a `docs/` zostáva to isté číslo nálezom) a skript uplatnené
-výnimky na konci každého behu vypíše, takže vyňatie nie je tiché. Dnes sú v ňom štyri
-položky — ilustračné čísla z kapitoly 3 v `vmicollect/README.md`, `vmicollect/src/writer_delta.c`
-a `vmicollect/src/retention.c`. Správnejšie je napísať „ilustračné, nie meranie“ priamo
+Výnimka mimo textu je pre zakázané čísla a slová (kontroly A a D) len jedna a platí pre
+súbory `vmicollect` zo staršej vetvy: pole `EXEMPT` v `scripts/check_claims.sh` (adresáre,
+ktoré vynecháva kontrola E, uvádza kapitola 4). Každá položka je trojica
+`súbor | vzor | dôvod`, platí iba pre ten jeden súbor (v `thesis/` a `docs/` zostáva to
+isté číslo nálezom) a skript každú uplatnenú výnimku na konci behu vypíše, takže vyňatie
+nie je tiché. Dnes sú v ňom štyri položky — ilustračné čísla z kapitoly 3
+v `vmicollect/README.md`, `vmicollect/src/writer_delta.c` a `vmicollect/src/retention.c`. Správnejšie je napísať „ilustračné, nie meranie“ priamo
 k číslu v tých súboroch a položky z `EXEMPT` zmazať; dovtedy drží výnimku zoznam.
 
 Čo kontrola **nezachytí**: nepravdivú vetu bez čísla, číslo prepísané aj v JSON aj v texte,
-zlú metodiku za správne uloženým číslom, číslo v kóde mimo komentára, prítomnosť hlavičky
-ako záruku, že sú v nej pravdivé údaje. Skript je sito na to, čo sa dá overiť textovo —
-nie dôkaz poctivosti.
+celé číslo bez značky, za ktorým nie je jednotka času, veľkosti ani percent (kontrola B
+hľadá iba desatinné čísla a čísla s takou jednotkou), zlú metodiku za správne uloženým
+číslom, číslo v kóde mimo komentára, prítomnosť hlavičky ako záruku, že sú v nej pravdivé
+údaje. Skript je sito na to, čo sa dá overiť textovo — nie dôkaz poctivosti.
 
-Kontrola je súčasťou finálneho auditu (krok K30): pred odovzdaním musí vrátiť 0 nálezov.
+Kontrola je súčasťou finálneho auditu: pred odovzdaním musí vrátiť 0 nálezov.
 Tento súbor (`HONESTY.md`) sa zámerne nekontroluje — obsahuje zoznam zakázaných čísel,
-takže by hlásil sám seba.
+takže by hlásil sám seba. Z rovnakého dôvodu sa vynecháva `scripts/check_claims.sh`
+(pole `FORBIDDEN_NUM`).

@@ -13,7 +13,8 @@
 #   B  cislo bez znacky zdroja (iba .md pod thesis/)
 #   C  znacka {{res:subor.json:kluc}} - existencia suboru, kluca a zhoda hodnoty
 #   D  zakazane slova
-#   E  hlavicka {commit, date, host, guest, command, n, values} v data/results/*.json
+#   E  hlavicka {commit, date, host, guest, command, n} a blok s vysledkom (values,
+#      inak podla PAYLOAD_BY_SCHEMA) v data/results/*.json
 #   F  aktualnost docs/PRIRUCKA.md (volanie scripts/check_prirucka.sh)
 #
 # Pouzitie:

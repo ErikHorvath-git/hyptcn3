@@ -54,9 +54,9 @@ cez pôvodný cloud-init zostáva samostatný krok v `harness/README.md`.
 Na zberovom PC (2026-10-20) bol disk hosťa zväčšený z 3 GiB na 20 GiB
 (`qemu-img resize` pri vypnutej VM, potom `growpart` a `resize2fs` v hosťovi).
 Pôvodných 899 MB voľného miesta by nestačilo na rast PostgreSQL a WAL počas
-dlhej kampane. Disk VM potom presunul na pracovný SSD:
+dlhej kampane. Disk VM bol potom do 2026-10-21 na pracovnom SSD:
 `/mnt/ssd/hyptcn3-work/vms/hyptcn-lab.qcow2` (kópia pri vypnutej VM, zhodná
-SHA-256 aj `qemu-img check`; libvirt definícia ukazuje na novú cestu).
+SHA-256 aj `qemu-img check`; libvirt definícia vtedy ukazovala na túto cestu).
 Kópia z HDD zostala ako `vms/hyptcn-lab.qcow2.hdd-backup-20261020` a už sa
 neaktualizuje.
 
@@ -81,8 +81,10 @@ snímky na SSD: v session kampaní `benign-v2-20261022` a `benign-v3-20261022`
 vznikli 2 s medzery (najviac 2,04 s, hranica auditu 2,5 s). Oneskorenie
 nastalo až po načítaní čítačov z `/proc`, v rovnakom okamihu, keď sa
 predĺžil zápis delta snímky zberača (session 3 kampane v3, snímka 26:
-čítanie 877 ms, spolu 1904 ms;
-[záznam](../data/results/collection_campaign_benign_v3_20261022.json)).
+čítacia slučka zberača 1.0, ktorá zahŕňala aj zápis zmenených stránok, 877 ms,
+celý cyklus 1904 ms;
+[záznam](../data/results/collection_campaign_benign_v3_20261022.json),
+[oprava v MERANIA.md](MERANIA.md) z 2026-10-25).
 Od 2026-10-22 preto riadky monitora
 zapisuje samostatné vlákno z fronty a vzorkovanie na zápis nečaká.
 
@@ -99,8 +101,19 @@ hosťa. Pred tým istým pilotom mala QEMU vo swape 331 228 kB a prvá plná
 snímka ich čítala späť 7,3 s pri perióde 5 s; jeden slot vypadol. Zberový
 runner preto pred zahrievaním načíta späť rozsahy procesu QEMU, ktoré majú
 odswapované stránky (krok `prefault`, iba čítanie cez `/proc/PID/mem` ako
-root; 2 GiB rezidentnej RAM za 0,35 s). Do `session.json` zapisuje
-`vm_swappiness` a swap QEMU; kampaň hodnotu swappiness zmrazí s pilotom.
+root; bez odswapovanej pamäte nečíta nič). Ani `vm.swappiness = 1` odsúvanie
+celkom nezastaví: pred krokom `prefault` mal proces QEMU vo swape v pilote 5
+220912 {{res:collection_pilot_5_20261022_timing.json:values.prefault.swap_kb_before}} kB
+(načítanie späť
+6,708 {{res:collection_pilot_5_20261022_timing.json:values.prefault.seconds}} s)
+a v pilote 7
+52176 {{res:collection_pilot_7_20261026_timing.json:values.prefault.swap_kb_before}} kB
+(2,623 {{res:collection_pilot_7_20261026_timing.json:values.prefault.seconds}} s);
+na konci zberu
+0 {{res:collection_pilot_7_20261026_timing.json:values.host_memory_after.qemu_swap_kb}} kB
+([súhrn pilota 7](../data/results/collection_pilot_7_20261026_timing.json)).
+Do `session.json` zapisuje `vm_swappiness` a swap QEMU; kampaň hodnotu
+swappiness zmrazí s pilotom.
 
 Libvirt 11 pri vypnutí hostiteľa VM session démona uloží (`reason=saved`
 v `~/.cache/libvirt/qemu/log/hyptcn-lab.log`) a pri ďalšom štarte démona ju
@@ -115,6 +128,10 @@ hosťa ich hostiteľovi nevráti a nový boot sa dotkne ďalších, takže na je
 procese QEMU plná snímka s reštartmi rastie: od 2026-10-22 00:12 UTC zo 118
 na 271 tisíc stránok z 524 tisíc a z 1,7 na 2,7 s
 ([záznam](../data/results/collection_full_snapshot_growth_20261022.json)).
+Kampaň `benign-v4-20261022` ukázala, že plná snímka môže rásť aj v rámci
+jedného bootu hosťa (skupiny `train-1` a `train-2` na prvom procese QEMU)
+a závisí od veku procesu QEMU ([oprava v MERANIA.md](MERANIA.md)
+z 2026-10-25; dôsledok pre príznaky je v L13 v [LIMITACIE.md](LIMITACIE.md)).
 Pred `campaign.py init` sa preto VM vypne a znova spustí, čím vznikne nový
 proces QEMU:
 
@@ -245,6 +262,13 @@ curl -fsS http://127.0.0.1:18080/api/orders -H "Authorization: Bearer $TOKEN"
 
 ## RAM introspekcia a model
 
+Výskumné session z laboratória zbiera `scripts/collection.py` (pilot)
+a `scripts/campaign.py` (kampaň, [AUTOMATICKY_ZBER.sk.md](AUTOMATICKY_ZBER.sk.md))
+podľa protokolu v [METODIKA_ZBERU.sk.md](METODIKA_ZBERU.sk.md); integrovaný
+detektor je `python3 -m safeguard` ([SAFEGUARD.sk.md](SAFEGUARD.sk.md)). Tento
+oddiel opisuje starší samostatný postup, ktorý zostáva iba na diagnostiku;
+ohraničený zber nižšie nie je session korpusu:
+
 ```sh
 # Pevný počet snímok pri perióde nastavenej skriptom; sudo potrebuje eBPF.
 sudo scripts/lab_capture.sh 24
@@ -260,7 +284,12 @@ Zapisuje snímky, log kolektora, stav HTTP premávky pred/po a manifest do
 `data/raw/`, ktoré je mimo gitu. Počet snímok overuje proti požadovanému počtu.
 Pri chybe alebo prerušení ukončí vlastný kolektor a vráti vlastníctvo
 artefaktov používateľovi. Pri dlhých behoch treba plánovať miesto na disku;
-skript historické snímky automaticky nemaže.
+skript historické snímky automaticky nemaže. Pri ručnom spustení platia jeho
+vlastné predvolené hodnoty (plná snímka každých 20 snímok, `output.fsync=true`,
+`output.mlock=false`); `scripts/collection.py` mu nastaví rotáciu z protokolu,
+zápis bez `fsync` a `output.mlock=true`. `features session` bez
+`--quality-policy behavioral-inputs-v1` vytvorí archív politiky
+`legacy-vector-v1`, ktorý safeguard neprijme.
 
 Agent vo VM sa používa na nasadenie a správu aplikácie. Čítanie RAM vykonáva
 existujúci hostiteľský eBPF kolektor. Oba mechanizmy sú odlišné a pôvod
@@ -277,6 +306,10 @@ objektov; nevyriešený nesúlad znamená chybu. Staršie príznaky z iných boo
 mohli obsahovať neúplné počty a nulové sokety. Pred ďalším tréningom ich treba
 vypočítať znova. Starý checkpoint slúži iba na mechanické overenie skórovania.
 
+Samostatný `scripts/detektor.py` patrí k staršej 22-stĺpcovej ceste, ktorá
+zostáva v repozitári do konca experimentov iba na diagnostiku. Integrovaný
+detektor (`replay`, `watch`, `run`) potrebuje balík modelu; model natrénovaný
+na serverovom korpuse zatiaľ neexistuje.
 V `scripts/detektor.py` boli opravené tri chyby prepojenia: slicing `deque`
 pri alarme, ignorovanie uloženej dĺžky okna a neplatné argumenty `hold`.
 Detektor zachová reťazce celého vstupného okna a po medzere v poradí snímok

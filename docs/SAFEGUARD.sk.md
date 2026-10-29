@@ -7,10 +7,12 @@ dát a nový beh nad VM. Diagnostický model nie je modelom natrénovaným na
 serverovom korpuse. Účinnosť proti útokom, falošné alarmy pri dlhšej prevádzke
 a vplyv celého detektora na VM ešte neboli touto integráciou vyhodnotené.
 
-Pilot pôvodného PC podľa [`METODIKA_ZBERU.sk.md`](METODIKA_ZBERU.sk.md) má
+Na zberovom PC audit prijal piloty 3 až 7 podľa [`METODIKA_ZBERU.sk.md`](METODIKA_ZBERU.sk.md)
+(posledný [pilot 7](../data/results/collection_pilot_7_20261026_audit.json), stav v
+[`PRIPRAVENOST_KAMPANE.sk.md`](PRIPRAVENOST_KAMPANE.sk.md)). Pilot pôvodného PC má
 [prijatý audit](../data/results/collection_pilot_v2_20261013_reaudit.json); pre zberové PC sa nepoužije.
-Benígny korpus `benign-v6-20261026` vyšiel na zberovom PC z pilota 7
-([audit](../data/results/collection_pilot_7_20261026_audit.json)) a je nazbieraný: audit prijal
+Kampane `benign-v2-20261022` až `benign-v5-20261025` sa uzavreli bez úplného korpusu.
+Benígny korpus `benign-v6-20261026` vyšiel z pilota 7 a je nazbieraný: audit prijal
 48 {{res:collection_campaign_benign_v6_20261026.json:values.summary.accepted_sessions}}
 session ([záznam](../data/results/collection_campaign_benign_v6_20261026.json), [MERANIA.md](MERANIA.md)); tréning nad ním
 a ďalšia experimentálna etapa zostávajú.
@@ -20,8 +22,11 @@ Automatický zber a archiváciu korpusu riadi
 Nový spoločný beh `run` s hostiteľským eBPF zberom je
 zatiaľ **UNVERIFIED**; staršie overenie samostatného zberača ho nenahrádza.
 Výstupy vykonaných overení sa evidujú v [`MERANIA.md`](MERANIA.md).
-Konkrétny integračný záznam vrátane zhody spracovania uložených RAM dát je
-[`safeguard_validation_20261013_a.json`](../data/results/safeguard_validation_20261013_a.json).
+Integračný záznam
+[`safeguard_validation_20261013_a.json`](../data/results/safeguard_validation_20261013_a.json)
+(syntetický model, zhoda spracovania uložených RAM dát) vznikol ešte
+s kontraktom `hyptcn3/safeguard-features/1`; aktuálny kontrakt zaviedol commit
+`6fcd6f9`. Pre aktuálny kontrakt sa prehratie uložených RAM dát zatiaľ nezopakovalo.
 
 ## Dátová cesta
 
@@ -43,11 +48,12 @@ existujúcej orchestrácii a overeniu identity prostredia.
 | Súbor | Zodpovednosť |
 |---|---|
 | `safeguard/features.py` | Import archívu aj surových snímok, geometria RAM, kvalita, okná a normalizácia |
-| `safeguard/model.py` | Prediktor globálnych a per-bin príznakov; klasifikátor záťaže |
+| `safeguard/model.py` | Prediktor globálnych a per-bin príznakov; klasifikátor záťaže; bloky TCN z `tcn/model.py` |
 | `safeguard/training.py` | Explicitné roly korpusu, tréning, výber checkpointu a kalibrácia |
 | `safeguard/bundle.py` | Manifest, načítanie váh a spoločné skórovanie okna |
 | `safeguard/runtime.py` | Stav detektora, alarmy, uchovanie dôkazov a čítanie pribúdajúcich snímok |
 | `safeguard/supervisor.py` | Vlastný proces zberača, zámok zberu a kontrola disku |
+| `safeguard/demo.py` | Syntetický korpus a príkaz `smoke` |
 | `safeguard/cli.py` | Príkazové rozhranie |
 
 ## Príznaky, tréning a načítanie
@@ -58,9 +64,9 @@ behaviorálnych stĺpcov a tenzor `čas × bin × 4`. Kontroly integrity, prízn
 nesie `changed_ratio`, `zero_ratio`, `entropy_mean`, `has_changed`.
 
 `Frame` vyžaduje štruktúrovanú kvalitu, čas a sekvenciu, identitu reťazca
-a geometriu pamäte. Plná snímka, chýbajúci predchodca alebo neplatné meranie
-prerušia okno. Zmena session/reťazca a medzera v čase alebo sekvencii
-prerušia aj históriu hlasovania. Nerastúce časy a duplicitné sekvencie sú
+a geometriu pamäte. Plná snímka, chýbajúci predchodca, neplatné meranie,
+zmena session alebo reťazca aj medzera v čase či sekvencii vyprázdnia okno
+aj históriu hlasovania k z n. Nerastúce časy a duplicitné sekvencie sú
 chybou. Nezodpovedajúca geometria alebo poradie príznakov sa neprepočítajú
 potichu na iný vstup modelu.
 
@@ -107,7 +113,9 @@ sa počas tréningu nenačíta. Boot/skupina nesmie patriť viacerým rolám.
 hodinu. Nadprahové skóre znamená `score > threshold`. Alarm modelu vyžaduje
 aspoň `k` prekročení v posledných `n` skóre, až keď je celá história dostupná.
 Kalibrácia eviduje aj udalosti pravidla k z n; nezávislé FAR sa meria až na
-odloženom teste. Po vyhodnotení testu sa prah neladí podľa jeho výsledku.
+odloženom teste. Vyhodnocovač FAR za hodinu a času do detekcie nad udalosťami
+safeguardu zatiaľ neexistuje. Po vyhodnotení testu sa prah neladí podľa jeho
+výsledku.
 
 Nový adresár modelu obsahuje `manifest.json`, `predictor.pt` a `classifier.pt`.
 Manifest ukladá poradie príznakov, biny, geometriu, okno, normalizáciu,
@@ -117,10 +125,12 @@ súborov oproti manifestu; neoverujú pôvod balíka od neznámeho autora.
 
 ## Príkazy
 
-Príkazy sa spúšťajú z koreňa repozitára. Pri vytváraní výstupu musí `--out`
-označovať nový adresár; `status` číta existujúci výstup. Cesty v ukážkach
-sú ilustračné; index prijatého korpusu `benign-v6-20261026` je
-`data/campaigns/benign-v6-20261026/corpus.json` a model z jeho tréningu zatiaľ neexistuje.
+Príkazy sa spúšťajú z koreňa repozitára. Globálna voľba `--threads N` pred
+podpríkazom (predvolene 4) určuje počet vlákien PyTorch. Pri vytváraní
+výstupu musí `--out` označovať nový adresár; `status` číta existujúci výstup.
+Cesty v ukážkach sú ilustračné; index prijatého korpusu `benign-v6-20261026` je na
+zberovom PC v `data/campaigns/benign-v6-20261026/corpus.json` a model z jeho tréningu
+zatiaľ neexistuje.
 
 **Skúška bez VM a bez roota:**
 
@@ -143,8 +153,11 @@ python3 -m safeguard inspect --bundle data/models/server-v2
 ```
 
 Časové nastavenia sa preberajú z protokolu v indexe. Neúplný korpus sa pre
-bežný tréning odmietne. `--diagnostic` je výslovný režim skúšania mechaniky;
-nenahrádza splnenie podmienok finálneho korpusu.
+bežný tréning odmietne. Audit, ktorého `extractor_sha256` sa líši od súčasného
+kódu `features/` a `guestparse/`, tréning tiež odmietne (`stale extractor
+implementation`); surové dáta treba znovu auditovať
+([KONTROLA_ZBERU.sk.md](KONTROLA_ZBERU.sk.md)). `--diagnostic` je výslovný
+režim skúšania mechaniky; nenahrádza splnenie podmienok finálneho korpusu.
 
 **Konečné prehratie uložených dát:**
 
@@ -155,7 +168,12 @@ python3 -m safeguard replay --bundle data/models/server-v2 --snapshots data/coll
 
 `replay` nemení retenciu surových dát a nespúšťa zberač. Pre diagnostický
 balík treba pridať `--allow-diagnostic`. Rozloženie a vstupný kontrakt musia
-sedieť aj v diagnostickom režime.
+sedieť aj v diagnostickom režime. Session archivovaná kampaňou má v `raw/`
+odkaz na komprimované snímky `.vmicd.zst`, ktoré `replay` nečíta. Najprv ju
+obnov do nového adresára `raw` a vedľa neho skopíruj `session.json`
+(`scripts.collection_archive restore`, postup v
+[AUTOMATICKY_ZBER.sk.md](AUTOMATICKY_ZBER.sk.md)); potom použi
+`--snapshots <nový>/raw`.
 
 **Sledovanie adresára, do ktorého už zapisuje zberač:**
 
@@ -178,7 +196,10 @@ sudo env PYTHONPATH="$(python3 -m site --user-site)" python3 -m safeguard run --
 python3 -m safeguard status --out data/safeguard/live-01
 ```
 
-`run` potrebuje oprávnenie na eBPF a bežiacu VM; `PYTHONPATH` v ukážke sprístupní pod `sudo` lokálnu inštaláciu PyTorch.
+`run` potrebuje oprávnenie na eBPF a bežiacu VM; `PYTHONPATH` v ukážke sprístupní
+pod `sudo` lokálnu inštaláciu PyTorch v používateľskom site-packages. Na zberovom
+PC, kde systémový `python3` nemá NumPy, sa namiesto toho spustí
+`sudo .venv/bin/python -m safeguard run` s rovnakými voľbami.
 Vyžaduje model z reálneho korpusu; diagnostický balík sa odmietne a príkaz nemá voľbu
 `--allow-diagnostic`. Pred zberom sa kontroluje protokol, jadro
 a serverový stack hosťa, profil, implementácia extrakcie a skórovania aj binárka zberača
@@ -190,12 +211,13 @@ disku a časový limit môžu beh ukončiť ako neúspešný. Prerušenie ukonč
 zberač spustený týmto príkazom; VM a premávka zostávajú pod `labctl`.
 Tento beh nenahrádza zber korpusu kampaňou (`scripts/campaign.py`, `scripts/collection.py`).
 
-Zberač tu beží s predvolenými nastaveniami výstupu (`output.fsync=true`,
-`output.mlock=false`), nie s nastaveniami kampane. Od verzie 1.1 zapisuje
-súbory vlákno mimo vzorkovacieho cyklu, takže `fsync` predlžuje zverejnenie
-snímky (sidecar), nie cyklus; nasledovník na chýbajúci sidecar čaká najviac
-15 s. Táto kombinácia nebola na zberovom PC meraná. Po SIGTERM dostane zberač
-60 s na zápis snímok z fronty, potom SIGKILL.
+Zberač tu beží s predvoleným `output.fsync=true` (kampaň zapisuje bez `fsync`),
+s frontou uzamknutou cez `output.mlock=true` ako v kampani a s `output.drain_s=90`
+(v kampani 180 s); kroky `prefault` a synchronizácie hodín hosťa tu nie sú.
+Od verzie 1.1 zapisuje súbory vlákno mimo vzorkovacieho cyklu, takže `fsync`
+predlžuje zverejnenie snímky (sidecar), nie cyklus; nasledovník na chýbajúci
+sidecar čaká najviac 15 s. Táto kombinácia nebola na zberovom PC meraná. Po
+SIGTERM dostane zberač 60 s na zápis snímok z fronty, potom SIGKILL.
 
 ## Stav, alarm a dôkazy
 
@@ -238,6 +260,9 @@ dlhodobé meranie časovania, spotreby zdrojov a vplyvu na služby hosťa.
   (kampaň `benign-v6-20261026`) a zmraziť kalibráciu pred testami.
 - Overiť spoločný hostiteľský zber a detektor vrátane dlhého reťazca a backlogu.
 - Porovnať TCN s alternatívami a vyhodnotiť klasifikáciu aj falošné alarmy.
+  Baseliny v `tcn/baselines.py` a metriky `tcn.eval.vyhodnot` používa iba
+  diagnostické CLI `tcn.train` staršej 22-stĺpcovej cesty; na vstupy safeguardu
+  ich zatiaľ nenapája žiadny runner.
 - V oddelenom izolovanom prostredí vyhodnotiť aktivované útoky a reálny malvér.
 
 Presnosť voči reálnym malvérovým vzorkám nebola meraná touto integračnou

@@ -8,7 +8,7 @@ pokracuje sa - prechod tabuliek sedi, `ss` rekonstruuje, `validate` bezi.
 
 Klucovy vstup: data/sessions/20260918T154914Z_validate/snap - snimka z bootu
 2026-09-18 15:49, profil v repe je z bootu 2026-09-19 10:30. Presne ten par,
-na ktorom sa kod 5 predviedol v docs/AUDIT.md (posun -0x1aa00000).
+na ktorom sa kod 5 predviedol pri audite 2026-10-05 (posun -0x1aa00000).
 """
 
 import json

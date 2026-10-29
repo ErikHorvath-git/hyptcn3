@@ -10,16 +10,20 @@ artefaktoch — nie prevzaté z dokumentácie a nie odhadnuté. Ku každému pat
 - **Čo by to odstránilo** — čo by sa muselo zmeniť, aby obmedzenie zmizlo (tam, kde to
   má odpoveď).
 
-Všetky výpisy nižšie sú z behov spustených 2026-09-18 medzi 16:42 a 16:55 UTC nad týmto
-repozitárom. Priznaná limitácia je silnejšia pozícia než zamlčaná: recenzent ju nájde tak
-či tak, a rozdiel je iba v tom, či ju nájde napísanú, alebo objavenú.
+Výpisy sú z behov nad týmto repozitárom. Pôvodné sú z 2026-09-18 (16:42–16:55 UTC),
+neskoršie majú pri sebe dátum alebo artefakt. Stav položiek bol overený proti kódu
+v commite `709ee7f` (2026-10-29); výpis, ktorý sa odvtedy zmenil, je opravený alebo
+označený dátumom. Identifikátory blokov (A2, A3, A4) v nadpisoch a v komentároch kódu
+vysvetľuje legenda v [`STAV.sk.md`](STAV.sk.md). Priznaná limitácia je silnejšia pozícia
+než zamlčaná: recenzent ju nájde tak či tak, a rozdiel je iba v tom, či ju nájde
+napísanú, alebo objavenú.
 
 | # | Limitácia |
 |---|---|
 | [L1](#l1--živá-snímka-vm-sa-nezastavuje) | Živá snímka: VM sa nezastavuje |
 | [L2](#l2--čítanie-nie-je-úplne-pasívne) | Čítanie nie je úplne pasívne |
 | [L3](#l3--profil-jadra-hosťa-je-vstupná-závislosť-získaná-z-hosťa) | Profil jadra hosťa je vstupná závislosť získaná z hosťa |
-| [L4](#l4--parsuje-sa-pamäť-jadra-nie-pamäť-procesov) | Parsuje sa pamäť jadra, nie pamäť procesov |
+| [L4](#l4--parsuje-sa-pamäť-jadra-nie-pamäť-procesov--čiastočne-odstránené-2026-10-05-a4) | Parsuje sa pamäť jadra, nie pamäť procesov — ČIASTOČNE ODSTRÁNENÉ |
 | [L5](#l5--hole_test-netestuje-bpf-vetvu) | `hole_test` netestuje BPF vetvu |
 | [L6](#l6--injekčný-test-je-injekcia-do-kópie-snímky) | Injekčný test je injekcia do kópie snímky |
 | [L7](#l7--confidential-vm-sev-snp-tdx-sa-takto-prečítať-nedá) | Confidential VM (SEV-SNP, TDX) sa takto prečítať nedá |
@@ -31,7 +35,9 @@ repozitárom. Priznaná limitácia je silnejšia pozícia než zamlčaná: recen
 | [L13](#l13--príznakový-vektor-čo-o-ňom-treba-vedieť-pred-tým-než-sa-naň-natrénuje-model) | Príznakový vektor: čo o ňom treba vedieť pred tréningom |
 | [L14](#l14--procesy-moduly-a-sokety-do-príznakového-vektora-nevstupujú--vyriešené-2026-09-19) | Procesy, moduly a sokety do príznakového vektora nevstupujú — VYRIEŠENÉ |
 | [L15](#l15--časové-rozlíšenie-proces-kratší-než-perióda-zberu-je-neviditeľný) | Časové rozlíšenie: proces kratší než perióda zberu je neviditeľný |
-| [L16](#l16--presnosť-detekcie-malvéru-nebola-meraná-a-v-tejto-verzii-sa-merať-nedá) | Presnosť detekcie malvéru nebola meraná a merať sa nedá |
+| [L16](#l16--presnosť-detekcie-malvéru-nebola-meraná) | Presnosť detekcie malvéru nebola meraná |
+| [L17](#l17--profil-jadra-hosťa-platí-pre-jeden-boot-nie-pre-verziu-jadra--vyriešené-2026-10-05-preukotvenie-blok-a2) | Profil jadra hosťa platí pre jeden boot — VYRIEŠENÉ |
+| [L18](#l18--kontrola-textu-jadra-rozdiel-medzi-bootmi-baseline-nesedí) | Kontrola textu jadra: rozdiel medzi bootmi, baseline nesedí |
 
 ---
 
@@ -52,20 +58,24 @@ a výsledkom môže byť stav pamäte, ktorý v hosťovi v jednom okamihu neexis
 ```
 $ grep -n "\.pause " vmicollect/src/backend_ebpf.c vmicollect/src/backend_file.c
 vmicollect/src/backend_file.c:119:    .pause         = f_pause,
+vmicollect/src/backend_ebpf.c:935:        LOGW("ebpf: capture.pause sa ignoruje - eBPF vie citat, nie riadit "
 vmicollect/src/backend_ebpf.c:1167:    .pause         = NULL,
 vmicollect/src/backend_ebpf.c:1201:    .pause         = NULL,
 ```
 
-(Druhý výskyt v `backend_ebpf.c` je náhradná tabuľka pre build bez podpory eBPF; ani tá
+(Riadok 935 je varovanie opísané nižšie; v pôvodnom výpise chýbal. Posledný výskyt
+v `backend_ebpf.c` je náhradná tabuľka pre build bez podpory eBPF; ani tá
 pauzu nemá.) Zberač na to pri zapnutom `capture.pause` upozorní hláškou „snimka bude
 'ziva' (stranky su z roznych okamihov)“ a do sidecaru zapíše skutočnosť, nie želanie
-konfigurácie. Vo všetkých 14 sidecaroch uložených v repozitári:
+konfigurácie. Vo všetkých sidecaroch, ktoré nájde príkaz nižšie (2026-09-18 ich bolo 14;
+2026-10-29 ich je 167, z toho 15 v gite, ostatné v `data/raw/`, ktorý je mimo gitu),
+je `paused` = false a `pause_ms` = 0; hodnota `true` sa nevyskytuje:
 
 ```
 $ grep -h '"paused"\|"pause_ms"' data/raw/*/*.json data/sessions/*/snap/*.json \
         data/results/2026-09-18_prvy_beh/sidecars/*/*.json | sed 's/^ *//' | sort | uniq -c
-     14 "paused": false,
-     14 "pause_ms": 0.000,
+    167 "paused": false,
+    167 "pause_ms": 0.000,
 ```
 
 Parser s tým počíta: každý prechod zoznamu má strop, detekciu cyklu a kontrolu rozumnosti
@@ -158,7 +168,7 @@ To isté varovanie je v `data/results/run_20260918T154742Z.json` aj
 `data/sessions/20260918T154914Z_validate/validate.json`. V týchto behoch išlo o 4 KiB,
 čo je zanedbateľné; pri VM podloženej `memfd` alebo `hugetlbfs` by to bola celá RAM.
 
-Zdroj správania je v BPF programe (`bpf/vmic_kvm.bpf.c`): čítanie ide cez
+Zdroj správania je v BPF programe (`vmicollect/bpf/vmic_kvm.bpf.c`): čítanie ide cez
 `bpf_copy_from_user_task()`, teda cez `access_process_vm()`, a to má pri shmem podložení
 práve tento efekt.
 
@@ -183,9 +193,12 @@ fyzickej pamäte — presne to odporúča druhá riadka varovania.
 
 **Fakt.** Parser potrebuje profil jadra hosťa: `kallsyms` (adresy symbolov) a BTF
 (offsety polí v štruktúrach). Bez neho sa zo snímky nedá prečítať nič viac než bajty.
-Profil sa získal **raz, z hosťa, mimo behu zberu** — rovnako, ako profil používa LibVMI
+Profil sa získal **z hosťa, mimo behu zberu** — rovnako, ako profil používa LibVMI
 alebo Volatility. Nikde v tejto práci sa preto nesmie napísať „bez akejkoľvek znalosti
-hosťa“.
+hosťa“. Odber sa raz zopakoval: profil v repe je z 2026-09-19 (boot `82b778a3…`), lebo
+profil z 2026-09-18 po reštarte hosťa prestal sedieť (L17). Odvtedy sa znova neodoberal
+(`git log -- 'profiles/*/kallsyms.txt'`): adresy sa pre snímky iných bootov aj pre klon
+`hyptcn-lab` s tým istým jadrom preukotvujú.
 
 Profil je naviazaný na **konkrétnu verziu jadra**. Rozloženie štruktúr závisí od
 konfigurácie jadra (`CONFIG_*`), nie iba od čísla verzie, takže offsety opísané zo
@@ -216,7 +229,7 @@ Rozhodnutie čítať offsety z BTF a nie z hlavičkových súborov je zdôvodnen
 **Formulácia do textu práce.**
 
 > Parser štruktúr hosťa vyžaduje profil jadra: zoznam symbolov (`/proc/kallsyms`)
-> a typové informácie BTF (`/sys/kernel/btf/vmlinux`). Profil sa získal jednorazovo,
+> a typové informácie BTF (`/sys/kernel/btf/vmlinux`). Profil sa získal
 > priamo z hosťa a mimo meraného okna zberu — rovnaký vstup vyžadujú aj LibVMI
 > a Volatility. Nejde teda o introspekciu bez akejkoľvek znalosti hosťa, ale o
 > introspekciu bez agenta bežiaceho v hosťovi počas merania. Profil je naviazaný na
@@ -245,24 +258,47 @@ Prakticky to znamená: procesy, moduly a sokety sa zo snímky rekonštruujú, al
 používateľské dáta (argumenty, obsah haldy, načítané knižnice v pamäti procesu, spustiteľný
 kód procesu) nie.
 
-**Zmena 2026-10-05 (blok A4, `guestparse/procmap.py`).** Registre vCPU stále nečíta nič,
-ale pre **priradenie zmenených binov procesom** sa registre nepotrebujú: pre každý proces
+**Zmena 2026-10-05 (blok A4, commit `88608d7` a oprava `66ec043`, `guestparse/procmap.py`).**
+Registre vCPU stále nečíta nič, ale pre **priradenie zmenených binov procesom** sa
+registre nepotrebujú: pre každý proces
 sa koreň tabuliek vezme z `mm->pgd` (ukazovateľ v pamäti jadra, preloží sa rovnako ako
 iné jadrové adresy) a zostúpi sa celými používateľskými tabuľkami — bez VMA zoznamu,
 ktorý v BTF tohto jadra (Debian 6.1.159, maple tree) ani nie je. Výsledok:
-`python3 -m guestparse procmap` priradí zmenené stranky binu konkrétnym procesom
-(napr. bin 21: 3560 strán jadro, 512 systemd; merané na snímke z 18. 9., artefakt
-v testoch `guestparse/tests/test_procmap.py`). Čo sa NEZMENILO: obsah používateľskej
-pamäte sa stále neparsuje (žiadne argumenty, halda, knižnice) — mapovanie bin→proces
-je len o **vlastníctve stránok**, nie o čítaní ich obsahu.
+`python3 -m guestparse procmap` priradí zmenené stranky binu konkrétnym procesom.
+Čísla, ktoré tu stáli pôvodne (bin 21: 3560 strán jadro, 512 systemd), sú z `88608d7`;
+zneplatnila ich oprava `66ec043`, ktorá zostup obmedzila na používateľskú polovicu PGD
+(predtým sa procesu priraďovali zrkadlené jadrové mapovania). Test
+`guestparse/tests/test_procmap.py` čísla neobsahuje a artefakt v `data/results/` k nim nie
+je. Výstup 2026-10-29 (commit `709ee7f`) na tej istej snímke z 18. 9. (súbor `.vmicd` je
+mimo gitu):
 
-**Overenie.** Na strane parsera sa CR3 ani registre vCPU nespomínajú:
+```
+$ python3 -m guestparse procmap --snapshot data/sessions/20260918T154914Z_validate/snap \
+        --profile profiles/debian12-6.1.0-42-cloud-amd64 --bin 21
+POZOR: profil bol z ineho bootu (KASLR); preukotvenie o -444596224 uspelo - pokracujem s preukotvenym profilom
+bin   gpa_od          zmenenych   jadro   procesy (top 5)
+  21  0x15000000          4072    3787   1/systemd:141, 377/qemu-ga:61, 364/systemd-resolve:32, 1702/(sd-pam):19, 1701/systemd:13
+mapovane_stranky=12194, capped=False, cas=0.09 s (zostup uzivatelskymi tabulkami z mm->pgd (VMA zoznam nie je v BTF tohto jadra))
+```
+
+Čo sa NEZMENILO: obsah používateľskej pamäte sa stále neparsuje (žiadne argumenty,
+halda, knižnice) — mapovanie bin→proces je len o **vlastníctve stránok**, nie o čítaní
+ich obsahu.
+
+**Overenie.** Na strane parsera sa CR3 ani registre vCPU nespomínajú (2026-09-18
+aj 2026-10-29). Pôvodný druhý príkaz
+(`grep -n "mm_struct\|pgd\|user space\|pouzivatelsk" guestparse/*.py`) 2026-09-18
+nevypísal nič. Od 2026-10-05 je v `guestparse/procmap.py`
+koreň používateľských tabuliek, ktorý sa číta z pamäte jadra (`mm->pgd`), nie z registra:
 
 ```
 $ grep -rniE "cr3|vcpu|\bregs\b|register" guestparse/*.py | wc -l
 0
-$ grep -n "mm_struct\|pgd\|user space\|pouzivatelsk" guestparse/*.py | head
-(žiadny výstup)
+$ grep -n "mm->pgd" guestparse/procmap.py
+5:cele uzivatelske tabulky stranok kazdeho procesu (koren = mm->pgd, prelozeny
+13:verzie jadra (staci mm->pgd, ktory v BTF je) a vidi presne to, co proces
+70:    Zostup celymi uzivatelskymi tabulkami z mm->pgd. Vracia True, ked sa
+200:        "sposob": ("zostup uzivatelskymi tabulkami z mm->pgd (VMA zoznam nie "
 ```
 
 Na strane BPF programu je z vCPU čítaný jediný údaj, a je to počítadlo:
@@ -282,16 +318,19 @@ Ide o `atomic_t online_vcpus`, teda počet spustených vCPU, ktorý sa objaví v
 
 > Preklad adries implementovaný v práci pokrýva priestor jadra hosťa: obraz jadra
 > a priamy mapping dvoma lineárnymi vzťahmi, oblasť modulov a vmalloc prechodom
-> štvorúrovňových tabuliek stránok z `init_top_pgt`. Obsah pamäte používateľských procesov
-> sa neparsuje. Dôvod je vo vstupe, nie v implementácii parsera: preklad používateľských
-> adries vyžaduje koreň tabuliek stránok daného procesu, ktorý sa získava z registra CR3
-> príslušného vCPU, a použitý backend registre vCPU nečíta — z modulu `kvm` číta mapu
-> memslotov a z vCPU iba ich počet. Zo snímky sa preto rekonštruujú jadrové objekty
-> (procesy, načítané moduly, sieťové spojenia), nie používateľské dáta procesov.
+> štvorúrovňových tabuliek stránok z `init_top_pgt`. Používateľské tabuľky stránok
+> procesov sa prechádzajú tiež, ale iba na priradenie zmenených fyzických stránok
+> procesom: ich koreň sa číta z `mm->pgd` v pamäti jadra, registre vCPU (CR3) použitý
+> backend nečíta — z modulu `kvm` číta mapu memslotov a z vCPU iba ich počet. Obsah
+> pamäte používateľských procesov sa neparsuje. Zo snímky sa preto rekonštruujú jadrové
+> objekty (procesy, načítané moduly, sieťové spojenia) a vlastníctvo zmenených stránok,
+> nie používateľské dáta procesov (argumenty, halda, knižnice, kód).
 
-**Čo by to odstránilo.** Buď rozšírenie BPF programu o čítanie `vcpu->arch.cr3`, alebo
-prechod cez `task_struct->mm->pgd`, ktorý je v pamäti a CR3 nepotrebuje. Druhá cesta je
-v dosahu súčasného návrhu, ale nie je implementovaná ani zmeraná — `UNVERIFIED`.
+**Čo by to odstránilo.** Prechod cez `task_struct->mm->pgd` je od 2026-10-05
+implementovaný (`guestparse procmap`, testy `guestparse/tests/test_procmap.py`), ale slúži
+iba na vlastníctvo stránok. Čítanie obsahu používateľskej pamäte — napríklad oblastí VMA,
+ktoré v BTF tohto jadra nie sú ako zoznam (maple tree) — nie je implementované ani
+zmerané (`UNVERIFIED`).
 
 ---
 
@@ -313,7 +352,7 @@ chunks=2 read_errors=1 filled_zero=131072 bytes_read=1966080
 OK: pamat za dierou sa zachovala, obraz je zhodny s referenciou
 ```
 
-Hlavička `tests/hole_test.c` to hovorí sama: „Backend 'ebpf' toto riesi mapou memslotov
+Hlavička `vmicollect/tests/hole_test.c` to hovorí sama: „Backend 'ebpf' toto riesi mapou memslotov
 (dieru preskoci celu naraz), ale kontrakt read_pa() plati pre kazdy backend - preto tento
 test pouziva fake backend s tou najhorsou moznou semantikou.“
 
@@ -331,41 +370,54 @@ test pouziva fake backend s tou najhorsou moznou semantikou.“
 ## L6 — Injekčný test je injekcia do kópie snímky
 
 **Fakt.** Detektor hookov v `sys_call_table` má pozitívny testovací prípad. Ten
-**neinštaluje rootkit**. Urobí sa kópia reálnej snímky, v kópii sa jedna položka tabuľky
-prepíše na adresu v oblasti modulov, a overí sa, že detektor taký zápis nájde a správne ho
-pomenuje. V hosťovi sa nemení nič.
+**neinštaluje rootkit**. Urobí sa kópia snímky (vždy `guestparse/tests/data/mini.vmicd`,
+27-stránkový výrez reálnej snímky z 2026-09-19 v repe, a navyše reálna snímka, ak je na
+stroji), v kópii sa jedna položka tabuľky prepíše na adresu v oblasti modulov, a overí
+sa, že detektor taký zápis nájde a správne ho pomenuje. V hosťovi sa nemení nič.
 
 Prečo to tam musí byť: kontrola, ktorá na čistom hosťovi vždy vráti nulu, je na
 nerozoznanie od funkcie, ktorá vždy vracia nulu. Negatívny aj pozitívny prípad musia bežať
 oba.
 
-Prečo to nie je skutočný rootkit: hosť nemá `gcc`, `make` ani hlavičky jadra, a nemá
-funkčné DNS, takže sa ani nedajú doinštalovať. Zavedenie modulu jadra je v tomto
-prostredí nedosiahnuteľné.
+Prečo to nie je skutočný rootkit: v meraniach sa do hosťa žiadny modul jadra nezaviedol.
+Pôvodný dôvod (2026-09-18): hosť `hyptcn-guest` nemal `gcc`, `make` ani hlavičky jadra
+a nemal funkčné DNS, takže sa nedali ani doinštalovať. Od 2026-10-05 (commit `2829eb7`)
+existuje PoC skutočného rootkitu `scripts/poc/diamorphine.sh` (Diamorphine LKM; v hosťovi
+potrebuje `git`, `make`, `gcc` a hlavičky jadra). Spúšťa ho starý harness sedení
+`scripts/session.sh` s manifestom `harness/session_manifest_g1_diamorphine.json`
+v zahadzovanom overlayi; harness v repozitári zostáva ako historický a diagnostický
+a izolovanej útokovej etape (`METODIKA_ZBERU.sk.md`, kap. 7) nezodpovedá. Beh PoC nie je
+doložený: v `data/sessions/` k nemu sedenie nie je a artefakt nemá (`UNVERIFIED`).
 
-**Overenie.** Hlavička `guestparse/tests/test_injection.py`:
+**Overenie.** Hlavička `guestparse/tests/test_injection.py` (stav 2026-10-29):
 
-> Test si urobi KOPIU realnej snimky a v KOPII prepise jednu polozku tabulky volani jadra
-> na adresu v oblasti modulov. V hostovi sa NIC nemeni a ziadny rootkit sa nikam
-> neinstaluje (...) Ide teda o injekciu do datoveho suboru, nie o realny utok; dokazuje sa
-> tym iba to, ze detektor taky zapis najde a spravne ho pomenuje.
+> Test si urobi KOPIU snimky a v KOPII prepise jednu polozku tabulky volani
+> jadra na adresu v oblasti modulov. V hostovi sa NIC nemeni a ziadny rootkit
+> sa nikam neinstaluje (...) Ide teda o injekciu do datoveho suboru, nie o realny utok;
+> dokazuje sa tym iba to, ze detektor taky zapis najde a spravne ho pomenuje.
+> (...) KDE TO BEZI: nad malou snimkou verzionovanou v repe (tests/data/mini.vmicd),
+> teda aj v cerstvom klone bez pristupu k tomuto stroju, a navyse nad realnou
+> snimkou hosta, ked na stroji je (znacka 'realsnap').
 
-Test je súčasťou sady, ktorá prechádza:
+Výsledok 2026-10-29 na tomto stroji: tri testy nad `mini.vmicd` prešli, tri testy nad
+reálnou snímkou sa preskočili, lebo `/var/tmp/vmic-val` už neexistuje (v behu
+2026-09-18 bežali nad ňou):
 
 ```
-$ python3 -m pytest -q
-........................................................................ [ 81%]
-................                                                         [100%]
-88 passed in 1.61s
+$ python3 -m pytest -q guestparse/tests/test_injection.py
+3 passed, 3 skipped in 0.31s
 ```
+
+Počet testov celej sady sa tu ručne neuvádza; generuje ho kapitola 3 `docs/PRIRUCKA.md`.
 
 **Formulácia do textu práce.**
 
 > Pozitívny prípad detekcie hookov v tabuľke systémových volaní bol overený injekčným
 > testom: do kópie reálnej snímky sa prepísala jedna položka tabuľky na adresu v oblasti
 > modulov a detektor ju nahlásil. **Ide o injekciu do dátového súboru, nie o skutočný
-> rootkit.** V hosťovi nebol zavedený žiadny modul jadra — prostredie to neumožňuje
-> (hosť nemá prekladač, nástroje `make`, hlavičky jadra ani funkčné rozlíšenie mien).
+> rootkit.** V hosťovi nebol zavedený žiadny modul jadra: pôvodný hosť na to nemal
+> prekladač, nástroje `make`, hlavičky jadra ani funkčné rozlíšenie mien a pripravený
+> test so skutočným rootkitom nemá doložený beh.
 > Test preto dokazuje, že detektor taký zápis nájde a správne pomenuje, nie že by
 > odhalil reálny útok na jadro.
 
@@ -386,11 +438,12 @@ bez `userspace_addr`.
 **Overenie.**
 
 ```
-$ grep -n "guest_memfd" vmicollect/src/backend_ebpf.c vmicollect/bpf/vmic_bpf_abi.h vmicollect/README.md
+$ grep -n "guest_memfd" vmicollect/src/backend_ebpf.c vmicollect/bpf/vmic_bpf_abi.h
 vmicollect/bpf/vmic_bpf_abi.h:163:    __u32 skipped;          /* sloty bez HVA (guest_memfd)             */
 vmicollect/bpf/vmic_bpf_abi.h:196:    __u32 skipped;          /* out: preskocene sloty (guest_memfd)     */
 vmicollect/src/backend_ebpf.c:902:                 "(guest_memfd / prave sa meni) - budu nulove",
-vmicollect/README.md:418:**Confidential VM (SEV-SNP, TDX).** Pamat takej VM je v `guest_memfd` a cez
+$ grep -h "guest_memfd" vmicollect/README.md
+**Confidential VM (SEV-SNP, TDX).** Pamat takej VM je v `guest_memfd` a cez
 ```
 
 Rozlíšenie privátnej a zdieľanej časti je popísané v komentári nad príznakmi memslotu
@@ -443,11 +496,15 @@ $ grep -n "mmap(NULL\|memcpy(out + done\|run_prog(p->fd_read" vmicollect/src/bac
 
 ## L9 — Hook je notifikačný
 
-**Fakt.** Rozhranie pluginu (`vmic_hook_api_t`) má tri polia: číslo ABI, ukazovateľ na
-konfiguráciu iba na čítanie, a logovaciu funkciu. **Neobsahuje `read_pa`** ani inú cestu
-k pamäti hosťa, ani ukazovateľ na backend či zberač. Plugin dostane pri každej snímke
-`const vmic_snapshot_t *` — teda cestu k hotovému súboru, časy a počítadlá — a ak chce
-obsah, musí si súbor otvoriť sám.
+**Fakt.** Rozhranie pluginu (`vmic_hook_api_t`, od 2026-10-05 ABI 2) má štyri položky:
+číslo ABI, ukazovateľ na konfiguráciu iba na čítanie, logovaciu funkciu a `alarm()`,
+ktorou plugin vyhlási alarm. Zberač alarm zapíše do `alarm.json` a `alarms.jsonl`
+a reťazec označí markerom HOLD, aby ho retencia nezmazala. **Neobsahuje `read_pa`** ani
+inú cestu k pamäti hosťa, ani ukazovateľ na backend či zberač. Plugin dostane pri každej
+snímke `const vmic_snapshot_t *` — teda cestu k hotovému súboru, časy a počítadlá — a ak
+chce obsah, musí si súbor otvoriť sám. Reakciu na alarm má voliteľný plugin
+`vmicollect/hooks/react_hook.c` (pozastavenie VM, odpojenie siete alebo snapshot cez
+libvirt); bez jeho načítania zberač nereaguje nijako.
 
 Od verzie zberača 1.1 (2026-10-25) beží hook pri writeri `delta` vo vlákne `vmic-writer`,
 až po zverejnení snímky (súbor aj sidecar existujú), nad jej kópiou; ukazovatele v zázname
@@ -460,15 +517,17 @@ SIGINT/SIGTERM/SIGHUP; dieťa spustené z hooku (napr. `system()`) ich zdedí za
 **Overenie.** Celé rozhranie, ktoré plugin dostane, je v `vmicollect/include/vmic.h`:
 
 ```c
-typedef struct {
+struct vmic_hook_api {
     unsigned abi;
     const vmic_config_t *cfg;
     void (*log)(int level, const char *fmt, ...);
-} vmic_hook_api_t;
+    int  (*alarm)(const struct vmic_hook_api *api, const vmic_alarm_t *a);
+};
 ```
 
-Reálny beh s pluginom (backend `file`, bez roota, výpis skrátený; cesta dočasného
-adresára nahradená `$D`):
+(stav 2026-10-29, komentáre vynechané; pred commitom `b431013` z 2026-10-05 mala štruktúra
+iba prvé tri položky). Reálny beh s pluginom z 2026-09-18 (backend `file`, bez roota,
+výpis skrátený; cesta dočasného adresára nahradená `$D`):
 
 ```
 2026-09-18T16:54:15.545Z INFO  example_hook: zapisujem index do '$D/index.csv'
@@ -487,8 +546,11 @@ seq,timestamp_unix,path,bytes_on_disk,pause_ms,capture_ms,total_ms,pages_changed
 
 > Rozširujúce rozhranie modulu (hook) je notifikačné. Plugin je zdieľaná knižnica načítaná
 > cez `dlopen` a po každej dokončenej snímke dostane záznam s cestou k súboru, časmi
-> jednotlivých fáz cyklu a počítadlami zmenených stránok. **Nedostáva funkciu na čítanie
-> pamäte hosťa ani obsah stránok**; ak potrebuje dáta, musí si uloženú snímku otvoriť sám.
+> jednotlivých fáz cyklu a počítadlami zmenených stránok. Môže vyhlásiť alarm, ktorý
+> zberač zapíše a pri ktorom chráni príslušný reťazec snímok pred retenciou; reakciu
+> na úrovni hypervízora vykoná iba voliteľný plugin, predvolene vypnutý. **Nedostáva
+> funkciu na čítanie pamäte hosťa ani obsah stránok**; ak potrebuje dáta, musí si uloženú
+> snímku otvoriť sám.
 > Pri inkrementálnom zápise (writer `delta`, zberač verzie 1.1) beží plugin vo vlákne, ktoré
 > súbory zverejňuje mimo vzorkovacieho cyklu: výpočet dlhší než perióda zberu neposunie
 > vzorkovanie, ale oneskorí zverejnenie ďalších snímok a pri dlhodobom zaostávaní vyčerpá
@@ -521,7 +583,7 @@ miesta:
    nevytvorí a alarm skrytého objektu príde o periódu neskôr.
 
 **Overenie.** Zdôvodnenie je v hlavičke `guestparse/checks.py`. Na meranej snímke sa
-uzavreli všetky tri kontroly a nález bol nulový:
+2026-09-18 uzavreli všetky vtedajšie tri kontroly a nález bol nulový:
 
 ```
 $ python3 -m guestparse checks --snapshot $S --profile $P
@@ -533,12 +595,33 @@ $ echo $?
 0
 ```
 
+Ten istý príkaz 2026-10-29 (commit `709ee7f`;
+`S=data/sessions/20260918T154914Z_validate/snap`,
+`P=profiles/debian12-6.1.0-42-cloud-amd64`) profil najprv preukotví (L17) a vypíše štyri
+kontroly. Štvrtá, obsah textu jadra, je nedostupná pre nesediacu baseline (L18), preto
+príkaz skončí kódom 4:
+
+```
+$ python3 -m guestparse checks --snapshot $S --profile $P
+POZOR: profil bol z ineho bootu (KASLR); preukotvenie o -444596224 uspelo - pokracujem s preukotvenym profilom
+sys_call_table         451 poloziek v [0xffffffff96000000, 0xffffffff96e01ef2), nalezov: 0
+procesy krizovo        tasks 80 vs. children/sibling 80, nalezov: 0
+moduly krizovo         modules 51 vs. module_kset 51 (z 109 kobjektov), nalezov: 0
+text jadra             NEDOSTUPNA (baseline textu nesedi s profilom ani po posune o KASLR rozdiel (ine jadro); obnov ju nad cistou snimkou)
+NEUZAVRETE kontroly: text_integrity - ich nulovy vysledok nic nedokazuje (preto navratovy kod 4, nie 0)
+nalezov spolu: 0 (z toho hookov v tabulke volani: 0)
+$ echo $?
+4
+```
+
 **Formulácia do textu práce.**
 
 > Kontroly integrity nad snímkou sú porovnaním dvoch nezávislých zdrojov, ktoré musia
 > sedieť: položky tabuľky systémových volaní proti rozsahu textu jadra, zoznam procesov
-> proti stromu potomkov, zoznam modulov proti objektom v `module_kset`. Ich slepé miesta
-> sú známe a pomenované: prepísanie obsluhy na inú adresu **vnútri** rozsahu textu jadra
+> proti stromu potomkov, zoznam modulov proti objektom v `module_kset` a obsah stránok
+> textu jadra proti baseline v profile (v uložených dátach pilotov a kampaní táto
+> štvrtá kontrola nebola vyhodnotená, L18). Ich slepé miesta sú známe a pomenované:
+> prepísanie obsluhy na inú adresu **vnútri** rozsahu textu jadra
 > rozsahová kontrola nevidí; skrytie, ktoré odpojí uzol z oboch porovnávaných štruktúr
 > naraz, nevytvorí rozdiel; a nulový výsledok kontroly, ktorá sa pre neúplný prechod
 > zoznamu neuzavrela, nie je dôkazom čistoty — nástroj takýto prípad označuje samostatne
@@ -575,15 +658,17 @@ nevznikne artefakt v `data/results/`. Výnimkou je pamäť zberača v riadku „
 na hostiteľa“: tá je zmeraná (diagnostika 2026-10-25); CPU zberača monitor hostiteľa
 zaznamenáva, žiadny záznam v `data/results/` ho však ako spotrebu nevyhodnocuje
 (`collection_writeback_stall_20261024.json` ho uvádza iba vo vzorkách okolo dlhých cyklov).
+Riadky vplyvu na hosťa a na hostiteľa uvádzajú navyše pozorovanie z prostredia so
+spoločným diskom VM a snímok (2026-10-21), ktoré párované meranie nenahrádza.
 
 | Veličina | Stav | Čo na ňu treba |
 |---|---|---|
-| živá latencia snímka → skóre modelu | `UNVERIFIED` | meranie počas bežiaceho zberu: `tcn/score.py` pripojený na beh `vmicollect run`, latencia od konca cyklu po vypočítané skóre, medián a p95 z aspoň 12 cyklov |
-| vplyv zberu na výkon vnútri hosťa | `UNVERIFIED` | benchmark s pevne daným objemom práce v hosťovi, schéma A/B/A, medián a IQR z aspoň 12 opakovaní |
-| vplyv zberu na hostiteľa | `UNVERIFIED` (pamäť zmeraná, CPU zaznamenané, nevyhodnotené) | pamäť: zberač 1.1 s `output.mlock` drží frontu uzamknutú v RAM (najväčšia možná plná snímka + 512 MiB), monitor kampane ju zaznamenáva (`Mlocked`); diagnostika 2026-10-25 pri VM s 2 GiB: VmRSS po uzamknutí 2596 {{res:collection_writer_diagnostic_20261025_timing.json:values.collector_mlock.vmrss_mib}} MiB, `Mlocked` hostiteľa počas zberu najviac 2609 {{res:collection_writer_diagnostic_20261025_timing.json:values.during_capture.mlocked_mib_max}} MiB ([záznam](../data/results/collection_writer_diagnostic_20261025_timing.json), [MERANIA.md](MERANIA.md) 2026-10-25; jeden 40-minútový beh mimo korpusu); chýba vyhodnotená spotreba CPU celého procesu (monitor hostiteľa ju zaznamenáva po 1 s za všetky vlákna spolu, teda aj za `vmic-writer` so SHA-256 a `vmic-log`, ako `procs.vmicollect.cpu_pct` v `host_monitor.jsonl`; záznam diagnostiky ju nevyhodnocuje a má iba maximum vzorkovacieho vlákna na cyklus, `rusage_max.cpu_ms`), priemer za celý beh a vplyv na ostatnú záťaž hostiteľa |
-| dlhý beh s retenciou | `UNVERIFIED` | beh jedného procesu zberača rádovo v hodinách s retenciou: zmeškané sloty, rast obsadeného miesta, správanie pri reštarte domény počas behu; zatiaľ existujú iba hodinové behy bez retencie: kampaň `benign-v4-20261022` mala 37 {{res:collection_campaign_benign_v4_20261022.json:n}} samostatných behov zberača po 720 {{res:collection_campaign_benign_v4_20261022.json:values.sessions.0.collector_end.snapshots}} cykloch (nový proces zberača v každej session, reštart hosťa na hraniciach skupín), spolu 26640 {{res:collection_writeback_stall_20261024.json:n}} cyklov a jeden zmeškaný slot pri spätnom zápise na SSD (zberač 1.0, [záznam](../data/results/collection_campaign_benign_v4_20261022.json), [MERANIA.md](MERANIA.md) 2026-10-25); zberač 1.1 bežal v kampani `benign-v5-20261025` tiež iba v hodinových behoch bez retencie: 18 {{res:collection_campaign_benign_v5_20261025.json:n}} behov po 720 {{res:collection_campaign_benign_v5_20261025.json:values.sessions.0.collector_end.snapshots}} cykloch (nový proces zberača v každej session), 0 {{res:collection_campaign_benign_v5_20261025.json:values.summary.scheduler_skips}} hlásení plánovača o zahodenom slote ([záznam](../data/results/collection_campaign_benign_v5_20261025.json), [MERANIA.md](MERANIA.md) 2026-10-26); v kampani `benign-v6-20261026` 48 {{res:collection_campaign_benign_v6_20261026.json:n}} behov po 720 {{res:collection_campaign_benign_v6_20261026.json:values.sessions.0.collector_end.snapshots}} cykloch, 0 {{res:collection_campaign_benign_v6_20261026.json:values.summary.scheduler_skips}} hlásení plánovača o zahodenom slote ([záznam](../data/results/collection_campaign_benign_v6_20261026.json), [MERANIA.md](MERANIA.md) 2026-10-29) |
+| živá latencia snímka → skóre modelu | `UNVERIFIED` | meranie počas spoločného behu zberača a detektora `python3 -m safeguard run`: latencia od konca cyklu po vypočítané skóre, medián a p95 z aspoň 12 cyklov; doteraz zmerané iba nad uloženými snímkami (`latency_score_20260919.json`, `latencia_predikcia_real_20261005.json`; obe vyrobila staršia cesta `tcn/score.py`, ktorá v repozitári zostáva ako historická a diagnostická) |
+| vplyv zberu na výkon vnútri hosťa | `UNVERIFIED` | benchmark s pevne daným objemom práce v hosťovi, schéma A/B/A, medián a IQR z aspoň 12 opakovaní; párované meranie podľa `METODIKA_ZBERU.sk.md` (kap. 7, Výkonnosť) chýba. Pozorované, nie zmerané A/B/A: keď bol disk VM na tom istom súborovom systéme ako snímky, spätný zápis plnej snímky oneskoril databázu hosťa a 4 {{res:collection_io_interference_20261021.json:values.request_failures.count}} požiadavky prekročili limit klienta 4 s ([záznam](../data/results/collection_io_interference_20261021.json), [MERANIA.md](MERANIA.md) 2026-10-21); disk VM sa potom presunul na iné zariadenie |
+| vplyv zberu na hostiteľa | `UNVERIFIED` (pamäť zmeraná, CPU zaznamenané, nevyhodnotené) | pamäť: zberač 1.1 s `output.mlock` drží frontu uzamknutú v RAM (najväčšia možná plná snímka + 512 MiB), monitor kampane ju zaznamenáva (`Mlocked`); diagnostika 2026-10-25 pri VM s 2 GiB: VmRSS po uzamknutí 2596 {{res:collection_writer_diagnostic_20261025_timing.json:values.collector_mlock.vmrss_mib}} MiB, `Mlocked` hostiteľa počas zberu najviac 2609 {{res:collection_writer_diagnostic_20261025_timing.json:values.during_capture.mlocked_mib_max}} MiB ([záznam](../data/results/collection_writer_diagnostic_20261025_timing.json), [MERANIA.md](MERANIA.md) 2026-10-25; jeden 40-minútový beh mimo korpusu); chýba vyhodnotená spotreba CPU celého procesu (monitor hostiteľa ju zaznamenáva po 1 s za všetky vlákna spolu, teda aj za `vmic-writer` so SHA-256 a `vmic-log`, ako `procs.vmicollect.cpu_pct` v `host_monitor.jsonl`; záznam diagnostiky ju nevyhodnocuje a má iba maximum vzorkovacieho vlákna na cyklus, `rusage_max.cpu_ms`), priemer za celý beh a vplyv na ostatnú záťaž hostiteľa; pozorovaný je vplyv spätného zápisu plnej snímky na I/O hostiteľa pri spoločnom disku VM a snímok: 12.0 {{res:collection_io_interference_20261021.json:values.writeback_burst_after_second_full.duration_s}} s pri iowait až 51.163 {{res:collection_io_interference_20261021.json:values.writeback_burst_after_second_full.iowait_max_pct}} % ([záznam](../data/results/collection_io_interference_20261021.json), zamietnutý pilot so zberačom 1.0) |
+| dlhý beh s retenciou | `UNVERIFIED` | beh jedného procesu zberača rádovo v hodinách s retenciou: zmeškané sloty, rast obsadeného miesta, správanie pri reštarte domény počas behu; zatiaľ existujú iba hodinové behy bez retencie: kampaň `benign-v4-20261022` mala 37 {{res:collection_campaign_benign_v4_20261022.json:n}} samostatných behov zberača po 720 {{res:collection_campaign_benign_v4_20261022.json:values.sessions.0.collector_end.snapshots}} cykloch (nový proces zberača v každej session, reštart hosťa na hraniciach skupín), spolu 26640 {{res:collection_writeback_stall_20261024.json:n}} cyklov a jeden zmeškaný slot pri spätnom zápise na SSD (zberač 1.0, [záznam](../data/results/collection_campaign_benign_v4_20261022.json), [MERANIA.md](MERANIA.md) 2026-10-25); zberač 1.1 bežal v kampani `benign-v5-20261025` tiež iba v hodinových behoch bez retencie: 18 {{res:collection_campaign_benign_v5_20261025.json:n}} behov po 720 {{res:collection_campaign_benign_v5_20261025.json:values.sessions.0.collector_end.snapshots}} cykloch (nový proces zberača v každej session), 0 {{res:collection_campaign_benign_v5_20261025.json:values.summary.scheduler_skips}} hlásení plánovača o zahodenom slote ([záznam](../data/results/collection_campaign_benign_v5_20261025.json), [MERANIA.md](MERANIA.md) 2026-10-26); v kampani `benign-v6-20261026` 48 {{res:collection_campaign_benign_v6_20261026.json:n}} behov po 720 {{res:collection_campaign_benign_v6_20261026.json:values.sessions.0.collector_end.snapshots}} cykloch, 0 {{res:collection_campaign_benign_v6_20261026.json:values.summary.scheduler_skips}} hlásení plánovača o zahodenom slote ([záznam](../data/results/collection_campaign_benign_v6_20261026.json), [MERANIA.md](MERANIA.md) 2026-10-29); reštart domény počas behu jedného procesu zberača doložil iba krátky beh s 8 {{res:a1_restart_20261005T204555Z.json:n_sidecars}} snímkami nad doménou `hyptcn-guest` ([záznam](../data/results/a1_restart_20261005T204555Z.json), 2026-10-05) |
 | správanie pri periódach iných než 2 s a 5 s | `UNVERIFIED` | sweep periódy a veľkosti bloku |
-| presnosť detekcie voči reálnym malvérovým vzorkám | **nebude zmeraná** | vzorky nie sú dostupné; nenahrádza sa ničím — podrobne v [L16](#l16--presnosť-detekcie-malvéru-nebola-meraná-a-v-tejto-verzii-sa-merať-nedá) |
+| presnosť detekcie voči reálnym malvérovým vzorkám | nezmeraná | plánovaná izolovaná etapa (`METODIKA_ZBERU.sk.md`, kap. 7), zatiaľ neuskutočnená; PoC techniky `scripts/poc/` a sťahovanie vzoriek `scripts/mb_fetch.py` existujú, ale nemajú artefakt (`UNVERIFIED`) — podrobne v [L16](#l16--presnosť-detekcie-malvéru-nebola-meraná) |
 
 **Čo z tejto tabuľky medzičasom odišlo.** Latencia snímka → príznakový vektor tu stála
 so stavom `UNVERIFIED` a s dôvodom „príznakový priestor zatiaľ neexistuje“. Oboje už
@@ -592,17 +677,31 @@ artefakt `data/results/latency_vector_20260918.json`, rozpis v `docs/MERANIA.md`
 Riadok bol preto 2026-09-19 z tabuľky odstránený.
 
 **Prečo je živá latencia snímka → skóre ďalej `UNVERIFIED`, hoci skórovanie existuje.**
-Model aj skórovací komponent hotové sú (`tcn/model.py`, `tcn/score.py`) — dôvod, ktorý tu
-stál („model ani skórovací komponent zatiaľ neexistujú“), bol nepravdivý a 2026-09-19 sa
-opravil. Nezmerané je niečo iné: skórovanie sa zatiaľ meralo len nad **uloženou** snímkou,
-mimo behu zberu (`data/results/latency_score_20260919.json`, kľúč `co_sa_NEMERALO` to
-hovorí aj v samotnom artefakte). Kým sa `tcn/score.py` neodmeria pripojený na bežiaci
-`vmicollect run`, číslo pre živú cestu nie je. Druhá vec, ktorá z toho čísla nevyplýva:
-model nie je natrénovaný, takže by šlo o čas cesty, nie o kvalitu rozhodnutia (L16).
+Model aj skórovací komponent hotové sú — dôvod, ktorý tu stál („model ani skórovací
+komponent zatiaľ neexistujú“), bol nepravdivý a 2026-09-19 sa opravil. Integrovanou
+detekčnou cestou je dnes `safeguard/` (`python3 -m safeguard`, skórovanie
+v `safeguard/runtime.py`, model nad `tcn/model.py`); staršia cesta `tcn/score.py`
+(používajú ju `scripts/detektor.py` a `scripts/soft_rt_check.py`) zostáva v repozitári ako
+historická a diagnostická. Nezmerané je niečo iné: skórovanie sa zatiaľ meralo len nad
+**uloženými** snímkami, mimo behu zberu (`data/results/latency_score_20260919.json`, kľúč
+`co_sa_NEMERALO` to hovorí aj v samotnom artefakte, a
+`data/results/latencia_predikcia_real_20261005.json`; obe vyrobil `tcn/score.py`).
+Spoločný beh zberača a detektora `python3 -m safeguard run` je podľa
+[`SAFEGUARD.sk.md`](SAFEGUARD.sk.md) `UNVERIFIED`, takže číslo pre živú cestu nie je.
+Druhá vec, ktorá z toho čísla nevyplýva: natrénované sú iba diagnostické modely
+(syntetický model v `data/results/safeguard_validation_20261013_a.json`, malé idle a lab
+sedenia v `data/results/trenovanie_prediktor_*.json`). Model na korpuse
+`benign-v6-20261026` zatiaľ natrénovaný nie je, takže by šlo o čas cesty, nie o kvalitu
+rozhodnutia (L16).
 
 Ďalšia nedoriešená vec, ktorá patrí do priznaných: pri načítaní BPF programu sa objavuje
 nefatálne hlásenie `libbpf: Error in bpf_create_map_xattr(pages): -EINVAL. Retrying
 without BTF.` Mapa sa vytvorí aj bez BTF a zber funguje, ale príčina nebola zistená.
+V novších behoch má hlásenie tvar
+`Error in bpf_create_map_xattr(pages):Invalid argument(-22). Retrying without BTF.`;
+posledný uložený výskyt je z pilota 7 z 2026-10-26 (`collection_pilot_7_20261026_audit.json`,
+`values.logs.sections.collector.warnings`), záznam kampane `benign-v6-20261026` varovania
+zberača neukladá.
 
 **Formulácia do textu práce.**
 
@@ -614,7 +713,9 @@ without BTF.` Mapa sa vytvorí aj bez BTF a zber funguje, ale príčina nebola z
 > virtuálnom stroji s 2 GiB to v jednom diagnostickom behu bolo
 > 2596 {{res:collection_writer_diagnostic_20261025_timing.json:values.collector_mlock.vmrss_mib}} MiB rezidentnej pamäte.
 > Spotrebu procesora celým procesom zberača monitor hostiteľa počas zberu zaznamenával
-> každú sekundu, v práci však vyhodnotená nie je.
+> každú sekundu, v práci však vyhodnotená nie je. Pozorovaný je ešte vplyv spätného zápisu
+> plných snímok na vstupno-výstupné operácie hostiteľa, ktorý pri spoločnom disku
+> virtuálneho stroja a snímok oneskoril aj hosťa; párovým meraním overený nie je.
 > Pri ostatných veličinách nejde o vynechanie: v rámci tejto práce neboli namerané, a formulácie
 > typu „minimálny vplyv na virtuálny stroj“ alebo „spracovanie v reálnom čase“ by preto
 > boli tvrdením bez podkladu. Tam, kde je to potrebné, sa namiesto nich uvádza konkrétna
@@ -629,9 +730,10 @@ without BTF.` Mapa sa vytvorí aj bez BTF a zber funguje, ale príčina nebola z
 stránky proti tabuľke hashov, ktorá je na začiatku reťazca nulová, takže „zmenená" tam
 znamená „nenulová" a platí presne `changed_ratio = 1 − zero_ratio` (overené na sidecari
 seq 0: 0,854823 + 0,145177 = 1,000000 na všetkých binoch). Riadok plnej snímky má teda iný
-význam než riadky delta snímok. `features/windows.py` to rieši voľbou, čo s plnými snímkami
-robiť, a východzie správanie je zdokumentované — ale kto pridá nový príznak alebo nový
-model, musí o tom vedieť.
+význam než riadky delta snímok. `features/windows.py` okno, ktoré obsahuje plnú snímku,
+neposkladá vôbec (dôvod je v `Okna.vynechane`), rovnako `safeguard/features.py`; riadok
+zostáva v matici s príznakom `je_plna`. Kto pridá nový príznak alebo nový model, musí
+o tom vedieť.
 
 **Formulácia do textu práce:** „Prvá snímka reťazca je referenčná; príznaky odvodené od zmeny
 majú v nej definíciu, ktorá sa líši od nasledujúcich snímok, preto sa v sekvenciách
@@ -643,17 +745,44 @@ stránku. Na plnej snímke to je ~431 ms navyše. Čísla sú v `docs/MERANIA.md
 z 2026-09-18 (fáza F2).
 
 **Formulácia do textu práce:** „Extrakcia príznakov je súčasťou cyklu zberu a jej cena je
-zmeraná; pri perióde 2 s zostáva p95 latencie cyklu pod periódou s rezervou približne
-trojnásobku."
+zmeraná; na nečinnej doméne `hyptcn-guest` pri perióde 2 s zostal p95 latencie cyklu pod
+periódou s rezervou približne trojnásobku."
+
+Rezerva platí iba pre toto meranie (F2: nečinná VM, zberač 1.0). Pod serverovou záťažou
+laboratória `hyptcn-lab` pri perióde 5 s trval so zberačom 1.0, ktorého cyklus zahŕňal aj
+volania `write()` pre zmenené stránky ([MERANIA.md](MERANIA.md), oprava z 2026-10-25),
+najpomalší delta cyklus session 1 kampane `benign-v3-20261022`
+2648.0 {{res:collection_campaign_benign_v3_20261022.json:values.sessions.0.long_cycles.2.total_ms}}
+ms a druhá plná snímka pilota 5
+2735.9 {{res:collection_pilot_5_20261022_timing.json:values.full_snapshots.seq_360.cycle_ms}}
+ms; plná snímka všetkých stránok hosťa by podľa lineárneho odhadu z pilota 5 trvala okolo
+4355.3 {{res:collection_full_snapshot_growth_20261022.json:values.estimate_all_pages_ms}}
+ms (odhad, nie meranie). So zberačom 1.1, ktorý zapisuje mimo vzorkovacieho cyklu, mala
+kampaň `benign-v5-20261025` najdlhší cyklus
+1821.1 {{res:collection_campaign_benign_v5_20261025.json:values.summary.cycle_total_ms_max}}
+ms (plná snímka) a najdlhšiu deltu
+894.8 {{res:collection_campaign_benign_v5_20261025.json:values.summary.delta_ms_max_all}}
+ms ([MERANIA.md](MERANIA.md), záznam z 2026-10-26); kampaň `benign-v6-20261026` mala
+najdlhší cyklus
+2009.0 {{res:collection_campaign_benign_v6_20261026.json:values.summary.cycle_total_ms_max}}
+ms (plná snímka) a najdlhšiu deltu
+897.3 {{res:collection_campaign_benign_v6_20261026.json:values.summary.delta_ms_max_all}}
+ms ([MERANIA.md](MERANIA.md), záznam z 2026-10-29).
 
 **Počet binov je viazaný na geometriu konkrétnej VM.** Pri 2,02 GiB VM vzniká 131 binov;
 pri inej veľkosti pamäte alebo inom rozložení memslotov ich bude iný počet. Model, ktorý by
-bral biny ako pevný počet vstupov, by bol použiteľný len na VM rovnakej veľkosti. Ako sa
-s tým naloží, je otvorené rozhodnutie fázy F3 a nesmie sa „vyriešiť" tichým doplnením núl
-do pevnej dĺžky.
+bral biny ako pevný počet vstupov, by bol použiteľný len na VM rovnakej veľkosti.
+Rozhodnuté je to v `safeguard/`: globálny vektor agreguje cez biny a lokálna vetva je
+jedna TCN zdieľaná cez všetky biny (`safeguard/model.py`), takže jej váhy od počtu binov
+nezávisia. Kontrakt príznakov uloženého modelu však zmrazuje zoznam binov aj rozloženie
+pamäte (`feature_contract` a `check_frame` v `safeguard/features.py`), takže model je
+použiteľný iba na VM s rovnakou geometriou; zmena geometrie vyžaduje nový tréning. Tiché
+doplnenie núl do pevnej dĺžky sa nepoužíva.
 
-**Vektor sa meral iba na jednej doméne.** Geometria s inou veľkosťou binu (1 MiB) je overená
-testom nad synteticky deravým obrazom, nie nad druhou skutočnou VM. Správanie pri hotplugu
+**Vektor sa meral na dvoch doménach s rovnakým jadrom.** `hyptcn-guest` má 131 binov,
+klon `hyptcn-lab` 130 binov po 16 MiB v troch oblastiach (`values.layout` v
+`data/results/collection_pilot_7_20261026_audit.json`). Geometria s inou veľkosťou binu
+(1 MiB) je overená iba testom nad synteticky deravým obrazom. Správanie pri hotplugu
 pamäte za behu je v kóde ošetrené podpisom oblastí, ale nebolo odskúšané behom.
 
 **`zero_ratio` a `mem_zero_ratio` závisia od veku procesu QEMU.** Stránka, ktorej sa proces
@@ -698,8 +827,8 @@ ktoré zmizne bez stopy, vyzerá, ako by nikdy nebolo. Pôvodné znenie je zacho
 dve polia o samotnom riadku, `ma_predchodcu` a `je_plna` — spolu **22 stĺpcov** (`MENA`
 vo `features/snapshot.py`). Pamäťová časť (príznaky 1–8) je agregát bloku `features` zo
 sidecaru snímky, ktorý počíta modul `vmicollect`; objektová časť (príznaky 9–20) sa číta
-cez `guestparse` nad **tou istou** snímkou. Pole `je_plna` pribudlo až po commite
-`da8ad2e` a v čase písania tohto záznamu v histórii ešte nie je:
+cez `guestparse` nad **tou istou** snímkou. Pole `je_plna` pribudlo v commite `b574b8d`
+(2026-09-19):
 
 | Príznaky | Čo v nich je | Veta zadania |
 |---|---|---|
@@ -713,12 +842,22 @@ cez `guestparse` nad **tou istou** snímkou. Pole `je_plna` pribudlo až po comm
 Príkaz: `python3 -m features session --snapshot <adresár> --profile <profil> --out <súbor.npz> [--csv <súbor.csv>]`.
 Mená príznakov sa ukladajú spolu s maticou, takže poradie stĺpcov sa dá spätne overiť.
 
+**Zmena 2026-10-13 (protokol server-normal-v2).** Do modelu `safeguard` vstupuje iba
+prvých 18 stĺpcov (`BEHAVIOR_NAMES = MENA[:18]` vo `features/archive.py`) a per-bin blok
+so štyrmi hodnotami na bin, ktorý spracúva jedna TCN zdieľaná cez biny
+(`safeguard/model.py`). Stĺpce 19–22 zostávajú v matici, ale model ich nečíta; nálezy
+kontrol integrity sú samostatný alarm, nie vstup modelu ([MERANIA.md](MERANIA.md), záznam
+„návrh v2“ z 2026-10-13). Staršia detekčná cesta nad všetkými 22 stĺpcami
+(`tcn/train.py`, `tcn/score.py`) v repozitári zostáva ako historická a diagnostická.
+
 **Prečo pevná dĺžka a nie biny ako kanály.** Počet binov závisí od veľkosti a rozloženia
 memslotov virtuálneho stroja (pri doméne `hyptcn-guest` ich je 131). Biny ako kanály by
 model priviazali na jednu veľkosť pamäte, preto sa cez biny agreguje — je to cesta (a)
-z otvoreného rozhodnutia vo `features/windows.py`. Cenou je strata informácie o tom,
+z vtedy otvoreného rozhodnutia (hlavičky `features/snapshot.py` a `features/windows.py`).
+Cenou je strata informácie o tom,
 **ktorá** oblasť pamäte sa menila; per-bin vektor kvôli tomu nezaniká, zostáva
-v `features/perbin.py` a v sidecari.
+v `features/perbin.py` a v sidecari a od 2026-10-13 je lokálnou vetvou modelu `safeguard`
+(L13).
 
 **Prvá snímka reťazca a plná snímka.** Príznaky `proc_new`, `proc_gone` a `mod_delta`
 potrebujú predchádzajúcu snímku. Zvolená cesta: riadok sa nevynecháva, ale nesie
@@ -730,10 +869,10 @@ vyjde presne `1 − mem_zero_ratio`. Je to rovnaké číslo s iným významom a 
 to nepokrýva. Ticho doplnená nula aj ticho iný význam sú v tomto projekte zakázané
 (`HONESTY.md`); kto maticu spracúva, musí čítať obe polia.
 
-**Overenie.** `features/tests/test_snapshot.py` (15 testov, všetky prešli 2026-09-19
-aj s `FEATURES_REQUIRE_REAL=1`) kontroluje dĺžku vektora, mená príznakov, ručne spočítanú
-pamäťovú agregáciu, `ma_predchodcu` = 0 na prvej snímke, `je_plna` proti hlavičkám
-reťazca `.vmicd` (nie proti poradiu v reťazci) aj doplnkovosť zmeny a nulového podielu
+**Overenie.** `features/tests/test_snapshot.py` (2026-09-19: 15 testov; 2026-10-29:
+30 testov; zakaždým prešli všetky aj s `FEATURES_REQUIRE_REAL=1`) kontroluje dĺžku
+vektora, mená príznakov, ručne spočítanú pamäťovú agregáciu, `ma_predchodcu` = 0 na prvej
+snímke, `je_plna` proti hlavičkám reťazca `.vmicd` (nie proti poradiu v reťazci) aj doplnkovosť zmeny a nulového podielu
 v plnej snímke, zhodu `proc_new` a `proc_gone` s ručne spočítaným rozdielom množín PID
 medzi dvoma snímkami a determinizmus. Nad
 `guestparse/tests/data/mini.vmicd` sa navyše overuje, že bez sidecaru s blokom `features`
@@ -742,15 +881,27 @@ skončí výpočet chybou a pamäťová časť sa **nedopočítava** inou cestou
 **Čo to stojí.** Spracovanie jednej snímky (rekonštrukcia objektov hosťa + agregácia
 sidecaru) trvalo medián 0,383 s, rozsah 0,373–0,580 s; n = 18, tri prechody reťazca
 šiestich snímok z `data/raw/20260919T004036Z_run`, teplá vyrovnávacia pamäť stránok
-hostiteľa. Pri perióde zberu 5 s to je zlomok periódy, takže spracovanie stíha. Merané
-na reťazci šiestich častí; ako cena rastie pri dlhšom reťazci, merané nebolo.
+hostiteľa (2026-09-19; samostatný artefakt v `data/results/` ani záznam v
+`docs/MERANIA.md` k tomu nie je). Pri perióde zberu 5 s to je zlomok periódy. Merané
+na reťazci šiestich častí. Pri dlhom reťazci čas na snímku rástol s pozíciou v session,
+lebo sa reťazec otváral pre každú snímku znova; od 2026-10-21 to odstraňuje
+`guestparse.image.ChainCursor` ([MERANIA.md](MERANIA.md), záznam z 2026-10-21). Na
+`hyptcn-lab` trvala offline extrakcia v audite pilota 7 spolu
+862.2 {{res:collection_pilot_7_20261026_timing.json:values.audit_timing.extraction_s_sum}}
+s za
+480 {{res:collection_pilot_7_20261026_audit.json:values.snapshots}}
+snímok a najdlhšia snímka
+5.73 {{res:collection_pilot_7_20261026_timing.json:values.audit_timing.extraction_s_max}}
+s, teda dlhšie ako perióda 5 s. Či živá cesta stíha, zmerané nie je (L12).
 
 **Formulácia do textu práce:** „Rekonštrukcia objektov hosťa a štatistiky pamäťových
 oblastí vstupujú do jedného príznakového vektora pevnej dĺžky, jeden vektor na snímku.
 Pamäťová časť je agregátom per-bin vektora, ktorý počíta modul zberu; objektová časť
 pochádza z rekonštrukcie zoznamu procesov, načítaných modulov, sieťových soketov
 a kontrol integrity nad tou istou snímkou. Príznaky, ktoré potrebujú predchádzajúcu
-snímku, sú v prvom časovom kroku označené príznakom `ma_predchodcu` = 0."
+snímku, sú v prvom časovom kroku označené príznakom `ma_predchodcu` = 0. Do vstupu
+modelu vstupujú behaviorálne príznaky a per-bin blok; kontroly integrity sa
+vyhodnocujú osobitne ako nezávislé nálezy."
 
 ---
 
@@ -838,7 +989,7 @@ než periodické čítanie pamäte — a hook je v tejto práci notifikačný (L
 
 ---
 
-## L16 — Presnosť detekcie malvéru nebola meraná a v tejto verzii sa merať nedá
+## L16 — Presnosť detekcie malvéru nebola meraná
 
 **Aktualizácia 2026-10-13:** nasledujúci text zachytáva historické rozhodnutie
 nepokračovať v zbere bez vzoriek. Aktuálny plán je v
@@ -846,6 +997,17 @@ nepokračovať v zbere bez vzoriek. Aktuálny plán je v
 normálu, potom izolované testy. Malvér nie je podmienkou tréningu normálu.
 Staré tvrdenie, že sa korpus ani tréning nerobia, už neplatí. Presnosť voči
 reálnym vzorkám stále nie je zmeraná a zostáva otvorenou časťou zadania.
+
+**Aktualizácia 2026-10-29:** pôvodný nadpis („… a v tejto verzii sa merať nedá“) sa skrátil,
+lebo meranie je plánovaná izolovaná etapa (`METODIKA_ZBERU.sk.md`, kap. 7), ktorá sa ešte
+neuskutočnila. Časť nástrojov na ňu existuje, ale nemá artefakt: PoC techniky
+v `scripts/poc/` (spúšťa ich starý harness `scripts/session.sh` nad doménou
+`hyptcn-guest`, ponechaný ako historický a diagnostický, L6) a sťahovanie vzoriek
+`scripts/mb_fetch.py`. Runner izolovanej útokovej etapy nad serverovým stackom
+laboratória ani vyhodnocovač udalostí `safeguard` (FAR za hodinu, čas do detekcie)
+zatiaľ neexistujú, takže na rozdiel od vety „vtedy sa nemení kód“ v historickom texte
+nižšie treba dopísať aj kód. Platí prvá časť nadpisu: v `data/results/` nie je
+detekčná metrika.
 
 ### Historické zdôvodnenie pôvodného rozsahu
 
@@ -893,6 +1055,12 @@ a `20260102T000000Z_idle_1` — dátumy, ktoré nikdy neboli). Metriky v nich s�
 generátor vyrába triedy, ktoré sú oddeliteľné; overujú, že cesta dát a tréning bežia,
 nič viac. Do textu práce nepatria a ak sa tam objavia, je to nález.
 
+Ďalšie súbory s číslami z modelu nie sú detekčnou metrikou: chyby predikcie a test
+confoundu nad nečinnými a lab sedeniami (`data/results/trenovanie_prediktor_*.json`,
+`data/results/chyba_predikcie_lab_vs_idle_20261008.json`,
+`data/results/konfunder_5sess_20261008.json`) a diagnostické overenie `safeguard`
+so syntetickým modelom (`data/results/safeguard_validation_20261013_a.json`).
+
 **Formulácia do textu práce (do abstraktu aj do záveru).**
 
 > Presnosť detekcie voči reálnym malvérovým vzorkám nebola v tejto práci meraná, pretože
@@ -906,20 +1074,6 @@ podľa `HONESTY.md` (P8). Dovtedy zostáva bod nesplnený a text práce to musí
 na každom mieste, kde by inak vznikol dojem, že detekcia bola vyhodnotená.
 
 ---
-
-## L18 - A3: zvyskovy rozdiel textu medzi bootmi
-
-Baseline textu jadra maskuje styri triedy boot-variantnych patchov
-(static keys z __jump_table, absolutne relokacie R_X86_64_64/32/32S zo
-sekcii .rela vmlinux-u, alternative z .altinstructions, static calls z
-__static_call_sites). Na jadre 6.1.0-42-cloud-amd64 sa tym pokryje rozdiel
-oproti CISTEJ snimke TOHO ISTEHO bootu uplne (0 nalezov na 3586 stranach),
-ale medzi DVOMA bootmi zostava ~1116 stranok s rozdielom, ktory vysvetluje
-dalsia trieda boot-variantnych patchov (kandidati: retpoline/rethunk
-prepisovanie, zbytkove paravirt miesta - tabulka __parainstructions je na
-tejto VM prazdna). Dolezitok pre prax: 4. kontrola sa preto vyhodnocuje
-proti baseline z cistej snimky AKTUALNEHO bootu (session.sh ju vytvara
-pred kazdou seriou); od A2 sa profil preukotvuje sam.
 
 ## L17 — Profil jadra hosťa platí pre jeden boot, nie pre verziu jadra — VYRIEŠENÉ 2026-10-05 (preukotvenie, blok A2)
 
@@ -940,15 +1094,32 @@ preukotví. Posun medzi bootom profilu a bootom snimky sa **meria z tabuliek str
 pre známu fyzickú adresu `init_task` (overenú obsahom `comm == "swapper/0"` pri skene
 banneru) sa spätne nájde virtuálna adresa, ktorá ju mapuje, a rozdiel voči adrese
 v profile sa aplikuje na všetky symboly obrazu jadra. Druhá kotva (`linux_banner`) musí
-s tým istým posunom sedieť, inak sa posun neprijme. Overené na páre, ktorý je v repe:
-snímka z 18. 9. (`data/sessions/20260918T154914Z_validate/snap`) + profil z 19. 9.
+s tým istým posunom sedieť, inak sa posun neprijme. Overené na páre
+snímka z 18. 9. (`data/sessions/20260918T154914Z_validate/snap`; v gite je iba sidecar,
+súbor `.vmicd` je mimo gitu, iba na tomto stroji) + profil z 19. 9.
 — pred A2 `ss` vrátil 0 socketov a každý podpríkaz končil kódom 5; po A2 sa profil
 preukotvil o `-0x1a800000`, `ss` rekonštruuje 13 socketov (rovnako ako historický
 artefakt so sediacim profilom) a `validate` beží. Drží to
 `guestparse/tests/test_reanchor.py` a `guestparse/tests/test_profile_boot.py`.
 Pozor na detail: posun sa NEBERIE priamo zo skenu banneru — ten dáva správne fyzické
 adresy, ale virtuálne o konštantu inak (obraz jadra sa mapuje s reziduálnym posunom
-2 MiB), preto sa meria z tabuliek.
+2 MiB), preto sa meria z tabuliek. Znovu overené 2026-10-29 (commit `709ee7f`) na tom
+istom páre: preukotvenie o `-444596224` (= `-0x1a800000`), `ss` vypíše 13 socketov a
+`validate` (`ps` pred aj po, `lsmod` a `ss` pred snímkou) skončí kódom 0 (80/80 procesov,
+moduly 51/0/0, sokety 11/1/1). Samostatný artefakt ani záznam v `docs/MERANIA.md`
+k overeniu na tomto páre nie je; príkazy sú v L10 a v `docs/kontroly.md`.
+
+**Doplnok 2026-10-13: kotvy z viacerých bootov.** Po reštarte hosťa môžu v RAM zostať
+banner a `init_task` aj zo starého bootu. Pri pilote v2 starý postup vybral prvú
+obsahovo zodpovedajúcu dvojicu, ktorá už nepatrila bežiacemu jadru, a preukotvenie túto
+chybu neodhalilo ([MERANIA.md](MERANIA.md), záznam „pilot v2: dokončený zber, chybná
+kotva po reštarte“). Kotva sa odvtedy vyberá podľa `sysctl_bootid` v RAM, ktoré musí
+sedieť s boot UUID uloženým pred zberom (prepínač `--boot-id`, pri natívnych session
+z metadát); bez tejto identity sa pripustí iba jediná kotva
+(`GuestView.resolve()` v `guestparse/view.py`, testy `guestparse/tests/test_boot_anchor.py`,
+diagnostika `data/results/boot_anchor_validation_20261013_a.json`).
+Preukotvuje aj knižničná cesta výpočtu príznakov (`features/snapshot.py`), ktorá to do
+2026-10-06 nerobila ([MERANIA.md](MERANIA.md), záznam z 2026-10-06).
 
 **Čo to znamená pre prácu (po vyriešení).** Nástroj chybu nezakrýva a od 2026-09-19 sa
 už nedala prehliadnuť; od 2026-10-05 ju navyše sám opraví. `guestparse/cli.py` pred
@@ -972,10 +1143,96 @@ Kód 5 prebíja aj nález (1), aj neuzavretosť (4): nález zo zlého profilu n�
 
 **Čo to odstránilo.** Odvodenie zo samotnej snímky, kde v tomto štarte leží obraz jadra
 vo virtuálnom priestore, a prepočet virtuálnych adries z `kallsyms` týmto rozdielom —
-presne postup opísaný nižšie v pôvodnom texte. Sken banneru dáva len rozdiel medzi
+presne postup, ktorý navrhoval pôvodný text tejto položky z 2026-09-19 (v súbore už nie
+je; `git show b574b8d:docs/LIMITACIE.md`). Sken banneru dáva len rozdiel medzi
 virtuálnou adresou z profilu a fyzickou adresou v snímke; s ním sedí lineárne čítanie,
 ale prechod tabuliek stránok nie, lebo tie sú indexované skutočnými virtuálnymi
 adresami tohto štartu. Preukotvenie (A2) preto posun meria z tabuliek, nie z banneru.
+
+---
+
+## L18 — Kontrola textu jadra: rozdiel medzi bootmi, baseline nesedí
+
+(Do 2026-10-29 stála táto položka pred L17 pod nadpisom „L18 - A3: zvyskovy rozdiel textu
+medzi bootmi“ a bez častí nižšie.)
+
+**Fakt.** Kontrola (d) v `guestparse/checks.py` (blok A3, commity `7134058`, `689c384`,
+`9ec44db`) porovnáva SHA-256 každej stránky textu jadra `[_stext, _etext)` s baseline
+`text_baseline.json` v profile. Baseline maskuje miesta, ktoré jadro pri štarte legitímne
+patchuje: static keys z `__jump_table` a pri vyrobení s `vmlinux` aj absolútne relokácie
+`R_X86_64_64/32/32S`, alternatives z `.altinstructions` a static calls. Kontrola má dve
+obmedzenia:
+
+1. **Zvyšok rozdielu medzi bootmi.** Podľa správy commitu `9ec44db` (2026-10-05) maskovanie
+   na jadre `6.1.0-42-cloud-amd64` pokrylo rozdiel oproti čistej snímke toho istého bootu
+   úplne (0 nálezov na 3586 stránkach), medzi dvoma bootmi však zostalo ~1116 stránok
+   s rozdielom. Príčinou je zrejme ďalšia trieda patchov, ktorá sa zatiaľ nemaskuje
+   (neoverené; kandidáti: prepisovanie retpoline/rethunk, zvyškové paravirt miesta;
+   tabuľka `__parainstructions` je na tejto VM prázdna). Artefakt v `data/results/` ani
+   záznam v `docs/MERANIA.md` k týmto číslam nie je.
+2. **Baseline v profile nesedí so súradnicami profilu.** Kontrola žiada, aby sa rozsah
+   baseline po posune o preukotvenie (L17) zhodoval s `_stext` a `_etext` profilu.
+   Sledovaná baseline (naposledy zmenená commitom `c221c6a`, 2026-10-06; v `689c384`
+   a `9ec44db` mala `stext` profilu) má `stext` `0xffffffff90400000`, profil má `_stext`
+   `0xffffffffb0800000`, hoci baseline nesie `boot_id` profilu. Zodpovedá to baseline
+   vyrobenej zo snímky iného bootu cez preukotvený pohľad: `build_text_baseline` uloží
+   adresy preukotveného profilu, ale `boot_id` z `boot.json` profilu. Baseline vyrába
+   v každom sedení starý harness `scripts/session.sh` (v repozitári ponechaný ako
+   historický a diagnostický), z prvej snímky bežiaceho bootu s `--force` priamo do
+   zdieľaného profilu; v sedení na inom boote, než je boot profilu, vznikne práve taká
+   baseline. Kontrola (d) je preto pri dnešných súboroch nedostupná pre každú
+   snímku, aj pre snímku z bootu profilu, a `checks` končí kódom 4 (L10). Kampaňový zber
+   (`scripts/collection.py`, `scripts/campaign.py`) baseline nevyrába vôbec.
+
+**Overenie.** 2026-10-29, commit `709ee7f`:
+
+```
+$ python3 -c "import json; print(hex(json.load(open('profiles/debian12-6.1.0-42-cloud-amd64/text_baseline.json'))['stext']))"
+0xffffffff90400000
+$ grep -w "_stext" profiles/debian12-6.1.0-42-cloud-amd64/kallsyms.txt
+ffffffffb0800000 T _stext
+$ python3 -m guestparse checks --snapshot data/raw/20260919T110017Z_run \
+        --profile profiles/debian12-6.1.0-42-cloud-amd64 | grep "text jadra"
+text jadra             NEDOSTUPNA (baseline textu nesedi s profilom ani po posune o KASLR rozdiel (ine jadro); obnov ju nad cistou snimkou)
+```
+
+`data/raw/20260919T110017Z_run` je snímka z bootu profilu (mimo gitu, iba na tomto
+stroji; `checks` nad ňou profil nepreukotvuje). Nad kópiou tej istej snímky s 8 bajtmi
+zapísanými na `_stext` kontrola 2026-10-05 so staršou baseline nález našla
+(`data/results/a3_pozitivny_20261005.json`, `nearest_symbol` `startup_64`). Vo všetkých
+kópiách auditov v `data/results/` (piloty od 2026-10-13 po pilot 7 z 2026-10-26, vybrané
+session kampaní a diagnostiky) zostala kontrola textu neuzavretá v každom riadku, napr.
+480 {{res:collection_pilot_7_20261026_audit.json:values.text_integrity_inconclusive_rows}}
+z
+480 {{res:collection_pilot_7_20261026_audit.json:values.snapshots}}
+v pilote 7 a
+480 {{res:collection_pilot_v2_20261013_reaudit.json:values.text_integrity_inconclusive_rows}}
+v pilote v2. Rovnako v korpuse: záznam kampane `benign-v6-20261026` má kontrolu textu
+neuzavretú vo všetkých riadkoch každej zo
+48 {{res:collection_campaign_benign_v6_20261026.json:n}}
+session (`values.sessions.*.integrity_inconclusive_rows.text_integrity`), napr.
+720 {{res:collection_campaign_benign_v6_20261026.json:values.sessions.0.integrity_inconclusive_rows.text_integrity}}
+z
+720 {{res:collection_campaign_benign_v6_20261026.json:values.sessions.0.snapshots}}
+v session 1. Audity dôvod neuzavretia neukladajú; záznamy v `docs/MERANIA.md`
+z 2026-10-06 a 2026-10-13 ho uvádzajú ako chýbajúcu baseline (tohto bootu).
+
+**Formulácia do textu práce.**
+
+> Štvrtá kontrola porovnáva obsah stránok textu jadra s baseline uloženou v profile
+> a maskuje miesta, ktoré jadro pri štarte legitímne patchuje. Maskovanie neodstráni
+> celý rozdiel medzi dvoma štartmi toho istého jadra. V zozbieraných dátach pilotov
+> a kampaní zostala táto kontrola neuzavretá a baseline, ktorá je v profile, ju
+> nevyhodnotí pre žiadnu snímku, lebo nezodpovedá súradniciam profilu; zmenu textu jadra
+> by v týchto dátach nález nezachytil. Ostatné tri kontroly sa vyhodnocovali.
+
+**Čo by to odstránilo.** Nová baseline v súradniciach profilu — zo snímky z bootu profilu
+bez preukotvenia, alebo úprava `build_text_baseline` v `guestparse/checks.py` tak, aby
+ukladala adresy profilu — zaznamenaná novým záznamom v `docs/MERANIA.md`; znovu zmeraný
+a uložený zvyšok rozdielu medzi bootmi; maskovanie ďalšej triedy patchov. Nová baseline
+mení profil a úprava `build_text_baseline` merací kód; `pilot_gate` v `scripts/campaign.py`
+potom vyžaduje nový pilot. Kým sa to nestane, kontrola (d) v nových dátach nález vytvoriť
+nemôže.
 
 ---
 

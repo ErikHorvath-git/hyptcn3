@@ -226,12 +226,16 @@ Pôvodná chyba (chýbajúci `end.json`, stav `running` po zastavení) vznikala
 opakovaným SIGTERM: systemd poslal signál všetkým procesom jednotky a runner
 navyše celej skupine dieťaťa, čím prerušil jeho upratovanie. Hlavným procesom
 bol `systemd-inhibit`, ktorý signály neposúval. Oprava je pokrytá testami.
-Skutočné `systemctl stop` bolo overené na tomto PC počas diagnostického
+Skutočné `systemctl stop` bolo overené na zberovom PC počas diagnostického
 zberu ([výsledok](../data/results/collection_stop_validation_20261020.json)).
 Prípravný runner použil rovnaké `campaign.run_child`, `collection.Interrupts`
 a `KillMode=mixed`; deti skončili, zámok aj blokovanie spánku sa uvoľnili
-a logový audit prerušenú session zamietol. Celá orchestrácia kampane vrátane
-obnovy po reštarte týmto testom overená nie je (UNVERIFIED).
+a logový audit prerušenú session zamietol. Bežnú orchestráciu (reštart
+skupiny, zber, audit, archív, zastavenie na hranici session a pokračovanie
+po ňom, zastavenie po zamietnutej session, `close` a `verify-archives`)
+prešli živé kampane `benign-v2-20261022` až `benign-v6-20261026`
+([MERANIA.md](MERANIA.md)). Obnova po reštarte hostiteľa alebo výpadku
+napájania zostáva UNVERIFIED.
 
 Pri SIGKILL alebo výpadku napájania upratovanie zaručiť nemožno. V súbore
 stavu potom ostane `running`. `status` ho podľa živosti procesu označí ako
@@ -268,11 +272,14 @@ Ak sa zber po začiatku merania nedokončil alebo audit session zamietol, runner
 uloží jej archív a zastaví alokáciu. Nevymení ju automaticky za úspešnejšiu
 session; každé ďalšie spustenie sa zastaví na tej istej session. Rovnako sa
 automaticky nepokračuje po zmene bootu alebo procesu QEMU uprostred skupiny
-(reštart, uloženie a obnova VM). Pri chybe ešte pred vznikom metadát sa
-zachová rozpracovaný adresár na kontrolu.
+(reštart, uloženie a obnova VM). Ak zber nevytvorí ani adresár session,
+runner skončí s chybou `capture could not start`; adresár bez metadát sa
+odloží ako `.attempt-<n>` (oddiel vyššie).
 
-Dôvod treba preskúmať a metodické rozhodnutie zaznamenať (`docs/MERANIA.md`,
-`docs/ISSUES.md`). Ak kampaň nemá pokračovať, uzavrie sa:
+Dôvod treba preskúmať a metodické rozhodnutie zaznamenať ako nový záznam
+v [MERANIA.md](MERANIA.md); otvorenú položku a stav práce eviduje
+[STAV.sk.md](STAV.sk.md). Ak kampaň nemá pokračovať, uzavrie sa; `--reason`
+uloží rozhodnutie aj do `closed.json`:
 
 ```sh
 .venv/bin/python scripts/campaign.py close data/campaigns/<kampaň> --reason "<zaznamenané rozhodnutie>"
@@ -283,9 +290,10 @@ Dôvod treba preskúmať a metodické rozhodnutie zaznamenať (`docs/MERANIA.md`
 a stav `closed`. Session, audity a archívy zostávajú; korpusový index
 nevznikne. Uzavretú kampaň už nemožno spustiť. Až uzavretie uvoľní názvy
 bootových skupín (`train-1` …) pre novú kampaň; `init` inak odmietne
-skupinu, ktorá už má dáta. Nová kampaň potrebuje prijatý pilot so súčasným
-meracím kódom; prijaté session uzavretej kampane sa do jej korpusu
-nepresúvajú.
+skupinu, ktorá už má dáta. Dokončenú kampaň (stav `complete`) `close`
+odmietne, jej skupiny preto pre novú kampaň zostávajú obsadené. Nová kampaň
+potrebuje prijatý pilot so súčasným meracím kódom; prijaté session uzavretej
+kampane sa do jej korpusu nepresúvajú.
 
 Úplnú opätovnú kontrolu archivovaných dát možno vykonať mimo merania:
 
@@ -317,7 +325,11 @@ Stav pripravenosti pred spustením kampane je v
 Po prijatí a archivovaní celého plánu vznikne
 `data/campaigns/<id>/corpus.json`. Runner overí kompletnosť indexu aj jeho
 prijatie validačnou cestou trénera a uloží kópiu do archívu. Stav
-`complete` patrí až tomuto kroku. Tréning ani kalibrácia sa nespúšťajú
+`complete` patrí až tomuto kroku. Kampaň `benign-v6-20261026` ho dosiahla
+s indexom
+48 {{res:collection_campaign_benign_v6_20261026.json:values.corpus.sessions}}
+session ([záznam](../data/results/collection_campaign_benign_v6_20261026.json)).
+Tréning ani kalibrácia sa nespúšťajú
 automaticky; ich výsledky vyžadujú samostatné merania.
 
 Testy používajú syntetické súbory a nahradené procesy zberača/auditu na
@@ -326,7 +338,10 @@ hranice, zámok, poškodenie dát, prerušenie kopírovania a prerušenie uvoľn
 pracovnej kópie. Nie sú dôkazom dokončeného živého korpusu.
 `scripts/validate_campaign_archive.py` samostatne overuje reálny disk:
 kopíruje existujúci pilot bez zmeny pôvodných dát a uvoľňovanie skúša na
-syntetickej pracovnej kópii. Vykonaný beh je v
-[`campaign_archive_validation_20261013_a.json`](../data/results/campaign_archive_validation_20261013_a.json).
+syntetickej pracovnej kópii. Beh z 2026-10-13
+([`campaign_archive_validation_20261013_a.json`](../data/results/campaign_archive_validation_20261013_a.json))
+overil nekomprimovaný archív na externom disku pôvodného PC. Komprimovaný
+archív na zberovom PC overili [obnova](../data/results/collection_archive_roundtrip_20261020.json)
+a `verify-archives` kampaní v2 až v6.
 Výsledky vykonaných overení patria do
 [`MERANIA.md`](MERANIA.md), nie do označenia plánovaných session za merania.

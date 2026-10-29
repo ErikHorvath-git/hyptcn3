@@ -4,11 +4,13 @@
 
 ### Prečo existuje
 
-Reálne snímky (`/var/tmp/vmic-val`, 463 MiB) ležia mimo repozitára a nie sú trvalé.
+Reálne snímky `/var/tmp/vmic-val` (463 MiB) a `/var/tmp/vmic-delta` ležali mimo repozitára
+a neboli trvalé – k 2026-10-29 už nie sú ani na vývojovom hostiteľovi, kde sa zbierali.
 Kým testy záviseli iba na nich, v čerstvom klone sa **ticho preskočilo 17 testov**,
 medzi nimi všetky tri testy z `test_injection.py` — teda jediný pozitívny dôkaz, že
 detektor hookov v `sys_call_table` niečo nájde. „50 passed“ pritom vyzeralo rovnako
-ako beh, kde prebehlo všetko.
+ako beh, kde prebehlo všetko. `mini.vmicd` je dnes jediný vstup z reálnej pamäte
+hosťa, ktorý má každý klon.
 
 `mini.vmicd` je výrez z jednej reálnej snímky, dosť veľký na to, aby nad ním bežala
 rekonštrukcia procesov, modulov aj injekčný test, a dosť malý na to, aby sa dal
@@ -30,15 +32,18 @@ verzionovať (110 872 B, 27 stránok).
 
 ### Patrí k jednému bootu hosťa — rovnako ako profil
 
-`mini.vmicd` je pamäť jadra z jedného konkrétneho štartu hosťa, takže sa dá rozobrať
-**len profilom z toho istého štartu**. KASLR posúva obraz jadra pri každom bootnutí a
-tabuľky stránok v snímke sú indexované virtuálnymi adresami práve toho bootu.
+`mini.vmicd` je pamäť jadra z jedného konkrétneho štartu hosťa, takže ju priamo (bez
+preukotvenia) rozoberie **len profil z toho istého štartu**. KASLR posúva obraz jadra
+pri každom bootnutí a tabuľky stránok v snímke sú indexované virtuálnymi adresami práve
+toho bootu. CLI `guestparse` ju po preukotvení profilu (`GuestView.reanchor()`)
+rozoberie aj profilom z iného bootu toho istého jadra – overujú to testy
+v `guestparse/tests/test_profile_boot.py`.
 
-Preto platí: keď sa obnoví `profiles/debian12-6.1.0-42-cloud-amd64/` (po reštarte
-hosťa), musí sa **spolu s ním** vyrobiť znovu aj táto snímka. Inak testy nad ňou
-spadnú na diagnóze `NESULAD PROFILU` — čo je správne správanie, nie chyba testov
-(pozri `guestparse/tests/test_profile_boot.py`). Táto snímka a profil v repe pochádzajú
-z bootu uvedeného v tabuľke vyššie.
+Testy nad fixture `mini_view` (napr. `test_mini.py`) však preukotvenie nerobia. Preto
+platí: keď sa obnoví `profiles/debian12-6.1.0-42-cloud-amd64/`, musí sa **spolu s ním**
+vyrobiť znovu aj táto snímka. Inak tieto testy zlyhajú na nesúlade profilu — čo je
+správne správanie, nie chyba testov. Táto snímka a profil v repe pochádzajú z bootu
+uvedeného v tabuľke vyššie.
 
 Úplný záznam je v `mini.json` (manifest vzniká spolu so snímkou a testy z neho čítajú
 očakávané hodnoty — nie sú prepísané ručne).
@@ -95,7 +100,9 @@ rm -rf data/raw/<stamp>_once                      # zdroj je veľký, v repe nem
 
 Skript prepíše `mini.vmicd` aj `mini.json`. Po zmene sa musia opraviť aj hodnoty
 v tomto súbore (SHA-256 a počty) — test `test_mini_snimka_sa_nemeni` kontroluje, že
-súbor sedí s manifestom.
+súbor sedí s manifestom. Nový profil potrebuje aj novú baseline textu jadra
+(`text_baseline.json` v profile): pred zmazaním zdroja
+`python3 -m guestparse textbaseline --snapshot data/raw/<stamp>_once --profile profiles/debian12-6.1.0-42-cloud-amd64 --force`.
 
 ### Prečo je `.vmicd` v gite
 

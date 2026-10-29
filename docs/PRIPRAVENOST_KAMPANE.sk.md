@@ -7,14 +7,14 @@ zoznamu procesov (commit `b065ee4`), po prijatí pilota 7 a po dokončení kampa
 odkazuje na uložené výsledky v `data/results/` a na záznamy v
 [MERANIA.md](MERANIA.md). Prevádzka kampane je v
 [AUTOMATICKY_ZBER.sk.md](AUTOMATICKY_ZBER.sk.md), laboratórium v
-[LAB.sk.md](LAB.sk.md).
+[LAB.sk.md](LAB.sk.md), stav celej práce voči zadaniu v [STAV.sk.md](STAV.sk.md).
 
 - **PASS**: overené na zberovom PC, dôkaz je uložený.
 - **FAIL**: overenie zlyhalo; uvedené je, čo sa zmenilo a čím sa to overilo.
 - **UNVERIFIED**: implementované a pokryté syntetickými testami, živé
   overenie chýba alebo príde až počas kampane.
 
-Rozhodujúci je pilot 3 `20261022T003017919708Z_pilot_bursty` (skupina
+Vstupom prvej kampane na zberovom PC bol pilot 3 `20261022T003017919708Z_pilot_bursty` (skupina
 `pilot-3-20261021`, commit `c15cda4`, profil `bursty`):
 [audit](../data/results/collection_pilot_3_20261021_audit.json),
 [súhrn časovania](../data/results/collection_pilot_3_20261021_timing.json).

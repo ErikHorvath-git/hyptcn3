@@ -1,12 +1,24 @@
-# Per-bin príznakový vektor — Pythonová referencia (krok K14)
+# Per-bin príznakový vektor — Pythonová referencia
 
-Tento súbor popisuje `features/perbin.py`, `features/crosscheck.py` a ich CLI.
-Moduly `windows.py`, `normalize.py` a `manifest.py` patria ku kroku K15 a majú
-vlastnú dokumentáciu vo svojich docstringoch.
+Tento súbor popisuje `features/perbin.py`, `features/crosscheck.py` a podpríkazy
+`perbin` a `crosscheck` (`python3 -m features`). Ostatné moduly balíka
+(`snapshot.py`, `windows.py`, `dataset.py`, `archive.py`, `coverage.py`,
+`quality.py`, `contract.py`, `normalize.py`, `manifest.py`, `stream.py`)
+a podpríkaz `session` majú dokumentáciu vo svojich docstringoch;
+`normalize.py`, `manifest.py` a `stream.py` slúžia staršej diagnostickej ceste
+(`tcn/train.py`, `tcn/score.py`, `scripts/detektor.py`), ktorá v repozitári
+zostáva do konca experimentov.
+
+Per-bin okná a ich normalizáciu pre integrovaný detektor (`python3 -m safeguard`)
+skladá `safeguard/features.py` (`WindowBuffer`, `arrays`, `FeatureNormalizer`).
+Do jeho modelu idú štyri polia z kontraktu nižšie — `changed_ratio`,
+`zero_ratio`, `entropy_mean`, `has_changed` (`BIN_PRIZNAKY` vo
+`features/windows.py`); `has_changed` sa nenormalizuje a normalizácia entropie
+sa učí iba z binov, ktoré sa zmenili.
 
 ## Prečo referencia existuje
 
-Ten istý vektor počíta aj C modul (`vmicollect/src/perbin.c`, krok K13). Keď to
+Ten istý vektor počíta aj C modul (`vmicollect/src/perbin.c`). Keď to
 isté číslo vyrobia dve nezávislé implementácie, je to doklad, že vzorec je
 správne zapísaný. Keď sa rozídu, jedna z nich je zlá a vie sa to hneď — nie až
 po tom, čo sa na tom natrénuje model.
@@ -20,9 +32,12 @@ sama.
 Binuje sa **iba nad rozsahmi z memslotov**. Bin, ktorý nepretína žiadny
 memslot, neexistuje — nevzniká ako nulový riadok. Dôvod: fyzický priestor x86
 je deravý (VGA diera `0xA0000–0xBFFFF`, PCI diera pod 4 GiB). Pri doméne
-`hyptcn-guest` je RAM 2,02 GiB, ale `max_paddr` 4 GiB, takže pri bine 16 MiB by
-z 256 binov bolo 125 trvale nulových a model by sa učil na výplň. Namerané nad
-touto doménou: **131 binov** (0–127, 251, 254, 255).
+`hyptcn-guest` (meranie 2026-09-18) je RAM 2,02 GiB, ale `max_paddr` 4 GiB, takže
+pri bine 16 MiB by z 256 binov bolo 125 trvale nulových a model by sa učil na
+výplň. Namerané nad touto doménou: **131 binov** (0–127, 251, 254, 255). Doména
+zberu korpusu `hyptcn-lab` má iné rozloženie memslotov: 130 binov (0–127, 254,
+255; `values.layout.bins` v `data/results/collection_pilot_7_20261026_audit.json`).
+Počet binov sa preto berie zo sidecaru (`features.bins_total`), nie z tohto textu.
 
 Index binu `= GPA >> log2(bin_bytes)`, teda je viazaný na fyzickú adresu, nie na
 poradie memslotu. Veľkosť binu je parameter (`--bin-bytes`, východzie 16 MiB);
@@ -80,19 +95,23 @@ spätne odvodiť nedajú. Sidecar snímky má v `capture.regions` **konfiguráci
 zberu** (`[capture].regions`), nie memsloty, a pri zbere celej RAM je to prázdne
 pole — vo všetkých dnešných sidecaroch je `"regions": []`.
 
-**Referencia preto potrebuje zdroj rozsahov zvonku a bez neho odmietne
-počítať.** Prijíma (v tomto poradí):
+**Referencia preto potrebuje explicitný zdroj rozsahov a bez neho odmietne
+počítať.** Berie ho zo súboru `--memslots`, a keď parameter chýba, zo sidecaru
+snímky (`--sidecar`, inak sidecar vedľa `.vmicd`). V JSON súbore hľadá
+(v tomto poradí):
 
-1. `values.memslot_ranges` — výstup `vmicollect probe -v`; dnes jediný zdroj,
-   ktorý skutočné memsloty má (v repozitári:
+1. `values.memslot_ranges` — výstup `vmicollect probe -v`; jediný zdroj
+   surových memslotov (v repozitári:
    `data/results/2026-09-18_zmrazeny_host/probe.json`);
-2. `features.memslots` — miesto, kam ich môže zapísať C modul; podporované
-   dopredu, aby sa referencia nemusela meniť;
+2. `features.regions` — efektívne oblasti zberu odvodené z memslotov (susedné
+   sloty zlúčené), ktoré C modul zapisuje do sidecaru; referencia prijíma aj
+   kľúč `features.memslots`;
 3. `memslots` — holý zoznam v ručne pripravenom súbore;
 4. neprázdne `capture.regions` — vtedy sa zdroj pomenuje tak, aby bolo vidieť,
    že ide o konfiguráciu zberu, nie o memsloty.
 
-Použitý zdroj je vždy vo výstupe pod `memslots.source`.
+Sidecary z 2026-09-18 v repozitári `features.regions` nemajú, pri nich treba
+`--memslots`. Použitý zdroj je vždy vo výstupe pod `memslots.source`.
 
 ## Invarianty
 
@@ -113,11 +132,18 @@ python3 -m features perbin \
 
 # krížová kontrola celého reťazca proti výstupu C modulu
 python3 -m features crosscheck \
-    --snapshot /var/tmp/vmic-delta \
+    --snapshot /var/tmp/perbin_c/on \
     --memslots data/results/2026-09-18_zmrazeny_host/probe.json \
-    --c data/results/perbin_c_<dátum>/ \
+    --c data/results/perbin_c_20260918/sidecars/on/ \
     --out data/results/perbin_crosscheck_<dátum>.json
 ```
+
+Snímky `.vmicd` sú mimo gitu (`.vmicd` je v `.gitignore`); v repozitári sú iba
+ich sidecary, preto príklady bežia len na stroji, kde snímky ležia. `--memslots`
+je povinné iba pri sidecaroch bez `features.regions`. Bez `--c` sa vektor z C
+berie zo sidecarov vedľa snímok. Bez `--out` ide JSON na stdout, za ním súhrn po
+snímkach. `--out` má ukazovať na nový súbor: existujúci výsledok v `data/results/`
+sa neprepisuje (HONESTY P10) a nástroj to sám nestráži.
 
 Návratové kódy: `0` = prebehlo a nič sa nerozišlo, `1` = nezhoda (padol
 invariant alebo sa C a referencia líšia), `2` = chyba vstupu.
@@ -130,24 +156,29 @@ python3 -m pytest features/tests -q
 
 Testy kontraktu binovania a definícií príznakov bežia vždy (počítajú sa nad
 vymyslenými memslotmi a nad stránkami so známym obsahom). Testy invariantov
-potrebujú snímky mimo repozitára (`/var/tmp/vmic-val`, `/var/tmp/vmic-delta`,
-`data/sessions/*/snap/*.vmicd` — `.vmicd` je v `.gitignore`) a v čerstvom klone
-sa **preskočia**. Preskočený test nie je prešiel; na stroji, kde snímky sú, sa
-preskočenie zakáže premennou `FEATURES_REQUIRE_REAL=1`.
+potrebujú snímky mimo repozitára: `data/sessions/*/snap/*.vmicd` (`.vmicd` je
+v `.gitignore`) a predvolene aj `/var/tmp/vmic-val` a `/var/tmp/vmic-delta`
+(cesty menia premenné `FEATURES_VAL` a `FEATURES_DELTA`). V čerstvom klone sa
+**preskočia**. Adresáre `/var/tmp/vmic-val` a `/var/tmp/vmic-delta` k 2026-10-29
+už nie sú ani na vývojovom hostiteľovi, kde sa snímky z 2026-09-18 zbierali,
+takže testy nad reťazcom delta snímok sa preskočia aj tam. Preskočený test nie
+je prešiel; na stroji, kde snímky sú, sa preskočenie zakáže premennou
+`FEATURES_REQUIRE_REAL=1`.
 
 ## Výsledok krížovej kontroly (2026-09-18)
 
 Porovnávalo sa proti behu `vmicollect` z 2026-09-18 19:02–19:03 UTC (6 snímok,
 perióda 5 s, doména `hyptcn-guest`), tri konfigurácie `[features]`. Sidecary z C
-sú v repozitári v `data/results/perbin_c_20260918/sidecars/`, snímky `.vmicd`
-k nim ležia mimo repozitára v `/var/tmp/perbin_c/`.
+sú v repozitári v `data/results/perbin_c_20260918/sidecars/`. Snímky `.vmicd`
+varianty `on` ležia mimo repozitára v `/var/tmp/perbin_c/on/`; snímky variantov
+`off` a `noent` sa nezachovali, takže tieto dve kontroly sa už zopakovať nedajú.
 
 | artefakt | konfigurácia | snímok | porovnaných polí | rozdielov |
 |---|---|---|---|---|
 | `data/results/perbin_crosscheck_20260918.json` | `enable=true, entropy=true` | 6 | 6288 | 0 |
 | `data/results/perbin_crosscheck_20260918_noent.json` | `enable=true, entropy=false` | 6 | 5502 | 0 |
 | `data/results/perbin_crosscheck_20260918_off.json` | `enable=false` | 6 | — (blok `features` v sidecari nie je) | — |
-| `data/results/perbin_crosscheck_20260918_starsie.json` | snímky z 2026-09-18 14:31, zozbierané pred K13 | 6 | — (blok `features` v sidecari nie je) | — |
+| `data/results/perbin_crosscheck_20260918_starsie.json` | snímky z 2026-09-18 14:31, zozbierané skôr, než C modul počítal per-bin vektor | 6 | — (blok `features` v sidecari nie je) | — |
 
 6288 = 6 snímok × 131 binov × 8 polí; pri vypnutej entropii 7 polí, teda 5502.
 
