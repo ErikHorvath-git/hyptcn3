@@ -1,0 +1,3085 @@
+{
+  "command": ".venv/bin/python -m safeguard train --corpus data/campaigns/benign-v6-20261026/corpus.json --out data/models/server-v2-benign-v6 --epochs 10 --seed 0",
+  "commit": "51d512db8f468ed2d67c70e5faf011938ba2fef3",
+  "commit_dirty": false,
+  "date": "2026-10-29T23:24:28.981200+00:00",
+  "guest": "hyptcn-lab, jadro 6.1.0-42-cloud-amd64, stack_sha256 3fcb9e724f031e3ed24fd3e08fb8f2946c8cd3f04416bc871d8f7dc31b3d46bc",
+  "host": "Linux-7.2.9+deb13-amd64-x86_64-with-glibc2.41",
+  "n": 36,
+  "values": {
+    "bundle": "/home/eh/projects/hyptcn3/data/models/server-v2-benign-v6",
+    "manifest": {
+      "architecture": {
+        "blocks": 4,
+        "channels": 16,
+        "classifier_pooling": "bin_mean_and_max",
+        "dropout": 0.1,
+        "global_features": 18,
+        "kernel": 3,
+        "local_features": 4,
+        "window_rows": 32
+      },
+      "calibration": {
+        "alarm_events": 1,
+        "calibration_alarm_events_per_hour": 0.09146341463414634,
+        "comparison": ">",
+        "diagnostic": false,
+        "event_definition": "k of n after n scored targets; rising edges; reset at barriers",
+        "exposure_definition": "scored targets times nominal interval; warmup/gaps excluded",
+        "fpr_design": 0.01,
+        "k": 3,
+        "method": "benign_score_quantile_higher",
+        "minimum_scores": 1000,
+        "n": 5,
+        "n_scores": 7872,
+        "note": "Calibration frequency is not a held-out false-alarm measurement or guarantee.",
+        "role": "calibration",
+        "scorable_hours": 10.933333333333334,
+        "threshold": 14.43027114868164,
+        "window_exceedance_fraction": 0.009908536585365854
+      },
+      "classes": [
+        "bursty",
+        "mixed",
+        "quiet",
+        "read_heavy",
+        "steady",
+        "write_heavy"
+      ],
+      "classification_task": "recorded benign workload scenario; not maliciousness or malware family",
+      "created_utc": "2026-10-29T23:24:28.981200+00:00",
+      "diagnostic": false,
+      "environment": {
+        "collector_sha256": "25f989f3f32f869b6503fa1c12d37b24ad0e49de16807674a339befefd2130b6",
+        "extractor_sha256": {
+          "features/__init__.py": "896f5a042106b05da8291cc22c0186f1a098e90e145d3e708df7d51670640265",
+          "features/__main__.py": "3ad44f361e7d3a7925070cb0f1935df8fbb16055cccadd84f9317deb89e15a9e",
+          "features/archive.py": "120ae743dc7e3ecfe85c2c4054c29532905dccd6a1d59d94e6ed83f53a0935c8",
+          "features/cli.py": "9127ab073bb8066b7cd84feb7ea6500eaabb54e532c2f08842b68b98c91cca25",
+          "features/contract.py": "97930184ecd0a276f0f7ac3772a5652631735c726599c3b3231d555243a5eb6e",
+          "features/coverage.py": "9d745c854720e2f9855687c34657090a2ef86df05efabc2a492318f79b6ec14d",
+          "features/crosscheck.py": "30fbaf0df1d8aab390e018f81dc00a9e08bdd13898f5816b8e864a0981fd3bbb",
+          "features/dataset.py": "c31eb6cc2e58b5dd2e71d926c61711e858e2c3d515b250f31bfff65b0eba9dd8",
+          "features/manifest.py": "9c8353c93d5276a94cf428eb7b2f677d6dd7cf9f0717d1da63edbf325ca350bd",
+          "features/normalize.py": "f3dd2ecc53d636ed1ba0f219915b4c5e784d463042ee58d78d5475ae96b9e965",
+          "features/perbin.py": "19a642ce37468ee56acaf408155933d35f81f45588b2d527d38aa700ace1e46f",
+          "features/quality.py": "14304025b5f40e380453e18b9a32e4b30e1222f6fc553535541ff2af3c3699dd",
+          "features/snapshot.py": "b6ab0d7d33258153dbf3f66c9675f1c2ac8e27a386a2690144c85c45599e106f",
+          "features/stream.py": "b10faf3ec928d704d24776c161a79430bfa2460e3c7f76ebbe23d9885cd99ac0",
+          "features/windows.py": "ac9954bda49b1bd1355be080bd5a1c5529b898fa9cf021987b067c6020d4a790",
+          "guestparse/__init__.py": "59510cb87991d23814b9b7df34bf809369c23871acae629f689d37378dface62",
+          "guestparse/__main__.py": "2e49dabc9bee0ec02712ae2f753c00420b3ddbfa892c357ce603603e3be54155",
+          "guestparse/checks.py": "0c73d5a352c5af61db0f491ff07af55be464579418338779c5f8a81da4eb869e",
+          "guestparse/cli.py": "4025dd43228aab575728b9e432db687090cc876d0d6e7612c4cc152ee745e96d",
+          "guestparse/context.py": "dda0607b556dc0ac131622bc949ca9d056ed19df12f529d2b8ab19f27334a4a9",
+          "guestparse/image.py": "91e8f6ad19c6df8cee9ddb9cf9bc1e16ecb094fd92734abca48dd10f30411320",
+          "guestparse/procmap.py": "67766b37167e7fe37e857467106c44be72bcc14c6509ac1ec037f44c050d7447",
+          "guestparse/profile.py": "90b318795a4d415ba310b1081dd45b3feab8ac8f7021c5fe830847ce7f3069bc",
+          "guestparse/validate.py": "6ab979ed5cc65f53f65eee124853f7d328c3980d2064aeeb5008bdb7a4502806",
+          "guestparse/view.py": "483209f55f67e69e2029d7c64dd2ac646425960963ab16a628d8d4f48ff59b43"
+        },
+        "kernel": "6.1.0-42-cloud-amd64",
+        "profile_sha256": {
+          "README.md": "c7d51ac7d9bd1783293d6c2a479867e347f52632eea2788d4215983a039137aa",
+          "boot.json": "f972ecc81e7c89596f63cefd7478721618e5ca37ab37d3b5ac9a992b2f59035b",
+          "btf.raw": "7d68818a28c8089b929918b10d7cc2da82b7ee169330d97d44dbd9a199f77ac3",
+          "btf.txt": "5d296517137d1435f7084655798ee67d30b642cb62f532376249d3d8698c92c8",
+          "kallsyms.txt": "3c78473bab03dd4246a085be6ebd26f8511dc6ddf5b674b76462ab77df05b009",
+          "text_baseline.json": "0cef20e14d381071d3688d2d0eec5713e5ebc27a47e71b7b57c4e87f5cfe9684"
+        },
+        "stack_sha256": "3fcb9e724f031e3ed24fd3e08fb8f2946c8cd3f04416bc871d8f7dc31b3d46bc"
+      },
+      "feature_contract": {
+        "biny": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9,
+          10,
+          11,
+          12,
+          13,
+          14,
+          15,
+          16,
+          17,
+          18,
+          19,
+          20,
+          21,
+          22,
+          23,
+          24,
+          25,
+          26,
+          27,
+          28,
+          29,
+          30,
+          31,
+          32,
+          33,
+          34,
+          35,
+          36,
+          37,
+          38,
+          39,
+          40,
+          41,
+          42,
+          43,
+          44,
+          45,
+          46,
+          47,
+          48,
+          49,
+          50,
+          51,
+          52,
+          53,
+          54,
+          55,
+          56,
+          57,
+          58,
+          59,
+          60,
+          61,
+          62,
+          63,
+          64,
+          65,
+          66,
+          67,
+          68,
+          69,
+          70,
+          71,
+          72,
+          73,
+          74,
+          75,
+          76,
+          77,
+          78,
+          79,
+          80,
+          81,
+          82,
+          83,
+          84,
+          85,
+          86,
+          87,
+          88,
+          89,
+          90,
+          91,
+          92,
+          93,
+          94,
+          95,
+          96,
+          97,
+          98,
+          99,
+          100,
+          101,
+          102,
+          103,
+          104,
+          105,
+          106,
+          107,
+          108,
+          109,
+          110,
+          111,
+          112,
+          113,
+          114,
+          115,
+          116,
+          117,
+          118,
+          119,
+          120,
+          121,
+          122,
+          123,
+          124,
+          125,
+          126,
+          127,
+          254,
+          255
+        ],
+        "global_names": [
+          "mem_changed_ratio",
+          "mem_bins_active",
+          "mem_changed_max",
+          "mem_changed_p95",
+          "mem_changed_spread",
+          "mem_entropy_mean",
+          "mem_entropy_max",
+          "mem_zero_ratio",
+          "proc_total",
+          "proc_user",
+          "proc_kernel",
+          "proc_new",
+          "proc_gone",
+          "mod_total",
+          "mod_delta",
+          "sock_total",
+          "sock_listen",
+          "sock_estab"
+        ],
+        "layout": {
+          "bin_bytes": 16777216,
+          "bins": [
+            [
+              0,
+              4096
+            ],
+            [
+              1,
+              4096
+            ],
+            [
+              2,
+              4096
+            ],
+            [
+              3,
+              4096
+            ],
+            [
+              4,
+              4096
+            ],
+            [
+              5,
+              4096
+            ],
+            [
+              6,
+              4096
+            ],
+            [
+              7,
+              4096
+            ],
+            [
+              8,
+              4096
+            ],
+            [
+              9,
+              4096
+            ],
+            [
+              10,
+              4096
+            ],
+            [
+              11,
+              4096
+            ],
+            [
+              12,
+              4096
+            ],
+            [
+              13,
+              4096
+            ],
+            [
+              14,
+              4096
+            ],
+            [
+              15,
+              4096
+            ],
+            [
+              16,
+              4096
+            ],
+            [
+              17,
+              4096
+            ],
+            [
+              18,
+              4096
+            ],
+            [
+              19,
+              4096
+            ],
+            [
+              20,
+              4096
+            ],
+            [
+              21,
+              4096
+            ],
+            [
+              22,
+              4096
+            ],
+            [
+              23,
+              4096
+            ],
+            [
+              24,
+              4096
+            ],
+            [
+              25,
+              4096
+            ],
+            [
+              26,
+              4096
+            ],
+            [
+              27,
+              4096
+            ],
+            [
+              28,
+              4096
+            ],
+            [
+              29,
+              4096
+            ],
+            [
+              30,
+              4096
+            ],
+            [
+              31,
+              4096
+            ],
+            [
+              32,
+              4096
+            ],
+            [
+              33,
+              4096
+            ],
+            [
+              34,
+              4096
+            ],
+            [
+              35,
+              4096
+            ],
+            [
+              36,
+              4096
+            ],
+            [
+              37,
+              4096
+            ],
+            [
+              38,
+              4096
+            ],
+            [
+              39,
+              4096
+            ],
+            [
+              40,
+              4096
+            ],
+            [
+              41,
+              4096
+            ],
+            [
+              42,
+              4096
+            ],
+            [
+              43,
+              4096
+            ],
+            [
+              44,
+              4096
+            ],
+            [
+              45,
+              4096
+            ],
+            [
+              46,
+              4096
+            ],
+            [
+              47,
+              4096
+            ],
+            [
+              48,
+              4096
+            ],
+            [
+              49,
+              4096
+            ],
+            [
+              50,
+              4096
+            ],
+            [
+              51,
+              4096
+            ],
+            [
+              52,
+              4096
+            ],
+            [
+              53,
+              4096
+            ],
+            [
+              54,
+              4096
+            ],
+            [
+              55,
+              4096
+            ],
+            [
+              56,
+              4096
+            ],
+            [
+              57,
+              4096
+            ],
+            [
+              58,
+              4096
+            ],
+            [
+              59,
+              4096
+            ],
+            [
+              60,
+              4096
+            ],
+            [
+              61,
+              4096
+            ],
+            [
+              62,
+              4096
+            ],
+            [
+              63,
+              4096
+            ],
+            [
+              64,
+              4096
+            ],
+            [
+              65,
+              4096
+            ],
+            [
+              66,
+              4096
+            ],
+            [
+              67,
+              4096
+            ],
+            [
+              68,
+              4096
+            ],
+            [
+              69,
+              4096
+            ],
+            [
+              70,
+              4096
+            ],
+            [
+              71,
+              4096
+            ],
+            [
+              72,
+              4096
+            ],
+            [
+              73,
+              4096
+            ],
+            [
+              74,
+              4096
+            ],
+            [
+              75,
+              4096
+            ],
+            [
+              76,
+              4096
+            ],
+            [
+              77,
+              4096
+            ],
+            [
+              78,
+              4096
+            ],
+            [
+              79,
+              4096
+            ],
+            [
+              80,
+              4096
+            ],
+            [
+              81,
+              4096
+            ],
+            [
+              82,
+              4096
+            ],
+            [
+              83,
+              4096
+            ],
+            [
+              84,
+              4096
+            ],
+            [
+              85,
+              4096
+            ],
+            [
+              86,
+              4096
+            ],
+            [
+              87,
+              4096
+            ],
+            [
+              88,
+              4096
+            ],
+            [
+              89,
+              4096
+            ],
+            [
+              90,
+              4096
+            ],
+            [
+              91,
+              4096
+            ],
+            [
+              92,
+              4096
+            ],
+            [
+              93,
+              4096
+            ],
+            [
+              94,
+              4096
+            ],
+            [
+              95,
+              4096
+            ],
+            [
+              96,
+              4096
+            ],
+            [
+              97,
+              4096
+            ],
+            [
+              98,
+              4096
+            ],
+            [
+              99,
+              4096
+            ],
+            [
+              100,
+              4096
+            ],
+            [
+              101,
+              4096
+            ],
+            [
+              102,
+              4096
+            ],
+            [
+              103,
+              4096
+            ],
+            [
+              104,
+              4096
+            ],
+            [
+              105,
+              4096
+            ],
+            [
+              106,
+              4096
+            ],
+            [
+              107,
+              4096
+            ],
+            [
+              108,
+              4096
+            ],
+            [
+              109,
+              4096
+            ],
+            [
+              110,
+              4096
+            ],
+            [
+              111,
+              4096
+            ],
+            [
+              112,
+              4096
+            ],
+            [
+              113,
+              4096
+            ],
+            [
+              114,
+              4096
+            ],
+            [
+              115,
+              4096
+            ],
+            [
+              116,
+              4096
+            ],
+            [
+              117,
+              4096
+            ],
+            [
+              118,
+              4096
+            ],
+            [
+              119,
+              4096
+            ],
+            [
+              120,
+              4096
+            ],
+            [
+              121,
+              4096
+            ],
+            [
+              122,
+              4096
+            ],
+            [
+              123,
+              4096
+            ],
+            [
+              124,
+              4096
+            ],
+            [
+              125,
+              4096
+            ],
+            [
+              126,
+              4096
+            ],
+            [
+              127,
+              4096
+            ],
+            [
+              254,
+              1
+            ],
+            [
+              255,
+              64
+            ]
+          ],
+          "memsize": 2147749888,
+          "page_size": 4096,
+          "regions": [
+            {
+              "bytes": 2147483648,
+              "gpa": 0
+            },
+            {
+              "bytes": 4096,
+              "gpa": 4276092928
+            },
+            {
+              "bytes": 262144,
+              "gpa": 4294705152
+            }
+          ],
+          "vcpus": 2
+        },
+        "local_names": [
+          "changed_ratio",
+          "zero_ratio",
+          "entropy_mean",
+          "has_changed"
+        ],
+        "max_gap_s": 7.5,
+        "quality_policy": "behavioral-inputs-v1",
+        "raw_names": [
+          "mem_changed_ratio",
+          "mem_bins_active",
+          "mem_changed_max",
+          "mem_changed_p95",
+          "mem_changed_spread",
+          "mem_entropy_mean",
+          "mem_entropy_max",
+          "mem_zero_ratio",
+          "proc_total",
+          "proc_user",
+          "proc_kernel",
+          "proc_new",
+          "proc_gone",
+          "mod_total",
+          "mod_delta",
+          "sock_total",
+          "sock_listen",
+          "sock_estab",
+          "chk_syscall_hooks",
+          "chk_crossview",
+          "ma_predchodcu",
+          "je_plna"
+        ],
+        "schema": "hyptcn3/safeguard-features/2",
+        "window_rows": 32
+      },
+      "limitations": [
+        "No attack detection or held-out false-alarm metric is inferred from training.",
+        "Classifier labels describe collection workload settings; they are not per-process ground truth."
+      ],
+      "loss_formula": "0.5 * mean(global_squared_error) + 0.5 * mean(bin_masked_mse)",
+      "normalizer": {
+        "entropy_observations": 660034,
+        "entropy_policy": "fit_observed_only_missing_to_zero",
+        "fit_rows": 12924,
+        "global_mean": [
+          0.0064086563325469,
+          0.3928493202866694,
+          0.07120690778179163,
+          0.03651774390789423,
+          0.7044244894735072,
+          2.666984564006014,
+          5.041383462705044,
+          0.5261848159831788,
+          109.12503868771279,
+          50.00139275766017,
+          59.12364593005262,
+          0.00510677808727948,
+          0.007505416279789539,
+          46.0,
+          0.0,
+          28.19073042401733,
+          20.00015475085113,
+          0.15629835964097802
+        ],
+        "global_names": [
+          "mem_changed_ratio",
+          "mem_bins_active",
+          "mem_changed_max",
+          "mem_changed_p95",
+          "mem_changed_spread",
+          "mem_entropy_mean",
+          "mem_entropy_max",
+          "mem_zero_ratio",
+          "proc_total",
+          "proc_user",
+          "proc_kernel",
+          "proc_new",
+          "proc_gone",
+          "mod_total",
+          "mod_delta",
+          "sock_total",
+          "sock_listen",
+          "sock_estab"
+        ],
+        "global_scale": [
+          0.0020306223047704504,
+          0.06312677515620023,
+          0.03667604584095033,
+          0.011544873640967537,
+          0.025255274253765704,
+          0.1268502098408189,
+          0.5077964684376104,
+          0.06341070806502463,
+          0.627563605273684,
+          0.0372936708607126,
+          0.6264823833981444,
+          0.071279021491931,
+          0.11940738024074869,
+          1.0,
+          1.0,
+          1.317890182459839,
+          0.017591979832680855,
+          1.2737461994037673
+        ],
+        "local_mean": [
+          0.00631084392641969,
+          0.5278556648313018,
+          2.759423863508546,
+          0.0
+        ],
+        "local_names": [
+          "changed_ratio",
+          "zero_ratio",
+          "entropy_mean",
+          "has_changed"
+        ],
+        "local_scale": [
+          0.014045725480001287,
+          0.44918051079632176,
+          0.9537111649357808,
+          1.0
+        ],
+        "mask_policy": "identity",
+        "schema": "hyptcn3/safeguard-normalizer/1"
+      },
+      "provenance": {
+        "corpus_index": "/home/eh/projects/hyptcn3/data/campaigns/benign-v6-20261026/corpus.json",
+        "corpus_index_sha256": "b86e5fc35d7c4227c188cc024a7b25a142e5c80e4782807c773e9ee519dad790",
+        "protocol": {
+          "bin_bytes": 16777216,
+          "cycles": 720,
+          "domain": "hyptcn-lab",
+          "full_every": 360,
+          "interval_s": 5,
+          "max_gap_s": 7.5,
+          "min_free_gib": 30,
+          "min_score_coverage": 0.85,
+          "name": "server-normal-v2",
+          "pilot_cycles": 480,
+          "profile": "profiles/debian12-6.1.0-42-cloud-amd64",
+          "quality_policy": "behavioral-inputs-v1",
+          "roles": {
+            "calibration": 2,
+            "dev": 1,
+            "test_benign": 2,
+            "train": 3
+          },
+          "scenarios": {
+            "bursty": {
+              "burst": 1,
+              "catalog_share": 0.5,
+              "workers": 8,
+              "write_share": 0.2
+            },
+            "mixed": {
+              "burst": 0.7,
+              "catalog_share": 0.35,
+              "workers": 5,
+              "write_share": 0.35
+            },
+            "quiet": {
+              "burst": 0,
+              "catalog_share": 0.5,
+              "workers": 1,
+              "write_share": 0.2
+            },
+            "read_heavy": {
+              "burst": 0.5,
+              "catalog_share": 0.85,
+              "workers": 6,
+              "write_share": 0.02
+            },
+            "steady": {
+              "burst": 0.2,
+              "catalog_share": 0.5,
+              "workers": 4,
+              "write_share": 0.2
+            },
+            "write_heavy": {
+              "burst": 0.5,
+              "catalog_share": 0.15,
+              "workers": 6,
+              "write_share": 0.65
+            }
+          },
+          "schema": "hyptcn3/collection-protocol/2",
+          "status": "pilot_required",
+          "stride": 1,
+          "target": "http://127.0.0.1:18080",
+          "warmup_s": 120,
+          "window_rows": 32
+        },
+        "protocol_sha256": "e9d2bfbf38ae13e772b4c5407eeb6ec272898b683db9765e9542f08f4ead2a85",
+        "sessions": [
+          {
+            "audit": "/home/eh/projects/hyptcn3/data/collections/benign-v6-20261026_01_train_write_heavy/campaign_audit_20261026T182437149136Z.json",
+            "audit_sha256": "2dc1bd4ef21a783680b07182bf2bdc7d4a33294c1ca54764d6d7906acdba8b31",
+            "boot_id": "6ae87fb5-ca15-416e-b14f-c2364442859e",
+            "collector_sha256": "25f989f3f32f869b6503fa1c12d37b24ad0e49de16807674a339befefd2130b6",
+            "end": 1793039059.118,
+            "features": "/home/eh/projects/hyptcn3/data/collections/benign-v6-20261026_01_train_write_heavy/campaign_audit_20261026T182437149136Z.npz",
+            "features_sha256": "4d55c33a46efdf5d2535afc01aedfd7dfba297daa7bf340124c1c400ab6a8b96",
+            "group": "train-1",
+            "guest": {
+              "boot_id": "6ae87fb5-ca15-416e-b14f-c2364442859e",
+              "kernel": "6.1.0-42-cloud-amd64",
+              "machine_id": "180ac982142b4714a979599073c96cdd",
+              "stack_manifest": [
+                "c346dc8bc1c8c3649fc96064fddfc07172f740f7c82d1830dbb935b16c488271  /opt/hyptcn-lab/services.py",
+                "d7372422553f866333177456ac6daec4847f5660c1c854a646e602d0be0fcf6c  /opt/hyptcn-lab/schema.sql",
+                "a8e5ef8843ebae83eed8691f8eb7e1d186448d36e4be7d4406efeaa96291d5e3  /opt/hyptcn-lab/guest_state.py",
+                "62f55e4374b5db4522d0ce84c911f26ccd580e8f55bc570c09ee63c64be234c6  /etc/nginx/conf.d/hyptcn-lab.conf",
+                "af75eee623f3c7a0b7a1c10a35c2216684c6f4b610d44e46560de137ef3d6962  /etc/systemd/system/hyptcn-lab@.service",
+                "nginx\t1.22.1-9+deb12u10",
+                "postgresql\t15+248+deb12u1",
+                "python3\t3.11.2-1+b1",
+                "python3-psycopg2\t2.9.5-1+b1",
+                "timers:"
+              ],
+              "stack_sha256": "3fcb9e724f031e3ed24fd3e08fb8f2946c8cd3f04416bc871d8f7dc31b3d46bc"
+            },
+            "id": "benign-v6-20261026_01_train_write_heavy",
+            "kernel": "6.1.0-42-cloud-amd64",
+            "protocol_sha256": "e9d2bfbf38ae13e772b4c5407eeb6ec272898b683db9765e9542f08f4ead2a85",
+            "role": "train",
+            "scenario": "write_heavy",
+            "seed": 3605818860,
+            "session": "/home/eh/projects/hyptcn3/data/collections/benign-v6-20261026_01_train_write_heavy/session.json",
+            "session_sha256": "46f043115aff26221a490ca6460bdad1a3bbb0a6727085f84ed391ecd65f267b",
+            "start": 1793035464.117,
+            "typ": "benign"
+          },
+          {
+            "audit": "/home/eh/projects/hyptcn3/data/collections/benign-v6-20261026_02_train_quiet/campaign_audit_20261026T194937357267Z.json",
+            "audit_sha256": "9b952fa0ef3ad2c5f516ac5cd8d064d8244b26b96a9000f19d62be3e9da92463",
+            "boot_id": "6ae87fb5-ca15-416e-b14f-c2364442859e",
+            "collector_sha256": "25f989f3f32f869b6503fa1c12d37b24ad0e49de16807674a339befefd2130b6",
+            "end": 1793044167.051,
+            "features": "/home/eh/projects/hyptcn3/data/collections/benign-v6-20261026_02_train_quiet/campaign_audit_20261026T194937357267Z.npz",
+            "features_sha256": "f66ef2ffd8943f672ee66c521fb03e7f70d6e7281b3bcf04331a72f7771dff44",
+            "group": "train-1",
+            "guest": {
+              "boot_id": "6ae87fb5-ca15-416e-b14f-c2364442859e",
+              "kernel": "6.1.0-42-cloud-amd64",
+              "machine_id": "180ac982142b4714a979599073c96cdd",
+              "stack_manifest": [
+                "c346dc8bc1c8c3649fc96064fddfc07172f740f7c82d1830dbb935b16c488271  /opt/hyptcn-lab/services.py",
+                "d7372422553f866333177456ac6daec4847f5660c1c854a646e602d0be0fcf6c  /opt/hyptcn-lab/schema.sql",
+                "a8e5ef8843ebae83eed8691f8eb7e1d186448d36e4be7d4406efeaa96291d5e3  /opt/hyptcn-lab/guest_state.py",
+                "62f55e4374b5db4522d0ce84c911f26ccd580e8f55bc570c09ee63c64be234c6  /etc/nginx/conf.d/hyptcn-lab.conf",
+                "af75eee623f3c7a0b7a1c10a35c2216684c6f4b610d44e46560de137ef3d6962  /etc/systemd/system/hyptcn-lab@.service",
+                "nginx\t1.22.1-9+deb12u10",
+                "postgresql\t15+248+deb12u1",
+                "python3\t3.11.2-1+b1",
+                "python3-psycopg2\t2.9.5-1+b1",
+                "timers:"
+              ],
+              "stack_sha256": "3fcb9e724f031e3ed24fd3e08fb8f2946c8cd3f04416bc871d8f7dc31b3d46bc"
+            },
+            "id": "benign-v6-20261026_02_train_quiet",
+            "kernel": "6.1.0-42-cloud-amd64",
+            "protocol_sha256": "e9d2bfbf38ae13e772b4c5407eeb6ec272898b683db9765e9542f08f4ead2a85",
+            "role": "train",
+            "scenario": "quiet",
+            "seed": 3605818861,
+            "session": "/home/eh/projects/hyptcn3/data/collections/benign-v6-20261026_02_train_quiet/session.json",
+            "session_sha256": "3d21a80c777ac9bb3d6f73a9708b8c24de6982b8b603540d851063ce8436b31d",
+            "start": 1793040572.05,
+            "typ": "benign"
+          },
+          {
+            "audit": "/home/eh/projects/hyptcn3/data/collections/benign-v6-20261026_03_train_bursty/campaign_audit_20261026T210959810390Z.json",
+            "audit_sha256": "3296110b064232e0b0cc1102a2accda711ca5b4b120acc64b14c7b4478ae05ac",
+            "boot_id": "6ae87fb5-ca15-416e-b14f-c2364442859e",
+            "collector_sha256": "25f989f3f32f869b6503fa1c12d37b24ad0e49de16807674a339befefd2130b6",
+            "end": 1793048982.674,
+            "features": "/home/eh/projects/hyptcn3/data/collections/benign-v6-20261026_03_train_bursty/campaign_audit_20261026T210959810390Z.npz",
+            "features_sha256": "8decc7355913ac60667201447ce8fcb9985978998789c9dfb1936d1079e8c2f7",
+            "group": "train-1",
+            "guest": {
+              "boot_id": "6ae87fb5-ca15-416e-b14f-c2364442859e",
+              "kernel": "6.1.0-42-cloud-amd64",
+              "machine_id": "180ac982142b4714a979599073c96cdd",
+              "stack_manifest": [
+                "c346dc8bc1c8c3649fc96064fddfc07172f740f7c82d1830dbb935b16c488271  /opt/hyptcn-lab/services.py",
+                "d7372422553f866333177456ac6daec4847f5660c1c854a646e602d0be0fcf6c  /opt/hyptcn-lab/schema.sql",
+                "a8e5ef8843ebae83eed8691f8eb7e1d186448d36e4be7d4406efeaa96291d5e3  /opt/hyptcn-lab/guest_state.py",
+                "62f55e4374b5db4522d0ce84c911f26ccd580e8f55bc570c09ee63c64be234c6  /etc/nginx/conf.d/hyptcn-lab.conf",
+                "af75eee623f3c7a0b7a1c10a35c2216684c6f4b610d44e46560de137ef3d6962  /etc/systemd/system/hyptcn-lab@.service",
+                "nginx\t1.22.1-9+deb12u10",
+                "postgresql\t15+248+deb12u1",
+                "python3\t3.11.2-1+b1",
+                "python3-psycopg2\t2.9.5-1+b1",
+                "timers:"
+              ],
+              "stack_sha256": "3fcb9e724f031e3ed24fd3e08fb8f2946c8cd3f04416bc871d8f7dc31b3d46bc"
+            },
+            "id": "benign-v6-20261026_03_train_bursty",
+            "kernel": "6.1.0-42-cloud-amd64",
+            "protocol_sha256": "e9d2bfbf38ae13e772b4c5407eeb6ec272898b683db9765e9542f08f4ead2a85",
+            "role": "train",
+            "scenario": "bursty",
+            "seed": 3605818862,
+            "session": "/home/eh/projects/hyptcn3/data/collections/benign-v6-20261026_03_train_bursty/session.json",
+            "session_sha256": "2ff2b8ad51606fcc4bd2596a1e5de4bc68bbc83913445cfeb40a2ef8c413b61b",
+            "start": 1793045387.674,
+            "typ": "benign"
+          },
+          {
+            "audit": "/home/eh/projects/hyptcn3/data/collections/benign-v6-20261026_04_train_mixed/campaign_audit_20261026T223814180669Z.json",
+            "audit_sha256": "1ca05794320d3937ccb71159b2183ebbd1be260e23636dcf5538448188c45bab",
+            "boot_id": "6ae87fb5-ca15-416e-b14f-c2364442859e",
+            "collector_sha256": "25f989f3f32f869b6503fa1c12d37b24ad0e49de16807674a339befefd2130b6",
+            "end": 1793054283.061,
+            "features": "/home/eh/projects/hyptcn3/data/collections/benign-v6-20261026_04_train_mixed/campaign_audit_20261026T223814180669Z.npz",
+            "features_sha256": "833a4b756040ef4ba1a7a92c14381b6575aeb355b45011db79c08b827096ed35",
+            "group": "train-1",
+            "guest": {
+              "boot_id": "6ae87fb5-ca15-416e-b14f-c2364442859e",
+              "kernel": "6.1.0-42-cloud-amd64",
+              "machine_id": "180ac982142b4714a979599073c96cdd",
+              "stack_manifest": [
+                "c346dc8bc1c8c3649fc96064fddfc07172f740f7c82d1830dbb935b16c488271  /opt/hyptcn-lab/services.py",
+                "d7372422553f866333177456ac6daec4847f5660c1c854a646e602d0be0fcf6c  /opt/hyptcn-lab/schema.sql",
+                "a8e5ef8843ebae83eed8691f8eb7e1d186448d36e4be7d4406efeaa96291d5e3  /opt/hyptcn-lab/guest_state.py",
+                "62f55e4374b5db4522d0ce84c911f26ccd580e8f55bc570c09ee63c64be234c6  /etc/nginx/conf.d/hyptcn-lab.conf",
+                "af75eee623f3c7a0b7a1c10a35c2216684c6f4b610d44e46560de137ef3d6962  /etc/systemd/system/hyptcn-lab@.service",
+                "nginx\t1.22.1-9+deb12u10",
+                "postgresql\t15+248+deb12u1",
+                "python3\t3.11.2-1+b1",
+                "python3-psycopg2\t2.9.5-1+b1",
+                "timers:"
+              ],
+              "stack_sha256": "3fcb9e724f031e3ed24fd3e08fb8f2946c8cd3f04416bc871d8f7dc31b3d46bc"
+            },
+            "id": "benign-v6-20261026_04_train_mixed",
+            "kernel": "6.1.0-42-cloud-amd64",
+            "protocol_sha256": "e9d2bfbf38ae13e772b4c5407eeb6ec272898b683db9765e9542f08f4ead2a85",
+            "role": "train",
+            "scenario": "mixed",
+            "seed": 3605818863,
+            "session": "/home/eh/projects/hyptcn3/data/collections/benign-v6-20261026_04_train_mixed/session.json",
+            "session_sha256": "7aa67dc93b3406565f56cc3d88e437954f0ac869001755ef2f914a38ec52fe84",
+            "start": 1793050688.06,
+            "typ": "benign"
+          },
+          {
+            "audit": "/home/eh/projects/hyptcn3/data/collections/benign-v6-20261026_05_train_read_heavy/campaign_audit_20261027T000632625914Z.json",
+            "audit_sha256": "2d2503e1c3978a6dcc8a5257b3c938c889864b6f4da2810f609bdcb913a2a10e",
+            "boot_id": "6ae87fb5-ca15-416e-b14f-c2364442859e",
+            "collector_sha256": "25f989f3f32f869b6503fa1c12d37b24ad0e49de16807674a339befefd2130b6",
+            "end": 1793059578.967,
+            "features": "/home/eh/projects/hyptcn3/data/collections/benign-v6-20261026_05_train_read_heavy/campaign_audit_20261027T000632625914Z.npz",
+            "features_sha256": "dc5a0630159f3a90c97150b15b2cbc7468fdaae764571e690844b55f4b581e85",
+            "group": "train-1",
+            "guest": {
+              "boot_id": "6ae87fb5-ca15-416e-b14f-c2364442859e",
+              "kernel": "6.1.0-42-cloud-amd64",
+              "machine_id": "180ac982142b4714a979599073c96cdd",
+              "stack_manifest": [
+                "c346dc8bc1c8c3649fc96064fddfc07172f740f7c82d1830dbb935b16c488271  /opt/hyptcn-lab/services.py",
+                "d7372422553f866333177456ac6daec4847f5660c1c854a646e602d0be0fcf6c  /opt/hyptcn-lab/schema.sql",
+                "a8e5ef8843ebae83eed8691f8eb7e1d186448d36e4be7d4406efeaa96291d5e3  /opt/hyptcn-lab/guest_state.py",
+                "62f55e4374b5db4522d0ce84c911f26ccd580e8f55bc570c09ee63c64be234c6  /etc/nginx/conf.d/hyptcn-lab.conf",
+                "af75eee623f3c7a0b7a1c10a35c2216684c6f4b610d44e46560de137ef3d6962  /etc/systemd/system/hyptcn-lab@.service",
+                "nginx\t1.22.1-9+deb12u10",
+                "postgresql\t15+248+deb12u1",
+                "python3\t3.11.2-1+b1",
+                "python3-psycopg2\t2.9.5-1+b1",
+                "timers:"
+              ],
+              "stack_sha256": "3fcb9e724f031e3ed24fd3e08fb8f2946c8cd3f04416bc871d8f7dc31b3d46bc"
+            },
+            "id": "benign-v6-20261026_05_train_read_heavy",
+            "kernel": "6.1.0-42-cloud-amd64",
+            "protocol_sha256": "e9d2bfbf38ae13e772b4c5407eeb6ec272898b683db9765e9542f08f4ead2a85",
+            "role": "train",
+            "scenario": "read_heavy",
+            "seed": 3605818864,
+            "session": "/home/eh/projects/hyptcn3/data/collections/benign-v6-20261026_05_train_read_heavy/session.json",
+            "session_sha256": "659d7e3bea1b0eef450a96b5e9229b1d9a91abb9b7aea82c4afdadae9770cb9c",
+            "start": 1793055983.967,
+            "typ": "benign"
+          },
+          {
+            "audit": "/home/eh/projects/hyptcn3/data/collections/benign-v6-20261026_06_train_steady/campaign_audit_20261027T013208770307Z.json",
+            "audit_sha256": "70c1e14946ef12b9d7268b311878d0c518968261bcf9d8baea1dd4a30283a815",
+            "boot_id": "6ae87fb5-ca15-416e-b14f-c2364442859e",
+            "collector_sha256": "25f989f3f32f869b6503fa1c12d37b24ad0e49de16807674a339befefd2130b6",
+            "end": 1793064716.727,
+            "features": "/home/eh/projects/hyptcn3/data/collections/benign-v6-20261026_06_train_steady/campaign_audit_20261027T013208770307Z.npz",
+            "features_sha256": "1a0d52de7a34349f7ca74c2610f2e517b6d34a635708371a9514e93a9025d740",
+            "group": "train-1",
+            "guest": {
+              "boot_id": "6ae87fb5-ca15-416e-b14f-c2364442859e",
+              "kernel": "6.1.0-42-cloud-amd64",
+              "machine_id": "180ac982142b4714a979599073c96cdd",
+              "stack_manifest": [
+                "c346dc8bc1c8c3649fc96064fddfc07172f740f7c82d1830dbb935b16c488271  /opt/hyptcn-lab/services.py",
+                "d7372422553f866333177456ac6daec4847f5660c1c854a646e602d0be0fcf6c  /opt/hyptcn-lab/schema.sql",
+                "a8e5ef8843ebae83eed8691f8eb7e1d186448d36e4be7d4406efeaa96291d5e3  /opt/hyptcn-lab/guest_state.py",
+                "62f55e4374b5db4522d0ce84c911f26ccd580e8f55bc570c09ee63c64be234c6  /etc/nginx/conf.d/hyptcn-lab.conf",
+                "af75eee623f3c7a0b7a1c10a35c2216684c6f4b610d44e46560de137ef3d6962  /etc/systemd/system/hyptcn-lab@.service",
+                "nginx\t1.22.1-9+deb12u10",
+                "postgresql\t15+248+deb12u1",
+                "python3\t3.11.2-1+b1",
+                "python3-psycopg2\t2.9.5-1+b1",
+                "timers:"
+              ],
+              "stack_sha256": "3fcb9e724f031e3ed24fd3e08fb8f2946c8cd3f04416bc871d8f7dc31b3d46bc"
+            },
+            "id": "benign-v6-20261026_06_train_steady",
+            "kernel": "6.1.0-42-cloud-amd64",
+            "protocol_sha256": "e9d2bfbf38ae13e772b4c5407eeb6ec272898b683db9765e9542f08f4ead2a85",
+            "role": "train",
+            "scenario": "steady",
+            "seed": 3605818865,
+            "session": "/home/eh/projects/hyptcn3/data/collections/benign-v6-20261026_06_train_steady/session.json",
+            "session_sha256": "fd0ecf4f9631786d6022cf31d9d512cd4919467126471d7514529aaf96b77606",
+            "start": 1793061121.727,
+            "typ": "benign"
+          },
+          {
+            "audit": "/home/eh/projects/hyptcn3/data/collections/benign-v6-20261026_07_train_write_heavy/campaign_audit_20261027T025841220533Z.json",
+            "audit_sha256": "0e5f135e4fbc95245982b8ff2afe203ec62c77e2ba7b0ab417adc67c5872d2e2",
+            "boot_id": "f77f5fe5-a314-43a9-b2c6-38293b13b987",
+            "collector_sha256": "25f989f3f32f869b6503fa1c12d37b24ad0e49de16807674a339befefd2130b6",
+            "end": 1793069904.141,
+            "features": "/home/eh/projects/hyptcn3/data/collections/benign-v6-20261026_07_train_write_heavy/campaign_audit_20261027T025841220533Z.npz",
+            "features_sha256": "c0ac53e4e30a196934b6117ecd83e2f0178229b9cd7e42fbbf698a5016869195",
+            "group": "train-2",
+            "guest": {
+              "boot_id": "f77f5fe5-a314-43a9-b2c6-38293b13b987",
+              "kernel": "6.1.0-42-cloud-amd64",
+              "machine_id": "180ac982142b4714a979599073c96cdd",
+              "stack_manifest": [
+                "c346dc8bc1c8c3649fc96064fddfc07172f740f7c82d1830dbb935b16c488271  /opt/hyptcn-lab/services.py",
+                "d7372422553f866333177456ac6daec4847f5660c1c854a646e602d0be0fcf6c  /opt/hyptcn-lab/schema.sql",
+                "a8e5ef8843ebae83eed8691f8eb7e1d186448d36e4be7d4406efeaa96291d5e3  /opt/hyptcn-lab/guest_state.py",
+                "62f55e4374b5db4522d0ce84c911f26ccd580e8f55bc570c09ee63c64be234c6  /etc/nginx/conf.d/hyptcn-lab.conf",
+                "af75eee623f3c7a0b7a1c10a35c2216684c6f4b610d44e46560de137ef3d6962  /etc/systemd/system/hyptcn-lab@.service",
+                "nginx\t1.22.1-9+deb12u10",
+                "postgresql\t15+248+deb12u1",
+                "python3\t3.11.2-1+b1",
+                "python3-psycopg2\t2.9.5-1+b1",
+                "timers:"
+              ],
+              "stack_sha256": "3fcb9e724f031e3ed24fd3e08fb8f2946c8cd3f04416bc871d8f7dc31b3d46bc"
+            },
+            "id": "benign-v6-20261026_07_train_write_heavy",
+            "kernel": "6.1.0-42-cloud-amd64",
+            "protocol_sha256": "e9d2bfbf38ae13e772b4c5407eeb6ec272898b683db9765e9542f08f4ead2a85",
+            "role": "train",
+            "scenario": "write_heavy",
+            "seed": 3440673412,
+            "session": "/home/eh/projects/hyptcn3/data/collections/benign-v6-20261026_07_train_write_heavy/session.json",
+            "session_sha256": "e6b061f6f8c664f12f154a79fbefd47ffb1c4d4f2b04f0b09be1d9ba69bff550",
+            "start": 1793066309.14,
+            "typ": "benign"
+          },
+          {
+            "audit": "/home/eh/projects/hyptcn3/data/collections/benign-v6-20261026_08_train_quiet/campaign_audit_20261027T042819907345Z.json",
+            "audit_sha256": "0c1e050fc5507cc2b241477275d1c5f2b9ea39a986fa4c7a85141e3c8f3874a1",
+            "boot_id": "f77f5fe5-a314-43a9-b2c6-38293b13b987",
+            "collector_sha256": "25f989f3f32f869b6503fa1c12d37b24ad0e49de16807674a339befefd2130b6",
+            "end": 1793075288.74,
+            "features": "/home/eh/projects/hyptcn3/data/collections/benign-v6-20261026_08_train_quiet/campaign_audit_20261027T042819907345Z.npz",
+            "features_sha256": "97a4d3a86e38d1677656e68f8de771b26ebcda64f95694acd0f0924442501e1e",
+            "group": "train-2",
+            "guest": {
+              "boot_id": "f77f5fe5-a314-43a9-b2c6-38293b13b987",
+              "kernel": "6.1.0-42-cloud-amd64",
+              "machine_id": "180ac982142b4714a979599073c96cdd",
+              "stack_manifest": [
+                "c346dc8bc1c8c3649fc96064fddfc07172f740f7c82d1830dbb935b16c488271  /opt/hyptcn-lab/services.py",
+                "d7372422553f866333177456ac6daec4847f5660c1c854a646e602d0be0fcf6c  /opt/hyptcn-lab/schema.sql",
+                "a8e5ef8843ebae83eed8691f8eb7e1d186448d36e4be7d4406efeaa96291d5e3  /opt/hyptcn-lab/guest_state.py",
+                "62f55e4374b5db4522d0ce84c911f26ccd580e8f55bc570c09ee63c64be234c6  /etc/nginx/conf.d/hyptcn-lab.conf",
+                "af75eee623f3c7a0b7a1c10a35c2216684c6f4b610d44e46560de137ef3d6962  /etc/systemd/system/hyptcn-lab@.service",
+                "nginx\t1.22.1-9+deb12u10",
+                "postgresql\t15+248+deb12u1",
+                "python3\t3.11.2-1+b1",
+                "python3-psycopg2\t2.9.5-1+b1",
+                "timers:"
+              ],
+              "stack_sha256": "3fcb9e724f031e3ed24fd3e08fb8f2946c8cd3f04416bc871d8f7dc31b3d46bc"
+            },
+            "id": "benign-v6-20261026_08_train_quiet",
+            "kernel": "6.1.0-42-cloud-amd64",
+            "protocol_sha256": "e9d2bfbf38ae13e772b4c5407eeb6ec272898b683db9765e9542f08f4ead2a85",
+            "role": "train",
+            "scenario": "quiet",
+            "seed": 3440673413,
+            "session": "/home/eh/projects/hyptcn3/data/collections/benign-v6-20261026_08_train_quiet/session.json",
+            "session_sha256": "db06d33bce92b319344c3b4084218d8ffc521e28aef6bece320cbe453a67bfe9",
+            "start": 1793071693.74,
+            "typ": "benign"
+          },
+          {
+            "audit": "/home/eh/projects/hyptcn3/data/collections/benign-v6-20261026_09_train_read_heavy/campaign_audit_20261027T055312674555Z.json",
+            "audit_sha256": "62190bfb5e711d0f82a085d1c6e95ba107ed78fde6e3e6e09f1211b3bf9fdddd",
+            "boot_id": "f77f5fe5-a314-43a9-b2c6-38293b13b987",
+            "collector_sha256": "25f989f3f32f869b6503fa1c12d37b24ad0e49de16807674a339befefd2130b6",
+            "end": 1793080380.839,
+            "features": "/home/eh/projects/hyptcn3/data/collections/benign-v6-20261026_09_train_read_heavy/campaign_audit_20261027T055312674555Z.npz",
+            "features_sha256": "7bbf10641c8420af13cb475659b6b1df5bc19000bddb22ff4c131b80e0857d17",
+            "group": "train-2",
+            "guest": {
+              "boot_id": "f77f5fe5-a314-43a9-b2c6-38293b13b987",
+              "kernel": "6.1.0-42-cloud-amd64",
+              "machine_id": "180ac982142b4714a979599073c96cdd",
+              "stack_manifest": [
+                "c346dc8bc1c8c3649fc96064fddfc07172f740f7c82d1830dbb935b16c488271  /opt/hyptcn-lab/services.py",
+                "d7372422553f866333177456ac6daec4847f5660c1c854a646e602d0be0fcf6c  /opt/hyptcn-lab/schema.sql",
+                "a8e5ef8843ebae83eed8691f8eb7e1d186448d36e4be7d4406efeaa96291d5e3  /opt/hyptcn-lab/guest_state.py",
+                "62f55e4374b5db4522d0ce84c911f26ccd580e8f55bc570c09ee63c64be234c6  /etc/nginx/conf.d/hyptcn-lab.conf",
+                "af75eee623f3c7a0b7a1c10a35c2216684c6f4b610d44e46560de137ef3d6962  /etc/systemd/system/hyptcn-lab@.service",
+                "nginx\t1.22.1-9+deb12u10",
+                "postgresql\t15+248+deb12u1",
+                "python3\t3.11.2-1+b1",
+                "python3-psycopg2\t2.9.5-1+b1",
+                "timers:"
+              ],
+              "stack_sha256": "3fcb9e724f031e3ed24fd3e08fb8f2946c8cd3f04416bc871d8f7dc31b3d46bc"
+            },
+            "id": "benign-v6-20261026_09_train_read_heavy",
+            "kernel": "6.1.0-42-cloud-amd64",
+            "protocol_sha256": "e9d2bfbf38ae13e772b4c5407eeb6ec272898b683db9765e9542f08f4ead2a85",
+            "role": "train",
+            "scenario": "read_heavy",
+            "seed": 3440673414,
+            "session": "/home/eh/projects/hyptcn3/data/collections/benign-v6-20261026_09_train_read_heavy/session.json",
+            "session_sha256": "96fbc37079fda35082a8c87894dc513c7b7566b2756d4cb181e7171715c35774",
+            "start": 1793076785.839,
+            "typ": "benign"
+          },
+          {
+            "audit": "/home/eh/projects/hyptcn3/data/collections/benign-v6-20261026_10_train_mixed/campaign_audit_20261027T072123600604Z.json",
+            "audit_sha256": "b1436131a1e002e9fab4e1e835759c0e3bc408932e5dff906b032689e5e61d3d",
+            "boot_id": "f77f5fe5-a314-43a9-b2c6-38293b13b987",
+            "collector_sha256": "25f989f3f32f869b6503fa1c12d37b24ad0e49de16807674a339befefd2130b6",
+            "end": 1793085671.267,
+            "features": "/home/eh/projects/hyptcn3/data/collections/benign-v6-20261026_10_train_mixed/campaign_audit_20261027T072123600604Z.npz",
+            "features_sha256": "474a641f2523c0b6b3799bdaa884a5fe0c0195dff7c12bd897f7999e5e2c3dd7",
+            "group": "train-2",
+            "guest": {
+              "boot_id": "f77f5fe5-a314-43a9-b2c6-38293b13b987",
+              "kernel": "6.1.0-42-cloud-amd64",
+              "machine_id": "180ac982142b4714a979599073c96cdd",
+              "stack_manifest": [
+                "c346dc8bc1c8c3649fc96064fddfc07172f740f7c82d1830dbb935b16c488271  /opt/hyptcn-lab/services.py",
+                "d7372422553f866333177456ac6daec4847f5660c1c854a646e602d0be0fcf6c  /opt/hyptcn-lab/schema.sql",
+                "a8e5ef8843ebae83eed8691f8eb7e1d186448d36e4be7d4406efeaa96291d5e3  /opt/hyptcn-lab/guest_state.py",
+                "62f55e4374b5db4522d0ce84c911f26ccd580e8f55bc570c09ee63c64be234c6  /etc/nginx/conf.d/hyptcn-lab.conf",
+                "af75eee623f3c7a0b7a1c10a35c2216684c6f4b610d44e46560de137ef3d6962  /etc/systemd/system/hyptcn-lab@.service",
+                "nginx\t1.22.1-9+deb12u10",
+                "postgresql\t15+248+deb12u1",
+                "python3\t3.11.2-1+b1",
+                "python3-psycopg2\t2.9.5-1+b1",
+                "timers:"
+              ],
+              "stack_sha256": "3fcb9e724f031e3ed24fd3e08fb8f2946c8cd3f04416bc871d8f7dc31b3d46bc"
+            },
+            "id": "benign-v6-20261026_10_train_mixed",
+            "kernel": "6.1.0-42-cloud-amd64",
+            "protocol_sha256": "e9d2bfbf38ae13e772b4c5407eeb6ec272898b683db9765e9542f08f4ead2a85",
+            "role": "train",
+            "scenario": "mixed",
+            "seed": 3440673415,
+            "session": "/home/eh/projects/hyptcn3/data/collections/benign-v6-20261026_10_train_mixed/session.json",
+            "session_sha256": "e91d53c7fa73c19d8cd547ae0e6122bd456a1c413353ff850bcff272ee4782a8",
+            "start": 1793082076.267,
+            "typ": "benign"
+          },
+          {
+            "audit": "/home/eh/projects/hyptcn3/data/collections/benign-v6-20261026_11_train_bursty/campaign_audit_20261027T085135780350Z.json",
+            "audit_sha256": "43422707172da35ca99bad5a75620758bda2815d0b8ffe516b6e67abc0b0ca86",
+            "boot_id": "f77f5fe5-a314-43a9-b2c6-38293b13b987",
+            "collector_sha256": "25f989f3f32f869b6503fa1c12d37b24ad0e49de16807674a339befefd2130b6",
+            "end": 1793091077.724,
+            "features": "/home/eh/projects/hyptcn3/data/collections/benign-v6-20261026_11_train_bursty/campaign_audit_20261027T085135780350Z.npz",
+            "features_sha256": "9d947b9e4a313f02e2f91ae35ac9363ed7eab83d2d91d4247894bc4128a450bb",
+            "group": "train-2",
+            "guest": {
+              "boot_id": "f77f5fe5-a314-43a9-b2c6-38293b13b987",
+              "kernel": "6.1.0-42-cloud-amd64",
+              "machine_id": "180ac982142b4714a979599073c96cdd",
+              "stack_manifest": [
+                "c346dc8bc1c8c3649fc96064fddfc07172f740f7c82d1830dbb935b16c488271  /opt/hyptcn-lab/services.py",
+                "d7372422553f866333177456ac6daec4847f5660c1c854a646e602d0be0fcf6c  /opt/hyptcn-lab/schema.sql",
+                "a8e5ef8843ebae83eed8691f8eb7e1d186448d36e4be7d4406efeaa96291d5e3  /opt/hyptcn-lab/guest_state.py",
+                "62f55e4374b5db4522d0ce84c911f26ccd580e8f55bc570c09ee63c64be234c6  /etc/nginx/conf.d/hyptcn-lab.conf",
+                "af75eee623f3c7a0b7a1c10a35c2216684c6f4b610d44e46560de137ef3d6962  /etc/systemd/system/hyptcn-lab@.service",
+                "nginx\t1.22.1-9+deb12u10",
+                "postgresql\t15+248+deb12u1",
+                "python3\t3.11.2-1+b1",
+                "python3-psycopg2\t2.9.5-1+b1",
+                "timers:"
+              ],
+              "stack_sha256": "3fcb9e724f031e3ed24fd3e08fb8f2946c8cd3f04416bc871d8f7dc31b3d46bc"
+            },
+            "id": "benign-v6-20261026_11_train_bursty",
+            "kernel": "6.1.0-42-cloud-amd64",
+            "protocol_sha256": "e9d2bfbf38ae13e772b4c5407eeb6ec272898b683db9765e9542f08f4ead2a85",
+            "role": "train",
+            "scenario": "bursty",
+            "seed": 3440673416,
+            "session": "/home/eh/projects/hyptcn3/data/collections/benign-v6-20261026_11_train_bursty/session.json",
+            "session_sha256": "0f43e4d5dbb1c9f5f0ed769ba2ab8e3072f2eee31098b595542f31853934f378",
+            "start": 1793087482.724,
+            "typ": "benign"
+          },
+          {
+            "audit": "/home/eh/projects/hyptcn3/data/collections/benign-v6-20261026_12_train_steady/campaign_audit_20261027T102449739240Z.json",
+            "audit_sha256": "11ff64ab5ae23d04466110bab8b88f0f92a470aa1b14e0af5e4f0f19a8d93d43",
+            "boot_id": "f77f5fe5-a314-43a9-b2c6-38293b13b987",
+            "collector_sha256": "25f989f3f32f869b6503fa1c12d37b24ad0e49de16807674a339befefd2130b6",
+            "end": 1793096677.961,
+            "features": "/home/eh/projects/hyptcn3/data/collections/benign-v6-20261026_12_train_steady/campaign_audit_20261027T102449739240Z.npz",
+            "features_sha256": "806fff6d5368403ccc14c9314222f2580e8f0302b0222c68e7cf27c46c9b3093",
+            "group": "train-2",
+            "guest": {
+              "boot_id": "f77f5fe5-a314-43a9-b2c6-38293b13b987",
+              "kernel": "6.1.0-42-cloud-amd64",
+              "machine_id": "180ac982142b4714a979599073c96cdd",
+              "stack_manifest": [
+                "c346dc8bc1c8c3649fc96064fddfc07172f740f7c82d1830dbb935b16c488271  /opt/hyptcn-lab/services.py",
+                "d7372422553f866333177456ac6daec4847f5660c1c854a646e602d0be0fcf6c  /opt/hyptcn-lab/schema.sql",
+                "a8e5ef8843ebae83eed8691f8eb7e1d186448d36e4be7d4406efeaa96291d5e3  /opt/hyptcn-lab/guest_state.py",
+                "62f55e4374b5db4522d0ce84c911f26ccd580e8f55bc570c09ee63c64be234c6  /etc/nginx/conf.d/hyptcn-lab.conf",
+                "af75eee623f3c7a0b7a1c10a35c2216684c6f4b610d44e46560de137ef3d6962  /etc/systemd/system/hyptcn-lab@.service",
+                "nginx\t1.22.1-9+deb12u10",
+                "postgresql\t15+248+deb12u1",
+                "python3\t3.11.2-1+b1",
+                "python3-psycopg2\t2.9.5-1+b1",
+                "timers:"
+              ],
+              "stack_sha256": "3fcb9e724f031e3ed24fd3e08fb8f2946c8cd3f04416bc871d8f7dc31b3d46bc"
+            },
+            "id": "benign-v6-20261026_12_train_steady",
+            "kernel": "6.1.0-42-cloud-amd64",
+            "protocol_sha256": "e9d2bfbf38ae13e772b4c5407eeb6ec272898b683db9765e9542f08f4ead2a85",
+            "role": "train",
+            "scenario": "steady",
+            "seed": 3440673417,
+            "session": "/home/eh/projects/hyptcn3/data/collections/benign-v6-20261026_12_train_steady/session.json",
+            "session_sha256": "985d3840e9cf5dd6b3e2292cade657305dbe976b408c60f1bf790f3ab38cec32",
+            "start": 1793093082.961,
+            "typ": "benign"
+          },
+          {
+            "audit": "/home/eh/projects/hyptcn3/data/collections/benign-v6-20261026_13_train_read_heavy/campaign_audit_20261027T115208715549Z.json",
+            "audit_sha256": "9b59be56e49c6005b75fbdcc2ac834ba2554961fd1a6ca8dd99d9ef9c2a91fac",
+            "boot_id": "aca8cdbf-4eb7-476d-a557-fc1c32ac1ef4",
+            "collector_sha256": "25f989f3f32f869b6503fa1c12d37b24ad0e49de16807674a339befefd2130b6",
+            "end": 1793101913.661,
+            "features": "/home/eh/projects/hyptcn3/data/collections/benign-v6-20261026_13_train_read_heavy/campaign_audit_20261027T115208715549Z.npz",
+            "features_sha256": "2f93f5590fdf83351151118a2e3b7bab7e9c90fddcc88ef9150d6108a7baa6da",
+            "group": "train-3",
+            "guest": {
+              "boot_id": "aca8cdbf-4eb7-476d-a557-fc1c32ac1ef4",
+              "kernel": "6.1.0-42-cloud-amd64",
+              "machine_id": "180ac982142b4714a979599073c96cdd",
+              "stack_manifest": [
+                "c346dc8bc1c8c3649fc96064fddfc07172f740f7c82d1830dbb935b16c488271  /opt/hyptcn-lab/services.py",
+                "d7372422553f866333177456ac6daec4847f5660c1c854a646e602d0be0fcf6c  /opt/hyptcn-lab/schema.sql",
+                "a8e5ef8843ebae83eed8691f8eb7e1d186448d36e4be7d4406efeaa96291d5e3  /opt/hyptcn-lab/guest_state.py",
+                "62f55e4374b5db4522d0ce84c911f26ccd580e8f55bc570c09ee63c64be234c6  /etc/nginx/conf.d/hyptcn-lab.conf",
+                "af75eee623f3c7a0b7a1c10a35c2216684c6f4b610d44e46560de137ef3d6962  /etc/systemd/system/hyptcn-lab@.service",
+                "nginx\t1.22.1-9+deb12u10",
+                "postgresql\t15+248+deb12u1",
+                "python3\t3.11.2-1+b1",
+                "python3-psycopg2\t2.9.5-1+b1",
+                "timers:"
+              ],
+              "stack_sha256": "3fcb9e724f031e3ed24fd3e08fb8f2946c8cd3f04416bc871d8f7dc31b3d46bc"
+            },
+            "id": "benign-v6-20261026_13_train_read_heavy",
+            "kernel": "6.1.0-42-cloud-amd64",
+            "protocol_sha256": "e9d2bfbf38ae13e772b4c5407eeb6ec272898b683db9765e9542f08f4ead2a85",
+            "role": "train",
+            "scenario": "read_heavy",
+            "seed": 2137948365,
+            "session": "/home/eh/projects/hyptcn3/data/collections/benign-v6-20261026_13_train_read_heavy/session.json",
+            "session_sha256": "b507b58dfcd695ee91f15520f55bd37c2ab46a1122464c013c6db0dcc72e11aa",
+            "start": 1793098318.661,
+            "typ": "benign"
+          },
+          {
+            "audit": "/home/eh/projects/hyptcn3/data/collections/benign-v6-20261026_14_train_bursty/campaign_audit_20261027T131956900671Z.json",
+            "audit_sha256": "e68dccfa8bae07c409af2f7cc8770032c11c6482fb5f2860e0e3592f3a41001a",
+            "boot_id": "aca8cdbf-4eb7-476d-a557-fc1c32ac1ef4",
+            "collector_sha256": "25f989f3f32f869b6503fa1c12d37b24ad0e49de16807674a339befefd2130b6",
+            "end": 1793107177.377,
+            "features": "/home/eh/projects/hyptcn3/data/collections/benign-v6-20261026_14_train_bursty/campaign_audit_20261027T131956900671Z.npz",
+            "features_sha256": "7dd7112895d74b9895b854235241d6a8162c7da6da3dba8952120286578d832a",
+            "group": "train-3",
+            "guest": {
+              "boot_id": "aca8cdbf-4eb7-476d-a557-fc1c32ac1ef4",
+              "kernel": "6.1.0-42-cloud-amd64",
+              "machine_id": "180ac982142b4714a979599073c96cdd",
+              "stack_manifest": [
+                "c346dc8bc1c8c3649fc96064fddfc07172f740f7c82d1830dbb935b16c488271  /opt/hyptcn-lab/services.py",
+                "d7372422553f866333177456ac6daec4847f5660c1c854a646e602d0be0fcf6c  /opt/hyptcn-lab/schema.sql",
+                "a8e5ef8843ebae83eed8691f8eb7e1d186448d36e4be7d4406efeaa96291d5e3  /opt/hyptcn-lab/guest_state.py",
+                "62f55e4374b5db4522d0ce84c911f26ccd580e8f55bc570c09ee63c64be234c6  /etc/nginx/conf.d/hyptcn-lab.conf",
+                "af75eee623f3c7a0b7a1c10a35c2216684c6f4b610d44e46560de137ef3d6962  /etc/systemd/system/hyptcn-lab@.service",
+                "nginx\t1.22.1-9+deb12u10",
+                "postgresql\t15+248+deb12u1",
+                "python3\t3.11.2-1+b1",
+                "python3-psycopg2\t2.9.5-1+b1",
+                "timers:"
+              ],
+              "stack_sha256": "3fcb9e724f031e3ed24fd3e08fb8f2946c8cd3f04416bc871d8f7dc31b3d46bc"
+            },
+            "id": "benign-v6-20261026_14_train_bursty",
+            "kernel": "6.1.0-42-cloud-amd64",
+            "protocol_sha256": "e9d2bfbf38ae13e772b4c5407eeb6ec272898b683db9765e9542f08f4ead2a85",
+            "role": "train",
+            "scenario": "bursty",
+            "seed": 2137948366,
+            "session": "/home/eh/projects/hyptcn3/data/collections/benign-v6-20261026_14_train_bursty/session.json",
+            "session_sha256": "59182ce1308049de49965b86d55b36a9590f57e6337d08e47341112f5c79821b",
+            "start": 1793103582.377,
+            "typ": "benign"
+          },
+          {
+            "audit": "/home/eh/projects/hyptcn3/data/collections/benign-v6-20261026_15_train_write_heavy/campaign_audit_20261027T145144759894Z.json",
+            "audit_sha256": "175f586d6cedeb30987d99923232f0a34dfdcec614424929be61fca12693f79c",
+            "boot_id": "aca8cdbf-4eb7-476d-a557-fc1c32ac1ef4",
+            "collector_sha256": "25f989f3f32f869b6503fa1c12d37b24ad0e49de16807674a339befefd2130b6",
+            "end": 1793112690.039,
+            "features": "/home/eh/projects/hyptcn3/data/collections/benign-v6-20261026_15_train_write_heavy/campaign_audit_20261027T145144759894Z.npz",
+            "features_sha256": "d1886f03c9112f046a0e5f6063e94d754e20507835c82d4b07e17866e5c4092e",
+            "group": "train-3",
+            "guest": {
+              "boot_id": "aca8cdbf-4eb7-476d-a557-fc1c32ac1ef4",
+              "kernel": "6.1.0-42-cloud-amd64",
+              "machine_id": "180ac982142b4714a979599073c96cdd",
+              "stack_manifest": [
+                "c346dc8bc1c8c3649fc96064fddfc07172f740f7c82d1830dbb935b16c488271  /opt/hyptcn-lab/services.py",
+                "d7372422553f866333177456ac6daec4847f5660c1c854a646e602d0be0fcf6c  /opt/hyptcn-lab/schema.sql",
+                "a8e5ef8843ebae83eed8691f8eb7e1d186448d36e4be7d4406efeaa96291d5e3  /opt/hyptcn-lab/guest_state.py",
+                "62f55e4374b5db4522d0ce84c911f26ccd580e8f55bc570c09ee63c64be234c6  /etc/nginx/conf.d/hyptcn-lab.conf",
+                "af75eee623f3c7a0b7a1c10a35c2216684c6f4b610d44e46560de137ef3d6962  /etc/systemd/system/hyptcn-lab@.service",
+                "nginx\t1.22.1-9+deb12u10",
+                "postgresql\t15+248+deb12u1",
+                "python3\t3.11.2-1+b1",
+                "python3-psycopg2\t2.9.5-1+b1",
+                "timers:"
+              ],
+              "stack_sha256": "3fcb9e724f031e3ed24fd3e08fb8f2946c8cd3f04416bc871d8f7dc31b3d46bc"
+            },
+            "id": "benign-v6-20261026_15_train_write_heavy",
+            "kernel": "6.1.0-42-cloud-amd64",
+            "protocol_sha256": "e9d2bfbf38ae13e772b4c5407eeb6ec272898b683db9765e9542f08f4ead2a85",
+            "role": "train",
+            "scenario": "write_heavy",
+            "seed": 2137948367,
+            "session": "/home/eh/projects/hyptcn3/data/collections/benign-v6-20261026_15_train_write_heavy/session.json",
+            "session_sha256": "096da1cfb6b92e9a2a3048c69d76df0c1fae34afd2b29c44313ce03d9b62a3e6",
+            "start": 1793109095.039,
+            "typ": "benign"
+          },
+          {
+            "audit": "/home/eh/projects/hyptcn3/data/collections/benign-v6-20261026_16_train_steady/campaign_audit_20261027T162230191358Z.json",
+            "audit_sha256": "877b085906a725f911b85e78469b01787e3580baae88ebd8f527a38e04498472",
+            "boot_id": "aca8cdbf-4eb7-476d-a557-fc1c32ac1ef4",
+            "collector_sha256": "25f989f3f32f869b6503fa1c12d37b24ad0e49de16807674a339befefd2130b6",
+            "end": 1793118137.685,
+            "features": "/home/eh/projects/hyptcn3/data/collections/benign-v6-20261026_16_train_steady/campaign_audit_20261027T162230191358Z.npz",
+            "features_sha256": "24de54f8020c9f502577be640c71cd4e9daf157ea4809ba1ed057d108ce49df6",
+            "group": "train-3",
+            "guest": {
+              "boot_id": "aca8cdbf-4eb7-476d-a557-fc1c32ac1ef4",
+              "kernel": "6.1.0-42-cloud-amd64",
+              "machine_id": "180ac982142b4714a979599073c96cdd",
+              "stack_manifest": [
+                "c346dc8bc1c8c3649fc96064fddfc07172f740f7c82d1830dbb935b16c488271  /opt/hyptcn-lab/services.py",
+                "d7372422553f866333177456ac6daec4847f5660c1c854a646e602d0be0fcf6c  /opt/hyptcn-lab/schema.sql",
+                "a8e5ef8843ebae83eed8691f8eb7e1d186448d36e4be7d4406efeaa96291d5e3  /opt/hyptcn-lab/guest_state.py",
+                "62f55e4374b5db4522d0ce84c911f26ccd580e8f55bc570c09ee63c64be234c6  /etc/nginx/conf.d/hyptcn-lab.conf",
+                "af75eee623f3c7a0b7a1c10a35c2216684c6f4b610d44e46560de137ef3d6962  /etc/systemd/system/hyptcn-lab@.service",
+                "nginx\t1.22.1-9+deb12u10",
+                "postgresql\t15+248+deb12u1",
+                "python3\t3.11.2-1+b1",
+                "python3-psycopg2\t2.9.5-1+b1",
+                "timers:"
+              ],
+              "stack_sha256": "3fcb9e724f031e3ed24fd3e08fb8f2946c8cd3f04416bc871d8f7dc31b3d46bc"
+            },
+            "id": "benign-v6-20261026_16_train_steady",
+            "kernel": "6.1.0-42-cloud-amd64",
+            "protocol_sha256": "e9d2bfbf38ae13e772b4c5407eeb6ec272898b683db9765e9542f08f4ead2a85",
+            "role": "train",
+            "scenario": "steady",
+            "seed": 2137948368,
+            "session": "/home/eh/projects/hyptcn3/data/collections/benign-v6-20261026_16_train_steady/session.json",
+            "session_sha256": "dbc6e8f8e64bcfa5d10551be2f0c1087c8ee18e718d6139504ae528859984744",
+            "start": 1793114542.685,
+            "typ": "benign"
+          },
+          {
+            "audit": "/home/eh/projects/hyptcn3/data/collections/benign-v6-20261026_17_train_mixed/campaign_audit_20261027T174948806435Z.json",
+            "audit_sha256": "68fa6edca4913650e2639fea2f780797594c581ea91bde4c2c23bab7e24c2ec2",
+            "boot_id": "aca8cdbf-4eb7-476d-a557-fc1c32ac1ef4",
+            "collector_sha256": "25f989f3f32f869b6503fa1c12d37b24ad0e49de16807674a339befefd2130b6",
+            "end": 1793123373.316,
+            "features": "/home/eh/projects/hyptcn3/data/collections/benign-v6-20261026_17_train_mixed/campaign_audit_20261027T174948806435Z.npz",
+            "features_sha256": "98eef69cf3972e0d6a8557415c6a3a325b7301c4bbf26e8acd62c9d69f171fc4",
+            "group": "train-3",
+            "guest": {
+              "boot_id": "aca8cdbf-4eb7-476d-a557-fc1c32ac1ef4",
+              "kernel": "6.1.0-42-cloud-amd64",
+              "machine_id": "180ac982142b4714a979599073c96cdd",
+              "stack_manifest": [
+                "c346dc8bc1c8c3649fc96064fddfc07172f740f7c82d1830dbb935b16c488271  /opt/hyptcn-lab/services.py",
+                "d7372422553f866333177456ac6daec4847f5660c1c854a646e602d0be0fcf6c  /opt/hyptcn-lab/schema.sql",
+                "a8e5ef8843ebae83eed8691f8eb7e1d186448d36e4be7d4406efeaa96291d5e3  /opt/hyptcn-lab/guest_state.py",
+                "62f55e4374b5db4522d0ce84c911f26ccd580e8f55bc570c09ee63c64be234c6  /etc/nginx/conf.d/hyptcn-lab.conf",
+                "af75eee623f3c7a0b7a1c10a35c2216684c6f4b610d44e46560de137ef3d6962  /etc/systemd/system/hyptcn-lab@.service",
+                "nginx\t1.22.1-9+deb12u10",
+                "postgresql\t15+248+deb12u1",
+                "python3\t3.11.2-1+b1",
+                "python3-psycopg2\t2.9.5-1+b1",
+                "timers:"
+              ],
+              "stack_sha256": "3fcb9e724f031e3ed24fd3e08fb8f2946c8cd3f04416bc871d8f7dc31b3d46bc"
+            },
+            "id": "benign-v6-20261026_17_train_mixed",
+            "kernel": "6.1.0-42-cloud-amd64",
+            "protocol_sha256": "e9d2bfbf38ae13e772b4c5407eeb6ec272898b683db9765e9542f08f4ead2a85",
+            "role": "train",
+            "scenario": "mixed",
+            "seed": 2137948369,
+            "session": "/home/eh/projects/hyptcn3/data/collections/benign-v6-20261026_17_train_mixed/session.json",
+            "session_sha256": "2f454b1c709e29349cc03fe03a67027856644c5541bf20ac75e3fc3b8f836b2f",
+            "start": 1793119778.315,
+            "typ": "benign"
+          },
+          {
+            "audit": "/home/eh/projects/hyptcn3/data/collections/benign-v6-20261026_18_train_quiet/campaign_audit_20261027T191955775309Z.json",
+            "audit_sha256": "3bd38e5f00dec0da3b7bc886d42d07832fab810280fca796b24c6da6b916f76c",
+            "boot_id": "aca8cdbf-4eb7-476d-a557-fc1c32ac1ef4",
+            "collector_sha256": "25f989f3f32f869b6503fa1c12d37b24ad0e49de16807674a339befefd2130b6",
+            "end": 1793128786.208,
+            "features": "/home/eh/projects/hyptcn3/data/collections/benign-v6-20261026_18_train_quiet/campaign_audit_20261027T191955775309Z.npz",
+            "features_sha256": "b2ae545144aa9e9addbb8cc54d2d02207eb4661b5411d6cb4a3748b5c7a39286",
+            "group": "train-3",
+            "guest": {
+              "boot_id": "aca8cdbf-4eb7-476d-a557-fc1c32ac1ef4",
+              "kernel": "6.1.0-42-cloud-amd64",
+              "machine_id": "180ac982142b4714a979599073c96cdd",
+              "stack_manifest": [
+                "c346dc8bc1c8c3649fc96064fddfc07172f740f7c82d1830dbb935b16c488271  /opt/hyptcn-lab/services.py",
+                "d7372422553f866333177456ac6daec4847f5660c1c854a646e602d0be0fcf6c  /opt/hyptcn-lab/schema.sql",
+                "a8e5ef8843ebae83eed8691f8eb7e1d186448d36e4be7d4406efeaa96291d5e3  /opt/hyptcn-lab/guest_state.py",
+                "62f55e4374b5db4522d0ce84c911f26ccd580e8f55bc570c09ee63c64be234c6  /etc/nginx/conf.d/hyptcn-lab.conf",
+                "af75eee623f3c7a0b7a1c10a35c2216684c6f4b610d44e46560de137ef3d6962  /etc/systemd/system/hyptcn-lab@.service",
+                "nginx\t1.22.1-9+deb12u10",
+                "postgresql\t15+248+deb12u1",
+                "python3\t3.11.2-1+b1",
+                "python3-psycopg2\t2.9.5-1+b1",
+                "timers:"
+              ],
+              "stack_sha256": "3fcb9e724f031e3ed24fd3e08fb8f2946c8cd3f04416bc871d8f7dc31b3d46bc"
+            },
+            "id": "benign-v6-20261026_18_train_quiet",
+            "kernel": "6.1.0-42-cloud-amd64",
+            "protocol_sha256": "e9d2bfbf38ae13e772b4c5407eeb6ec272898b683db9765e9542f08f4ead2a85",
+            "role": "train",
+            "scenario": "quiet",
+            "seed": 2137948370,
+            "session": "/home/eh/projects/hyptcn3/data/collections/benign-v6-20261026_18_train_quiet/session.json",
+            "session_sha256": "ecb906e87a5223c5018584cc74b6581da86f27e308978f6097c3cba903d12367",
+            "start": 1793125191.208,
+            "typ": "benign"
+          },
+          {
+            "audit": "/home/eh/projects/hyptcn3/data/collections/benign-v6-20261026_19_dev_steady/campaign_audit_20261027T204607545977Z.json",
+            "audit_sha256": "68153953a20deb795850ceeb55f0f2a296920e02d7f77859373c9e89051a9905",
+            "boot_id": "06f0dd2e-0140-4b73-81c0-bc9015473be8",
+            "collector_sha256": "25f989f3f32f869b6503fa1c12d37b24ad0e49de16807674a339befefd2130b6",
+            "end": 1793133953.647,
+            "features": "/home/eh/projects/hyptcn3/data/collections/benign-v6-20261026_19_dev_steady/campaign_audit_20261027T204607545977Z.npz",
+            "features_sha256": "c7ba690e81ccb4792d477aabebb560ddcc05a9781148ba093dc7fb36c0071c50",
+            "group": "dev-1",
+            "guest": {
+              "boot_id": "06f0dd2e-0140-4b73-81c0-bc9015473be8",
+              "kernel": "6.1.0-42-cloud-amd64",
+              "machine_id": "180ac982142b4714a979599073c96cdd",
+              "stack_manifest": [
+                "c346dc8bc1c8c3649fc96064fddfc07172f740f7c82d1830dbb935b16c488271  /opt/hyptcn-lab/services.py",
+                "d7372422553f866333177456ac6daec4847f5660c1c854a646e602d0be0fcf6c  /opt/hyptcn-lab/schema.sql",
+                "a8e5ef8843ebae83eed8691f8eb7e1d186448d36e4be7d4406efeaa96291d5e3  /opt/hyptcn-lab/guest_state.py",
+                "62f55e4374b5db4522d0ce84c911f26ccd580e8f55bc570c09ee63c64be234c6  /etc/nginx/conf.d/hyptcn-lab.conf",
+                "af75eee623f3c7a0b7a1c10a35c2216684c6f4b610d44e46560de137ef3d6962  /etc/systemd/system/hyptcn-lab@.service",
+                "nginx\t1.22.1-9+deb12u10",
+                "postgresql\t15+248+deb12u1",
+                "python3\t3.11.2-1+b1",
+                "python3-psycopg2\t2.9.5-1+b1",
+                "timers:"
+              ],
+              "stack_sha256": "3fcb9e724f031e3ed24fd3e08fb8f2946c8cd3f04416bc871d8f7dc31b3d46bc"
+            },
+            "id": "benign-v6-20261026_19_dev_steady",
+            "kernel": "6.1.0-42-cloud-amd64",
+            "protocol_sha256": "e9d2bfbf38ae13e772b4c5407eeb6ec272898b683db9765e9542f08f4ead2a85",
+            "role": "dev",
+            "scenario": "steady",
+            "seed": 1818028832,
+            "session": "/home/eh/projects/hyptcn3/data/collections/benign-v6-20261026_19_dev_steady/session.json",
+            "session_sha256": "268f17c02b2a328be4e93aeb15fb5fa89989661e30f20b355da2b733d49eeb97",
+            "start": 1793130358.647,
+            "typ": "benign"
+          },
+          {
+            "audit": "/home/eh/projects/hyptcn3/data/collections/benign-v6-20261026_20_dev_mixed/campaign_audit_20261027T221427087713Z.json",
+            "audit_sha256": "40c185c4a44de39d9deb37e3c507ca8ebd113cec9f031ee5afec12f8e6884466",
+            "boot_id": "06f0dd2e-0140-4b73-81c0-bc9015473be8",
+            "collector_sha256": "25f989f3f32f869b6503fa1c12d37b24ad0e49de16807674a339befefd2130b6",
+            "end": 1793139252.75,
+            "features": "/home/eh/projects/hyptcn3/data/collections/benign-v6-20261026_20_dev_mixed/campaign_audit_20261027T221427087713Z.npz",
+            "features_sha256": "7437cb37d4a7913c2035b048b67b577d4de3a0ef91ebf16c253fe192007e7077",
+            "group": "dev-1",
+            "guest": {
+              "boot_id": "06f0dd2e-0140-4b73-81c0-bc9015473be8",
+              "kernel": "6.1.0-42-cloud-amd64",
+              "machine_id": "180ac982142b4714a979599073c96cdd",
+              "stack_manifest": [
+                "c346dc8bc1c8c3649fc96064fddfc07172f740f7c82d1830dbb935b16c488271  /opt/hyptcn-lab/services.py",
+                "d7372422553f866333177456ac6daec4847f5660c1c854a646e602d0be0fcf6c  /opt/hyptcn-lab/schema.sql",
+                "a8e5ef8843ebae83eed8691f8eb7e1d186448d36e4be7d4406efeaa96291d5e3  /opt/hyptcn-lab/guest_state.py",
+                "62f55e4374b5db4522d0ce84c911f26ccd580e8f55bc570c09ee63c64be234c6  /etc/nginx/conf.d/hyptcn-lab.conf",
+                "af75eee623f3c7a0b7a1c10a35c2216684c6f4b610d44e46560de137ef3d6962  /etc/systemd/system/hyptcn-lab@.service",
+                "nginx\t1.22.1-9+deb12u10",
+                "postgresql\t15+248+deb12u1",
+                "python3\t3.11.2-1+b1",
+                "python3-psycopg2\t2.9.5-1+b1",
+                "timers:"
+              ],
+              "stack_sha256": "3fcb9e724f031e3ed24fd3e08fb8f2946c8cd3f04416bc871d8f7dc31b3d46bc"
+            },
+            "id": "benign-v6-20261026_20_dev_mixed",
+            "kernel": "6.1.0-42-cloud-amd64",
+            "protocol_sha256": "e9d2bfbf38ae13e772b4c5407eeb6ec272898b683db9765e9542f08f4ead2a85",
+            "role": "dev",
+            "scenario": "mixed",
+            "seed": 1818028833,
+            "session": "/home/eh/projects/hyptcn3/data/collections/benign-v6-20261026_20_dev_mixed/session.json",
+            "session_sha256": "4deabd767df478a589389b995a4eba26043cd9081a68349cad037448914ef177",
+            "start": 1793135657.75,
+            "typ": "benign"
+          },
+          {
+            "audit": "/home/eh/projects/hyptcn3/data/collections/benign-v6-20261026_21_dev_quiet/campaign_audit_20261027T234536141952Z.json",
+            "audit_sha256": "eed67fe12bff00693e39fe854f3d8ba9fd3893c7aa023d1609e92237f57f12bd",
+            "boot_id": "06f0dd2e-0140-4b73-81c0-bc9015473be8",
+            "collector_sha256": "25f989f3f32f869b6503fa1c12d37b24ad0e49de16807674a339befefd2130b6",
+            "end": 1793144724.63,
+            "features": "/home/eh/projects/hyptcn3/data/collections/benign-v6-20261026_21_dev_quiet/campaign_audit_20261027T234536141952Z.npz",
+            "features_sha256": "f91cb1931dcbe58031847eb928975cc2adfce4123d731f56f51c964a748faf1c",
+            "group": "dev-1",
+            "guest": {
+              "boot_id": "06f0dd2e-0140-4b73-81c0-bc9015473be8",
+              "kernel": "6.1.0-42-cloud-amd64",
+              "machine_id": "180ac982142b4714a979599073c96cdd",
+              "stack_manifest": [
+                "c346dc8bc1c8c3649fc96064fddfc07172f740f7c82d1830dbb935b16c488271  /opt/hyptcn-lab/services.py",
+                "d7372422553f866333177456ac6daec4847f5660c1c854a646e602d0be0fcf6c  /opt/hyptcn-lab/schema.sql",
+                "a8e5ef8843ebae83eed8691f8eb7e1d186448d36e4be7d4406efeaa96291d5e3  /opt/hyptcn-lab/guest_state.py",
+                "62f55e4374b5db4522d0ce84c911f26ccd580e8f55bc570c09ee63c64be234c6  /etc/nginx/conf.d/hyptcn-lab.conf",
+                "af75eee623f3c7a0b7a1c10a35c2216684c6f4b610d44e46560de137ef3d6962  /etc/systemd/system/hyptcn-lab@.service",
+                "nginx\t1.22.1-9+deb12u10",
+                "postgresql\t15+248+deb12u1",
+                "python3\t3.11.2-1+b1",
+                "python3-psycopg2\t2.9.5-1+b1",
+                "timers:"
+              ],
+              "stack_sha256": "3fcb9e724f031e3ed24fd3e08fb8f2946c8cd3f04416bc871d8f7dc31b3d46bc"
+            },
+            "id": "benign-v6-20261026_21_dev_quiet",
+            "kernel": "6.1.0-42-cloud-amd64",
+            "protocol_sha256": "e9d2bfbf38ae13e772b4c5407eeb6ec272898b683db9765e9542f08f4ead2a85",
+            "role": "dev",
+            "scenario": "quiet",
+            "seed": 1818028834,
+            "session": "/home/eh/projects/hyptcn3/data/collections/benign-v6-20261026_21_dev_quiet/session.json",
+            "session_sha256": "b99940abe77269649270c73ea4c0d8a87c74ae835fecb520c57b0407975d807b",
+            "start": 1793141129.63,
+            "typ": "benign"
+          },
+          {
+            "audit": "/home/eh/projects/hyptcn3/data/collections/benign-v6-20261026_22_dev_read_heavy/campaign_audit_20261028T011145219011Z.json",
+            "audit_sha256": "fd9af2dc573510c508912b5448eba134fc10057be491232765f173af8955ef6f",
+            "boot_id": "06f0dd2e-0140-4b73-81c0-bc9015473be8",
+            "collector_sha256": "25f989f3f32f869b6503fa1c12d37b24ad0e49de16807674a339befefd2130b6",
+            "end": 1793149892.143,
+            "features": "/home/eh/projects/hyptcn3/data/collections/benign-v6-20261026_22_dev_read_heavy/campaign_audit_20261028T011145219011Z.npz",
+            "features_sha256": "218220856a6b33be97189923e427734b5c10b85f77c82c6d42a5573f27acdc9e",
+            "group": "dev-1",
+            "guest": {
+              "boot_id": "06f0dd2e-0140-4b73-81c0-bc9015473be8",
+              "kernel": "6.1.0-42-cloud-amd64",
+              "machine_id": "180ac982142b4714a979599073c96cdd",
+              "stack_manifest": [
+                "c346dc8bc1c8c3649fc96064fddfc07172f740f7c82d1830dbb935b16c488271  /opt/hyptcn-lab/services.py",
+                "d7372422553f866333177456ac6daec4847f5660c1c854a646e602d0be0fcf6c  /opt/hyptcn-lab/schema.sql",
+                "a8e5ef8843ebae83eed8691f8eb7e1d186448d36e4be7d4406efeaa96291d5e3  /opt/hyptcn-lab/guest_state.py",
+                "62f55e4374b5db4522d0ce84c911f26ccd580e8f55bc570c09ee63c64be234c6  /etc/nginx/conf.d/hyptcn-lab.conf",
+                "af75eee623f3c7a0b7a1c10a35c2216684c6f4b610d44e46560de137ef3d6962  /etc/systemd/system/hyptcn-lab@.service",
+                "nginx\t1.22.1-9+deb12u10",
+                "postgresql\t15+248+deb12u1",
+                "python3\t3.11.2-1+b1",
+                "python3-psycopg2\t2.9.5-1+b1",
+                "timers:"
+              ],
+              "stack_sha256": "3fcb9e724f031e3ed24fd3e08fb8f2946c8cd3f04416bc871d8f7dc31b3d46bc"
+            },
+            "id": "benign-v6-20261026_22_dev_read_heavy",
+            "kernel": "6.1.0-42-cloud-amd64",
+            "protocol_sha256": "e9d2bfbf38ae13e772b4c5407eeb6ec272898b683db9765e9542f08f4ead2a85",
+            "role": "dev",
+            "scenario": "read_heavy",
+            "seed": 1818028835,
+            "session": "/home/eh/projects/hyptcn3/data/collections/benign-v6-20261026_22_dev_read_heavy/session.json",
+            "session_sha256": "22aa6161d3faaadc44932c776715e7bcc3d4253caa61e25acf3311d164b7c049",
+            "start": 1793146297.143,
+            "typ": "benign"
+          },
+          {
+            "audit": "/home/eh/projects/hyptcn3/data/collections/benign-v6-20261026_23_dev_write_heavy/campaign_audit_20261028T024008217751Z.json",
+            "audit_sha256": "fe8fb7758c5bb64062ddad56b9f0b88c736d35fb2fdea37afb4042c4e1881a17",
+            "boot_id": "06f0dd2e-0140-4b73-81c0-bc9015473be8",
+            "collector_sha256": "25f989f3f32f869b6503fa1c12d37b24ad0e49de16807674a339befefd2130b6",
+            "end": 1793155194.605,
+            "features": "/home/eh/projects/hyptcn3/data/collections/benign-v6-20261026_23_dev_write_heavy/campaign_audit_20261028T024008217751Z.npz",
+            "features_sha256": "759ac0f13bd9c79c3f8e758dbe2da3597fe722ce26bf8a96abfe2039870b735f",
+            "group": "dev-1",
+            "guest": {
+              "boot_id": "06f0dd2e-0140-4b73-81c0-bc9015473be8",
+              "kernel": "6.1.0-42-cloud-amd64",
+              "machine_id": "180ac982142b4714a979599073c96cdd",
+              "stack_manifest": [
+                "c346dc8bc1c8c3649fc96064fddfc07172f740f7c82d1830dbb935b16c488271  /opt/hyptcn-lab/services.py",
+                "d7372422553f866333177456ac6daec4847f5660c1c854a646e602d0be0fcf6c  /opt/hyptcn-lab/schema.sql",
+                "a8e5ef8843ebae83eed8691f8eb7e1d186448d36e4be7d4406efeaa96291d5e3  /opt/hyptcn-lab/guest_state.py",
+                "62f55e4374b5db4522d0ce84c911f26ccd580e8f55bc570c09ee63c64be234c6  /etc/nginx/conf.d/hyptcn-lab.conf",
+                "af75eee623f3c7a0b7a1c10a35c2216684c6f4b610d44e46560de137ef3d6962  /etc/systemd/system/hyptcn-lab@.service",
+                "nginx\t1.22.1-9+deb12u10",
+                "postgresql\t15+248+deb12u1",
+                "python3\t3.11.2-1+b1",
+                "python3-psycopg2\t2.9.5-1+b1",
+                "timers:"
+              ],
+              "stack_sha256": "3fcb9e724f031e3ed24fd3e08fb8f2946c8cd3f04416bc871d8f7dc31b3d46bc"
+            },
+            "id": "benign-v6-20261026_23_dev_write_heavy",
+            "kernel": "6.1.0-42-cloud-amd64",
+            "protocol_sha256": "e9d2bfbf38ae13e772b4c5407eeb6ec272898b683db9765e9542f08f4ead2a85",
+            "role": "dev",
+            "scenario": "write_heavy",
+            "seed": 1818028836,
+            "session": "/home/eh/projects/hyptcn3/data/collections/benign-v6-20261026_23_dev_write_heavy/session.json",
+            "session_sha256": "34cf7f0e24cd4d094750e1d1b31b36fe9e3411339f1c4ed9a079e7e5e6bdfccb",
+            "start": 1793151599.604,
+            "typ": "benign"
+          },
+          {
+            "audit": "/home/eh/projects/hyptcn3/data/collections/benign-v6-20261026_24_dev_bursty/campaign_audit_20261028T041153666658Z.json",
+            "audit_sha256": "837c70611d73899f952ceaf1085939135ea9b6aa77471ae535ddefe407b2d3a8",
+            "boot_id": "06f0dd2e-0140-4b73-81c0-bc9015473be8",
+            "collector_sha256": "25f989f3f32f869b6503fa1c12d37b24ad0e49de16807674a339befefd2130b6",
+            "end": 1793160695.325,
+            "features": "/home/eh/projects/hyptcn3/data/collections/benign-v6-20261026_24_dev_bursty/campaign_audit_20261028T041153666658Z.npz",
+            "features_sha256": "da973bc280c39cac5a7cdcb8cb864ef6743b5461e42a7a09254f24644d34d268",
+            "group": "dev-1",
+            "guest": {
+              "boot_id": "06f0dd2e-0140-4b73-81c0-bc9015473be8",
+              "kernel": "6.1.0-42-cloud-amd64",
+              "machine_id": "180ac982142b4714a979599073c96cdd",
+              "stack_manifest": [
+                "c346dc8bc1c8c3649fc96064fddfc07172f740f7c82d1830dbb935b16c488271  /opt/hyptcn-lab/services.py",
+                "d7372422553f866333177456ac6daec4847f5660c1c854a646e602d0be0fcf6c  /opt/hyptcn-lab/schema.sql",
+                "a8e5ef8843ebae83eed8691f8eb7e1d186448d36e4be7d4406efeaa96291d5e3  /opt/hyptcn-lab/guest_state.py",
+                "62f55e4374b5db4522d0ce84c911f26ccd580e8f55bc570c09ee63c64be234c6  /etc/nginx/conf.d/hyptcn-lab.conf",
+                "af75eee623f3c7a0b7a1c10a35c2216684c6f4b610d44e46560de137ef3d6962  /etc/systemd/system/hyptcn-lab@.service",
+                "nginx\t1.22.1-9+deb12u10",
+                "postgresql\t15+248+deb12u1",
+                "python3\t3.11.2-1+b1",
+                "python3-psycopg2\t2.9.5-1+b1",
+                "timers:"
+              ],
+              "stack_sha256": "3fcb9e724f031e3ed24fd3e08fb8f2946c8cd3f04416bc871d8f7dc31b3d46bc"
+            },
+            "id": "benign-v6-20261026_24_dev_bursty",
+            "kernel": "6.1.0-42-cloud-amd64",
+            "protocol_sha256": "e9d2bfbf38ae13e772b4c5407eeb6ec272898b683db9765e9542f08f4ead2a85",
+            "role": "dev",
+            "scenario": "bursty",
+            "seed": 1818028837,
+            "session": "/home/eh/projects/hyptcn3/data/collections/benign-v6-20261026_24_dev_bursty/session.json",
+            "session_sha256": "779b72efd9489d0e2e4f591bbb721711e69f667da9c851e31247197a83db3020",
+            "start": 1793157100.325,
+            "typ": "benign"
+          },
+          {
+            "audit": "/home/eh/projects/hyptcn3/data/collections/benign-v6-20261026_25_calibration_steady/campaign_audit_20261028T054541271728Z.json",
+            "audit_sha256": "aeca0ede05ddb3df1f6687dc77c1620c5bf9ef5687c68285d0eed9dc677d0e96",
+            "boot_id": "14989607-ecf7-447f-9a3f-0388f3aaf994",
+            "collector_sha256": "25f989f3f32f869b6503fa1c12d37b24ad0e49de16807674a339befefd2130b6",
+            "end": 1793166326.552,
+            "features": "/home/eh/projects/hyptcn3/data/collections/benign-v6-20261026_25_calibration_steady/campaign_audit_20261028T054541271728Z.npz",
+            "features_sha256": "56b6873539d47ce77a5dc9f4f46a874334b7f6e38dfe9b1bfc369fd326bd5c3a",
+            "group": "calibration-1",
+            "guest": {
+              "boot_id": "14989607-ecf7-447f-9a3f-0388f3aaf994",
+              "kernel": "6.1.0-42-cloud-amd64",
+              "machine_id": "180ac982142b4714a979599073c96cdd",
+              "stack_manifest": [
+                "c346dc8bc1c8c3649fc96064fddfc07172f740f7c82d1830dbb935b16c488271  /opt/hyptcn-lab/services.py",
+                "d7372422553f866333177456ac6daec4847f5660c1c854a646e602d0be0fcf6c  /opt/hyptcn-lab/schema.sql",
+                "a8e5ef8843ebae83eed8691f8eb7e1d186448d36e4be7d4406efeaa96291d5e3  /opt/hyptcn-lab/guest_state.py",
+                "62f55e4374b5db4522d0ce84c911f26ccd580e8f55bc570c09ee63c64be234c6  /etc/nginx/conf.d/hyptcn-lab.conf",
+                "af75eee623f3c7a0b7a1c10a35c2216684c6f4b610d44e46560de137ef3d6962  /etc/systemd/system/hyptcn-lab@.service",
+                "nginx\t1.22.1-9+deb12u10",
+                "postgresql\t15+248+deb12u1",
+                "python3\t3.11.2-1+b1",
+                "python3-psycopg2\t2.9.5-1+b1",
+                "timers:"
+              ],
+              "stack_sha256": "3fcb9e724f031e3ed24fd3e08fb8f2946c8cd3f04416bc871d8f7dc31b3d46bc"
+            },
+            "id": "benign-v6-20261026_25_calibration_steady",
+            "kernel": "6.1.0-42-cloud-amd64",
+            "protocol_sha256": "e9d2bfbf38ae13e772b4c5407eeb6ec272898b683db9765e9542f08f4ead2a85",
+            "role": "calibration",
+            "scenario": "steady",
+            "seed": 1685356153,
+            "session": "/home/eh/projects/hyptcn3/data/collections/benign-v6-20261026_25_calibration_steady/session.json",
+            "session_sha256": "c208534ff0fa33f9aede3696238678527d061925d359f3e3fa4b11a36f045b03",
+            "start": 1793162731.552,
+            "typ": "benign"
+          },
+          {
+            "audit": "/home/eh/projects/hyptcn3/data/collections/benign-v6-20261026_26_calibration_bursty/campaign_audit_20261028T071412593878Z.json",
+            "audit_sha256": "8b8c8790f5ef1773765d7f49b25b51924f257dd183dd27f6225de13e2aeb049b",
+            "boot_id": "14989607-ecf7-447f-9a3f-0388f3aaf994",
+            "collector_sha256": "25f989f3f32f869b6503fa1c12d37b24ad0e49de16807674a339befefd2130b6",
+            "end": 1793171635.675,
+            "features": "/home/eh/projects/hyptcn3/data/collections/benign-v6-20261026_26_calibration_bursty/campaign_audit_20261028T071412593878Z.npz",
+            "features_sha256": "3df4a3720ec9e69ea262a920501bfc634f6b3c44354974092c48cd561f4f622a",
+            "group": "calibration-1",
+            "guest": {
+              "boot_id": "14989607-ecf7-447f-9a3f-0388f3aaf994",
+              "kernel": "6.1.0-42-cloud-amd64",
+              "machine_id": "180ac982142b4714a979599073c96cdd",
+              "stack_manifest": [
+                "c346dc8bc1c8c3649fc96064fddfc07172f740f7c82d1830dbb935b16c488271  /opt/hyptcn-lab/services.py",
+                "d7372422553f866333177456ac6daec4847f5660c1c854a646e602d0be0fcf6c  /opt/hyptcn-lab/schema.sql",
+                "a8e5ef8843ebae83eed8691f8eb7e1d186448d36e4be7d4406efeaa96291d5e3  /opt/hyptcn-lab/guest_state.py",
+                "62f55e4374b5db4522d0ce84c911f26ccd580e8f55bc570c09ee63c64be234c6  /etc/nginx/conf.d/hyptcn-lab.conf",
+                "af75eee623f3c7a0b7a1c10a35c2216684c6f4b610d44e46560de137ef3d6962  /etc/systemd/system/hyptcn-lab@.service",
+                "nginx\t1.22.1-9+deb12u10",
+                "postgresql\t15+248+deb12u1",
+                "python3\t3.11.2-1+b1",
+                "python3-psycopg2\t2.9.5-1+b1",
+                "timers:"
+              ],
+              "stack_sha256": "3fcb9e724f031e3ed24fd3e08fb8f2946c8cd3f04416bc871d8f7dc31b3d46bc"
+            },
+            "id": "benign-v6-20261026_26_calibration_bursty",
+            "kernel": "6.1.0-42-cloud-amd64",
+            "protocol_sha256": "e9d2bfbf38ae13e772b4c5407eeb6ec272898b683db9765e9542f08f4ead2a85",
+            "role": "calibration",
+            "scenario": "bursty",
+            "seed": 1685356154,
+            "session": "/home/eh/projects/hyptcn3/data/collections/benign-v6-20261026_26_calibration_bursty/session.json",
+            "session_sha256": "9593f3566a2b374faeab5ee49e69dd263419dc61e136c927a1592f41cda84607",
+            "start": 1793168040.675,
+            "typ": "benign"
+          },
+          {
+            "audit": "/home/eh/projects/hyptcn3/data/collections/benign-v6-20261026_27_calibration_quiet/campaign_audit_20261028T085355864422Z.json",
+            "audit_sha256": "132daee3bb171a68b7ba86bb4df0d9c8c251800b1ba5b0cb6d6356f5bde0c552",
+            "boot_id": "14989607-ecf7-447f-9a3f-0388f3aaf994",
+            "collector_sha256": "25f989f3f32f869b6503fa1c12d37b24ad0e49de16807674a339befefd2130b6",
+            "end": 1793177624.047,
+            "features": "/home/eh/projects/hyptcn3/data/collections/benign-v6-20261026_27_calibration_quiet/campaign_audit_20261028T085355864422Z.npz",
+            "features_sha256": "449d16144b9507f197d6b3a0b65aa9206e52ec8a29cec1d1a0ae8800e57077c7",
+            "group": "calibration-1",
+            "guest": {
+              "boot_id": "14989607-ecf7-447f-9a3f-0388f3aaf994",
+              "kernel": "6.1.0-42-cloud-amd64",
+              "machine_id": "180ac982142b4714a979599073c96cdd",
+              "stack_manifest": [
+                "c346dc8bc1c8c3649fc96064fddfc07172f740f7c82d1830dbb935b16c488271  /opt/hyptcn-lab/services.py",
+                "d7372422553f866333177456ac6daec4847f5660c1c854a646e602d0be0fcf6c  /opt/hyptcn-lab/schema.sql",
+                "a8e5ef8843ebae83eed8691f8eb7e1d186448d36e4be7d4406efeaa96291d5e3  /opt/hyptcn-lab/guest_state.py",
+                "62f55e4374b5db4522d0ce84c911f26ccd580e8f55bc570c09ee63c64be234c6  /etc/nginx/conf.d/hyptcn-lab.conf",
+                "af75eee623f3c7a0b7a1c10a35c2216684c6f4b610d44e46560de137ef3d6962  /etc/systemd/system/hyptcn-lab@.service",
+                "nginx\t1.22.1-9+deb12u10",
+                "postgresql\t15+248+deb12u1",
+                "python3\t3.11.2-1+b1",
+                "python3-psycopg2\t2.9.5-1+b1",
+                "timers:"
+              ],
+              "stack_sha256": "3fcb9e724f031e3ed24fd3e08fb8f2946c8cd3f04416bc871d8f7dc31b3d46bc"
+            },
+            "id": "benign-v6-20261026_27_calibration_quiet",
+            "kernel": "6.1.0-42-cloud-amd64",
+            "protocol_sha256": "e9d2bfbf38ae13e772b4c5407eeb6ec272898b683db9765e9542f08f4ead2a85",
+            "role": "calibration",
+            "scenario": "quiet",
+            "seed": 1685356155,
+            "session": "/home/eh/projects/hyptcn3/data/collections/benign-v6-20261026_27_calibration_quiet/session.json",
+            "session_sha256": "f8fffd6e55722941da078eb0d8abff0cd04ba4ece09ae809a42207191c59e064",
+            "start": 1793174029.047,
+            "typ": "benign"
+          },
+          {
+            "audit": "/home/eh/projects/hyptcn3/data/collections/benign-v6-20261026_28_calibration_write_heavy/campaign_audit_20261028T102017387015Z.json",
+            "audit_sha256": "a5f009584d3e271a5e875598cbba65784d1c32eff89c670a9742e4cbc593ec7a",
+            "boot_id": "14989607-ecf7-447f-9a3f-0388f3aaf994",
+            "collector_sha256": "25f989f3f32f869b6503fa1c12d37b24ad0e49de16807674a339befefd2130b6",
+            "end": 1793182802.496,
+            "features": "/home/eh/projects/hyptcn3/data/collections/benign-v6-20261026_28_calibration_write_heavy/campaign_audit_20261028T102017387015Z.npz",
+            "features_sha256": "0d460a53e606a2d5edb4d9dba6d0efe4d74c32365a6b551f4f1d6b37dc7b9667",
+            "group": "calibration-1",
+            "guest": {
+              "boot_id": "14989607-ecf7-447f-9a3f-0388f3aaf994",
+              "kernel": "6.1.0-42-cloud-amd64",
+              "machine_id": "180ac982142b4714a979599073c96cdd",
+              "stack_manifest": [
+                "c346dc8bc1c8c3649fc96064fddfc07172f740f7c82d1830dbb935b16c488271  /opt/hyptcn-lab/services.py",
+                "d7372422553f866333177456ac6daec4847f5660c1c854a646e602d0be0fcf6c  /opt/hyptcn-lab/schema.sql",
+                "a8e5ef8843ebae83eed8691f8eb7e1d186448d36e4be7d4406efeaa96291d5e3  /opt/hyptcn-lab/guest_state.py",
+                "62f55e4374b5db4522d0ce84c911f26ccd580e8f55bc570c09ee63c64be234c6  /etc/nginx/conf.d/hyptcn-lab.conf",
+                "af75eee623f3c7a0b7a1c10a35c2216684c6f4b610d44e46560de137ef3d6962  /etc/systemd/system/hyptcn-lab@.service",
+                "nginx\t1.22.1-9+deb12u10",
+                "postgresql\t15+248+deb12u1",
+                "python3\t3.11.2-1+b1",
+                "python3-psycopg2\t2.9.5-1+b1",
+                "timers:"
+              ],
+              "stack_sha256": "3fcb9e724f031e3ed24fd3e08fb8f2946c8cd3f04416bc871d8f7dc31b3d46bc"
+            },
+            "id": "benign-v6-20261026_28_calibration_write_heavy",
+            "kernel": "6.1.0-42-cloud-amd64",
+            "protocol_sha256": "e9d2bfbf38ae13e772b4c5407eeb6ec272898b683db9765e9542f08f4ead2a85",
+            "role": "calibration",
+            "scenario": "write_heavy",
+            "seed": 1685356156,
+            "session": "/home/eh/projects/hyptcn3/data/collections/benign-v6-20261026_28_calibration_write_heavy/session.json",
+            "session_sha256": "a4db4371c9a8d1333213aee6842edb14cf60e290bacdb4e26e2218271193b34d",
+            "start": 1793179207.496,
+            "typ": "benign"
+          },
+          {
+            "audit": "/home/eh/projects/hyptcn3/data/collections/benign-v6-20261026_29_calibration_read_heavy/campaign_audit_20261028T115805236401Z.json",
+            "audit_sha256": "9d0929df68d2c47cba4cc61321f16692040498031348c103e91e097eb1aced4f",
+            "boot_id": "14989607-ecf7-447f-9a3f-0388f3aaf994",
+            "collector_sha256": "25f989f3f32f869b6503fa1c12d37b24ad0e49de16807674a339befefd2130b6",
+            "end": 1793188673.003,
+            "features": "/home/eh/projects/hyptcn3/data/collections/benign-v6-20261026_29_calibration_read_heavy/campaign_audit_20261028T115805236401Z.npz",
+            "features_sha256": "7163bb4bd1b839d9c0993d5887b1db2736204e925d41c826f3bbcb437f318c25",
+            "group": "calibration-1",
+            "guest": {
+              "boot_id": "14989607-ecf7-447f-9a3f-0388f3aaf994",
+              "kernel": "6.1.0-42-cloud-amd64",
+              "machine_id": "180ac982142b4714a979599073c96cdd",
+              "stack_manifest": [
+                "c346dc8bc1c8c3649fc96064fddfc07172f740f7c82d1830dbb935b16c488271  /opt/hyptcn-lab/services.py",
+                "d7372422553f866333177456ac6daec4847f5660c1c854a646e602d0be0fcf6c  /opt/hyptcn-lab/schema.sql",
+                "a8e5ef8843ebae83eed8691f8eb7e1d186448d36e4be7d4406efeaa96291d5e3  /opt/hyptcn-lab/guest_state.py",
+                "62f55e4374b5db4522d0ce84c911f26ccd580e8f55bc570c09ee63c64be234c6  /etc/nginx/conf.d/hyptcn-lab.conf",
+                "af75eee623f3c7a0b7a1c10a35c2216684c6f4b610d44e46560de137ef3d6962  /etc/systemd/system/hyptcn-lab@.service",
+                "nginx\t1.22.1-9+deb12u10",
+                "postgresql\t15+248+deb12u1",
+                "python3\t3.11.2-1+b1",
+                "python3-psycopg2\t2.9.5-1+b1",
+                "timers:"
+              ],
+              "stack_sha256": "3fcb9e724f031e3ed24fd3e08fb8f2946c8cd3f04416bc871d8f7dc31b3d46bc"
+            },
+            "id": "benign-v6-20261026_29_calibration_read_heavy",
+            "kernel": "6.1.0-42-cloud-amd64",
+            "protocol_sha256": "e9d2bfbf38ae13e772b4c5407eeb6ec272898b683db9765e9542f08f4ead2a85",
+            "role": "calibration",
+            "scenario": "read_heavy",
+            "seed": 1685356157,
+            "session": "/home/eh/projects/hyptcn3/data/collections/benign-v6-20261026_29_calibration_read_heavy/session.json",
+            "session_sha256": "64234afcf222a62400daf9aa014fee5c3e3a81d7e2db7e6f2f5e4cd32c9b3710",
+            "start": 1793185078.003,
+            "typ": "benign"
+          },
+          {
+            "audit": "/home/eh/projects/hyptcn3/data/collections/benign-v6-20261026_30_calibration_mixed/campaign_audit_20261028T132735055032Z.json",
+            "audit_sha256": "41e8760681e1e7f24c9e8d2a4f3df589dc7c8a3bd8247d59727cab660648ce59",
+            "boot_id": "14989607-ecf7-447f-9a3f-0388f3aaf994",
+            "collector_sha256": "25f989f3f32f869b6503fa1c12d37b24ad0e49de16807674a339befefd2130b6",
+            "end": 1793194038.0,
+            "features": "/home/eh/projects/hyptcn3/data/collections/benign-v6-20261026_30_calibration_mixed/campaign_audit_20261028T132735055032Z.npz",
+            "features_sha256": "5df953cc6cc44a67828e8c67cbae019570b5381516566dd2ff25672a7ad852ae",
+            "group": "calibration-1",
+            "guest": {
+              "boot_id": "14989607-ecf7-447f-9a3f-0388f3aaf994",
+              "kernel": "6.1.0-42-cloud-amd64",
+              "machine_id": "180ac982142b4714a979599073c96cdd",
+              "stack_manifest": [
+                "c346dc8bc1c8c3649fc96064fddfc07172f740f7c82d1830dbb935b16c488271  /opt/hyptcn-lab/services.py",
+                "d7372422553f866333177456ac6daec4847f5660c1c854a646e602d0be0fcf6c  /opt/hyptcn-lab/schema.sql",
+                "a8e5ef8843ebae83eed8691f8eb7e1d186448d36e4be7d4406efeaa96291d5e3  /opt/hyptcn-lab/guest_state.py",
+                "62f55e4374b5db4522d0ce84c911f26ccd580e8f55bc570c09ee63c64be234c6  /etc/nginx/conf.d/hyptcn-lab.conf",
+                "af75eee623f3c7a0b7a1c10a35c2216684c6f4b610d44e46560de137ef3d6962  /etc/systemd/system/hyptcn-lab@.service",
+                "nginx\t1.22.1-9+deb12u10",
+                "postgresql\t15+248+deb12u1",
+                "python3\t3.11.2-1+b1",
+                "python3-psycopg2\t2.9.5-1+b1",
+                "timers:"
+              ],
+              "stack_sha256": "3fcb9e724f031e3ed24fd3e08fb8f2946c8cd3f04416bc871d8f7dc31b3d46bc"
+            },
+            "id": "benign-v6-20261026_30_calibration_mixed",
+            "kernel": "6.1.0-42-cloud-amd64",
+            "protocol_sha256": "e9d2bfbf38ae13e772b4c5407eeb6ec272898b683db9765e9542f08f4ead2a85",
+            "role": "calibration",
+            "scenario": "mixed",
+            "seed": 1685356158,
+            "session": "/home/eh/projects/hyptcn3/data/collections/benign-v6-20261026_30_calibration_mixed/session.json",
+            "session_sha256": "be1d2957c1b223d8eef5e8802b971d7af03b8f82cc2648847517d6c9068ea8e9",
+            "start": 1793190443.0,
+            "typ": "benign"
+          },
+          {
+            "audit": "/home/eh/projects/hyptcn3/data/collections/benign-v6-20261026_31_calibration_steady/campaign_audit_20261028T150010860710Z.json",
+            "audit_sha256": "a2be3aa0d57281e01ab1871a4ae855176825ceaee3c9b0d6b320a887870c0427",
+            "boot_id": "84b59cb0-7c3d-4801-9e09-796bc55c26e2",
+            "collector_sha256": "25f989f3f32f869b6503fa1c12d37b24ad0e49de16807674a339befefd2130b6",
+            "end": 1793199596.428,
+            "features": "/home/eh/projects/hyptcn3/data/collections/benign-v6-20261026_31_calibration_steady/campaign_audit_20261028T150010860710Z.npz",
+            "features_sha256": "e4ebb9759cabb44d0bfac7137631994980131c9b382e630a51e67f6bfddaa9de",
+            "group": "calibration-2",
+            "guest": {
+              "boot_id": "84b59cb0-7c3d-4801-9e09-796bc55c26e2",
+              "kernel": "6.1.0-42-cloud-amd64",
+              "machine_id": "180ac982142b4714a979599073c96cdd",
+              "stack_manifest": [
+                "c346dc8bc1c8c3649fc96064fddfc07172f740f7c82d1830dbb935b16c488271  /opt/hyptcn-lab/services.py",
+                "d7372422553f866333177456ac6daec4847f5660c1c854a646e602d0be0fcf6c  /opt/hyptcn-lab/schema.sql",
+                "a8e5ef8843ebae83eed8691f8eb7e1d186448d36e4be7d4406efeaa96291d5e3  /opt/hyptcn-lab/guest_state.py",
+                "62f55e4374b5db4522d0ce84c911f26ccd580e8f55bc570c09ee63c64be234c6  /etc/nginx/conf.d/hyptcn-lab.conf",
+                "af75eee623f3c7a0b7a1c10a35c2216684c6f4b610d44e46560de137ef3d6962  /etc/systemd/system/hyptcn-lab@.service",
+                "nginx\t1.22.1-9+deb12u10",
+                "postgresql\t15+248+deb12u1",
+                "python3\t3.11.2-1+b1",
+                "python3-psycopg2\t2.9.5-1+b1",
+                "timers:"
+              ],
+              "stack_sha256": "3fcb9e724f031e3ed24fd3e08fb8f2946c8cd3f04416bc871d8f7dc31b3d46bc"
+            },
+            "id": "benign-v6-20261026_31_calibration_steady",
+            "kernel": "6.1.0-42-cloud-amd64",
+            "protocol_sha256": "e9d2bfbf38ae13e772b4c5407eeb6ec272898b683db9765e9542f08f4ead2a85",
+            "role": "calibration",
+            "scenario": "steady",
+            "seed": 572270821,
+            "session": "/home/eh/projects/hyptcn3/data/collections/benign-v6-20261026_31_calibration_steady/session.json",
+            "session_sha256": "837319d7d3909a4ebe9fa49aec108e336237736d005e9ed452ec86b8224eaa03",
+            "start": 1793196001.428,
+            "typ": "benign"
+          },
+          {
+            "audit": "/home/eh/projects/hyptcn3/data/collections/benign-v6-20261026_32_calibration_quiet/campaign_audit_20261028T162817924303Z.json",
+            "audit_sha256": "699658ca053b9006afb0b6ccd25871958d610f70671ad05f2b95502255e4f1b4",
+            "boot_id": "84b59cb0-7c3d-4801-9e09-796bc55c26e2",
+            "collector_sha256": "25f989f3f32f869b6503fa1c12d37b24ad0e49de16807674a339befefd2130b6",
+            "end": 1793204886.643,
+            "features": "/home/eh/projects/hyptcn3/data/collections/benign-v6-20261026_32_calibration_quiet/campaign_audit_20261028T162817924303Z.npz",
+            "features_sha256": "60842f5e1a7e0bdeb18c749f77135a7f69c0a590036f18eee04d25b88574aa36",
+            "group": "calibration-2",
+            "guest": {
+              "boot_id": "84b59cb0-7c3d-4801-9e09-796bc55c26e2",
+              "kernel": "6.1.0-42-cloud-amd64",
+              "machine_id": "180ac982142b4714a979599073c96cdd",
+              "stack_manifest": [
+                "c346dc8bc1c8c3649fc96064fddfc07172f740f7c82d1830dbb935b16c488271  /opt/hyptcn-lab/services.py",
+                "d7372422553f866333177456ac6daec4847f5660c1c854a646e602d0be0fcf6c  /opt/hyptcn-lab/schema.sql",
+                "a8e5ef8843ebae83eed8691f8eb7e1d186448d36e4be7d4406efeaa96291d5e3  /opt/hyptcn-lab/guest_state.py",
+                "62f55e4374b5db4522d0ce84c911f26ccd580e8f55bc570c09ee63c64be234c6  /etc/nginx/conf.d/hyptcn-lab.conf",
+                "af75eee623f3c7a0b7a1c10a35c2216684c6f4b610d44e46560de137ef3d6962  /etc/systemd/system/hyptcn-lab@.service",
+                "nginx\t1.22.1-9+deb12u10",
+                "postgresql\t15+248+deb12u1",
+                "python3\t3.11.2-1+b1",
+                "python3-psycopg2\t2.9.5-1+b1",
+                "timers:"
+              ],
+              "stack_sha256": "3fcb9e724f031e3ed24fd3e08fb8f2946c8cd3f04416bc871d8f7dc31b3d46bc"
+            },
+            "id": "benign-v6-20261026_32_calibration_quiet",
+            "kernel": "6.1.0-42-cloud-amd64",
+            "protocol_sha256": "e9d2bfbf38ae13e772b4c5407eeb6ec272898b683db9765e9542f08f4ead2a85",
+            "role": "calibration",
+            "scenario": "quiet",
+            "seed": 572270822,
+            "session": "/home/eh/projects/hyptcn3/data/collections/benign-v6-20261026_32_calibration_quiet/session.json",
+            "session_sha256": "109607266f0cac2d6152d6bdbbacdc6b3ec5f9bcef984f49e2651eabb052a4ad",
+            "start": 1793201291.643,
+            "typ": "benign"
+          },
+          {
+            "audit": "/home/eh/projects/hyptcn3/data/collections/benign-v6-20261026_33_calibration_mixed/campaign_audit_20261028T175511316439Z.json",
+            "audit_sha256": "9ac70a14529f85320bb5a8bf1235640a20fd3d663ec34e031ceab45d7d5ee5e5",
+            "boot_id": "84b59cb0-7c3d-4801-9e09-796bc55c26e2",
+            "collector_sha256": "25f989f3f32f869b6503fa1c12d37b24ad0e49de16807674a339befefd2130b6",
+            "end": 1793210097.294,
+            "features": "/home/eh/projects/hyptcn3/data/collections/benign-v6-20261026_33_calibration_mixed/campaign_audit_20261028T175511316439Z.npz",
+            "features_sha256": "da6bfa692e1ab23d6ca94ef0a0c839e7533a890b82a539b448b3639b6ba2331c",
+            "group": "calibration-2",
+            "guest": {
+              "boot_id": "84b59cb0-7c3d-4801-9e09-796bc55c26e2",
+              "kernel": "6.1.0-42-cloud-amd64",
+              "machine_id": "180ac982142b4714a979599073c96cdd",
+              "stack_manifest": [
+                "c346dc8bc1c8c3649fc96064fddfc07172f740f7c82d1830dbb935b16c488271  /opt/hyptcn-lab/services.py",
+                "d7372422553f866333177456ac6daec4847f5660c1c854a646e602d0be0fcf6c  /opt/hyptcn-lab/schema.sql",
+                "a8e5ef8843ebae83eed8691f8eb7e1d186448d36e4be7d4406efeaa96291d5e3  /opt/hyptcn-lab/guest_state.py",
+                "62f55e4374b5db4522d0ce84c911f26ccd580e8f55bc570c09ee63c64be234c6  /etc/nginx/conf.d/hyptcn-lab.conf",
+                "af75eee623f3c7a0b7a1c10a35c2216684c6f4b610d44e46560de137ef3d6962  /etc/systemd/system/hyptcn-lab@.service",
+                "nginx\t1.22.1-9+deb12u10",
+                "postgresql\t15+248+deb12u1",
+                "python3\t3.11.2-1+b1",
+                "python3-psycopg2\t2.9.5-1+b1",
+                "timers:"
+              ],
+              "stack_sha256": "3fcb9e724f031e3ed24fd3e08fb8f2946c8cd3f04416bc871d8f7dc31b3d46bc"
+            },
+            "id": "benign-v6-20261026_33_calibration_mixed",
+            "kernel": "6.1.0-42-cloud-amd64",
+            "protocol_sha256": "e9d2bfbf38ae13e772b4c5407eeb6ec272898b683db9765e9542f08f4ead2a85",
+            "role": "calibration",
+            "scenario": "mixed",
+            "seed": 572270823,
+            "session": "/home/eh/projects/hyptcn3/data/collections/benign-v6-20261026_33_calibration_mixed/session.json",
+            "session_sha256": "803dc348f555db0b5a0b9948bfe4430dbc2b387846e65b5e221d13231ee9a529",
+            "start": 1793206502.294,
+            "typ": "benign"
+          },
+          {
+            "audit": "/home/eh/projects/hyptcn3/data/collections/benign-v6-20261026_34_calibration_read_heavy/campaign_audit_20261028T192636931059Z.json",
+            "audit_sha256": "6171638da27f6c18940bd037f29d241e4ff9c358a543014ce48dc3cf9607e8e7",
+            "boot_id": "84b59cb0-7c3d-4801-9e09-796bc55c26e2",
+            "collector_sha256": "25f989f3f32f869b6503fa1c12d37b24ad0e49de16807674a339befefd2130b6",
+            "end": 1793215582.274,
+            "features": "/home/eh/projects/hyptcn3/data/collections/benign-v6-20261026_34_calibration_read_heavy/campaign_audit_20261028T192636931059Z.npz",
+            "features_sha256": "6bb7fe6bfe8ffa5af7d24e4aec39bbaaa643b56f201d2d90fe0fa9d0b6f5f35d",
+            "group": "calibration-2",
+            "guest": {
+              "boot_id": "84b59cb0-7c3d-4801-9e09-796bc55c26e2",
+              "kernel": "6.1.0-42-cloud-amd64",
+              "machine_id": "180ac982142b4714a979599073c96cdd",
+              "stack_manifest": [
+                "c346dc8bc1c8c3649fc96064fddfc07172f740f7c82d1830dbb935b16c488271  /opt/hyptcn-lab/services.py",
+                "d7372422553f866333177456ac6daec4847f5660c1c854a646e602d0be0fcf6c  /opt/hyptcn-lab/schema.sql",
+                "a8e5ef8843ebae83eed8691f8eb7e1d186448d36e4be7d4406efeaa96291d5e3  /opt/hyptcn-lab/guest_state.py",
+                "62f55e4374b5db4522d0ce84c911f26ccd580e8f55bc570c09ee63c64be234c6  /etc/nginx/conf.d/hyptcn-lab.conf",
+                "af75eee623f3c7a0b7a1c10a35c2216684c6f4b610d44e46560de137ef3d6962  /etc/systemd/system/hyptcn-lab@.service",
+                "nginx\t1.22.1-9+deb12u10",
+                "postgresql\t15+248+deb12u1",
+                "python3\t3.11.2-1+b1",
+                "python3-psycopg2\t2.9.5-1+b1",
+                "timers:"
+              ],
+              "stack_sha256": "3fcb9e724f031e3ed24fd3e08fb8f2946c8cd3f04416bc871d8f7dc31b3d46bc"
+            },
+            "id": "benign-v6-20261026_34_calibration_read_heavy",
+            "kernel": "6.1.0-42-cloud-amd64",
+            "protocol_sha256": "e9d2bfbf38ae13e772b4c5407eeb6ec272898b683db9765e9542f08f4ead2a85",
+            "role": "calibration",
+            "scenario": "read_heavy",
+            "seed": 572270824,
+            "session": "/home/eh/projects/hyptcn3/data/collections/benign-v6-20261026_34_calibration_read_heavy/session.json",
+            "session_sha256": "8e39f6f2d89cbe49aebcdbb3a2e32bb89eea1622c000755f591faff12cc77530",
+            "start": 1793211987.274,
+            "typ": "benign"
+          },
+          {
+            "audit": "/home/eh/projects/hyptcn3/data/collections/benign-v6-20261026_35_calibration_write_heavy/campaign_audit_20261028T205537593489Z.json",
+            "audit_sha256": "31beda24f70858adf7b2031b127691a32d66b6fce147dfbf7a7779fe62af96f1",
+            "boot_id": "84b59cb0-7c3d-4801-9e09-796bc55c26e2",
+            "collector_sha256": "25f989f3f32f869b6503fa1c12d37b24ad0e49de16807674a339befefd2130b6",
+            "end": 1793220923.179,
+            "features": "/home/eh/projects/hyptcn3/data/collections/benign-v6-20261026_35_calibration_write_heavy/campaign_audit_20261028T205537593489Z.npz",
+            "features_sha256": "89da6fdfbded505f831f4f8ae7887cc753669a7c3e91d10bb06816791cbccd79",
+            "group": "calibration-2",
+            "guest": {
+              "boot_id": "84b59cb0-7c3d-4801-9e09-796bc55c26e2",
+              "kernel": "6.1.0-42-cloud-amd64",
+              "machine_id": "180ac982142b4714a979599073c96cdd",
+              "stack_manifest": [
+                "c346dc8bc1c8c3649fc96064fddfc07172f740f7c82d1830dbb935b16c488271  /opt/hyptcn-lab/services.py",
+                "d7372422553f866333177456ac6daec4847f5660c1c854a646e602d0be0fcf6c  /opt/hyptcn-lab/schema.sql",
+                "a8e5ef8843ebae83eed8691f8eb7e1d186448d36e4be7d4406efeaa96291d5e3  /opt/hyptcn-lab/guest_state.py",
+                "62f55e4374b5db4522d0ce84c911f26ccd580e8f55bc570c09ee63c64be234c6  /etc/nginx/conf.d/hyptcn-lab.conf",
+                "af75eee623f3c7a0b7a1c10a35c2216684c6f4b610d44e46560de137ef3d6962  /etc/systemd/system/hyptcn-lab@.service",
+                "nginx\t1.22.1-9+deb12u10",
+                "postgresql\t15+248+deb12u1",
+                "python3\t3.11.2-1+b1",
+                "python3-psycopg2\t2.9.5-1+b1",
+                "timers:"
+              ],
+              "stack_sha256": "3fcb9e724f031e3ed24fd3e08fb8f2946c8cd3f04416bc871d8f7dc31b3d46bc"
+            },
+            "id": "benign-v6-20261026_35_calibration_write_heavy",
+            "kernel": "6.1.0-42-cloud-amd64",
+            "protocol_sha256": "e9d2bfbf38ae13e772b4c5407eeb6ec272898b683db9765e9542f08f4ead2a85",
+            "role": "calibration",
+            "scenario": "write_heavy",
+            "seed": 572270825,
+            "session": "/home/eh/projects/hyptcn3/data/collections/benign-v6-20261026_35_calibration_write_heavy/session.json",
+            "session_sha256": "2225aee534c3d81c96f552f4e1fe841a932b1668b694ec38f467a3cda487c960",
+            "start": 1793217328.179,
+            "typ": "benign"
+          },
+          {
+            "audit": "/home/eh/projects/hyptcn3/data/collections/benign-v6-20261026_36_calibration_bursty/campaign_audit_20261028T222804261084Z.json",
+            "audit_sha256": "360f722cbed9ce55e87aae62a4ca30f893b80b791a817cd30edeccbd1d60ad34",
+            "boot_id": "84b59cb0-7c3d-4801-9e09-796bc55c26e2",
+            "collector_sha256": "25f989f3f32f869b6503fa1c12d37b24ad0e49de16807674a339befefd2130b6",
+            "end": 1793226464.797,
+            "features": "/home/eh/projects/hyptcn3/data/collections/benign-v6-20261026_36_calibration_bursty/campaign_audit_20261028T222804261084Z.npz",
+            "features_sha256": "1030c3e94b34f5ad8bf328bb53ea60e8ed6a2fc45d93e11b02e5ba942c5b05a5",
+            "group": "calibration-2",
+            "guest": {
+              "boot_id": "84b59cb0-7c3d-4801-9e09-796bc55c26e2",
+              "kernel": "6.1.0-42-cloud-amd64",
+              "machine_id": "180ac982142b4714a979599073c96cdd",
+              "stack_manifest": [
+                "c346dc8bc1c8c3649fc96064fddfc07172f740f7c82d1830dbb935b16c488271  /opt/hyptcn-lab/services.py",
+                "d7372422553f866333177456ac6daec4847f5660c1c854a646e602d0be0fcf6c  /opt/hyptcn-lab/schema.sql",
+                "a8e5ef8843ebae83eed8691f8eb7e1d186448d36e4be7d4406efeaa96291d5e3  /opt/hyptcn-lab/guest_state.py",
+                "62f55e4374b5db4522d0ce84c911f26ccd580e8f55bc570c09ee63c64be234c6  /etc/nginx/conf.d/hyptcn-lab.conf",
+                "af75eee623f3c7a0b7a1c10a35c2216684c6f4b610d44e46560de137ef3d6962  /etc/systemd/system/hyptcn-lab@.service",
+                "nginx\t1.22.1-9+deb12u10",
+                "postgresql\t15+248+deb12u1",
+                "python3\t3.11.2-1+b1",
+                "python3-psycopg2\t2.9.5-1+b1",
+                "timers:"
+              ],
+              "stack_sha256": "3fcb9e724f031e3ed24fd3e08fb8f2946c8cd3f04416bc871d8f7dc31b3d46bc"
+            },
+            "id": "benign-v6-20261026_36_calibration_bursty",
+            "kernel": "6.1.0-42-cloud-amd64",
+            "protocol_sha256": "e9d2bfbf38ae13e772b4c5407eeb6ec272898b683db9765e9542f08f4ead2a85",
+            "role": "calibration",
+            "scenario": "bursty",
+            "seed": 572270826,
+            "session": "/home/eh/projects/hyptcn3/data/collections/benign-v6-20261026_36_calibration_bursty/session.json",
+            "session_sha256": "d31ea031af45b5412577803a1c543027426656b262571cc2b7b485b74072346f",
+            "start": 1793222869.797,
+            "typ": "benign"
+          },
+          {
+            "audit": "/home/eh/projects/hyptcn3/data/collections/benign-v6-20261026_37_test_benign_mixed/campaign_audit_20261029T000259189769Z.json",
+            "audit_sha256": "9fd5d6d41d3e24f2aa0b9cee087fbb199ea859733cbff958175f9fb2075a7fe5",
+            "boot_id": "483babc9-77dc-408b-8243-d2e97e983944",
+            "collector_sha256": "25f989f3f32f869b6503fa1c12d37b24ad0e49de16807674a339befefd2130b6",
+            "end": 1793232163.076,
+            "features": "/home/eh/projects/hyptcn3/data/collections/benign-v6-20261026_37_test_benign_mixed/campaign_audit_20261029T000259189769Z.npz",
+            "features_sha256": "f0e634568ebb8f8171e5a58e7db1888552d936f0167c51b1cfb5f767372ba728",
+            "group": "test_benign-1",
+            "guest": {
+              "boot_id": "483babc9-77dc-408b-8243-d2e97e983944",
+              "kernel": "6.1.0-42-cloud-amd64",
+              "machine_id": "180ac982142b4714a979599073c96cdd",
+              "stack_manifest": [
+                "c346dc8bc1c8c3649fc96064fddfc07172f740f7c82d1830dbb935b16c488271  /opt/hyptcn-lab/services.py",
+                "d7372422553f866333177456ac6daec4847f5660c1c854a646e602d0be0fcf6c  /opt/hyptcn-lab/schema.sql",
+                "a8e5ef8843ebae83eed8691f8eb7e1d186448d36e4be7d4406efeaa96291d5e3  /opt/hyptcn-lab/guest_state.py",
+                "62f55e4374b5db4522d0ce84c911f26ccd580e8f55bc570c09ee63c64be234c6  /etc/nginx/conf.d/hyptcn-lab.conf",
+                "af75eee623f3c7a0b7a1c10a35c2216684c6f4b610d44e46560de137ef3d6962  /etc/systemd/system/hyptcn-lab@.service",
+                "nginx\t1.22.1-9+deb12u10",
+                "postgresql\t15+248+deb12u1",
+                "python3\t3.11.2-1+b1",
+                "python3-psycopg2\t2.9.5-1+b1",
+                "timers:"
+              ],
+              "stack_sha256": "3fcb9e724f031e3ed24fd3e08fb8f2946c8cd3f04416bc871d8f7dc31b3d46bc"
+            },
+            "id": "benign-v6-20261026_37_test_benign_mixed",
+            "kernel": "6.1.0-42-cloud-amd64",
+            "protocol_sha256": "e9d2bfbf38ae13e772b4c5407eeb6ec272898b683db9765e9542f08f4ead2a85",
+            "role": "test_benign",
+            "scenario": "mixed",
+            "seed": 2655160050,
+            "session": "/home/eh/projects/hyptcn3/data/collections/benign-v6-20261026_37_test_benign_mixed/session.json",
+            "session_sha256": "9171041d2191d04c46d9c3ca9e6ed8176447785afce21e1d4b1bb0d19dd1754d",
+            "start": 1793228568.076,
+            "typ": "benign"
+          },
+          {
+            "audit": "/home/eh/projects/hyptcn3/data/collections/benign-v6-20261026_38_test_benign_steady/campaign_audit_20261029T013537575306Z.json",
+            "audit_sha256": "a1f0e692787151607a957fd798e3effeb6f2c0a1952e4d964e07da7ca2f1e164",
+            "boot_id": "483babc9-77dc-408b-8243-d2e97e983944",
+            "collector_sha256": "25f989f3f32f869b6503fa1c12d37b24ad0e49de16807674a339befefd2130b6",
+            "end": 1793237725.784,
+            "features": "/home/eh/projects/hyptcn3/data/collections/benign-v6-20261026_38_test_benign_steady/campaign_audit_20261029T013537575306Z.npz",
+            "features_sha256": "fbb7637220144f93bc1a5d1d550940ada3b4b863fd870376edbe472606e3d702",
+            "group": "test_benign-1",
+            "guest": {
+              "boot_id": "483babc9-77dc-408b-8243-d2e97e983944",
+              "kernel": "6.1.0-42-cloud-amd64",
+              "machine_id": "180ac982142b4714a979599073c96cdd",
+              "stack_manifest": [
+                "c346dc8bc1c8c3649fc96064fddfc07172f740f7c82d1830dbb935b16c488271  /opt/hyptcn-lab/services.py",
+                "d7372422553f866333177456ac6daec4847f5660c1c854a646e602d0be0fcf6c  /opt/hyptcn-lab/schema.sql",
+                "a8e5ef8843ebae83eed8691f8eb7e1d186448d36e4be7d4406efeaa96291d5e3  /opt/hyptcn-lab/guest_state.py",
+                "62f55e4374b5db4522d0ce84c911f26ccd580e8f55bc570c09ee63c64be234c6  /etc/nginx/conf.d/hyptcn-lab.conf",
+                "af75eee623f3c7a0b7a1c10a35c2216684c6f4b610d44e46560de137ef3d6962  /etc/systemd/system/hyptcn-lab@.service",
+                "nginx\t1.22.1-9+deb12u10",
+                "postgresql\t15+248+deb12u1",
+                "python3\t3.11.2-1+b1",
+                "python3-psycopg2\t2.9.5-1+b1",
+                "timers:"
+              ],
+              "stack_sha256": "3fcb9e724f031e3ed24fd3e08fb8f2946c8cd3f04416bc871d8f7dc31b3d46bc"
+            },
+            "id": "benign-v6-20261026_38_test_benign_steady",
+            "kernel": "6.1.0-42-cloud-amd64",
+            "protocol_sha256": "e9d2bfbf38ae13e772b4c5407eeb6ec272898b683db9765e9542f08f4ead2a85",
+            "role": "test_benign",
+            "scenario": "steady",
+            "seed": 2655160051,
+            "session": "/home/eh/projects/hyptcn3/data/collections/benign-v6-20261026_38_test_benign_steady/session.json",
+            "session_sha256": "f882fd851f2d79868bf669b72e735619410d8571c31937a039a8a5b51a0e82b9",
+            "start": 1793234130.784,
+            "typ": "benign"
+          },
+          {
+            "audit": "/home/eh/projects/hyptcn3/data/collections/benign-v6-20261026_39_test_benign_quiet/campaign_audit_20261029T030441544714Z.json",
+            "audit_sha256": "d516eb2cf435d410e82b838c5b09874ab1756cf9771446947a5c5da3988e0a23",
+            "boot_id": "483babc9-77dc-408b-8243-d2e97e983944",
+            "collector_sha256": "25f989f3f32f869b6503fa1c12d37b24ad0e49de16807674a339befefd2130b6",
+            "end": 1793243070.33,
+            "features": "/home/eh/projects/hyptcn3/data/collections/benign-v6-20261026_39_test_benign_quiet/campaign_audit_20261029T030441544714Z.npz",
+            "features_sha256": "ab7a200ba2db4fd4fea927a701a442c808d744a9c30abfbc6b45d4c33efc2342",
+            "group": "test_benign-1",
+            "guest": {
+              "boot_id": "483babc9-77dc-408b-8243-d2e97e983944",
+              "kernel": "6.1.0-42-cloud-amd64",
+              "machine_id": "180ac982142b4714a979599073c96cdd",
+              "stack_manifest": [
+                "c346dc8bc1c8c3649fc96064fddfc07172f740f7c82d1830dbb935b16c488271  /opt/hyptcn-lab/services.py",
+                "d7372422553f866333177456ac6daec4847f5660c1c854a646e602d0be0fcf6c  /opt/hyptcn-lab/schema.sql",
+                "a8e5ef8843ebae83eed8691f8eb7e1d186448d36e4be7d4406efeaa96291d5e3  /opt/hyptcn-lab/guest_state.py",
+                "62f55e4374b5db4522d0ce84c911f26ccd580e8f55bc570c09ee63c64be234c6  /etc/nginx/conf.d/hyptcn-lab.conf",
+                "af75eee623f3c7a0b7a1c10a35c2216684c6f4b610d44e46560de137ef3d6962  /etc/systemd/system/hyptcn-lab@.service",
+                "nginx\t1.22.1-9+deb12u10",
+                "postgresql\t15+248+deb12u1",
+                "python3\t3.11.2-1+b1",
+                "python3-psycopg2\t2.9.5-1+b1",
+                "timers:"
+              ],
+              "stack_sha256": "3fcb9e724f031e3ed24fd3e08fb8f2946c8cd3f04416bc871d8f7dc31b3d46bc"
+            },
+            "id": "benign-v6-20261026_39_test_benign_quiet",
+            "kernel": "6.1.0-42-cloud-amd64",
+            "protocol_sha256": "e9d2bfbf38ae13e772b4c5407eeb6ec272898b683db9765e9542f08f4ead2a85",
+            "role": "test_benign",
+            "scenario": "quiet",
+            "seed": 2655160052,
+            "session": "/home/eh/projects/hyptcn3/data/collections/benign-v6-20261026_39_test_benign_quiet/session.json",
+            "session_sha256": "7c64828883723c36aa387d693009f73a0392c4029ef0a3342ece22a2a7061a07",
+            "start": 1793239475.33,
+            "typ": "benign"
+          },
+          {
+            "audit": "/home/eh/projects/hyptcn3/data/collections/benign-v6-20261026_40_test_benign_bursty/campaign_audit_20261029T043214915442Z.json",
+            "audit_sha256": "29b1542da8415aa6890aded020fbe8e161b3e8858dae5702a5c3a09f36dae0e2",
+            "boot_id": "483babc9-77dc-408b-8243-d2e97e983944",
+            "collector_sha256": "25f989f3f32f869b6503fa1c12d37b24ad0e49de16807674a339befefd2130b6",
+            "end": 1793248316.165,
+            "features": "/home/eh/projects/hyptcn3/data/collections/benign-v6-20261026_40_test_benign_bursty/campaign_audit_20261029T043214915442Z.npz",
+            "features_sha256": "544816bb463f55bb615f443d50dc4edf870fecfae9c90576f4fa6554ce16fe6f",
+            "group": "test_benign-1",
+            "guest": {
+              "boot_id": "483babc9-77dc-408b-8243-d2e97e983944",
+              "kernel": "6.1.0-42-cloud-amd64",
+              "machine_id": "180ac982142b4714a979599073c96cdd",
+              "stack_manifest": [
+                "c346dc8bc1c8c3649fc96064fddfc07172f740f7c82d1830dbb935b16c488271  /opt/hyptcn-lab/services.py",
+                "d7372422553f866333177456ac6daec4847f5660c1c854a646e602d0be0fcf6c  /opt/hyptcn-lab/schema.sql",
+                "a8e5ef8843ebae83eed8691f8eb7e1d186448d36e4be7d4406efeaa96291d5e3  /opt/hyptcn-lab/guest_state.py",
+                "62f55e4374b5db4522d0ce84c911f26ccd580e8f55bc570c09ee63c64be234c6  /etc/nginx/conf.d/hyptcn-lab.conf",
+                "af75eee623f3c7a0b7a1c10a35c2216684c6f4b610d44e46560de137ef3d6962  /etc/systemd/system/hyptcn-lab@.service",
+                "nginx\t1.22.1-9+deb12u10",
+                "postgresql\t15+248+deb12u1",
+                "python3\t3.11.2-1+b1",
+                "python3-psycopg2\t2.9.5-1+b1",
+                "timers:"
+              ],
+              "stack_sha256": "3fcb9e724f031e3ed24fd3e08fb8f2946c8cd3f04416bc871d8f7dc31b3d46bc"
+            },
+            "id": "benign-v6-20261026_40_test_benign_bursty",
+            "kernel": "6.1.0-42-cloud-amd64",
+            "protocol_sha256": "e9d2bfbf38ae13e772b4c5407eeb6ec272898b683db9765e9542f08f4ead2a85",
+            "role": "test_benign",
+            "scenario": "bursty",
+            "seed": 2655160053,
+            "session": "/home/eh/projects/hyptcn3/data/collections/benign-v6-20261026_40_test_benign_bursty/session.json",
+            "session_sha256": "23712ecf1e25cfab0d6b302e4379ec26f568c3dbf2872460a5f1cf559c71d5dc",
+            "start": 1793244721.165,
+            "typ": "benign"
+          },
+          {
+            "audit": "/home/eh/projects/hyptcn3/data/collections/benign-v6-20261026_41_test_benign_read_heavy/campaign_audit_20261029T070154205904Z.json",
+            "audit_sha256": "8d9905f5fde26a027ec93e451a874a5f9d09282ba8df33ef87ba3641a38f9608",
+            "boot_id": "483babc9-77dc-408b-8243-d2e97e983944",
+            "collector_sha256": "25f989f3f32f869b6503fa1c12d37b24ad0e49de16807674a339befefd2130b6",
+            "end": 1793257302.61,
+            "features": "/home/eh/projects/hyptcn3/data/collections/benign-v6-20261026_41_test_benign_read_heavy/campaign_audit_20261029T070154205904Z.npz",
+            "features_sha256": "49af6c0589a5883029ef1c6e439f1f050f84c14d000bc33de5873338d412cdaf",
+            "group": "test_benign-1",
+            "guest": {
+              "boot_id": "483babc9-77dc-408b-8243-d2e97e983944",
+              "kernel": "6.1.0-42-cloud-amd64",
+              "machine_id": "180ac982142b4714a979599073c96cdd",
+              "stack_manifest": [
+                "c346dc8bc1c8c3649fc96064fddfc07172f740f7c82d1830dbb935b16c488271  /opt/hyptcn-lab/services.py",
+                "d7372422553f866333177456ac6daec4847f5660c1c854a646e602d0be0fcf6c  /opt/hyptcn-lab/schema.sql",
+                "a8e5ef8843ebae83eed8691f8eb7e1d186448d36e4be7d4406efeaa96291d5e3  /opt/hyptcn-lab/guest_state.py",
+                "62f55e4374b5db4522d0ce84c911f26ccd580e8f55bc570c09ee63c64be234c6  /etc/nginx/conf.d/hyptcn-lab.conf",
+                "af75eee623f3c7a0b7a1c10a35c2216684c6f4b610d44e46560de137ef3d6962  /etc/systemd/system/hyptcn-lab@.service",
+                "nginx\t1.22.1-9+deb12u10",
+                "postgresql\t15+248+deb12u1",
+                "python3\t3.11.2-1+b1",
+                "python3-psycopg2\t2.9.5-1+b1",
+                "timers:"
+              ],
+              "stack_sha256": "3fcb9e724f031e3ed24fd3e08fb8f2946c8cd3f04416bc871d8f7dc31b3d46bc"
+            },
+            "id": "benign-v6-20261026_41_test_benign_read_heavy",
+            "kernel": "6.1.0-42-cloud-amd64",
+            "protocol_sha256": "e9d2bfbf38ae13e772b4c5407eeb6ec272898b683db9765e9542f08f4ead2a85",
+            "role": "test_benign",
+            "scenario": "read_heavy",
+            "seed": 2655160054,
+            "session": "/home/eh/projects/hyptcn3/data/collections/benign-v6-20261026_41_test_benign_read_heavy/session.json",
+            "session_sha256": "e5353c87f3e63415cc1a9cc8784ccc523eb3b0bbff8b86a4f5a19d34d40e5a0b",
+            "start": 1793253707.61,
+            "typ": "benign"
+          },
+          {
+            "audit": "/home/eh/projects/hyptcn3/data/collections/benign-v6-20261026_42_test_benign_write_heavy/campaign_audit_20261029T083341029178Z.json",
+            "audit_sha256": "d49f77c9070cf3baf5cd2c5aeb2f55eb5338ecc38af41c13566176cadb2d66d4",
+            "boot_id": "483babc9-77dc-408b-8243-d2e97e983944",
+            "collector_sha256": "25f989f3f32f869b6503fa1c12d37b24ad0e49de16807674a339befefd2130b6",
+            "end": 1793262806.625,
+            "features": "/home/eh/projects/hyptcn3/data/collections/benign-v6-20261026_42_test_benign_write_heavy/campaign_audit_20261029T083341029178Z.npz",
+            "features_sha256": "d0b4298bbe835cbd165714e7e343642997661d1e8afd4df109f4fedda3927ffd",
+            "group": "test_benign-1",
+            "guest": {
+              "boot_id": "483babc9-77dc-408b-8243-d2e97e983944",
+              "kernel": "6.1.0-42-cloud-amd64",
+              "machine_id": "180ac982142b4714a979599073c96cdd",
+              "stack_manifest": [
+                "c346dc8bc1c8c3649fc96064fddfc07172f740f7c82d1830dbb935b16c488271  /opt/hyptcn-lab/services.py",
+                "d7372422553f866333177456ac6daec4847f5660c1c854a646e602d0be0fcf6c  /opt/hyptcn-lab/schema.sql",
+                "a8e5ef8843ebae83eed8691f8eb7e1d186448d36e4be7d4406efeaa96291d5e3  /opt/hyptcn-lab/guest_state.py",
+                "62f55e4374b5db4522d0ce84c911f26ccd580e8f55bc570c09ee63c64be234c6  /etc/nginx/conf.d/hyptcn-lab.conf",
+                "af75eee623f3c7a0b7a1c10a35c2216684c6f4b610d44e46560de137ef3d6962  /etc/systemd/system/hyptcn-lab@.service",
+                "nginx\t1.22.1-9+deb12u10",
+                "postgresql\t15+248+deb12u1",
+                "python3\t3.11.2-1+b1",
+                "python3-psycopg2\t2.9.5-1+b1",
+                "timers:"
+              ],
+              "stack_sha256": "3fcb9e724f031e3ed24fd3e08fb8f2946c8cd3f04416bc871d8f7dc31b3d46bc"
+            },
+            "id": "benign-v6-20261026_42_test_benign_write_heavy",
+            "kernel": "6.1.0-42-cloud-amd64",
+            "protocol_sha256": "e9d2bfbf38ae13e772b4c5407eeb6ec272898b683db9765e9542f08f4ead2a85",
+            "role": "test_benign",
+            "scenario": "write_heavy",
+            "seed": 2655160055,
+            "session": "/home/eh/projects/hyptcn3/data/collections/benign-v6-20261026_42_test_benign_write_heavy/session.json",
+            "session_sha256": "e79601f507e6061c41cb1e0b99c7e86f7691488ccdfb6be39e8ce142414df147",
+            "start": 1793259211.625,
+            "typ": "benign"
+          },
+          {
+            "audit": "/home/eh/projects/hyptcn3/data/collections/benign-v6-20261026_43_test_benign_mixed/campaign_audit_20261029T100802097688Z.json",
+            "audit_sha256": "ce7a37c550d30ea59ef29e21aa6c853213775ee5a428f6183b1f8ccb122f8210",
+            "boot_id": "55a37477-9f7c-478b-9a4f-8917b49da8ef",
+            "collector_sha256": "25f989f3f32f869b6503fa1c12d37b24ad0e49de16807674a339befefd2130b6",
+            "end": 1793268461.957,
+            "features": "/home/eh/projects/hyptcn3/data/collections/benign-v6-20261026_43_test_benign_mixed/campaign_audit_20261029T100802097688Z.npz",
+            "features_sha256": "e17d5a432c3a01020fd1cdb887f08c2a8b720c4317729de0d40269d325b307cc",
+            "group": "test_benign-2",
+            "guest": {
+              "boot_id": "55a37477-9f7c-478b-9a4f-8917b49da8ef",
+              "kernel": "6.1.0-42-cloud-amd64",
+              "machine_id": "180ac982142b4714a979599073c96cdd",
+              "stack_manifest": [
+                "c346dc8bc1c8c3649fc96064fddfc07172f740f7c82d1830dbb935b16c488271  /opt/hyptcn-lab/services.py",
+                "d7372422553f866333177456ac6daec4847f5660c1c854a646e602d0be0fcf6c  /opt/hyptcn-lab/schema.sql",
+                "a8e5ef8843ebae83eed8691f8eb7e1d186448d36e4be7d4406efeaa96291d5e3  /opt/hyptcn-lab/guest_state.py",
+                "62f55e4374b5db4522d0ce84c911f26ccd580e8f55bc570c09ee63c64be234c6  /etc/nginx/conf.d/hyptcn-lab.conf",
+                "af75eee623f3c7a0b7a1c10a35c2216684c6f4b610d44e46560de137ef3d6962  /etc/systemd/system/hyptcn-lab@.service",
+                "nginx\t1.22.1-9+deb12u10",
+                "postgresql\t15+248+deb12u1",
+                "python3\t3.11.2-1+b1",
+                "python3-psycopg2\t2.9.5-1+b1",
+                "timers:"
+              ],
+              "stack_sha256": "3fcb9e724f031e3ed24fd3e08fb8f2946c8cd3f04416bc871d8f7dc31b3d46bc"
+            },
+            "id": "benign-v6-20261026_43_test_benign_mixed",
+            "kernel": "6.1.0-42-cloud-amd64",
+            "protocol_sha256": "e9d2bfbf38ae13e772b4c5407eeb6ec272898b683db9765e9542f08f4ead2a85",
+            "role": "test_benign",
+            "scenario": "mixed",
+            "seed": 818790174,
+            "session": "/home/eh/projects/hyptcn3/data/collections/benign-v6-20261026_43_test_benign_mixed/session.json",
+            "session_sha256": "a4b36e748b2d418081fdd516128f524cb691b02c4e524da50642157cd9006b58",
+            "start": 1793264866.957,
+            "typ": "benign"
+          },
+          {
+            "audit": "/home/eh/projects/hyptcn3/data/collections/benign-v6-20261026_44_test_benign_steady/campaign_audit_20261029T114038806732Z.json",
+            "audit_sha256": "cbf171343f0c7d709acd62ec7c2d788c2a590ffbad2ac57b468788fea51700d0",
+            "boot_id": "55a37477-9f7c-478b-9a4f-8917b49da8ef",
+            "collector_sha256": "25f989f3f32f869b6503fa1c12d37b24ad0e49de16807674a339befefd2130b6",
+            "end": 1793274026.537,
+            "features": "/home/eh/projects/hyptcn3/data/collections/benign-v6-20261026_44_test_benign_steady/campaign_audit_20261029T114038806732Z.npz",
+            "features_sha256": "7e741cd71584fa0adfdb02419892b816a50c407e9c3b431b8ace46e3131d19f7",
+            "group": "test_benign-2",
+            "guest": {
+              "boot_id": "55a37477-9f7c-478b-9a4f-8917b49da8ef",
+              "kernel": "6.1.0-42-cloud-amd64",
+              "machine_id": "180ac982142b4714a979599073c96cdd",
+              "stack_manifest": [
+                "c346dc8bc1c8c3649fc96064fddfc07172f740f7c82d1830dbb935b16c488271  /opt/hyptcn-lab/services.py",
+                "d7372422553f866333177456ac6daec4847f5660c1c854a646e602d0be0fcf6c  /opt/hyptcn-lab/schema.sql",
+                "a8e5ef8843ebae83eed8691f8eb7e1d186448d36e4be7d4406efeaa96291d5e3  /opt/hyptcn-lab/guest_state.py",
+                "62f55e4374b5db4522d0ce84c911f26ccd580e8f55bc570c09ee63c64be234c6  /etc/nginx/conf.d/hyptcn-lab.conf",
+                "af75eee623f3c7a0b7a1c10a35c2216684c6f4b610d44e46560de137ef3d6962  /etc/systemd/system/hyptcn-lab@.service",
+                "nginx\t1.22.1-9+deb12u10",
+                "postgresql\t15+248+deb12u1",
+                "python3\t3.11.2-1+b1",
+                "python3-psycopg2\t2.9.5-1+b1",
+                "timers:"
+              ],
+              "stack_sha256": "3fcb9e724f031e3ed24fd3e08fb8f2946c8cd3f04416bc871d8f7dc31b3d46bc"
+            },
+            "id": "benign-v6-20261026_44_test_benign_steady",
+            "kernel": "6.1.0-42-cloud-amd64",
+            "protocol_sha256": "e9d2bfbf38ae13e772b4c5407eeb6ec272898b683db9765e9542f08f4ead2a85",
+            "role": "test_benign",
+            "scenario": "steady",
+            "seed": 818790175,
+            "session": "/home/eh/projects/hyptcn3/data/collections/benign-v6-20261026_44_test_benign_steady/session.json",
+            "session_sha256": "5fc1ed4e70c91dcf6650758efb8a73cc3dd552b94d47b2b89b22d11ee682bf3d",
+            "start": 1793270431.536,
+            "typ": "benign"
+          },
+          {
+            "audit": "/home/eh/projects/hyptcn3/data/collections/benign-v6-20261026_45_test_benign_read_heavy/campaign_audit_20261029T130956528996Z.json",
+            "audit_sha256": "c05265dcca5ade79ad7f34214ed2e418b33df29d4884bc44cbf95d542b73d81d",
+            "boot_id": "55a37477-9f7c-478b-9a4f-8917b49da8ef",
+            "collector_sha256": "25f989f3f32f869b6503fa1c12d37b24ad0e49de16807674a339befefd2130b6",
+            "end": 1793279383.313,
+            "features": "/home/eh/projects/hyptcn3/data/collections/benign-v6-20261026_45_test_benign_read_heavy/campaign_audit_20261029T130956528996Z.npz",
+            "features_sha256": "d650d39d90a22a71c41a201d9e92089176ea5db69f87addf745d7eda79048ef9",
+            "group": "test_benign-2",
+            "guest": {
+              "boot_id": "55a37477-9f7c-478b-9a4f-8917b49da8ef",
+              "kernel": "6.1.0-42-cloud-amd64",
+              "machine_id": "180ac982142b4714a979599073c96cdd",
+              "stack_manifest": [
+                "c346dc8bc1c8c3649fc96064fddfc07172f740f7c82d1830dbb935b16c488271  /opt/hyptcn-lab/services.py",
+                "d7372422553f866333177456ac6daec4847f5660c1c854a646e602d0be0fcf6c  /opt/hyptcn-lab/schema.sql",
+                "a8e5ef8843ebae83eed8691f8eb7e1d186448d36e4be7d4406efeaa96291d5e3  /opt/hyptcn-lab/guest_state.py",
+                "62f55e4374b5db4522d0ce84c911f26ccd580e8f55bc570c09ee63c64be234c6  /etc/nginx/conf.d/hyptcn-lab.conf",
+                "af75eee623f3c7a0b7a1c10a35c2216684c6f4b610d44e46560de137ef3d6962  /etc/systemd/system/hyptcn-lab@.service",
+                "nginx\t1.22.1-9+deb12u10",
+                "postgresql\t15+248+deb12u1",
+                "python3\t3.11.2-1+b1",
+                "python3-psycopg2\t2.9.5-1+b1",
+                "timers:"
+              ],
+              "stack_sha256": "3fcb9e724f031e3ed24fd3e08fb8f2946c8cd3f04416bc871d8f7dc31b3d46bc"
+            },
+            "id": "benign-v6-20261026_45_test_benign_read_heavy",
+            "kernel": "6.1.0-42-cloud-amd64",
+            "protocol_sha256": "e9d2bfbf38ae13e772b4c5407eeb6ec272898b683db9765e9542f08f4ead2a85",
+            "role": "test_benign",
+            "scenario": "read_heavy",
+            "seed": 818790176,
+            "session": "/home/eh/projects/hyptcn3/data/collections/benign-v6-20261026_45_test_benign_read_heavy/session.json",
+            "session_sha256": "4aa2b9a913cc1a0065aea5820d39a489e031eb4a0a39c78e63eceed0295f310a",
+            "start": 1793275788.313,
+            "typ": "benign"
+          },
+          {
+            "audit": "/home/eh/projects/hyptcn3/data/collections/benign-v6-20261026_46_test_benign_bursty/campaign_audit_20261029T144104394043Z.json",
+            "audit_sha256": "050f23b79ac8a521ab5053f4fb84aede9b9d7484522923172ecb4db34ddbf6c5",
+            "boot_id": "55a37477-9f7c-478b-9a4f-8917b49da8ef",
+            "collector_sha256": "25f989f3f32f869b6503fa1c12d37b24ad0e49de16807674a339befefd2130b6",
+            "end": 1793284846.447,
+            "features": "/home/eh/projects/hyptcn3/data/collections/benign-v6-20261026_46_test_benign_bursty/campaign_audit_20261029T144104394043Z.npz",
+            "features_sha256": "bd7fa616eba0bbf1e00c969231f75f801d16f61dc980fbe420bea65b9d496909",
+            "group": "test_benign-2",
+            "guest": {
+              "boot_id": "55a37477-9f7c-478b-9a4f-8917b49da8ef",
+              "kernel": "6.1.0-42-cloud-amd64",
+              "machine_id": "180ac982142b4714a979599073c96cdd",
+              "stack_manifest": [
+                "c346dc8bc1c8c3649fc96064fddfc07172f740f7c82d1830dbb935b16c488271  /opt/hyptcn-lab/services.py",
+                "d7372422553f866333177456ac6daec4847f5660c1c854a646e602d0be0fcf6c  /opt/hyptcn-lab/schema.sql",
+                "a8e5ef8843ebae83eed8691f8eb7e1d186448d36e4be7d4406efeaa96291d5e3  /opt/hyptcn-lab/guest_state.py",
+                "62f55e4374b5db4522d0ce84c911f26ccd580e8f55bc570c09ee63c64be234c6  /etc/nginx/conf.d/hyptcn-lab.conf",
+                "af75eee623f3c7a0b7a1c10a35c2216684c6f4b610d44e46560de137ef3d6962  /etc/systemd/system/hyptcn-lab@.service",
+                "nginx\t1.22.1-9+deb12u10",
+                "postgresql\t15+248+deb12u1",
+                "python3\t3.11.2-1+b1",
+                "python3-psycopg2\t2.9.5-1+b1",
+                "timers:"
+              ],
+              "stack_sha256": "3fcb9e724f031e3ed24fd3e08fb8f2946c8cd3f04416bc871d8f7dc31b3d46bc"
+            },
+            "id": "benign-v6-20261026_46_test_benign_bursty",
+            "kernel": "6.1.0-42-cloud-amd64",
+            "protocol_sha256": "e9d2bfbf38ae13e772b4c5407eeb6ec272898b683db9765e9542f08f4ead2a85",
+            "role": "test_benign",
+            "scenario": "bursty",
+            "seed": 818790177,
+            "session": "/home/eh/projects/hyptcn3/data/collections/benign-v6-20261026_46_test_benign_bursty/session.json",
+            "session_sha256": "0483866153925ff1029f99c3916dd6482fd803ac38e582740ec7a573e3483735",
+            "start": 1793281251.447,
+            "typ": "benign"
+          },
+          {
+            "audit": "/home/eh/projects/hyptcn3/data/collections/benign-v6-20261026_47_test_benign_quiet/campaign_audit_20261029T165111701776Z.json",
+            "audit_sha256": "77019a6937359cd1186f99454a5b231cb72f2785a5d207335a256ce076a35dd6",
+            "boot_id": "55a37477-9f7c-478b-9a4f-8917b49da8ef",
+            "collector_sha256": "25f989f3f32f869b6503fa1c12d37b24ad0e49de16807674a339befefd2130b6",
+            "end": 1793292661.898,
+            "features": "/home/eh/projects/hyptcn3/data/collections/benign-v6-20261026_47_test_benign_quiet/campaign_audit_20261029T165111701776Z.npz",
+            "features_sha256": "e7311eda26e1af8dce7adf2b26437bd8a081b8257dbb378d2d4938f6b1158e22",
+            "group": "test_benign-2",
+            "guest": {
+              "boot_id": "55a37477-9f7c-478b-9a4f-8917b49da8ef",
+              "kernel": "6.1.0-42-cloud-amd64",
+              "machine_id": "180ac982142b4714a979599073c96cdd",
+              "stack_manifest": [
+                "c346dc8bc1c8c3649fc96064fddfc07172f740f7c82d1830dbb935b16c488271  /opt/hyptcn-lab/services.py",
+                "d7372422553f866333177456ac6daec4847f5660c1c854a646e602d0be0fcf6c  /opt/hyptcn-lab/schema.sql",
+                "a8e5ef8843ebae83eed8691f8eb7e1d186448d36e4be7d4406efeaa96291d5e3  /opt/hyptcn-lab/guest_state.py",
+                "62f55e4374b5db4522d0ce84c911f26ccd580e8f55bc570c09ee63c64be234c6  /etc/nginx/conf.d/hyptcn-lab.conf",
+                "af75eee623f3c7a0b7a1c10a35c2216684c6f4b610d44e46560de137ef3d6962  /etc/systemd/system/hyptcn-lab@.service",
+                "nginx\t1.22.1-9+deb12u10",
+                "postgresql\t15+248+deb12u1",
+                "python3\t3.11.2-1+b1",
+                "python3-psycopg2\t2.9.5-1+b1",
+                "timers:"
+              ],
+              "stack_sha256": "3fcb9e724f031e3ed24fd3e08fb8f2946c8cd3f04416bc871d8f7dc31b3d46bc"
+            },
+            "id": "benign-v6-20261026_47_test_benign_quiet",
+            "kernel": "6.1.0-42-cloud-amd64",
+            "protocol_sha256": "e9d2bfbf38ae13e772b4c5407eeb6ec272898b683db9765e9542f08f4ead2a85",
+            "role": "test_benign",
+            "scenario": "quiet",
+            "seed": 818790178,
+            "session": "/home/eh/projects/hyptcn3/data/collections/benign-v6-20261026_47_test_benign_quiet/session.json",
+            "session_sha256": "e2374216db932f075b225157e645cf2fe9793f1ff78ffe28d4530b46b12dcf59",
+            "start": 1793289066.898,
+            "typ": "benign"
+          },
+          {
+            "audit": "/home/eh/projects/hyptcn3/data/collections/benign-v6-20261026_48_test_benign_write_heavy/campaign_audit_20261029T181852159368Z.json",
+            "audit_sha256": "ce992dfe418bd9ac13bce60d8a8206d0ad901b88d4d4da0d8b42e47bd05a4f36",
+            "boot_id": "55a37477-9f7c-478b-9a4f-8917b49da8ef",
+            "collector_sha256": "25f989f3f32f869b6503fa1c12d37b24ad0e49de16807674a339befefd2130b6",
+            "end": 1793297917.366,
+            "features": "/home/eh/projects/hyptcn3/data/collections/benign-v6-20261026_48_test_benign_write_heavy/campaign_audit_20261029T181852159368Z.npz",
+            "features_sha256": "8623350ed4748a8c59b686ba844d9798147dec21ee52c039368c369d4c148092",
+            "group": "test_benign-2",
+            "guest": {
+              "boot_id": "55a37477-9f7c-478b-9a4f-8917b49da8ef",
+              "kernel": "6.1.0-42-cloud-amd64",
+              "machine_id": "180ac982142b4714a979599073c96cdd",
+              "stack_manifest": [
+                "c346dc8bc1c8c3649fc96064fddfc07172f740f7c82d1830dbb935b16c488271  /opt/hyptcn-lab/services.py",
+                "d7372422553f866333177456ac6daec4847f5660c1c854a646e602d0be0fcf6c  /opt/hyptcn-lab/schema.sql",
+                "a8e5ef8843ebae83eed8691f8eb7e1d186448d36e4be7d4406efeaa96291d5e3  /opt/hyptcn-lab/guest_state.py",
+                "62f55e4374b5db4522d0ce84c911f26ccd580e8f55bc570c09ee63c64be234c6  /etc/nginx/conf.d/hyptcn-lab.conf",
+                "af75eee623f3c7a0b7a1c10a35c2216684c6f4b610d44e46560de137ef3d6962  /etc/systemd/system/hyptcn-lab@.service",
+                "nginx\t1.22.1-9+deb12u10",
+                "postgresql\t15+248+deb12u1",
+                "python3\t3.11.2-1+b1",
+                "python3-psycopg2\t2.9.5-1+b1",
+                "timers:"
+              ],
+              "stack_sha256": "3fcb9e724f031e3ed24fd3e08fb8f2946c8cd3f04416bc871d8f7dc31b3d46bc"
+            },
+            "id": "benign-v6-20261026_48_test_benign_write_heavy",
+            "kernel": "6.1.0-42-cloud-amd64",
+            "protocol_sha256": "e9d2bfbf38ae13e772b4c5407eeb6ec272898b683db9765e9542f08f4ead2a85",
+            "role": "test_benign",
+            "scenario": "write_heavy",
+            "seed": 818790179,
+            "session": "/home/eh/projects/hyptcn3/data/collections/benign-v6-20261026_48_test_benign_write_heavy/session.json",
+            "session_sha256": "d74e1609f321ad9f9aadc0669eaa89e2aa97f5941265fbac344d5b63679f3349",
+            "start": 1793294322.366,
+            "typ": "benign"
+          }
+        ],
+        "source_sha256": {
+          "features/__init__.py": "896f5a042106b05da8291cc22c0186f1a098e90e145d3e708df7d51670640265",
+          "features/__main__.py": "3ad44f361e7d3a7925070cb0f1935df8fbb16055cccadd84f9317deb89e15a9e",
+          "features/archive.py": "120ae743dc7e3ecfe85c2c4054c29532905dccd6a1d59d94e6ed83f53a0935c8",
+          "features/cli.py": "9127ab073bb8066b7cd84feb7ea6500eaabb54e532c2f08842b68b98c91cca25",
+          "features/contract.py": "97930184ecd0a276f0f7ac3772a5652631735c726599c3b3231d555243a5eb6e",
+          "features/coverage.py": "9d745c854720e2f9855687c34657090a2ef86df05efabc2a492318f79b6ec14d",
+          "features/crosscheck.py": "30fbaf0df1d8aab390e018f81dc00a9e08bdd13898f5816b8e864a0981fd3bbb",
+          "features/dataset.py": "c31eb6cc2e58b5dd2e71d926c61711e858e2c3d515b250f31bfff65b0eba9dd8",
+          "features/manifest.py": "9c8353c93d5276a94cf428eb7b2f677d6dd7cf9f0717d1da63edbf325ca350bd",
+          "features/normalize.py": "f3dd2ecc53d636ed1ba0f219915b4c5e784d463042ee58d78d5475ae96b9e965",
+          "features/perbin.py": "19a642ce37468ee56acaf408155933d35f81f45588b2d527d38aa700ace1e46f",
+          "features/quality.py": "14304025b5f40e380453e18b9a32e4b30e1222f6fc553535541ff2af3c3699dd",
+          "features/snapshot.py": "b6ab0d7d33258153dbf3f66c9675f1c2ac8e27a386a2690144c85c45599e106f",
+          "features/stream.py": "b10faf3ec928d704d24776c161a79430bfa2460e3c7f76ebbe23d9885cd99ac0",
+          "features/windows.py": "ac9954bda49b1bd1355be080bd5a1c5529b898fa9cf021987b067c6020d4a790",
+          "guestparse/__init__.py": "59510cb87991d23814b9b7df34bf809369c23871acae629f689d37378dface62",
+          "guestparse/__main__.py": "2e49dabc9bee0ec02712ae2f753c00420b3ddbfa892c357ce603603e3be54155",
+          "guestparse/checks.py": "0c73d5a352c5af61db0f491ff07af55be464579418338779c5f8a81da4eb869e",
+          "guestparse/cli.py": "4025dd43228aab575728b9e432db687090cc876d0d6e7612c4cc152ee745e96d",
+          "guestparse/context.py": "dda0607b556dc0ac131622bc949ca9d056ed19df12f529d2b8ab19f27334a4a9",
+          "guestparse/image.py": "91e8f6ad19c6df8cee9ddb9cf9bc1e16ecb094fd92734abca48dd10f30411320",
+          "guestparse/procmap.py": "67766b37167e7fe37e857467106c44be72bcc14c6509ac1ec037f44c050d7447",
+          "guestparse/profile.py": "90b318795a4d415ba310b1081dd45b3feab8ac8f7021c5fe830847ce7f3069bc",
+          "guestparse/validate.py": "6ab979ed5cc65f53f65eee124853f7d328c3980d2064aeeb5008bdb7a4502806",
+          "guestparse/view.py": "483209f55f67e69e2029d7c64dd2ac646425960963ab16a628d8d4f48ff59b43",
+          "safeguard/__init__.py": "a846b213918daa6ba5f58f1ff95dda2e5aeb40f04c10df7ba78bf64cc0545af7",
+          "safeguard/__main__.py": "3dbf2d1046841370d186eafb631d790c5b231a433668561b0a0742f731966da5",
+          "safeguard/bundle.py": "afb5b2f34348b5db519b6d1545cce6eb0041fe3c2be0f771c39f74361492e3ad",
+          "safeguard/cli.py": "8b1cebcf07b553a8322ba9d10230f5849f732557d32f867c9e6212ac5a3487c1",
+          "safeguard/demo.py": "98dc2a832129666e97365446c29cae74488d2697ccc45b6d196315c7ff7bb131",
+          "safeguard/features.py": "0b8869024d70a2dccf05d482334b5770250fe0f3e1696a616133448c3e67b1e9",
+          "safeguard/model.py": "b601b6e1279e2b2e3244e02170327760bafb1ed1d3602d4a9c1a54d26f5935d3",
+          "safeguard/runtime.py": "cdd2dd7b56256b77ccec0a2029d19e7bd71417974a58d7b8a6b6be8a4ea19be0",
+          "safeguard/supervisor.py": "258685210cac1a3f22ed496078ddc89dec767eb96387b04d9dafbd31cdc92e35",
+          "safeguard/training.py": "d4beb849b813fbd7e4cb4928293e7b8c121f9dce69ccededd0bfab3483abc42e",
+          "tcn/__init__.py": "499de0c2cdba245ab9c7c430f1fb1dc0a6cf65f87cdbb4f1ed24c1cd3cf52a81",
+          "tcn/baselines.py": "8473faf994a162f8a6dd4bbf78701b079ab6107e813dfdea8d86b2ebe826949a",
+          "tcn/eval.py": "f17aa86233425ebc86530693d5eeab64d8cf8742301ff9cbacb141c331403c1f",
+          "tcn/model.py": "7da3a3f38398bb3536cb6a3a5e12605b3594ede1eefd907be7d0ca3e79470f97",
+          "tcn/score.py": "43d4c0a52c440ae6238d2a32db82971698ad7959708e4523791f181bd1b5194a",
+          "tcn/train.py": "acad4d3c92da49588f90e88229c9a2873b2320f88be3642ac6f82f263da7d941"
+        }
+      },
+      "schema": "hyptcn3/safeguard-bundle/1",
+      "score_formula": "0.5 * mean(global_squared_error) + 0.5 * max(bin_masked_mse)",
+      "training": {
+        "batch_size": 32,
+        "checkpoint_selection_role": "dev",
+        "epochs": 10,
+        "history": [
+          {
+            "dev_classification_loss": 1.8235472072734795,
+            "dev_prediction_loss": 0.32969740978101403,
+            "epoch": 1,
+            "train_classification_loss": 0.467130950677302,
+            "train_prediction_loss": 0.3912897936414251
+          },
+          {
+            "dev_classification_loss": 2.706805388092761,
+            "dev_prediction_loss": 0.30404065549373627,
+            "epoch": 2,
+            "train_classification_loss": 0.0673298383084931,
+            "train_prediction_loss": 0.2948850224900052
+          },
+          {
+            "dev_classification_loss": 2.87322196608415,
+            "dev_prediction_loss": 0.2964193662249945,
+            "epoch": 3,
+            "train_classification_loss": 0.03939406627894513,
+            "train_prediction_loss": 0.28151599747863243
+          },
+          {
+            "dev_classification_loss": 3.0127382167679153,
+            "dev_prediction_loss": 0.2927191978608205,
+            "epoch": 4,
+            "train_classification_loss": 0.02485288668518222,
+            "train_prediction_loss": 0.2740888032446386
+          },
+          {
+            "dev_classification_loss": 3.6394252427444003,
+            "dev_prediction_loss": 0.28691176670353585,
+            "epoch": 5,
+            "train_classification_loss": 0.01913735870719363,
+            "train_prediction_loss": 0.269227784015945
+          },
+          {
+            "dev_classification_loss": 3.464902843718471,
+            "dev_prediction_loss": 0.28619738837810066,
+            "epoch": 6,
+            "train_classification_loss": 0.014369514363805725,
+            "train_prediction_loss": 0.2651112989237315
+          },
+          {
+            "dev_classification_loss": 3.38748749421209,
+            "dev_prediction_loss": 0.2815488591123887,
+            "epoch": 7,
+            "train_classification_loss": 0.012290080135049637,
+            "train_prediction_loss": 0.26227933699441797
+          },
+          {
+            "dev_classification_loss": 3.1904681382840856,
+            "dev_prediction_loss": 0.2793700527248344,
+            "epoch": 8,
+            "train_classification_loss": 0.011669924901376402,
+            "train_prediction_loss": 0.2603923914232228
+          },
+          {
+            "dev_classification_loss": 3.651663726108541,
+            "dev_prediction_loss": 0.2777695147608354,
+            "epoch": 9,
+            "train_classification_loss": 0.006739687488011428,
+            "train_prediction_loss": 0.25809617412243757
+          },
+          {
+            "dev_classification_loss": 3.0639679832900777,
+            "dev_prediction_loss": 0.2744809666845372,
+            "epoch": 10,
+            "train_classification_loss": 0.01234039994701475,
+            "train_prediction_loss": 0.25552735310098346
+          }
+        ],
+        "normalization_fit_role": "train",
+        "normalization_rows": 12924,
+        "seed": 0,
+        "selected_classifier_epoch": 1,
+        "selected_predictor_epoch": 10,
+        "test_feature_arrays_loaded": false,
+        "windows": {
+          "calibration": 7872,
+          "dev": 3936,
+          "train": 11808
+        }
+      },
+      "weights": {
+        "classifier": {
+          "file": "classifier.pt",
+          "sha256": "e63a78e2a23f13653dc52bb67e7a70f48926fb75129c10f2165473476390eff9"
+        },
+        "predictor": {
+          "file": "predictor.pt",
+          "sha256": "757c909cf54b10f4407ae9edc6d89856a67e1ae186620484be5eeb91c220f978"
+        }
+      }
+    },
+    "manifest_sha256": "42512e4202720d92f386d3caa92b1da1e035d3a0806423b91319c086f6245d35",
+    "note": "Zaznam treningu: kalibracna frekvencia udalosti je na role calibration (nie drzane bokom FAR). Strata klasifikatora na dev rastie od 1. epochy, preto checkpoint klasifikatora je z epochy 1. Ziadna detekcia utokov ani FAR na test_benign z tohto zaznamu nevyplyva.",
+    "schema": "hyptcn3/safeguard-train-record/1",
+    "sessions_by_role": {
+      "calibration": 12,
+      "dev": 6,
+      "test_benign": 12,
+      "train": 18
+    },
+    "test_benign_loaded_in_training": false,
+    "train_result": {
+      "bundle": "/home/eh/projects/hyptcn3/data/models/server-v2-benign-v6",
+      "calibration": {
+        "alarm_events": 1,
+        "calibration_alarm_events_per_hour": 0.09146341463414634,
+        "comparison": ">",
+        "diagnostic": false,
+        "event_definition": "k of n after n scored targets; rising edges; reset at barriers",
+        "exposure_definition": "scored targets times nominal interval; warmup/gaps excluded",
+        "fpr_design": 0.01,
+        "k": 3,
+        "method": "benign_score_quantile_higher",
+        "minimum_scores": 1000,
+        "n": 5,
+        "n_scores": 7872,
+        "note": "Calibration frequency is not a held-out false-alarm measurement or guarantee.",
+        "role": "calibration",
+        "scorable_hours": 10.933333333333334,
+        "threshold": 14.43027114868164,
+        "window_exceedance_fraction": 0.009908536585365854
+      },
+      "classes": [
+        "bursty",
+        "mixed",
+        "quiet",
+        "read_heavy",
+        "steady",
+        "write_heavy"
+      ],
+      "diagnostic": false,
+      "training": {
+        "batch_size": 32,
+        "checkpoint_selection_role": "dev",
+        "epochs": 10,
+        "history": [
+          {
+            "dev_classification_loss": 1.8235472072734795,
+            "dev_prediction_loss": 0.32969740978101403,
+            "epoch": 1,
+            "train_classification_loss": 0.467130950677302,
+            "train_prediction_loss": 0.3912897936414251
+          },
+          {
+            "dev_classification_loss": 2.706805388092761,
+            "dev_prediction_loss": 0.30404065549373627,
+            "epoch": 2,
+            "train_classification_loss": 0.0673298383084931,
+            "train_prediction_loss": 0.2948850224900052
+          },
+          {
+            "dev_classification_loss": 2.87322196608415,
+            "dev_prediction_loss": 0.2964193662249945,
+            "epoch": 3,
+            "train_classification_loss": 0.03939406627894513,
+            "train_prediction_loss": 0.28151599747863243
+          },
+          {
+            "dev_classification_loss": 3.0127382167679153,
+            "dev_prediction_loss": 0.2927191978608205,
+            "epoch": 4,
+            "train_classification_loss": 0.02485288668518222,
+            "train_prediction_loss": 0.2740888032446386
+          },
+          {
+            "dev_classification_loss": 3.6394252427444003,
+            "dev_prediction_loss": 0.28691176670353585,
+            "epoch": 5,
+            "train_classification_loss": 0.01913735870719363,
+            "train_prediction_loss": 0.269227784015945
+          },
+          {
+            "dev_classification_loss": 3.464902843718471,
+            "dev_prediction_loss": 0.28619738837810066,
+            "epoch": 6,
+            "train_classification_loss": 0.014369514363805725,
+            "train_prediction_loss": 0.2651112989237315
+          },
+          {
+            "dev_classification_loss": 3.38748749421209,
+            "dev_prediction_loss": 0.2815488591123887,
+            "epoch": 7,
+            "train_classification_loss": 0.012290080135049637,
+            "train_prediction_loss": 0.26227933699441797
+          },
+          {
+            "dev_classification_loss": 3.1904681382840856,
+            "dev_prediction_loss": 0.2793700527248344,
+            "epoch": 8,
+            "train_classification_loss": 0.011669924901376402,
+            "train_prediction_loss": 0.2603923914232228
+          },
+          {
+            "dev_classification_loss": 3.651663726108541,
+            "dev_prediction_loss": 0.2777695147608354,
+            "epoch": 9,
+            "train_classification_loss": 0.006739687488011428,
+            "train_prediction_loss": 0.25809617412243757
+          },
+          {
+            "dev_classification_loss": 3.0639679832900777,
+            "dev_prediction_loss": 0.2744809666845372,
+            "epoch": 10,
+            "train_classification_loss": 0.01234039994701475,
+            "train_prediction_loss": 0.25552735310098346
+          }
+        ],
+        "normalization_fit_role": "train",
+        "normalization_rows": 12924,
+        "seed": 0,
+        "selected_classifier_epoch": 1,
+        "selected_predictor_epoch": 10,
+        "test_feature_arrays_loaded": false,
+        "windows": {
+          "calibration": 7872,
+          "dev": 3936,
+          "train": 11808
+        }
+      }
+    },
+    "weights_sha256": {
+      "classifier.pt": "e63a78e2a23f13653dc52bb67e7a70f48926fb75129c10f2165473476390eff9",
+      "predictor.pt": "757c909cf54b10f4407ae9edc6d89856a67e1ae186620484be5eeb91c220f978"
+    }
+  }
+}

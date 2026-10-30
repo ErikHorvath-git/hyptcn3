@@ -1,0 +1,696 @@
+{
+  "command": "python3 -m tcn.eval far --corpus data/campaigns/benign-v6-20261026/corpus.json --role dev --replay data/safeguard/far-dev-benign-v6/benign-v6-20261026_19_dev_steady data/safeguard/far-dev-benign-v6/benign-v6-20261026_20_dev_mixed data/safeguard/far-dev-benign-v6/benign-v6-20261026_21_dev_quiet data/safeguard/far-dev-benign-v6/benign-v6-20261026_22_dev_read_heavy data/safeguard/far-dev-benign-v6/benign-v6-20261026_23_dev_write_heavy data/safeguard/far-dev-benign-v6/benign-v6-20261026_24_dev_bursty --campaign data/results/collection_campaign_benign_v6_20261026.json --out /tmp/safeguard_far_dev_benign_v6_20261029_b.json",
+  "commit": "a1a4b9b840f7f2fdc86d6b740f409c1d7235f712",
+  "commit_dirty": false,
+  "cwd": "/home/eh/projects/hyptcn3",
+  "date": "2026-10-29T23:35:53.308181+00:00",
+  "evaluator_sha256": "ca38e9d55a37815462344a9f6c6ea069801f7f76b54d75fd2785f39d4b8c14a8",
+  "guest": "jadro 6.1.0-42-cloud-amd64, stack_sha256 3fcb9e724f031e3ed24fd3e08fb8f2946c8cd3f04416bc871d8f7dc31b3d46bc",
+  "host": "Linux-7.2.9+deb13-amd64-x86_64-with-glibc2.41",
+  "n": 6,
+  "values": {
+    "alfa": 0.05,
+    "balik": {
+      "calibration": {
+        "alarm_events": 1,
+        "calibration_alarm_events_per_hour": 0.09146341463414634,
+        "comparison": ">",
+        "diagnostic": false,
+        "event_definition": "k of n after n scored targets; rising edges; reset at barriers",
+        "exposure_definition": "scored targets times nominal interval; warmup/gaps excluded",
+        "fpr_design": 0.01,
+        "k": 3,
+        "method": "benign_score_quantile_higher",
+        "minimum_scores": 1000,
+        "n": 5,
+        "n_scores": 7872,
+        "note": "Calibration frequency is not a held-out false-alarm measurement or guarantee.",
+        "role": "calibration",
+        "scorable_hours": 10.933333333333334,
+        "threshold": 14.43027114868164,
+        "window_exceedance_fraction": 0.009908536585365854
+      },
+      "created_utc": "2026-10-29T23:24:28.981200+00:00",
+      "manifest_sha256": "abbacf9580e72005f93cf636215f08466d11c00dfc241e98e25ad1260bbc4371",
+      "training": {
+        "batch_size": 32,
+        "epochs": 10,
+        "seed": 0
+      },
+      "weights": {
+        "classifier": {
+          "file": "classifier.pt",
+          "sha256": "e63a78e2a23f13653dc52bb67e7a70f48926fb75129c10f2165473476390eff9"
+        },
+        "predictor": {
+          "file": "predictor.pt",
+          "sha256": "757c909cf54b10f4407ae9edc6d89856a67e1ae186620484be5eeb91c220f978"
+        }
+      }
+    },
+    "dane_prijatim_korpusu": {
+      "chyb_vstupu": 0,
+      "integrita_neuzavrete": {
+        "process_cross_view": 5,
+        "text_integrity": 4320
+      },
+      "integrita_uzavretych_riadkov": 0,
+      "poznamka": "prijatie do korpusu zamieta relacie s nalezom integrity, medzerou, chybou citania alebo neplatnym riadkom (scripts/collection.py audit), takze tieto hodnoty nie su meranim detektora; vypadky senzora a integritu bez vyberu meria safeguard run",
+      "udalosti_integrita": 0,
+      "vypadkov": 0,
+      "vypadky_s": 0
+    },
+    "final": false,
+    "kampan": {
+      "accepted_sessions": 48,
+      "planned_sessions": 48,
+      "rejected_sessions": [],
+      "zaznam": "/home/eh/projects/hyptcn3/data/results/collection_campaign_benign_v6_20261026.json",
+      "zaznam_sha256": "f2fc4a8d1006730a9a9cbda7a7d56e8d919c08b4b13ae70b3125945e3761d631"
+    },
+    "klasifikacia_aktivit": {
+      "okna": {
+        "confusion": [
+          [
+            656,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            286,
+            0,
+            2,
+            0,
+            368
+          ],
+          [
+            0,
+            0,
+            656,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            656,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            653,
+            0,
+            3
+          ],
+          [
+            1,
+            299,
+            0,
+            0,
+            0,
+            356
+          ]
+        ],
+        "f1_macro": 0.606997573424949,
+        "f1_macro_nad_triedami": [
+          "bursty",
+          "mixed",
+          "quiet",
+          "read_heavy",
+          "steady",
+          "write_heavy"
+        ],
+        "n": 3936,
+        "na_triedu": {
+          "bursty": {
+            "f1": 0.9992383853769993,
+            "n": 656,
+            "precision": 0.9984779299847792,
+            "recall": 1.0
+          },
+          "mixed": {
+            "f1": 0.46091861402095086,
+            "n": 656,
+            "precision": 0.4888888888888889,
+            "recall": 0.43597560975609756
+          },
+          "quiet": {
+            "f1": 1.0,
+            "n": 656,
+            "precision": 1.0,
+            "recall": 1.0
+          },
+          "read_heavy": {
+            "f1": 0.6670055922724962,
+            "n": 656,
+            "precision": 0.5003813882532419,
+            "recall": 1.0
+          },
+          "steady": {
+            "f1": 0.0,
+            "n": 656,
+            "precision": 0.0,
+            "recall": 0.0
+          },
+          "write_heavy": {
+            "f1": 0.514822848879248,
+            "n": 656,
+            "precision": 0.4896836313617607,
+            "recall": 0.5426829268292683
+          }
+        },
+        "presnost": 0.663109756097561
+      },
+      "poznamka": "trieda je zaznamenane nastavenie zataze session, nie skodlivost ani rodina malveru; okna jednej relacie nie su nezavisle, nezavislou jednotkou je relacia",
+      "relacie": {
+        "interval": [
+          0.22277809550351213,
+          0.9567281317072583
+        ],
+        "interval_metoda": "Clopper-Pearson",
+        "na_relaciu": {
+          "benign-v6-20261026_19_dev_steady": {
+            "scenar": "steady",
+            "spravne_okna_podiel": 0.0,
+            "vacsinova_predikcia": "read_heavy"
+          },
+          "benign-v6-20261026_20_dev_mixed": {
+            "scenar": "mixed",
+            "spravne_okna_podiel": 0.43597560975609756,
+            "vacsinova_predikcia": "write_heavy"
+          },
+          "benign-v6-20261026_21_dev_quiet": {
+            "scenar": "quiet",
+            "spravne_okna_podiel": 1.0,
+            "vacsinova_predikcia": "quiet"
+          },
+          "benign-v6-20261026_22_dev_read_heavy": {
+            "scenar": "read_heavy",
+            "spravne_okna_podiel": 1.0,
+            "vacsinova_predikcia": "read_heavy"
+          },
+          "benign-v6-20261026_23_dev_write_heavy": {
+            "scenar": "write_heavy",
+            "spravne_okna_podiel": 0.5426829268292683,
+            "vacsinova_predikcia": "write_heavy"
+          },
+          "benign-v6-20261026_24_dev_bursty": {
+            "scenar": "bursty",
+            "spravne_okna_podiel": 1.0,
+            "vacsinova_predikcia": "bursty"
+          }
+        },
+        "presnost": 0.6666666666666666,
+        "spolu": 6,
+        "spravnych": 4
+      },
+      "triedy": [
+        "bursty",
+        "mixed",
+        "quiet",
+        "read_heavy",
+        "steady",
+        "write_heavy"
+      ]
+    },
+    "korpus": "/home/eh/projects/hyptcn3/data/campaigns/benign-v6-20261026/corpus.json",
+    "korpus_sha256": "b86e5fc35d7c4227c188cc024a7b25a142e5c80e4782807c773e9ee519dad790",
+    "max_medzera_s": 7.5,
+    "merane": {
+      "scenare": {
+        "bursty": {
+          "disperzia": {
+            "df": null,
+            "dovod": "bez udalosti modelu",
+            "p": null,
+            "x2": null
+          },
+          "far_h": {
+            "skorovany": {
+              "dolna_h": 0.0,
+              "horna_h": 4.0487701325640755,
+              "udalosti_h": 0.0
+            },
+            "sledovany": {
+              "dolna_h": 0.0,
+              "horna_h": 3.6888794541139354,
+              "udalosti_h": 0.0
+            }
+          },
+          "spolu": {
+            "bez_skore_cas_podiel": 0.0888888888888889,
+            "relacii": 1,
+            "riadkov": 720,
+            "skorovany_s": 3280,
+            "skorovanych": 656,
+            "sledovany_s": 3600.0,
+            "udalosti_model": 0
+          }
+        },
+        "mixed": {
+          "disperzia": {
+            "df": null,
+            "dovod": "bez udalosti modelu",
+            "p": null,
+            "x2": null
+          },
+          "far_h": {
+            "skorovany": {
+              "dolna_h": 0.0,
+              "horna_h": 4.0487701325640755,
+              "udalosti_h": 0.0
+            },
+            "sledovany": {
+              "dolna_h": 0.0,
+              "horna_h": 3.6888794541139354,
+              "udalosti_h": 0.0
+            }
+          },
+          "spolu": {
+            "bez_skore_cas_podiel": 0.0888888888888889,
+            "relacii": 1,
+            "riadkov": 720,
+            "skorovany_s": 3280,
+            "skorovanych": 656,
+            "sledovany_s": 3600.0,
+            "udalosti_model": 0
+          }
+        },
+        "quiet": {
+          "disperzia": {
+            "df": null,
+            "dovod": "bez udalosti modelu",
+            "p": null,
+            "x2": null
+          },
+          "far_h": {
+            "skorovany": {
+              "dolna_h": 0.0,
+              "horna_h": 4.0487701325640755,
+              "udalosti_h": 0.0
+            },
+            "sledovany": {
+              "dolna_h": 0.0,
+              "horna_h": 3.6888794541139354,
+              "udalosti_h": 0.0
+            }
+          },
+          "spolu": {
+            "bez_skore_cas_podiel": 0.0888888888888889,
+            "relacii": 1,
+            "riadkov": 720,
+            "skorovany_s": 3280,
+            "skorovanych": 656,
+            "sledovany_s": 3600.0,
+            "udalosti_model": 0
+          }
+        },
+        "read_heavy": {
+          "disperzia": {
+            "df": null,
+            "dovod": "bez udalosti modelu",
+            "p": null,
+            "x2": null
+          },
+          "far_h": {
+            "skorovany": {
+              "dolna_h": 0.0,
+              "horna_h": 4.0487701325640755,
+              "udalosti_h": 0.0
+            },
+            "sledovany": {
+              "dolna_h": 0.0,
+              "horna_h": 3.6888794541139354,
+              "udalosti_h": 0.0
+            }
+          },
+          "spolu": {
+            "bez_skore_cas_podiel": 0.0888888888888889,
+            "relacii": 1,
+            "riadkov": 720,
+            "skorovany_s": 3280,
+            "skorovanych": 656,
+            "sledovany_s": 3600.0,
+            "udalosti_model": 0
+          }
+        },
+        "steady": {
+          "disperzia": {
+            "df": null,
+            "dovod": "jedna relacia",
+            "p": null,
+            "x2": null
+          },
+          "far_h": {
+            "skorovany": {
+              "dolna_h": 0.02778783803153767,
+              "horna_h": 6.115218355908547,
+              "udalosti_h": 1.0975609756097562
+            },
+            "sledovany": {
+              "dolna_h": 0.025317807984289876,
+              "horna_h": 5.571643390938898,
+              "udalosti_h": 1.0
+            }
+          },
+          "spolu": {
+            "bez_skore_cas_podiel": 0.0888888888888889,
+            "relacii": 1,
+            "riadkov": 720,
+            "skorovany_s": 3280,
+            "skorovanych": 656,
+            "sledovany_s": 3600.0,
+            "udalosti_model": 1
+          }
+        },
+        "write_heavy": {
+          "disperzia": {
+            "df": null,
+            "dovod": "bez udalosti modelu",
+            "p": null,
+            "x2": null
+          },
+          "far_h": {
+            "skorovany": {
+              "dolna_h": 0.0,
+              "horna_h": 4.0487701325640755,
+              "udalosti_h": 0.0
+            },
+            "sledovany": {
+              "dolna_h": 0.0,
+              "horna_h": 3.688878429499751,
+              "udalosti_h": 0.0
+            }
+          },
+          "spolu": {
+            "bez_skore_cas_podiel": 0.08888914195689479,
+            "relacii": 1,
+            "riadkov": 720,
+            "skorovany_s": 3280,
+            "skorovanych": 656,
+            "sledovany_s": 3600.0009999275208,
+            "udalosti_model": 0
+          }
+        }
+      },
+      "skupin": 1,
+      "skupiny": {
+        "dev-1": {
+          "disperzia": {
+            "df": 5,
+            "dovod": null,
+            "p": 0.4158801869955079,
+            "x2": 5.000000000000001
+          },
+          "far_h": {
+            "skorovany": {
+              "dolna_h": 0.004631306338589611,
+              "horna_h": 1.0192030593180912,
+              "udalosti_h": 0.18292682926829268
+            },
+            "sledovany": {
+              "dolna_h": 0.004219634468709025,
+              "horna_h": 0.9286071888351921,
+              "udalosti_h": 0.1666666589511769
+            }
+          },
+          "spolu": {
+            "bez_skore_cas_podiel": 0.08888893106689966,
+            "relacii": 6,
+            "riadkov": 4320,
+            "skorovany_s": 19680,
+            "skorovanych": 3936,
+            "sledovany_s": 21600.00099992752,
+            "udalosti_model": 1
+          }
+        }
+      },
+      "spolu": {
+        "disperzia": {
+          "df": 5,
+          "dovod": null,
+          "p": 0.4158801869955079,
+          "x2": 5.000000000000001
+        },
+        "far_h": {
+          "skorovany": {
+            "dolna_h": 0.004631306338589611,
+            "horna_h": 1.0192030593180912,
+            "udalosti_h": 0.18292682926829268
+          },
+          "sledovany": {
+            "dolna_h": 0.004219634468709025,
+            "horna_h": 0.9286071888351921,
+            "udalosti_h": 0.1666666589511769
+          }
+        },
+        "spolu": {
+          "bez_skore_cas_podiel": 0.08888893106689966,
+          "relacii": 6,
+          "riadkov": 4320,
+          "skorovany_s": 19680,
+          "skorovanych": 3936,
+          "sledovany_s": 21600.00099992752,
+          "udalosti_model": 1
+        }
+      }
+    },
+    "perioda_s": 5,
+    "poznamka": "FAR z alarmovych udalosti benigneho behu prijatych relacii; nehovori nic o detekcii utokov ani o presnosti voci malveru (HONESTY P4). Rola dev vyberala checkpointy prediktora aj klasifikatora (checkpoint_selection_role), toto FAR ani presnost klasifikacie preto nie su drzane bokom; zaverecne su iba na test_benign (--final).",
+    "predpoklady": [
+      "obojstranny exaktny Garwoodov interval s alfa/2 na kazdu stranu; pri 0 udalostiach je horna hranica -ln(alfa/2) udalosti",
+      "odhaduje sa miera vazena expoziciou tychto relacii; udalosti v relacii sa beru ako nezavisle (pravidlo k z n ich moze zhlukovat, casy udalosti su pri relaciach)",
+      "variabilita medzi bootmi v intervale nie je; jednotkou neistoty je skupina (METODIKA kap. 1), pocet skupin je vo vysledku",
+      "intervaly po scenaroch a skupinach nie su simultanne"
+    ],
+    "relacie": {
+      "benign-v6-20261026_19_dev_steady": {
+        "archiv": "/home/eh/projects/hyptcn3/data/collections/benign-v6-20261026_19_dev_steady/campaign_audit_20261027T204607545977Z.npz",
+        "bez_skore_cas_podiel": 0.0888888888888889,
+        "bez_skore_riadkov_podiel": 0.0888888888888889,
+        "casy_udalosti_model_s": [
+          2555.0
+        ],
+        "chyb_vstupu": 0,
+        "chyb_vstupu_s": 0,
+        "features_sha256": "c7ba690e81ccb4792d477aabebb560ddcc05a9781148ba093dc7fb36c0071c50",
+        "integrita_neuzavrete": {
+          "text_integrity": 720
+        },
+        "integrita_uzavretych_riadkov": 0,
+        "predikcie_aktivity": {
+          "read_heavy": 653,
+          "write_heavy": 3
+        },
+        "prehratie": "/home/eh/projects/hyptcn3/data/safeguard/far-dev-benign-v6/benign-v6-20261026_19_dev_steady",
+        "riadkov": 720,
+        "scenario": "steady",
+        "skorovany_s": 3280,
+        "skorovanych": 656,
+        "skupina": "dev-1",
+        "sledovany_s": 3600.0,
+        "subory_sha256": {
+          "configuration.json": "a6e20c08fdf55541412b797f085700b719bcaed1ac2b2be47f0137e1822b801c",
+          "events.jsonl": "9adeb63d8d815d5a6a025c090052c589885b17b20e6da72daab09a02f4e61786",
+          "status.json": "70f881d1ae2aba24114bbcbb2128ab9c79a324f00cfff988ba70b5cbd0785dfb"
+        },
+        "udalosti": 1,
+        "udalosti_integrita": 0,
+        "udalosti_model": 1,
+        "vypadkov": 0,
+        "vypadky_s": 0
+      },
+      "benign-v6-20261026_20_dev_mixed": {
+        "archiv": "/home/eh/projects/hyptcn3/data/collections/benign-v6-20261026_20_dev_mixed/campaign_audit_20261027T221427087713Z.npz",
+        "bez_skore_cas_podiel": 0.0888888888888889,
+        "bez_skore_riadkov_podiel": 0.0888888888888889,
+        "casy_udalosti_model_s": [],
+        "chyb_vstupu": 0,
+        "chyb_vstupu_s": 0,
+        "features_sha256": "7437cb37d4a7913c2035b048b67b577d4de3a0ef91ebf16c253fe192007e7077",
+        "integrita_neuzavrete": {
+          "process_cross_view": 1,
+          "text_integrity": 720
+        },
+        "integrita_uzavretych_riadkov": 0,
+        "predikcie_aktivity": {
+          "mixed": 286,
+          "read_heavy": 2,
+          "write_heavy": 368
+        },
+        "prehratie": "/home/eh/projects/hyptcn3/data/safeguard/far-dev-benign-v6/benign-v6-20261026_20_dev_mixed",
+        "riadkov": 720,
+        "scenario": "mixed",
+        "skorovany_s": 3280,
+        "skorovanych": 656,
+        "skupina": "dev-1",
+        "sledovany_s": 3600.0,
+        "subory_sha256": {
+          "configuration.json": "1a19d8686884c863efa0496c4f2f6158045fa074c4380bbd41ca321ce3739150",
+          "events.jsonl": "c7eccf8ba6e64899438f5de4994b0f805cb277f6a0bb14ad2d8dc5c2aefa77ed",
+          "status.json": "6f4bb05d610db809d29fbfd2c383f99acddba787730cbd9d56605bffaa154ba8"
+        },
+        "udalosti": 0,
+        "udalosti_integrita": 0,
+        "udalosti_model": 0,
+        "vypadkov": 0,
+        "vypadky_s": 0
+      },
+      "benign-v6-20261026_21_dev_quiet": {
+        "archiv": "/home/eh/projects/hyptcn3/data/collections/benign-v6-20261026_21_dev_quiet/campaign_audit_20261027T234536141952Z.npz",
+        "bez_skore_cas_podiel": 0.0888888888888889,
+        "bez_skore_riadkov_podiel": 0.0888888888888889,
+        "casy_udalosti_model_s": [],
+        "chyb_vstupu": 0,
+        "chyb_vstupu_s": 0,
+        "features_sha256": "f91cb1931dcbe58031847eb928975cc2adfce4123d731f56f51c964a748faf1c",
+        "integrita_neuzavrete": {
+          "process_cross_view": 1,
+          "text_integrity": 720
+        },
+        "integrita_uzavretych_riadkov": 0,
+        "predikcie_aktivity": {
+          "quiet": 656
+        },
+        "prehratie": "/home/eh/projects/hyptcn3/data/safeguard/far-dev-benign-v6/benign-v6-20261026_21_dev_quiet",
+        "riadkov": 720,
+        "scenario": "quiet",
+        "skorovany_s": 3280,
+        "skorovanych": 656,
+        "skupina": "dev-1",
+        "sledovany_s": 3600.0,
+        "subory_sha256": {
+          "configuration.json": "5e0dde3d280d92781cde8dccec75ee4a9db3548a5c29b683d1c9f18ba4b7c2f8",
+          "events.jsonl": "d1d66048e7ab0ef42d5182dc11896b47e40524048b04da8c918fd0873968c1cd",
+          "status.json": "aedff858cad9307be8efaf1b63c4aaeede5ad0c8fab549779f245ac7ae1f92fc"
+        },
+        "udalosti": 0,
+        "udalosti_integrita": 0,
+        "udalosti_model": 0,
+        "vypadkov": 0,
+        "vypadky_s": 0
+      },
+      "benign-v6-20261026_22_dev_read_heavy": {
+        "archiv": "/home/eh/projects/hyptcn3/data/collections/benign-v6-20261026_22_dev_read_heavy/campaign_audit_20261028T011145219011Z.npz",
+        "bez_skore_cas_podiel": 0.0888888888888889,
+        "bez_skore_riadkov_podiel": 0.0888888888888889,
+        "casy_udalosti_model_s": [],
+        "chyb_vstupu": 0,
+        "chyb_vstupu_s": 0,
+        "features_sha256": "218220856a6b33be97189923e427734b5c10b85f77c82c6d42a5573f27acdc9e",
+        "integrita_neuzavrete": {
+          "process_cross_view": 2,
+          "text_integrity": 720
+        },
+        "integrita_uzavretych_riadkov": 0,
+        "predikcie_aktivity": {
+          "read_heavy": 656
+        },
+        "prehratie": "/home/eh/projects/hyptcn3/data/safeguard/far-dev-benign-v6/benign-v6-20261026_22_dev_read_heavy",
+        "riadkov": 720,
+        "scenario": "read_heavy",
+        "skorovany_s": 3280,
+        "skorovanych": 656,
+        "skupina": "dev-1",
+        "sledovany_s": 3600.0,
+        "subory_sha256": {
+          "configuration.json": "55bee32324c5a3f75b023c0a08c1d10c8a1009ee0193540fae0efe2f6d75bfdc",
+          "events.jsonl": "1f3245b5508cdcf65c8fab54c6ce7bcf44187a7bb9e023fd8ccd5300b3b33ab2",
+          "status.json": "ca70000097bf2e1ca90c832a716b57c2453c7bf697df719c5d15c00b74569279"
+        },
+        "udalosti": 0,
+        "udalosti_integrita": 0,
+        "udalosti_model": 0,
+        "vypadkov": 0,
+        "vypadky_s": 0
+      },
+      "benign-v6-20261026_23_dev_write_heavy": {
+        "archiv": "/home/eh/projects/hyptcn3/data/collections/benign-v6-20261026_23_dev_write_heavy/campaign_audit_20261028T024008217751Z.npz",
+        "bez_skore_cas_podiel": 0.08888914195689479,
+        "bez_skore_riadkov_podiel": 0.0888888888888889,
+        "casy_udalosti_model_s": [],
+        "chyb_vstupu": 0,
+        "chyb_vstupu_s": 0,
+        "features_sha256": "759ac0f13bd9c79c3f8e758dbe2da3597fe722ce26bf8a96abfe2039870b735f",
+        "integrita_neuzavrete": {
+          "text_integrity": 720
+        },
+        "integrita_uzavretych_riadkov": 0,
+        "predikcie_aktivity": {
+          "bursty": 1,
+          "mixed": 299,
+          "write_heavy": 356
+        },
+        "prehratie": "/home/eh/projects/hyptcn3/data/safeguard/far-dev-benign-v6/benign-v6-20261026_23_dev_write_heavy",
+        "riadkov": 720,
+        "scenario": "write_heavy",
+        "skorovany_s": 3280,
+        "skorovanych": 656,
+        "skupina": "dev-1",
+        "sledovany_s": 3600.0009999275208,
+        "subory_sha256": {
+          "configuration.json": "74479f9b2ad836fa489d184ea4c8b7623adbc0b3f6b60828a31e5b1585c37c25",
+          "events.jsonl": "581209fb0699c8fd5e961889466a05a204e63121d48b85da556a9a501b6c096f",
+          "status.json": "ad00f539be50ca88e19f309bf934a9ce44e25b0505e0555515881d41471260e6"
+        },
+        "udalosti": 0,
+        "udalosti_integrita": 0,
+        "udalosti_model": 0,
+        "vypadkov": 0,
+        "vypadky_s": 0
+      },
+      "benign-v6-20261026_24_dev_bursty": {
+        "archiv": "/home/eh/projects/hyptcn3/data/collections/benign-v6-20261026_24_dev_bursty/campaign_audit_20261028T041153666658Z.npz",
+        "bez_skore_cas_podiel": 0.0888888888888889,
+        "bez_skore_riadkov_podiel": 0.0888888888888889,
+        "casy_udalosti_model_s": [],
+        "chyb_vstupu": 0,
+        "chyb_vstupu_s": 0,
+        "features_sha256": "da973bc280c39cac5a7cdcb8cb864ef6743b5461e42a7a09254f24644d34d268",
+        "integrita_neuzavrete": {
+          "process_cross_view": 1,
+          "text_integrity": 720
+        },
+        "integrita_uzavretych_riadkov": 0,
+        "predikcie_aktivity": {
+          "bursty": 656
+        },
+        "prehratie": "/home/eh/projects/hyptcn3/data/safeguard/far-dev-benign-v6/benign-v6-20261026_24_dev_bursty",
+        "riadkov": 720,
+        "scenario": "bursty",
+        "skorovany_s": 3280,
+        "skorovanych": 656,
+        "skupina": "dev-1",
+        "sledovany_s": 3600.0,
+        "subory_sha256": {
+          "configuration.json": "3996a248ac7b57bfc42ae5f7266dadcc34e8e437a0ecb3a0686c63958207d3f8",
+          "events.jsonl": "440bacf111c97fa6e4cf7563fa41ea9aab5d4780de4dab69392ab8134c7b7844",
+          "status.json": "5f0006fc0e10b108b8c3ec0a1d2c1f2c37e192651e96913abcfc0145d229895b"
+        },
+        "udalosti": 0,
+        "udalosti_integrita": 0,
+        "udalosti_model": 0,
+        "vypadkov": 0,
+        "vypadky_s": 0
+      }
+    },
+    "rola": "dev",
+    "schema": "hyptcn3/safeguard-far/2",
+    "zdroje_udalosti": {
+      "safeguard/bundle.py": "zhodny",
+      "safeguard/features.py": "zhodny",
+      "safeguard/model.py": "zhodny",
+      "safeguard/runtime.py": "zhodny",
+      "tcn/model.py": "zhodny"
+    }
+  }
+}
