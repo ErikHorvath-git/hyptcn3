@@ -35,7 +35,7 @@ casu bez skore. Integrita, vypadky a chyby vstupu su na prijatych relaciach
 korpusu nulove uz z prijatia (scripts/collection.py audit), preto idu do casti
 'dane_prijatim_korpusu' bez intervalu. test_benign je zaverecny test (kap. 5):
 prikaz ho pusti iba s --final, nad commitnutym tcn/eval.py a iba raz na korpus
-(zaznam '<corpus>.test_benign-final.json' vedla indexu). Detekciu utokov ani
+(zaznam '<corpus>.test_benign-final.json' vedla indexu vznikne az po --out). Detekciu utokov ani
 cas do detekcie z toho odvodit nemozno. Ten isty prikaz vyhodnoti aj
 klasifikator profilu zataze (trieda okna = scenar relacie), aby jedno
 zaverecne spustenie na test_benign dalo oboje.
@@ -505,13 +505,19 @@ def _hlavny(argv=None):
     elif zmeny:
         doc["commit_note"] = "neulozene zmeny: %s; kod urcuje evaluator_sha256" % ", ".join(zmeny)
     text = json.dumps(doc, ensure_ascii=False, indent=2, sort_keys=True, allow_nan=False) + "\n"
-    if a.final:
-        # Jedno zaverecne FAR na korpus: zaznam vedla indexu vznikne pred vysledkom.
-        with open(os.path.realpath(a.corpus) + ".test_benign-final.json", "x", encoding="utf-8") as fh:
-            json.dump({"date": doc["date"], "out": os.path.realpath(a.out), "commit": commit,
-                       "evaluator_sha256": doc["evaluator_sha256"],
-                       "manifest_sha256": values["balik"]["manifest_sha256"]}, fh, indent=2)
+    # Vystup vznikne skor nez zaznam o zaverecnom teste: ked --out existuje alebo
+    # jeho adresar chyba, jedine zaverecne FAR korpusu sa tym nespotrebuje.
     with open(a.out, "x", encoding="utf-8") as fh:
+        if a.final:
+            try:
+                with open(os.path.realpath(a.corpus) + ".test_benign-final.json", "x", encoding="utf-8") as zaznam:
+                    json.dump({"date": doc["date"], "out": os.path.realpath(a.out), "commit": commit,
+                               "evaluator_sha256": doc["evaluator_sha256"],
+                               "manifest_sha256": values["balik"]["manifest_sha256"]}, zaznam, indent=2)
+            except FileExistsError:
+                fh.close()
+                os.unlink(a.out)
+                raise
         fh.write(text)
     spolu = values["merane"]["spolu"]
     klas = values["klasifikacia_aktivit"]

@@ -253,3 +253,17 @@ def test_klasifikacia_aktivit_na_oknach_a_relaciach():
     assert 0 < dolna < 0.5 < horna < 1
     with pytest.raises(ValueError, match="nie je triedou"):
         klasifikacia_aktivit({"a": dict(a, scenario="bursty")}, ["quiet", "steady"])
+
+
+def test_existujuci_vystup_nespotrebuje_zaverecny_test(tmp_path, monkeypatch):
+    korpus, sessions = _korpus(tmp_path, roly=("test_benign",))
+    prehratia = [_prehratie(tmp_path, korpus, sessions[0])]
+    monkeypatch.setattr(ev, "_git_stav", lambda: ("abc", []))
+    obsadeny = tmp_path / "uz_je.json"
+    obsadeny.write_text("{}")
+    argv = ["far", "--corpus", str(korpus), "--role", "test_benign", "--final", "--replay", *map(str, prehratia)]
+    with pytest.raises(FileExistsError):
+        _hlavny(argv + ["--out", str(obsadeny)])
+    assert not (tmp_path / "corpus.json.test_benign-final.json").exists()
+    assert obsadeny.read_text() == "{}"
+    assert _hlavny(argv + ["--out", str(tmp_path / "vysledok.json")]) == 0
