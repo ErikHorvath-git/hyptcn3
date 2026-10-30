@@ -237,14 +237,16 @@ počas čítania VM nezastavuje a nad bežiacou VM je **UNVERIFIED**.
 ### 1.3 Ostatné časti systému a ich hranice
 
 Počty riadkov sú zistené 2026-10-29 nad commitom `709ee7f` príkazom `wc -l` nad uvedenými
-súbormi (bez testov; pri `lab/` nad `git ls-files lab`).
+súbormi (bez testov; pri `lab/` nad `git ls-files lab`); `tcn/eval.py` 2026-10-30 po pridaní
+vyhodnocovača.
 
 | Komponent | Cesta | Riadkov | Čo robí |
 |---|---|---:|---|
 | príznaky snímky | `features/*.py` okrem `normalize.py`, `manifest.py` a `stream.py` | 2677 | vektor snímky z RAM a objektov hosťa (`snapshot.py`), per-bin blok zo sidecaru a okná (`windows.py`), politiky platnosti (`quality.py`), archív sedenia (`archive.py`), index korpusu (`dataset.py`), Python referencia per-bin vektora (`perbin.py`, `crosscheck.py`) |
 | detektor | `safeguard/*.py` | 2001 | `Frame`, okno a normalizácia (`features.py`), modely, tréning, balík modelu, detektor (`runtime.py`), vlastný proces zberača (`supervisor.py`), CLI `python3 -m safeguard` |
 | TCN | `tcn/model.py` | 143 | kauzálne dilatované bloky, na ktorých stavia `safeguard/model.py` |
-| staršia 22-stĺpcová cesta | `tcn/train.py`, `score.py`, `eval.py`, `baselines.py`; `features/normalize.py`, `manifest.py`, `stream.py`; `scripts/detektor.py`, `soft_rt_check.py` | 578, 383, 151, 181; 264, 335, 56; 154, 178 | tréning, skórovanie, metriky a baseline nad 22-stĺpcovým vektorom snímky, jeho normalizácia a okná, detektor nad touto cestou a kontrola časovania nad sidecarmi a výstupom `tcn.score`; diagnostická a historická, v repozitári ostáva do konca experimentov |
+| vyhodnotenie | `tcn/eval.py` | 533 | FAR za hodinu z alarmových udalostí a presnosť klasifikátora aktivít z prehratí `safeguard replay` (`python3 -m tcn.eval far`, od `591a061`); metriky staršej cesty (`vyhodnot`, `tabulka`, `uloz`) |
+| staršia 22-stĺpcová cesta | `tcn/train.py`, `score.py`, `baselines.py`; `features/normalize.py`, `manifest.py`, `stream.py`; `scripts/detektor.py`, `soft_rt_check.py` | 578, 383, 181; 264, 335, 56; 154, 178 | tréning, skórovanie, metriky a baseline nad 22-stĺpcovým vektorom snímky, jeho normalizácia a okná, detektor nad touto cestou a kontrola časovania nad sidecarmi a výstupom `tcn.score`; diagnostická a historická, v repozitári ostáva do konca experimentov |
 | zber korpusu | `scripts/collection.py`, `campaign.py`, `collection_archive.py`, `lab_capture.sh` | 944, 809, 501, 110 | plán, zber, audit a archív benígnych sedení, kampaň |
 | laboratórium | `scripts/labctl.py`, `lab/` | 368, 558 | serverová VM `hyptcn-lab` (klon `hyptcn-guest`, voľba `--source`) a jej služby |
 | etapa útokov | `scripts/poc/*.sh`, `scripts/poc/*.c`, `scripts/aktivita.sh`, `scripts/mb_fetch.py`, `harness/net_isolated.*` | 188, 93, 130, 173, 53 | pripravené stavebné bloky; táto etapa sa ešte neuskutočnila ([`METODIKA_ZBERU.sk.md`](METODIKA_ZBERU.sk.md), časť 7) |
@@ -260,8 +262,9 @@ zo staršej cesty používa iba `tcn/model.py`. Tok od snímky po udalosť je v 
 Podrobnosti detektora sú v [`SAFEGUARD.sk.md`](SAFEGUARD.sk.md), protokol zberu
 v [`METODIKA_ZBERU.sk.md`](METODIKA_ZBERU.sk.md) a [`AUTOMATICKY_ZBER.sk.md`](AUTOMATICKY_ZBER.sk.md),
 laboratórium v [`LAB.sk.md`](LAB.sk.md).
-Vyhodnocovač falošných alarmov za hodinu a času do detekcie nad udalosťami `safeguard`
-zatiaľ neexistuje.
+Falošné alarmy za hodinu a presnosť klasifikátora z prehratí `safeguard` počíta
+`python3 -m tcn.eval far` ([`SAFEGUARD.sk.md`](SAFEGUARD.sk.md)); čas do detekcie a podiel
+detegovaných incidentov zatiaľ nepočíta žiadny kód.
 
 ## 2. Vrstvy zberača
 

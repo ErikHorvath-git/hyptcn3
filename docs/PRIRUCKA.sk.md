@@ -14,9 +14,9 @@ generovaný a needituje sa ručne — ako, hovorí kapitola 10.
 Program číta pamäť bežiaceho virtuálneho stroja zvonku, z hostiteľa, a periodicky z nej
 ukladá snímky. Druhý program zo snímky poskladá zoznam procesov, modulov jadra a sieťových
 spojení tak, ako ich v tej chvíli videl hosťovaný systém. Z každej snímky sa počíta krátky
-číselný vektor o tom, kde a ako sa pamäť oproti predchádzajúcej zmenila; vektory idú za
-sebou do okien pre TCN prediktor normálu v balíku `safeguard/` (`python3 -m safeguard`), ktorý z chyby
-predikcie a z kontrol integrity robí alarm. Model nad serverovým korpusom zatiaľ natrénovaný nie je.
+číselný vektor o tom, kde a ako sa pamäť oproti predchádzajúcej zmenila; vektory idú za sebou do okien pre
+TCN prediktor normálu v balíku `safeguard/` (`python3 -m safeguard`), ktorý z chyby predikcie a z kontrol
+integrity robí alarm. Model nad serverovým korpusom je natrénovaný, záverečný test zatiaľ nebežal (kapitola 8).
 
 ## 2. Čo treba mať
 
@@ -127,7 +127,7 @@ iba na riadkoch role `train` a pri prehrávaní ani živom skórovaní sa znova 
 je skóre; samostatný klasifikátor určí profil záťaže. Kalibrovaný prah s pravidlom k z n robí zo
 skóre alarm, nález integrity ho vyvolá sám (`safeguard/runtime.py`). Staršia diagnostická cesta
 (`tcn/train.py`, `tcn/score.py`, `scripts/detektor.py`) zostáva do konca experimentov; jej prediktor
-sa trénoval iba na krátkych benígnych sedeniach, nad korpusom `benign-v6-20261026` zatiaľ nič (L16).
+sa trénoval iba na krátkych benígnych sedeniach, nie na korpuse `benign-v6-20261026`.
 
 | príkaz zberača | čo robí |
 |---|---|
@@ -170,16 +170,16 @@ Commity, z ktorých merania pochádzajú:
 
 ## 8. Čo nefunguje a čo ešte nie je
 
-Detekčná cesta `safeguard/` je implementovaná, **model nad serverovým korpusom však natrénovaný
-nie je**: korpus `benign-v6-20261026` je nazbieraný, tréning a nezávislé vyhodnotenie zostávajú
-a `smoke` overuje iba mechaniku (`docs/SAFEGUARD.sk.md`, L16). Vyhodnocovač FAR/h a času do
-detekcie zatiaľ nie je; otvorené body voči zadaniu vlastní `docs/STAV.sk.md`. Živá latencia
-snímka → skóre počas zberu meraná nie je, len spracovanie uložených snímok (napr. staršou
-cestou `tcn.score`, `data/results/latency_score_20260919.json`; L12). Slovo „real-time“ v názve
-práce preto znamená periodický zber s meraným časom cyklu (kapitola 7). Presnosť voči reálnym
-malvérovým vzorkám zatiaľ nebola meraná; syntetický scenár sa za také meranie nevydáva. Plán
-ďalšej etapy je v `docs/METODIKA_ZBERU.sk.md`. Pri načítaní BPF programu sa objaví nefatálne
-`@@LIBBPF@@` — zber funguje, príčina neznáma.
+Modely detekčnej cesty `safeguard/` sú natrénované na korpuse `benign-v6-20261026`, `python3 -m tcn.eval far`
+ich však vyhodnotil iba na role `dev`, ktorá vyberala checkpointy: **výsledok nie je odložený**. Klasifikátor
+na nej nerozlíšil `steady` od `read_heavy` a zamieňal `mixed` s `write_heavy`. Záverečný test na `test_benign`
+zatiaľ nebežal, čas do detekcie nepočíta žiadny kód a `smoke` overuje iba mechaniku (`docs/SAFEGUARD.sk.md`,
+L16); otvorené body voči zadaniu vlastní `docs/STAV.sk.md`. Živá latencia snímka → skóre počas zberu meraná
+nie je, len spracovanie uložených snímok (napr. staršou cestou `tcn.score`,
+`data/results/latency_score_20260919.json`; L12). Slovo „real-time“ v názve práce preto znamená periodický
+zber s meraným časom cyklu (kapitola 7). Presnosť voči reálnym malvérovým vzorkám zatiaľ nebola meraná;
+syntetický scenár sa za také meranie nevydáva. Plán ďalšej etapy je v `docs/METODIKA_ZBERU.sk.md`. Pri
+načítaní BPF programu sa objaví nefatálne `@@LIBBPF@@` — zber funguje, príčina neznáma.
 
 Ostatné obmedzenia vlastní `docs/LIMITACIE.md` (@@LIMITACIE@@); prerozprávať ich tu by
 znamenalo držať dve znenia toho istého. Nadpisy sú preto dosadené z neho, skrátené:

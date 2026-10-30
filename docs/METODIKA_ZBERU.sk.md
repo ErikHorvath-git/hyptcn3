@@ -9,7 +9,8 @@ Strojovo čitateľná konfigurácia: [`config/collection-v2.json`](../config/col
 Zber a audit jednej session: [`scripts/collection.py`](../scripts/collection.py);
 celá kampaň: [`scripts/campaign.py`](../scripts/campaign.py).
 Implementovaný tréning, načítanie a detektor:
-[`SAFEGUARD.sk.md`](SAFEGUARD.sk.md), CLI `python3 -m safeguard`.
+[`SAFEGUARD.sk.md`](SAFEGUARD.sk.md), CLI `python3 -m safeguard`; vyhodnotenie FAR
+a klasifikátora z prehratí: `python3 -m tcn.eval far`.
 Rozhodnutia platia pre jednu konfiguráciu Linux/QEMU/KVM; prenos na iné jadro,
 veľkosť RAM alebo iný serverový stack je osobitný experiment.
 
@@ -252,7 +253,10 @@ diagnostiku; CLI `tcn.hodnotenie` bolo 2026-10-29 odstránené.
 provenienciu a nepoužíva testové polia pri fitovaní.
 Spoločný balík modelov uchová normalizáciu, oba modely, kalibráciu aj kontrakt
 vstupu. Diagnostický syntetický model sa nesmie zameniť za finálny tréning.
-Záverečné vyhodnotenie na `test_benign` a detekčné metriky z časti 7 zatiaľ
+Alarmové udalosti, FAR benígnej prevádzky s intervalom a podiel času bez skóre z časti 7
+aj presnosť klasifikátora profilu záťaže počíta z prehratí `python3 -m tcn.eval far`
+(`tcn/eval.py`); `test_benign` vyhodnotí iba s `--final`, s commitnutým `tcn/eval.py`
+a raz na korpus. Podiel detegovaných incidentov a oneskorenie od aktivácie zatiaľ
 implementované nie sú.
 
 ## 6. Spustenie pilotu a prijatie dát
@@ -375,7 +379,9 @@ novým modelom bude samostatným overením; pilot výskumného zberu ho nenahrá
 
 **Klasifikácia aktivít:** samostatný cieľ od anomálie. Profil generátora je
 známy experimentálny režim a trieda implementovaného klasifikátora, nie pravda
-o každom procese v RAM. Jeho presnosť na reálnom korpuse sa ešte musí zmerať.
+o každom procese v RAM. Jeho presnosť počíta `python3 -m tcn.eval far` spolu s FAR
+(trieda okna je scenár session, nezávislou jednotkou je session); na odloženej role
+`test_benign` sa ešte musí zmerať.
 Pri budúcej klasifikácii
 konkrétnej aktivity sa uchová presný interval začiatku/konca a dôkaz vykonania;
 okná cez prechod majú označenie `transition`, nie náhodnú triedu celej session.

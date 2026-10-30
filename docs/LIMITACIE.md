@@ -668,6 +668,7 @@ spoločným diskom VM a snímok (2026-10-21), ktoré párované meranie nenahrá
 | vplyv zberu na hostiteľa | `UNVERIFIED` (pamäť zmeraná, CPU zaznamenané, nevyhodnotené) | pamäť: zberač 1.1 s `output.mlock` drží frontu uzamknutú v RAM (najväčšia možná plná snímka + 512 MiB), monitor kampane ju zaznamenáva (`Mlocked`); diagnostika 2026-10-25 pri VM s 2 GiB: VmRSS po uzamknutí 2596 {{res:collection_writer_diagnostic_20261025_timing.json:values.collector_mlock.vmrss_mib}} MiB, `Mlocked` hostiteľa počas zberu najviac 2609 {{res:collection_writer_diagnostic_20261025_timing.json:values.during_capture.mlocked_mib_max}} MiB ([záznam](../data/results/collection_writer_diagnostic_20261025_timing.json), [MERANIA.md](MERANIA.md) 2026-10-25; jeden 40-minútový beh mimo korpusu); chýba vyhodnotená spotreba CPU celého procesu (monitor hostiteľa ju zaznamenáva po 1 s za všetky vlákna spolu, teda aj za `vmic-writer` so SHA-256 a `vmic-log`, ako `procs.vmicollect.cpu_pct` v `host_monitor.jsonl`; záznam diagnostiky ju nevyhodnocuje a má iba maximum vzorkovacieho vlákna na cyklus, `rusage_max.cpu_ms`), priemer za celý beh a vplyv na ostatnú záťaž hostiteľa; pozorovaný je vplyv spätného zápisu plnej snímky na I/O hostiteľa pri spoločnom disku VM a snímok: 12.0 {{res:collection_io_interference_20261021.json:values.writeback_burst_after_second_full.duration_s}} s pri iowait až 51.163 {{res:collection_io_interference_20261021.json:values.writeback_burst_after_second_full.iowait_max_pct}} % ([záznam](../data/results/collection_io_interference_20261021.json), zamietnutý pilot so zberačom 1.0) |
 | dlhý beh s retenciou | `UNVERIFIED` | beh jedného procesu zberača rádovo v hodinách s retenciou: zmeškané sloty, rast obsadeného miesta, správanie pri reštarte domény počas behu; zatiaľ existujú iba hodinové behy bez retencie: kampaň `benign-v4-20261022` mala 37 {{res:collection_campaign_benign_v4_20261022.json:n}} samostatných behov zberača po 720 {{res:collection_campaign_benign_v4_20261022.json:values.sessions.0.collector_end.snapshots}} cykloch (nový proces zberača v každej session, reštart hosťa na hraniciach skupín), spolu 26640 {{res:collection_writeback_stall_20261024.json:n}} cyklov a jeden zmeškaný slot pri spätnom zápise na SSD (zberač 1.0, [záznam](../data/results/collection_campaign_benign_v4_20261022.json), [MERANIA.md](MERANIA.md) 2026-10-25); zberač 1.1 bežal v kampani `benign-v5-20261025` tiež iba v hodinových behoch bez retencie: 18 {{res:collection_campaign_benign_v5_20261025.json:n}} behov po 720 {{res:collection_campaign_benign_v5_20261025.json:values.sessions.0.collector_end.snapshots}} cykloch (nový proces zberača v každej session), 0 {{res:collection_campaign_benign_v5_20261025.json:values.summary.scheduler_skips}} hlásení plánovača o zahodenom slote ([záznam](../data/results/collection_campaign_benign_v5_20261025.json), [MERANIA.md](MERANIA.md) 2026-10-26); v kampani `benign-v6-20261026` 48 {{res:collection_campaign_benign_v6_20261026.json:n}} behov po 720 {{res:collection_campaign_benign_v6_20261026.json:values.sessions.0.collector_end.snapshots}} cykloch, 0 {{res:collection_campaign_benign_v6_20261026.json:values.summary.scheduler_skips}} hlásení plánovača o zahodenom slote ([záznam](../data/results/collection_campaign_benign_v6_20261026.json), [MERANIA.md](MERANIA.md) 2026-10-29); reštart domény počas behu jedného procesu zberača doložil iba krátky beh s 8 {{res:a1_restart_20261005T204555Z.json:n_sidecars}} snímkami nad doménou `hyptcn-guest` ([záznam](../data/results/a1_restart_20261005T204555Z.json), 2026-10-05) |
 | správanie pri periódach iných než 2 s a 5 s | `UNVERIFIED` | sweep periódy a veľkosti bloku |
+| FAR benígnej prevádzky a presnosť klasifikátora profilu záťaže na odloženej role `test_benign` | nezmerané | jediné spustenie `python3 -m tcn.eval far --role test_benign --final` nad prehratiami všetkých 12 {{res:safeguard_train_benign_v6_20261029.json:values.sessions_by_role.test_benign}} session `test_benign` balíkom `server-v2-benign-v6` (raz na korpus, rozhodnutie vlastníka; [`SAFEGUARD.sk.md`](SAFEGUARD.sk.md)); rola `dev` je vyhodnotená ([záznam](../data/results/safeguard_far_dev_benign_v6_20261029_b.json)), ale vyberala checkpointy prediktora aj klasifikátora, takže jej FAR ani presnosť nie sú odložené a do textu sa ako záverečný výsledok nesmú dostať |
 | presnosť detekcie voči reálnym malvérovým vzorkám | nezmeraná | plánovaná izolovaná etapa (`METODIKA_ZBERU.sk.md`, kap. 7), zatiaľ neuskutočnená; PoC techniky `scripts/poc/` a sťahovanie vzoriek `scripts/mb_fetch.py` existujú, ale nemajú artefakt (`UNVERIFIED`) — podrobne v [L16](#l16--presnosť-detekcie-malvéru-nebola-meraná) |
 
 **Čo z tejto tabuľky medzičasom odišlo.** Latencia snímka → príznakový vektor tu stála
@@ -688,11 +689,14 @@ historická a diagnostická. Nezmerané je niečo iné: skórovanie sa zatiaľ m
 `data/results/latencia_predikcia_real_20261005.json`; obe vyrobil `tcn/score.py`).
 Spoločný beh zberača a detektora `python3 -m safeguard run` je podľa
 [`SAFEGUARD.sk.md`](SAFEGUARD.sk.md) `UNVERIFIED`, takže číslo pre živú cestu nie je.
-Druhá vec, ktorá z toho čísla nevyplýva: natrénované sú iba diagnostické modely
+Druhá vec, ktorá z toho čísla nevyplýva: kvalita rozhodnutia. Obe merania bežali s modelom,
+ktorý nebol natrénovaný na korpuse (náhodné váhy v `latency_score_20260919.json`, smoke model
+v `latencia_predikcia_real_20261005.json`); natrénované boli dovtedy iba diagnostické modely
 (syntetický model v `data/results/safeguard_validation_20261013_a.json`, malé idle a lab
-sedenia v `data/results/trenovanie_prediktor_*.json`). Model na korpuse
-`benign-v6-20261026` zatiaľ natrénovaný nie je, takže by šlo o čas cesty, nie o kvalitu
-rozhodnutia (L16).
+sedenia v `data/results/trenovanie_prediktor_*.json`). Balík natrénovaný 2026-10-29 na korpuse
+`benign-v6-20261026` ([záznam](../data/results/safeguard_train_benign_v6_20261029.json)) v žiadnom
+meraní latencie nebežal a aj s ním by šlo o čas cesty, nie o kvalitu rozhodnutia (L16).
+(Do 2026-10-30 tu stálo, že model na korpuse `benign-v6-20261026` natrénovaný nie je.)
 
 Ďalšia nedoriešená vec, ktorá patrí do priznaných: pri načítaní BPF programu sa objavuje
 nefatálne hlásenie `libbpf: Error in bpf_create_map_xattr(pages): -EINVAL. Retrying
@@ -720,6 +724,8 @@ zberača neukladá.
 > typu „minimálny vplyv na virtuálny stroj“ alebo „spracovanie v reálnom čase“ by preto
 > boli tvrdením bez podkladu. Tam, kde je to potrebné, sa namiesto nich uvádza konkrétna
 > perióda zberu a namerané trvanie jednotlivých fáz cyklu, ktoré uložené artefakty majú.
+> Falošné alarmy a presnosť klasifikátora profilu záťaže sú vyhodnotené iba na vývojovej
+> množine, ktorá slúžila na výber modelu; na odloženej testovacej množine zmerané neboli.
 > Presnosť voči reálnym malvérovým vzorkám nebola meraná.
 
 ---
@@ -814,6 +820,37 @@ vyhodnotení ho treba brať ako možný zmätočný faktor (napr. porovnať rozd
 **Formulácia do textu práce:** „Podiel nulových stránok závisí aj od toho, koľko pamäte hosťa už
 hypervízor alokoval; keďže skupiny korpusu vznikali postupne na jednom procese virtuálneho
 stroja, tento príznak sa medzi skupinami posúva aj bez zmeny správania hosťa."
+
+**Klasifikátor profilu záťaže nad týmto vektorom zamieňal dva páry profilov (rola `dev`,
+2026-10-29).** Balík `server-v2-benign-v6` mal na vývojovej role presnosť na okná
+0.663 {{res:safeguard_far_dev_benign_v6_20261029_b.json:values.klasifikacia_aktivit.okna.presnost}}
+a macro-F1
+0.607 {{res:safeguard_far_dev_benign_v6_20261029_b.json:values.klasifikacia_aktivit.okna.f1_macro}}
+([záznam](../data/results/safeguard_far_dev_benign_v6_20261029_b.json),
+`values.klasifikacia_aktivit`). `quiet`, `bursty` a `read_heavy` rozpoznal vo všetkých oknách.
+Okná `steady` označil ako `read_heavy`
+(653 {{res:safeguard_far_dev_benign_v6_20261029_b.json:values.klasifikacia_aktivit.okna.confusion.4.3}}
+z
+656 {{res:safeguard_far_dev_benign_v6_20261029_b.json:values.klasifikacia_aktivit.okna.na_triedu.steady.n}},
+žiadne správne) a profily `mixed` a `write_heavy` zamieňal navzájom: správne bolo
+286 {{res:safeguard_far_dev_benign_v6_20261029_b.json:values.klasifikacia_aktivit.okna.confusion.1.1}}
+okien `mixed` a
+356 {{res:safeguard_far_dev_benign_v6_20261029_b.json:values.klasifikacia_aktivit.okna.confusion.5.5}}
+okien `write_heavy`, každej triedy z
+656 {{res:safeguard_far_dev_benign_v6_20261029_b.json:values.klasifikacia_aktivit.okna.na_triedu.mixed.n}}.
+Väčšinová predikcia sedela v
+4 {{res:safeguard_far_dev_benign_v6_20261029_b.json:values.klasifikacia_aktivit.relacie.spravnych}}
+zo
+6 {{res:safeguard_far_dev_benign_v6_20261029_b.json:values.klasifikacia_aktivit.relacie.spolu}}
+session. Rola `dev` vyberala checkpoint klasifikátora (epocha
+1 {{res:safeguard_train_benign_v6_20261029.json:values.train_result.training.selected_classifier_epoch}},
+v ďalších epochách bola strata na `dev` vyššia), takže čísla nie sú odložené a výsledok na
+`test_benign` chýba. Či tieto profily nerozlišuje vektor, alebo model, sa nezisťovalo.
+
+**Formulácia do textu práce:** „Klasifikátor profilu záťaže na vývojovej množine nerozlíšil
+profil steady od read_heavy a zamieňal profily mixed a write_heavy. Vývojová množina slúžila
+na výber modelu, preto to nie je nezávislé meranie; výsledok na odloženej testovacej množine
+zatiaľ nie je."
 
 ---
 
@@ -1005,9 +1042,22 @@ v `scripts/poc/` (spúšťa ich starý harness `scripts/session.sh` nad doménou
 `hyptcn-guest`, ponechaný ako historický a diagnostický, L6) a sťahovanie vzoriek
 `scripts/mb_fetch.py`. Runner izolovanej útokovej etapy nad serverovým stackom
 laboratória ani vyhodnocovač udalostí `safeguard` (FAR za hodinu, čas do detekcie)
-zatiaľ neexistujú, takže na rozdiel od vety „vtedy sa nemení kód“ v historickom texte
-nižšie treba dopísať aj kód. Platí prvá časť nadpisu: v `data/results/` nie je
-detekčná metrika.
+v tom čase neexistovali (vyhodnocovač FAR pribudol v commite `591a061`, pozri nižšie), takže
+na rozdiel od vety „vtedy sa nemení kód“ v historickom texte nižšie treba dopísať aj kód.
+Platí prvá časť nadpisu: v `data/results/` nie je metrika detekcie útokov ani malvéru.
+
+**Aktualizácia 2026-10-30:** vyhodnocovač udalostí `safeguard` pre benígnu prevádzku
+existuje: `python3 -m tcn.eval far` (`tcn/eval.py`, commity `591a061` a `a1a4b9b`) počíta
+z prehratí jednej roly korpusu alarmové udalosti, FAR za hodinu s intervalom a presnosť
+klasifikátora profilu záťaže ([`SAFEGUARD.sk.md`](SAFEGUARD.sk.md)). Čas do detekcie
+a podiel detegovaných incidentov nepočíta žiadny kód a runner útokovej etapy stále nie je.
+Balík natrénovaný na korpuse `benign-v6-20261026`
+([záznam](../data/results/safeguard_train_benign_v6_20261029.json)) je vyhodnotený iba
+na role `dev` ([záznam](../data/results/safeguard_far_dev_benign_v6_20261029_b.json)),
+ktorá vyberala jeho checkpointy, takže výsledok nie je odložený; záverečné spustenie na
+`test_benign` neprebehlo. V `dev` útok nebežal a trieda klasifikátora je nastavenie záťaže,
+nie škodlivosť: ani jedno z týchto čísel nie je metrikou detekcie útokov alebo malvéru,
+prvá časť nadpisu teda platí ďalej.
 
 ### Historické zdôvodnenie pôvodného rozsahu
 
@@ -1214,7 +1264,11 @@ session (`values.sessions.*.integrity_inconclusive_rows.text_integrity`), napr.
 720 {{res:collection_campaign_benign_v6_20261026.json:values.sessions.0.integrity_inconclusive_rows.text_integrity}}
 z
 720 {{res:collection_campaign_benign_v6_20261026.json:values.sessions.0.snapshots}}
-v session 1. Audity dôvod neuzavretia neukladajú; záznamy v `docs/MERANIA.md`
+v session 1. Detektor `safeguard` ju pri prehratí roly `dev` balíkom `server-v2-benign-v6`
+mal neuzavretú vo všetkých
+4320 {{res:safeguard_far_dev_benign_v6_20261029_b.json:values.dane_prijatim_korpusu.integrita_neuzavrete.text_integrity}}
+riadkoch ([záznam](../data/results/safeguard_far_dev_benign_v6_20261029_b.json), 2026-10-29).
+Audity dôvod neuzavretia neukladajú; záznamy v `docs/MERANIA.md`
 z 2026-10-06 a 2026-10-13 ho uvádzajú ako chýbajúcu baseline (tohto bootu).
 
 **Formulácia do textu práce.**

@@ -1,6 +1,6 @@
 # Príručka k hyptcn3
 
-Vstupný dokument repozitára; stav kódu a artefaktov k 2026-10-29. Súbor je
+Vstupný dokument repozitára; stav kódu a artefaktov k 2026-10-30. Súbor je
 generovaný a needituje sa ručne — ako, hovorí kapitola 10.
 
 ## 1. Čo to je
@@ -8,9 +8,9 @@ generovaný a needituje sa ručne — ako, hovorí kapitola 10.
 Program číta pamäť bežiaceho virtuálneho stroja zvonku, z hostiteľa, a periodicky z nej
 ukladá snímky. Druhý program zo snímky poskladá zoznam procesov, modulov jadra a sieťových
 spojení tak, ako ich v tej chvíli videl hosťovaný systém. Z každej snímky sa počíta krátky
-číselný vektor o tom, kde a ako sa pamäť oproti predchádzajúcej zmenila; vektory idú za
-sebou do okien pre TCN prediktor normálu v balíku `safeguard/` (`python3 -m safeguard`), ktorý z chyby
-predikcie a z kontrol integrity robí alarm. Model nad serverovým korpusom zatiaľ natrénovaný nie je.
+číselný vektor o tom, kde a ako sa pamäť oproti predchádzajúcej zmenila; vektory idú za sebou do okien pre
+TCN prediktor normálu v balíku `safeguard/` (`python3 -m safeguard`), ktorý z chyby predikcie a z kontrol
+integrity robí alarm. Model nad serverovým korpusom je natrénovaný, záverečný test zatiaľ nebežal (kapitola 8).
 
 ## 2. Čo treba mať
 
@@ -30,7 +30,7 @@ make -C vmicollect test   # plná snímka, tri delty, obnova reťazca, kontroln�
 python3 -m pytest -q      # parser, príznaky, tcn, safeguard a skripty zberu
 ```
 
-`make test` prejde celú cestu zberu nad syntetickým obrazom veľkosti 16 MiB, ktorý si sám vyrobí. Testov je 684 prešlých a 24 preskočených v `pytest` (spolu 708 zozbieraných; preskočený test nie je prešiel) a 4 v C (`alarm_test`, `hole_test`, `perbin_test`, `retention_test`).
+`make test` prejde celú cestu zberu nad syntetickým obrazom veľkosti 16 MiB, ktorý si sám vyrobí. Testov je 706 prešlých a 24 preskočených v `pytest` (spolu 730 zozbieraných; preskočený test nie je prešiel) a 4 v C (`alarm_test`, `hole_test`, `perbin_test`, `retention_test`).
 
 ## 4. Ako vznikne snímka
 
@@ -70,7 +70,7 @@ nič nezapisuje“ v kapitole 6 platí o binárke; skript okolo nej `data/result
 | `vmicollect/` | zberač snímok pamäte VM: C a eBPF nad QEMU/KVM | `vmicollect/src/collector.c` | 37 / 12 178 |
 | `guestparse/` | rekonštrukcia procesov, modulov a soketov zo snímky; kontroly integrity | `guestparse/view.py` | 34 / 7 257 |
 | `features/` | per-bin referencia k C, vektor snímky, okná, kvalita riadkov, archív sedenia a index korpusu; staršia normalizácia pre `tcn/` | `features/perbin.py` | 27 / 5 611 |
-| `tcn/` | TCN bloky pre `safeguard/model.py`, baseliny a metriky; staršia diagnostická cesta tréningu a skórovania (`tcn/train.py`, `tcn/score.py`) | `tcn/model.py` | 11 / 1 993 |
+| `tcn/` | TCN bloky pre `safeguard/model.py`, baseliny a metriky; staršia diagnostická cesta tréningu a skórovania (`tcn/train.py`, `tcn/score.py`) | `tcn/model.py` | 12 / 2 644 |
 | `safeguard/` | integrovaná detekčná cesta: okná a normalizácia, modely, kalibrácia, balík a hostiteľský detektor | `safeguard/cli.py` | 16 / 3 378 |
 | `profiles/` | profil jadra hosťa: symboly a offsety polí štruktúr | `profiles/debian12-6.1.0-42-cloud-amd64/README.md` | jeden adresár na verziu jadra hosťa; nový boot rieši preukotvenie (L17) |
 | `scripts/` | zber a audit sedenia, kampaň (`scripts/campaign.py`), laboratórium a premávka, root behy, PoC techniky na validáciu citlivosti (`scripts/poc/`), kontroly tvrdení; staršie diagnostické sedenia a detektor (`scripts/session.sh`, `scripts/detektor.py`) | `scripts/collection.py` | 61 / 18 825 |
@@ -131,7 +131,7 @@ iba na riadkoch role `train` a pri prehrávaní ani živom skórovaní sa znova 
 je skóre; samostatný klasifikátor určí profil záťaže. Kalibrovaný prah s pravidlom k z n robí zo
 skóre alarm, nález integrity ho vyvolá sám (`safeguard/runtime.py`). Staršia diagnostická cesta
 (`tcn/train.py`, `tcn/score.py`, `scripts/detektor.py`) zostáva do konca experimentov; jej prediktor
-sa trénoval iba na krátkych benígnych sedeniach, nad korpusom `benign-v6-20261026` zatiaľ nič (L16).
+sa trénoval iba na krátkych benígnych sedeniach, nie na korpuse `benign-v6-20261026`.
 
 | príkaz zberača | čo robí |
 |---|---|
@@ -206,16 +206,16 @@ Commity, z ktorých merania pochádzajú:
 
 ## 8. Čo nefunguje a čo ešte nie je
 
-Detekčná cesta `safeguard/` je implementovaná, **model nad serverovým korpusom však natrénovaný
-nie je**: korpus `benign-v6-20261026` je nazbieraný, tréning a nezávislé vyhodnotenie zostávajú
-a `smoke` overuje iba mechaniku (`docs/SAFEGUARD.sk.md`, L16). Vyhodnocovač FAR/h a času do
-detekcie zatiaľ nie je; otvorené body voči zadaniu vlastní `docs/STAV.sk.md`. Živá latencia
-snímka → skóre počas zberu meraná nie je, len spracovanie uložených snímok (napr. staršou
-cestou `tcn.score`, `data/results/latency_score_20260919.json`; L12). Slovo „real-time“ v názve
-práce preto znamená periodický zber s meraným časom cyklu (kapitola 7). Presnosť voči reálnym
-malvérovým vzorkám zatiaľ nebola meraná; syntetický scenár sa za také meranie nevydáva. Plán
-ďalšej etapy je v `docs/METODIKA_ZBERU.sk.md`. Pri načítaní BPF programu sa objaví nefatálne
-`libbpf: Error in bpf_create_map_xattr(pages): -EINVAL. Retrying without BTF.` — zber funguje, príčina neznáma.
+Modely detekčnej cesty `safeguard/` sú natrénované na korpuse `benign-v6-20261026`, `python3 -m tcn.eval far`
+ich však vyhodnotil iba na role `dev`, ktorá vyberala checkpointy: **výsledok nie je odložený**. Klasifikátor
+na nej nerozlíšil `steady` od `read_heavy` a zamieňal `mixed` s `write_heavy`. Záverečný test na `test_benign`
+zatiaľ nebežal, čas do detekcie nepočíta žiadny kód a `smoke` overuje iba mechaniku (`docs/SAFEGUARD.sk.md`,
+L16); otvorené body voči zadaniu vlastní `docs/STAV.sk.md`. Živá latencia snímka → skóre počas zberu meraná
+nie je, len spracovanie uložených snímok (napr. staršou cestou `tcn.score`,
+`data/results/latency_score_20260919.json`; L12). Slovo „real-time“ v názve práce preto znamená periodický
+zber s meraným časom cyklu (kapitola 7). Presnosť voči reálnym malvérovým vzorkám zatiaľ nebola meraná;
+syntetický scenár sa za také meranie nevydáva. Plán ďalšej etapy je v `docs/METODIKA_ZBERU.sk.md`. Pri
+načítaní BPF programu sa objaví nefatálne `libbpf: Error in bpf_create_map_xattr(pages): -EINVAL. Retrying without BTF.` — zber funguje, príčina neznáma.
 
 Ostatné obmedzenia vlastní `docs/LIMITACIE.md` (L1 až L18); prerozprávať ich tu by
 znamenalo držať dve znenia toho istého. Nadpisy sú preto dosadené z neho, skrátené:
@@ -243,19 +243,19 @@ znamenalo držať dve znenia toho istého. Nadpisy sú preto dosadené z neho, s
 
 | dokument | čo vlastní | riadkov |
 |---|---|---|
-| `docs/STAV.sk.md` | stav voči zadaniu, otvorené body, legenda blokov A1..H, prostredia | 155 |
-| `docs/ARCHITEKTURA.md` | rozhrania, formát `.vmicd` a sidecaru, tok dát podrobne | 1606 |
-| `docs/MERANIA.md` | log meraní: čo, kedy, akým príkazom a s akým výsledkom | 2817 |
-| `docs/LIMITACIE.md` | L1 až L18: čo systém nevie a čo z toho plynie pre text | 1244 |
+| `docs/STAV.sk.md` | stav voči zadaniu, otvorené body, legenda blokov A1..H, prostredia | 158 |
+| `docs/ARCHITEKTURA.md` | rozhrania, formát `.vmicd` a sidecaru, tok dát podrobne | 1609 |
+| `docs/MERANIA.md` | log meraní: čo, kedy, akým príkazom a s akým výsledkom | 3101 |
+| `docs/LIMITACIE.md` | L1 až L18: čo systém nevie a čo z toho plynie pre text | 1298 |
 | `docs/kontroly.md` | kontroly podozrivých vzorcov a validačný príkaz | 338 |
 | `HONESTY.md` | pravidlá pre čísla a slová v texte práce | 298 |
-| `README.md` | rozcestník repozitára, preklad a testy, pôvod kódu | 100 |
-| `docs/LAB.sk.md` | serverové laboratórium, premávka z hostiteľa a RAM zber | 331 |
-| `docs/METODIKA_ZBERU.sk.md` | protokol zberu, príznaky, rozdelenie korpusu a audit | 412 |
+| `README.md` | rozcestník repozitára, preklad a testy, pôvod kódu | 101 |
+| `docs/LAB.sk.md` | serverové laboratórium, premávka z hostiteľa a RAM zber | 332 |
+| `docs/METODIKA_ZBERU.sk.md` | protokol zberu, príznaky, rozdelenie korpusu a audit | 418 |
 | `docs/KONTROLA_ZBERU.sk.md` | pokrytie okien, kontrola logov a úložisko uloženého zberu | 222 |
 | `docs/AUTOMATICKY_ZBER.sk.md` | kampaň: spustenie, uložené dáta, zastavenie, archív, report | 347 |
 | `docs/PRIPRAVENOST_KAMPANE.sk.md` | pripravenosť kampane a zvyškové riziká (PASS/FAIL/UNVERIFIED) | 140 |
-| `docs/SAFEGUARD.sk.md` | tréning modelového balíka, replay a spustenie detektora | 270 |
+| `docs/SAFEGUARD.sk.md` | tréning modelového balíka, replay a spustenie detektora | 481 |
 | `vmicollect/README.md` | zberač zvnútra: vrstvy, hooky, formáty | 642 |
 | `guestparse/README.md` | parser zvnútra: preklad adries, prechod zoznamami | 180 |
 | `features/PERBIN.md` | definícia príznakov a ich kontrakt | 194 |

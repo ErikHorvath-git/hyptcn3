@@ -13,10 +13,11 @@ z komentárov v kóde a prostredia.
 **Integrovaný safeguard:** [`docs/SAFEGUARD.sk.md`](docs/SAFEGUARD.sk.md).
 `python3 -m safeguard` je detekčná cesta repozitára: tréning, kontrola
 a prehrávanie balíka, sledovanie adresára snímok a spoločný beh zberača
-s detektorom. `smoke` overuje mechaniku na syntetických dátach; tréning nad
-korpusom `benign-v6-20261026`, živý spoločný beh a účinnosť detekcie zostávajú
-na overenie. Staršia cesta `tcn/train.py`, `tcn/score.py` a `scripts/detektor.py`
-ostáva do konca experimentov iba na diagnostiku.
+s detektorom. `smoke` overuje mechaniku na syntetických dátach. Balík z korpusu
+`benign-v6-20261026` je natrénovaný a vyhodnotený zatiaľ iba na role `dev`; záverečný
+test na `test_benign`, živý spoločný beh a účinnosť detekcie útokov zostávajú na overenie.
+Staršia cesta `tcn/train.py`, `tcn/score.py` a `scripts/detektor.py` ostáva do konca
+experimentov iba na diagnostiku.
 
 **Metodika zberu a príznakov:** [`docs/METODIKA_ZBERU.sk.md`](docs/METODIKA_ZBERU.sk.md).
 `make collection-plan` vypíše pridelenie behov do tréningu, vývoja, kalibrácie

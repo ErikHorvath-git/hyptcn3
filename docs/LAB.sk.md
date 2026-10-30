@@ -308,8 +308,9 @@ vypočítať znova. Starý checkpoint slúži iba na mechanické overenie skóro
 
 Samostatný `scripts/detektor.py` patrí k staršej 22-stĺpcovej ceste, ktorá
 zostáva v repozitári do konca experimentov iba na diagnostiku. Integrovaný
-detektor (`replay`, `watch`, `run`) potrebuje balík modelu; model natrénovaný
-na serverovom korpuse zatiaľ neexistuje.
+detektor (`replay`, `watch`, `run`) potrebuje balík modelu; balík
+`server-v2-benign-v6` z korpusu `benign-v6-20261026` je natrénovaný
+([záznam](../data/results/safeguard_train_benign_v6_20261029.json)), živý beh s ním ešte nebol.
 V `scripts/detektor.py` boli opravené tri chyby prepojenia: slicing `deque`
 pri alarme, ignorovanie uloženej dĺžky okna a neplatné argumenty `hold`.
 Detektor zachová reťazce celého vstupného okna a po medzere v poradí snímok

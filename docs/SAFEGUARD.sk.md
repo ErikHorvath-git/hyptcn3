@@ -4,8 +4,8 @@ Balík [`safeguard/`](../safeguard/) spája príznaky, normalizáciu, tréning,
 uloženie modelov a detektor pod `python3 -m safeguard`. Softvérová cesta je
 implementovaná; jej overovanie rozlišuje syntetický test, prehratie uložených
 dát a nový beh nad VM. Diagnostický model nie je modelom natrénovaným na
-serverovom korpuse. Účinnosť proti útokom, falošné alarmy pri dlhšej prevádzke
-a vplyv celého detektora na VM ešte neboli touto integráciou vyhodnotené.
+serverovom korpuse. Účinnosť proti útokom, falošné alarmy na odloženom teste a pri dlhšej
+živej prevádzke a vplyv celého detektora na VM ešte neboli touto integráciou vyhodnotené.
 
 Na zberovom PC audit prijal piloty 3 až 7 podľa [`METODIKA_ZBERU.sk.md`](METODIKA_ZBERU.sk.md)
 (posledný [pilot 7](../data/results/collection_pilot_7_20261026_audit.json), stav v
@@ -14,7 +14,9 @@ Na zberovom PC audit prijal piloty 3 až 7 podľa [`METODIKA_ZBERU.sk.md`](METOD
 Kampane `benign-v2-20261022` až `benign-v5-20261025` sa uzavreli bez úplného korpusu.
 Benígny korpus `benign-v6-20261026` vyšiel z pilota 7 a je nazbieraný: audit prijal
 48 {{res:collection_campaign_benign_v6_20261026.json:values.summary.accepted_sessions}}
-session ([záznam](../data/results/collection_campaign_benign_v6_20261026.json), [MERANIA.md](MERANIA.md)); tréning nad ním
+session ([záznam](../data/results/collection_campaign_benign_v6_20261026.json), [MERANIA.md](MERANIA.md)). Balík modelov
+z neho je natrénovaný a vyhodnotený iba na vývojovej role `dev`, ktorá vyberala jeho checkpointy
+(časť [Natrénovaný balík a rola dev](#natrénovaný-balík-a-rola-dev)); záverečný test na `test_benign`
 a ďalšia experimentálna etapa zostávajú.
 Automatický zber a archiváciu korpusu riadi
 [`scripts/campaign.py`](../scripts/campaign.py); postup je v
@@ -113,9 +115,9 @@ sa počas tréningu nenačíta. Boot/skupina nesmie patriť viacerým rolám.
 hodinu. Nadprahové skóre znamená `score > threshold`. Alarm modelu vyžaduje
 aspoň `k` prekročení v posledných `n` skóre, až keď je celá história dostupná.
 Kalibrácia eviduje aj udalosti pravidla k z n; nezávislé FAR sa meria až na
-odloženom teste. Vyhodnocovač FAR za hodinu a času do detekcie nad udalosťami
-safeguardu zatiaľ neexistuje. Po vyhodnotení testu sa prah neladí podľa jeho
-výsledku.
+odloženom teste. FAR za hodinu z udalostí safeguardu počíta `python3 -m tcn.eval far`
+(časť Príkazy); čas do detekcie zatiaľ nepočíta žiadny kód. Po vyhodnotení testu sa
+prah neladí podľa jeho výsledku.
 
 Nový adresár modelu obsahuje `manifest.json`, `predictor.pt` a `classifier.pt`.
 Manifest ukladá poradie príznakov, biny, geometriu, okno, normalizáciu,
@@ -129,8 +131,8 @@ Príkazy sa spúšťajú z koreňa repozitára. Globálna voľba `--threads N` p
 podpríkazom (predvolene 4) určuje počet vlákien PyTorch. Pri vytváraní
 výstupu musí `--out` označovať nový adresár; `status` číta existujúci výstup.
 Cesty v ukážkach sú ilustračné; index prijatého korpusu `benign-v6-20261026` je na
-zberovom PC v `data/campaigns/benign-v6-20261026/corpus.json` a model z jeho tréningu
-zatiaľ neexistuje.
+zberovom PC v `data/campaigns/benign-v6-20261026/corpus.json` a balík z jeho tréningu
+v `data/models/server-v2-benign-v6` (oba adresáre sú mimo gitu).
 
 **Skúška bez VM a bez roota:**
 
@@ -174,6 +176,49 @@ obnov do nového adresára `raw` a vedľa neho skopíruj `session.json`
 (`scripts.collection_archive restore`, postup v
 [AUTOMATICKY_ZBER.sk.md](AUTOMATICKY_ZBER.sk.md)); potom použi
 `--snapshots <nový>/raw`.
+
+**Vyhodnotenie FAR a klasifikátora z prehratí:**
+
+```sh
+python3 -m tcn.eval far --corpus data/campaigns/benign-v6-20261026/corpus.json --role dev --replay data/safeguard/far-dev-benign-v6/* --campaign data/results/collection_campaign_benign_v6_20261026.json --out data/results/safeguard_far_dev_NAZOV.json
+```
+
+`tcn.eval far` (`tcn/eval.py`) číta výstupy `replay --archive` všetkých session jednej
+roly korpusu, `dev` alebo `test_benign`, a počíta veličiny benígnej prevádzky
+z [`METODIKA_ZBERU.sk.md`](METODIKA_ZBERU.sk.md), kap. 7. Prehratie surových snímok
+(`--snapshots`) neprijme. Prehratie priradí k session indexu podľa SHA-256 archívu.
+Skončí chybou, keď index nie je úplný; keď archív nepatrí session tejto roly alebo
+session chýba, je prehratá dvakrát či nie celá (prehratie musí skončiť `replay_complete`
+a pokryť session od začiatku po koniec); keď prehratia použili rôzne balíky,
+diagnostický balík, balík z iného indexu alebo s inou dĺžkou okna či maximálnou
+medzerou než protokol indexu; aj keď `status.json` nesedí s `events.jsonl`.
+
+`test_benign` vyhodnotí iba s `--final` a `--final` platí iba pre `test_benign`.
+Vyžaduje git a `tcn/eval.py` bez neuložených zmien a beží raz na korpus: po vytvorení
+`--out` vytvorí vedľa indexu záznam s menom indexu a príponou `.test_benign-final.json`
+a pri ďalšom pokuse skončí chybou, lebo záznam už existuje (prázdny `--out` vtedy zmaže).
+Je to poistka postupu, nie dôkaz: po zmazaní záznamu sa dá spustiť znova. Keď `--out`
+existuje alebo jeho adresár chýba, príkaz skončí skôr, než záznam vznikne, a záverečné
+spustenie sa nespotrebuje. Existujúci `--out` sa neprepíše nikdy. `--campaign` doplní
+plánované, prijaté a zamietnuté session zo záznamu kampane, `--alfa` mení hladinu
+intervalov.
+
+Výsledok má schému `hyptcn3/safeguard-far/2`, hlavičku podľa
+[`HONESTY.md`](../HONESTY.md), kap. 4, a navyše `commit_dirty`, `evaluator_sha256`
+a `cwd`. Pod `values.merane` sú alarmové udalosti modelu (riadky s `alarm_event`
+a zdrojom `model_anomaly`, teda nábežné hrany pravidla k z n, nie okná nad prahom),
+FAR za hodinu sledovaného aj skórovaného času s exaktným Garwoodovým intervalom,
+podiel času bez skóre a Pearsonov test rozptylu udalostí medzi session; spolu,
+po skupinách a po scenároch. Počty udalostí integrity, výpadkov senzora a chýb vstupu
+sú v `values.dane_prijatim_korpusu` bez intervalu: prijatie do korpusu zamieta session
+s nálezom integrity, medzerou, chybou čítania alebo neplatným riadkom, takže tieto počty
+nie sú meraním detektora; počty neuzavretých kontrol integrity sú tam tiež.
+`values.klasifikacia_aktivit` hodnotí klasifikátor profilu záťaže (trieda okna je scenár
+jeho session): presnosť a macro-F1 na okná, metriky tried, maticu zámen a počet session
+so správnou väčšinovou predikciou s Clopperovým-Pearsonovým intervalom, lebo okná jednej
+session nie sú nezávislé. `values.zdroje_udalosti` uvádza, či sa súbory skórovania
+zhodujú s provenienciou balíka, `values.relacie` nesie výsledky a SHA-256 súborov
+každého prehratia. Čas do detekcie ani detekciu útokov z výsledku odvodiť nemožno.
 
 **Sledovanie adresára, do ktorého už zapisuje zberač:**
 
@@ -254,16 +299,182 @@ Pri surových snímkach sa zaznamenáva čas extrakcie a celého spracovania.
 starých dát nie je latenciou detekcie. Tieto polia ešte nenahrádzajú
 dlhodobé meranie časovania, spotreby zdrojov a vplyvu na služby hosťa.
 
+## Natrénovaný balík a rola dev
+
+Balík `server-v2-benign-v6` vznikol 2026-10-29 na zberovom PC z čistého stromu v commite
+`51d512d`:
+
+```sh
+.venv/bin/python -m safeguard train --corpus data/campaigns/benign-v6-20261026/corpus.json --out data/models/server-v2-benign-v6 --epochs 10 --seed 0
+```
+
+Adresár balíka je mimo gitu a zostal na zberovom PC. Záznam tréningu s celým manifestom je
+[`safeguard_train_benign_v6_20261029.json`](../data/results/safeguard_train_benign_v6_20261029.json).
+Tréning použil 36 {{res:safeguard_train_benign_v6_20261029.json:n}} session:
+18 {{res:safeguard_train_benign_v6_20261029.json:values.sessions_by_role.train}} roly `train`,
+6 {{res:safeguard_train_benign_v6_20261029.json:values.sessions_by_role.dev}} roly `dev`
+a 12 {{res:safeguard_train_benign_v6_20261029.json:values.sessions_by_role.calibration}} roly `calibration`;
+polia príznakov
+12 {{res:safeguard_train_benign_v6_20261029.json:values.sessions_by_role.test_benign}}
+session `test_benign` nenačítal (`test_feature_arrays_loaded` je `false`). Okien bolo
+11808 {{res:safeguard_train_benign_v6_20261029.json:values.train_result.training.windows.train}}
+v `train`,
+3936 {{res:safeguard_train_benign_v6_20261029.json:values.train_result.training.windows.dev}}
+v `dev` a
+7872 {{res:safeguard_train_benign_v6_20261029.json:values.train_result.training.windows.calibration}}
+v `calibration`. Strata predikcie na `dev` klesala v každej epoche, z
+0.330 {{res:safeguard_train_benign_v6_20261029.json:values.train_result.training.history.0.dev_prediction_loss}}
+na
+0.274 {{res:safeguard_train_benign_v6_20261029.json:values.train_result.training.history.9.dev_prediction_loss}};
+checkpoint prediktora je z epochy
+10 {{res:safeguard_train_benign_v6_20261029.json:values.train_result.training.selected_predictor_epoch}}.
+Strata klasifikátora na `dev` bola najnižšia po prvej epoche,
+1.82 {{res:safeguard_train_benign_v6_20261029.json:values.train_result.training.history.0.dev_classification_loss}},
+a v každej ďalšej vyššia, kým na `train` klesla z
+0.467 {{res:safeguard_train_benign_v6_20261029.json:values.train_result.training.history.0.train_classification_loss}}
+na
+0.0123 {{res:safeguard_train_benign_v6_20261029.json:values.train_result.training.history.9.train_classification_loss}}:
+klasifikátor sa pretrénoval a jeho checkpoint je z epochy
+1 {{res:safeguard_train_benign_v6_20261029.json:values.train_result.training.selected_classifier_epoch}}.
+
+Kalibrácia na role `calibration` nastavila prah
+14.43 {{res:safeguard_train_benign_v6_20261029.json:values.train_result.calibration.threshold}}
+ako kvantil benígnych skóre pre `--fpr`
+0.01 {{res:safeguard_train_benign_v6_20261029.json:values.train_result.calibration.fpr_design}},
+s pravidlom `k`
+3 {{res:safeguard_train_benign_v6_20261029.json:values.train_result.calibration.k}}
+z `n`
+5 {{res:safeguard_train_benign_v6_20261029.json:values.train_result.calibration.n}}.
+Nad prahom bol podiel
+0.0099 {{res:safeguard_train_benign_v6_20261029.json:values.train_result.calibration.window_exceedance_fraction}}
+zo
+7872 {{res:safeguard_train_benign_v6_20261029.json:values.train_result.calibration.n_scores}}
+skóre a pravidlo dalo
+1 {{res:safeguard_train_benign_v6_20261029.json:values.train_result.calibration.alarm_events}}
+udalosť za
+10.93 {{res:safeguard_train_benign_v6_20261029.json:values.train_result.calibration.scorable_hours}}
+skórovaných hodín, teda
+0.0915 {{res:safeguard_train_benign_v6_20261029.json:values.train_result.calibration.calibration_alarm_events_per_hour}}
+za hodinu. Je to frekvencia na dátach, z ktorých vznikol prah, nie FAR.
+
+Prehratia všetkých
+6 {{res:safeguard_far_dev_benign_v6_20261029_b.json:n}}
+session roly `dev` týmto balíkom (`safeguard replay --archive`, výstupy zostali na zberovom
+PC v `data/safeguard/far-dev-benign-v6/`) vyhodnotil `tcn.eval far` v commite `591a061` iba
+pre FAR ([záznam](../data/results/safeguard_far_dev_benign_v6_20261029.json), schéma `/1`)
+a v commite `a1a4b9b` aj s klasifikátorom
+([záznam](../data/results/safeguard_far_dev_benign_v6_20261029_b.json), schéma `/2`);
+časť FAR je v oboch záznamoch zhodná. Hashe váh vo výsledku sa zhodujú so záznamom tréningu.
+Rola `dev` má
+1 {{res:safeguard_far_dev_benign_v6_20261029_b.json:values.merane.skupin}}
+skupinu (boot) a
+4320 {{res:safeguard_far_dev_benign_v6_20261029_b.json:values.merane.spolu.spolu.riadkov}}
+riadkov, v každej session
+656 {{res:safeguard_far_dev_benign_v6_20261029_b.json:values.relacie.benign-v6-20261026_19_dev_steady.skorovanych}}
+skórovaných zo
+720 {{res:safeguard_far_dev_benign_v6_20261029_b.json:values.relacie.benign-v6-20261026_19_dev_steady.riadkov}}.
+Model dal
+1 {{res:safeguard_far_dev_benign_v6_20261029_b.json:values.merane.spolu.spolu.udalosti_model}}
+alarmovú udalosť, v session `benign-v6-20261026_19_dev_steady`
+2555 s {{res:safeguard_far_dev_benign_v6_20261029_b.json:values.relacie.benign-v6-20261026_19_dev_steady.casy_udalosti_model_s.0}}
+po jej začiatku. Skórovaný čas bol
+19680 s {{res:safeguard_far_dev_benign_v6_20261029_b.json:values.merane.spolu.spolu.skorovany_s}}
+z
+21600 s {{res:safeguard_far_dev_benign_v6_20261029_b.json:values.merane.spolu.spolu.sledovany_s}}
+sledovaného; podiel času bez skóre
+0.089 {{res:safeguard_far_dev_benign_v6_20261029_b.json:values.merane.spolu.spolu.bez_skore_cas_podiel}}
+pripadá na zahrievanie okna po plnej snímke na začiatku oboch reťazcov každej session.
+FAR modelu bol
+0.183 {{res:safeguard_far_dev_benign_v6_20261029_b.json:values.merane.spolu.far_h.skorovany.udalosti_h}}
+udalosti za skórovanú hodinu (interval
+0.0046 {{res:safeguard_far_dev_benign_v6_20261029_b.json:values.merane.spolu.far_h.skorovany.dolna_h}}
+až
+1.019 {{res:safeguard_far_dev_benign_v6_20261029_b.json:values.merane.spolu.far_h.skorovany.horna_h}})
+a
+0.167 {{res:safeguard_far_dev_benign_v6_20261029_b.json:values.merane.spolu.far_h.sledovany.udalosti_h}}
+za sledovanú hodinu (interval
+0.0042 {{res:safeguard_far_dev_benign_v6_20261029_b.json:values.merane.spolu.far_h.sledovany.dolna_h}}
+až
+0.929 {{res:safeguard_far_dev_benign_v6_20261029_b.json:values.merane.spolu.far_h.sledovany.horna_h}});
+interval je obojstranný exaktný Garwoodov pri alfa
+0.05 {{res:safeguard_far_dev_benign_v6_20261029_b.json:values.alfa}},
+predpokladá nezávislé udalosti a variabilitu medzi bootmi neobsahuje. Test rozptylu medzi
+session (X²
+5.0 {{res:safeguard_far_dev_benign_v6_20261029_b.json:values.merane.spolu.disperzia.x2}},
+df
+5 {{res:safeguard_far_dev_benign_v6_20261029_b.json:values.merane.spolu.disperzia.df}},
+p
+0.42 {{res:safeguard_far_dev_benign_v6_20261029_b.json:values.merane.spolu.disperzia.p}})
+pri jedinej udalosti nič nehovorí. Udalosti integrity
+(0 {{res:safeguard_far_dev_benign_v6_20261029_b.json:values.dane_prijatim_korpusu.udalosti_integrita}}),
+výpadky
+(0 {{res:safeguard_far_dev_benign_v6_20261029_b.json:values.dane_prijatim_korpusu.vypadkov}})
+a chyby vstupu
+(0 {{res:safeguard_far_dev_benign_v6_20261029_b.json:values.dane_prijatim_korpusu.chyb_vstupu}})
+sú dané prijatím do korpusu, nie meraním detektora. Kontrola textu jadra bola neuzavretá
+vo všetkých
+4320 {{res:safeguard_far_dev_benign_v6_20261029_b.json:values.dane_prijatim_korpusu.integrita_neuzavrete.text_integrity}}
+riadkoch (L18 v [LIMITACIE.md](LIMITACIE.md)) a krížový pohľad na procesy v
+5 {{res:safeguard_far_dev_benign_v6_20261029_b.json:values.dane_prijatim_korpusu.integrita_neuzavrete.process_cross_view}},
+takže všetky kontroly integrity nemal uzavreté ani jeden riadok
+(0 {{res:safeguard_far_dev_benign_v6_20261029_b.json:values.dane_prijatim_korpusu.integrita_uzavretych_riadkov}}).
+Súbory skórovania (`values.zdroje_udalosti`) sa zhodovali s provenienciou balíka.
+
+Klasifikátor profilu záťaže mal na `dev` presnosť na okná
+0.663 {{res:safeguard_far_dev_benign_v6_20261029_b.json:values.klasifikacia_aktivit.okna.presnost}}
+a macro-F1
+0.607 {{res:safeguard_far_dev_benign_v6_20261029_b.json:values.klasifikacia_aktivit.okna.f1_macro}}
+nad
+3936 {{res:safeguard_far_dev_benign_v6_20261029_b.json:values.klasifikacia_aktivit.okna.n}}
+oknami; väčšinová predikcia sedela v
+4 {{res:safeguard_far_dev_benign_v6_20261029_b.json:values.klasifikacia_aktivit.relacie.spravnych}}
+zo
+6 {{res:safeguard_far_dev_benign_v6_20261029_b.json:values.klasifikacia_aktivit.relacie.spolu}}
+session (Clopperov-Pearsonov interval
+0.223 {{res:safeguard_far_dev_benign_v6_20261029_b.json:values.klasifikacia_aktivit.relacie.interval.0}}
+až
+0.957 {{res:safeguard_far_dev_benign_v6_20261029_b.json:values.klasifikacia_aktivit.relacie.interval.1}}).
+`quiet`, `bursty` a `read_heavy` rozpoznal vo všetkých oknách. Negatívny výsledok:
+z
+656 {{res:safeguard_far_dev_benign_v6_20261029_b.json:values.klasifikacia_aktivit.okna.na_triedu.steady.n}}
+okien `steady` nerozpoznal ani jedno,
+653 {{res:safeguard_far_dev_benign_v6_20261029_b.json:values.klasifikacia_aktivit.okna.confusion.4.3}}
+označil ako `read_heavy`; z
+656 {{res:safeguard_far_dev_benign_v6_20261029_b.json:values.klasifikacia_aktivit.okna.na_triedu.mixed.n}}
+okien `mixed` označil
+368 {{res:safeguard_far_dev_benign_v6_20261029_b.json:values.klasifikacia_aktivit.okna.confusion.1.5}}
+ako `write_heavy` a správne
+286 {{res:safeguard_far_dev_benign_v6_20261029_b.json:values.klasifikacia_aktivit.okna.confusion.1.1}},
+z
+656 {{res:safeguard_far_dev_benign_v6_20261029_b.json:values.klasifikacia_aktivit.okna.na_triedu.write_heavy.n}}
+okien `write_heavy`
+299 {{res:safeguard_far_dev_benign_v6_20261029_b.json:values.klasifikacia_aktivit.okna.confusion.5.1}}
+ako `mixed` a správne
+356 {{res:safeguard_far_dev_benign_v6_20261029_b.json:values.klasifikacia_aktivit.okna.confusion.5.5}}.
+Väčšinová predikcia session `steady` bola `read_heavy` a session `mixed` `write_heavy`.
+Trieda je zaznamenané nastavenie záťaže session, nie škodlivosť ani rodina malvéru.
+
+Rola `dev` vyberala checkpointy prediktora aj klasifikátora, preto toto FAR ani presnosť
+klasifikátora nie sú odložené a nie sú záverečným výsledkom. Záverečné čísla dá jediné
+spustenie s `--final` nad prehratiami
+12 {{res:safeguard_train_benign_v6_20261029.json:values.sessions_by_role.test_benign}}
+session `test_benign` v
+2 {{res:safeguard_train_benign_v6_20261029.json:values.manifest.provenance.protocol.roles.test_benign}}
+skupinách; o ňom rozhoduje vlastník a zatiaľ neprebehlo. V `dev` útok nebežal: detekciu
+útokov ani malvéru tieto čísla nemerajú ([`HONESTY.md`](../HONESTY.md), P4).
+
 ## Čo zostáva experimentálne overiť
 
-- Natrénovať modely nad nazbieraným benígnym korpusom s oddelenými bootmi a rolami
-  (kampaň `benign-v6-20261026`) a zmraziť kalibráciu pred testami.
+- Záverečne vyhodnotiť balík `server-v2-benign-v6` na `test_benign` jediným spustením
+  `tcn.eval far --final` (rozhodnutie vlastníka); kalibrácia je uložená v manifeste
+  balíka a podľa výsledku sa neladí.
 - Overiť spoločný hostiteľský zber a detektor vrátane dlhého reťazca a backlogu.
-- Porovnať TCN s alternatívami a vyhodnotiť klasifikáciu aj falošné alarmy.
+- Porovnať TCN s alternatívami nad rovnakými rolami a vstupmi.
   Baseliny v `tcn/baselines.py` a metriky `tcn.eval.vyhodnot` používa iba
   diagnostické CLI `tcn.train` staršej 22-stĺpcovej cesty; na vstupy safeguardu
   ich zatiaľ nenapája žiadny runner.
-- V oddelenom izolovanom prostredí vyhodnotiť aktivované útoky a reálny malvér.
+- V oddelenom izolovanom prostredí vyhodnotiť aktivované útoky a reálny malvér;
+  čas do detekcie a podiel detegovaných incidentov zatiaľ nepočíta žiadny kód.
 
 Presnosť voči reálnym malvérovým vzorkám nebola meraná touto integračnou
 skúškou. Označenie „day-0“ pomenúva zamýšľaný experiment s neznámym
