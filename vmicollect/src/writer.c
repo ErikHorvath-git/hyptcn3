@@ -20,14 +20,6 @@ static const entry_t REGISTRY[] = {
 };
 #define REGISTRY_COUNT (sizeof(REGISTRY) / sizeof(REGISTRY[0]))
 
-const vmic_writer_ops_t *vmic_writer_find(const char *name)
-{
-    for (size_t i = 0; i < REGISTRY_COUNT; i++)
-        if (strcmp(REGISTRY[i].ops->name, name) == 0)
-            return REGISTRY[i].ops;
-    return NULL;
-}
-
 int vmic_writer_create(vmic_writer_t *w, const vmic_config_t *cfg)
 {
     memset(w, 0, sizeof(*w));

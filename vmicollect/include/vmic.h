@@ -412,9 +412,7 @@ struct vmic_backend {
 /* Vrati priponu, ktoru ma vystup backendu naozaj mat. */
 const char *vmic_backend_ext(const vmic_backend_t *b);
 
-/* registry - backends.c */
-const vmic_backend_ops_t *vmic_backend_find(const char *name);
-const char              **vmic_backend_list(size_t *count);
+/* registry - backend.c */
 int   vmic_backend_create(vmic_backend_t *b, const vmic_config_t *cfg);
 void  vmic_backend_destroy(vmic_backend_t *b);
 int   vmic_backend_pause(vmic_backend_t *b);
@@ -466,7 +464,6 @@ struct vmic_writer {
     void                    *output;  /* vmic_output_t pre 'delta' */
 };
 
-const vmic_writer_ops_t *vmic_writer_find(const char *name);
 int  vmic_writer_create(vmic_writer_t *w, const vmic_config_t *cfg);
 void vmic_writer_destroy(vmic_writer_t *w);
 
@@ -513,7 +510,7 @@ int vmic_sched_run(const vmic_config_t *cfg,
  * a oznac retazec s chain_id markerom HOLD (flight recorder, A5).
  *
  * top_bins su indexy binov (gpa >> log2(bin_bytes)) - tie iste indexy,
- * ktore su v sidecari a v per-bin oknach (features/windows.py).
+ * ktore su v sidecari a v per-bin oknach (safeguard/features.py).
  * `invariants` je kratky textovy stav invariantov, ktory spocital ten,
  * kto alarm vyhlasuje (napr. "syscall_hooks=1 process_cross_view=0").
  */

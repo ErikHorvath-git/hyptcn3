@@ -89,7 +89,6 @@ SEED=$(jq -r '.seed // 0' "$MANIFEST_IN")
 WARMUP=$(jq -r '.warmup_s // 30' "$MANIFEST_IN")
 RUNTIME=$(jq -r '.runtime_s // 300' "$MANIFEST_IN")
 INTERVAL=$(jq -r '.interval_s // 5' "$MANIFEST_IN")
-LOAD=$(jq -r '.load // empty' "$MANIFEST_IN")
 TCPDUMP=$(jq -r '.tcpdump // true' "$MANIFEST_IN")
 INJ_FILE=$(jq -r '.injekcia.subor // empty' "$MANIFEST_IN")
 INJ_ARGS=$(jq -r '.injekcia.args // [] | join(" ")' "$MANIFEST_IN")
@@ -110,7 +109,6 @@ if [ "$DRY" -eq 1 ]; then
     echo "  revert:  virsh snapshot-revert $DOMAIN $SNAPSHOT --running"
     echo "  zber:    vmicollect run (writer=$COLLECT_WRITER) -> $RAWDIR"
     echo "  injekcia: guest-agent -> $INJ_FILE ($INJ_ARGS)"
-    [ -n "$LOAD" ] && echo "  zataz:   scripts/loads/run.sh $LOAD --seed $SEED --dur $RUNTIME"
     echo "  ground truth PRED/PO + tcpdump=$TCPDUMP -> $SESS"
     exit 0
 fi

@@ -24,7 +24,6 @@ vystup dal rurou posunut dalej. Varovania (neuplny zoznam) idu na stderr.
 Podprikazy `checks` a `validate` implementuju moduly guestparse.checks a
 guestparse.validate. Ocakavana vstupna funkcia:
     run(args, view) -> dict        # vysledok, ktory sa vytlaci ako JSON
-Kym modul neexistuje, podprikaz skonci navratovym kodom 3 a hlaskou, nie stopou.
 
 NAVRATOVE KODY:
 
@@ -33,7 +32,6 @@ NAVRATOVE KODY:
      skriptu a "nasiel som hook" sa nesmie stratit v uspesnom kode
   2  chyba: snimka sa neda otvorit (aj rozbity retazec .vmicd), profil sa neda
      nacitat, posun jadra sa nenasiel
-  3  podprikaz nie je implementovany (chyba modul balika)
   4  `checks`: nic sa nenaslo, ALE aspon jedna kontrola sa neuzavrela
      (summary.inconclusive nie je prazdny). Nula z neuzavretej kontroly nie
      je dokaz cistoty, preto sa nesmie hlasit ako 0. Ked su nalezy aj
@@ -66,7 +64,6 @@ from .view import build_view
 EXIT_OK = 0
 EXIT_FINDINGS = 1
 EXIT_ERROR = 2
-EXIT_NOT_IMPLEMENTED = 3
 EXIT_INCONCLUSIVE = 4
 EXIT_PROFILE_MISMATCH = 5
 
@@ -352,13 +349,7 @@ def checks_exit_code(res):
 
 def _external(modname, args, view):
     """Podprikaz, ktory implementuje samostatny modul balika."""
-    try:
-        mod = __import__("guestparse.%s" % modname, fromlist=["run"])
-    except ImportError:
-        sys.stderr.write(
-            "podprikaz '%s' zatial nie je implementovany "
-            "(chyba modul guestparse/%s.py)\n" % (modname, modname))
-        return None
+    mod = __import__("guestparse.%s" % modname, fromlist=["run"])
     return mod.run(args, view)
 
 
@@ -478,8 +469,6 @@ def main(argv=None):
             return EXIT_PROFILE_MISMATCH
 
         res = _external(args.cmd, args, view)
-        if res is None:
-            return EXIT_NOT_IMPLEMENTED
         if args.cmd == "validate":
             with open(args.out, "w") as fh:
                 json.dump(res, fh, indent=2)
@@ -492,9 +481,6 @@ def main(argv=None):
         if args.cmd == "procmap":
             print(json.dumps(res, indent=2)) if args.json else _print_procmap(res)
             return final(EXIT_OK)
-        if args.json:
-            print(json.dumps(res, indent=2))
-        return final(EXIT_OK)
     finally:
         img.close()
 

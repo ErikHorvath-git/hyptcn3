@@ -34,7 +34,6 @@ void vmic_sanitize(char *s);
 int64_t vmic_file_size(const char *path);
 /* kolko blokov subor realne zabera (riedke subory!); -1 pri chybe     */
 int64_t vmic_file_disk_usage(const char *path);
-bool vmic_file_exists(const char *path);
 
 /* ---- I/O, ktore znasa kratke zapisy a EINTR ----------------------- */
 int  vmic_write_all(int fd, const void *buf, size_t len);

@@ -346,7 +346,7 @@ def cmd_session(args):
     Mena sa ukladaju spolu s maticou zamerne: bez nich je stlpec cislo a
     poradie priznakov sa neda spatne overit.
     """
-    from .snapshot import MENA, SCHEMA, retazec
+    from .snapshot import retazec
 
     res = retazec(args.snapshot, args.profile, args.max_medzera_s,
                   quality_policy=args.quality_policy)

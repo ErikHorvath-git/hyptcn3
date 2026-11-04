@@ -101,14 +101,12 @@ class VmicdImage:
     nulove, preto sa nesmu zdedit z predchadzajuceho reťazca. Starsia
     historia sa aj tak overuje; nova baseline nezakryva chybajuce delty.
 
-    Retazec sa pri otvoreni overuje (validate_chain). Kontrolu sa da vypnut
-    iba vyslovne, parametrom validate=False - sluzi na skumanie rozbitych
-    snimok v testoch, nie na bezne citanie.
+    Retazec sa pri otvoreni vzdy overuje (validate_chain).
     """
 
     kind = "vmicd"
 
-    def __init__(self, paths, validate=True):
+    def __init__(self, paths):
         if isinstance(paths, str):
             paths = [paths]
         self.index = {}          # index stranky -> (subor, offset)
@@ -117,14 +115,13 @@ class VmicdImage:
         self.memsize = 0
         self.page_size = PAGE
         self.headers = [self.header(p) for p in self.paths]
-        self.validated = bool(validate)
-        if validate:
-            validate_chain(self.headers)
-        h0 = self.headers[0] if self.headers else None
-        self.chain_id = h0["chain_id"] if h0 else None
-        self.seq_from = h0["seq"] if h0 else None
-        self.seq_to = self.headers[-1]["seq"] if self.headers else None
-        self.full_baseline = bool(h0 and h0["full"])
+        validate_chain(self.headers)
+        self.validated = True
+        h0 = self.headers[0]
+        self.chain_id = h0["chain_id"]
+        self.seq_from = h0["seq"]
+        self.seq_to = self.headers[-1]["seq"]
+        self.full_baseline = h0["full"]
         try:
             for h in self.headers:
                 self._load(h)
@@ -485,7 +482,7 @@ def chain_files(directory, chain_id=None, until_seq=None, warn=True):
             chain_headers(directory, chain_id, until_seq, warn)]
 
 
-def open_image(path, chain_id=None, until_seq=None, validate=True):
+def open_image(path, until_seq=None):
     """
     Otvori snimku: adresar s retazcom .vmicd, jeden .vmicd, alebo raw obraz.
 
@@ -494,10 +491,7 @@ def open_image(path, chain_id=None, until_seq=None, validate=True):
     a odmietne sa z toho isteho dovodu.
     """
     if os.path.isdir(path):
-        parts = chain_files(path, chain_id, until_seq) if validate else [
-            os.path.join(path, n) for n in sorted(os.listdir(path))
-            if n.endswith(".vmicd")]
-        return VmicdImage(parts, validate=validate)
+        return VmicdImage(chain_files(path, until_seq=until_seq))
     if path.endswith(".vmicd"):
-        return VmicdImage(path, validate=validate)
+        return VmicdImage(path)
     return RawImage(path)

@@ -13,16 +13,6 @@ from .quality import valid_for
 BEHAVIOR_NAMES = MENA[:18]
 
 
-def model_arrays(data):
-    """Unnormalized inputs for the planned global/per-bin experiments.
-
-    Return time x 18 global behavior columns and time x bins x 4 local columns.
-    Keep the entropy measurement mask (has_changed) with its value. Identity,
-    quality flags and integrity findings never become input numbers here.
-    """
-    return data["matica"][:, :len(BEHAVIOR_NAMES)], data["perbin"]
-
-
 def save(path, result):
     path = Path(path)
     if path.suffix != ".npz":

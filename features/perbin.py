@@ -291,7 +291,7 @@ def page_entropy(page):
 # ----------------------------------------------------------- citanie snimky
 
 
-def _chain_parts(snapshot, chain_id=None, until_seq=None):
+def _chain_parts(snapshot, until_seq=None):
     """Cesty retazca .vmicd v poradi seq.
 
     Pri adresari sa beru VSETKY retazce (kolektor pri dlhsom behu rozdeli
@@ -353,7 +353,7 @@ def _record_indices(header):
 
 
 def per_bin(snapshot, memslots, bin_bytes=DEFAULT_BIN_BYTES,
-            chain_id=None, until_seq=None):
+            until_seq=None):
     """
     Spocita per-bin vektor pre stav pamate po poslednej casti retazca.
 
@@ -361,7 +361,7 @@ def per_bin(snapshot, memslots, bin_bytes=DEFAULT_BIN_BYTES,
     s invariantmi (sucty), aby sa dali overit bez dalsieho prechodu.
     """
     shift = _shift(bin_bytes)
-    heads = _chain_parts(snapshot, chain_id, until_seq)
+    heads = _chain_parts(snapshot, until_seq)
     last = heads[-1]
     if last["page_size"] != PAGE:
         raise FeatureError(
@@ -376,7 +376,7 @@ def per_bin(snapshot, memslots, bin_bytes=DEFAULT_BIN_BYTES,
     ent_sum = {}
     mimo = {"changed": 0, "state": 0, "priklady": []}
 
-    img = VmicdImage([h["path"] for h in heads], validate=True)
+    img = VmicdImage([h["path"] for h in heads])
     try:
         # Prechadza sa REKONSTRUOVANY stav: index retazca po zlucenych
         # castiach. Stranka, ktora v nom nie je, je nulova a nezmenena,
@@ -489,9 +489,9 @@ def check_against_sidecar(result, sidecar_path):
     return rep
 
 
-def sidecar_for(snapshot, chain_id=None, until_seq=None):
+def sidecar_for(snapshot, until_seq=None):
     """Sidecar .json poslednej casti retazca (rovnake meno, ina pripona)."""
-    heads = _chain_parts(snapshot, chain_id, until_seq)
+    heads = _chain_parts(snapshot, until_seq)
     p = heads[-1]["path"]
     cand = p[:-len(".vmicd")] + ".json" if p.endswith(".vmicd") else p + ".json"
     if not os.path.exists(cand):

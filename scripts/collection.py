@@ -45,7 +45,7 @@ MEASUREMENT_DIRS = ("features", "guestparse", "safeguard", "scripts", "lab", "vm
 SOURCE_SUFFIXES = (".py", ".c", ".h", ".sh", ".sql", ".conf", ".service")
 # Reporting/documentation tools do not take part in capture, audit or archival.
 NOT_MEASUREMENT = {"scripts/campaign_report.py", "scripts/gen_prirucka.py", "scripts/check_claims.sh",
-                   "scripts/check_prirucka.sh", "scripts/stamp_results.py"}
+                   "scripts/check_prirucka.sh"}
 # Measured 2026-10-20 on the working SSD with fsync: full snapshots took
 # 4.7-10.7 s (period 5 s) after sustained delta writes. Without fsync a
 # snapshot is published from the page cache; its SHA-256 (sidecar) is re-checked
@@ -380,7 +380,7 @@ def collector_memory(pid):
             "need_bytes": need, "available_bytes": available, "ok": available >= need}
 
 
-def file_record(path, base):
+def file_record(path):
     with path.open("rb") as stream:
         sha = hashlib.file_digest(stream, "sha256").hexdigest()
     record = {"size": path.stat().st_size, "sha256": sha}
@@ -401,7 +401,7 @@ def write_logs_manifest(out):
                 and (not name.startswith("raw/") or name in ("raw/collect.log", "raw/capture.json"))
                 and name not in ("session.json", "end.json", "logs_manifest.json")
                 and not re.fullmatch(r"(campaign_)?audit_.*", name)):
-            files[name] = file_record(path, out)
+            files[name] = file_record(path)
     doc = {"schema": "hyptcn3/session-logs/1", "date": datetime.now(timezone.utc).isoformat(), "files": files}
     write_json(out / "logs_manifest.json", doc)
     return digest(out / "logs_manifest.json")

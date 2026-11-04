@@ -42,14 +42,6 @@ static const entry_t REGISTRY[] = {
 };
 #define REGISTRY_COUNT (sizeof(REGISTRY) / sizeof(REGISTRY[0]))
 
-const vmic_backend_ops_t *vmic_backend_find(const char *name)
-{
-    for (size_t i = 0; i < REGISTRY_COUNT; i++)
-        if (strcmp(REGISTRY[i].ops->name, name) == 0)
-            return REGISTRY[i].ops;
-    return NULL;
-}
-
 void vmic_backend_print_list(void *stream)
 {
     FILE *out = stream ? (FILE *)stream : stdout;

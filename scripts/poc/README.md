@@ -27,12 +27,12 @@ snímky, nie beh techniky v hosťovi: `data/results/g1_citlivost_sim_20261005.js
 | `encrypt_files.sh` | šifrovanie súborov | vytvorí v `/tmp/victim` testovacie súbory (počet a veľkosť zo `SEED`, obsah z `/dev/urandom`), zašifruje ich `openssl` (AES-256-CBC, heslo = `SEED`) a originály zmaže; manifest `g1_encrypt` |
 | `diamorphine.sh` | Diamorphine LKM | stiahne Diamorphine z GitHubu (commit z `DIAMORPHINE_COMMIT`, inak vetva `master`), zbuildí ho proti hlavičkám jadra hosťa a zavedie `insmod`; **rootkit na úrovni jadra - len v overlayi sedenia**; manifest `g1_diamorphine` |
 | `miner.sh` | kryptominer | stiahne archív z `MINER_URL`, overí jeho SHA-256 (`MINER_SHA`) a `DUR` s spúšťa xmrig na `MINER_THREADS` vláknach (pool `pool.supportxmr.com:443`, vymyslený používateľ); manifest pre miner nie je |
-| `hider.c`, `memfd_exec.c`, `build.sh` | samostatné zdroje | `build.sh` ich skompiluje v hosťovi (gcc) a vypíše SHA-256; žiadny manifest ich nepoužíva a bežce `hider_run.sh` a `memfd_run.sh` majú vlastnú, odlišnú kópiu zdroja (heredoc) |
 
 `session.sh` prenesie do hosťa jediný súbor a spustí ho s premennými `SEED`
 a `DUR`. `DIAMORPHINE_COMMIT`, `MINER_URL` ani `MINER_SHA` neodovzdá, takže
-Diamorphine by sa ním stiahol z vetvy `master`, `miner.sh` by skončil chybou
-a `build.sh` by nenašiel zdroje `.c` vedľa seba.
+Diamorphine by sa ním stiahol z vetvy `master` a `miner.sh` by skončil chybou.
+Samostatné kópie `hider.c`, `memfd_exec.c` a `build.sh` sa 2026-11-04 odstránili ako mŕtvy kód;
+zdroj C nesú bežce `hider_run.sh` a `memfd_run.sh`.
 
 ## Pravidlá
 

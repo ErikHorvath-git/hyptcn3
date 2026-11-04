@@ -105,7 +105,7 @@ Označenia pochádzajú z plánu z 2026-10-05. Používajú ich komentáre v kó
 | B4 | `scripts/root_run.sh session <manifest>` (`scripts/session.sh`) | `d7801bf`, `915ba38` | existuje ako historický harness nad `hyptcn-guest`; s manifestom dokončil iba štyri sedenia `idle` z 2026-10-05 a 2026-10-06 (`data/sessions/*_idle_benign/manifest.json`) |
 | B5 | rovnaký priebeh benígnych a škodlivých sedení, `scripts/session_batch.sh`, `scripts/root_run.sh batch`, manifesty G1 | `d7801bf`, `69c4bf5` | existuje ako historický harness; benígny zber dnes riadi `scripts/campaign.py` nad `hyptcn-lab` |
 | C | benígne záťaže `scripts/loads/` (idle, nginx_wrk, pgbench, build, rsync_tar, mix) | `7e8f35f` | existuje, používa ju iba starší harness; profily záťaže labu sú v `config/collection-v2.json` a `scripts/host_traffic.py` |
-| D | per-bin okná `okna_s_perbin()` vo `features/windows.py` | `2da4651` | existuje; safeguard skladá per-bin okná sám v `safeguard/features.py` |
+| D | per-bin okná `okna_s_perbin()` vo `features/windows.py` | `2da4651` | odstránené 2026-11-04 ako mŕtvy kód (volali ho iba testy); safeguard skladá per-bin okná sám v `safeguard/features.py` |
 | E1 | regresná hlava TCN (prediktor normálu) | `63fee0c` | `TCNPrediktor` v `tcn/model.py` používa `safeguard/model.py`; tréner `tcn/train.py` ostáva ako diagnostický |
 | E2 | skóre anomálie ako chyba predikcie (`tcn/score.py`) | `63fee0c` | existuje ako diagnostické (volá ho `scripts/detektor.py`); skóre safeguardu je `anomaly_score` v `safeguard/model.py` |
 | E3 | kalibrácia prahu (`tcn/kalibracia.py`) | `63fee0c` | odstránené v `709ee7f`; kalibrácia safeguardu je `calibrate` v `safeguard/training.py` |

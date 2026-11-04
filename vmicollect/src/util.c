@@ -134,12 +134,6 @@ int64_t vmic_file_disk_usage(const char *path)
     return (int64_t)st.st_blocks * 512;
 }
 
-bool vmic_file_exists(const char *path)
-{
-    struct stat st;
-    return stat(path, &st) == 0;
-}
-
 /* ------------------------------------------------------------------ */
 /* I/O                                                                 */
 /* ------------------------------------------------------------------ */

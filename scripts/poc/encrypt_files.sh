@@ -17,7 +17,6 @@ for i in $(seq 1 "$N"); do
 done
 echo "encrypt_files: $N suborov po ${SIZE_KB}kB v $DIR, seed=$SEED"
 
-KEY=$(head -c 32 /dev/urandom | openssl enc -base64 -A 2>/dev/null || true)
 ENC=0
 for f in "$DIR"/*; do
     openssl enc -aes-256-cbc -salt -in "$f" -out "$f.enc" -pass "pass:$SEED" 2>/dev/null \
