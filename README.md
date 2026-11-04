@@ -14,8 +14,9 @@ z komentárov v kóde a prostredia.
 `python3 -m safeguard` je detekčná cesta repozitára: tréning, kontrola
 a prehrávanie balíka, sledovanie adresára snímok a spoločný beh zberača
 s detektorom. `smoke` overuje mechaniku na syntetických dátach. Balík z korpusu
-`benign-v6-20261026` je natrénovaný a vyhodnotený zatiaľ iba na role `dev`; záverečný
-test na `test_benign`, živý spoločný beh a účinnosť detekcie útokov zostávajú na overenie.
+`benign-v6-20261026` je natrénovaný a záverečne vyhodnotený na odloženej role `test_benign`
+([`docs/MERANIA.md`](docs/MERANIA.md), 2026-11-04); živý spoločný beh, prevádzkové poruchy
+a účinnosť detekcie útokov zostávajú na overenie.
 Staršia cesta `tcn/train.py`, `tcn/score.py` a `scripts/detektor.py` ostáva do konca
 experimentov iba na diagnostiku.
 

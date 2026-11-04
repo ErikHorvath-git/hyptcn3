@@ -16,7 +16,7 @@ ukladá snímky. Druhý program zo snímky poskladá zoznam procesov, modulov ja
 spojení tak, ako ich v tej chvíli videl hosťovaný systém. Z každej snímky sa počíta krátky
 číselný vektor o tom, kde a ako sa pamäť oproti predchádzajúcej zmenila; vektory idú za sebou do okien pre
 TCN prediktor normálu v balíku `safeguard/` (`python3 -m safeguard`), ktorý z chyby predikcie a z kontrol
-integrity robí alarm. Model nad serverovým korpusom je natrénovaný, záverečný test zatiaľ nebežal (kapitola 8).
+integrity robí alarm. Model nad serverovým korpusom je natrénovaný a záverečne vyhodnotený (kapitola 8).
 
 ## 2. Čo treba mať
 
@@ -171,9 +171,9 @@ Commity, z ktorých merania pochádzajú:
 ## 8. Čo nefunguje a čo ešte nie je
 
 Modely detekčnej cesty `safeguard/` sú natrénované na korpuse `benign-v6-20261026`, `python3 -m tcn.eval far`
-ich však vyhodnotil iba na role `dev`, ktorá vyberala checkpointy: **výsledok nie je odložený**. Klasifikátor
-na nej nerozlíšil `steady` od `read_heavy` a zamieňal `mixed` s `write_heavy`. Záverečný test na `test_benign`
-zatiaľ nebežal, čas do detekcie nepočíta žiadny kód a `smoke` overuje iba mechaniku (`docs/SAFEGUARD.sk.md`,
+ich na `dev` (vyberala checkpointy, nie je odložená) a raz záverečne na `test_benign` (`docs/MERANIA.md`,
+2026-11-04). Klasifikátor profilu záťaže zamieňa `steady`, `mixed` a `write_heavy` s inými profilmi;
+prevádzkové poruchy v korpuse nie sú, čas do detekcie nepočíta žiadny kód a `smoke` overuje iba mechaniku (`docs/SAFEGUARD.sk.md`,
 L16); otvorené body voči zadaniu vlastní `docs/STAV.sk.md`. Živá latencia snímka → skóre počas zberu meraná
 nie je, len spracovanie uložených snímok (napr. staršou cestou `tcn.score`,
 `data/results/latency_score_20260919.json`; L12). Slovo „real-time“ v názve práce preto znamená periodický

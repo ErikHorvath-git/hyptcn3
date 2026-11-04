@@ -381,7 +381,7 @@ novým modelom bude samostatným overením; pilot výskumného zberu ho nenahrá
 známy experimentálny režim a trieda implementovaného klasifikátora, nie pravda
 o každom procese v RAM. Jeho presnosť počíta `python3 -m tcn.eval far` spolu s FAR
 (trieda okna je scenár session, nezávislou jednotkou je session); na odloženej role
-`test_benign` sa ešte musí zmerať.
+`test_benign` je zmeraná ([`MERANIA.md`](MERANIA.md), 2026-11-04).
 Pri budúcej klasifikácii
 konkrétnej aktivity sa uchová presný interval začiatku/konca a dôkaz vykonania;
 okná cez prechod majú označenie `transition`, nie náhodnú triedu celej session.

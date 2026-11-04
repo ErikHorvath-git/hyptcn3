@@ -15,9 +15,9 @@ Kampane `benign-v2-20261022` až `benign-v5-20261025` sa uzavreli bez úplného 
 Benígny korpus `benign-v6-20261026` vyšiel z pilota 7 a je nazbieraný: audit prijal
 48 {{res:collection_campaign_benign_v6_20261026.json:values.summary.accepted_sessions}}
 session ([záznam](../data/results/collection_campaign_benign_v6_20261026.json), [MERANIA.md](MERANIA.md)). Balík modelov
-z neho je natrénovaný a vyhodnotený iba na vývojovej role `dev`, ktorá vyberala jeho checkpointy
-(časť [Natrénovaný balík a rola dev](#natrénovaný-balík-a-rola-dev)); záverečný test na `test_benign`
-a ďalšia experimentálna etapa zostávajú.
+z neho je natrénovaný, vyhodnotený na vývojovej role `dev`, ktorá vyberala jeho checkpointy
+(časť [Natrénovaný balík a rola dev](#natrénovaný-balík-a-rola-dev)), a 2026-11-04 raz záverečne na
+`test_benign` ([`MERANIA.md`](MERANIA.md)); test pri prevádzkových poruchách a údržbe zostáva.
 Automatický zber a archiváciu korpusu riadi
 [`scripts/campaign.py`](../scripts/campaign.py); postup je v
 [`AUTOMATICKY_ZBER.sk.md`](AUTOMATICKY_ZBER.sk.md).
@@ -460,14 +460,24 @@ spustenie s `--final` nad prehratiami
 12 {{res:safeguard_train_benign_v6_20261029.json:values.sessions_by_role.test_benign}}
 session `test_benign` v
 2 {{res:safeguard_train_benign_v6_20261029.json:values.manifest.provenance.protocol.roles.test_benign}}
-skupinách; o ňom rozhoduje vlastník a zatiaľ neprebehlo. V `dev` útok nebežal: detekciu
-útokov ani malvéru tieto čísla nemerajú ([`HONESTY.md`](../HONESTY.md), P4).
+skupinách. Prebehlo 2026-11-04 ([záznam](../data/results/safeguard_far_test_benign_v6_20261104.json)):
+1 {{res:safeguard_far_test_benign_v6_20261104.json:values.merane.spolu.spolu.udalosti_model}}
+udalosť modelu, FAR
+0.0915 {{res:safeguard_far_test_benign_v6_20261104.json:values.merane.spolu.far_h.skorovany.udalosti_h}}
+za skórovanú hodinu (Garwood do
+0.510 {{res:safeguard_far_test_benign_v6_20261104.json:values.merane.spolu.far_h.skorovany.horna_h}}
+), klasifikátor správne v
+5 {{res:safeguard_far_test_benign_v6_20261104.json:values.klasifikacia_aktivit.relacie.spravnych}}
+z
+12 {{res:safeguard_far_test_benign_v6_20261104.json:values.klasifikacia_aktivit.relacie.spolu}}
+session. Ani v `dev`, ani v `test_benign` útok nebežal: detekciu útokov ani malvéru tieto
+čísla nemerajú ([`HONESTY.md`](../HONESTY.md), P4).
 
 ## Čo zostáva experimentálne overiť
 
-- Záverečne vyhodnotiť balík `server-v2-benign-v6` na `test_benign` jediným spustením
-  `tcn.eval far --final` (rozhodnutie vlastníka); kalibrácia je uložená v manifeste
-  balíka a podľa výsledku sa neladí.
+- Zmerať falošné alarmy balíka `server-v2-benign-v6` pri prevádzkových poruchách a údržbe
+  ([`NAVRH_PROTOKOL_V3.sk.md`](NAVRH_PROTOKOL_V3.sk.md)); kalibrácia je uložená v manifeste
+  balíka a podľa záverečného testu sa neladí.
 - Overiť spoločný hostiteľský zber a detektor vrátane dlhého reťazca a backlogu.
 - Porovnať TCN s alternatívami nad rovnakými rolami a vstupmi.
   Baseliny v `tcn/baselines.py` a metriky `tcn.eval.vyhodnot` používa iba

@@ -10,7 +10,7 @@ ukladá snímky. Druhý program zo snímky poskladá zoznam procesov, modulov ja
 spojení tak, ako ich v tej chvíli videl hosťovaný systém. Z každej snímky sa počíta krátky
 číselný vektor o tom, kde a ako sa pamäť oproti predchádzajúcej zmenila; vektory idú za sebou do okien pre
 TCN prediktor normálu v balíku `safeguard/` (`python3 -m safeguard`), ktorý z chyby predikcie a z kontrol
-integrity robí alarm. Model nad serverovým korpusom je natrénovaný, záverečný test zatiaľ nebežal (kapitola 8).
+integrity robí alarm. Model nad serverovým korpusom je natrénovaný a záverečne vyhodnotený (kapitola 8).
 
 ## 2. Čo treba mať
 
@@ -207,9 +207,9 @@ Commity, z ktorých merania pochádzajú:
 ## 8. Čo nefunguje a čo ešte nie je
 
 Modely detekčnej cesty `safeguard/` sú natrénované na korpuse `benign-v6-20261026`, `python3 -m tcn.eval far`
-ich však vyhodnotil iba na role `dev`, ktorá vyberala checkpointy: **výsledok nie je odložený**. Klasifikátor
-na nej nerozlíšil `steady` od `read_heavy` a zamieňal `mixed` s `write_heavy`. Záverečný test na `test_benign`
-zatiaľ nebežal, čas do detekcie nepočíta žiadny kód a `smoke` overuje iba mechaniku (`docs/SAFEGUARD.sk.md`,
+ich na `dev` (vyberala checkpointy, nie je odložená) a raz záverečne na `test_benign` (`docs/MERANIA.md`,
+2026-11-04). Klasifikátor profilu záťaže zamieňa `steady`, `mixed` a `write_heavy` s inými profilmi;
+prevádzkové poruchy v korpuse nie sú, čas do detekcie nepočíta žiadny kód a `smoke` overuje iba mechaniku (`docs/SAFEGUARD.sk.md`,
 L16); otvorené body voči zadaniu vlastní `docs/STAV.sk.md`. Živá latencia snímka → skóre počas zberu meraná
 nie je, len spracovanie uložených snímok (napr. staršou cestou `tcn.score`,
 `data/results/latency_score_20260919.json`; L12). Slovo „real-time“ v názve práce preto znamená periodický
@@ -243,19 +243,19 @@ znamenalo držať dve znenia toho istého. Nadpisy sú preto dosadené z neho, s
 
 | dokument | čo vlastní | riadkov |
 |---|---|---|
-| `docs/STAV.sk.md` | stav voči zadaniu, otvorené body, legenda blokov A1..H, prostredia | 158 |
+| `docs/STAV.sk.md` | stav voči zadaniu, otvorené body, legenda blokov A1..H, prostredia | 155 |
 | `docs/ARCHITEKTURA.md` | rozhrania, formát `.vmicd` a sidecaru, tok dát podrobne | 1609 |
-| `docs/MERANIA.md` | log meraní: čo, kedy, akým príkazom a s akým výsledkom | 3101 |
+| `docs/MERANIA.md` | log meraní: čo, kedy, akým príkazom a s akým výsledkom | 3185 |
 | `docs/LIMITACIE.md` | L1 až L18: čo systém nevie a čo z toho plynie pre text | 1298 |
 | `docs/kontroly.md` | kontroly podozrivých vzorcov a validačný príkaz | 338 |
 | `HONESTY.md` | pravidlá pre čísla a slová v texte práce | 298 |
-| `README.md` | rozcestník repozitára, preklad a testy, pôvod kódu | 101 |
+| `README.md` | rozcestník repozitára, preklad a testy, pôvod kódu | 102 |
 | `docs/LAB.sk.md` | serverové laboratórium, premávka z hostiteľa a RAM zber | 332 |
 | `docs/METODIKA_ZBERU.sk.md` | protokol zberu, príznaky, rozdelenie korpusu a audit | 418 |
 | `docs/KONTROLA_ZBERU.sk.md` | pokrytie okien, kontrola logov a úložisko uloženého zberu | 222 |
 | `docs/AUTOMATICKY_ZBER.sk.md` | kampaň: spustenie, uložené dáta, zastavenie, archív, report | 347 |
 | `docs/PRIPRAVENOST_KAMPANE.sk.md` | pripravenosť kampane a zvyškové riziká (PASS/FAIL/UNVERIFIED) | 140 |
-| `docs/SAFEGUARD.sk.md` | tréning modelového balíka, replay a spustenie detektora | 481 |
+| `docs/SAFEGUARD.sk.md` | tréning modelového balíka, replay a spustenie detektora | 491 |
 | `vmicollect/README.md` | zberač zvnútra: vrstvy, hooky, formáty | 642 |
 | `guestparse/README.md` | parser zvnútra: preklad adries, prechod zoznamami | 180 |
 | `features/PERBIN.md` | definícia príznakov a ich kontrakt | 194 |
