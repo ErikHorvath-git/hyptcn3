@@ -240,3 +240,101 @@ def test_clock_sync_margin_covers_a_session_of_measured_drift():
     p = protocol(DEFAULT)
     hours = (p["warmup_s"] + p["cycles"] * p["interval_s"]) / 3600
     assert collection.CLOCK_SYNC_S + 0.04 * hours * 5 < 1.0  # Five times the drift seen on 2026-10-20.
+
+
+V3 = DEFAULT.with_name("collection-v3.json")
+
+
+def test_v2_plan_is_unchanged_by_protocol_v3():
+    import hashlib
+    doc = json.dumps(plan(protocol(DEFAULT)), sort_keys=True).encode()
+    assert hashlib.sha256(doc).hexdigest().startswith("5b04b41a590c02b6")
+
+
+def test_v3_plan_spreads_every_event_type_over_every_boot():
+    from scripts.collection import check_schedule
+    p = protocol(V3)
+    result = plan(p)
+    assert plan(p) == result
+    v2_groups = {s["group"] for s in plan(protocol(DEFAULT))["sessions"]}
+    groups = {}
+    for s in result["sessions"]:
+        assert s["group"].startswith("v3-") and s["group"] not in v2_groups
+        check_schedule(p, s["events"], p["cycles"])
+        assert p["events"]["per_session"][0] <= len(s["events"]) <= p["events"]["per_session"][1]
+        assert all(e["class"] == p["events"]["classes"][e["type"]] for e in s["events"])
+        groups.setdefault(s["group"], set()).update(e["type"] for e in s["events"])
+    assert len(groups) == p["roles"]["test_events"]
+    assert all(types == set(p["events"]["classes"]) for types in groups.values())
+
+
+@pytest.mark.parametrize("change", ["unknown_type", "too_long", "pilot_overlap"])
+def test_protocol_rejects_impossible_event_schedules(tmp_path, change):
+    p = json.loads(V3.read_text())
+    if change == "unknown_type":
+        p["events"]["classes"]["format_disk"] = "udrzba"
+    elif change == "too_long":
+        p["events"]["duration_s"] = [120, 900]
+    else:
+        p["events"]["pilot"][1]["start_s"] = p["events"]["pilot"][0]["start_s"] + 200
+    path = tmp_path / "v3.json"
+    path.write_text(json.dumps(p))
+    with pytest.raises(ValueError, match="event"):
+        protocol(path)
+
+
+class FakeLab:
+    def __init__(self, fail=()):
+        self.calls, self.fail = [], set(fail)
+
+    def __call__(self, p, *args, timeout=600):
+        action, kind = args[2], args[3]
+        self.calls.append((action, kind))
+        if (action, kind) in self.fail:
+            return {"ok": False, "error": "synthetic"}
+        return {"ok": True, "health": 200, "units": {}}
+
+
+def run_events(monkeypatch, tmp_path, fake, ticks):
+    from scripts import collection
+    monkeypatch.setattr(collection, "lab_json", fake)
+    planned = [{"type": "zamok_tabulky", "class": "chyba_aplikacie", "start_s": 10, "duration_s": 20},
+               {"type": "zataz_pamate", "class": "zataz_pamate", "start_s": 40, "duration_s": 20}]
+    events = collection.Events(protocol(V3), planned, lambda name, **values: None)
+    origin = 1000.
+    try:
+        for now in ticks:
+            monkeypatch.setattr(collection.time, "time", lambda now=now: origin + now)
+            events.tick(origin)
+    finally:
+        events.close(tmp_path / "events.json")
+    return json.loads((tmp_path / "events.json").read_text())["events"]
+
+
+def test_events_start_and_stop_on_schedule(monkeypatch, tmp_path):
+    fake = FakeLab()
+    records = run_events(monkeypatch, tmp_path, fake, [5, 10, 20, 30, 40, 60, 70])
+    assert fake.calls == [("start", "zamok_tabulky"), ("stop", "zamok_tabulky"),
+                          ("start", "zataz_pamate"), ("stop", "zataz_pamate")]
+    assert [r["executed"] for r in records] == [True, True]
+    assert records[0]["host_start_unix"] == 1010 and records[0]["host_stopped_unix"] == 1030
+
+
+def test_failed_start_still_restores_and_counts_as_not_executed(monkeypatch, tmp_path):
+    fake = FakeLab(fail={("start", "zamok_tabulky")})
+    records = run_events(monkeypatch, tmp_path, fake, [10, 30, 40, 60])
+    assert fake.calls[:2] == [("start", "zamok_tabulky"), ("stop", "zamok_tabulky")]
+    assert [r["executed"] for r in records] == [False, True]
+
+
+def test_interrupted_session_stops_the_active_event(monkeypatch, tmp_path):
+    fake = FakeLab()
+    records = run_events(monkeypatch, tmp_path, fake, [10, 15])
+    assert fake.calls == [("start", "zamok_tabulky"), ("stop", "zamok_tabulky")]
+    assert records[0]["executed"] and "host_start_unix" not in records[1]
+
+
+def test_lab_not_restored_stops_the_capture(monkeypatch, tmp_path):
+    fake = FakeLab(fail={("stop", "zamok_tabulky")})
+    with pytest.raises(ValueError, match="not restored"):
+        run_events(monkeypatch, tmp_path, fake, [10, 30])

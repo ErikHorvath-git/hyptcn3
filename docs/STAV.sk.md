@@ -52,7 +52,8 @@ Body nadväzujú: falošné alarmy pri reálnych prevádzkových udalostiach dá
    FAR 0,0915 {{res:safeguard_far_test_benign_v6_20261104.json:values.merane.spolu.far_h.skorovany.udalosti_h}} za skórovanú hodinu (Garwood do 0,510 {{res:safeguard_far_test_benign_v6_20261104.json:values.merane.spolu.far_h.skorovany.horna_h}}).
    Korpus však obsahuje iba ustálenú prevádzku; zlá konfigurácia s pádom služby, reštarty, zálohy
    a údržba v ňom nie sú ([`METODIKA_ZBERU.sk.md`](METODIKA_ZBERU.sk.md), kap. 5). Ich zber a test
-   falošných alarmov navrhuje [`NAVRH_PROTOKOL_V3.sk.md`](NAVRH_PROTOKOL_V3.sk.md).
+   falošných alarmov navrhuje [`NAVRH_PROTOKOL_V3.sk.md`](NAVRH_PROTOKOL_V3.sk.md); kód kroku A
+   (udalosti v labe, plán, audit, `python3 -m tcn.eval udalosti`) je hotový, pilot v3 a zber nebežali.
 2. **Klasifikátor profilu záťaže zamieňa scenáre.** Checkpoint klasifikátora je z epochy
    1 {{res:safeguard_train_benign_v6_20261029.json:values.train_result.training.selected_classifier_epoch}}, po nej bola strata klasifikácie na `dev` vždy vyššia. Na `dev` rozpoznal `quiet`,
    `bursty` a `read_heavy`, okná `steady` však označil za `read_heavy` (653 {{res:safeguard_far_dev_benign_v6_20261029_b.json:values.klasifikacia_aktivit.okna.confusion.4.3}} zo 656 {{res:safeguard_far_dev_benign_v6_20261029_b.json:values.klasifikacia_aktivit.okna.na_triedu.steady.n}}),

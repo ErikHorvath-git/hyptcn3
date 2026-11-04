@@ -96,6 +96,11 @@ class Lab:
         return json.loads(self.guest("python3 /opt/hyptcn-lab/guest_state.py "
                                      + " ".join(shlex.quote(str(a)) for a in args), timeout=timeout))
 
+    def event(self, action, kind, timeout=180):
+        """Start or stop one benign operational event (lab/udalosti.py) and parse its JSON reply."""
+        return json.loads(self.guest("python3 /opt/hyptcn-lab/udalosti.py "
+                                     + shlex.quote(action) + " " + shlex.quote(kind), timeout=timeout))
+
     def fetch_segment(self, doc, dest):
         """Fetch gzip copies, verify transfer and content hashes, then delete them in the guest."""
         dest = Path(dest)
@@ -288,13 +293,14 @@ def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("command", choices=["up", "create", "start", "deploy", "status", "stop", "reboot",
                                             "traffic-start", "traffic-stop", "exec", "logs", "state", "clock",
-                                            "sync-clock", "segment", "journal"])
+                                            "sync-clock", "segment", "journal", "event"])
     parser.add_argument("--domain", default="hyptcn-lab")
     parser.add_argument("--uri", default="qemu:///session")
     parser.add_argument("--source", default="hyptcn-guest")
     parser.add_argument("--guest-command", help="Command for exec, executed inside the lab VM")
     parser.add_argument("--label", help="segment/journal: exclusive guest segment label")
     parser.add_argument("--dest", type=Path, help="segment/journal: existing host directory for verified copies")
+    parser.add_argument("--event", nargs=2, metavar=("ACTION", "TYPE"), help="event: start|stop and event type")
     parser.add_argument("--since", type=float, help="journal: start, Unix seconds")
     parser.add_argument("--until", type=float, help="journal: end, Unix seconds")
     args = parser.parse_args(argv)
@@ -344,6 +350,11 @@ def main(argv=None):
         before = lab.clock()
         lab.virsh("domtime", lab.domain, "--sync")
         print(json.dumps({"before": before, "after": lab.clock()}))
+    if args.command == "event":
+        lab.owned()
+        if not args.event:
+            parser.error("event requires --event ACTION TYPE")
+        print(json.dumps(lab.event(*args.event), sort_keys=True))
     if args.command in ("segment", "journal"):
         lab.owned()
         if not args.label or not args.dest or not args.dest.is_dir():

@@ -453,6 +453,184 @@ def vyhodnot_far(korpus, rola, prehratia, alfa=0.05, final=False, kampan=None):
     }, balik
 
 
+SCHEMA_INDEX_UDALOSTI = "hyptcn3/event-index/1"
+SCHEMA_FAR_UDALOSTI = "hyptcn3/safeguard-event-far/1"
+# Po skonceni udalosti, ked uz okno neobsahuje jej snimku: cas, v ktorom sa sleduje, ci alarm odznie.
+DOZVUK_S = 300.0
+PREDPOKLADY_UDALOSTI = [
+    "okno patri udalosti, ked sa jeho snimky [t - (W-1)*perioda, t] prekryvaju s intervalom udalosti "
+    "[host start, host stop hotovy]; cas udalosti obsahuje aj prechod (METODIKA kap. 3, znacka transition)",
+    "dozvuk je %d s po poslednom okne, ktore udalost obsahovalo; mimo udalosti a dozvuku je cista prevadzka"
+    % DOZVUK_S,
+    "udalost bez dokazu (executed false) a jej okna do metrik nevstupuju (NAVRH_PROTOKOL_V3 kap. 5)",
+    "porovnanie s cistou prevadzkou je podmieneny exaktny binomicky test dvoch Poissonovych mier "
+    "(jednostranne: viac alarmov pri udalosti); relacie a boot nie su v teste zohladnene",
+]
+
+
+def kategorie_udalosti(riadky, udalosti, perioda_s, okno):
+    """Kategoria kazdeho riadku: typ udalosti, 'po_udalosti', 'prevadzka' alebo None (vylucene)."""
+    sirka = (okno - 1) * perioda_s
+    vysledok = []
+    for r in riadky:
+        t = float(r["timestamp"])
+        prekryv = [u for u in udalosti if u["host_start_unix"] <= t and t - sirka <= u["host_stopped_unix"]]
+        dozvuk = [u for u in udalosti if u["host_stopped_unix"] < t - sirka <= u["host_stopped_unix"] + DOZVUK_S]
+        if prekryv or dozvuk:
+            vykonane = all(u["executed"] for u in prekryv + dozvuk)
+            vysledok.append(None if not vykonane else prekryv[0]["type"] if prekryv else "po_udalosti")
+        else:
+            vysledok.append("prevadzka")
+    return vysledok
+
+
+def _expozicia(riadky, kategorie, perioda_s):
+    """Suhrny ako suhrn_relacie, po kategoriach jednej relacie (vstup pre far)."""
+    out = {}
+    for r, k in zip(riadky, kategorie):
+        if k is None:
+            continue
+        s = out.setdefault(k, {"riadkov": 0, "skorovanych": 0, "udalosti_model": 0, "udalosti_integrita": 0,
+                               "sledovany_s": 0.0, "skorovany_s": 0.0})
+        s["riadkov"] += 1
+        s["sledovany_s"] += perioda_s
+        if r["score"] is not None:
+            s["skorovanych"] += 1
+            s["skorovany_s"] += perioda_s
+        if r["alarm_event"]:
+            s["udalosti_model"] += "model_anomaly" in r["alarm_sources"]
+            s["udalosti_integrita"] += "kernel_integrity" in r["alarm_sources"]
+    return out
+
+
+def priebeh_udalosti(riadky, udalost, perioda_s, okno):
+    """Oneskorenie prveho alarmu modelu od zaciatku udalosti a ci alarm odznie po dozvuku."""
+    sirka = (okno - 1) * perioda_s
+    koniec = udalost["host_stopped_unix"] + sirka
+    pocas = [r for r in riadky if udalost["host_start_unix"] <= float(r["timestamp"]) <= koniec]
+    dozvuk = [r for r in riadky if koniec < float(r["timestamp"]) <= koniec + DOZVUK_S]
+    prvy = next((float(r["timestamp"]) for r in pocas if r["alarm_event"] and "model_anomaly" in r["alarm_sources"]),
+                None)
+    return {"type": udalost["type"], "class": udalost["class"], "executed": udalost["executed"],
+            "start_unix": udalost["host_start_unix"], "stop_unix": udalost["host_stopped_unix"],
+            "alarm_modelu": prvy is not None,
+            "oneskorenie_s": None if prvy is None else prvy - udalost["host_start_unix"],
+            "alarm_riadkov": sum(bool(r.get("model_alarm")) for r in pocas),
+            "alarm_v_dozvuku_riadkov": sum(bool(r.get("model_alarm")) for r in dozvuk),
+            "alarm_na_konci_dozvuku": bool(dozvuk and dozvuk[-1].get("model_alarm")),
+            "dozvuk_riadkov": len(dozvuk)}
+
+
+def porovnanie_mier(k1, e1, k0, e0):
+    """Jednostranny podmieneny exaktny test: je miera 1 vacsia nez miera 0 (Poisson, expozicie e)?"""
+    from scipy.stats import binomtest
+    if e1 <= 0 or e0 <= 0:
+        return {"p": None, "dovod": "bez expozicie"}
+    if k1 + k0 == 0:
+        return {"p": 1.0, "pomer_mier": None, "dovod": "bez udalosti modelu"}
+    test = binomtest(k1, k1 + k0, e1 / (e1 + e0), alternative="greater")
+    return {"p": float(test.pvalue), "pomer_mier": (k1 / e1) / (k0 / e0) if k0 else None, "dovod": None}
+
+
+def vyhodnot_udalosti(index_cesta, prehratia, alfa=0.05):
+    """FAR dnesneho balika pocas prevadzkovych udalosti protokolu v3 (krok A), po typoch a triedach."""
+    alfa = _alfa(alfa)
+    index = json.loads(open(index_cesta, encoding="utf-8").read())
+    if index.get("schema") != SCHEMA_INDEX_UDALOSTI or index.get("complete") is not True:
+        raise ValueError("nie je uplny index %s" % SCHEMA_INDEX_UDALOSTI)
+    protokol = index["protocol_config"]
+    perioda, max_medzera, okno = protokol["interval_s"], protokol["max_gap_s"], protokol["window_rows"]
+    triedy = protokol["events"]["classes"]
+    zaznamy = {z["features_sha256"]: z for z in index["sessions"]}
+    balik, balik_sha, relacie, priebehy = None, None, {}, []
+    po_kategoriach = collections.defaultdict(list)
+    for adresar in prehratia:
+        konf, stav, riadky, hashe = _nacitaj_prehratie(adresar)
+        zaznam = zaznamy.get(_digest(konf["archive"]))
+        if zaznam is None:
+            raise ValueError("%s: archiv nie je relaciou tohto indexu" % adresar)
+        if zaznam["id"] in relacie:
+            raise ValueError("%s: relacia %s je prehrata dvakrat" % (adresar, zaznam["id"]))
+        manifest = konf["bundle_manifest"]
+        if manifest.get("diagnostic") is not False:
+            raise ValueError("%s: diagnosticky balik nema FAR" % adresar)
+        kontrakt = manifest["feature_contract"]
+        if kontrakt["max_gap_s"] != max_medzera or kontrakt["window_rows"] != okno:
+            raise ValueError("%s: casove nastavenia balika sa lisia od protokolu" % adresar)
+        if balik is None:
+            balik, balik_sha = manifest, _manifest_sha(manifest)
+        elif _manifest_sha(manifest) != balik_sha:
+            raise ValueError("%s: prehratia pouzili rozne baliky" % adresar)
+        if riadky[0]["timestamp"] != zaznam["start"] or riadky[-1]["timestamp"] != zaznam["end"]:
+            raise ValueError("%s: prehratie nepokryva celu relaciu" % adresar)
+        if _digest(zaznam["events"]) != zaznam["events_sha256"]:
+            raise ValueError("%s: events.json sa zmenil od indexu" % adresar)
+        udalosti = json.loads(open(zaznam["events"], encoding="utf-8").read())["events"]
+        suhrn = suhrn_relacie(riadky, perioda, max_medzera)
+        kategorie = kategorie_udalosti(riadky, udalosti, perioda, okno)
+        for kategoria, e in _expozicia(riadky, kategorie, perioda).items():
+            po_kategoriach[kategoria].append(dict(e, relacia=zaznam["id"], skupina=zaznam["group"]))
+        priebehy += [dict(priebeh_udalosti(riadky, u, perioda, okno), relacia=zaznam["id"], skupina=zaznam["group"])
+                     for u in udalosti]
+        relacie[zaznam["id"]] = dict(suhrn, scenario=zaznam["scenario"], skupina=zaznam["group"],
+                                     features_sha256=zaznam["features_sha256"], archiv=os.path.realpath(konf["archive"]),
+                                     prehratie=os.path.realpath(adresar), subory_sha256=hashe,
+                                     udalosti_sha256=zaznam["events_sha256"],
+                                     vylucenych_riadkov=sum(k is None for k in kategorie))
+    chybaju = sorted(z["id"] for z in zaznamy.values() if z["id"] not in relacie)
+    if chybaju:
+        raise ValueError("chybaju prehratia relacii: %s" % ", ".join(chybaju))
+
+    def miera(zoznam):
+        vysledok = far(zoznam, alfa)
+        vysledok["skupin"] = len({s["skupina"] for s in zoznam})
+        vysledok["udalosti_integrita"] = sum(s["udalosti_integrita"] for s in zoznam)
+        return vysledok
+
+    typy = {k: v for k, v in po_kategoriach.items() if k in triedy}
+    podla_triedy = collections.defaultdict(list)
+    for typ, zoznam in typy.items():
+        podla_triedy[triedy[typ]] += zoznam
+    cista = po_kategoriach.get("prevadzka", [])
+    vsetky = [s for zoznam in typy.values() for s in zoznam]
+    k0, e0 = sum(s["udalosti_model"] for s in cista), sum(s["skorovany_s"] for s in cista)
+    porovnaj = lambda zoznam: porovnanie_mier(sum(s["udalosti_model"] for s in zoznam),
+                                              sum(s["skorovany_s"] for s in zoznam), k0, e0)
+    env = balik["environment"]
+    relacie_env = {"kernel": {z["guest"]["kernel"] for z in index["sessions"]},
+                   "stack_sha256": {z["guest"]["stack_sha256"] for z in index["sessions"]},
+                   "collector_sha256": {z["collector_sha256"] for z in index["sessions"]},
+                   "extractor_sha256": {json.dumps(z["extractor_sha256"], sort_keys=True) for z in index["sessions"]}}
+    prostredie = {k: "zhodne" if v == {env[k] if k != "extractor_sha256" else json.dumps(env[k], sort_keys=True)}
+                  else "ine" for k, v in relacie_env.items()}
+    vykonane = [p for p in priebehy if p["executed"]]
+    return {
+        "schema": SCHEMA_FAR_UDALOSTI, "alfa": alfa, "dozvuk_s": DOZVUK_S,
+        "index": os.path.realpath(index_cesta), "index_sha256": _digest(index_cesta),
+        "protokol": protokol["name"], "protocol_sha256": index["protocol_sha256"],
+        "balik": {"manifest_sha256": balik_sha, "created_utc": balik["created_utc"],
+                  "corpus_index_sha256": balik["provenance"]["corpus_index_sha256"],
+                  "calibration": balik["calibration"]},
+        "prostredie_voci_baliku": prostredie,
+        "perioda_s": perioda, "okno_riadkov": okno,
+        "merane": {
+            "prevadzka": miera(cista) if cista else None,
+            "po_udalosti": miera(po_kategoriach["po_udalosti"]) if po_kategoriach.get("po_udalosti") else None,
+            "vsetky_udalosti": {**miera(vsetky), "voci_prevadzke": porovnaj(vsetky)} if vsetky else None,
+            "typy": {t: {**miera(z), "trieda": triedy[t], "voci_prevadzke": porovnaj(z)} for t, z in sorted(typy.items())},
+            "triedy": {t: {**miera(z), "voci_prevadzke": porovnaj(z)} for t, z in sorted(podla_triedy.items())},
+            "skupin": len({s["skupina"] for s in relacie.values()}),
+        },
+        "udalosti": {"planovanych": len(priebehy), "vykonanych": len(vykonane),
+                     "s_alarmom_modelu": sum(p["alarm_modelu"] for p in vykonane),
+                     "alarm_na_konci_dozvuku": sum(p["alarm_na_konci_dozvuku"] for p in vykonane),
+                     "priebeh": priebehy},
+        "relacie": relacie, "predpoklady": [*PREDPOKLADY, *PREDPOKLADY_UDALOSTI],
+        "poznamka": ("Prevadzkove udalosti su benigne; kazdy alarm je falosny. Vysledok plati iba pre tieto typy "
+                     "udalosti v labe a nehovori nic o detekcii utokov ani malveru (HONESTY P4)."),
+    }, balik
+
+
 def _git_stav():
     """(commit, zoznam zmenenych ciest) alebo (None, None), ked git nie je k dispozicii."""
     try:
@@ -486,24 +664,20 @@ def _hlavny(argv=None):
     f.add_argument("--alfa", type=_arg_alfa, default=0.05)
     f.add_argument("--final", action="store_true",
                    help="povinne pre test_benign: zaverecne FAR, raz na korpus, nad commitnutym kodom")
+    u = sub.add_parser("udalosti", help="FAR dnesneho balika pocas prevadzkovych udalosti (protokol v3, krok A)")
+    u.add_argument("--index", required=True, help="events_index.json testovacej kampane v3")
+    u.add_argument("--replay", required=True, nargs="+", help="vystupne adresare safeguard replay --archive")
+    u.add_argument("--out", required=True, help="novy JSON; existujuci sa neprepise")
+    u.add_argument("--alfa", type=_arg_alfa, default=0.05)
     a = p.parse_args(argv)
+    if a.prikaz == "udalosti":
+        return _udalosti(a, argv)
     values, balik = vyhodnot_far(a.corpus, a.role, a.replay, a.alfa, a.final, a.campaign)
-    commit, zmeny = _git_stav()
+    doc = _zaznam(values, balik, argv)
+    commit, zmeny = doc["commit"], doc.pop("_zmeny")
     vlastny = os.path.relpath(os.path.abspath(__file__), REPO)
     if a.final and (commit is None or zmeny is None or vlastny in zmeny):
         raise SystemExit("--final vyzaduje git a commitnuty %s" % vlastny)
-    doc = {"commit": commit, "commit_dirty": None if zmeny is None else bool(zmeny),
-           "evaluator_sha256": _digest(os.path.abspath(__file__)),
-           "date": datetime.datetime.now(datetime.timezone.utc).isoformat(),
-           "host": platform.platform(),
-           "guest": "jadro %s, stack_sha256 %s" % (balik["environment"]["kernel"],
-                                                   balik["environment"]["stack_sha256"]),
-           "command": shlex.join(["python3", "-m", "tcn.eval", *argv]), "cwd": os.getcwd(),
-           "n": len(values["relacie"]), "values": values}
-    if zmeny is None:
-        doc["commit_note"] = "git nedostupny; kod urcuje evaluator_sha256"
-    elif zmeny:
-        doc["commit_note"] = "neulozene zmeny: %s; kod urcuje evaluator_sha256" % ", ".join(zmeny)
     text = json.dumps(doc, ensure_ascii=False, indent=2, sort_keys=True, allow_nan=False) + "\n"
     # Vystup vznikne skor nez zaznam o zaverecnom teste: ked --out existuje alebo
     # jeho adresar chyba, jedine zaverecne FAR korpusu sa tym nespotrebuje.
@@ -525,6 +699,37 @@ def _hlavny(argv=None):
                       "far_model_skorovany_h": spolu["far_h"]["skorovany"],
                       "aktivity_okna_presnost": klas["okna"]["presnost"],
                       "aktivity_relacie": [klas["relacie"]["spravnych"], klas["relacie"]["spolu"]]},
+                     ensure_ascii=False))
+    return 0
+
+
+def _zaznam(values, balik, argv):
+    commit, zmeny = _git_stav()
+    doc = {"commit": commit, "commit_dirty": None if zmeny is None else bool(zmeny),
+           "evaluator_sha256": _digest(os.path.abspath(__file__)),
+           "date": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+           "host": platform.platform(),
+           "guest": "jadro %s, stack_sha256 %s" % (balik["environment"]["kernel"],
+                                                   balik["environment"]["stack_sha256"]),
+           "command": shlex.join(["python3", "-m", "tcn.eval", *argv]), "cwd": os.getcwd(),
+           "n": len(values["relacie"]), "values": values, "_zmeny": zmeny}
+    if zmeny is None:
+        doc["commit_note"] = "git nedostupny; kod urcuje evaluator_sha256"
+    elif zmeny:
+        doc["commit_note"] = "neulozene zmeny: %s; kod urcuje evaluator_sha256" % ", ".join(zmeny)
+    return doc
+
+
+def _udalosti(a, argv):
+    values, balik = vyhodnot_udalosti(a.index, a.replay, a.alfa)
+    doc = _zaznam(values, balik, argv)
+    doc.pop("_zmeny")
+    with open(a.out, "x", encoding="utf-8") as fh:
+        fh.write(json.dumps(doc, ensure_ascii=False, indent=2, sort_keys=True, allow_nan=False) + "\n")
+    m = values["merane"]
+    print(json.dumps({"relacii": doc["n"], "udalosti": [values["udalosti"]["vykonanych"], values["udalosti"]["planovanych"]],
+                      "prevadzka_far_h": m["prevadzka"] and m["prevadzka"]["far_h"]["skorovany"],
+                      "udalosti_far_h": m["vsetky_udalosti"] and m["vsetky_udalosti"]["far_h"]["skorovany"]},
                      ensure_ascii=False))
     return 0
 

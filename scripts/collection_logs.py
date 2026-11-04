@@ -29,6 +29,13 @@ REQUIRED = ("preflight_smoke.json", "host_monitor.jsonl", "host_monitor.log", "t
 SERVICE_LINE = re.compile(r"python3\[(\d+)\]: .*request rid=(\S+) method=(\S+) path=(\S+) status=(\d+)\s*$")
 REQUIRED_UNITS = ("nginx", "postgresql@15-main", "hyptcn-lab@auth", "hyptcn-lab@catalog",
                   "hyptcn-lab@orders", "hyptcn-lab@worker", "systemd-journald")
+APPS = ("hyptcn-lab@auth", "hyptcn-lab@catalog", "hyptcn-lab@orders", "hyptcn-lab@worker")
+# Units a protocol-v3 event restarts by design (lab/udalosti.py); any other restart stays a problem.
+EVENT_UNITS = {"zla_konfiguracia_sluzby": ("hyptcn-lab@catalog",), "restart_sluzby": ("hyptcn-lab@orders",),
+               "restart_databazy": ("postgresql@15-main", *APPS),
+               # The worker's statement hits the 3 s timeout on the locked table; systemd restarts it.
+               "zamok_tabulky": ("hyptcn-lab@worker",)}
+NGINX_TIME = re.compile(r"^(\d{4}/\d\d/\d\d \d\d:\d\d:\d\d) ")
 
 
 def digest(path):
@@ -68,6 +75,12 @@ def audit_logs(directory, *, snapshot_times=()):
     directory = Path(directory).resolve()
     problems = traffic_log.Problems()
     result = {"schema": SCHEMA, "session_dir": str(directory), "sections": {}}
+    # Protocol v3: [host start - 1 s, host stop done + grace] of each event. Failures inside a window
+    # are expected evidence of the event; outside every window the checks stay as strict as in v2.
+    windows, event_types, known_pids = [], [], {}
+
+    def in_window(*times):
+        return any(lo <= t <= hi for t in times for lo, hi in windows)
 
     def check(condition, key, detail=None):
         if not condition:
@@ -93,7 +106,9 @@ def audit_logs(directory, *, snapshot_times=()):
         check(end.get("guest_after") == meta.get("guest_before"), "guest_identity_changed")
         for name in ("collector", "traffic", "monitor"):
             rc = end.get(name + "_rc", end.get(name, {}).get("rc"))
-            check(type(rc) is int and rc == 0, "child_exit", f"{name}:{rc}")
+            # host_traffic exits 1 after any failed request; outside the event windows those still fail below.
+            allowed = (0, 1) if name == "traffic" and "events" in meta else (0,)
+            check(type(rc) is int and rc in allowed, "child_exit", f"{name}:{rc}")
         start, stop = finite(end["measure_start_unix"]), finite(end["measure_end_unix"])
         check(start < stop, "invalid_measure_interval")
         check(all(start <= finite(t) <= stop for t in snapshot_times), "snapshot_outside_measure")
@@ -140,13 +155,19 @@ def audit_logs(directory, *, snapshot_times=()):
             clock = read_json(directory / "guest" / f"clock_{when}.json")
             check(abs(finite(clock["offset_s"])) <= 1.0 and 0 <= finite(clock["uncertainty_s"]) <= 1.0,
                   "guest_clock", when)
+        restarted = {unit for kind in event_types for unit in EVENT_UNITS.get(kind, ())}
         for unit in REQUIRED_UNITS:
+            if unit in restarted:
+                continue
             a, b = before["units"].get(unit, {}), after["units"].get(unit, {})
             check(all(k in a and k in b and a[k] == b[k] for k in
                       ("NRestarts", "InvocationID", "ExecMainPID", "ExecMainStartTimestampMonotonic")),
                   "service_restarted", unit)
+        for name in ("auth", "catalog", "orders"):
+            unit = "hyptcn-lab@" + name
+            known_pids.setdefault(name, set()).update(str(state["units"][unit]["ExecMainPID"]) for state in (before, after))
         return {"boot_id": after["boot_id"], "database_before": before["database"],
-                "database_after": after["database"], "units_checked": list(REQUIRED_UNITS)}
+                "database_after": after["database"], "units_checked": [u for u in REQUIRED_UNITS if u not in restarted]}
 
     def segments():
         files, counts = {}, {}
@@ -208,8 +229,8 @@ def audit_logs(directory, *, snapshot_times=()):
             check(0 <= finite(row["t_start_mono"]) <= finite(row["t_end_mono"]) and finite(row["duration_ms"]) >= 0,
                   "request_timing", row.get("rid"))
             check(unix(row["t_start_utc"]) <= unix(row["t_end_utc"]), "request_wall_clock", row.get("rid"))
-            check(row["outcome"] == "ok" and type(row["status"]) is int and 200 <= row["status"] < 300,
-                  "request_failed", row.get("rid"))
+            check(row["outcome"] == "ok" and type(row["status"]) is int and 200 <= row["status"] < 300
+                  or in_window(unix(row["t_start_utc"]), unix(row["t_end_utc"])), "request_failed", row.get("rid"))
         status = read_json(directory / "traffic.json")
         before = read_json(directory / "traffic_before.json")
         check(status.get("final") is True and not status.get("logging_error") and not status.get("worker_errors"),
@@ -224,6 +245,7 @@ def audit_logs(directory, *, snapshot_times=()):
 
     def correlation(contents, requests):
         expected = {r["rid"]: r for r in requests}
+        during = {rid for rid, r in expected.items() if in_window(unix(r["t_start_utc"]), unix(r["t_end_utc"]))}
         matched = Counter()
         for line in contents["session:nginx-access.jsonl"].splitlines():
             row = json.loads(line)
@@ -234,6 +256,8 @@ def audit_logs(directory, *, snapshot_times=()):
                 continue
             req = expected[rid]
             matched[rid] += 1
+            if rid in during:
+                continue  # A client timeout leaves nginx 499 and a late timestamp.
             check(row["forwarded_rid"] == rid and row["status"] == req["status"] and
                   row["method"] == req["method"] and row["uri"] == req["route"], "nginx_mismatch", rid)
             check(unix(req["t_start_utc"]) - 1 <= finite(row["msec"]) <= unix(req["t_end_utc"]) + 1,
@@ -250,36 +274,55 @@ def audit_logs(directory, *, snapshot_times=()):
         for row in smoke["values"]["checks"]:
             check(row["status"] == row.get("expected"), "preflight_failed", row["rid"])
             check(pre[row["rid"]] == [row["status"]], "preflight_correlation", row["rid"])
-        before = read_json(directory / "guest/state_before.json")
-        pids = {name: str(before["units"]["hyptcn-lab@" + name]["ExecMainPID"])
-                for name in ("auth", "catalog", "orders")}
+        pids = {name: known_pids[name] for name in ("auth", "catalog", "orders")}
         service, catalog_calls = Counter(), Counter()
         journal = contents["journal:journal.txt"]
+        tolerated = Counter()
         for line in journal.splitlines():
             m = SERVICE_LINE.search(line)
             if m and m[2] in expected:
                 service[(m[2], m[1], m[3], m[4], int(m[5]))] += 1
-                if m[1] == pids["catalog"] and m[3] == "GET" and m[4].startswith("/api/catalog/") and m[5] == "200":
+                if m[1] in pids["catalog"] and m[3] == "GET" and m[4].startswith("/api/catalog/") and m[5] == "200":
                     catalog_calls[m[2]] += 1
-            if re.search(r"Suppressed \d+ messages|Missed \d+ journal messages|Traceback \(most recent call last\)", line):
+            if re.search(r"Suppressed \d+ messages|Missed \d+ journal messages", line):
                 problems.add("journal_error_or_loss", line[:180])
+            elif "Traceback (most recent call last)" in line:
+                if windows and in_window(unix(line.split(" ", 1)[0])):
+                    tolerated["journal_tracebacks"] += 1
+                else:
+                    problems.add("journal_error_or_loss", line[:180])
+
+        def served(rid, name, method, route, status):
+            return sum(service[(rid, pid, method, route, status)] for pid in pids[name])
         for rid, req in expected.items():
             route, method, status = req["route"], req["method"], req["status"]
             name = "auth" if route.startswith("/api/auth/") else "catalog" if route.startswith("/api/catalog") else "orders"
             if route == "/":
                 continue  # nginx serves this route without an API call.
-            check(service[(rid, pids[name], method, route, status)] == 1, "service_request_count", rid)
+            if rid in during:
+                tolerated["requests_in_events"] += 1
+                tolerated["failed_in_events"] += req["outcome"] != "ok" or not 200 <= req["status"] < 300
+                continue
+            check(served(rid, name, method, route, status) == 1, "service_request_count", rid)
             if route == "/api/orders":
-                check(service[(rid, pids["auth"], "GET", "/api/auth/check", 200)] == 1, "service_auth_call", rid)
+                check(served(rid, "auth", "GET", "/api/auth/check", 200) == 1, "service_auth_call", rid)
                 if method == "POST" and status == 201:
                     check(catalog_calls[rid] == 1, "service_catalog_call", rid)
             if route == "/healthz":
                 for dependency in ("auth", "catalog"):
-                    check(service[(rid, pids[dependency], "GET", "/healthz", 200)] == 1,
+                    check(served(rid, dependency, "GET", "/healthz", 200) == 1,
                           "service_health_call", f"{rid}:{dependency}")
-        check(not contents["session:nginx-error.log"].strip(), "nginx_error_log_nonempty")
+        for line in contents["session:nginx-error.log"].splitlines():
+            # nginx writes guest local time; the lab guest runs in UTC.
+            m = NGINX_TIME.match(line)
+            stamp = m and datetime.strptime(m[1], "%Y/%m/%d %H:%M:%S").replace(tzinfo=timezone.utc).timestamp()
+            if stamp and windows and in_window(stamp, stamp + 1):
+                tolerated["nginx_error_lines"] += 1
+            elif line.strip():
+                problems.add("nginx_error_log_nonempty", line[:180])
         return {"requests": len(expected), "nginx_matched_once": sum(matched[rid] == 1 for rid in expected),
-                "service_records": sum(service.values()), "preflight_requests": len(smoke["values"]["checks"])}
+                "service_records": sum(service.values()), "preflight_requests": len(smoke["values"]["checks"]),
+                **({"tolerated_in_events": dict(tolerated)} if windows else {})}
 
     def monitor():
         end = read_json(directory / "end.json")
@@ -315,8 +358,42 @@ def audit_logs(directory, *, snapshot_times=()):
                 "warnings": [line for line in log.splitlines() if re.search(r"\sWARN\s", line)],
                 "errors": errors, "end": ends[-1] if ends else None}
 
+    def events():
+        meta = read_json(directory / "session.json")
+        doc = read_json(directory / "events.json")
+        check(doc.get("schema") == "hyptcn3/session-events/1", "events_schema")
+        planned = [{k: r[k] for k in ("type", "class", "start_s", "duration_s")} for r in doc["events"]]
+        check(planned == meta["events"], "events_differ_from_plan")
+        for record in doc["events"]:
+            if "host_start_unix" not in record:
+                problems.add("event_not_started", record["type"])
+                continue
+            if "host_stopped_unix" not in record:
+                problems.add("event_not_stopped", record["type"])
+                continue
+            windows.append((finite(record["host_start_unix"]) - 1,
+                            finite(record["host_stopped_unix"]) + finite(meta["event_grace_s"])))
+            event_types.append(record["type"])
+            # The deployed guest script must be the one hashed at session start.
+            script = meta["source_sha256"].get("lab/udalosti.py")
+            check(all(record.get(step, {}).get("script_sha256") == script for step in ("start", "stop")),
+                  "event_script_differs", record["type"])
+            for state in (record.get("start", {}), record["stop"]):
+                for name in ("auth", "catalog", "orders"):
+                    pid = state.get("units", {}).get("hyptcn-lab@" + name, {}).get("ExecMainPID")
+                    if pid and pid != "0":
+                        known_pids.setdefault(name, set()).add(str(pid))
+        return {"events": len(doc["events"]), "executed": sum(r["executed"] is True for r in doc["events"]),
+                "windows": windows, "types": event_types}
+
     section("metadata", metadata)
     section("manifest", manifest)
+    try:
+        planned = "events" in read_json(directory / "session.json")
+    except (OSError, ValueError):
+        planned = False  # The metadata section has already recorded why.
+    if planned:
+        section("events", events)
     section("guest", guest)
     contents, requests = {}, []
 

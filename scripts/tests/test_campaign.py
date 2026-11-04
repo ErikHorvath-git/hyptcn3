@@ -438,3 +438,35 @@ def test_ended_before_measurement_needs_proof_of_no_ram(tmp_path):
     assert c.ended_before_measurement(session)
     (session / "raw").mkdir()
     assert not c.ended_before_measurement(session)  # Contradiction: keep it for review.
+
+
+def event_audit(tmp_path, name, role="test_events", group="v3-test_events-1", boot="b1", accepted=True):
+    session = tmp_path / name
+    session.mkdir()
+    (session / "events.json").write_text('{"events": []}\n')
+    (session / "f.npz").write_bytes(name.encode())
+    meta = {"schema": "hyptcn3/collection-session/2", "session_id": name, "role": role, "group": group,
+            "scenario": "quiet", "seed": 1, "guest_before": {"boot_id": boot}, "collector_sha256": "c"}
+    write_new(session / "session.json", meta)
+    logs = {"schema": "hyptcn3/collection-logs-audit/1", "accepted": True, "problems": [],
+            "sections": {"metadata": {"session_sha256": digest(session / "session.json")}}}
+    values = {"accepted": accepted, "protocol_sha256": "p", "session_dir": str(session),
+              "session_sha256": digest(session / "session.json"), "features": str(session / "f.npz"),
+              "features_sha256": digest(session / "f.npz"), "logs": logs, "extractor_sha256": {}}
+    write_new(session / "audit.json", {"values": values})
+    return session / "audit.json"
+
+
+def test_test_only_protocol_gets_an_event_index_not_a_corpus(tmp_path, monkeypatch):
+    import features.archive
+    monkeypatch.setattr(features.archive, "load", lambda path: {"casy": [10.0, 15.0]})
+    p = {"roles": {"test_events": 1}, "scenarios": {"quiet": {}, "steady": {}}}
+    reports = [event_audit(tmp_path, "s1"), event_audit(tmp_path, "s2")]
+    doc = c.event_index(reports, p, "p")
+    assert doc["complete"] and [r["id"] for r in doc["sessions"]] == ["s1", "s2"]
+    assert doc["sessions"][0]["start"] == 10.0 and doc["sessions"][0]["events_sha256"]
+    assert not c.event_index(reports[:1], p, "p")["complete"]
+    with pytest.raises(ValueError, match="boot/group"):
+        c.event_index([*reports, event_audit(tmp_path, "s3", boot="b2")], p, "p")
+    with pytest.raises(ValueError, match="unaccepted"):
+        c.event_index([event_audit(tmp_path, "s4", accepted=False)], p, "p")

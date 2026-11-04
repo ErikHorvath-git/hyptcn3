@@ -35,6 +35,7 @@ from features.windows import WindowError
 from features.quality import protocol_policy, valid_for, BEHAVIOR_POLICY
 from features.coverage import ideal_windows, scorable_windows
 from scripts.collection_logs import audit_logs
+from lab.udalosti import TYPES as EVENT_TYPES
 
 DEFAULT = ROOT / "config/collection-v2.json"
 COLLECTIONS = ROOT / "data/collections"  # Global lock; diagnostics only change the session base.
@@ -96,7 +97,52 @@ def protocol(path):
             raise ValueError("score coverage gate is unreachable for " + key)
     if p["bin_bytes"] != 16777216:
         raise ValueError("capture runner currently supports 16 MiB bins")
+    if "events" in p:
+        check_events(p)
     return p
+
+
+EVENT_KEYS = {"note", "classes", "per_session", "duration_s", "first_s", "min_gap_s", "tail_s", "grace_s", "pilot"}
+
+
+def check_events(p):
+    """Protocol v3: benign operational events scheduled inside the measured interval."""
+    e = p["events"]
+    if set(e) != EVENT_KEYS or not e["classes"] or not set(e["classes"]) <= set(EVENT_TYPES):
+        raise ValueError("invalid event configuration")
+    numbers = [*e["per_session"], *e["duration_s"], e["first_s"], e["min_gap_s"], e["tail_s"], e["grace_s"]]
+    if any(type(v) is not int or v < 1 for v in numbers) or e["per_session"][0] > e["per_session"][1] \
+            or e["duration_s"][0] > e["duration_s"][1] or e["grace_s"] >= e["min_gap_s"]:
+        raise ValueError("invalid event configuration")
+    longest = e["first_s"] + e["per_session"][1] * e["duration_s"][1] + (e["per_session"][1] - 1) * e["min_gap_s"]
+    if longest + e["tail_s"] > p["cycles"] * p["interval_s"]:
+        raise ValueError("event schedule does not fit the session")
+    check_schedule(p, e["pilot"], p["pilot_cycles"])
+
+
+def check_schedule(p, events, cycles):
+    e, end = p["events"], 0
+    for event in events:
+        if event["type"] not in e["classes"] or event["start_s"] < max(e["first_s"], end + e["min_gap_s"] * bool(end)):
+            raise ValueError("event schedule violates the protocol")
+        end = event["start_s"] + event["duration_s"]
+    if events and end + e["tail_s"] > cycles * p["interval_s"]:
+        raise ValueError("event schedule does not fit the session")
+
+
+def event_schedule(p, seed, deck):
+    """Seeded offsets from the measurement start; types are drawn from the group's deck."""
+    e, rng = p["events"], random.Random(seed)
+    events, start = [], e["first_s"]
+    for _ in range(rng.randint(*e["per_session"])):
+        kind = deck.pop(0)
+        duration = rng.randrange(e["duration_s"][0], e["duration_s"][1] + 1, 30)
+        events.append({"type": kind, "class": e["classes"][kind], "start_s": start, "duration_s": duration})
+        start += duration + e["min_gap_s"]
+    # Slack (the longest schedule fits) moves the whole block by a seeded offset.
+    slack = p["cycles"] * p["interval_s"] - e["tail_s"] - (start - e["min_gap_s"])
+    shift = rng.randrange(0, slack // 30 + 1) * 30
+    return [dict(event, start_s=event["start_s"] + shift) for event in events]
 
 
 def plan(p):
@@ -108,10 +154,16 @@ def plan(p):
             scenarios = list(p["scenarios"])
             seed = int.from_bytes(hashlib.sha256(f"{role}/{repetition}".encode()).digest()[:4], "big")
             random.Random(seed).shuffle(scenarios)
+            deck = []  # Every event type before any repeats, within each group.
             for scenario in scenarios:
-                result.append({"role": role, "group": f"{role}-{repetition + 1}",
-                               "scenario": scenario, "seed": seed + len(result),
-                               "cycles": p["cycles"]})
+                session = {"role": role, "group": f"{p.get('group_prefix', '')}{role}-{repetition + 1}",
+                           "scenario": scenario, "seed": seed + len(result), "cycles": p["cycles"]}
+                if "events" in p:
+                    rng = random.Random(session["seed"])
+                    while len(deck) < p["events"]["per_session"][1]:
+                        deck.extend(rng.sample(sorted(p["events"]["classes"]), len(p["events"]["classes"])))
+                    session["events"] = event_schedule(p, session["seed"], deck)
+                result.append(session)
     return {"schema": "hyptcn3/collection-plan/1", "sessions": result,
             "planned_hours": len(result) * p["cycles"] * p["interval_s"] / 3600,
             "note": "Design allocation, not collected data; pilot and overhead runs are separate."}
@@ -459,11 +511,15 @@ def run_session(a, p):
         if getattr(a, "expected_qemu", None) and qemu != json.loads(a.expected_qemu):
             raise ValueError("VM process differs from campaign group (restart or restore)")
         attempt = getattr(a, "group_attempt", 1) or 1
+        events = [dict(e, **{"class": p["events"]["classes"][e["type"]]}) for e in p["events"]["pilot"]
+                  ] if a.role == "pilot" and "events" in p else []
         if a.role not in ("pilot", "diagnostic"):
             assignment = {"role": a.role, "group": a.group, "scenario": a.scenario,
                           "seed": a.seed, "cycles": p["cycles"]}
-            if assignment not in plan(p)["sessions"]:
+            planned = [s for s in plan(p)["sessions"] if {k: s[k] for k in assignment} == assignment]
+            if not planned:
                 raise ValueError("assignment/seed not present in frozen collection plan")
+            events = planned[0].get("events", [])
             if not a.pilot_report:
                 raise ValueError("corpus capture requires --pilot-report from an accepted pilot audit")
             report = json.loads(Path(a.pilot_report).read_text())
@@ -508,6 +564,7 @@ def run_session(a, p):
                     "campaign_id": getattr(a, "campaign_id", None),
                     "role": a.role, "group": a.group, "group_attempt": attempt, "scenario": a.scenario,
                     "typ": "benign", "seed": a.seed, "cycles": cycles, "guest_before": before,
+                    **({"events": events, "event_grace_s": p["events"]["grace_s"]} if "events" in p else {}),
                     "protocol_sha256": digest(a.protocol), "source_sha256": source_hashes,
                     "measurement_sha256": measurement_sources(),
                     "profile_sha256": {str(f.relative_to(prof)): digest(f) for f in prof.rglob("*") if f.is_file()},
@@ -520,7 +577,7 @@ def run_session(a, p):
                                 "seed": a.seed, "workers": s["workers"], "burst": s["burst"],
                                 "catalog_share": s["catalog_share"], "write_share": s["write_share"],
                                 "summary_interval_s": 5, "load_model": "closed loop, not a fixed request rate"},
-                    "metadata_not_model_inputs": ["scenario", "seed", "traffic", "boot_id", "group", "session_id"],
+                    "metadata_not_model_inputs": ["scenario", "seed", "traffic", "boot_id", "group", "session_id", "events"],
                     "working_storage": storage_identity(base),
                     "host_context": {"host_boot": Path("/proc/sys/kernel/random/boot_id").read_text().strip(),
                                      "qemu": qemu, "memory": host_memory(qemu), "python": sys.executable},
@@ -536,6 +593,60 @@ def run_session(a, p):
         print(f"Audit: python3 scripts/collection.py audit {out}")
 
 
+class Events:
+    """Planned benign events (lab/udalosti.py), offsets from the measurement start.
+
+    One event at a time. Stop always runs, also after a failed start or an
+    interruption, and returns the lab to its deployed state. An event counts
+    only with guest evidence of both steps and a healthy stack afterwards.
+    """
+
+    def __init__(self, p, planned, step):
+        self.p, self.step, self.active = p, step, None
+        self.records = [dict(event, executed=False) for event in planned]
+
+    def call(self, record, action):
+        try:
+            return lab_json(self.p, "event", "--event", action, record["type"], timeout=240)
+        except (subprocess.SubprocessError, OSError, ValueError) as exc:
+            return {"ok": False, "error": f"{type(exc).__name__}: {exc}"[:300]}
+
+    def tick(self, origin):
+        now = time.time()
+        if self.active is not None:
+            record = self.records[self.active]
+            if now >= origin + record["start_s"] + record["duration_s"]:
+                if not self.stop():
+                    raise ValueError("lab not restored after event " + record["type"])
+            return
+        for index, record in enumerate(self.records):
+            if "host_start_unix" not in record and now >= origin + record["start_s"]:
+                self.active = index  # Before the call: an interruption must still stop it.
+                record["host_start_unix"] = time.time()
+                record["start"] = self.call(record, "start")
+                record["host_started_unix"] = time.time()
+                self.step("event-start", type=record["type"], ok=record["start"].get("ok"))
+                if not record["start"].get("ok") and not self.stop():
+                    raise ValueError("lab not restored after event " + record["type"])
+                return
+
+    def stop(self):
+        record, self.active = self.records[self.active], None
+        record["host_stop_unix"] = time.time()
+        record["stop"] = self.call(record, "stop")
+        record["host_stopped_unix"] = time.time()
+        restored = record["stop"].get("ok") is True and record["stop"].get("health") == 200
+        record["executed"] = record.get("start", {}).get("ok") is True and restored
+        self.step("event-stop", type=record["type"], executed=record["executed"])
+        return restored
+
+    def close(self, path):
+        if self.active is not None:
+            self.stop()
+        write_json(path, {"schema": "hyptcn3/session-events/1", "events": self.records,
+                          "note": "Benign operational events; host times bound each event, guest replies are evidence."})
+
+
 def capture_session(p, out, metadata, cycles):
     owner = (int(os.environ["SUDO_UID"]), int(os.environ["SUDO_GID"])) if "SUDO_UID" in os.environ else None
     guest = out / "guest"
@@ -545,6 +656,7 @@ def capture_session(p, out, metadata, cycles):
     status = {"schema": END_SCHEMA, "completed": False, "interrupted": False, "steps": {}}
     children = {}
     interrupts = Interrupts()
+    events = Events(p, metadata["events"], lambda name, **values: step(name, **values)) if "events" in metadata else None
 
     def step(name, **values):
         status["steps"][name] = {"unix": time.time(), **values}
@@ -638,6 +750,8 @@ def capture_session(p, out, metadata, cycles):
                 checked = time.monotonic()
                 if generators(exclude={children["traffic"].pid}):
                     raise ValueError("another host_traffic.py appeared during capture")
+            if events:
+                events.tick(status["measure_start_unix"])
             time.sleep(1)
         status["capture_finished_unix"] = time.time()
         status["collector_rc"] = children["collector"].returncode
@@ -681,6 +795,11 @@ def capture_session(p, out, metadata, cycles):
             if name in children:
                 status[name] = stop_child(children.pop(name), grace)
         status["signals"] = interrupts.received
+        if events:
+            try:
+                events.close(out / "events.json")
+            except OSError as exc:
+                status["events_error"] = str(exc)
         # No snapshot without the measured phase: the campaign may retry such an attempt.
         status["measurement_started"] = "measure_start_unix" in status
         if status["interrupted"]:
@@ -886,7 +1005,8 @@ def main(argv=None):
     sub = ap.add_subparsers(dest="command", required=True)
     sub.add_parser("plan")
     run = sub.add_parser("run")
-    run.add_argument("--role", choices=["pilot", "diagnostic", "train", "dev", "calibration", "test_benign"],
+    run.add_argument("--role", choices=["pilot", "diagnostic", "train", "dev", "calibration", "test_benign",
+                                        "test_events"],
                      required=True)
     run.add_argument("--scenario", default="steady")
     run.add_argument("--group", required=True)

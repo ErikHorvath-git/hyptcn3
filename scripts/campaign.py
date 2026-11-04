@@ -654,7 +654,65 @@ def execute(directory, *, stop_after=None):
         interrupts.restore()
 
 
+EVENT_INDEX = "hyptcn3/event-index/1"
+
+
+def event_index(reports, p, protocol_sha):
+    """Test-only protocol (v3, step A): accepted sessions with their event intervals.
+
+    No training roles, so no corpus index: these sessions are only scored by an
+    existing bundle (python3 -m tcn.eval udalosti).
+    """
+    from features.archive import load
+    from features.quality import require_log_audit
+    records, boots, groups = [], {}, {}
+    for path in reports:
+        v = read_json(path)["values"]
+        if not v["accepted"] or v["protocol_sha256"] != protocol_sha:
+            raise ValueError("unaccepted audit or protocol mismatch: " + str(path))
+        session = Path(v["session_dir"])
+        meta = read_json(session / "session.json")
+        if v.get("session_sha256") != digest(session / "session.json") or digest(v["features"]) != v["features_sha256"]:
+            raise ValueError("session metadata or features changed since audit: " + str(path))
+        require_log_audit(meta, v)
+        boot = meta["guest_before"]["boot_id"]
+        if meta["role"] not in p["roles"] or boots.setdefault(boot, meta["group"]) != meta["group"] \
+                or groups.setdefault(meta["group"], boot) != boot:
+            raise ValueError("role or boot/group mapping outside the plan: " + str(path))
+        casy = load(v["features"])["casy"]
+        events = session / "events.json"
+        records.append({"id": meta["session_id"], "role": meta["role"], "group": meta["group"], "boot_id": boot,
+                        "scenario": meta["scenario"], "seed": meta["seed"],
+                        "start": float(casy[0]), "end": float(casy[-1]),
+                        "session": str(session / "session.json"), "session_sha256": v["session_sha256"],
+                        "audit": str(Path(path).resolve()), "audit_sha256": digest(path),
+                        "features": v["features"], "features_sha256": v["features_sha256"],
+                        "events": str(events), "events_sha256": digest(events),
+                        "guest": meta["guest_before"], "collector_sha256": meta["collector_sha256"],
+                        "extractor_sha256": v["extractor_sha256"]})
+    planned = sum(p["roles"].values()) * len(p["scenarios"])
+    return {"schema": EVENT_INDEX, "complete": len(records) == planned, "planned_sessions": planned,
+            "protocol_sha256": protocol_sha, "protocol_config": p, "sessions": records,
+            "note": "Benign operational events; test-only sessions, never training data."}
+
+
 def finish_corpus(directory, manifest, p, reports):
+    if "train" not in p["roles"]:
+        update_state(directory, status="running", stage="index", accepted_archived=len(reports))
+        index = directory / "events_index.json"
+        doc = event_index(reports, p, manifest["protocol_sha256"])
+        doc["protocol"] = str(directory / "protocol.json")
+        if not doc["complete"]:
+            raise ValueError("campaign ended without a complete event allocation")
+        if index.exists():
+            if read_json(index) != doc:
+                raise ValueError("existing event index differs")
+        else:
+            write_new(index, doc)
+        guard_mount(manifest["archive_root"], manifest["archive_mount"])
+        copy_exclusive(index, Path(manifest["archive_dir"]) / "events_index.json")
+        update_state(directory, status="complete", stage="complete", corpus=str(index), message=None)
+        return
     from features.dataset import build
     update_state(directory, status="running", stage="index", accepted_archived=len(reports))
     index = directory / "corpus.json"

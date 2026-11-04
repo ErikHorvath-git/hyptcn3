@@ -1,10 +1,12 @@
 # Návrh protokolu v3: prevádzkové udalosti bez malvéru
 
-**Stav: návrh z 2026-11-04, schválený smer, neimplementovaný.** Platný protokol zberu
-je `server-normal-v2` ([`METODIKA_ZBERU.sk.md`](METODIKA_ZBERU.sk.md),
+**Stav: návrh z 2026-11-04, krok A implementovaný (kap. 7), pilot ani zber ešte
+nebežali.** Protokol kroku A je [`config/collection-v3.json`](../config/collection-v3.json)
+(`server-events-v3`). Platný trénovací protokol ostáva `server-normal-v2`
+([`METODIKA_ZBERU.sk.md`](METODIKA_ZBERU.sk.md),
 [`config/collection-v2.json`](../config/collection-v2.json)), stav práce voči zadaniu
-je v [`STAV.sk.md`](STAV.sk.md). Po implementácii sa z návrhu stane kapitola metodiky
-a súbor protokolu; tento dokument sa potom zmaže.
+je v [`STAV.sk.md`](STAV.sk.md). Po vyhodnotení kroku A sa z návrhu stane kapitola
+metodiky; tento dokument sa potom zmaže.
 
 Rozhodnutia vlastníka z 2026-11-04:
 
@@ -62,8 +64,9 @@ sa bude vzťahovať iba na tieto typy.
 ## 4. Postup: najprv vyhodnotiť, potom prípadne trénovať
 
 **Krok A: vyhodnotenie dnešného modelu bez tréningu.** Zbierajú sa session so
-základnou premávkou a 2 až 4 vloženými udalosťami (každá 2 až 10 minút, medzi nimi
-najmenej 10 minút čistej prevádzky). Každý typ udalosti sa zopakuje v niekoľkých
+základnou premávkou a 2 až 3 vloženými udalosťami (každá 2 až 6 minút, pred prvou,
+medzi nimi aj po poslednej najmenej 10 minút čistej prevádzky; pôvodných 2 až 4
+udalostí po 2 až 10 minút sa do hodinovej session s týmito medzerami nezmestí). Každý typ udalosti sa zopakuje v niekoľkých
 bootoch, aby jednotkou neistoty bola skupina (METODIKA, kap. 1). Všetky tieto session
 sú iba testovacie. Model `server-v2-benign-v6` sa na nich prehrá a výsledok je:
 
@@ -100,16 +103,34 @@ extraktora. Pred zberom sa preto overí, že nový kód vypočíta z tých istý
 snímok korpusu v6 bajtovo rovnaké archívy príznakov. Bez tejto zhody by dnešný model
 nové dáta neskóroval férovo a krok A by odpadol.
 
-## 7. Čo treba zmeniť v kóde
+## 7. Zmeny v kóde
 
-| Zmena | Kde |
-|---|---|
-| spúšťanie udalostí v hosťovi podľa plánu a záznam ich intervalov s dôkazom | `lab/`, `scripts/collection.py` |
-| plán s udalosťami, typmi a seedom | `scripts/collection.py plan`, `config/collection-v3.json` |
-| mená skupín s predponou protokolu (dnešné `train-1` … kolidujú s dokončenou kampaňou v6) | `scripts/collection.py`, `scripts/campaign.py` |
-| audit, ktorý v intervaloch udalostí pripustí očakávané chyby klienta a reštarty služieb | `scripts/collection_logs.py`, `scripts/collection.py` |
-| vyhodnotenie falošných alarmov po typoch udalostí, oneskorenie a trvanie alarmu | `tcn/eval.py` |
-| značky okien z intervalov udalostí (iba pre krok B) | `features/dataset.py`, `safeguard/training.py` |
+| Zmena | Kde | Stav |
+|---|---|---|
+| udalosti v hosťovi: `start`/`stop`, `stop` vždy vráti nasadený stav, odpoveď JSON s dôkazom (stav jednotiek, `/healthz`, hash skriptu) | `lab/udalosti.py`, `scripts/labctl.py event` | hotové |
+| plán: 4 skupiny `test_events` × 6 scenárov (24 h), každý typ udalosti v každom boote, seedované časy | `scripts/collection.py plan`, `config/collection-v3.json` | hotové |
+| spúšťanie podľa plánu počas merania, záznam `events.json` s časmi hosťa aj hostiteľa; prerušenie aj zlyhaný štart udalosť zastaví | `scripts/collection.py` (`Events`) | hotové |
+| mená skupín s predponou `v3-`; plán v2 je bajtovo nezmenený (test) | `scripts/collection.py` | hotové |
+| audit: v intervale udalosti a 60 s po nej pripustí zlyhané požiadavky, chyby nginx, traceback v journale a reštart jednotiek, ktoré udalosť reštartuje; mimo intervalov ostáva prísny | `scripts/collection_logs.py` | hotové |
+| testovacia kampaň bez roly `train` dostane `events_index.json` namiesto korpusu | `scripts/campaign.py` | hotové |
+| FAR po typoch a triedach udalostí, dozvuk, čistá prevádzka, oneskorenie alarmu, test proti čistej prevádzke | `tcn/eval.py udalosti` | hotové |
+| značky okien z intervalov udalostí (iba pre krok B) | `features/dataset.py`, `safeguard/training.py` | iba pri kroku B |
+
+Typy udalostí kroku A (`lab/udalosti.py`): `zla_konfiguracia_sluzby` (preklep v drop-ine
+jednotky catalog, systemd ju reštartuje každé 3 s), `zla_konfiguracia_nginx` (zlý port
+upstreamu catalog, 502), `restart_databazy` (PostgreSQL; jednotky labu majú
+`Requires=postgresql.service`, reštartujú sa s ním), `restart_sluzby` (orders),
+`zamok_tabulky` (`LOCK TABLE orders`, dotazy narazia na 3 s `statement_timeout`),
+`udrzba_zaloha` (`pg_dump` a `tar` `/etc` s kompresiou) a `zataz_pamate` (proces
+s 400 MiB dotknutej pamäte). `logrotate` a čistenie journalu sa nevolajú, lebo by
+rozdelili segmenty logov, ktoré audit overuje.
+
+Pilot v3 obsahuje dve udalosti (`config/collection-v3.json`, `events.pilot`), aby
+audit udalostí prešiel na skutočnom labe ešte pred kampaňou. Identita hosťa
+(`stack_sha256`) skript udalostí nezahŕňa, takže ostáva porovnateľná s prostredím
+balíka v6; hash skriptu je v každej odpovedi udalosti a audit ho porovná s hashom
+pri štarte session. Kolektor sa po upratovaní (commit 625fe0f) preložil z iného
+zdroja, preto vyhodnotenie zapíše zhodu prostredia s balíkom po položkách.
 
 ## 8. Poradie
 

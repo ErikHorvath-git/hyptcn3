@@ -38,8 +38,16 @@ def pack(directory, name, text):
             "gz_bytes": path.stat().st_size, "gz_sha256": logs.digest(path), "file_sha256": logs.digest(path)}
 
 
+# Protocol v3 variant: restart_sluzby of orders, host bounds 1.45-1.6 s, grace .1 s -> window .45-1.7 s.
+EVENT = {"type": "restart_sluzby", "class": "restart_sluzby", "start_s": 0, "duration_s": 1}
+
+
 @pytest.fixture
 def session(tmp_path):
+    return build(tmp_path)
+
+
+def build(tmp_path, event=False):
     d = tmp_path / "synthetic-session"
     (d / "guest").mkdir(parents=True)
     (d / "raw").mkdir()
@@ -49,9 +57,11 @@ def session(tmp_path):
     write(d / "protocol.json", {"synthetic": True})
     write(d / "session.json", {"schema": "hyptcn3/collection-session/2", "session_id": d.name, "cycles": 10,
                                "guest_before": identity, "seed": 1, "traffic": config,
-                               "protocol_sha256": logs.digest(d / "protocol.json"), "collector_sha256": "test"})
+                               "protocol_sha256": logs.digest(d / "protocol.json"), "collector_sha256": "test",
+                               **({"events": [EVENT], "event_grace_s": .1, "source_sha256": {"lab/udalosti.py": "u"}}
+                                  if event else {})})
     write(d / "end.json", {"schema": "hyptcn3/collection-end/2", "completed": True,
-                           "guest_after": identity, "collector_rc": 0, "traffic_rc": 0,
+                           "guest_after": identity, "collector_rc": 0, "traffic_rc": int(event),
                            "monitor": {"rc": 0}, "measure_start_unix": BASE + 1, "measure_end_unix": BASE + 3})
     reqs = [sample.request(0, 0, "warmup", .1, 3, method="POST", route="/api/auth/token"),
             sample.request(1, 1, "measure", 1.1, 2),
@@ -60,6 +70,8 @@ def session(tmp_path):
             sample.request(4, 3, "post", 3.1, 2, route="/api/orders")]
     for r in reqs:
         r.update(session_id=d.name, t_start_utc=utc(r["t_start_mono"]), t_end_utc=utc(r["t_end_mono"]))
+    if event:  # The order placed while orders restarts gets 502 from nginx.
+        reqs[2].update(status=502, outcome="http_error", error="HTTPError: HTTP Error 502")
     marks = [dict(sample.marker("measure", "warmup", 1., 1), t_utc=utc(1)),
              dict(sample.marker("post", "measure", 3., 3), t_utc=utc(3))]
     heads = [dict(sample.header(schema, d.name), config=config, start_utc=utc(0), start_unix=BASE)
@@ -76,13 +88,16 @@ def session(tmp_path):
     write(d / "traffic_before.json", {"run_id": sample.RUN, "started_at": utc(0)})
     write(d / "traffic.json", {"run_id": sample.RUN, "session_id": d.name, "started_at": utc(0),
                               "final": True, "requests": len(reqs), "requests_logged": len(reqs),
-                              "ok": len(reqs), "errors": 0})
+                              "ok": sum(r["outcome"] == "ok" for r in reqs),
+                              "errors": sum(r["outcome"] != "ok" for r in reqs)})
     units = {name: {"ActiveState": "active", "Result": "success", "NRestarts": "0", "InvocationID": name,
                     "ExecMainPID": str(100 + i), "ExecMainStartTimestampMonotonic": "1"}
              for i, name in enumerate(logs.REQUIRED_UNITS)}
+    restarted = {**units, "hyptcn-lab@orders": dict(units["hyptcn-lab@orders"], InvocationID="new", ExecMainPID="999")}
     for when in ("before", "after"):
         write(d / "guest" / f"state_{when}.json", {"schema": "hyptcn3/guest-state/1", **identity,
-                                                   "units": units, "database": {}})
+                                                   "units": restarted if event and when == "after" else units,
+                                                   "database": {}})
         write(d / "guest" / f"clock_{when}.json", {"offset_s": .01, "uncertainty_s": .01})
     nginx = [dict(schema="hyptcn3/nginx-access/1", rid=r["rid"], forwarded_rid=r["rid"],
                   method=r["method"], uri=r["route"], status=r["status"], msec=BASE + r["t_end_mono"]) for r in reqs]
@@ -92,6 +107,8 @@ def session(tmp_path):
 
     def call(r, service, method, route, status):
         pid = units["hyptcn-lab@" + service]["ExecMainPID"]
+        if event and service == "orders" and r["t_start_mono"] > 1.7:
+            pid = "999"
         journal.append(f"{utc(2)} guest python3[{pid}]: client request rid={r['rid']} method={method} path={route} status={status}\n")
 
     for r in reqs:
@@ -104,12 +121,21 @@ def session(tmp_path):
         if r["route"] == "/healthz":
             for name in ("auth", "catalog"):
                 call(r, name, "GET", "/healthz", 200)
+    errors = ""
+    if event:
+        journal.append(f"{utc(1.5)} guest python3[999]: Traceback (most recent call last):\n")
+        errors = "2026/01/01 00:00:01 [error] 7#7: *1 connect() failed (111: Connection refused) while connecting to upstream\n"
+        write(d / "events.json", {"schema": "hyptcn3/session-events/1", "events": [dict(
+            EVENT, executed=True, host_start_unix=BASE + 1.45, host_started_unix=BASE + 1.5,
+            host_stop_unix=BASE + 1.55, host_stopped_unix=BASE + 1.6, start={"ok": True, "script_sha256": "u"},
+            stop={"ok": True, "health": 200, "script_sha256": "u",
+                  "units": {"hyptcn-lab@orders": {"ExecMainPID": "999"}}})]})
     for name, suffix, text in (("pre", "nginx-access.jsonl", json.dumps({"rid": "smoke", "status": 401}) + "\n"),
                                ("session", "nginx-access.jsonl", "".join(json.dumps(r) + "\n" for r in nginx)),
                                ("journal", "journal.txt", "".join(journal))):
         entries = [pack(d, name + "-" + suffix, text)]
         if name != "journal":
-            entries.append(pack(d, name + "-nginx-error.log", ""))
+            entries.append(pack(d, name + "-nginx-error.log", errors if name == "session" else ""))
         write(d / "guest" / (name + "_segment.json"), {
             "schema": "hyptcn3/guest-journal-segment/1" if name == "journal" else "hyptcn3/guest-log-segment/1",
             "files": entries})
@@ -197,6 +223,68 @@ def test_rejects_independent_evidence_failures(session, case, problem):
     result = logs.audit_logs(session)
     assert not result["accepted"]
     assert problem in result["problem_counts"], result["problems"]
+
+
+def test_event_window_tolerates_expected_failures_only(tmp_path):
+    d = build(tmp_path, event=True)
+    result = logs.audit_logs(d, snapshot_times=[BASE + 1.1, BASE + 2.5])
+    assert result["accepted"], result["problems"]
+    assert result["sections"]["events"]["executed"] == 1
+    assert result["sections"]["correlation"]["tolerated_in_events"] == {
+        "journal_tracebacks": 1, "nginx_error_lines": 1, "requests_in_events": 2, "failed_in_events": 1}
+    assert "hyptcn-lab@orders" not in result["sections"]["guest"]["units_checked"]
+
+
+@pytest.mark.parametrize("case,problem", [
+    ("other_unit", "service_restarted"), ("late_traceback", "journal_error_or_loss"),
+    ("late_nginx_error", "nginx_error_log_nonempty"), ("not_stopped", "event_not_stopped"),
+    ("plan", "events_differ_from_plan"), ("no_events_file", "events:unreadable"),
+    ("script", "event_script_differs"),
+])
+def test_event_session_stays_strict_outside_windows(tmp_path, case, problem):
+    d = build(tmp_path, event=True)
+    if case == "other_unit":
+        path = d / "guest/state_after.json"
+        doc = logs.read_json(path)
+        doc["units"]["hyptcn-lab@auth"]["InvocationID"] = "new"
+        write(path, doc)
+    elif case in ("late_traceback", "late_nginx_error"):
+        name, suffix = ("journal", "journal.txt") if case == "late_traceback" else ("session", "nginx-error.log")
+        path = d / "guest" / (name + "-" + suffix + ".gz")
+        text = gzip.decompress(path.read_bytes()).decode() + (
+            f"{utc(2.5)} guest python3[999]: Traceback (most recent call last):\n" if name == "journal"
+            else "2026/01/01 00:00:03 [error] 7#7: upstream timed out\n")
+        doc_path = d / "guest" / (name + "_segment.json")
+        doc = logs.read_json(doc_path)
+        index = next(i for i, f in enumerate(doc["files"]) if f["name"].endswith(suffix))
+        doc["files"][index] = pack(d, name + "-" + suffix, text)
+        write(doc_path, doc)
+    elif case in ("not_stopped", "plan", "script"):
+        doc = logs.read_json(d / "events.json")
+        if case == "plan":
+            doc["events"][0]["start_s"] = 30
+        elif case == "script":
+            doc["events"][0]["stop"]["script_sha256"] = "other"
+        else:
+            del doc["events"][0]["host_stopped_unix"]
+        write(d / "events.json", doc)
+    else:
+        (d / "events.json").unlink()
+    seal(d)
+    result = logs.audit_logs(d)
+    assert not result["accepted"]
+    assert problem in result["problem_counts"], result["problems"]
+
+
+def test_failed_request_outside_event_window_is_rejected(tmp_path):
+    d = build(tmp_path, event=True)
+    events = logs.read_json(d / "events.json")
+    events["events"][0].update(host_start_unix=BASE + 3.5, host_started_unix=BASE + 3.5,
+                               host_stop_unix=BASE + 3.6, host_stopped_unix=BASE + 3.6)
+    write(d / "events.json", events)
+    seal(d)
+    result = logs.audit_logs(d)
+    assert {"request_failed", "journal_error_or_loss", "nginx_error_log_nonempty"} <= set(result["problem_counts"])
 
 
 def test_snapshot_must_be_inside_traffic_phase(session):
