@@ -1,0 +1,44 @@
+{
+  "command": "bash data/results/extractor_equivalence_20261104/run.sh (na zberovom PC)",
+  "commit": "625fe0fdcdc1716233a89962753ce6863d92b8ad",
+  "date": "2026-11-04",
+  "guest": "snimky hyptcn-lab z korpusu benign-v6-20261026, session benign-v6-20261026_01_train_write_heavy",
+  "host": "Linux-7.2.9+deb13-amd64-x86_64-with-glibc2.41 (zberove PC)",
+  "n": 60,
+  "values": {
+    "arrays": [
+      "biny",
+      "casy",
+      "chain_ids",
+      "layout_json",
+      "matica",
+      "max_medzera_s",
+      "mena",
+      "perbin",
+      "poznamky",
+      "quality_json",
+      "quality_policy",
+      "schema",
+      "seq",
+      "snimky",
+      "trvanie_s",
+      "valid"
+    ],
+    "columns": 22,
+    "differing_arrays": [
+      "trvanie_s"
+    ],
+    "keys_equal": true,
+    "new_commit": "625fe0f",
+    "note": "trvanie_s je cas spracovania, nie priznak. Vsetky ostatne polia archivu su bajtovo rovnake, upratanie 625fe0f teda nezmenilo extrakciu; overene na prvych 60 snimkach (plna snimka a delty) jednej session, nie na celom korpuse.",
+    "old_commit": "d6c1ed4",
+    "quality_policy": "behavioral-inputs-v1",
+    "rows": 60,
+    "schema": "hyptcn3/extractor-equivalence/1",
+    "session": "benign-v6-20261026_01_train_write_heavy",
+    "snapshots": [
+      0,
+      59
+    ]
+  }
+}

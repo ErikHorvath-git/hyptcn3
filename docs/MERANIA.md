@@ -3183,3 +3183,17 @@ zámeny sa nezisťovala. Návrh ďalšieho zberu ich nahrádza triedami prevádz
 Čo záznam neukazuje: detekciu útokov ani malvéru (žiaden útok nebežal), správanie pri
 údržbe a prevádzkových poruchách (v korpuse nie sú), živý beh `safeguard run`, latenciu
 snímka → skóre počas zberu ani vplyv na VM.
+
+## 2026-11-04 — upratanie mŕtveho kódu nezmenilo extrakciu príznakov
+
+Commit `625fe0f` odstránil mŕtvy kód aj vo `features/` a `guestparse/`, čím sa zmenil hash
+extraktora. Aby model `server-v2-benign-v6` mohol férovo skórovať nové dáta, na zberovom PC sa
+príznaky vypočítali starým (`d6c1ed4`) aj novým kódom z tých istých surových snímok
+korpusu `benign-v6-20261026` (skript `data/results/extractor_equivalence_20261104/run.sh`,
+`python3 -m features session --quality-policy behavioral-inputs-v1` so `session.json` session
+kvôli identite bootu). Zo
+60 {{res:extractor_equivalence_20261104.json:n}}
+snímok vznikli archívy s rovnakými kľúčmi; líšil sa iba čas spracovania `trvanie_s`, všetky
+ostatné polia (`matica`, `perbin`, `valid`, `quality_json` a ďalšie) sú bajtovo rovnaké
+([záznam](../data/results/extractor_equivalence_20261104.json)). Overená je jedna session a začiatok jej reťazca, nie celý
+korpus. Ďalšia kampaň potrebuje nový pilot, lebo sa zmenil merací kód.
