@@ -101,6 +101,9 @@ def build(tmp_path, event=False):
         write(d / "guest" / f"clock_{when}.json", {"offset_s": .01, "uncertainty_s": .01})
     nginx = [dict(schema="hyptcn3/nginx-access/1", rid=r["rid"], forwarded_rid=r["rid"],
                   method=r["method"], uri=r["route"], status=r["status"], msec=BASE + r["t_end_mono"]) for r in reqs]
+    if event:  # lab/udalosti.py checks health without a request id while the event runs.
+        nginx.append(dict(schema="hyptcn3/nginx-access/1", rid="", forwarded_rid="x", method="GET",
+                          uri="/healthz", status=502, msec=BASE + 1.55))
     write(d / "preflight_smoke.json", {"schema": "hyptcn3/lab-smoke/1", "values": {
         "order_completed": True, "checks": [{"rid": "smoke", "status": 401, "expected": 401}]}})
     journal = []
@@ -231,7 +234,8 @@ def test_event_window_tolerates_expected_failures_only(tmp_path):
     assert result["accepted"], result["problems"]
     assert result["sections"]["events"]["executed"] == 1
     assert result["sections"]["correlation"]["tolerated_in_events"] == {
-        "journal_tracebacks": 1, "nginx_error_lines": 1, "requests_in_events": 2, "failed_in_events": 1}
+        "event_health_checks": 1, "journal_tracebacks": 1, "nginx_error_lines": 1,
+        "requests_in_events": 2, "failed_in_events": 1}
     assert "hyptcn-lab@orders" not in result["sections"]["guest"]["units_checked"]
 
 
@@ -239,7 +243,7 @@ def test_event_window_tolerates_expected_failures_only(tmp_path):
     ("other_unit", "service_restarted"), ("late_traceback", "journal_error_or_loss"),
     ("late_nginx_error", "nginx_error_log_nonempty"), ("not_stopped", "event_not_stopped"),
     ("plan", "events_differ_from_plan"), ("no_events_file", "events:unreadable"),
-    ("script", "event_script_differs"),
+    ("script", "event_script_differs"), ("late_health_check", "nginx_unknown_request"),
 ])
 def test_event_session_stays_strict_outside_windows(tmp_path, case, problem):
     d = build(tmp_path, event=True)
@@ -258,6 +262,16 @@ def test_event_session_stays_strict_outside_windows(tmp_path, case, problem):
         doc = logs.read_json(doc_path)
         index = next(i for i, f in enumerate(doc["files"]) if f["name"].endswith(suffix))
         doc["files"][index] = pack(d, name + "-" + suffix, text)
+        write(doc_path, doc)
+    elif case == "late_health_check":
+        doc_path = d / "guest/session_segment.json"
+        path = d / "guest/session-nginx-access.jsonl.gz"
+        row = dict(schema="hyptcn3/nginx-access/1", rid="", forwarded_rid="y", method="GET", uri="/healthz",
+                   status=200, msec=BASE + 2.5)
+        text = gzip.decompress(path.read_bytes()).decode() + json.dumps(row) + "\n"
+        doc = logs.read_json(doc_path)
+        index = next(i for i, f in enumerate(doc["files"]) if f["name"].endswith("nginx-access.jsonl"))
+        doc["files"][index] = pack(d, "session-nginx-access.jsonl", text)
         write(doc_path, doc)
     elif case in ("not_stopped", "plan", "script"):
         doc = logs.read_json(d / "events.json")

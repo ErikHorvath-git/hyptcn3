@@ -246,11 +246,15 @@ def audit_logs(directory, *, snapshot_times=()):
     def correlation(contents, requests):
         expected = {r["rid"]: r for r in requests}
         during = {rid for rid, r in expected.items() if in_window(unix(r["t_start_utc"]), unix(r["t_end_utc"]))}
-        matched = Counter()
+        matched, tolerated = Counter(), Counter()
         for line in contents["session:nginx-access.jsonl"].splitlines():
             row = json.loads(line)
             check(row.get("schema") == "hyptcn3/nginx-access/1", "nginx_schema")
             rid = row["rid"]
+            if (rid == "" and row["method"] == "GET" and row["uri"] == "/healthz"
+                    and in_window(finite(row["msec"]))):
+                tolerated["event_health_checks"] += 1  # lab/udalosti.py polls health with no request id.
+                continue
             if rid not in expected:
                 problems.add("nginx_unknown_request", rid)
                 continue
@@ -277,7 +281,6 @@ def audit_logs(directory, *, snapshot_times=()):
         pids = {name: known_pids[name] for name in ("auth", "catalog", "orders")}
         service, catalog_calls = Counter(), Counter()
         journal = contents["journal:journal.txt"]
-        tolerated = Counter()
         for line in journal.splitlines():
             m = SERVICE_LINE.search(line)
             if m and m[2] in expected:

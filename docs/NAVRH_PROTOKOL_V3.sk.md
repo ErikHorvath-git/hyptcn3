@@ -1,7 +1,7 @@
 # Návrh protokolu v3: prevádzkové udalosti bez malvéru
 
-**Stav: návrh z 2026-11-04, krok A implementovaný (kap. 7), pilot ani zber ešte
-nebežali.** Protokol kroku A je [`config/collection-v3.json`](../config/collection-v3.json)
+**Stav: návrh z 2026-11-04, krok A implementovaný (kap. 7), prvý pilot audit
+zamietol (kap. 7), zber ešte nebežal.** Protokol kroku A je [`config/collection-v3.json`](../config/collection-v3.json)
 (`server-events-v3`). Platný trénovací protokol ostáva `server-normal-v2`
 ([`METODIKA_ZBERU.sk.md`](METODIKA_ZBERU.sk.md),
 [`config/collection-v2.json`](../config/collection-v2.json)), stav práce voči zadaniu
@@ -129,7 +129,10 @@ Pilot v3 obsahuje dve udalosti (`config/collection-v3.json`, `events.pilot`), ab
 audit udalostí prešiel na skutočnom labe ešte pred kampaňou. Identita hosťa
 (`stack_sha256`) skript udalostí nezahŕňa, takže ostáva porovnateľná s prostredím
 balíka v6; hash skriptu je v každej odpovedi udalosti a audit ho porovná s hashom
-pri štarte session. Kolektor sa po upratovaní (commit 625fe0f) preložil z iného
+pri štarte session. Prvý pilot (`20261104T161025010961Z_pilot_steady`, commit 4f024d8) audit
+zamietol: šesť riadkov nginx `GET /healthz` bez `X-Request-Id` pochádzalo z kontroly zdravia
+v samotnom `lab/udalosti.py`. Audit ich odvtedy pripustí iba vnútri okna udalosti
+(`event_health_checks`); mimo okna ostávajú neznámou požiadavkou. Kolektor sa po upratovaní (commit 625fe0f) preložil z iného
 zdroja, preto vyhodnotenie zapíše zhodu prostredia s balíkom po položkách.
 
 ## 8. Poradie
