@@ -16,7 +16,7 @@
   "warmup_s": 120,
   "min_free_gib": 30,
   "roles": {
-    "test_events": 4
+    "test_events": 8
   },
   "scenarios": {
     "quiet": {

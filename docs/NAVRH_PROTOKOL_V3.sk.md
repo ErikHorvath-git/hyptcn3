@@ -108,7 +108,7 @@ nové dáta neskóroval férovo a krok A by odpadol.
 | Zmena | Kde | Stav |
 |---|---|---|
 | udalosti v hosťovi: `start`/`stop`, `stop` vždy vráti nasadený stav, odpoveď JSON s dôkazom (stav jednotiek, `/healthz`, hash skriptu) | `lab/udalosti.py`, `scripts/labctl.py event` | hotové |
-| plán: 4 skupiny `test_events` × 6 scenárov (24 h), každý typ udalosti v každom boote, seedované časy | `scripts/collection.py plan`, `config/collection-v3.json` | hotové |
+| plán: 8 skupín `test_events` × 6 scenárov (48 h, rovnako ako korpus `benign-v6-20261026`), každý typ udalosti v každom boote, seedované časy | `scripts/collection.py plan`, `config/collection-v3.json` | hotové |
 | spúšťanie podľa plánu počas merania, záznam `events.json` s časmi hosťa aj hostiteľa; prerušenie aj zlyhaný štart udalosť zastaví | `scripts/collection.py` (`Events`) | hotové |
 | mená skupín s predponou `v3-`; plán v2 je bajtovo nezmenený (test) | `scripts/collection.py` | hotové |
 | audit: v intervale udalosti a 60 s po nej pripustí zlyhané požiadavky, chyby nginx, traceback v journale a reštart jednotiek, ktoré udalosť reštartuje; mimo intervalov ostáva prísny | `scripts/collection_logs.py` | hotové |
