@@ -45,6 +45,30 @@ Na zberovom PC sa použije `.venv/bin/python`.
   všetkými skontrolovanými session.
 - Lišta pod grafom slúži na zväčšenie výrezu a posun.
 
+## Porovnanie modelov (napríklad po týždňoch)
+
+**Porovnať modely…** (Ctrl+P): pridáš dva a viac balíkov a jednu session (`.npz`).
+Modely sa zoradia podľa dátumu tréningu a prvý je referencia. Obrázok má štyri časti:
+
+1. **Skóre / vlastný prah** každého modelu na tej istej session. Nad 1 je okno nad
+   prahom daného modelu, takže modely s rôznym prahom sú porovnateľné.
+2. **Čo model považuje za normálne:** posun priemerov normalizéra (18 globálnych
+   príznakov a 3 príznaky binov) voči prvému modelu, v smerodajných odchýlkach
+   prvého modelu. Ukazuje, ako sa medzi tréningami posunula bežná prevádzka.
+3. **Podobnosť vrstiev:** lineárne CKA (Kornblith a kol., 2019) medzi výstupmi
+   každého bloku TCN a toho istého bloku prvého modelu, na rovnakých oknách session.
+   Hodnota 1 znamená rovnakú reprezentáciu až na otočenie a mierku.
+4. **Učenie:** strata predikcie na `dev` po epochách, vybraná epocha a prah.
+
+Surové váhy sa prvok po prvku neporovnávajú. Dva samostatne natrénované modely
+môžu mať rovnako naučené kanály v inom poradí a rozdiel matíc by ukazoval hlavne
+túto zámenu. Všetky štyri pohľady od poradia kanálov nezávisia. Balík navyše
+ukladá iba váhy vybranej epochy, preto priebeh váh počas jedného tréningu
+zobraziť nejde.
+
+Bez okna:
+`python3 TCN-gui/tcn_gui.py --compare MODEL1 MODEL2 ... --input SESSION.npz --png porovnanie.png`
+
 Posledný model a priečinok si aplikácia pamätá v `~/.config/hyptcn3-tcn-gui.json`.
 
 Kým na danom PC beží zber, analýza sa nespustí. Prehratie zaťažuje CPU a disk
@@ -69,4 +93,5 @@ Testy natrénujú malý syntetický balík zo `safeguard.demo` a overia:
 - alarm pri umelej odchýlke v jednom bine;
 - odmietnutie diagnostického balíka bez povolenia;
 - vykreslenie obrázka bez okna;
-- kontrolu priečinka v aplikácii (preskočí sa bez grafického displeja).
+- kontrolu priečinka v aplikácii (preskočí sa bez grafického displeja);
+- nezávislosť CKA od poradia kanálov a porovnanie dvoch tréningov.

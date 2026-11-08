@@ -21,6 +21,7 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 
 import analyza  # noqa: E402
+import porovnanie  # noqa: E402
 
 COLORS = {"ok": "#1f9d55", "alarm": "#d1343a", "unknown": "#d98a00", "error": "#d1343a"}
 
@@ -148,6 +149,8 @@ class App:
         file_menu.add_command(label="Otvoriť session (.npz)…", accelerator="Ctrl+O", command=self.choose_file)
         file_menu.add_command(label="Otvoriť priečinok so session…", accelerator="Ctrl+D", command=self.choose_folder)
         file_menu.add_separator()
+        file_menu.add_command(label="Porovnať modely…", accelerator="Ctrl+P", command=self.open_compare)
+        file_menu.add_separator()
         file_menu.add_command(label="Uložiť obrázok…", accelerator="Ctrl+S", command=self.save_png)
         file_menu.add_command(label="Uložiť prehľad (CSV)…", command=self.save_csv)
         file_menu.add_separator()
@@ -155,7 +158,7 @@ class App:
         menu.add_cascade(label="Súbor", menu=file_menu)
         root.config(menu=menu)
         for key, action in (("m", self.choose_model), ("o", self.choose_file), ("d", self.choose_folder),
-                            ("s", self.save_png), ("q", root.destroy)):
+                            ("s", self.save_png), ("p", self.open_compare), ("q", root.destroy)):
             root.bind(f"<Control-{key}>", lambda _e, f=action: f())
 
         ttk.Label(root, textvariable=self.status, relief="sunken", padding=(6, 2)).pack(side="bottom", fill="x")
@@ -165,6 +168,7 @@ class App:
         model_box = ttk.LabelFrame(side, text="Model", padding=6)
         model_box.pack(fill="x")
         ttk.Button(model_box, text="Načítať model…", command=self.choose_model).pack(fill="x")
+        ttk.Button(model_box, text="Porovnať modely…", command=self.open_compare).pack(fill="x", pady=(4, 0))
         ttk.Checkbutton(model_box, text="povoliť diagnostický (syntetický) balík",
                         variable=self.diagnostic).pack(anchor="w", pady=(4, 0))
         self.model_info = ttk.Label(model_box, text="žiadny model", wraplength=330, justify="left",
@@ -361,6 +365,19 @@ class App:
                 _, key, text = message
                 self.tree.item(key, values=("chyba", ""), tags=("error",))
                 self.status.set(text)
+            elif kind == "compare":
+                self.report, self.figure_name = None, "porovnanie-modelov"
+                porovnanie.draw_compare(self.figure, message[1])
+                self.canvas.draw_idle()
+                self.busy = False
+                self.root.config(cursor="")
+                self.status.set(f"Porovnaných {len(message[1]['models'])} modelov na {message[1]['input']['session']}.")
+            elif kind == "compare_error":
+                from tkinter import messagebox
+                self.busy = False
+                self.root.config(cursor="")
+                self.status.set("")
+                messagebox.showerror("TCN detektor", message[1])
             elif kind == "done":
                 self.busy = False
                 self.root.config(cursor="")
@@ -370,16 +387,17 @@ class App:
 
     def show(self, report):
         self.report = report
+        self.figure_name = Path(report["input"]["session_dir"]).name
         draw(self.figure, report)
         self.canvas.draw_idle()
 
     # -- export -----------------------------------------------------------------
     def save_png(self):
         from tkinter import filedialog, messagebox
-        if self.report is None:
-            messagebox.showinfo("TCN detektor", "Najprv analyzuj session.")
+        if not getattr(self, "figure_name", None):
+            messagebox.showinfo("TCN detektor", "Najprv analyzuj session alebo porovnaj modely.")
             return
-        name = Path(self.report["input"]["session_dir"]).name + ".png"
+        name = self.figure_name + ".png"
         path = filedialog.asksaveasfilename(defaultextension=".png", initialfile=name,
                                             filetypes=[("PNG", "*.png"), ("PDF", "*.pdf"), ("SVG", "*.svg")])
         if path:
@@ -407,6 +425,87 @@ class App:
                               r["threshold"], r["model"]["name"], key])
         self.status.set(f"Prehľad uložený: {path}")
 
+    # -- model comparison -----------------------------------------------------
+    def open_compare(self):
+        """Dialog: list of bundles (e.g. one per week) and one reference session."""
+        import tkinter as tk
+        from tkinter import filedialog, messagebox, ttk
+        dialog = tk.Toplevel(self.root)
+        dialog.title("Porovnať modely")
+        dialog.transient(self.root)
+        frame = ttk.Frame(dialog, padding=10)
+        frame.pack(fill="both", expand=True)
+        ttk.Label(frame, text="Modely (zoradia sa podľa dátumu tréningu, prvý je referencia):").pack(anchor="w")
+        models = tk.Listbox(frame, height=8, width=80)
+        models.pack(fill="both", expand=True, pady=4)
+        for path in self.settings.get("compare_models", "").split("\n"):
+            if path and Path(path).is_dir():
+                models.insert("end", path)
+        if models.size() == 0 and self.bundle_path:
+            models.insert("end", str(self.bundle_path))
+        buttons = ttk.Frame(frame)
+        buttons.pack(fill="x")
+
+        def add():
+            path = filedialog.askdirectory(parent=dialog, title="Adresár modelu (manifest.json)",
+                                           initialdir=self.settings.get("bundle") or analyza.ROOT / "data")
+            if path and path not in models.get(0, "end"):
+                models.insert("end", path)
+
+        def remove():
+            for index in reversed(models.curselection()):
+                models.delete(index)
+
+        ttk.Button(buttons, text="Pridať model…", command=add).pack(side="left")
+        ttk.Button(buttons, text="Odobrať", command=remove).pack(side="left", padx=4)
+        ttk.Label(frame, text="Session, na ktorej sa modely porovnajú (.npz alebo adresár session):").pack(
+            anchor="w", pady=(10, 0))
+        session = tk.StringVar(value=self.selected() or "")
+        row = ttk.Frame(frame)
+        row.pack(fill="x", pady=4)
+        ttk.Entry(row, textvariable=session).pack(side="left", fill="x", expand=True)
+
+        def pick():
+            path = filedialog.askopenfilename(parent=dialog, title="Archív príznakov session",
+                                              initialdir=self.start_dir(), filetypes=[("archív", "*.npz")])
+            if path:
+                session.set(path)
+
+        ttk.Button(row, text="Vybrať…", command=pick).pack(side="left", padx=(4, 0))
+
+        def go():
+            paths = list(models.get(0, "end"))
+            if len(paths) < 2 or not session.get():
+                messagebox.showinfo("TCN detektor", "Pridaj aspoň dva modely a vyber session.", parent=dialog)
+                return
+            if analyza.busy_collecting():
+                messagebox.showwarning("TCN detektor", "Na tomto PC beží zber; porovnanie spusti po zbere.",
+                                       parent=dialog)
+                return
+            self.remember(compare_models="\n".join(paths))
+            dialog.destroy()
+            self.compare(paths, session.get())
+
+        ttk.Button(frame, text="Porovnať", command=go).pack(anchor="e", pady=(8, 0))
+
+    def compare(self, paths, session):
+        import threading
+        if self.busy:
+            return
+        self.busy = True
+        self.root.config(cursor="watch")
+        self.status.set(f"Porovnávam {len(paths)} modelov…")
+        diagnostic = self.diagnostic.get()  # Tk variables must not be read from the worker thread.
+
+        def work():
+            try:
+                result = porovnanie.compare(paths, session, allow_diagnostic=diagnostic)
+                self.queue.put(("compare", result))
+            except (ValueError, OSError, RuntimeError, KeyError) as exc:
+                self.queue.put(("compare_error", f"{type(exc).__name__}: {exc}"))
+
+        threading.Thread(target=work, daemon=True).start()
+
     def run(self):
         self.root.mainloop()
 
@@ -420,8 +519,20 @@ def main(argv=None):
     parser.add_argument("--bundle", help="adresár balíka safeguard (manifest.json)")
     parser.add_argument("--input", help="archív .npz, adresár session alebo adresár snímok .vmicd")
     parser.add_argument("--diagnostic", action="store_true", help="povoliť diagnostický (syntetický) balík")
+    parser.add_argument("--compare", nargs="+", metavar="BUNDLE",
+                        help="porovnať tieto modely (napr. po týždňoch) na session z --input; s --png bez okna")
     parser.add_argument("--png", type=Path, help="bez okna: uložiť obrázok sem")
     args = parser.parse_args(argv)
+    if args.compare:
+        if not args.input or not args.png:
+            parser.error("--compare potrebuje --input a --png")
+        import matplotlib
+        matplotlib.use("Agg")
+        from matplotlib.figure import Figure
+        result = porovnanie.compare(args.compare, args.input, allow_diagnostic=args.diagnostic)
+        porovnanie.draw_compare(Figure(figsize=(13, 8), dpi=110), result).savefig(args.png)
+        print(f"porovnanie {len(result['models'])} modelov: {args.png}")
+        return 0
     if args.png:
         if not (args.bundle and args.input):
             parser.error("--png potrebuje --bundle aj --input")

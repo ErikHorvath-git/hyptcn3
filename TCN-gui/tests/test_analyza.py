@@ -102,3 +102,28 @@ def test_app_checks_a_folder_of_sessions(setup, tmp_path, monkeypatch):
         assert values["odchylka"].startswith("✗") and values["benign"].startswith("✓")
     finally:
         app.root.destroy()
+
+
+def test_cka_ignores_channel_order_and_scale():
+    import porovnanie
+    rng = np.random.default_rng(0)
+    x = rng.normal(size=(200, 16))
+    assert porovnanie.linear_cka(x, x[:, rng.permutation(16)] * 3.0) == pytest.approx(1.0)
+    assert porovnanie.linear_cka(x, rng.normal(size=(200, 16))) < 0.3
+
+
+def test_compare_two_trainings_on_one_session(setup, tmp_path):
+    import porovnanie
+    root, test, odd = setup
+    second = tmp_path / "tyzden-2"
+    corpus = Path(test["features"]).parents[1] / "index.json"
+    train_bundle(corpus, second, window_rows=8, epochs=2, batch_size=32, fpr=0.05, diagnostic=True, seed=1)
+    result = porovnanie.compare([second, root / "models" / "synthetic"], odd, allow_diagnostic=True)
+    assert [m["name"] for m in result["models"]] == ["synthetic", "tyzden-2"]  # Ordered by training date.
+    assert result["layers"]["cka"][0] == pytest.approx([1.0] * len(result["layers"]["names"]))
+    assert all(0 <= v <= 1 + 1e-6 for v in result["layers"]["cka"][1])
+    assert result["models"][1]["baseline_shift"] == pytest.approx([0.0] * 21, abs=1e-9)  # Same training data.
+    out = tmp_path / "porovnanie.png"
+    assert tcn_gui.main(["--compare", str(root / "models" / "synthetic"), str(second), "--input", str(odd),
+                         "--diagnostic", "--png", str(out)]) == 0
+    assert out.stat().st_size > 50_000
