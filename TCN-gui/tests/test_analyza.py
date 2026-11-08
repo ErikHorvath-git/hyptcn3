@@ -1,0 +1,97 @@
+"""TCN GUI on the synthetic diagnostic bundle from safeguard.demo (mechanics only, HONESTY P4)."""
+import json
+from pathlib import Path
+import sys
+import threading
+import urllib.error
+import urllib.request
+
+import numpy as np
+import pytest
+
+GUI = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(GUI))
+
+import analyza  # noqa: E402
+import server  # noqa: E402
+from safeguard.bundle import load_bundle  # noqa: E402
+from safeguard.demo import create_corpus  # noqa: E402
+from safeguard.runtime import replay_archive  # noqa: E402
+from safeguard.training import train_bundle  # noqa: E402
+
+
+@pytest.fixture(scope="module")
+def setup(tmp_path_factory):
+    root = tmp_path_factory.mktemp("gui")
+    index = create_corpus(root / "corpus")
+    train_bundle(index, root / "models" / "synthetic", window_rows=8, epochs=2,
+                 batch_size=32, fpr=0.05, diagnostic=True)
+    test = next(s for s in json.loads(index.read_text())["sessions"] if s["role"] == "test_benign")
+    data = dict(np.load(test["features"], allow_pickle=False))
+    data["perbin"][50:62, 1, 0] = 0.95  # One bin suddenly rewritten: an artificial deviation.
+    data["perbin"][50:62, 1, 3] = 1
+    odd = root / "collections" / "odchylka"
+    odd.mkdir(parents=True)
+    np.savez(odd / "features.npz", **data)
+    return root, test, odd
+
+
+def test_scores_match_detector_replay_and_decompose_exactly(setup):
+    root, test, _ = setup
+    bundle = root / "models" / "synthetic"
+    report = analyza.analyze(bundle, test["features"], allow_diagnostic=True)
+    reference = replay_archive(load_bundle(bundle, allow_diagnostic=True), test["features"], test["id"])
+    assert report["series"]["score"] == [r["score"] for r in reference]
+    s = report["series"]
+    for i, score in enumerate(s["score"]):
+        if score is None:
+            assert report["features"]["errors"][i] is None
+            continue
+        assert s["global_part"][i] + s["bin_part"][i] == pytest.approx(score, rel=1e-5)
+        features = report["features"]["errors"][i]
+        assert 0.5 * sum(features) / len(features) == pytest.approx(s["global_part"][i], rel=1e-4)
+    json.dumps(report, allow_nan=False)
+    assert report["model"]["history"] and report["model"]["name"] == "synthetic"
+
+
+def test_deviation_raises_model_alarm_in_the_changed_bin(setup):
+    root, _, odd = setup
+    report = analyza.analyze(root / "models" / "synthetic", odd, allow_diagnostic=True)
+    assert report["verdict"]["level"] == "alarm" and report["summary"]["model_alarm_events"] >= 1
+    assert report["bins"]["top_by_mean"][0] == 1
+
+
+def test_diagnostic_bundle_needs_explicit_permission(setup):
+    root, test, _ = setup
+    with pytest.raises(ValueError, match="diagnostic"):
+        analyza.analyze(root / "models" / "synthetic", test["features"])
+
+
+def test_rejects_directory_without_snapshots(tmp_path):
+    with pytest.raises(ValueError, match="vmicd"):
+        analyza.resolve_input(tmp_path)
+
+
+def test_server_lists_inputs_and_answers_analysis(setup, monkeypatch):
+    root, _, odd = setup
+    found = server.discover([root])
+    assert str((root / "models" / "synthetic").resolve()) in found["bundles"]
+    assert str((odd / "features.npz").resolve()) in found["inputs"]
+    monkeypatch.setattr(analyza, "busy_collecting", lambda: False)
+    httpd = server.ThreadingHTTPServer(("127.0.0.1", 0), server.Handler)
+    httpd.roots, httpd.allow_during_collection, httpd.lock = [root], False, threading.Lock()
+    threading.Thread(target=httpd.serve_forever, daemon=True).start()
+    try:
+        base = f"http://127.0.0.1:{httpd.server_port}"
+        assert b"TCN detektor" in urllib.request.urlopen(base + "/").read()
+        body = json.dumps({"bundle": found["bundles"][0], "input": str(odd), "allow_diagnostic": True}).encode()
+        reply = json.loads(urllib.request.urlopen(urllib.request.Request(base + "/api/analyze", data=body)).read())
+        assert reply["verdict"]["level"] == "alarm"
+        monkeypatch.setattr(analyza, "busy_collecting", lambda: True)
+        with pytest.raises(urllib.error.HTTPError) as refused:
+            urllib.request.urlopen(urllib.request.Request(base + "/api/analyze", data=body))
+        assert refused.value.code == 409
+        with pytest.raises(urllib.error.HTTPError):
+            urllib.request.urlopen(base + "/static/../server.py")
+    finally:
+        httpd.shutdown()

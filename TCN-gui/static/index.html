@@ -1,0 +1,150 @@
+<!doctype html>
+<html lang="sk">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TCN detektor</title>
+<link rel="stylesheet" href="/static/style.css">
+<script src="/static/vendor/plotly.min.js"
+  onerror="var s=document.createElement('script');s.src='https://cdn.jsdelivr.net/npm/plotly.js-dist-min@2.35.2/plotly.min.js';s.onload=()=>window.tcnRender&&window.tcnRender();document.head.appendChild(s)"></script>
+</head>
+<body>
+<header>
+  <div class="brand">
+    <span class="logo" aria-hidden="true"></span>
+    <div>
+      <h1>TCN detektor</h1>
+      <p>Skóre anomálie, relevantné oblasti pamäte a natrénovaný model pre jednu session snímok</p>
+    </div>
+  </div>
+</header>
+
+<main>
+  <section class="panel controls" aria-label="Vstup">
+    <div class="field">
+      <label for="bundle">Model (balík safeguard)</label>
+      <input id="bundle" list="bundles" placeholder="…/data/models/server-v2-benign-v6" autocomplete="off">
+      <datalist id="bundles"></datalist>
+    </div>
+    <div class="field wide">
+      <label for="input">Snímky: archív príznakov .npz, adresár session alebo adresár raw s .vmicd</label>
+      <input id="input" list="inputs" placeholder="…/data/collections/&lt;session&gt;" autocomplete="off">
+      <datalist id="inputs"></datalist>
+    </div>
+    <details class="field">
+      <summary>Rozšírené</summary>
+      <label for="profile">Profil jadra (iba pre raw snímky)</label>
+      <input id="profile" placeholder="profiles/debian12-6.1.0-42-cloud-amd64">
+      <label class="check"><input type="checkbox" id="diagnostic"> povoliť diagnostický balík</label>
+    </details>
+    <button id="run" type="button">Analyzovať</button>
+    <p id="status" class="status" role="status"></p>
+  </section>
+
+  <section id="verdict" class="verdict hidden" aria-live="polite">
+    <div class="verdict-main">
+      <span class="verdict-dot"></span>
+      <div>
+        <div class="verdict-label" id="verdict-label"></div>
+        <div class="verdict-detail" id="verdict-detail"></div>
+      </div>
+    </div>
+    <dl class="stats" id="stats"></dl>
+    <p class="context" id="context"></p>
+  </section>
+
+  <nav class="tabs hidden" id="tabs" role="tablist">
+    <button role="tab" data-tab="session" aria-selected="true">Session</button>
+    <button role="tab" data-tab="model" aria-selected="false">Model</button>
+  </nav>
+
+  <section id="tab-session" class="tab hidden">
+    <article class="panel chart-card">
+      <header><h2>Skóre anomálie v čase</h2>
+        <label class="check small"><input type="checkbox" id="logscale"> logaritmická mierka (skóre aj farby)</label></header>
+      <p class="hint">Čiara je skóre okna, prerušovaná čiara kalibrovaný prah. Červené pásy: alarm modelu
+        (k z n okien nad prahom). Fialové pásy: prevádzkové udalosti z <code>events.json</code>.
+        Krížiky hore: nález kontroly integrity jadra.</p>
+      <div id="chart-score" class="chart tall"></div>
+    </article>
+
+    <article class="panel chart-card">
+      <header><h2>Pamäťový chromatogram: chyba predikcie po binoch</h2></header>
+      <p class="hint">Každý riadok je fyzická oblasť RAM hosťa (bin, os y v MiB od začiatku).
+        Farba je chyba per-bin TCN v danom okne. Do skóre ide najhorší bin, takže jasné škvrny sú
+        miesta pamäte, ktoré model považuje za najmenej obvyklé.</p>
+      <div id="chart-bins" class="chart tall"></div>
+      <p class="hint">Pre porovnanie vstup: podiel zmenených stránok v každom bine (<code>changed_ratio</code>).</p>
+      <div id="chart-input" class="chart"></div>
+    </article>
+
+    <div class="grid2">
+      <article class="panel chart-card">
+        <header><h2>Rozklad skóre</h2></header>
+        <p class="hint">Skóre = 0,5 · priemerná chyba globálnych príznakov + 0,5 · chyba najhoršieho binu.</p>
+        <div id="chart-parts" class="chart"></div>
+      </article>
+      <article class="panel chart-card">
+        <header><h2>Najrelevantnejšie biny</h2></header>
+        <p class="hint">Priemerná chyba binu cez session a počet okien, v ktorých bol najhorší.</p>
+        <div id="chart-topbins" class="chart"></div>
+      </article>
+    </div>
+
+    <article class="panel chart-card">
+      <header><h2>Príspevok globálnych príznakov</h2></header>
+      <p class="hint">0,5 · chyba príznaku / 18: o koľko daný príznak (procesy, moduly, sokety, pamäť) zvýšil skóre.</p>
+      <div id="chart-features" class="chart tall"></div>
+    </article>
+
+    <div class="grid2">
+      <article class="panel chart-card">
+        <header><h2>Profil záťaže (klasifikátor)</h2></header>
+        <p class="hint">Pravdepodobnosť scenára záťaže z tréningu. Opisuje druh prevádzky, nie škodlivosť.</p>
+        <div id="chart-activity" class="chart"></div>
+      </article>
+      <article class="panel chart-card">
+        <header><h2>Rozdelenie skóre</h2></header>
+        <p class="hint">Histogram skóre všetkých okien session voči prahu.</p>
+        <div id="chart-hist" class="chart"></div>
+      </article>
+    </div>
+  </section>
+
+  <section id="tab-model" class="tab hidden">
+    <article class="panel">
+      <header><h2 id="model-title">Model</h2></header>
+      <dl class="cards" id="model-cards"></dl>
+    </article>
+    <div class="grid2">
+      <article class="panel chart-card">
+        <header><h2>Krivky učenia: predikcia</h2></header>
+        <p class="hint">Strata na <code>train</code> a <code>dev</code> po epochách; zvislá čiara je vybraná epocha (najnižšia strata na <code>dev</code>).</p>
+        <div id="chart-loss-pred" class="chart"></div>
+      </article>
+      <article class="panel chart-card">
+        <header><h2>Krivky učenia: klasifikátor</h2></header>
+        <p class="hint">Krížová entropia klasifikátora scenára záťaže.</p>
+        <div id="chart-loss-class" class="chart"></div>
+      </article>
+    </div>
+    <div class="grid2">
+      <article class="panel chart-card">
+        <header><h2>Dáta modelu</h2></header>
+        <p class="hint">Okná podľa roly korpusu (tréning, výber epochy, kalibrácia prahu).</p>
+        <div id="chart-roles" class="chart"></div>
+      </article>
+      <article class="panel">
+        <header><h2>Prostredie a obmedzenia</h2></header>
+        <table class="kv" id="model-env"></table>
+        <ul class="limits" id="model-limits"></ul>
+      </article>
+    </div>
+  </section>
+</main>
+
+<footer>Anomália je odchýlka od benígnej prevádzky, na ktorej sa model učil, nie verdikt o malvéri.
+  Čísla sú výstup prehratia cez <code>safeguard.runtime.Detector</code>, rovnaký ako pri ostrom behu.</footer>
+<script src="/static/app.js"></script>
+</body>
+</html>
