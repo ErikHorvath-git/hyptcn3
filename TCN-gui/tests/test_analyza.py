@@ -1,10 +1,7 @@
-"""TCN GUI on the synthetic diagnostic bundle from safeguard.demo (mechanics only, HONESTY P4)."""
+"""TCN GUI (analyza.py, tcn_gui.py) on the synthetic diagnostic bundle from safeguard.demo (mechanics only, HONESTY P4)."""
 import json
 from pathlib import Path
 import sys
-import threading
-import urllib.error
-import urllib.request
 
 import numpy as np
 import pytest
@@ -13,7 +10,7 @@ GUI = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(GUI))
 
 import analyza  # noqa: E402
-import server  # noqa: E402
+import tcn_gui  # noqa: E402
 from safeguard.bundle import load_bundle  # noqa: E402
 from safeguard.demo import create_corpus  # noqa: E402
 from safeguard.runtime import replay_archive  # noqa: E402
@@ -72,26 +69,9 @@ def test_rejects_directory_without_snapshots(tmp_path):
         analyza.resolve_input(tmp_path)
 
 
-def test_server_lists_inputs_and_answers_analysis(setup, monkeypatch):
+def test_one_figure_renders_without_a_window(setup, tmp_path):
     root, _, odd = setup
-    found = server.discover([root])
-    assert str((root / "models" / "synthetic").resolve()) in found["bundles"]
-    assert str((odd / "features.npz").resolve()) in found["inputs"]
-    monkeypatch.setattr(analyza, "busy_collecting", lambda: False)
-    httpd = server.ThreadingHTTPServer(("127.0.0.1", 0), server.Handler)
-    httpd.roots, httpd.allow_during_collection, httpd.lock = [root], False, threading.Lock()
-    threading.Thread(target=httpd.serve_forever, daemon=True).start()
-    try:
-        base = f"http://127.0.0.1:{httpd.server_port}"
-        assert b"TCN detektor" in urllib.request.urlopen(base + "/").read()
-        body = json.dumps({"bundle": found["bundles"][0], "input": str(odd), "allow_diagnostic": True}).encode()
-        reply = json.loads(urllib.request.urlopen(urllib.request.Request(base + "/api/analyze", data=body)).read())
-        assert reply["verdict"]["level"] == "alarm"
-        monkeypatch.setattr(analyza, "busy_collecting", lambda: True)
-        with pytest.raises(urllib.error.HTTPError) as refused:
-            urllib.request.urlopen(urllib.request.Request(base + "/api/analyze", data=body))
-        assert refused.value.code == 409
-        with pytest.raises(urllib.error.HTTPError):
-            urllib.request.urlopen(base + "/static/../server.py")
-    finally:
-        httpd.shutdown()
+    out = tmp_path / "session.png"
+    assert tcn_gui.main(["--bundle", str(root / "models" / "synthetic"), "--input", str(odd),
+                         "--diagnostic", "--png", str(out)]) == 0
+    assert out.read_bytes().startswith(b"\x89PNG") and out.stat().st_size > 50_000

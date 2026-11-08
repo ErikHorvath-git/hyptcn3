@@ -1,79 +1,54 @@
-# TCN-gui: grafický prehliadač detektora
+# TCN-gui: jedno okno s výsledkom detektora
 
-Webová stránka, ktorá zoberie jednu session snímok (napríklad hodinu) a natrénovaný
-balík `safeguard`. Ukáže, či model alebo kontroly integrity hlásia alarm, a aj to, čím
-je skóre spôsobené. Druhá záložka ukazuje, ako sa model učil a z akých dát.
+Malá desktopová aplikácia (Tkinter a matplotlib, bez servera a prehliadača). Vyberieš
+natrénovaný balík `safeguard` a jednu session snímok, napríklad hodinu. Dostaneš jeden
+obrázok so štyrmi panelmi:
 
-Prehratie ide cez `safeguard.runtime.Detector`, takže skóre, prah, pravidlo k z n aj
-alarmy sú presne tie, ktoré by vydal detektor pri ostrom behu (test
-`tests/test_analyza.py` to porovnáva s `replay_archive`). GUI nič nezapisuje do
-repozitára ani do dát.
+1. **Skóre anomálie v čase** s kalibrovaným prahom. Červené pásy sú alarmy modelu
+   (pravidlo k z n), fialové pásy prevádzkové udalosti z `events.json` (protokol v3)
+   a krížiky nálezy kontroly integrity jadra. V nadpise okna je verdikt:
+   `BEZ ALARMU`, `ANOMÁLIA`, `NÁLEZ INTEGRITY JADRA`, `NEDOSTATOČNÉ POKRYTIE` alebo `CHYBA VSTUPU`.
+2. **Pamäťový chromatogram:** čas × oblasť RAM hosťa (bin, GPA v MiB). Farba je chyba
+   predikcie per-bin TCN. Do skóre ide najhorší bin, takže jasné miesto ukazuje, *kde*
+   v pamäti sa hosť správa nezvyčajne. Časová os je spoločná s panelom 1.
+3. **Ako sa sieť učila:** strata predikcie a klasifikácie na `train` a `dev` po
+   epochách a vybraná epocha (najnižšia strata na `dev`). V nadpise je počet okien podľa rolí.
+4. **Klasifikácia záťaže v čase:** pravdepodobnosti scenárov z tréningu a v nadpise
+   prevažujúci scenár a zaznamenaný scenár session. Klasifikátor opisuje druh
+   prevádzky, nie škodlivosť.
+
+Prehratie ide cez `safeguard.runtime.Detector` (`analyza.py`), takže skóre, prah
+aj alarmy sú presne tie, ktoré by vydal detektor pri ostrom behu. Test
+`tests/test_analyza.py` to porovnáva s `replay_archive`.
 
 ## Spustenie
 
 ```sh
-python3 TCN-gui/server.py                 # dáta z data/ v repozitári
-python3 TCN-gui/server.py --data /cesta/k/hyptcn3-data --port 8765
+python3 TCN-gui/tcn_gui.py                       # okno, model a snímky sa vyberú tlačidlami
+python3 TCN-gui/tcn_gui.py --bundle data/models/server-v2-benign-v6 --input data/collections/<session>
+python3 TCN-gui/tcn_gui.py --bundle ... --input ... --png session.png   # bez okna, iba obrázok
 ```
 
-Potom otvor `http://127.0.0.1:8765/`. Na zberovom PC sa použije interpreter z `.venv`
-(`.venv/bin/python TCN-gui/server.py`). Server počúva iba na 127.0.0.1. Z iného PC
-sa naň dostaneš cez tunel:
+Na zberovom PC sa použije `.venv/bin/python`. Lišta matplotlib pod obrázkom slúži na
+zväčšenie výrezu a uloženie obrázka.
 
-```sh
-ssh -L 8765:127.0.0.1:8765 hyptcn     # potom http://127.0.0.1:8765/ lokálne
-```
-
-Kým na danom PC beží zber (`hyptcn-collection.service` alebo `collection.py run`),
-server skórovanie odmietne. Prehratie zaťažuje CPU a disk a narušilo by meranie
-(`docs/AUTOMATICKY_ZBER.sk.md`). Prepínač `--allow-during-collection` je iba pre
-iný stroj, kde sa nezbiera.
-
-Grafy kreslí Plotly. Stránka ho najprv hľadá v `TCN-gui/static/vendor/plotly.min.js`
-(mimo gitu, kvôli práci bez internetu) a potom ho načíta z jsdelivr. Na offline použitie:
-
-```sh
-mkdir -p TCN-gui/static/vendor
-curl -Lo TCN-gui/static/vendor/plotly.min.js https://cdn.jsdelivr.net/npm/plotly.js-dist-min@2.35.2/plotly.min.js
-```
-
-## Vstupy
-
-- **Model:** adresár balíka so súborom `manifest.json`, napríklad `data/models/server-v2-benign-v6`.
-  Diagnostický balík (syntetický, `safeguard smoke`) sa načíta iba po zaškrtnutí voľby
-  v sekcii „Rozšírené“.
+- **Model:** adresár balíka so súborom `manifest.json`. Diagnostický (syntetický)
+  balík sa načíta iba so začiarknutím voľby „diagnostický balík“ alebo s `--diagnostic`.
 - **Snímky:** jedna z možností:
-  - archív príznakov session (`.npz`, napríklad `campaign_audit_*.npz` v adresári session);
+  - archív príznakov session (`.npz`, napríklad `campaign_audit_*.npz`);
   - adresár session, z ktorého sa vezme najnovší archív;
   - adresár so snímkami `.vmicd` a ich sidecarmi (alebo session s podadresárom `raw/`).
-    Tie sa najprv extrahujú cez `guestparse` s profilom jadra, štandardne
-    `profiles/debian12-6.1.0-42-cloud-amd64`.
-- Ak je v adresári session `events.json` (protokol v3), prevádzkové udalosti sa
-  vyznačia v grafe skóre.
+    Tie sa extrahujú cez `guestparse` s profilom `profiles/debian12-6.1.0-42-cloud-amd64`.
 
-## Čo grafy ukazujú
-
-| Graf | Význam |
-|---|---|
-| Verdikt | `BEZ ALARMU`, `ANOMÁLIA` (alarm modelu podľa pravidla k z n), `NÁLEZ INTEGRITY JADRA`, `NEDOSTATOČNÉ POKRYTIE` (skórovaná je menej ako polovica snímok) alebo `CHYBA VSTUPU` |
-| Skóre anomálie v čase | skóre každého okna, kalibrovaný prah, pásy alarmu, udalosti a nálezy integrity |
-| Pamäťový chromatogram | čas × bin RAM hosťa (GPA v MiB), farba je chyba predikcie per-bin TCN; do skóre ide najhorší bin |
-| Vstup `changed_ratio` | ten istý rozsah ako chromatogram, ale surový podiel zmenených stránok na porovnanie |
-| Rozklad skóre | `0,5 · globálne príznaky + 0,5 · najhorší bin`, presne podľa `SCORE_FORMULA` |
-| Najrelevantnejšie biny | priemerná chyba binu a počet okien, v ktorých bol najhorší |
-| Príspevok globálnych príznakov | `0,5 · chyba príznaku / 18` pre procesy, moduly, sokety a pamäť; súčet riadkov dáva globálnu časť skóre |
-| Profil záťaže | pravdepodobnosti klasifikátora scenára záťaže (opisuje prevádzku, nie škodlivosť) |
-| Model | krivky učenia `train`/`dev`, vybrané epochy, prah a pravidlo z kalibrácie, okná podľa rolí, prostredie a obmedzenia z manifestu |
-
-Logaritmická mierka sa prepína pri grafe skóre a platí aj pre farby oboch heatmáp.
+Kým na danom PC beží zber, analýza sa nespustí. Prehratie zaťažuje CPU a disk
+a narušilo by meranie (`docs/AUTOMATICKY_ZBER.sk.md`).
 
 ## Ako čítať výsledok
 
 `BEZ ALARMU` znamená, že session sa správala ako benígna prevádzka, na ktorej sa
 model učil. Nie je to dôkaz, že hosť je čistý. `ANOMÁLIA` je odchýlka od tej istej
-prevádzky, nie verdikt o malvéri (`HONESTY.md`, P4). Miera falošných alarmov
-modelu je zmeraná v `docs/MERANIA.md` a v `docs/STAV.sk.md` (R13); prevádzkové
-udalosti meria protokol v3 (`docs/NAVRH_PROTOKOL_V3.sk.md`).
+prevádzky, nie verdikt o malvéri (`HONESTY.md`, P4). Miera falošných alarmov je
+v `docs/MERANIA.md` a `docs/STAV.sk.md` (R13).
 
 ## Testy
 
@@ -81,6 +56,9 @@ udalosti meria protokol v3 (`docs/NAVRH_PROTOKOL_V3.sk.md`).
 python3 -m pytest -q TCN-gui/tests
 ```
 
-Testy natrénujú malý syntetický balík zo `safeguard.demo` a overia zhodu skóre
-s detektorom, presný rozklad skóre, alarm pri umelej odchýlke v jednom bine,
-odmietnutie diagnostického balíka bez povolenia a HTTP rozhranie servera.
+Testy natrénujú malý syntetický balík zo `safeguard.demo` a overia:
+- zhodu skóre s detektorom;
+- presný rozklad skóre na globálne príznaky a najhorší bin;
+- alarm pri umelej odchýlke v jednom bine;
+- odmietnutie diagnostického balíka bez povolenia;
+- vykreslenie obrázka bez okna.
