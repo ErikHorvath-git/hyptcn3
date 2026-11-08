@@ -166,8 +166,10 @@ def _verdict(rows, integrity_rows, alarm_events, scored, fatal):
                       "z tréningu, nie dôkaz, že hosť je čistý."}
 
 
-def analyze(bundle_path, input_path, *, profile=None, allow_diagnostic=False):
-    bundle = load_bundle(bundle_path, allow_diagnostic=allow_diagnostic)
+def analyze(bundle_path, input_path, *, profile=None, allow_diagnostic=False, bundle=None):
+    """Score one session; pass an already loaded `bundle` to skip reloading the weights."""
+    if bundle is None:
+        bundle = load_bundle(bundle_path, allow_diagnostic=allow_diagnostic)
     recorder = _Recorder(bundle)
     kind, source, session_dir = resolve_input(input_path)
     if kind == "archive":

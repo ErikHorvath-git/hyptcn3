@@ -1,21 +1,19 @@
 # TCN-gui: jedno okno s výsledkom detektora
 
 Malá desktopová aplikácia (Tkinter a matplotlib, bez servera a prehliadača). Vyberieš
-natrénovaný balík `safeguard` a jednu session snímok, napríklad hodinu. Dostaneš jeden
-obrázok so štyrmi panelmi:
+natrénovaný balík `safeguard` a jednu session snímok, napríklad hodinu, a dostaneš
+dva grafy so spoločnou časovou osou:
 
-1. **Skóre anomálie v čase** s kalibrovaným prahom. Červené pásy sú alarmy modelu
-   (pravidlo k z n), fialové pásy prevádzkové udalosti z `events.json` (protokol v3)
-   a krížiky nálezy kontroly integrity jadra. V nadpise okna je verdikt:
-   `BEZ ALARMU`, `ANOMÁLIA`, `NÁLEZ INTEGRITY JADRA`, `NEDOSTATOČNÉ POKRYTIE` alebo `CHYBA VSTUPU`.
-2. **Pamäťový chromatogram:** čas × oblasť RAM hosťa (bin, GPA v MiB). Farba je chyba
-   predikcie per-bin TCN. Do skóre ide najhorší bin, takže jasné miesto ukazuje, *kde*
-   v pamäti sa hosť správa nezvyčajne. Časová os je spoločná s panelom 1.
-3. **Ako sa sieť učila:** strata predikcie a klasifikácie na `train` a `dev` po
-   epochách a vybraná epocha (najnižšia strata na `dev`). V nadpise je počet okien podľa rolí.
-4. **Klasifikácia záťaže v čase:** pravdepodobnosti scenárov z tréningu a v nadpise
-   prevažujúci scenár a zaznamenaný scenár session. Klasifikátor opisuje druh
-   prevádzky, nie škodlivosť.
+1. **Skóre anomálie** s prahom; červený pás je alarm modelu (k z n okien nad prahom),
+   fialový pás prevádzková udalosť z `events.json`. Nadpis obsahuje verdikt
+   (`BEZ ALARMU`, `ANOMÁLIA`, `NÁLEZ INTEGRITY JADRA`, `NEDOSTATOČNÉ POKRYTIE`,
+   `CHYBA VSTUPU`).
+2. **Chyba modelu po oblastiach pamäte** (chromatogram): os y je adresa RAM hosťa po
+   16 MiB, farba chyba predikcie per-bin TCN. Svetlé miesto ukazuje, kde v pamäti sa
+   hosť správa nezvyčajne.
+
+Pod grafmi je jeden riadok: vybraná epocha tréningu, strata na `dev` a prevažujúca
+trieda klasifikátora záťaže (druh prevádzky, nie škodlivosť).
 
 Prehratie ide cez `safeguard.runtime.Detector` (`analyza.py`), takže skóre, prah
 aj alarmy sú presne tie, ktoré by vydal detektor pri ostrom behu. Test
@@ -24,21 +22,30 @@ aj alarmy sú presne tie, ktoré by vydal detektor pri ostrom behu. Test
 ## Spustenie
 
 ```sh
-python3 TCN-gui/tcn_gui.py                       # okno, model a snímky sa vyberú tlačidlami
+python3 TCN-gui/tcn_gui.py                       # aplikácia
 python3 TCN-gui/tcn_gui.py --bundle data/models/server-v2-benign-v6 --input data/collections/<session>
 python3 TCN-gui/tcn_gui.py --bundle ... --input ... --png session.png   # bez okna, iba obrázok
 ```
 
-Na zberovom PC sa použije `.venv/bin/python`. Lišta matplotlib pod obrázkom slúži na
-zväčšenie výrezu a uloženie obrázka.
+Na zberovom PC sa použije `.venv/bin/python`.
 
-- **Model:** adresár balíka so súborom `manifest.json`. Diagnostický (syntetický)
-  balík sa načíta iba so začiarknutím voľby „diagnostický balík“ alebo s `--diagnostic`.
-- **Snímky:** jedna z možností:
-  - archív príznakov session (`.npz`, napríklad `campaign_audit_*.npz`);
-  - adresár session, z ktorého sa vezme najnovší archív;
-  - adresár so snímkami `.vmicd` a ich sidecarmi (alebo session s podadresárom `raw/`).
-    Tie sa extrahujú cez `guestparse` s profilom `profiles/debian12-6.1.0-42-cloud-amd64`.
+## Ovládanie
+
+- **Načítať model…** (Ctrl+M): adresár balíka so súborom `manifest.json`. Pod tlačidlom
+  sa ukáže vybraná epocha, okno, počet binov, prah, pravidlo alarmu a triedy.
+  Diagnostický (syntetický) balík sa načíta iba so začiarknutou voľbou.
+- **Session…** (Ctrl+O): jeden archív príznakov `.npz`, ktorý sa hneď analyzuje.
+- **Priečinok…** (Ctrl+D): napríklad `data/collections`. Do zoznamu sa načítajú session
+  o jednu úroveň nižšie, teda adresáre s `.npz`, so snímkami `.vmicd` alebo s `raw/`.
+- **Analyzovať vybranú** (Enter alebo dvojklik) a **Skontrolovať všetky**: v zozname
+  pribudne výsledok (`✓ bez alarmu`, `✗ N alarm`, `? pokrytie`) a pomer maximálneho
+  skóre k prahu. Analýza beží na pozadí, okno nezamrzne. Kliknutím na už
+  skontrolovanú session sa zobrazí jej graf.
+- **Súbor → Uložiť obrázok** (Ctrl+S, PNG/PDF/SVG) a **Uložiť prehľad (CSV)** so
+  všetkými skontrolovanými session.
+- Lišta pod grafom slúži na zväčšenie výrezu a posun.
+
+Posledný model a priečinok si aplikácia pamätá v `~/.config/hyptcn3-tcn-gui.json`.
 
 Kým na danom PC beží zber, analýza sa nespustí. Prehratie zaťažuje CPU a disk
 a narušilo by meranie (`docs/AUTOMATICKY_ZBER.sk.md`).
@@ -61,4 +68,5 @@ Testy natrénujú malý syntetický balík zo `safeguard.demo` a overia:
 - presný rozklad skóre na globálne príznaky a najhorší bin;
 - alarm pri umelej odchýlke v jednom bine;
 - odmietnutie diagnostického balíka bez povolenia;
-- vykreslenie obrázka bez okna.
+- vykreslenie obrázka bez okna;
+- kontrolu priečinka v aplikácii (preskočí sa bez grafického displeja).

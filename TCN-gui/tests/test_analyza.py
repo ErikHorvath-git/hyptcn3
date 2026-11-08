@@ -75,3 +75,30 @@ def test_one_figure_renders_without_a_window(setup, tmp_path):
     assert tcn_gui.main(["--bundle", str(root / "models" / "synthetic"), "--input", str(odd),
                          "--diagnostic", "--png", str(out)]) == 0
     assert out.read_bytes().startswith(b"\x89PNG") and out.stat().st_size > 50_000
+
+
+def test_app_checks_a_folder_of_sessions(setup, tmp_path, monkeypatch):
+    import os
+    import time
+    if not os.environ.get("DISPLAY") and not os.environ.get("WAYLAND_DISPLAY"):
+        pytest.skip("bez grafického displeja")
+    root, test, odd = setup
+    folder = tmp_path / "sessions"
+    folder.mkdir()
+    (folder / "benign").symlink_to(Path(test["features"]).parent)
+    (folder / "odchylka").symlink_to(odd)
+    monkeypatch.setattr(tcn_gui, "SETTINGS", tmp_path / "settings.json")
+    monkeypatch.setattr(analyza, "busy_collecting", lambda: False)
+    app = tcn_gui.App(diagnostic=True)
+    try:
+        app.load_model(root / "models" / "synthetic")
+        app.add_inputs(tcn_gui.find_sessions(folder))
+        app.analyze_all()
+        deadline = time.monotonic() + 60
+        while (app.busy or len(app.reports) < 2) and time.monotonic() < deadline:
+            app.root.update()
+            time.sleep(0.02)
+        values = {app.tree.item(k)["text"]: app.tree.item(k)["values"][0] for k in app.tree.get_children()}
+        assert values["odchylka"].startswith("✗") and values["benign"].startswith("✓")
+    finally:
+        app.root.destroy()
