@@ -39,6 +39,17 @@ prikaz ho pusti iba s --final, nad commitnutym tcn/eval.py a iba raz na korpus
 cas do detekcie z toho odvodit nemozno. Ten isty prikaz vyhodnoti aj
 klasifikator profilu zataze (trieda okna = scenar relacie), aby jedno
 zaverecne spustenie na test_benign dalo oboje.
+
+DETEKCIA MALVERU (dataset 3)
+----------------------------
+`python3 -m tcn.eval malver --index I --config config/malver-v1.json --replay ...`
+cita index behov (hyptcn3/malver-index/1, pozri nacitaj_index_malveru) a ich
+prehratia tym istym balikom. Miera detekcie (Clopper-Pearson) a TTD su zvlast
+pre alarm modelu a pre nalez kontroly integrity, iba nad behmi s dokazanou
+aktivaciou (dokaz zo strany hosta), porovnane s pravdepodobnostou nahodneho
+alarmu v rovnako dlhom useku kontrolnych behov; po skupinach spravania a
+rodinach, s predregistrovanou ocakavanou reakciou skupiny z konfiguracie.
+Scenare spravania sa vyhodnocuju oddelene od skutocnych vzoriek.
 """
 
 import argparse
@@ -631,6 +642,447 @@ def vyhodnot_udalosti(index_cesta, prehratia, alfa=0.05):
     }, balik
 
 
+# ------------------------------------------------------------- malver (dataset 3)
+
+SCHEMA_INDEX_MALVERU = "hyptcn3/malver-index/1"
+SCHEMA_KONFIG_MALVERU = "hyptcn3/malver-config/1"
+SCHEMA_MALVER = "hyptcn3/safeguard-malver/1"
+DRUHY_BEHU = ("vzorka", "scenar", "kontrola")
+ZDROJE_DOKAZU = ("host", "guest", "inetsim")
+# Dokaz aktivacie, ktory nezavisi od hosta pod utokom (log INetSim, CPU procesu QEMU, ...).
+ZDROJE_HOSTA = ("host", "inetsim")
+ZDROJE_ALARMU = {"model": "model_anomaly", "integrita": "kernel_integrity"}
+PREDPOKLADY_MALVERU = [
+    "beh je aktivovany prave vtedy, ked ma cas aktivacie a aspon jeden dokaz zo strany hosta "
+    "(zdroj host alebo inetsim); dokaz iba z hosta pod utokom (guest) nestaci, lebo malver ho moze "
+    "podvrhnut alebo skryt",
+    "neaktivovany beh nie je detekcia ani platny negativ: do menovatela nevstupuje, je iba spocitany a vymenovany",
+    "detekcia = alarmova udalost (nabezna hrana, pole alarm_event) daneho zdroja v [aktivacia, aktivacia + "
+    "horizont]; alarm, ktory zacal pred aktivaciou, sa nerata (je pri behu zvlast)",
+    "Clopperov-Pearsonov interval je obojstranny s alfa/2 na kazdu stranu; behy sa beru ako nezavisle "
+    "(kazda vzorka bezi raz, na cerstvom boote z cisteho obrazu)",
+    "pravdepodobnost nahodneho alarmu v useku dlzky horizontu je 1 - exp(-miera * horizont), miera je "
+    "Poissonov odhad z kontrolnych behov k ich sledovanemu casu; interval je Garwoodov interval miery "
+    "prenesany tou istou funkciou; empiricky odhad su po sebe iduce neprekryvajuce sa useky kontrol",
+    "test detekcie proti nahode je jednostranny binomicky test s bodovym odhadom pravdepodobnosti "
+    "nahodneho alarmu (neistota odhadu z kontrol v teste nie je)",
+    "skupina reaguje zdrojom, ked ho detekuje aspon prah_reakcie_podiel aktivovanych behov skupiny; "
+    "zhoda = pozorovana reakcia sa rovna predregistrovanej v konfiguracii",
+    "scenare spravania (simulacie technik) sa vyhodnocuju oddelene od skutocnych vzoriek",
+]
+
+
+def clopper_pearson(k, n, alfa=0.05):
+    """Exaktny obojstranny interval podielu k z n; pri n = 0 None."""
+    from scipy.stats import beta
+    alfa = _alfa(alfa)
+    if n == 0:
+        return None
+    dolna = 0.0 if k == 0 else float(beta.ppf(alfa / 2, k, n - k + 1))
+    horna = 1.0 if k == n else float(beta.ppf(1 - alfa / 2, k + 1, n - k))
+    return [dolna, horna]
+
+
+def _cislo(x, meno, kladne=True):
+    if isinstance(x, bool) or not isinstance(x, (int, float)) or not math.isfinite(x) or (kladne and x <= 0):
+        raise ValueError("%s musi byt konecne %scislo" % (meno, "kladne " if kladne else ""))
+    return float(x)
+
+
+def _hex64(x):
+    return isinstance(x, str) and len(x) == 64 and all(c in "0123456789abcdef" for c in x)
+
+
+def nacitaj_konfig_malveru(konfig):
+    """Konfiguracia vyhodnotenia malveru (cesta alebo dict) -> (konfig, sha256, cesta alebo None)."""
+    if isinstance(konfig, dict):
+        k, cesta = konfig, None
+    else:
+        cesta = os.path.realpath(konfig)
+        k = json.loads(open(cesta, encoding="utf-8").read())
+    if k.get("schema") != SCHEMA_KONFIG_MALVERU:
+        raise ValueError("konfiguracia nema schemu %s" % SCHEMA_KONFIG_MALVERU)
+    _cislo(k.get("horizont_s"), "horizont_s")
+    _cislo(k.get("min_cisty_usek_s"), "min_cisty_usek_s")
+    _alfa(k.get("alfa"))
+    prah = _cislo(k.get("prah_reakcie_podiel"), "prah_reakcie_podiel")
+    if prah > 1:
+        raise ValueError("prah_reakcie_podiel musi byt v (0, 1]")
+    skupiny = k.get("skupiny")
+    if not isinstance(skupiny, dict) or not skupiny:
+        raise ValueError("konfiguracia nema skupiny")
+    for meno, s in skupiny.items():
+        ocak = s.get("ocakavane") if isinstance(s, dict) else None
+        if not isinstance(ocak, dict) or set(ocak) != set(ZDROJE_ALARMU) or \
+                not all(isinstance(v, bool) for v in ocak.values()):
+            raise ValueError("skupina %s: ocakavane musi mat prave %s ako true/false"
+                             % (meno, ", ".join(ZDROJE_ALARMU)))
+        kontroly = s.get("kontroly_integrity")
+        if kontroly is not None and (not isinstance(kontroly, list) or not kontroly
+                                     or not all(isinstance(c, str) and c for c in kontroly)):
+            raise ValueError("skupina %s: kontroly_integrity musi byt neprazdny zoznam nazvov" % meno)
+    minimum = k.get("minimum")
+    if not isinstance(minimum, dict) or set(minimum) != {"vzorky", "rodiny", "na_skupinu"} or \
+            not all(type(v) is int and v >= 0 for v in minimum.values()):
+        raise ValueError("minimum musi mat cele nezaporne vzorky, rodiny, na_skupinu")
+    scenare = k.get("scenare")
+    if not isinstance(scenare, list) or not all(isinstance(x, str) and x for x in scenare) \
+            or len(set(scenare)) != len(scenare):
+        raise ValueError("scenare musi byt zoznam roznych nazvov")
+    return k, hashlib.sha256(json.dumps(k, sort_keys=True).encode()).hexdigest(), cesta
+
+
+def aktivacia_behu(beh):
+    """(aktivovany, cas aktivacie alebo None, dovod alebo None) podla pravidla dokazu.
+
+    Pravidlo: beh je aktivovany prave vtedy, ked activation.timestamp_unix nie je null
+    a medzi dokazmi je aspon jeden zo strany hosta (source host alebo inetsim).
+    Dokazy iba z hosta pod utokom (source guest) nestacia - beh sa berie ako
+    neaktivovany, nie ako negativ.
+    """
+    akt = beh["activation"]
+    hostove = [d for d in akt["evidence"] if d["source"] in ZDROJE_HOSTA]
+    if akt["timestamp_unix"] is None:
+        return False, None, "bez_casu_aktivacie" if akt["evidence"] else "bez_dokazu"
+    if not hostove:
+        return False, None, "bez_dokazu_zo_strany_hosta"
+    return True, float(akt["timestamp_unix"]), None
+
+
+def _over_beh(beh, konfig):
+    """Kontrola jedneho zaznamu indexu; nejednoznacny zaznam je ValueError."""
+    bid = beh.get("id")
+    if not isinstance(bid, str) or not bid:
+        raise ValueError("beh bez id")
+    druh = beh.get("kind")
+    if druh not in DRUHY_BEHU:
+        raise ValueError("%s: kind musi byt %s" % (bid, "|".join(DRUHY_BEHU)))
+    if not _hex64(beh.get("archive_sha256")) or not isinstance(beh.get("archive"), str):
+        raise ValueError("%s: chyba archive alebo archive_sha256" % bid)
+    start, end = _cislo(beh.get("start"), "start", False), _cislo(beh.get("end"), "end", False)
+    if end <= start:
+        raise ValueError("%s: end nie je po start" % bid)
+    akt = beh.get("activation")
+    if druh == "kontrola":
+        if beh.get("sample_sha256") is not None or beh.get("launch_unix") is not None or \
+                beh.get("group") is not None or (akt not in (None, {}) and akt != {"timestamp_unix": None, "evidence": []}):
+            raise ValueError("%s: kontrolny beh nema vzorku, spustenie, skupinu ani aktivaciu" % bid)
+        return
+    if beh.get("group") not in konfig["skupiny"]:
+        raise ValueError("%s: skupina %r nie je v konfiguracii" % (bid, beh.get("group")))
+    if not isinstance(beh.get("family"), str) or not beh["family"]:
+        raise ValueError("%s: chyba family" % bid)
+    if druh == "vzorka":
+        if not _hex64(beh.get("sample_sha256")):
+            raise ValueError("%s: vzorka potrebuje sample_sha256 (64 hex, male pismena)" % bid)
+    else:
+        if beh.get("scenario") not in konfig["scenare"]:
+            raise ValueError("%s: scenar %r nie je v konfiguracii" % (bid, beh.get("scenario")))
+        if beh.get("sample_sha256") is not None:
+            raise ValueError("%s: scenar nema sample_sha256" % bid)
+    spustenie = _cislo(beh.get("launch_unix"), "launch_unix", False)
+    if not start <= spustenie <= end:
+        raise ValueError("%s: spustenie mimo behu" % bid)
+    if spustenie - start < konfig["min_cisty_usek_s"]:
+        raise ValueError("%s: cisty usek pred spustenim %.1f s je kratsi nez %.0f s"
+                         % (bid, spustenie - start, konfig["min_cisty_usek_s"]))
+    if not isinstance(akt, dict) or set(akt) != {"timestamp_unix", "evidence"} or \
+            not isinstance(akt["evidence"], list):
+        raise ValueError("%s: activation musi byt {timestamp_unix, evidence}" % bid)
+    for d in akt["evidence"]:
+        if not isinstance(d, dict) or d.get("source") not in ZDROJE_DOKAZU or \
+                not isinstance(d.get("kind"), str) or not d["kind"]:
+            raise ValueError("%s: dokaz musi mat source %s a kind" % (bid, "|".join(ZDROJE_DOKAZU)))
+    if akt["timestamp_unix"] is not None:
+        t = _cislo(akt["timestamp_unix"], "activation.timestamp_unix", False)
+        if not spustenie <= t <= end:
+            raise ValueError("%s: aktivacia pred spustenim alebo po konci behu" % bid)
+        if aktivacia_behu(beh)[0] and t + konfig["horizont_s"] > end:
+            raise ValueError("%s: beh konci skor nez horizont po aktivacii; negativ by bol nejednoznacny" % bid)
+
+
+def nacitaj_index_malveru(index_cesta, konfig):
+    """Index behov datasetu 3 (schema hyptcn3/malver-index/1), skontrolovany voci konfiguracii.
+
+    {"schema": "hyptcn3/malver-index/1", "complete": true,
+     "protocol_config": {"interval_s", "max_gap_s", "window_rows"},
+     "bundle_manifest_sha256": volitelne - ked je, vsetky prehratia ho musia mat,
+     "runs": [{"id", "kind": "vzorka"|"scenar"|"kontrola",
+               "sample_sha256" (vzorka; inak null), "scenario" (scenar), "family", "group" (nie kontrola),
+               "archive", "archive_sha256", "start", "end" (cas prvej a poslednej snimky),
+               "launch_unix" (nie kontrola),
+               "activation": {"timestamp_unix": cas alebo null,
+                              "evidence": [{"source": "host"|"guest"|"inetsim", "kind", ...}]}}]}
+    Kazda vzorka bezi prave raz (sample_sha256 sa neopakuje); pravidlo aktivacie je v aktivacia_behu.
+    """
+    index = json.loads(open(index_cesta, encoding="utf-8").read())
+    if index.get("schema") != SCHEMA_INDEX_MALVERU or index.get("complete") is not True:
+        raise ValueError("nie je uplny index %s" % SCHEMA_INDEX_MALVERU)
+    protokol = index.get("protocol_config")
+    if not isinstance(protokol, dict) or not {"interval_s", "max_gap_s", "window_rows"} <= set(protokol):
+        raise ValueError("index nema protocol_config s interval_s, max_gap_s, window_rows")
+    behy = index.get("runs")
+    if not isinstance(behy, list) or not behy:
+        raise ValueError("index nema behy")
+    for beh in behy:
+        _over_beh(beh, konfig)
+    for kluc, meno in (("id", "id"), ("archive_sha256", "archiv")):
+        pocty = collections.Counter(b[kluc] for b in behy)
+        dvakrat = sorted(x for x, n in pocty.items() if n > 1)
+        if dvakrat:
+            raise ValueError("%s sa v indexe opakuje: %s" % (meno, ", ".join(dvakrat)))
+    vzorky = collections.Counter(b["sample_sha256"] for b in behy if b["kind"] == "vzorka")
+    dvakrat = sorted(x for x, n in vzorky.items() if n > 1)
+    if dvakrat:
+        raise ValueError("vzorka bezi viac nez raz: %s" % ", ".join(dvakrat))
+    return index
+
+
+def priebeh_malveru(riadky, beh, aktivacia, horizont_s, kontroly_integrity=None):
+    """Alarmove udalosti jedneho behu vzhladom na spustenie a aktivaciu, po zdrojoch.
+
+    Integrita sa pri skupine s kontroly_integrity rata iba z udalosti, ktorych riadok
+    ma nalez niektorej z tychto kontrol (pole check v integrity.findings).
+    """
+    def zdroj(r, meno):
+        if not r["alarm_event"] or ZDROJE_ALARMU[meno] not in r["alarm_sources"]:
+            return False
+        if meno == "integrita" and kontroly_integrity:
+            return any(f.get("check") in kontroly_integrity for f in r["integrity"].get("findings", []))
+        return True
+
+    start = float(riadky[0]["timestamp"])
+    spustenie = beh.get("launch_unix")
+    out = {}
+    for meno in ZDROJE_ALARMU:
+        casy = [float(r["timestamp"]) for r in riadky if zdroj(r, meno)]
+        v = {"udalosti": len(casy)}
+        if spustenie is not None:
+            v["pred_spustenim"] = sum(t < spustenie for t in casy)
+            koniec = aktivacia if aktivacia is not None else float("inf")
+            v["medzi_spustenim_a_aktivaciou"] = sum(spustenie <= t < koniec for t in casy)
+        if aktivacia is not None:
+            v_horizonte = [t for t in casy if aktivacia <= t <= aktivacia + horizont_s]
+            v["detekcia"] = bool(v_horizonte)
+            v["ttd_s"] = v_horizonte[0] - aktivacia if v_horizonte else None
+            v["udalosti_v_horizonte"] = len(v_horizonte)
+            if meno == "integrita":
+                v["kontroly_v_horizonte"] = sorted({
+                    f.get("check") for r in riadky if zdroj(r, meno)
+                    and aktivacia <= float(r["timestamp"]) <= aktivacia + horizont_s
+                    for f in r["integrity"].get("findings", [])})
+        out[meno] = v
+    if aktivacia is not None:
+        pred = [r for r in riadky if float(r["timestamp"]) <= aktivacia]
+        out["alarm_modelu_aktivny_pri_aktivacii"] = bool(pred and pred[-1].get("model_alarm"))
+        out["cisty_usek_s"] = spustenie - start
+    return out
+
+
+def useky_kontroly(riadky, perioda_s, horizont_s):
+    """Pocet neprekryvajucich sa usekov dlzky horizontu od zaciatku kontroly a usekov s udalostou zdroja."""
+    start = float(riadky[0]["timestamp"])
+    pocet = int((float(riadky[-1]["timestamp"]) - start + perioda_s) // horizont_s)
+    out = {"usekov": pocet}
+    for meno, zdroj in ZDROJE_ALARMU.items():
+        s_alarmom = {int((float(r["timestamp"]) - start) // horizont_s) for r in riadky
+                     if r["alarm_event"] and zdroj in r["alarm_sources"]}
+        out["s_alarmom_" + meno] = sum(i < pocet for i in s_alarmom)
+    return out
+
+
+def _nahoda(kontroly, horizont_s, alfa):
+    """Pravdepodobnost nahodneho alarmu v useku dlzky horizontu z kontrolnych behov, po zdrojoch."""
+    if not kontroly:
+        return None
+    expozicia = sum(s["sledovany_s"] for s in kontroly)
+    usekov = sum(s["useky"]["usekov"] for s in kontroly)
+    out = {"kontrol": len(kontroly), "sledovany_s": expozicia, "horizont_s": horizont_s}
+    for meno in ZDROJE_ALARMU:
+        k = sum(s["udalosti_model" if meno == "model" else "udalosti_integrita"] for s in kontroly)
+        dolna, horna = poissonov_interval(k, alfa)
+        p = lambda mu: 1 - math.exp(-mu / expozicia * horizont_s)
+        s_alarmom = sum(s["useky"]["s_alarmom_" + meno] for s in kontroly)
+        out[meno] = {"udalosti": k, "miera_h": k / expozicia * 3600,
+                     "p_poisson": p(k), "p_poisson_interval": [p(dolna), p(horna)],
+                     "empiricky": {"usekov": usekov, "s_alarmom": s_alarmom,
+                                   "podiel": s_alarmom / usekov if usekov else None,
+                                   "interval": clopper_pearson(s_alarmom, usekov, alfa)}}
+    return out
+
+
+def _miery_detekcie(behy, nahoda, alfa, min_ttd_s):
+    """Miera detekcie, TTD a porovnanie s nahodou nad aktivovanymi behmi, po zdrojoch."""
+    from scipy.stats import binomtest
+    aktivne = [b for b in behy if b["aktivovany"]]
+    n = len(aktivne)
+    out = {"spustenych": len(behy), "aktivovanych": n,
+           "neaktivovanych": sorted(b["id"] for b in behy if not b["aktivovany"])}
+    for meno in ZDROJE_ALARMU:
+        detegovane = [b for b in aktivne if b["priebeh"][meno]["detekcia"]]
+        ttd = sorted(b["priebeh"][meno]["ttd_s"] for b in detegovane)
+        v = {"detegovanych": len(detegovane), "miera": len(detegovane) / n if n else None,
+             "interval": clopper_pearson(len(detegovane), n, alfa), "interval_metoda": "Clopper-Pearson",
+             "ttd_s": {b["id"]: b["priebeh"][meno]["ttd_s"] for b in detegovane},
+             "ttd_median_s": float(np.median(ttd)) if ttd else None,
+             "ttd_min_s": ttd[0] if ttd else None, "ttd_max_s": ttd[-1] if ttd else None}
+        if meno == "model":
+            v["ttd_min_mozny_s"] = min_ttd_s
+        if nahoda is not None and n:
+            p0 = nahoda[meno]["p_poisson"]
+            v["voci_nahode"] = {"p_nahody": p0, "p_nahody_interval": nahoda[meno]["p_poisson_interval"],
+                                "p": float(binomtest(len(detegovane), n, min(max(p0, 0.0), 1.0),
+                                                     alternative="greater").pvalue) if p0 > 0 else
+                                (1.0 if not detegovane else 0.0),
+                                "test": "jednostranny binomicky (viac detekcii nez nahoda)"}
+        else:
+            v["voci_nahode"] = None
+        out[meno] = v
+    return out
+
+
+def _reakcie(behy, konfig, alfa):
+    """Ocakavana (predregistrovana) a pozorovana reakcia na skupinu spravania."""
+    out = {}
+    for meno, s in sorted(konfig["skupiny"].items()):
+        clenovia = [b for b in behy if b["skupina"] == meno]
+        aktivne = [b for b in clenovia if b["aktivovany"]]
+        n = len(aktivne)
+        zdroje = {}
+        for zdroj in ZDROJE_ALARMU:
+            k = sum(b["priebeh"][zdroj]["detekcia"] for b in aktivne)
+            pozorovane = (k / n >= konfig["prah_reakcie_podiel"]) if n else None
+            zdroje[zdroj] = {"ocakavane": s["ocakavane"][zdroj], "pozorovane": pozorovane,
+                             "detegovanych": k, "aktivovanych": n, "interval": clopper_pearson(k, n, alfa),
+                             "zhoda": None if pozorovane is None else pozorovane == s["ocakavane"][zdroj]}
+        zhody = [z["zhoda"] for z in zdroje.values()]
+        out[meno] = {"spustenych": len(clenovia), "aktivovanych": n,
+                     "kontroly_integrity": s.get("kontroly_integrity"), "zdroje": zdroje,
+                     "zhoda": None if None in zhody else all(zhody),
+                     "dovod": "bez aktivovaneho behu" if not n else None}
+    return out
+
+
+def _podla(behy, kluc, alfa):
+    out = {}
+    for hodnota in sorted({b[kluc] for b in behy}):
+        clenovia = [b for b in behy if b[kluc] == hodnota]
+        aktivne = [b for b in clenovia if b["aktivovany"]]
+        out[hodnota] = {"skupina": sorted({b["skupina"] for b in clenovia}),
+                        "spustenych": len(clenovia), "aktivovanych": len(aktivne)}
+        for zdroj in ZDROJE_ALARMU:
+            k = sum(b["priebeh"][zdroj]["detekcia"] for b in aktivne)
+            out[hodnota][zdroj] = {"detegovanych": k, "interval": clopper_pearson(k, len(aktivne), alfa)}
+    return out
+
+
+def vyhodnot_malver(index_cesta, prehratia, konfig, alfa=None):
+    """Detekcia malveru (dataset 3) z prehrati safeguard replay --archive; kazdy beh prave raz.
+
+    Vzorky a scenare spravania sa vyhodnocuju oddelene; kontrolne behy (izolovana siet
+    bez vzorky) davaju pravdepodobnost nahodneho alarmu v useku dlzky horizontu.
+    Minima poctu vzoriek sa iba hlasia, vyhodnotenie neodmietnu.
+    """
+    konfig, konfig_sha, konfig_cesta = nacitaj_konfig_malveru(konfig)
+    alfa = _alfa(konfig["alfa"] if alfa is None else alfa)
+    horizont = float(konfig["horizont_s"])
+    index = nacitaj_index_malveru(index_cesta, konfig)
+    protokol = index["protocol_config"]
+    perioda, max_medzera, okno = protokol["interval_s"], protokol["max_gap_s"], protokol["window_rows"]
+    zaznamy = {b["archive_sha256"]: b for b in index["runs"]}
+    balik, balik_sha, relacie = None, None, {}
+    for adresar in prehratia:
+        konf, stav, riadky, hashe = _nacitaj_prehratie(adresar)
+        beh = zaznamy.get(_digest(konf["archive"]))
+        if beh is None:
+            raise ValueError("%s: archiv nie je behom tohto indexu" % adresar)
+        if beh["id"] in relacie:
+            raise ValueError("%s: beh %s je prehraty dvakrat" % (adresar, beh["id"]))
+        manifest = konf["bundle_manifest"]
+        if manifest.get("diagnostic") is not False:
+            raise ValueError("%s: diagnosticky balik sa nevyhodnocuje" % adresar)
+        kontrakt = manifest["feature_contract"]
+        if kontrakt["max_gap_s"] != max_medzera or kontrakt["window_rows"] != okno:
+            raise ValueError("%s: casove nastavenia balika sa lisia od protokolu" % adresar)
+        if balik is None:
+            balik, balik_sha = manifest, _manifest_sha(manifest)
+        elif _manifest_sha(manifest) != balik_sha:
+            raise ValueError("%s: prehratia pouzili rozne baliky" % adresar)
+        if riadky[0]["timestamp"] != beh["start"] or riadky[-1]["timestamp"] != beh["end"]:
+            raise ValueError("%s: prehratie nepokryva cely beh" % adresar)
+        suhrn = suhrn_relacie(riadky, perioda, max_medzera)
+        if (stav.get("scored"), stav.get("input_errors"), stav.get("alarm_events")) != (
+                suhrn["skorovanych"], suhrn["chyb_vstupu"], suhrn["udalosti"]):
+            raise ValueError("%s: status.json nesedi s events.jsonl" % adresar)
+        zaznam = {"id": beh["id"], "druh": beh["kind"], "rodina": beh.get("family"), "skupina": beh.get("group"),
+                  "scenar": beh.get("scenario"), "sample_sha256": beh.get("sample_sha256"),
+                  "archiv": os.path.realpath(konf["archive"]), "archive_sha256": beh["archive_sha256"],
+                  "prehratie": os.path.realpath(adresar), "subory_sha256": hashe,
+                  "suhrn": {k: suhrn[k] for k in ("riadkov", "skorovanych", "udalosti_model", "udalosti_integrita",
+                                                   "sledovany_s", "skorovany_s", "bez_skore_cas_podiel",
+                                                   "chyb_vstupu", "vypadkov", "vypadky_s")}}
+        if beh["kind"] == "kontrola":
+            zaznam["useky"] = useky_kontroly(riadky, perioda, horizont)
+        else:
+            aktivovany, cas, dovod = aktivacia_behu(beh)
+            kontroly = konfig["skupiny"][beh["group"]].get("kontroly_integrity")
+            zaznam.update(aktivovany=aktivovany, aktivacia_unix=cas, dovod_neaktivovany=dovod,
+                          spustenie_unix=float(beh["launch_unix"]),
+                          dokazy_zdroje=sorted({d["source"] for d in beh["activation"]["evidence"]}),
+                          priebeh=priebeh_malveru(riadky, beh, cas, horizont, kontroly))
+        relacie[beh["id"]] = zaznam
+    chybaju = sorted(b["id"] for b in index["runs"] if b["id"] not in relacie)
+    if chybaju:
+        raise ValueError("chybaju prehratia behov: %s" % ", ".join(chybaju))
+    if index.get("bundle_manifest_sha256") not in (None, balik_sha):
+        raise ValueError("prehratia nepouzili balik uvedeny v indexe")
+
+    kontroly = [dict(r["suhrn"], useky=r["useky"]) for r in relacie.values() if r["druh"] == "kontrola"]
+    nahoda = _nahoda(kontroly, horizont, alfa)
+    min_ttd = balik["calibration"]["k"] * perioda if "k" in balik["calibration"] else None
+    casti = {}
+    for druh in ("vzorka", "scenar"):
+        behy = [r for r in relacie.values() if r["druh"] == druh]
+        if not behy:
+            casti[druh] = None
+            continue
+        casti[druh] = {"spolu": _miery_detekcie(behy, nahoda, alfa, min_ttd),
+                       "skupiny": {g: _miery_detekcie([b for b in behy if b["skupina"] == g], nahoda, alfa, min_ttd)
+                                   for g in sorted({b["skupina"] for b in behy})},
+                       "reakcie": _reakcie(behy, konfig, alfa),
+                       "podla_rodiny" if druh == "vzorka" else "podla_scenara":
+                           _podla(behy, "rodina" if druh == "vzorka" else "scenar", alfa)}
+    vzorky = [r for r in relacie.values() if r["druh"] == "vzorka" and r["aktivovany"]]
+    minimum = konfig["minimum"]
+    na_skupinu = {g: sum(r["skupina"] == g for r in vzorky) for g in sorted(konfig["skupiny"])}
+    minima = {"vzorky": {"aktivovanych": len({r["sample_sha256"] for r in vzorky}), "minimum": minimum["vzorky"]},
+              "rodiny": {"aktivovanych": len({r["rodina"] for r in vzorky}), "minimum": minimum["rodiny"]},
+              "na_skupinu": {"aktivovanych": na_skupinu, "minimum": minimum["na_skupinu"]}}
+    for kluc in ("vzorky", "rodiny"):
+        minima[kluc]["splnene"] = minima[kluc]["aktivovanych"] >= minima[kluc]["minimum"]
+    minima["na_skupinu"]["splnene"] = all(v >= minimum["na_skupinu"] for v in na_skupinu.values())
+    minima["vsetky_splnene"] = all(minima[k]["splnene"] for k in ("vzorky", "rodiny", "na_skupinu"))
+    minima["poznamka"] = "rataju sa iba aktivovane skutocne vzorky; nesplnene minimum vyhodnotenie neodmietne"
+    return {
+        "schema": SCHEMA_MALVER, "alfa": alfa, "horizont_s": horizont,
+        "min_cisty_usek_s": float(konfig["min_cisty_usek_s"]),
+        "index": os.path.realpath(index_cesta), "index_sha256": _digest(index_cesta),
+        "konfiguracia": konfig_cesta, "konfiguracia_sha256": konfig_sha,
+        "konfiguracia_subor_sha256": _digest(konfig_cesta) if konfig_cesta else None,
+        "balik": {"manifest_sha256": balik_sha, "created_utc": balik["created_utc"],
+                  "corpus_index_sha256": balik["provenance"]["corpus_index_sha256"],
+                  "calibration": balik["calibration"]},
+        "perioda_s": perioda, "okno_riadkov": okno,
+        "nahodny_alarm": nahoda,
+        "vzorky": casti["vzorka"], "scenare": casti["scenar"],
+        "minima": minima,
+        "pocty": {d: sum(r["druh"] == d for r in relacie.values()) for d in DRUHY_BEHU},
+        "relacie": relacie, "predpoklady": [*PREDPOKLADY, *PREDPOKLADY_MALVERU],
+        "poznamka": ("Detekcia plati pre tieto vzorky v tomto labe, s tymto balikom a prahom; alarm modelu a nalez "
+                     "kontroly integrity su oddelene zdroje. Najmensi mozny TTD modelu je k * perioda (pravidlo k z n)."),
+    }, balik
+
+
 def _git_stav():
     """(commit, zoznam zmenenych ciest) alebo (None, None), ked git nie je k dispozicii."""
     try:
@@ -669,9 +1121,17 @@ def _hlavny(argv=None):
     u.add_argument("--replay", required=True, nargs="+", help="vystupne adresare safeguard replay --archive")
     u.add_argument("--out", required=True, help="novy JSON; existujuci sa neprepise")
     u.add_argument("--alfa", type=_arg_alfa, default=0.05)
+    m = sub.add_parser("malver", help="detekcia malveru (dataset 3): miera detekcie, TTD, reakcie skupin")
+    m.add_argument("--index", required=True, help="index behov (schema %s)" % SCHEMA_INDEX_MALVERU)
+    m.add_argument("--config", required=True, help="konfiguracia vyhodnotenia (config/malver-v1.json)")
+    m.add_argument("--replay", required=True, nargs="+", help="vystupne adresare safeguard replay --archive")
+    m.add_argument("--out", required=True, help="novy JSON; existujuci sa neprepise")
+    m.add_argument("--alfa", type=_arg_alfa, default=None, help="predvolene alfa z konfiguracie")
     a = p.parse_args(argv)
     if a.prikaz == "udalosti":
         return _udalosti(a, argv)
+    if a.prikaz == "malver":
+        return _malver(a, argv)
     values, balik = vyhodnot_far(a.corpus, a.role, a.replay, a.alfa, a.final, a.campaign)
     doc = _zaznam(values, balik, argv)
     commit, zmeny = doc["commit"], doc.pop("_zmeny")
@@ -731,6 +1191,21 @@ def _udalosti(a, argv):
                       "prevadzka_far_h": m["prevadzka"] and m["prevadzka"]["far_h"]["skorovany"],
                       "udalosti_far_h": m["vsetky_udalosti"] and m["vsetky_udalosti"]["far_h"]["skorovany"]},
                      ensure_ascii=False))
+    return 0
+
+
+def _malver(a, argv):
+    values, balik = vyhodnot_malver(a.index, a.replay, a.config, a.alfa)
+    doc = _zaznam(values, balik, argv)
+    doc.pop("_zmeny")
+    with open(a.out, "x", encoding="utf-8") as fh:
+        fh.write(json.dumps(doc, ensure_ascii=False, indent=2, sort_keys=True, allow_nan=False) + "\n")
+    v = values["vzorky"]
+    print(json.dumps({"behov": doc["n"], "pocty": values["pocty"],
+                      "vzorky_aktivovanych": v and v["spolu"]["aktivovanych"],
+                      "detekcia_model": v and [v["spolu"]["model"]["detegovanych"], v["spolu"]["aktivovanych"]],
+                      "detekcia_integrita": v and [v["spolu"]["integrita"]["detegovanych"], v["spolu"]["aktivovanych"]],
+                      "minima_splnene": values["minima"]["vsetky_splnene"]}, ensure_ascii=False))
     return 0
 
 

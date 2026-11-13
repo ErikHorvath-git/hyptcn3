@@ -1,0 +1,53 @@
+{
+  "schema": "hyptcn3/malver-config/1",
+  "name": "malver-v1",
+  "_dokumentacia": {
+    "ucel": "Predregistrovane nastavenie vyhodnotenia datasetu 3 (behy malveru) prikazom 'python3 -m tcn.eval malver'. Meni sa iba novou verziou suboru, nie po pohlade na vysledky.",
+    "index_behov": {
+      "schema": "hyptcn3/malver-index/1",
+      "koren": "{schema, complete: true, protocol_config: {interval_s, max_gap_s, window_rows}, bundle_manifest_sha256 (volitelne), runs: [...]}",
+      "beh": {
+        "id": "jedinecny identifikator behu",
+        "kind": "vzorka (skutocna vzorka) | scenar (simulacia techniky, oddelene vyhodnotenie) | kontrola (izolovana siet bez vzorky)",
+        "sample_sha256": "SHA-256 vzorky (64 hex, male pismena); iba pri vzorka, inak null; kazda vzorka bezi prave raz",
+        "scenario": "pri scenar nazov zo zoznamu 'scenare'",
+        "family": "rodina vzorky (pri scenar napr. nazov scenara); nie pri kontrola",
+        "group": "skupina spravania zo 'skupiny'; pri kontrola null",
+        "archive": "cesta k archivu priznakov behu (vstup safeguard replay --archive)",
+        "archive_sha256": "SHA-256 archivu; prehratie sa k behu paruje podla obsahu archivu",
+        "start": "cas prvej snimky behu (unix s); prehratie musi zacat presne tu",
+        "end": "cas poslednej snimky behu; prehratie musi skoncit presne tu",
+        "launch_unix": "cas spustenia vzorky alebo scenara; pri kontrola null; launch_unix - start >= min_cisty_usek_s",
+        "activation": {
+          "timestamp_unix": "cas dokazanej aktivacie alebo null; launch_unix <= cas a cas + horizont_s <= end",
+          "evidence": "zoznam {source: host | guest | inetsim, kind: str, ...}; host = napr. CPU procesu QEMU, inetsim = log spojeni INetSim, guest = nove procesy, moduly, spojenia, subory v hostovi"
+        }
+      },
+      "pravidlo_aktivacie": "Beh je aktivovany prave vtedy, ked ma activation.timestamp_unix a aspon jeden dokaz so source host alebo inetsim. Inak je neaktivovany: nie je detekcia ani platny negativ, do menovatela nevstupuje, je spocitany a vymenovany."
+    },
+    "ocakavane": "Predregistrovana reakcia skupiny po zdrojoch: model = alarmova udalost modelu (model_anomaly), integrita = alarmova udalost kontroly integrity (kernel_integrity). kontroly_integrity obmedzi integritu na nalezy tychto kontrol (pole check).",
+    "prah_reakcie_podiel": "skupina reaguje zdrojom, ked ho detekuje aspon tento podiel jej aktivovanych behov",
+    "minimum": "minimalne pocty aktivovanych skutocnych vzoriek; vyhodnotenie hlasi, ci su splnene, ale neodmietne ho"
+  },
+  "horizont_s": 600,
+  "min_cisty_usek_s": 600,
+  "alfa": 0.05,
+  "prah_reakcie_podiel": 0.5,
+  "minimum": {"vzorky": 10, "rodiny": 5, "na_skupinu": 1},
+  "scenare": ["diamorphine", "encrypt_files", "memfd_run", "hider_run", "miner"],
+  "skupiny": {
+    "ransomver": {"ocakavane": {"model": true, "integrita": false},
+                  "popis": "sifrovanie suborov: zataz disku a CPU"},
+    "kryptominer": {"ocakavane": {"model": true, "integrita": false},
+                    "popis": "trvala zataz CPU a sietove spojenie na pool"},
+    "botnet": {"ocakavane": {"model": true, "integrita": false},
+               "popis": "spojenia na riadiaci server, skenovanie, zaplavy"},
+    "rootkit_jadra": {"ocakavane": {"model": false, "integrita": true},
+                      "popis": "modul jadra, hook systemovych volani; ocakavaju sa kontroly integrity"},
+    "rootkit_userspace": {"ocakavane": {"model": false, "integrita": true},
+                          "kontroly_integrity": ["process_cross_view"],
+                          "popis": "skryvanie v userspace; ocakava sa zoznam procesov z pamate jadra (krizovy pohlad), model pravdepodobne nie"},
+    "tichy_backdoor": {"ocakavane": {"model": false, "integrita": false},
+                       "popis": "necinny backdoor; neocakava sa ziadna reakcia"}
+  }
+}

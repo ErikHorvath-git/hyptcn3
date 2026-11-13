@@ -19,6 +19,16 @@ ANOMALNE (blok F - predikcia normalu, bez stitkov):
 5. IsolationForestAnomalia - izolacny les nad rozvinutymi oknami.
 6. GRUPrediktor         - GRU s regresnou hlavou, porovnatelny pocet
    parametrov s TCNPrediktorom.
+7. LSTMPrediktor        - to iste s LSTM (zadanie ziada porovnanie s LSTM
+   aj GRU); skryty rozmer vybera skryte_pre_prediktor().
+
+VSTUP SAFEGUARD (E4): tcn/porovnanie.py dava anomalnym baselinom okna
+safeguardu (18 globalnych behavioralnych stlpcov + per-bin tenzor). Per-bin
+cast vidia ZHRNUTU cez biny funkciou zluc_biny(): priemer a maximum kazdeho
+zo 4 per-bin kanalov, rovnako ako to robi safeguard.model.Classifier
+("bin_mean_and_max"). Vstup na krok je teda 18 + 4 + 4 = 26 stlpcov; TCN
+prediktor safeguardu vidi kazdy bin zvlast (zdielany TCN cez biny) a jeho
+skore berie maximum cez biny - baseliny tuto lokalizaciu nemaju.
 
 Vsetky anomálne modely fitnu IBA na benígnych trenovacích oknách a ich skóre
 sa ma kalibrovat rovnakym postupom ako skore TCN - preto patria do jednej
@@ -30,6 +40,7 @@ predikcia a treninguje ich trenuj_siet()/trenuj_prediktor() v train.py.
 """
 
 import numpy as np
+import torch
 from sklearn.ensemble import IsolationForest
 from sklearn.linear_model import LogisticRegression
 from torch import nn
@@ -166,16 +177,73 @@ class IsolationForestAnomalia:
         # -decision_function: vacsie = anomalnejsie (konzistentne s chybou)
         return -self.m.decision_function(self._flat(X))
 
+    def skore_nezaporne(self, X):
+        """-score_samples v [0, 1]: to iste poradie ako skore(), iba posunute.
+
+        skore() je -decision_function = -score_samples - offset a moze byt
+        zaporne; kalibracia safeguardu (safeguard.training.calibrate) zaporne
+        skore odmieta. Posun o konstantu nemeni kvantilovy prah ani alarmy.
+        """
+        return -self.m.score_samples(self._flat(X))
+
 
 class GRUPrediktor(nn.Module):
-    """GRU s regresnou hlavou - prediktor normalu, porovnatelny s TCN (F)."""
+    """GRU s regresnou hlavou - prediktor normalu, porovnatelny s TCN (F).
 
-    def __init__(self, priznakov, skryte):
+    vystupov=None predpoveda vsetky vstupne stlpce (povodne spravanie);
+    inak len prvych `vystupov` (porovnanie.py nepredpoveda masky has_changed).
+    """
+
+    rekurencia = nn.GRU
+
+    def __init__(self, priznakov, skryte, vystupov=None):
         super().__init__()
-        self.gru = nn.GRU(priznakov, skryte, batch_first=True)
-        self.hlava = nn.Linear(skryte, priznakov)
+        self.gru = self.rekurencia(priznakov, skryte, batch_first=True)
+        self.hlava = nn.Linear(skryte, priznakov if vystupov is None else vystupov)
 
     def forward(self, x, po_krokoch=False):
         h, _ = self.gru(x)
         pred = self.hlava(h)
         return pred if po_krokoch else pred[:, -1, :]
+
+
+class LSTMPrediktor(GRUPrediktor):
+    """Jednovrstvove LSTM s regresnou hlavou; okrem bunky zhodne s GRUPrediktor.
+
+    Atribut sa vola `gru` aj tu, aby forward a trening boli jeden kod; typ
+    rekurencie je nn.LSTM (overuje test_porovnanie).
+    """
+
+    rekurencia = nn.LSTM
+
+
+def skryte_pre_prediktor(trieda, priznakov, vystupov, ciel, maximum=256):
+    """Skryty rozmer prediktora `trieda` s poctom parametrov najblizsie k `ciel`.
+
+    Ako skryte_pre_parametre(), ale pocita parametre presne toho prediktora,
+    ktory sa bude trenovat (LSTM ma 4 brany, GRU 3 - jeden vzorec nestaci).
+    Vracia (skryte, pocet_parametrov).
+    """
+    if ciel < 1 or maximum < 1:
+        raise ValueError("ciel a maximum musia byt kladne")
+    najlepsie = None
+    for h in range(1, maximum + 1):
+        n = sum(p.numel() for p in trieda(priznakov, h, vystupov).parameters())
+        if najlepsie is None or abs(n - ciel) < najlepsie[1]:
+            najlepsie = (h, abs(n - ciel), n)
+    if najlepsie[0] == maximum:
+        raise ValueError("skryty rozmer narazil na maximum %d; zvys maximum" % maximum)
+    return najlepsie[0], najlepsie[2]
+
+
+def zluc_biny(globalne, lokalne):
+    """(N, L, G) a (N, L, B, 4) -> (N, L, G + 8): priemer a maximum cez biny.
+
+    To iste zhrnutie ako safeguard.model.Classifier.forward; poradie stlpcov:
+    globalne, priemery 4 per-bin kanalov, maxima 4 per-bin kanalov.
+    """
+    globalne = torch.as_tensor(globalne, dtype=torch.float32)
+    lokalne = torch.as_tensor(lokalne, dtype=torch.float32)
+    if lokalne.ndim != 4 or globalne.ndim != 3 or lokalne.shape[:2] != globalne.shape[:2]:
+        raise ValueError("zluc_biny: ocakava (N, L, G) a (N, L, B, C) so zhodnym N, L")
+    return torch.cat((globalne, lokalne.mean(dim=2), lokalne.max(dim=2).values), dim=-1)
