@@ -25,7 +25,13 @@ WANTED = (
     "socket",
     "sock_common",
     "mm_struct",        # pre A4: mapovanie bin -> proces (mm->pgd, mm->mmap)
-    "vm_area_struct",   # vm_start/vm_end/vm_next
+    "vm_area_struct",   # vm_start/vm_end/vm_flags/vm_file
+    "maple_tree",       # mm->mm_mt: strom VMA v jadre 6.1+
+    "maple_range_64",
+    "maple_arange_64",
+    "path",             # file->f_path.dentry->d_name: meno suboru (memfd:)
+    "dentry",
+    "qstr",
 )
 
 # Strojovo citatelne udaje o tom, z KTOREHO startu hosta je profil.

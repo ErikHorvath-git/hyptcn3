@@ -8,6 +8,7 @@ from pathlib import Path
 import numpy as np
 
 from features.archive import save
+from features.snapshot import MENA
 from .bundle import digest, load_bundle
 from .runtime import replay_archive
 from .training import train_bundle
@@ -45,13 +46,14 @@ def create_corpus(output, *, layout=None, rows=96, window_rows=8):
             directory.mkdir()
             t = np.arange(rows)
             level = 0.02 + scenario_i * 0.08
-            matrix = np.zeros((rows, 22))
+            matrix = np.zeros((rows, len(MENA)))
             matrix[:, :8] = np.clip(level + rng.normal(0, 0.005, (rows, 8)), 0, 1)
             matrix[:, 8:18] = 20 + scenario_i * 10 + rng.integers(0, 5, (rows, 10))
-            matrix[:, 20] = 1
+            predecessor, full_column = MENA.index("ma_predchodcu"), MENA.index("je_plna")
+            matrix[:, predecessor] = 1
             full = (t % 64 == 0)
-            matrix[full, 20] = 0
-            matrix[full, 21] = 1
+            matrix[full, predecessor] = 0
+            matrix[full, full_column] = 1
             local = np.zeros((rows, len(layout["bins"]), 4))
             local[:, :, 0] = np.clip(level + rng.normal(0, 0.01, local.shape[:2]), 0, 1)
             local[:, :, 1] = rng.uniform(0.1, 0.3, local.shape[:2])

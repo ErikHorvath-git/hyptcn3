@@ -7,7 +7,10 @@ malware families or establish detection accuracy without held-out experiments.
 import torch
 from torch import nn
 
+from features.archive import BEHAVIOR_NAMES
 from tcn.model import TCN, TCNPrediktor, skontroluj_rf
+
+GLOBAL_FEATURES = len(BEHAVIOR_NAMES)
 
 
 SCORE_FORMULA = "0.5 * mean(global_squared_error) + 0.5 * max(bin_masked_mse)"
@@ -18,13 +21,13 @@ def architecture(window_rows=32):
     blocks = 1
     while 1 + 4 * (2 ** blocks - 1) < window_rows:
         blocks += 1
-    return {"global_features": 18, "local_features": 4, "channels": 16,
+    return {"global_features": GLOBAL_FEATURES, "local_features": 4, "channels": 16,
             "kernel": 3, "blocks": max(4, blocks), "window_rows": window_rows,
             "dropout": 0.1, "classifier_pooling": "bin_mean_and_max"}
 
 
 def validate_architecture(config):
-    if (config.get("global_features") != 18 or config.get("local_features") != 4
+    if (config.get("global_features") != GLOBAL_FEATURES or config.get("local_features") != 4
             or config.get("classifier_pooling") != "bin_mean_and_max"):
         raise ValueError("unsupported safeguard architecture")
     for key in ("channels", "kernel", "blocks", "window_rows"):
@@ -50,7 +53,7 @@ class Predictor(nn.Module):
     def __init__(self, config):
         super().__init__()
         kwargs = _kwargs(config)
-        self.global_tcn = TCNPrediktor(18, **kwargs)
+        self.global_tcn = TCNPrediktor(GLOBAL_FEATURES, **kwargs)
         # has_changed is an input mask, never a regression target.
         self.bin_tcn = TCN(4, 3, **kwargs)
 
@@ -67,7 +70,7 @@ class Classifier(nn.Module):
         super().__init__()
         if type(classes) is not int or classes < 1:
             raise ValueError("classifier needs at least one class")
-        self.tcn = TCN(26, classes, **_kwargs(config))
+        self.tcn = TCN(GLOBAL_FEATURES + 8, classes, **_kwargs(config))
 
     def forward(self, global_window, local_window):
         pooled = torch.cat((global_window, local_window.mean(dim=2),

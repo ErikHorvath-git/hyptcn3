@@ -29,6 +29,10 @@ python3 TCN-gui/tcn_gui.py --bundle ... --input ... --png session.png   # bez ok
 
 Na zberovom PC sa použije `.venv/bin/python`.
 
+Od schémy príznakov `hyptcn3/snapshot-vektor/4` (2026-11-14, príznaky `proc_wx` a
+`proc_memfd`, 20 vstupov modelu) sa starší balík `server-v2-benign-v6` a archívy s 22
+stĺpcami nenačítajú. Na ich zobrazenie treba repozitár na commite `500de07`.
+
 ## Ovládanie
 
 - **Načítať model…** (Ctrl+M): adresár balíka so súborom `manifest.json`. Pod tlačidlom

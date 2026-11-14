@@ -19,6 +19,10 @@ from .profile import ProfileError
 START_KERNEL_MAP = 0xFFFFFFFF80000000
 MODULES_VADDR = 0xFFFFFFFFC0000000      # koniec linearne mapovaneho obrazu jadra
 KERNEL_VA_MIN = 0xFFFF800000000000      # najnizsia kanonicka adresa jadra
+LIST_POISON2 = 0xDEAD000000000122       # list_del_rcu: prev odstraneneho uzla (x86_64)
+PTE_P, PTE_RW, PTE_US, PTE_PS = 1, 2, 4, 1 << 7
+PTE_NX = 1 << 63
+PTE_ADDR = 0x000FFFFFFFFFF000
 DIRECT_MAP_MAX = 1 << 46                # 64 TiB okno priameho mappingu
 
 AF_INET = 2
@@ -395,6 +399,17 @@ class GuestView:
         novy proces pribudne v dalsej snimke. Zvyskove riziko (exec vedlajsieho
         vlakna procesu na konci zoznamu) je v L1 v docs/LIMITACIE.md.
 
+        Pravidlo 'tail' moze predchadzat aj nezhodne spojenie, ktore vysvetli
+        odstranenie procesu v tom istom obraze (session
+        events-v3-20261108_46_test_events_write_heavy, snimka 270: proces
+        sluzby worker a jeho postgres zanikli pocas citania). Uzol X dosiahnuty
+        z uzla A ma `prev` na uzol D namiesto A, ale stranka D ukazuje D
+        odstraneny cez list_del_rcu (D.prev == LIST_POISON2) a D.next == X.
+        Stranka X je teda z casu pred odstranenim D a A.next uz D obchadza.
+        Take spojenie nie je roztrhnutie, ktore by skrylo uzol: D v zozname
+        po odstraneni nie je. Pravidlo 'prev' sa tym nemeni (prechod dozadu
+        cez X skonci na LIST_POISON2 a neuzavrie sa).
+
         Vracia {'processes', 'count', 'truncated', 'stop_reason', 'walk'}.
         'walk' je 'next', 'prev', ked zoznam potvrdil prechod dozadu, alebo
         'tail', ked prvy nezhodny uzol je podla init_task.prev posledny a
@@ -416,20 +431,24 @@ class GuestView:
         if init_pa is None:
             return self._result("processes", [], True, "neznamy posun jadra")
 
-        out, stop, zhodne = self._prechod_tasks(init_pa, init_va, m, 0, limit)
+        out, stop, zhodne, vysvetlene = self._prechod_tasks(init_pa, init_va, m, 0, limit)
         if stop is None:
             return dict(self._result("processes", out, False, None), walk="next")
-        spat, stop_spat, _ = self._prechod_tasks(init_pa, init_va, m, 8, limit)
+        spat, stop_spat, _, _ = self._prechod_tasks(init_pa, init_va, m, 8, limit)
         if stop_spat is None and zhodne and ({pr["task_va"] for pr in spat}
                                              == {pr["task_va"] for pr in out[:zhodne]}):
             return dict(self._result("processes", out[:zhodne], False, None),
                         walk="prev", forward_stop_reason=stop)
-        posledny = out[zhodne] if 0 < zhodne < len(out) else None
+        koniec = vysvetlene["zhodne"]
+        posledny = out[koniec] if 0 < koniec < len(out) else None
         if (posledny is not None and posledny["tgid"] != posledny["pid"]
-                and posledny["tgid"] in {pr["pid"] for pr in out[:zhodne]}
+                and posledny["tgid"] in {pr["pid"] for pr in out[:koniec]}
                 and self.u64(init_pa + m["tasks"] + 8) == posledny["task_va"] + m["tasks"]):
-            return dict(self._result("processes", out[:zhodne], False, None),
-                        walk="tail", forward_stop_reason=stop)
+            res = dict(self._result("processes", out[:koniec], False, None),
+                       walk="tail", forward_stop_reason=stop)
+            if vysvetlene["odstranene"]:
+                res["deleted_links"] = vysvetlene["odstranene"]
+            return res
         return dict(self._result("processes", out, True, stop), walk="next",
                     backward_stop_reason=stop_spat
                     or "prechod dozadu presiel ine uzly ako zhodne spojenia dopredu")
@@ -439,12 +458,15 @@ class GuestView:
         Jeden smer zoznamu init_task.tasks: `smer` 0 ide cez `next`, 8 cez
         `prev`. Vracia (procesy v poradi prechodu, dovod zastavenia alebo
         None, pocet uzlov pred prvym uzlom, ktoreho opacne spojenie
-        neukazuje tam, odkial sa k nemu prislo).
+        neukazuje tam, odkial sa k nemu prislo, a pre smer 0 slovnik
+        {'zhodne': to iste bez spojeni vysvetlenych odstranenim uzla v tom
+        istom obraze, 'odstranene': pocet takych spojeni}).
         """
         head_va = init_va + m["tasks"]
         out, seen = [], set()
         stop = None
         odkial, zhodne = head_va, None
+        vysvetlene = {"zhodne": None, "odstranene": 0}
         nxt = self.u64(init_pa + m["tasks"] + smer)
         while True:
             if nxt == head_va:
@@ -473,8 +495,15 @@ class GuestView:
             if not comm:
                 stop = "prazdne comm pri pid %d" % pid
                 break
-            if zhodne is None and self.u64(tpa + m["tasks"] + 8 - smer) != odkial:
-                zhodne = len(out)
+            opacne = self.u64(tpa + m["tasks"] + 8 - smer)
+            if opacne != odkial:
+                if zhodne is None:
+                    zhodne = len(out)
+                if vysvetlene["zhodne"] is None:
+                    if smer == 0 and self._odstraneny_pred(opacne, nxt, m, seen):
+                        vysvetlene["odstranene"] += 1
+                    else:
+                        vysvetlene["zhodne"] = len(out)
             out.append({
                 "pid": pid,
                 "tgid": tgid,
@@ -484,7 +513,23 @@ class GuestView:
             })
             odkial = nxt
             nxt = self.u64(tpa + m["tasks"] + smer)
-        return out, stop, len(out) if zhodne is None else zhodne
+        if vysvetlene["zhodne"] is None:
+            vysvetlene["zhodne"] = len(out)
+        return out, stop, len(out) if zhodne is None else zhodne, vysvetlene
+
+    def _odstraneny_pred(self, uzol, nasledovnik, m, seen):
+        """
+        Je `uzol` (spojenie tasks) proces odstraneny cez list_del_rcu, ktory
+        v zozname stal tesne pred `nasledovnik`? Jeho stranka ma prev ==
+        LIST_POISON2 a next == nasledovnik; prechod dopredu ho nepresiel.
+        """
+        if not self._plausible_va(uzol) or uzol in seen:
+            return False
+        upa = self.to_pa(uzol - m["tasks"])
+        if upa is None:
+            return False
+        return (self.u64(upa + m["tasks"] + 8) == LIST_POISON2
+                and self.u64(upa + m["tasks"]) == nasledovnik)
 
     # ------------------------------------------------------------- moduly
 
@@ -635,6 +680,155 @@ class GuestView:
         if missing_syms:
             res["missing_symbols"] = missing_syms
         return res
+
+    # ------------------------------------------------ podozrive vzory pamate
+
+    MEMFD_PREFIX = "memfd:"
+
+    def memory_patterns(self, procs=None, max_fds=4096, max_tables=65536):
+        """
+        Dva vzory, ktore beznemu serveru nepatria a pouziva ich kod vlozeny
+        do pamate: stranky zapisovatelne a zaroven spustitelne (W+X) a subory
+        `memfd:` (anonymny subor v RAM, typicky pre spustenie bez suboru na
+        disku, memfd_create + fexecve).
+
+        W+X sa cita z uzivatelskych tabuliek stranok procesu (mm->pgd), nie zo
+        stromu VMA: rozhoduje, co hardver naozaj dovoli. Stranka sa pocita,
+        ked je pritomna, pouzivatelska, zapisovatelna na kazdej urovni a bez
+        NX na urovniach PUD, PMD a PTE. NX na urovni PGD sa ignoruje: jadro
+        s PTI ma v kopii PGD pre rezim jadra pouzivatelske polozky s NX
+        (pti_set_user_pgtbl) a mm->pgd ukazuje na tuto kopiu; pouzivatelska
+        kopia je bez neho. Pristupove prava na zapis bez skutocne zapisanej
+        stranky (copy-on-write) sa neratia, lebo PTE ma vtedy RW = 0.
+
+        memfd sa hlada v tabulke deskriptorov procesu (meno dentry zacina
+        `memfd:`) a v mm->exe_file (proces spusteny z memfd). Mapovany memfd
+        bez otvoreneho deskriptora tento prechod nevidi (L1 v
+        docs/LIMITACIE.md).
+
+        Vracia {'patterns', 'count', 'truncated', 'stop_reason',
+        'wx_processes', 'memfd_processes', 'wx_pages', 'tables',
+        'skipped_tasks'}; procesy zdielajuce mm (vfork) sa ratia raz.
+        """
+        try:
+            o_mm, o_files = self.p.require("task_struct", "mm", "files")
+            o_pgd, o_exe = self.p.require("mm_struct", "pgd", "exe_file")
+            o_fdt, = self.p.require("files_struct", "fdt")
+            o_maxfds, o_fd = self.p.require("fdtable", "max_fds", "fd")
+            o_path, = self.p.require("file", "f_path")
+            o_dentry, = self.p.require("path", "dentry")
+            o_dname, = self.p.require("dentry", "d_name")
+            o_qname, = self.p.require("qstr", "name")
+        except ProfileError as exc:
+            return dict(self._result("patterns", [], True, str(exc)), wx_processes=0,
+                        memfd_processes=0, wx_pages=0, tables=0, skipped_tasks=0)
+        if procs is None:
+            pres = self.processes()
+            procs, proc_trunc = pres["processes"], pres["truncated"]
+        else:
+            proc_trunc = False
+
+        def file_name(fva):
+            fpa = self.to_pa(fva) if self._plausible_va(fva) else None
+            if fpa is None:
+                return None
+            d = self.u64(fpa + o_path + o_dentry)
+            dpa = self.to_pa(d) if self._plausible_va(d) else None
+            if dpa is None:
+                return None
+            name = self.u64(dpa + o_dname + o_qname)
+            npa = self.to_pa(name) if self._plausible_va(name) else None
+            return self.cstr(npa, len(self.MEMFD_PREFIX)) if npa is not None else None
+
+        out, mms, skipped, tables, pages = [], set(), 0, 0, 0
+        stop = None
+        wx_pids, memfd_pids = set(), set()
+        for pr in procs:
+            if pr.get("kernel_thread"):
+                continue
+            tpa = self.to_pa(pr["task_va"])
+            if tpa is None:
+                skipped += 1
+                continue
+            mm = self.u64(tpa + o_mm)
+            mpa = self.to_pa(mm) if self._plausible_va(mm) else None
+            if mpa is not None and mm not in mms:
+                mms.add(mm)
+                pgd = self.u64(mpa + o_pgd)
+                root = self.to_pa(pgd) if self._plausible_va(pgd) else None
+                if root is None:
+                    skipped += 1
+                else:
+                    n, t, capped = self._wx_pages(root, max_tables - tables)
+                    tables += t
+                    if capped:
+                        stop = "strop %d tabuliek stranok" % max_tables
+                    if n:
+                        pages += n
+                        wx_pids.add(pr["pid"])
+                        out.append({"pid": pr["pid"], "comm": pr["comm"], "kind": "wx", "pages": n})
+                exe = self.u64(mpa + o_exe)
+                if exe and file_name(exe) == self.MEMFD_PREFIX:
+                    memfd_pids.add(pr["pid"])
+                    out.append({"pid": pr["pid"], "comm": pr["comm"], "kind": "memfd_exe"})
+            if stop:
+                break
+            files = self.u64(tpa + o_files)
+            fpa = self.to_pa(files) if self._plausible_va(files) else None
+            fdt = self.u64(fpa + o_fdt) if fpa is not None else None
+            fdtpa = self.to_pa(fdt) if self._plausible_va(fdt) else None
+            nmax = self.i32(fdtpa + o_maxfds) if fdtpa is not None else None
+            arr = self.u64(fdtpa + o_fd) if fdtpa is not None else None
+            apa = self.to_pa(arr) if self._plausible_va(arr) else None
+            if apa is None or nmax is None or nmax < 0:
+                skipped += 1
+                continue
+            for i in range(min(nmax, max_fds)):
+                fva = self.u64(apa + i * 8)
+                if fva and file_name(fva) == self.MEMFD_PREFIX:
+                    memfd_pids.add(pr["pid"])
+                    out.append({"pid": pr["pid"], "comm": pr["comm"], "kind": "memfd_fd", "fd": i})
+        truncated = proc_trunc or stop is not None
+        res = self._result("patterns", out, truncated,
+                           stop or ("zoznam procesov je neuplny" if proc_trunc else None))
+        res.update(wx_processes=len(wx_pids), memfd_processes=len(memfd_pids),
+                   wx_pages=pages, tables=tables, skipped_tasks=skipped)
+        return res
+
+    def _wx_pages(self, root_pa, max_tables):
+        """
+        Pocet 4 KiB stranok (velka stranka sa rata po 4 KiB) zapisovatelnych
+        a spustitelnych z pouzivatelskeho rezimu pod korenom root_pa. Do
+        nizsej urovne sa zostupuje iba cez polozky, ktore zapis a spustenie
+        este dovoluju. Vracia (stranky, precitane tabulky, dosiahnuty strop).
+        """
+        need = PTE_P | PTE_RW | PTE_US
+        need_nx = need | PTE_NX
+        stack = [(root_pa, 0)]
+        pages = tables = 0
+        while stack:
+            if tables >= max_tables:
+                return pages, tables, True
+            pa, lvl = stack.pop()
+            raw = self.img.read(pa, PAGE)
+            if not raw or len(raw) < PAGE:
+                continue
+            tables += 1
+            entries = struct.unpack("<512Q", raw)
+            if lvl == 0:                           # iba pouzivatelska polovica
+                stack.extend(((e & PTE_ADDR, 1) for e in entries[:256] if e & need == need))
+                continue
+            if lvl == 3:
+                pages += sum(1 for e in entries if e & need_nx == need)
+                continue
+            for e in entries:
+                if e & need_nx != need:
+                    continue
+                if e & PTE_PS:
+                    pages += 512 if lvl == 2 else 512 * 512
+                else:
+                    stack.append((e & PTE_ADDR, lvl + 1))
+        return pages, tables, False
 
     def _socket_row(self, skpa, sc, protos):
         """Jeden riadok z sock_common; None ked to nie je IPv4/IPv6 socket."""

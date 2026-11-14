@@ -124,7 +124,7 @@ def test_compare_two_trainings_on_one_session(setup, tmp_path):
     assert [m["name"] for m in result["models"]] == ["synthetic", "tyzden-2"]  # Ordered by training date.
     assert result["layers"]["cka"][0] == pytest.approx([1.0] * len(result["layers"]["names"]))
     assert all(0 <= v <= 1 + 1e-6 for v in result["layers"]["cka"][1])
-    assert result["models"][1]["baseline_shift"] == pytest.approx([0.0] * 21, abs=1e-9)  # Same training data.
+    assert result["models"][1]["baseline_shift"] == pytest.approx([0.0] * len(result["baseline_names"]), abs=1e-9)  # Same training data.
     out = tmp_path / "porovnanie.png"
     assert tcn_gui.main(["--compare", str(root / "models" / "synthetic"), str(second), "--input", str(odd),
                          "--diagnostic", "--png", str(out)]) == 0

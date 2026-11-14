@@ -10,7 +10,7 @@ from .quality import valid_for
 
 # Integrity verdicts and acquisition flags are kept as metadata, not behavioral
 # prediction targets. This selection is independent of process/VM identities.
-BEHAVIOR_NAMES = MENA[:18]
+BEHAVIOR_NAMES = MENA[:MENA.index("chk_syscall_hooks")]
 
 
 def save(path, result):

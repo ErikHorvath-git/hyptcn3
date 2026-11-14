@@ -70,10 +70,11 @@ def test_entropia_rozdelenia_kraje():
 
 
 def test_mena_su_kontrakt():
-    """Dvadsat priznakov + dva priznaky o riadku, mena sa neopakuju."""
-    assert len(MENA) == 22
-    assert len(set(MENA)) == 22
+    """Dvadsatdva priznakov + dva priznaky o riadku, mena sa neopakuju."""
+    assert len(MENA) == 24
+    assert len(set(MENA)) == 24
     assert MENA[-2:] == ("ma_predchodcu", "je_plna")
+    assert MENA[18:22] == ("proc_wx", "proc_memfd", "chk_syscall_hooks", "chk_crossview")
     assert MENA[:8] == ("mem_changed_ratio", "mem_bins_active",
                         "mem_changed_max", "mem_changed_p95",
                         "mem_changed_spread", "mem_entropy_mean",
@@ -177,6 +178,10 @@ def test_object_features_reanchor_before_reading_pointers(monkeypatch):
             assert self.shifted
             return dict(sockets=[], count=0, truncated=False, stop_reason=None)
 
+        def memory_patterns(self, **_):
+            assert self.shifted
+            return _vzory()
+
     monkeypatch.setattr(snapshot.checks, "check_all", lambda *a, **kw: {
         "summary": {"inconclusive": [], "syscall_hooks": 0}, "findings": []})
     _, _, notes = objekty_z_pohladu(View())
@@ -190,7 +195,12 @@ def test_object_features_reanchor_before_reading_pointers(monkeypatch):
 # ----------------------------------------------------- 3. realny retazec
 
 
-@pytest.mark.parametrize("incomplete", [None, "processes", "modules", "sockets"])
+def _vzory(truncated=False, wx=0, memfd=0):
+    return {"patterns": [], "count": 0, "truncated": truncated, "stop_reason": "cut" if truncated else None,
+            "wx_processes": wx, "memfd_processes": memfd}
+
+
+@pytest.mark.parametrize("incomplete", [None, "processes", "modules", "sockets", "memory_patterns"])
 def test_behavior_quality_depends_on_feature_traversals_not_cross_view(monkeypatch, incomplete):
     from types import SimpleNamespace
     from features import snapshot
@@ -201,6 +211,7 @@ def test_behavior_quality_depends_on_feature_traversals_not_cross_view(monkeypat
         processes=lambda: walk("processes", "processes"),
         modules=lambda: walk("modules", "modules"),
         sockets=lambda **kwargs: walk("sockets", "sockets"),
+        memory_patterns=lambda **kwargs: _vzory(truncated=incomplete == "memory_patterns"),
     )
     monkeypatch.setattr(snapshot.checks, "check_all", lambda *args, **kwargs: {
         "summary": {"inconclusive": ["process_cross_view", "text_integrity"], "syscall_hooks": 0},
@@ -219,7 +230,8 @@ def test_backward_closed_process_list_is_complete_with_note(monkeypatch):
         ktext_shift=1, profile_boot_mismatch=lambda: None,
         processes=lambda: {"processes": procs, "count": 1, "truncated": False, "stop_reason": None,
                            "walk": "prev", "forward_stop_reason": "cyklus v zozname"},
-        modules=lambda: walk("modules"), sockets=lambda **kwargs: walk("sockets"))
+        modules=lambda: walk("modules"), sockets=lambda **kwargs: walk("sockets"),
+        memory_patterns=lambda **kwargs: _vzory())
     monkeypatch.setattr(snapshot.checks, "check_all", lambda *args, **kwargs: {
         "summary": {"inconclusive": [], "syscall_hooks": 0}, "findings": []})
     values, state, notes = objekty_z_pohladu(view)
@@ -238,7 +250,8 @@ def test_process_list_cut_before_tail_insertion_is_complete_with_note(monkeypatc
         ktext_shift=1, profile_boot_mismatch=lambda: None,
         processes=lambda: {"processes": procs, "count": 1, "truncated": False, "stop_reason": None,
                            "walk": "tail", "forward_stop_reason": "cyklus v zozname"},
-        modules=lambda: walk("modules"), sockets=lambda **kwargs: walk("sockets"))
+        modules=lambda: walk("modules"), sockets=lambda **kwargs: walk("sockets"),
+        memory_patterns=lambda **kwargs: _vzory())
     monkeypatch.setattr(snapshot.checks, "check_all", lambda *args, **kwargs: {
         "summary": {"inconclusive": [], "syscall_hooks": 0}, "findings": []})
     values, state, notes = objekty_z_pohladu(view)
@@ -303,12 +316,14 @@ def test_object_state_carries_raw_cross_view_keys(monkeypatch):
     walk = lambda field: {field: [], "count": 0, "truncated": False, "stop_reason": None}
     view = SimpleNamespace(ktext_shift=1, profile_boot_mismatch=lambda: None,
                            processes=lambda: walk("processes"), modules=lambda: walk("modules"),
-                           sockets=lambda **kwargs: walk("sockets"))
+                           sockets=lambda **kwargs: walk("sockets"),
+                           memory_patterns=lambda **kwargs: _vzory(wx=2, memfd=1))
     monkeypatch.setattr(snapshot.checks, "check_all", lambda *args, **kwargs: {
         "summary": {"inconclusive": [], "syscall_hooks": 1}, "findings": [HIDDEN, HOOK]})
     values, state, _ = objekty_z_pohladu(view)
     assert state["krizove_kluce"] == frozenset({snapshot.kluc_nalezu(HIDDEN)})
     assert values["chk_crossview"] == 1     # per-snapshot count, before confirmation
+    assert values["proc_wx"] == 2 and values["proc_memfd"] == 1
 
 
 def test_chain_threads_cross_view_keys_independent_of_model_validity(monkeypatch, tmp_path):

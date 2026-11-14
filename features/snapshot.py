@@ -20,7 +20,7 @@ per-bin vektor kvoli tomu nezanika, zostava v perbin.py a v sidecari.
 
 KONTRAKT VEKTORA (dohodnuty, nemeni sa bez dohody)
 ---------------------------------------------------
-Dlzka je MENA - dvadsat priznakov plus dve polia o tom, co riadok vobec je:
+Dlzka je MENA - dvadsatdva priznakov plus dve polia o tom, co riadok vobec je:
 `ma_predchodcu` a `je_plna`. Poradie je dane poradim v MENA a uklada sa spolu
 s datami, aby sa dalo overit.
 
@@ -37,12 +37,18 @@ s datami, aby sa dalo overit.
   Objekty hosta (z guestparse nad tou istou snimkou):
      9  proc_total    10 proc_user    11 proc_kernel   12 proc_new
     13 proc_gone      14 mod_total    15 mod_delta     16 sock_total
-    17 sock_listen    18 sock_estab   19 chk_syscall_hooks
-    20 chk_crossview
+    17 sock_listen    18 sock_estab
+    19 proc_wx        procesy so strankami zapisovatelnymi a spustitelnymi (W+X)
+    20 proc_memfd     procesy s otvorenym alebo spustenym suborom memfd:
+    21 chk_syscall_hooks  22 chk_crossview
 
   O riadku samotnom:
-    21 ma_predchodcu  0/1 - bola pred touto snimkou ina?
-    22 je_plna        0/1 - je to plna snimka, alebo delta?
+    23 ma_predchodcu  0/1 - bola pred touto snimkou ina?
+    24 je_plna        0/1 - je to plna snimka, alebo delta?
+
+  Priznaky 19 a 20 pribudli v schema hyptcn3/snapshot-vektor/4 (2026-11-14,
+  guestparse.view.GuestView.memory_patterns). Starsie archivy maju 22
+  stlpcov a s novym kontraktom sa nemiesaju.
 
 PAMATOVA CAST SA NEDOPOCITAVA INAK
 -----------------------------------
@@ -113,7 +119,7 @@ from guestparse.view import build_view                     # noqa: E402
 from .perbin import FeatureError, _chain_parts             # noqa: E402
 from .quality import LEGACY_POLICY, BEHAVIOR_POLICY, valid_for  # noqa: E402
 
-SCHEMA = "hyptcn3/snapshot-vektor/3"
+SCHEMA = "hyptcn3/snapshot-vektor/4"
 
 MENA = (
     "mem_changed_ratio", "mem_bins_active", "mem_changed_max",
@@ -122,6 +128,7 @@ MENA = (
     "proc_total", "proc_user", "proc_kernel", "proc_new", "proc_gone",
     "mod_total", "mod_delta",
     "sock_total", "sock_listen", "sock_estab",
+    "proc_wx", "proc_memfd",
     "chk_syscall_hooks", "chk_crossview",
     "ma_predchodcu", "je_plna",
 )
@@ -311,10 +318,11 @@ def objekty_z_pohladu(view):
     p = view.processes()
     m = view.modules()
     s = view.sockets(procs=p["processes"])
+    vz = view.memory_patterns(procs=p["processes"])
     c = checks.check_all(view, procs=p, mods=m)
 
     pozn = list(ukotvenie)
-    for meno, res in (("procesy", p), ("moduly", m), ("sokety", s)):
+    for meno, res in (("procesy", p), ("moduly", m), ("sokety", s), ("vzory pamate", vz)):
         if res["truncated"]:
             pozn.append("%s: prechod sa neuzavrel (%s), pocet je dolna hranica"
                         % (meno, res["stop_reason"]))
@@ -336,16 +344,19 @@ def objekty_z_pohladu(view):
         "krizove_kluce": frozenset(kluc_nalezu(f) for f in c["findings"]
                                    if f["check"] in KRIZOVE_NALEZY),
         "quality": {
-            "traversals_complete": not any(r["truncated"] for r in (p, m, s)),
-            "behavior_valid": not any(r["truncated"] for r in (p, m, s)),
+            "traversals_complete": not any(r["truncated"] for r in (p, m, s, vz)),
+            "behavior_valid": not any(r["truncated"] for r in (p, m, s, vz)),
             "inconclusive": list(c["summary"]["inconclusive"]),
             "findings": c["findings"],
             # Legacy 22-column validity also needs the integrity count checks.
             # The primary 18-column model uses behavior_valid instead.
-            "model_valid": not any(r["truncated"] for r in (p, m, s))
+            "model_valid": not any(r["truncated"] for r in (p, m, s, vz))
                 and not (set(c["summary"]["inconclusive"]) - {"text_integrity"}),
             # Smer, ktorym sa zoznam procesov uzavrel (view.processes).
             "process_walk": p.get("walk"),
+            # Procesy s W+X strankami alebo memfd (pid, comm, druh).
+            "memory_patterns": [{k: v for k, v in x.items() if k in ("pid", "comm", "kind")}
+                                for x in vz["patterns"]],
         },
     }
     hodnoty = {
@@ -357,6 +368,8 @@ def objekty_z_pohladu(view):
         "sock_total": s["count"],
         "sock_listen": sum(1 for so in sokety if so["state"] == "LISTEN"),
         "sock_estab": sum(1 for so in sokety if so["state"] == "ESTABLISHED"),
+        "proc_wx": vz["wx_processes"],
+        "proc_memfd": vz["memfd_processes"],
         "chk_syscall_hooks": c["summary"]["syscall_hooks"],
         "chk_crossview": sum(1 for f in c["findings"]
                              if f["check"] in KRIZOVE_NALEZY),
@@ -429,6 +442,7 @@ def vektor_snimky(snapshot, profil, seq=None, predch=None, cursor=None,
         proc_new, proc_gone,
         obj["mod_total"], mod_delta,
         obj["sock_total"], obj["sock_listen"], obj["sock_estab"],
+        obj["proc_wx"], obj["proc_memfd"],
         obj["chk_syscall_hooks"], obj["chk_crossview"],
         ma_predchodcu, je_plna,
     ]

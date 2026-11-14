@@ -184,3 +184,23 @@ prázdne); voči balíku `server-v2-benign-v6` sa extraktor a zberač líšia u�
 | bod | stav | záznam |
 |---|---|---|
 | 1. E2: FAR balíka v6 pri prevádzkových udalostiach | hotové 2026-11-14 nad neúplnou alokáciou 45 zo 48 session; FAR počas udalostí 5.63 {{res:safeguard_far_events_v3_20261114.json:values.merane.vsetky_udalosti.far_h.skorovany.udalosti_h}} za skórovanú hodinu, v čistej prevádzke 0.047 {{res:safeguard_far_events_v3_20261114.json:values.merane.prevadzka.far_h.skorovany.udalosti_h}}; štatisticky vyššia (p < 0,001) pri `restart_databazy`, `zamok_tabulky`, `zataz_pamate` a `zla_konfiguracia_sluzby`, pri `zla_konfiguracia_nginx` 0.61 {{res:safeguard_far_events_v3_20261114.json:values.merane.typy.zla_konfiguracia_nginx.far_h.skorovany.udalosti_h}} za skórovanú hodinu bez preukázaného rozdielu (p = 0.138 {{res:safeguard_far_events_v3_20261114.json:values.merane.typy.zla_konfiguracia_nginx.voci_prevadzke.p}}). Podľa pravidla v kap. 4 [`NAVRH_PROTOKOL_V3.sk.md`](NAVRH_PROTOKOL_V3.sk.md) by nasledoval krok B (nová kampaň s rolami ako v2); podľa pravidla plánu vlastníka sa nová kampaň nezbiera, výsledok sa iba hlási a o kroku B rozhodne vlastník. | [`safeguard_far_events_v3_20261114.json`](../data/results/safeguard_far_events_v3_20261114.json), [súhrn](../data/results/safeguard_far_events_v3_20261114_summary.json), [kampaň](../data/results/collection_campaign_events_v3_20261108.json), [session 46](../data/results/collection_process_walk_combined_20261112.json) |
+
+## 7. Nová iterácia merania (od 2026-11-14)
+
+Rozhodnutie z 2026-11-14 (vlastník cez session Diplomovka): korpus `benign-v6-20261026` sa
+nepreauditováva (možnosti A a B z kap. 6 sa nepoužijú). Kampane `benign-v6-20261026` a
+`events-v3-20261108` ostávajú predchádzajúcou iteráciou a E2 jej výsledkom. Nasleduje jeden
+nový zmrazený merací kód, nový pilot a nové kampane datasetov 1 a 2 zbierané súčasne na
+dvoch VM s rovnakým obrazom a jadrom hosťa; prevádzkové udalosti z v3 patria podľa pravidla
+z kap. 4 [`NAVRH_PROTOKOL_V3.sk.md`](NAVRH_PROTOKOL_V3.sk.md) aj do tréningových rolí.
+
+| krok | stav |
+|---|---|
+| roztrhnutý zoznam procesov zo session 46 | opravené v `guestparse/view.py` (L1), testy `guestparse/tests/test_defensive.py`; overené na kópii session 46 (snímky 269 až 271) |
+| príznaky `proc_wx` a `proc_memfd` | pridané (`GuestView.memory_patterns`, schéma `hyptcn3/snapshot-vektor/4`, 20 vstupov modelu, kontrakt `hyptcn3/safeguard-features/3`; L10 bod 5), testy `guestparse/tests/test_memory_patterns.py`; overené iba na piatich snímkach session 46 bez pozitívnej kontroly v hosťovi |
+| zber z dvoch VM (`campaign.py`, `labctl.py`) | nezačaté |
+| protokol s udalosťami v tréningu | nezačaté |
+| zmrazenie kódu, pilot, kampane, tréning, vyhodnotenia | nezačaté |
+
+Balík `server-v2-benign-v6` a archívy príznakov so schémou `hyptcn3/snapshot-vektor/3`
+(22 stĺpcov) sa s kódom od tejto zmeny nenačítajú; ich prehratie ide z commitu `500de07`.

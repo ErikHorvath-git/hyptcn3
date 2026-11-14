@@ -13,11 +13,14 @@ import numpy as np
 import pytest
 import torch
 
-from features.archive import save
+from features.archive import BEHAVIOR_NAMES, save
+from features.snapshot import MENA
 from safeguard.bundle import digest, load_bundle
 from safeguard.tests.test_training import make_corpus
 from safeguard.training import train_bundle
 from tcn import klasifikator as kl
+
+G = len(BEHAVIOR_NAMES)
 
 LAYOUT = {"bin_bytes": 4096, "page_size": 4096, "bins": [[0, 1], [1, 1], [2, 1]],
           "regions": [{"gpa": 0, "bytes": 12288}], "memsize": 12288, "vcpus": 2}
@@ -37,10 +40,10 @@ def _konfig(cesta, trening=("test_events-1", "test_events-3", "test_events-5", "
 def _archiv(cesta, casy, scenar_i, udalosti, meno, seed):
     rng = np.random.default_rng(seed)
     n = len(casy)
-    matica = rng.normal(1 + scenar_i, 0.1, size=(n, 22))
+    matica = rng.normal(1 + scenar_i, 0.1, size=(n, len(MENA)))
     for u in udalosti:  # Pocas udalosti sa spravanie posunie, aby sa dalo co ucit.
-        matica[(casy >= u["host_start_unix"]) & (casy <= u["host_stopped_unix"]), :18] += 3
-    matica[:, 18:] = 0
+        matica[(casy >= u["host_start_unix"]) & (casy <= u["host_stopped_unix"]), :G] += 3
+    matica[:, G:] = 0
     matica[1:, -2] = 1
     matica[0, -1] = 1
     local = np.zeros((n, 3, 4))

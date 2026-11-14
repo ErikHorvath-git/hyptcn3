@@ -21,7 +21,7 @@ from features.windows import BIN_PRIZNAKY, perbin_zo_sidecaru
 from features.quality import BEHAVIOR_POLICY
 
 
-CONTRACT_SCHEMA = "hyptcn3/safeguard-features/2"
+CONTRACT_SCHEMA = "hyptcn3/safeguard-features/3"
 NORMALIZER_SCHEMA = "hyptcn3/safeguard-normalizer/1"
 GLOBAL_NAMES = tuple(BEHAVIOR_NAMES)
 LOCAL_NAMES = tuple(BIN_PRIZNAKY)

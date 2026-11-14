@@ -316,3 +316,74 @@ def test_neprecitatelny_vkladany_uzol_nepotvrdi():
     assert res["truncated"] is True and res["walk"] == "next"
     assert "comm" in res["stop_reason"]
     assert res["count"] == 3
+
+
+# ------------------- odstranenie uprostred spolu s vlozenim na koniec
+
+GONE_VA = KBASE + 0x60000           # proces odstraneny cez list_del_rcu pocas citania
+LIST_POISON2 = 0xDEAD000000000122
+
+
+def _odstraneny_a_vkladany():
+    """
+    Snimka 270 session events-v3-20261108_46_test_events_write_heavy v malom:
+    medzi t0 a t1 bol proces, ktory pocas citania zanikol. t0.next ho uz
+    obchadza, stranka t1 sa vsak precitala skor a jej prev na neho este
+    ukazuje; jeho stranka ma prev LIST_POISON2 a next t1. Zaroven je na
+    konci zoznamu vkladany uzol ako v _vkladany_na_konci.
+    """
+    view, img = _vkladany_na_konci()
+    _task(img, GONE_VA, 190491, "postgres")
+    img.u64(_pa(GONE_VA) + O_TASKS, TASK_VA[1] + O_TASKS)
+    img.u64(_pa(GONE_VA) + O_TASKS + 8, LIST_POISON2)
+    img.u64(_pa(TASK_VA[1]) + O_TASKS + 8, GONE_VA + O_TASKS)
+    return view, img
+
+
+def test_odstraneny_uzol_pred_vkladanim_uzavrie_tail():
+    view, _ = _odstraneny_a_vkladany()
+    res = view.processes()
+    assert res["truncated"] is False and res["stop_reason"] is None
+    assert res["walk"] == "tail" and res["deleted_links"] == 1
+    assert "cyklus" in res["forward_stop_reason"]
+    assert [p["comm"] for p in res["processes"]] == ["proces0", "proces1", "proces2"]
+
+
+def test_vkladany_bez_odstranenia_nema_deleted_links():
+    res = _vkladany_na_konci()[0].processes()
+    assert res["walk"] == "tail" and "deleted_links" not in res
+
+
+def test_odstraneny_uzol_bez_poison_nevysvetli():
+    """prev uzla D je platny: D je v zozname a t0.next ho preskocil, mohol sa skryt."""
+    view, img = _odstraneny_a_vkladany()
+    img.u64(_pa(GONE_VA) + O_TASKS + 8, TASK_VA[0] + O_TASKS)
+    res = view.processes()
+    assert res["truncated"] is True and res["walk"] == "next"
+
+
+def test_odstraneny_uzol_s_inym_next_nevysvetli():
+    """D bol odstraneny, ale nestal tesne pred t1: medzi nimi mohol byt iny uzol."""
+    view, img = _odstraneny_a_vkladany()
+    img.u64(_pa(GONE_VA) + O_TASKS, TASK_VA[2] + O_TASKS)
+    res = view.processes()
+    assert res["truncated"] is True and res["walk"] == "next"
+
+
+def test_odstraneny_uzol_bez_vkladania_na_konci_neuzavrie():
+    """Samotne odstranenie uprostred neuzavrie zoznam, ktory sa dopredu zacyklil inde."""
+    view, img = _odstraneny_a_vkladany()
+    img.u64(_pa(INIT_VA) + O_TASKS + 8, TASK_VA[2] + O_TASKS)
+    res = view.processes()
+    assert res["truncated"] is True and res["walk"] == "next"
+
+
+def test_odstraneny_uzol_v_uplnom_zozname_nemeni_next():
+    """Zoznam uzavrety dopredu ostava 'next' aj so zastaranym prev."""
+    view, img = _obojsmerny(INIT_VA + O_TASKS)
+    _task(img, GONE_VA, 190491, "postgres")
+    img.u64(_pa(GONE_VA) + O_TASKS, TASK_VA[1] + O_TASKS)
+    img.u64(_pa(GONE_VA) + O_TASKS + 8, LIST_POISON2)
+    img.u64(_pa(TASK_VA[1]) + O_TASKS + 8, GONE_VA + O_TASKS)
+    res = view.processes()
+    assert res["walk"] == "next" and res["truncated"] is False and res["count"] == 3

@@ -18,7 +18,7 @@ def run_detector(monkeypatch, tmp_path, sequences, full=()):
     monkeypatch.setattr(detektor, "nacitaj_prediktor", lambda _: (None, None, {"dlzka_okna": 3}))
     monkeypatch.setattr(detektor, "chyba_predikcie_okna", lambda *_: (2., [], []))
     monkeypatch.setattr(snapshot, "vektor_snimky", lambda _a, _b, seq, *_:
-                        ([1.] * 21 + [float(seq in full)], {}, []))
+                        ([1.] * (len(snapshot.MENA) - 1) + [float(seq in full)], {}, []))
     out = tmp_path / "output.jsonl"
     rc = detektor.main(["--snapshots", str(tmp_path), "--profile", "unused", "--model", "unused",
                        "--prah", "1", "--k", "1", "--n", "1", "--hold-bin", str(binary), "--out", str(out)])

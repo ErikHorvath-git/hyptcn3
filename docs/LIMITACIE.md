@@ -154,7 +154,17 @@ prostredia nesedia už dnes: extraktor sa zmenil commitom `625fe0f` a zberač sa
 (`prostredie_voci_baliku` v [zázname E2](../data/results/safeguard_far_events_v3_20261114.json)),
 `safeguard run` preto balík `server-v2-benign-v6` odmietne a bežný `safeguard train` odmietne
 audity korpusu `benign-v6-20261026` aj bez tejto opravy; prehratie `safeguard replay --archive`
-tieto hashe nekontroluje. Oprava je odložená na obdobie po vyhodnotení. Kampaň
+tieto hashe nekontroluje. Oprava bola odložená na obdobie po vyhodnotení a doplnila sa
+2026-11-14 pre ďalšiu iteráciu merania (zmrazený kód, nový pilot a nové kampane, kap. 7
+[`STAV.sk.md`](STAV.sk.md)). Spojenie, pri ktorom `prev` uzla ukazuje na uzol odstránený
+v tom istom obraze cez `list_del_rcu` (jeho `prev` je `LIST_POISON2` a jeho `next` je ten
+istý uzol), sa nepovažuje za roztrhnutie pred pravidlom `tail`; riadok s takým spojením
+nesie `deleted_links` (`guestparse/view.py`, `_odstraneny_pred`). Odstránený uzol v zozname
+už nie je, takže taká výnimka žiadny proces neskryje; pravidlo `prev` sa nemení. Nad kópiou
+session 46 nové pravidlo snímku 270 uzavrie pravidlom `tail` s jedným `deleted_links` cez
+110 procesov, teda presne cez uzly pred uzlom na konci zoznamu (`forward_before_tail_node`
+v zázname vyššie), a snímky 269 a 271 ostávajú `next`. Kampane `benign-v6-20261026` a
+`events-v3-20261108` ostávajú auditované starým pravidlom. Kampaň
 `events-v3-20261108` je preto neúplná alokácia 45 zo 48 session ([MERANIA.md](MERANIA.md)
 2026-11-14). V jej session audit použil pravidlo `prev` v
 13 {{res:collection_campaign_events_v3_20261108.json:values.summary.process_walk_prev_rows}}
@@ -626,6 +636,19 @@ miesta:
    audit a safeguard preto berú krížový rozdiel za nález až vtedy, keď ho ukáže aj
    bezprostredne predchádzajúca snímka. Objekt skrytý kratšie ako jednu periódu nález
    nevytvorí a alarm skrytého objektu príde o periódu neskôr.
+
+5. **Príznaky W+X a memfd (od schémy `hyptcn3/snapshot-vektor/4`, 2026-11-14) sú
+   počty procesov, nie kontrola integrity.** `proc_wx` počíta procesy so stránkami, ktoré
+   tabuľky stránok povoľujú zapisovať aj spúšťať z používateľského režimu, `proc_memfd`
+   procesy s otvoreným deskriptorom na súbor `memfd:` alebo spustené z neho
+   (`GuestView.memory_patterns`). Neodhalia: mapovaný `memfd` bez otvoreného deskriptora
+   (strom VMA sa nečíta; maple tree jadra 6.1 sa v živej snímke dal prečítať, ale pri
+   dvoch procesoch odkazoval na uvoľnené uzly počas celej session, preto sa nepoužil),
+   kód, ktorý stránku najprv zapíše a potom prepne na spustiteľnú bez zápisu (W^X cez
+   `mprotect`), ani W+X stránku jadra. Tabuľky stránok procesu, ktorý počas čítania
+   skončil, môžu byť v snímke už uvoľnené a dať náhodný počet (L1). Na benígnej session
+   `events-v3-20261108_46_test_events_write_heavy` (snímky 0, 100, 270, 500 a 719) boli
+   oba počty nulové; s pozitívnou kontrolou v hosťovi ešte overené nie sú.
 
 **Overenie.** Zdôvodnenie je v hlavičke `guestparse/checks.py`. Na meranej snímke sa
 2026-09-18 uzavreli všetky vtedajšie tri kontroly a nález bol nulový:

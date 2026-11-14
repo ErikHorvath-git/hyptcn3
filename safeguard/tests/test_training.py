@@ -9,7 +9,9 @@ import torch
 
 from features.archive import load, save
 from safeguard.bundle import digest, load_bundle
-from safeguard.features import arrays, frames_from_archive
+from safeguard.features import GLOBAL_NAMES, MENA, arrays, frames_from_archive
+
+G = len(GLOBAL_NAMES)
 from safeguard.model import (Classifier, Predictor, anomaly_score, architecture,
                              prediction_errors)
 from safeguard.training import train_bundle, validate_index, calibrate, _validate_current_semantics
@@ -40,8 +42,8 @@ def make_corpus(directory, session_schema="hyptcn3/collection-session/1"):
             location.mkdir()
             rng = np.random.default_rng(10 * role_index + scenario_index)
             rows = 48
-            matrix = rng.normal(1 + scenario_index, 0.1, size=(rows, 22))
-            matrix[:, 18:] = 0
+            matrix = rng.normal(1 + scenario_index, 0.1, size=(rows, len(MENA)))
+            matrix[:, G:] = 0
             matrix[1:, -2] = 1
             matrix[0, -1] = 1
             local = np.zeros((rows, 3, 4))
@@ -111,7 +113,7 @@ def test_train_load_score_normalizer_and_immutable_bundle(trained):
     assert report["training"]["test_feature_arrays_loaded"] is False
     index = json.loads(corpus.read_text())
     train = [record for record in index["sessions"] if record["role"] == "train"]
-    expected_mean = np.concatenate([load(record["features"])["matica"][1:, :18] for record in train]).mean(axis=0)
+    expected_mean = np.concatenate([load(record["features"])["matica"][1:, :G] for record in train]).mean(axis=0)
     np.testing.assert_allclose(bundle.normalizer.global_mean, expected_mean)
     dev = next(record for record in index["sessions"] if record["role"] == "dev")
     frames = frames_from_archive(load(dev["features"]), dev["id"])
@@ -205,7 +207,7 @@ def test_prediction_mask_and_shared_bin_equivariance():
     config = architecture(32)
     assert config["blocks"] >= 4
     predictor, classifier = Predictor(config).eval(), Classifier(config, 2).eval()
-    global_values = torch.randn(2, 8, 18)
+    global_values = torch.randn(2, 8, G)
     local_values = torch.randn(2, 8, 3, 4)
     local_values[..., 3] = 1
     permutation = torch.tensor([2, 0, 1])
@@ -218,12 +220,12 @@ def test_prediction_mask_and_shared_bin_equivariance():
                                    classifier(global_values, local_values[:, :, permutation]))
     target = torch.zeros(2, 3, 4)
     target[..., 2] = 100
-    global_error, bins = prediction_errors((torch.zeros(2, 18), torch.zeros(2, 3, 3)),
-                                          torch.zeros(2, 18), target)
+    global_error, bins = prediction_errors((torch.zeros(2, G), torch.zeros(2, 3, 3)),
+                                          torch.zeros(2, G), target)
     assert torch.count_nonzero(bins) == 0  # Unobserved entropy has no regression loss.
     target[..., 3] = 1
-    _, observed = prediction_errors((torch.zeros(2, 18), torch.zeros(2, 3, 3)),
-                                    torch.zeros(2, 18), target)
+    _, observed = prediction_errors((torch.zeros(2, G), torch.zeros(2, 3, 3)),
+                                    torch.zeros(2, G), target)
     assert (observed > 0).all()
     assert (anomaly_score(global_error, observed) > 0).all()
 

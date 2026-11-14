@@ -13,7 +13,7 @@ import numpy as np
 import torch
 from features.quality import BEHAVIOR_POLICY, protocol_policy
 
-from .features import FeatureNormalizer, WindowBuffer, Frame, arrays, check_frame
+from .features import CONTRACT_SCHEMA, MENA, FeatureNormalizer, WindowBuffer, Frame, arrays, check_frame
 from .model import Classifier, Predictor, SCORE_FORMULA, LOSS_FORMULA, anomaly_score, prediction_errors
 
 SCHEMA = "hyptcn3/safeguard-bundle/1"
@@ -128,13 +128,13 @@ def load_bundle(path, allow_diagnostic=False):
     if (calibration.get("method") != "benign_score_quantile_higher"
             or calibration.get("comparison") != ">"):
         raise ValueError("unsupported calibration rule")
-    if contract.get("schema") != "hyptcn3/safeguard-features/2":
+    if contract.get("schema") != CONTRACT_SCHEMA:
         raise ValueError("unsupported feature contract")
     if not math.isfinite(contract["max_gap_s"]) or contract["max_gap_s"] <= 0:
         raise ValueError("invalid temporal contract")
     # Validate names, physical geometry and types before accepting a bundle,
     # independently of the first incoming frame.
-    dummy = Frame("contract-validation", 0, 0.0, np.zeros(22),
+    dummy = Frame("contract-validation", 0, 0.0, np.zeros(len(MENA)),
                   np.zeros((len(contract["biny"]), 4)), tuple(contract["biny"]),
                   {"model_valid": True, "behavior_valid": True, "traversals_complete": True,
                    "inconclusive": [], "findings": [], "read_errors": 0, "filled_zero": 0},

@@ -12,6 +12,8 @@ from safeguard import features
 from safeguard.features import (Frame, FeatureNormalizer, WindowBuffer, arrays,
                                 check_frame, feature_contract, frames_from_archive)
 
+G = len(features.GLOBAL_NAMES)
+
 
 def sample(seq=0, *, session="synthetic", full=False, predecessor=True,
            valid=True, timestamp=None, perbin=None):
@@ -51,7 +53,7 @@ def test_window_stream_matches_existing_offline_rules_at_all_barriers():
             actual.append(global_values)
             ends.append(window[-1].seq)
             np.testing.assert_array_equal(local_values, np.stack([f.perbin for f in window]))
-    np.testing.assert_array_equal(actual, reference.X[..., :18])
+    np.testing.assert_array_equal(actual, reference.X[..., :G])
     assert ends == [m["seq_do"] for m in reference.meta]
 
 
@@ -152,7 +154,7 @@ def test_constant_or_entirely_unobserved_training_channels_are_finite():
     assert normalizer.local_mean[2] == 0 and normalizer.local_scale[2] == 1
     global_values, local_values = arrays([frame])
     a, b = normalizer.transform(global_values[None], local_values[None])
-    assert a.shape == (1, 1, 18) and b.shape == (1, 1, 2, 4)
+    assert a.shape == (1, 1, G) and b.shape == (1, 1, 2, 4)
     assert np.isfinite(a).all() and np.isfinite(b).all()
 
 
@@ -171,11 +173,11 @@ def test_normalizer_cannot_fit_repeated_windows_or_ineligible_rows():
 def test_behavior_arrays_exclude_integrity_and_acquisition_flags():
     first = sample(1)
     vector = first.vector.copy()
-    vector[18:] = [999, 999, 0, 1]
+    vector[G:] = [999, 999, 0, 1]
     second = replace(first, vector=vector)
     a, _ = arrays([first, second])
     np.testing.assert_array_equal(a[0], a[1])
-    assert a.shape[-1] == 18
+    assert a.shape[-1] == G
 
 
 def test_saved_contract_rejects_feature_order_bin_geometry_and_temporal_corruption():

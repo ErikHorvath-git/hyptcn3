@@ -64,7 +64,7 @@ def test_rf_kratsie_nez_okno_je_chyba():
 
 def test_maly_pocet_parametrov():
     n = pocet_parametrov(TCN(F, 2))
-    assert n == 5394, n                  # radovo tisice, nie miliony
+    assert n == 5522, n                  # radovo tisice, nie miliony (F = 24 od snapshot-vektor/4)
 
 
 def test_gru_ma_porovnatelny_pocet_parametrov():
