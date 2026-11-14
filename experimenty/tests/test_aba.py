@@ -261,3 +261,78 @@ def test_execute_without_root_is_refused_before_any_change(tmp_path, monkeypatch
 def test_run_requires_a_mode(tmp_path):
     with pytest.raises(SystemExit):
         aba.main(["run", "--out", str(tmp_path / "x")])
+
+
+# --- VM under test ---------------------------------------------------------------------------
+
+def run_args(protocol, **values):
+    import argparse
+    defaults = {"protocol": str(protocol), "scenario": "steady", "traffic_seed": 1, "repetitions": 2,
+                "allow_unbalanced": False, "warmup_s": 240.0, "measure_s": 600.0, "rest_s": 60.0,
+                "bundle": aba.DEFAULTS["bundle"], "profile": None, "domain": None, "target": None, "vm": None,
+                "threads": 4, "collector": aba.DEFAULTS["collector"]}
+    return argparse.Namespace(**{**defaults, **values})
+
+
+def multi_protocol(tmp_path):
+    doc = json.loads((aba.ROOT / aba.DEFAULTS["protocol"]).read_text())
+    del doc["domain"], doc["target"]
+    doc["vms"] = [{"name": "a", "domain": "hyptcn-lab", "port": 18080},
+                  {"name": "b", "domain": "hyptcn-lab-b", "port": 18081}]
+    path = tmp_path / "protocol-multi.json"
+    path.write_text(json.dumps(doc))
+    return path
+
+
+def test_single_vm_protocol_config_is_unchanged():
+    cfg = aba.make_config(run_args(aba.DEFAULTS["protocol"]))
+    protocol = json.loads((aba.ROOT / aba.DEFAULTS["protocol"]).read_text())
+    assert (cfg["domain"], cfg["target"]) == (protocol["domain"], protocol["target"])
+    assert cfg["protocol_values"]["domain"] == protocol["domain"] and "vm" not in cfg and "port" not in cfg
+    assert [str(x) for x in aba.labctl_argv(cfg, "traffic-stop")][1:] == [
+        str(aba.ROOT / "scripts/labctl.py"), "--domain", protocol["domain"], "traffic-stop"]
+    assert aba.guest_protocol(cfg) == {"domain": protocol["domain"]}
+    assert "--vm" not in aba.cli_options(cfg) and aba.detector_reaches_vm(cfg)
+    with pytest.raises(ValueError, match="only for a protocol that lists vms"):
+        aba.make_config(run_args(aba.DEFAULTS["protocol"], vm="a"))
+
+
+def test_multi_vm_protocol_runs_on_one_named_vm(tmp_path):
+    protocol = multi_protocol(tmp_path)
+    with pytest.raises(ValueError, match="choose one with --vm: a, b"):
+        aba.make_config(run_args(protocol))
+    with pytest.raises(ValueError, match="choose one with --vm"):
+        aba.make_config(run_args(protocol, vm="c"))
+    a, b = (aba.make_config(run_args(protocol, vm=vm)) for vm in ("a", "b"))
+    assert (a["vm"], a["domain"], a["target"], a["traffic"]["target"]) == (
+        "a", "hyptcn-lab", "http://127.0.0.1:18080", "http://127.0.0.1:18080")
+    assert (b["vm"], b["port"], b["domain"], b["traffic"]["target"]) == (
+        "b", 18081, "hyptcn-lab-b", "http://127.0.0.1:18081")
+    assert [str(x) for x in aba.labctl_argv(b, "traffic-stop")][2:] == [
+        "--domain", "hyptcn-lab-b", "--vm", "b", "--port", "18081", "traffic-stop"]
+    assert aba.guest_protocol(b) == {"domain": "hyptcn-lab-b", "vm": "b", "port": 18081}
+    options = aba.cli_options(b)
+    assert options[options.index("--vm") + 1] == "b"  # the printed --execute command names the VM again
+    monitor = [str(x) for x in aba.monitor_argv(b, tmp_path, "block")]
+    assert "qemu=guest=hyptcn-lab-b," in monitor
+    # The detector (condition C) only reaches the VM on labctl's default port.
+    assert aba.detector_reaches_vm(a) and not aba.detector_reaches_vm(b)
+
+
+def test_dry_run_on_a_named_vm_and_refusal_of_an_unreachable_detector(tmp_path, monkeypatch, capsys):
+    protocol = multi_protocol(tmp_path)
+    out = tmp_path / "e5-run"
+    assert aba.main(["run", "--dry-run", "--out", str(out), "--repetitions", "2", "--protocol", str(protocol),
+                     "--vm", "b"]) == 0
+    text = capsys.readouterr().out
+    assert "--domain hyptcn-lab-b --vm b --port 18081 traffic-stop" in text
+    assert "--target http://127.0.0.1:18081" in text and "vm.domain=hyptcn-lab-b" in text
+    assert "WARNING: condition C cannot run on VM b" in text and not out.exists()
+    monkeypatch.setattr(os, "geteuid", lambda: 0)
+    monkeypatch.setenv("SUDO_USER", "tester")
+    monkeypatch.setattr(Path, "is_dir", lambda self: True)  # the bundle check comes first
+    assert aba.main(["run", "--execute", "--out", str(out), "--repetitions", "2", "--protocol", str(protocol),
+                     "--vm", "b"]) == 2
+    assert "condition C cannot run on VM b" in capsys.readouterr().err and not out.exists()
+    assert aba.main(["run", "--dry-run", "--out", str(out), "--repetitions", "2", "--protocol", str(protocol)]) == 2
+    assert "choose one with --vm" in capsys.readouterr().err

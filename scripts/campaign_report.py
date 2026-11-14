@@ -64,6 +64,10 @@ RETIRED_DIR = re.compile(r"(?P<sid>[a-zA-Z0-9][a-zA-Z0-9_-]{0,159})\.attempt-(?P
 ATTEMPT_RECORD = re.compile(r"(?P<sid>[a-zA-Z0-9][a-zA-Z0-9_-]{0,159})\.attempt-(?P<n>[0-9]+)\.json")
 # campaign.take_stop_request and execute move operator stop requests into events/ under these suffixes.
 STOP_REQUEST_SUFFIXES = ("_stop-request.json", "_stop-request-stale.json")
+# Multi-VM campaigns: one runner per VM, <stamp>_stop-request-<vm>.json and ...-<vm>-stale.json.
+STOP_REQUEST = re.compile(r".*_stop-request(?:-(?P<vm>[a-z0-9]{1,16}))??(?P<stale>-stale)?\.json")
+# campaign.reject: attempts/<session>.rejected.json; a replacement is the session <plan session>-r<n>.
+REJECTION_SCHEMA = "hyptcn3/campaign-rejection/1"
 
 DEFINITIONS = {
     "status": {
@@ -124,6 +128,18 @@ DEFINITIONS = {
                         "false, no raw/ directory, no RAM image), renamed <session>.attempt-<n> by campaign.py "
                         "and retried in the same group boot. Listed under retired_attempts with its reason; never "
                         "a session, never part of any total."),
+    "multi_vm": ("A protocol with several VMs has one campaign runner per VM. Sessions are read from "
+                 "<collections>/<campaign>/<vm>/<session>, runner state from status-<vm>.json, and each "
+                 "session, group and event carries its vm. Campaign events are attributed per runner: an "
+                 "interval lasts until the next event of the same VM, so stage seconds are runner time summed "
+                 "over the VMs and can exceed the wall-clock span."),
+    "replacement": ("An audit-rejected session may be captured again under the protocol's pre-registered "
+                    "replacement rule (protocol.json replacement.max_per_campaign): the same assignment (VM, "
+                    "role, group, scenario, seed) in the same group boot, as session <plan session>-r<n>. The "
+                    "rejected session keeps its row (status rejected, replaced_by) and is in no accepted total; "
+                    "the replacement has its own row (replaces). Planned counts are plan rows, so a replacement "
+                    "adds an attempted session, not a planned one. Every rejection record "
+                    "(attempts/<session>.rejected.json) is listed with its reasons under campaign.rejections."),
     "stop_request": ("campaign.py request-stop asks a running campaign to stop before its next capture; the "
                      "runner moves the request into events/ when it honors it (*_stop-request.json) and sets aside "
                      "one left by an earlier run when it starts (*_stop-request-stale.json). Not campaign events."),
@@ -218,7 +234,8 @@ DEFINITIONS = {
 }
 
 SESSION_COLUMNS = (
-    "index", "plot_label", "session_id", "campaign_id", "role", "group", "group_attempt", "scenario", "seed",
+    "index", "plot_label", "session_id", "campaign_id", "vm", "role", "group", "group_attempt", "scenario", "seed",
+    "replaces", "replaced_by",
     "boot_id", "session_schema", "session_dir", "raw_dir",
     "status", "reasons", "superseded", "superseded_reason",
     "completed", "interrupted", "end_error", "collector_rc", "traffic_rc", "monitor_rc",
@@ -292,8 +309,8 @@ COVERAGE_COLUMNS = ("session_id", "status", "audit_path", "source", "expected_sn
                     "first_score_seq", "longest_unscored_run_rows", "nominal_scored_s", "nominal_unscored_s",
                     "score_coverage", "ideal_windows", "ideal_score_coverage", "lost_windows_vs_ideal", "gate",
                     "gate_possible_at_assigned_length", "gate_passed", "missing")
-EVENT_COLUMNS = ("time_utc", "status", "stage", "session", "group", "position", "message", "duration_to_next_s",
-                 "attributed_to", "file")
+EVENT_COLUMNS = ("time_utc", "vm", "status", "stage", "session", "group", "position", "message",
+                 "duration_to_next_s", "attributed_to", "file")
 ROUTE_COLUMNS = ("session_id", "route", "requests", "ok", "errors", "share_of_measure_requests")
 SOURCE_COLUMNS = ("session_id", "session_dir", "kind", "path", "realpath", "bytes", "sha256",
                   "logs_manifest_sha256", "matches_logs_manifest")
@@ -1526,7 +1543,7 @@ def campaign_step(s, ctx):
     """campaign.py check_session / audit_capture conditions (DEFINITIONS["campaign_provenance"])."""
     manifest, plan_row, meta = ctx["manifest"], ctx["plan_row"], s.meta
     problems = []
-    for key in ("role", "group", "scenario", "seed", "session_id"):
+    for key in ("role", "group", "scenario", "seed", "session_id", "vm", "replaces"):
         if meta.get(key) != plan_row.get(key):
             problems.append(f"session.json {key} {meta.get(key)!r} differs from the frozen assignment "
                             f"{plan_row.get(key)!r}")
@@ -1543,6 +1560,8 @@ def campaign_step(s, ctx):
     if group is None:
         problems.append(f"no readable groups/{plan_row.get('group')}.json for the session's group")
     else:
+        if group.get("vm") != plan_row.get("vm"):
+            problems.append("the recorded campaign group belongs to another VM (groups/<group>.json vm)")
         if meta.get("guest_before") != group.get("identity"):
             problems.append("session boot differs from the recorded campaign group (groups/<group>.json identity)")
         if dig(meta, "host_context", "qemu") != group.get("qemu"):
@@ -1790,6 +1809,7 @@ def read_evidence(s, inputs, ctx):
     guest = meta.get("guest_before") if isinstance(meta.get("guest_before"), dict) else {}
     settings = meta.get("collector_settings") if isinstance(meta.get("collector_settings"), dict) else {}
     row.update(campaign_id=meta.get("campaign_id"), role=meta.get("role"), group=meta.get("group"),
+               vm=meta.get("vm"), replaces=meta.get("replaces"), replaced_by=(ctx.get("plan_row") or {}).get("replaced_by"),
                group_attempt=meta.get("group_attempt"), scenario=meta.get("scenario"), seed=meta.get("seed"),
                boot_id=guest.get("boot_id"), session_schema=meta.get("schema"),
                hash_async_setting=settings.get("hash_async"), fsync_setting=settings.get("fsync"),
@@ -1803,6 +1823,9 @@ def read_evidence(s, inputs, ctx):
              "session schema 1 records no collector_settings" if schema1 else
              "session.json collector_settings has no such flag (session predates the setting)")
     row.na(("campaign_id",), "not a campaign session (session.json campaign_id is null)")
+    row.na(("vm",), "single-VM protocol (session.json names no vm)")
+    row.na(("replaces",), "not a replacement of an audit-rejected session")
+    row.na(("replaced_by",), "no rejection record names a replacement for this session")
     if schema1:
         row.na(("group_attempt",), "session schema 1 has no group attempts")
     else:
@@ -1891,7 +1914,7 @@ def read_evidence(s, inputs, ctx):
 def fill_plan_identity(s, plan_row):
     if not plan_row:
         return
-    for key in ("role", "group", "scenario", "seed"):
+    for key in ("role", "group", "scenario", "seed", "vm", "replaces", "replaced_by"):
         if s.row.get(key) is None:
             s.row[key] = plan_row.get(key)
     if s.row["snapshots_expected"] is None and integer(plan_row.get("cycles")) is not None:
@@ -1969,15 +1992,16 @@ def read_events(directory, inputs):
     """Campaign events and, separately, the operator stop requests stored next to them."""
     events, requests = [], []
     for path in sorted((directory / "events").glob("*.json")):
-        if path.name.endswith(STOP_REQUEST_SUFFIXES):
-            stale = path.name.endswith(STOP_REQUEST_SUFFIXES[1])
+        request = STOP_REQUEST.fullmatch(path.name)
+        if request:
+            stale = request["stale"] is not None
             try:
                 doc = inputs.read_json(path, "campaign_stop_request", None)
             except (OSError, ValueError) as exc:
                 inputs.problem(path, f"stop request unreadable: {exc}")
                 doc = {}
             requests.append({"file": path.name, "requested_utc": doc.get("date") if isinstance(doc.get("date"), str)
-                             else None, "honored": not stale,
+                             else None, "honored": not stale, **({"vm": request["vm"]} if request["vm"] else {}),
                              "note": ("set aside when a later run started (meant for an earlier run)" if stale
                                       else "honored: the runner stopped before its next capture")})
             continue
@@ -1986,7 +2010,8 @@ def read_events(directory, inputs):
         except (OSError, ValueError) as exc:
             inputs.problem(path, f"campaign event unreadable: {exc}")
             continue
-        events.append({"file": path.name, "time": unix_of(doc.get("updated_at")), "status": doc.get("status"),
+        events.append({"file": path.name, "time": unix_of(doc.get("updated_at")), "vm": doc.get("vm"),
+                       "status": doc.get("status"),
                        "stage": doc.get("stage"), "session": doc.get("session"), "group": doc.get("group"),
                        "position": doc.get("position"),
                        "message": clean_text(doc["message"]) if doc.get("message") else None})
@@ -2008,20 +2033,25 @@ def stage_category(event):
         return "after_close"
     return {"preflight": "preflight", "session-preflight": "preflight", "reboot": "reboot",
             "capture": "capture_stage", "audit": "audit", "archive": "archive",
-            "session-complete": "between_sessions", "index": "index",
+            "session-complete": "between_sessions", "index": "index", "replacement": "between_sessions",
+            "audit-wait": "audit_wait", "role-wait": "role_wait",
             "retry": "retry_pause"}.get(stage, f"other:{stage}")
 
 
 def campaign_time(events):
     timed = [e for e in events if e["time"] is not None]
     by_category, intervals = Counter(), []
-    for first, second in zip(timed, timed[1:]):
-        category = ("unaccounted" if second["status"] == "stopped" and second["stage"] == "unclean-end"
-                    else stage_category(first))
-        duration = second["time"] - first["time"]
-        first["duration_to_next_s"], first["attributed_to"] = r6(duration), category
-        by_category[category] += duration
-        intervals.append((first["time"], second["time"], category))
+    runners = sorted({e.get("vm") for e in timed}, key=str)
+    for vm in runners:  # One event stream per runner (DEFINITIONS["multi_vm"]); a single runner has vm None.
+        own = [e for e in timed if e.get("vm") == vm]
+        for first, second in zip(own, own[1:]):
+            category = ("unaccounted" if second["status"] == "stopped" and second["stage"] == "unclean-end"
+                        else stage_category(first))
+            duration = second["time"] - first["time"]
+            first["duration_to_next_s"], first["attributed_to"] = r6(duration), category
+            by_category[category] += duration
+            intervals.append((first["time"], second["time"], category))
+    intervals.sort()
     if not timed:
         return None, intervals
     span = timed[-1]["time"] - timed[0]["time"]
@@ -2030,6 +2060,7 @@ def campaign_time(events):
            "last_stage": timed[-1]["stage"], "wall_clock_span_s": r6(span), "wall_clock_span_h": r6(span / 3600),
            "by_category_s": {k: r6(v) for k, v in sorted(by_category.items())},
            "sum_of_categories_s": r6(math.fsum(by_category.values())),
+           **({"runners": runners, "runners_note": DEFINITIONS["multi_vm"]} if runners != [None] else {}),
            "note": ("Runner stage time from campaign events. capture_stage covers the runner's capture child "
                     "(guest preflight, warmup, capture and guest evidence transfer); measured capture hours "
                     "are reported only under capture_time.")}
@@ -2052,6 +2083,46 @@ def plan_rows(manifest):
     if repeated:
         raise DataError("campaign.json repeats session IDs: " + ", ".join(repeated))
     return rows
+
+
+def session_base(collections, manifest, row):
+    """campaign.session_dir: <collections>/<session>, or <collections>/<campaign>/<vm>/<session> per VM."""
+    return collections / str(manifest.get("id")) / row["vm"] if isinstance(row.get("vm"), str) else collections
+
+
+def read_rejections(directory, inputs):
+    """attempts/<session>.rejected.json records of campaign.reject, by session ID."""
+    records = {}
+    for path in sorted((directory / "attempts").glob("*.rejected.json")):
+        try:
+            doc = inputs.read_json(path, "campaign_rejection", None)
+        except (OSError, ValueError) as exc:
+            inputs.problem(path, f"rejection record unreadable: {exc}")
+            continue
+        if isinstance(doc, dict) and doc.get("schema") == REJECTION_SCHEMA:
+            records[path.name[:-len(".rejected.json")]] = doc
+        else:
+            inputs.problem(path, "not a campaign rejection record")
+    return records
+
+
+def with_replacements(rows, rejected, problems):
+    """Plan rows, each followed by the replacements of its audit-rejected sessions (campaign.chain)."""
+    out = []
+    for row in rows:
+        current = row
+        for number in range(1, 1000):
+            record = rejected.get(current["session_id"])
+            replacement = record.get("replacement") if record else None
+            if replacement is not None and replacement != f"{row['session_id']}-r{number}":
+                problems.append(f"attempts/{current['session_id']}.rejected.json names replacement {replacement!r}, "
+                                f"not the plan's {row['session_id']}-r{number}; it is not followed")
+                replacement = None
+            out.append({**current, "replaced_by": replacement} if replacement else current)
+            if replacement is None:
+                break
+            current = {**row, "session_id": replacement, "replaces": current["session_id"]}
+    return out
 
 
 def build_campaign(directory, collections, inputs):
@@ -2091,10 +2162,15 @@ def build_campaign(directory, collections, inputs):
         if not isinstance(theirs, list) or strip(theirs) != strip(rows) or (
                 all(isinstance(r, dict) and "session_id" in r for r in theirs) and theirs != rows):
             problems.append("plan.json sessions differ from campaign.json sessions")
-    for key in ("guest_environment", "extractor_sha256"):
-        if key not in manifest:
+    # One runner and status file per VM of a multi-VM campaign (DEFINITIONS["multi_vm"]).
+    vms = manifest["vms"] if isinstance(manifest.get("vms"), dict) and manifest["vms"] else None
+    for key in ("guest_environment", "extractor_sha256"):  # The guest environment is per VM there.
+        if key not in manifest and not (vms and all(isinstance(v, dict) and key in v for v in vms.values())):
             problems.append(f"campaign.json has no {key}: that campaign provenance check is skipped")
-    state = optional("status.json", "campaign_status")
+    states = {vm: optional("status.json" if vm is None else f"status-{vm}.json", "campaign_status")
+              for vm in (vms or [None])}
+    rejected = read_rejections(directory, inputs)
+    planned_rows, rows = rows, with_replacements(rows, rejected, problems)
     events, stop_requests = read_events(directory, inputs)
     closed = None
     if (directory / "closed.json").exists():
@@ -2115,25 +2191,39 @@ def build_campaign(directory, collections, inputs):
         if doc.get("schema") == "hyptcn3/campaign-group/1":
             group_docs[doc.get("group")] = doc
             groups.append({"group": doc.get("group"), "role": doc.get("role"), "date": doc.get("date"),
+                           **({"vm": doc["vm"]} if doc.get("vm") else {}),
                            "boot_id": dig(doc, "identity", "boot_id"),
                            "previous_boot": doc.get("previous_boot"), "file": path.name})
     archive_dir = Path(manifest["archive_dir"]) if isinstance(manifest.get("archive_dir"), str) else None
-    sessions = []
+    sessions, dirs = [], {}
     for position, plan_row in enumerate(rows, 1):
-        sid = plan_row["session_id"]
-        if (collections / sid).is_dir():
-            ctx = {"manifest": manifest, "plan_row": plan_row, "protocol": protocol, "state": state,
+        sid, vm = plan_row["session_id"], plan_row.get("vm")
+        state = states.get(vm)
+        path = dirs[sid] = session_base(collections, manifest, plan_row) / sid
+        if path.is_dir():
+            # Pilot, guest environment and estimates of a multi-VM campaign are recorded per VM.
+            view = {**manifest, **vms[vm]} if vms and isinstance(vms.get(vm), dict) else manifest
+            ctx = {"manifest": view, "plan_row": plan_row, "protocol": protocol, "state": state,
                    "groups": group_docs, "pointer": directory / "attempts" / f"{sid}.audit.json",
                    "done": directory / "attempts" / f"{sid}.done.json",
-                   "archive_fallback": archive_dir / "collections" / sid if archive_dir else None}
-            s = read_session(collections / sid, inputs, ctx)
+                   "archive_fallback": archive_dir / "collections" / (vm or "") / sid if archive_dir else None}
+            s = read_session(path, inputs, ctx)
         else:
-            s = planned_session(sid, collections / sid, plan_row, state, protocol)
+            s = planned_session(sid, path, plan_row, state, protocol)
         s.index = position
         sessions.append(s)
-    problems += attempt_problems(directory, collections, rows, state, sessions)
-    retired, retired_problems = retired_attempts(directory, collections, rows, inputs)
+    problems += attempt_problems(directory, dirs, rows, states, sessions)
+    bases = sorted({session_base(collections, manifest, row) for row in rows})
+    retired, retired_problems = retired_attempts(directory, bases, rows, inputs)
     problems += retired_problems
+    rejections = [{"session": sid, "vm": doc.get("vm"), "role": doc.get("role"), "group": doc.get("group"),
+                   "scenario": doc.get("scenario"), "date": doc.get("date") if isinstance(doc.get("date"), str) else None,
+                   "reasons": audit_reasons(doc), "replacement": doc.get("replacement"),
+                   "max_per_campaign": doc.get("max_per_campaign")}
+                  for sid, doc in sorted(rejected.items(), key=lambda item: (str(item[1].get("date")), item[0]))]
+    problems += [f"attempts/{r['session']}.rejected.json names a session that is not in the plan"
+                 for r in rejections if r["session"] not in dirs]
+    state = states[None] if vms is None else {"vms": states}
     time_doc, intervals = campaign_time(events)
     campaign = {"id": manifest.get("id"), "directory": str(directory), "collections_dir": str(collections),
                 "archive_dir": manifest.get("archive_dir"), "commit": manifest.get("commit"),
@@ -2141,36 +2231,47 @@ def build_campaign(directory, collections, inputs):
                 "planned_capture_hours": manifest.get("planned_capture_hours"),
                 "planned_capture_hours_source": "campaign.json planned_capture_hours (design allocation)",
                 "status": state, "closed": closed, "stop_requests": stop_requests,
-                "stop_request_pending": (directory / "stop-request.json").exists(),
+                "stop_request_pending": any(directory.glob("stop-request*.json")),
+                "vms": list(vms) if vms else None,
+                "replacement_rule": protocol.get("replacement") if isinstance(protocol, dict) else None,
+                "rejections": rejections, "rejections_definition": DEFINITIONS["replacement"],
                 "groups": groups, "problems": problems}
     return {"mode": "campaign", "campaign": campaign, "sessions": sessions, "events": events,
-            "campaign_time": time_doc, "stage_intervals": intervals, "protocol": protocol, "plan_rows": rows,
-            "retired_attempts": retired}
+            "campaign_time": time_doc, "stage_intervals": intervals, "protocol": protocol,
+            "plan_rows": planned_rows, "retired_attempts": retired}
 
 
-def attempt_problems(directory, collections, rows, state, sessions):
-    """Campaign records that name sessions whose directory is absent (a moved or lost session)."""
-    problems, planned = [], {row["session_id"] for row in rows}
+def attempt_problems(directory, dirs, rows, states, sessions):
+    """Campaign records that name sessions whose directory is absent (a moved or lost session).
+
+    dirs: session directory of every plan row and replacement; states: runner status per VM
+    (the key None is the single runner of a single-VM campaign).
+    """
+    problems = []
     for path in sorted((directory / "attempts").glob("*.json")):
         if ATTEMPT_RECORD.fullmatch(path.name):
             continue  # retired_attempts()
-        suffix = next((x for x in (".done.json", ".audit.json") if path.name.endswith(x)), None)
+        suffix = next((x for x in (".done.json", ".audit.json", ".rejected.json") if path.name.endswith(x)), None)
         sid = path.name[:-len(suffix)] if suffix else None
         if sid is None:
-            problems.append(f"attempts/{path.name}: not a .done.json or .audit.json record")
-        elif sid not in planned:
+            problems.append(f"attempts/{path.name}: not a .done.json, .audit.json or .rejected.json record")
+        elif sid not in dirs:
             problems.append(f"attempts/{path.name} names a session that is not in the plan")
-        elif not (collections / sid).is_dir():
-            problems.append(f"attempts/{path.name} exists, but the session directory {collections / sid} is absent")
-    if isinstance(state, dict):
+        elif not dirs[sid].is_dir():
+            problems.append(f"attempts/{path.name} exists, but the session directory {dirs[sid]} is absent")
+    for vm, state in states.items():
+        if not isinstance(state, dict):
+            continue
+        name = "status.json" if vm is None else f"status-{vm}.json"
         named = state.get("session")
-        if isinstance(named, str) and named and not (collections / named).is_dir() and not running_on(state, named):
-            problems.append(f"status.json (status {state.get('status')}) names session {named}, whose directory "
+        if (isinstance(named, str) and named and not (named in dirs and dirs[named].is_dir())
+                and not running_on(state, named)):
+            problems.append(f"{name} (status {state.get('status')}) names session {named}, whose directory "
                             "is absent")
         archived = state.get("accepted_archived")
-        done = sum(1 for s in sessions if s.row["campaign_done"] is True)
+        done = sum(1 for s, row in zip(sessions, rows) if row.get("vm") == vm and s.row["campaign_done"] is True)
         if type(archived) is int and archived != done:
-            problems.append(f"status.json accepted_archived = {archived}, but {done} session directories have a "
+            problems.append(f"{name} accepted_archived = {archived}, but {done} session directories have a "
                             "done checkpoint")
     return problems
 
@@ -2206,7 +2307,7 @@ def retired_entry(path, sid, number, inputs, record=None):
     return entry
 
 
-def retired_attempts(directory, collections, rows, inputs):
+def retired_attempts(directory, bases, rows, inputs):
     """Campaign attempts that ended before measurement: attempts/ records and renamed directories."""
     planned = {row["session_id"] for row in rows}
     records, dirs = {}, {}
@@ -2218,7 +2319,7 @@ def retired_attempts(directory, collections, rows, inputs):
             records[(m["sid"], int(m["n"]))] = {**inputs.read_json(path, "campaign_attempt", None), "file": path.name}
         except (OSError, ValueError) as exc:
             inputs.problem(path, f"attempt record unreadable: {exc}")
-    for path in sorted(collections.iterdir()):
+    for path in sorted(p for base in bases if base.is_dir() for p in base.iterdir()):
         m = RETIRED_DIR.fullmatch(path.name)
         if m and m["sid"] in planned and path.is_dir():
             dirs[(m["sid"], int(m["n"]))] = path
@@ -2441,7 +2542,7 @@ def build_summary(report, inputs, command, generated):
     attempted, accepted, usable = sets["all_attempted"], sets["accepted"], sets[USABLE]
     by_status = {status: [s.sid for s in sessions if s.status == status] for status in STATUSES}
     campaign = report["campaign"]
-    planned = len(sessions) if campaign else None
+    planned = len(report["plan_rows"]) if campaign else None  # replacements are attempts, not plan rows
     not_started = [s for s in sessions if not s.attempted]
     reasons = {}
     for status in ("rejected", "interrupted", "incomplete", "in_progress"):
@@ -2522,6 +2623,11 @@ def build_summary(report, inputs, command, generated):
             "by_status": {status: sum(s.status == status for s in members) for status in STATUSES},
             **{name: aggregate([s for s in chosen if s.row["scenario"] == scenario]) for name, chosen in sets.items()},
         }
+    per_vm = {vm: {"attempted": sum(s.attempted for s in members),
+                   "by_status": {status: sum(s.status == status for s in members) for status in STATUSES},
+                   **{name: aggregate([s for s in chosen if s.row["vm"] == vm]) for name, chosen in sets.items()}}
+              for vm in sorted({s.row["vm"] for s in sessions if s.row["vm"]})
+              for members in [[s for s in sessions if s.row["vm"] == vm]]}
     missing_counts = Counter(field for s in attempted for field in s.row.missing)
     return {
         "schema": SCHEMA, "generated_utc": generated, "mode": report["mode"], "command": command,
@@ -2548,6 +2654,10 @@ def build_summary(report, inputs, command, generated):
                         "definition": DEFINITIONS["data_volume"]},
         "host": {name: host_block(members) for name, members in sets.items()},
         "per_scenario": per_scenario,
+        "per_vm": per_vm or None,
+        "per_vm_note": ("sessions by their VM (session.json vm; the plan row when there is none); a control "
+                        "axis next to the boot groups, not a separate test" if per_vm else
+                        "single-VM protocol or sessions without a vm: no per-VM breakdown"),
         "missing_fields_attempted_sessions": dict(sorted(missing_counts.items())),
         "inputs_unreadable": sorted(inputs.unreadable, key=lambda i: (i["input"], i["problem"])),
         "sources": [{k: v for k, v in record.items()} for record in sorted(inputs.files.values(),
@@ -2760,7 +2870,8 @@ def plot_timeline(report):
     sessions = report["sessions"]
     lanes = [("capture_stage", "runner: capture stage"), ("audit", "runner: audit"), ("archive", "runner: archive"),
              ("reboot", "runner: reboot"), ("preflight", "runner: preflight"),
-             ("between_sessions", "runner: between sessions"), ("stopped", "runner: stopped"),
+             ("between_sessions", "runner: between sessions"), ("audit_wait", "runner: waits for the audit lock"),
+             ("role_wait", "runner: waits for earlier roles"), ("stopped", "runner: stopped"),
              ("unaccounted", "runner: unaccounted (unclean end)"), ("before_first_launch", "initialized, not launched"),
              ("other", "runner: other")]
     intervals = report["stage_intervals"]
@@ -3105,6 +3216,20 @@ def readme(report, summary, files):
             lines += [f"Operator stop requests: {honored} honored, {len(c['stop_requests']) - honored} set aside as "
                       "stale" + ("; one is pending in stop-request.json" if c["stop_request_pending"] else "")
                       + ".", ""]
+        if c["vms"]:
+            lines += [f"VMs: {', '.join(c['vms'])}, one runner and status file per VM; sessions are read from "
+                      "`<collections>/<campaign>/<vm>/<session>`. Runner stage seconds are summed over the VMs.", ""]
+        if c["rejections"]:
+            rule = c["replacement_rule"] or {}
+            replaced = sum(r["replacement"] is not None for r in c["rejections"])
+            lines += [f"Audit rejections recorded by the runner: {len(c['rejections'])}; replaced under the "
+                      f"protocol's rule: {replaced} of at most {rule.get('max_per_campaign', 0)} per campaign. "
+                      "A rejected session is never accepted data; a replacement is the same assignment in the "
+                      "same group boot:", ""]
+            lines += [f"- `{r['session']}`" + (f" (VM {r['vm']})" if r["vm"] else "") + ": "
+                      + md(one_line("; ".join(r["reasons"]) or "no reason recorded")) + "; "
+                      + (f"replaced by `{r['replacement']}`" if r["replacement"] else "not replaced")
+                      for r in c["rejections"]] + [""]
     else:
         lines += [f"Mode: sessions ({len(report['sessions'])} session directories read).", ""]
     lines += ["Only saved evidence was read; RAM images were not opened and archived members were not "

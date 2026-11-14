@@ -18,6 +18,7 @@ VMS = [{"name": "a", "domain": "hyptcn-lab", "port": 18080}, {"name": "b", "doma
 
 
 ROLES = {"train": 6, "dev": 2, "calibration": 4, "test_benign": 4}  # Groups over all VMs.
+REPLACEMENT = {"max_per_campaign": 2, "same": ["vm", "role", "scenario"]}
 
 
 def multi_protocol(tmp_path, vms=VMS, **changes):
@@ -297,7 +298,7 @@ def multi(tmp_path, monkeypatch):
     captures.mkdir()
     external.mkdir()
     doc = json.loads(multi_protocol(tmp_path, roles=dict.fromkeys(("train", "dev", "calibration", "test_benign"), 2),
-                                    min_free_gib=0).read_text())
+                                    min_free_gib=0, replacement=dict(REPLACEMENT)).read_text())
     doc["scenarios"] = {"quiet": doc["scenarios"]["quiet"]}
     write_new(directory / "protocol.json", doc)
     p = collection.protocol(directory / "protocol.json")
@@ -318,7 +319,8 @@ def multi(tmp_path, monkeypatch):
                 "planned_capture_hours": len(rows)}
     write_new(directory / "campaign.json", manifest)
     state = {"directory": directory, "manifest": manifest, "p": p, "rows": rows, "captures": captures,
-             "calls": [], "boot": {"a": "pilot-a", "b": "pilot-b"}, "reboots": 0, "finished": []}
+             "calls": [], "boot": {"a": "pilot-a", "b": "pilot-b"}, "reboots": 0, "finished": [],
+             "reject": set()}
     qemu = lambda domain: {"pid": len(domain), "start_ticks": 1, "host_boot": "host-boot"}
     monkeypatch.setattr(c, "COLLECTIONS", captures)
     monkeypatch.setattr(c, "BASE", tmp_path)
@@ -346,14 +348,19 @@ def multi(tmp_path, monkeypatch):
         if "run" in command:
             vm = command[command.index("--vm") + 1]
             sid = command[command.index("--session-id") + 1]
-            row = next(r for r in rows if r["session_id"] == sid)
+            row = next(r for r in rows if r["session_id"] == sid.split("-r")[0])
             assert row["vm"] == vm and command[command.index("--pilot-report") + 1].endswith(f"pilot-{vm}.json")
+            for key in ("role", "group", "scenario", "seed"):  # A replacement repeats the frozen assignment.
+                assert command[command.index("--" + key) + 1] == str(row[key])
+            replaces = command[command.index("--replaces") + 1] if "--replaces" in command else None
+            assert (replaces is not None) == ("-r" in sid)
             assert command[command.index("--expected-boot-id") + 1] == state["boot"][vm]
             state["calls"].append(("capture", vm, row["group"]))
             src = captures / manifest["id"] / vm / sid
             src.mkdir(parents=True)
             identity = {**env(vm), "boot_id": state["boot"][vm]}
-            write_new(src / "session.json", {**row, "schema": "hyptcn3/collection-session/2",
+            write_new(src / "session.json", {**row, "session_id": sid, "schema": "hyptcn3/collection-session/2",
+                       **({"replaces": replaces} if replaces else {}),
                        "campaign_id": manifest["id"], "commit": manifest["commit"], "measurement_dirty": [],
                        "host_context": {"qemu": qemu(collection.for_vm(p, vm)["domain"])},
                        "protocol_sha256": manifest["protocol_sha256"], "guest_before": identity})
@@ -363,18 +370,20 @@ def multi(tmp_path, monkeypatch):
             return 0
         src = Path(command[command.index("audit") + 1])
         report = Path(command[command.index("--out") + 1])
-        row = next(r for r in rows if r["session_id"] == src.name)
+        row = next(r for r in rows if r["session_id"] == src.name.split("-r")[0])
         state["calls"].append(("audit", row["vm"], row["group"]))
         feature = report.with_suffix(".npz")
-        feature.write_bytes(b"synthetic feature archive")
+        feature.write_bytes(b"synthetic feature archive " + src.name.encode())
+        accepted = src.name not in state["reject"]
         write_new(report, {"schema": "hyptcn3/collection-audit/1", "commit": manifest["commit"],
                   "measurement_dirty": [],
-                  "values": {"accepted": True, "reasons": [], "protocol_sha256": manifest["protocol_sha256"],
+                  "values": {"accepted": accepted, "reasons": [] if accepted else ["missed sampling slot"],
+                             "protocol_sha256": manifest["protocol_sha256"],
                              "extractor_sha256": manifest["extractor_sha256"], "session_dir": str(src),
                              "role": row["role"], "session_sha256": digest(src / "session.json"),
                              "source_sha256": {"frame.vmicd": digest(src / "raw/frame.vmicd")},
                              "features": str(feature), "features_sha256": digest(feature)}})
-        return 0
+        return 0 if accepted else 2
     monkeypatch.setattr(c, "run_child", child)
 
     def finish(directory, manifest, protocol, reports):
@@ -546,3 +555,125 @@ def test_per_vm_names_of_campaign_files_and_pilots(multi, tmp_path):
     path.write_text(json.dumps({"synthetic": "changed"}))
     with pytest.raises(ValueError, match="plan or frozen"):
         c.load_campaign(multi["directory"])
+
+
+# --- pre-registered replacement of audit-rejected sessions --------------------------------------
+
+@pytest.mark.parametrize("rule", [{"max_per_campaign": 2}, {"same": ["vm", "role", "scenario"]},
+                                  {**REPLACEMENT, "max_per_campaign": -1}, {**REPLACEMENT, "max_per_campaign": "2"},
+                                  {**REPLACEMENT, "same": ["vm", "role"]}, {**REPLACEMENT, "extra": 1}, None])
+def test_protocol_rejects_unclear_replacement_rules(tmp_path, rule):
+    with pytest.raises(ValueError, match="invalid replacement rule"):
+        collection.protocol(multi_protocol(tmp_path, replacement=rule))
+    collection.protocol(multi_protocol(tmp_path, replacement={**REPLACEMENT, "note": "B5"}))
+    collection.protocol(multi_protocol(tmp_path, None, replacement=dict(REPLACEMENT)))  # Single VM as well.
+    assert "replacement" not in collection.protocol(collection.DEFAULT)  # Old protocols: nothing is replaced.
+
+
+def session_ids(multi, kind="capture"):
+    return [call for call in multi["calls"] if call[0] == kind]
+
+
+def test_rejected_session_is_replaced_by_the_same_assignment_in_the_same_boot(multi):
+    directory, manifest = multi["directory"], multi["manifest"]
+    rejected = next(r for r in multi["rows"] if r["vm"] == "b")  # train-2 on VM b
+    multi["reject"].add(rejected["session_id"])
+    run_to_end(multi)
+    replacement = rejected["session_id"] + "-r1"
+    record = read_json(directory / "attempts" / (rejected["session_id"] + ".rejected.json"))
+    assert record["reasons"] == ["missed sampling slot"] and record["replacement"] == replacement
+    assert (record["vm"], record["role"], record["group"], record["scenario"], record["seed"]) \
+        == tuple(rejected[k] for k in ("vm", "role", "group", "scenario", "seed"))
+    assert (record["replacements_before"], record["max_per_campaign"]) == (0, 2)
+    assert multi["reboots"] == 8  # No extra boot: the group is still one boot of one VM.
+    old = read_json(c.session_dir(manifest, rejected) / "session.json")
+    new = read_json(c.session_dir(manifest, {**rejected, "session_id": replacement}) / "session.json")
+    assert new["replaces"] == rejected["session_id"] and "replaces" not in old
+    for key in ("vm", "role", "group", "scenario", "seed", "guest_before"):
+        assert new[key] == old[key]
+    # The replacement ran right after the rejected session, before any other session of that VM.
+    captures = [call[2] for call in session_ids(multi) if call[1] == "b"]
+    assert captures[:2] == [rejected["group"]] * 2 and len(session_ids(multi)) == 9
+    # Rejected data is archived and kept, but has no checkpoint and is in no index; its replacement is.
+    assert (c.session_dir(manifest, rejected) / "raw").is_symlink()
+    assert not (directory / "attempts" / (rejected["session_id"] + ".done.json")).exists()
+    _, _, reports = multi["finished"][0]
+    indexed = [Path(read_json(r)["values"]["session_dir"]).name for r in reports]
+    assert rejected["session_id"] not in indexed and replacement in indexed and len(indexed) == 8
+    assert all(read_json(r)["values"]["accepted"] for r in reports)
+    # Every rejection is in the status with its cause.
+    assert [(r["session"], r["reasons"], r["replacement"]) for r in c.status(directory)["vms"]["b"]["rejections"]] \
+        == [(rejected["session_id"], ["missed sampling slot"], replacement)]
+    assert c.status(directory)["vms"]["a"]["rejections"] == []
+    events = [read_json(e) for e in sorted((directory / "events").glob("*.json"))]
+    assert any(e["stage"] == "replacement" and "missed sampling slot" in e["message"] for e in events)
+    calls = list(multi["calls"])
+    run_to_end(multi)
+    assert multi["calls"] == calls
+
+
+def test_replacements_are_capped_per_campaign_over_all_vms(multi):
+    directory = multi["directory"]
+    first_a = next(r for r in multi["rows"] if r["vm"] == "a")["session_id"]
+    first_b = next(r for r in multi["rows"] if r["vm"] == "b")["session_id"]
+    multi["reject"].update({first_a, first_a + "-r1", first_b})  # Third rejection: VM b, nothing left.
+    c.execute(directory, vm="a")  # Rejected, replaced, replacement rejected, replaced again (r2), then role wait.
+    assert [r["replacement"] for r in c.rejections(directory)] == [first_a + "-r1", first_a + "-r2"]
+    for _ in range(2):  # The stop is permanent: a rerun does not capture, audit or replace anything.
+        with pytest.raises(ValueError, match="audit rejected session; archived without replacement: missed"):
+            c.execute(directory, vm="b")
+    last = c.rejections(directory)[-1]
+    assert (last["session"], last["replacement"], last["replacements_before"]) == (first_b, None, 2)
+    assert len([call for call in session_ids(multi) if call[1] == "b"]) == 1
+    assert vm_state(multi, "b")["status"] == "stopped" and "missed sampling slot" in vm_state(multi, "b")["message"]
+    assert not multi["finished"]
+
+
+def test_no_rule_means_no_replacement(multi):
+    doc = read_json(multi["directory"] / "protocol.json")
+    del doc["replacement"]
+    (multi["directory"] / "protocol.json").write_text(json.dumps(doc))
+    manifest = read_json(multi["directory"] / "campaign.json")
+    manifest["protocol_sha256"] = digest(multi["directory"] / "protocol.json")
+    (multi["directory"] / "campaign.json").write_text(json.dumps(manifest))
+    multi["manifest"]["protocol_sha256"] = manifest["protocol_sha256"]
+    first = multi["rows"][0]["session_id"]
+    multi["reject"].add(first)
+    with pytest.raises(ValueError, match="archived without replacement"):
+        c.execute(multi["directory"], vm="a")
+    record, = c.rejections(multi["directory"])
+    assert (record["session"], record["replacement"], record["max_per_campaign"]) == (first, None, 0)
+
+
+def test_replacement_rule_and_records_are_bound_to_the_frozen_plan(multi):
+    directory = multi["directory"]
+    first = multi["rows"][0]
+    multi["reject"].add(first["session_id"])
+    c.execute(directory, vm="a")
+    # A record that points anywhere else than the plan's own replacement ID is refused.
+    path = directory / "attempts" / (first["session_id"] + ".rejected.json")
+    record = read_json(path)
+    path.write_text(json.dumps({**record, "replacement": multi["rows"][1]["session_id"]}))
+    with pytest.raises(ValueError, match="does not match the frozen plan"):
+        c.execute(directory, vm="a")
+    path.write_text(json.dumps(record))
+    # Raising the limit after the freeze changes the protocol hash; changing a plan row is detected as before.
+    protocol = read_json(directory / "protocol.json")
+    protocol["replacement"]["max_per_campaign"] = 99
+    (directory / "protocol.json").write_text(json.dumps(protocol))
+    with pytest.raises(ValueError, match="plan or frozen"):
+        c.load_campaign(directory)
+
+
+def test_replaced_session_passes_the_corpus_builder(tmp_path):
+    """features/dataset.py as it is: one accepted session per group/scenario, one boot per group."""
+    from features import dataset
+    from features.tests.test_dataset import protocol, record
+    audits = [record(tmp_path, role, i) for i, role in enumerate(dataset.ROLES)]
+    # Same group, scenario and boot under another session ID, captured right after the rejected one
+    # (before the next role starts, as the runner does it).
+    other = record(tmp_path, "train", .5, boot="train-0")
+    assert dataset.build(audits, protocol(), "protocol-test")["complete"]
+    assert dataset.build([other, *audits[1:]], protocol(), "protocol-test")["complete"]  # The replacement alone.
+    with pytest.raises(ValueError, match="duplicate group/scenario"):  # Both can never be indexed.
+        dataset.build([other, *audits], protocol(), "protocol-test")

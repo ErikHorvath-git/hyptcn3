@@ -84,8 +84,38 @@ def frozen_files(manifest):
             *(vm_file("pilot.json", vm) for vm in manifest.get("vms", [None]))]
 
 
+def rejection_file(directory, session_id):
+    return directory / "attempts" / (session_id + ".rejected.json")
+
+
+def chain(directory, row):
+    """A plan row followed by the replacements of its audit-rejected sessions, oldest first.
+
+    The last one is the assignment's current session. A replacement is the same
+    assignment under the ID <plan session>-r<n>; rejection records name it.
+    """
+    rows = [row]
+    while rejection_file(directory, rows[-1]["session_id"]).exists():
+        record = read_json(rejection_file(directory, rows[-1]["session_id"]))
+        if record.get("replacement") is None:
+            break
+        expected = f"{row['session_id']}-r{len(rows)}"
+        if record["replacement"] != expected or record.get("session") != rows[-1]["session_id"]:
+            raise ValueError("rejection record does not match the frozen plan: " + rows[-1]["session_id"])
+        rows.append({**row, "session_id": expected, "replaces": rows[-1]["session_id"],
+                     "plan_session": row["session_id"], "replacement": len(rows)})
+    return rows
+
+
+def rejections(directory, vm=None):
+    """Audit rejections of the campaign with their causes, in time order (all VMs unless one is named)."""
+    records = [read_json(path) for path in sorted((directory / "attempts").glob("*.rejected.json"))]
+    return sorted((r for r in records if vm is None or r.get("vm") == vm), key=lambda r: r["date"])
+
+
 def is_done(directory, row):
-    return (directory / "attempts" / (row["session_id"] + ".done.json")).exists()
+    """The assignment is archived and accepted: the plan session itself or its replacement."""
+    return (directory / "attempts" / (chain(directory, row)[-1]["session_id"] + ".done.json")).exists()
 
 
 def stamp():
@@ -198,7 +228,8 @@ def capacity_guard(manifest, p, remaining, directory=None):
         if vm == manifest["vm"] or not pending:
             continue
         other = manifest["vms"][vm]
-        needed += max(0, other["estimated_session_bytes_with_reserve"] - raw_bytes(session_dir(manifest, pending[0])))
+        current = chain(directory, pending[0])[-1]
+        needed += max(0, other["estimated_session_bytes_with_reserve"] - raw_bytes(session_dir(manifest, current)))
         archived += other["estimated_archive_bytes_per_session"] * len(pending)
     if shutil.disk_usage(COLLECTIONS).free < needed + reserve:
         raise ValueError("insufficient working space for the next session")
@@ -574,6 +605,8 @@ def check_session(path, manifest, row, directory):
             raise ValueError("session differs from frozen assignment: " + k)
     if meta.get("vm") != row.get("vm"):
         raise ValueError("session differs from frozen assignment: vm")
+    if meta.get("replaces") != row.get("replaces"):
+        raise ValueError("session differs from frozen assignment: replaces")
     # Measurement sources, not the whole worktree: a note written meanwhile is not a different capture.
     if (meta.get("campaign_id") != manifest["id"] or meta["commit"] != manifest["commit"]
             or meta.get("measurement_dirty") != [] or meta["protocol_sha256"] != manifest["protocol_sha256"]
@@ -680,6 +713,40 @@ def retire_attempt(directory, manifest, row, session):
                  message=f"attempt {number} ended before measurement: {reason}")
 
 
+def reject(directory, manifest, p, row, report, values):
+    """Record an audit rejection with its cause; schedule its replacement if the protocol's rule allows.
+
+    The rule is part of the frozen protocol (collection.check_replacement). The
+    replacement is the same assignment - VM, role, group, scenario, seed, event
+    schedule - captured again in the same boot of its group, right after the
+    rejected session and before the group's next one. So a group stays one boot
+    of one VM and the corpus still holds each group/scenario once: the rejected
+    session is archived and kept, but never indexed. Called under the audit lock,
+    so the per-campaign count is exact over all VMs. Returns the replacement row
+    or None (no rule, or its maximum is used up: the allocation stops as before).
+    """
+    limit = (p.get("replacement") or {}).get("max_per_campaign", 0)
+    used = sum(r.get("replacement") is not None for r in rejections(directory))
+    plan_session, number = row.get("plan_session", row["session_id"]), row.get("replacement", 0) + 1
+    replacement = f"{plan_session}-r{number}" if used < limit else None
+    write_new(rejection_file(directory, row["session_id"]), {
+        "schema": "hyptcn3/campaign-rejection/1", "date": now(), "session": row["session_id"],
+        **{k: row[k] for k in ("vm", "role", "group", "scenario", "seed", "replaces") if k in row},
+        "reasons": values["reasons"], "audit": str(report), "audit_sha256": digest(report),
+        "replacement": replacement, "replacements_before": used, "max_per_campaign": limit,
+        "note": "Rejected by the audit; archived, never part of the corpus or event index. "
+                + ("Replaced by the same assignment in the same group boot (protocol replacement rule)."
+                   if replacement else "Not replaced: no replacement left under the protocol; allocation stopped.")})
+    if replacement is None:
+        return None
+    update_state(directory, vm=row.get("vm"), status="running", stage="replacement", session=row["session_id"],
+                 replacements_used=used + 1,
+                 message=f"audit rejected ({'; '.join(values['reasons'])}); replacement {used + 1} of {limit}: "
+                         + replacement)
+    return {**row, "session_id": replacement, "replaces": row["session_id"], "plan_session": plan_session,
+            "replacement": number}
+
+
 def take_stop_request(directory, vm=None):
     """Consume an operator request to stop before the next capture."""
     request = directory / vm_file("stop-request.json", vm)
@@ -745,7 +812,8 @@ def execute(directory, *, stop_after=None, vm=None):
         raise ValueError("this campaign runs one VM per runner; --vm is one of: "
                          + ", ".join(map(str, vm_names(protocol))) if vm is None else "campaign has no VM " + vm)
     manifest, p = vm_view(campaign, protocol, vm)
-    rows = [r for r in manifest["sessions"] if r.get("vm") == vm]
+    # Replacements of audit-rejected sessions follow their plan row; the list grows when one is scheduled.
+    rows = [r for planned in manifest["sessions"] if planned.get("vm") == vm for r in chain(directory, planned)]
     if os.geteuid() != 0 or os.environ.get("SUDO_USER") != manifest["owner"]["name"]:
         raise ValueError("run with sudo from the campaign owner's account")
     if (directory / "closed.json").exists():
@@ -777,6 +845,12 @@ def execute(directory, *, stop_after=None, vm=None):
                 session = session_dir(manifest, row)
                 destination = archive_dest(manifest, row)
                 checkpoint = directory / "attempts" / (row["session_id"] + ".done.json")
+                if rejection_file(directory, row["session_id"]).exists():
+                    record = read_json(rejection_file(directory, row["session_id"]))
+                    if record.get("replacement") is None:
+                        raise ValueError("audit rejected session; archived without replacement: "
+                                         + "; ".join(record["reasons"]))
+                    continue  # Its replacement is the next row.
                 if checkpoint.exists():
                     done = read_json(checkpoint)
                     if not check_session(session, manifest, row, directory):
@@ -818,7 +892,8 @@ def execute(directory, *, stop_after=None, vm=None):
                                "--session-id", session.name, "--campaign-id", manifest["id"],
                                "--expected-boot-id", group["identity"]["boot_id"],
                                "--expected-qemu", json.dumps(group["qemu"]),
-                               *(["--vm", vm] if vm else [])]
+                               *(["--vm", vm] if vm else []),
+                               *(["--replaces", row["replaces"]] if "replaces" in row else [])]
                     rc = run_child(command, directory / "logs" / f"capture_{stamp()}.log", lock_fd=lock_fd,
                                    timeout=p["warmup_s"] + p["cycles"] * p["interval_s"] + 300, guard=guard)
                     if rc and not session.exists():
@@ -837,8 +912,13 @@ def execute(directory, *, stop_after=None, vm=None):
                     verify_frozen(directory, manifest, p)
                     report, values = audit_capture(directory, manifest, p, row, session, guard)
                     archive_capture(directory, manifest, session, p, report)
+                    replacement = None if values["accepted"] else reject(directory, manifest, p, row, report, values)
                 if not values["accepted"]:
-                    raise ValueError("audit rejected session; archived without replacement: " + "; ".join(values["reasons"]))
+                    if replacement is None:
+                        raise ValueError("audit rejected session; archived without replacement: "
+                                         + "; ".join(values["reasons"]))
+                    rows.insert(i + 1, replacement)
+                    continue
                 write_new(checkpoint, {"session": session.name, "audit": str(report), "audit_sha256": digest(report),
                                        "manifest_sha256": digest(destination / "archive-manifest.json"), "date": now()})
                 reports.append(report)
@@ -858,7 +938,8 @@ def execute(directory, *, stop_after=None, vm=None):
                     update_state(directory, vm=vm, status="complete", stage="vm-complete", message=None,
                                  accepted_archived=len(reports))
                     return 0
-                reports = [Path(read_json(directory / "attempts" / (r["session_id"] + ".audit.json"))["path"])
+                reports = [Path(read_json(directory / "attempts" / (chain(directory, r)[-1]["session_id"]
+                                                                     + ".audit.json"))["path"])
                            for r in manifest["sessions"]]
                 finish_corpus(directory, manifest, protocol, reports)
             return 0
@@ -1061,6 +1142,9 @@ def status(directory):
 def vm_status(directory, manifest, p, vm):
     state = read_json(directory / vm_file("status.json", vm))
     state["running"] = campaign_running(state)
+    # Every audit rejection with its cause and, if the protocol allowed one, its replacement.
+    state["rejections"] = [{k: r.get(k) for k in ("date", "session", "reasons", "replacement")}
+                           for r in rejections(directory, vm)]
     if state.get("status") == "running" and not state["running"]:
         state["stale"] = True
         state["note"] = ("recorded as running but that process is not alive (SIGKILL, crash or power loss); "
@@ -1115,7 +1199,7 @@ def main(argv=None):
     else:
         manifest, _ = load_campaign(a.directory)
         guard_mount(manifest["archive_root"], manifest["archive_mount"])
-        for row in manifest["sessions"]:
+        for row in (r for planned in manifest["sessions"] for r in chain(a.directory.resolve(), planned)):
             dest = archive_dest(manifest, row)
             if dest.exists():
                 verify_archive(dest, session_dir(manifest, row))

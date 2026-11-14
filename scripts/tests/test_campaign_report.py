@@ -1435,3 +1435,165 @@ def test_closed_campaign_and_stop_requests_are_reported(tmp_path, monkeypatch):
     assert "closed" in {e["status"] for e in read_csv(out / "events.csv")}
     readme = (out / "README.md").read_text()
     assert "Closed by the operator on" in readme and "Operator stop requests: 1 honored, 1 set aside" in readme
+
+
+# ---------------------------------------------------------------- multi-VM campaign with a replacement
+
+class VmProtocol(dict):
+    def __missing__(self, key):
+        if key == "target":
+            return "http://127.0.0.1:18080"
+        raise KeyError(key)
+
+
+def make_multi_campaign(root, monkeypatch):
+    """Two VMs, one runner each (campaign.update_state per VM): VM a's first session is accepted; VM b's
+    first is rejected by its audit, recorded and replaced by campaign.reject, and the replacement is accepted."""
+    clock = Clock(T0)
+    monkeypatch.setattr(camp, "now", clock.now)
+    monkeypatch.setattr(camp, "stamp", clock.stamp)
+    cid = "synthetic-multi"
+    data = root / "data"
+    directory, collections, store = data / "campaigns" / cid, data / "collections", root / "archive"
+    for child in ("events", "groups", "attempts", "logs"):
+        (directory / child).mkdir(parents=True)
+    collections.mkdir(parents=True)
+    protocol = {k: v for k, v in PROTOCOL.items() if k not in ("domain", "target")}
+    protocol.update(vms=[{"name": "a", "domain": "synthetic-vm", "port": 18080},
+                         {"name": "b", "domain": "synthetic-vm-b", "port": 18081}],
+                    roles={"train": 2}, replacement={"max_per_campaign": 1, "same": ["vm", "role", "scenario"]})
+    arc.write_new(directory / "protocol.json", protocol)
+    # make_session copies PROTOCOL into every session; one VM's capture sees its target under the old key.
+    monkeypatch.setattr(sys.modules[__name__], "PROTOCOL", VmProtocol(protocol))
+    protocol = collection.protocol(directory / "protocol.json")
+    planned = collection.plan(protocol)
+    for i, row in enumerate(planned["sessions"]):
+        row["session_id"] = f"{cid}_{i + 1:02d}_{row['vm']}_{row['role']}_{row['scenario']}"
+    arc.write_new(directory / "plan.json", planned)
+    environment = {k: v for k, v in GUEST.items() if k != "boot_id"}
+    manifest = {"schema": "hyptcn3/collection-campaign/1", "id": cid, "date": iso(T0), "commit": "synthetic",
+                "workspace": str(REPO), "protocol_sha256": arc.digest(directory / "protocol.json"),
+                "vms": {vm: {"guest_environment": environment} for vm in ("a", "b")}, "archive_root": str(store),
+                "archive_mount": {}, "archive_dir": str(store / "campaigns" / cid), "archive_compression": "zstd",
+                "sessions": planned["sessions"], "planned_capture_hours": planned["planned_hours"],
+                "extractor_sha256": {}}
+    arc.write_new(directory / "campaign.json", manifest)
+    rows = manifest["sessions"]
+    first = {vm: next(r for r in rows if r["vm"] == vm) for vm in ("a", "b")}
+    for vm in ("a", "b"):
+        camp.update_state(directory, vm=vm, status="ready", stage="initialized", accepted_archived=0, total=2)
+    clock.t += 100
+
+    def session(vm, row, kind, start, audit_s, **extra):
+        sid = row["session_id"]
+        camp.update_state(directory, vm=vm, status="running", stage="capture", session=sid, group=row["group"])
+        truth = make_session(collections / cid / vm, sid, start=start, kind=kind, role=row["role"],
+                             group=row["group"], scenario=row["scenario"], seed=row["seed"], cycles=row["cycles"],
+                             campaign_id=cid, windows=8 if kind == "accepted" else 4,
+                             reasons=("score coverage below design gate 0.6",), audit_prefix="campaign_audit_",
+                             meta_extra={"vm": vm, **extra})
+        clock.t = json.loads((collections / cid / vm / sid / "end.json").read_text())["written_unix"] + 2
+        camp.update_state(directory, vm=vm, status="running", stage="audit", session=sid)
+        clock.t += audit_s
+        report = truth["audit"]
+        arc.write_new(directory / "attempts" / f"{sid}.audit.json", {"path": str(report), "sha256": arc.digest(report)})
+        camp.update_state(directory, vm=vm, status="running", stage="archive", session=sid)
+        destination = store / "campaigns" / cid / "collections" / vm / sid
+        archive(collections / cid / vm / sid, destination)
+        if kind == "accepted":
+            arc.write_new(directory / "attempts" / f"{sid}.done.json", {
+                "session": sid, "audit": str(report), "audit_sha256": arc.digest(report),
+                "manifest_sha256": arc.digest(destination / "archive-manifest.json"), "date": clock.now()})
+            camp.update_state(directory, vm=vm, status="stopped", stage="between-sessions", accepted_archived=1,
+                              message="requested stop-after boundary")
+        return report
+
+    for vm in ("a", "b"):
+        arc.write_new(directory / "groups" / f"{first[vm]['group']}.json", {
+            "schema": "hyptcn3/campaign-group/1", "date": clock.now(), "group": first[vm]["group"], "vm": vm,
+            "role": "train", "identity": GUEST, "qemu": QEMU, "previous_boot": "previous"})
+    start = clock.t
+    session("a", first["a"], "accepted", start, 40)
+    clock.t = start  # VM b ran at the same time, on its own runner
+    report = session("b", first["b"], "rejected", start + 5, 30)
+    replacement = camp.reject(directory, manifest, protocol, first["b"], report,
+                              json.loads(report.read_text())["values"])
+    session("b", replacement, "accepted", clock.t + 5, 30, replaces=first["b"]["session_id"])
+    return directory, rows, first, replacement
+
+
+def test_multi_vm_campaign_report_lists_vms_rejections_and_replacements(tmp_path, monkeypatch):
+    directory, rows, first, replacement = make_multi_campaign(tmp_path, monkeypatch)
+    out = tmp_path / "report"
+    assert run_report(["campaign", directory, "--out", out]) == 0  # default collections dir, per-VM layout
+    sessions = by_id(read_csv(out / "sessions.csv"))
+    rejected, replaced = first["b"]["session_id"], replacement["session_id"]
+    assert replaced == rejected + "-r1"
+    expected = [r["session_id"] for r in rows]
+    expected.insert(expected.index(rejected) + 1, replaced)  # plan order, a replacement after its rejected session
+    assert list(sessions) == expected
+    assert {sid: row["status"] for sid, row in sessions.items() if row["status"] != "planned"} == {
+        first["a"]["session_id"]: "accepted", rejected: "rejected", replaced: "accepted"}
+    assert [row["vm"] for row in sessions.values()] == ["b" if "_b_" in sid else "a" for sid in sessions]
+    assert (sessions[rejected]["replaced_by"], sessions[rejected]["replaces"]) == (replaced, "")
+    assert (sessions[replaced]["replaces"], sessions[replaced]["replaced_by"]) == (rejected, "")
+    assert sessions[replaced]["group"] == sessions[rejected]["group"]
+    assert sessions[replaced]["boot_id"] == sessions[rejected]["boot_id"]  # the same boot of the group
+    assert all(sessions[sid]["provenance_problems"] == "none" for sid in (first["a"]["session_id"], rejected, replaced))
+    assert sessions[replaced]["campaign_done"] == "true" and sessions[rejected]["campaign_done"] == "false"
+    assert f"/synthetic-multi/b/{replaced}" in sessions[replaced]["session_dir"]
+    assert sessions[rejected]["archived"] == sessions[replaced]["archived"] == "true"
+    summary = json.loads((out / "summary.json").read_text())
+    block = summary["sessions"]
+    # A replacement is an attempt, never a fifth planned session; the rejected one is in no accepted total.
+    assert (block["planned"], block["attempted"], block["accepted"], block["rejected"]) == (4, 3, 2, 1)
+    assert block["accepted_of_planned"]["denominator"] == 4 and block["not_started"] == 2
+    campaign = summary["campaign"]
+    assert campaign["problems"] == [] and campaign["vms"] == ["a", "b"]
+    assert set(campaign["status"]["vms"]) == {"a", "b"}
+    assert campaign["status"]["vms"]["b"]["session"] == replaced
+    assert campaign["replacement_rule"]["max_per_campaign"] == 1
+    assert campaign["rejections"] == [{
+        "session": rejected, "vm": "b", "role": "train", "group": first["b"]["group"],
+        "scenario": first["b"]["scenario"], "date": campaign["rejections"][0]["date"],
+        "reasons": ["score coverage below design gate 0.6"], "replacement": replaced, "max_per_campaign": 1}]
+    assert {g["vm"] for g in campaign["groups"]} == {"a", "b"}
+    assert set(summary["per_vm"]) == {"a", "b"}
+    assert summary["per_vm"]["b"]["by_status"]["rejected"] == 1 and summary["per_vm"]["a"]["by_status"]["accepted"] == 1
+    # Stage time is attributed per runner: 40 s of VM a's audit and 2 x 30 s on VM b, which overlap in time.
+    timing = summary["campaign_time"]
+    assert timing["runners"] == ["a", "b"] and timing["by_category_s"]["audit"] == pytest.approx(100)
+    events = read_csv(out / "events.csv")
+    assert {e["vm"] for e in events} == {"a", "b"} and "replacement" in {e["stage"] for e in events}
+    readme = (out / "README.md").read_text()
+    assert "VMs: a, b, one runner and status file per VM" in readme
+    assert "Audit rejections recorded by the runner: 1; replaced under the protocol's rule: 1 of at most 1" in readme
+    assert f"- `{rejected}` (VM b): score coverage below design gate 0.6; replaced by `{replaced}`" in readme
+
+
+def test_multi_vm_report_problems_and_stop_requests(tmp_path, monkeypatch):
+    directory, rows, first, replacement = make_multi_campaign(tmp_path, monkeypatch)
+    collections = directory.parent.parent / "collections"
+    arc.write_new(directory / "stop-request-a.json", {"schema": "hyptcn3/campaign-stop-request/1", "vm": "a",
+                                                      "date": iso(T0 + 60_000), "uid": 1000})
+    assert camp.take_stop_request(directory, "a")
+    arc.write_new(directory / "stop-request-b.json", {"schema": "hyptcn3/campaign-stop-request/1", "vm": "b",
+                                                      "date": iso(T0 + 61_000), "uid": 1000})
+    # A rejection record that points outside the plan is reported and not followed.
+    other = next(r for r in rows if r["vm"] == "a" and r is not first["a"])
+    arc.write_new(directory / "attempts" / f"{other['session_id']}.rejected.json", {
+        "schema": "hyptcn3/campaign-rejection/1", "date": iso(T0 + 62_000), "session": other["session_id"],
+        "reasons": ["x"], "replacement": "somewhere-else"})
+    shutil.rmtree(collections / "synthetic-multi" / "b" / replacement["session_id"])
+    out = tmp_path / "report"
+    assert run_report(["campaign", directory, "--out", out]) == 0
+    summary = json.loads((out / "summary.json").read_text())
+    campaign = summary["campaign"]
+    assert campaign["stop_request_pending"] is True
+    assert [(r["vm"], r["honored"]) for r in campaign["stop_requests"]] == [("a", True)]
+    problems = "\n".join(campaign["problems"])
+    assert "names replacement 'somewhere-else'" in problems and "it is not followed" in problems
+    assert f"status-b.json (status stopped) names session {replacement['session_id']}, whose directory is absent" in problems
+    assert f"attempts/{replacement['session_id']}.done.json exists, but the session directory" in problems
+    assert "status-b.json accepted_archived = 1, but 0 session directories have a done checkpoint" in problems
+    assert "somewhere-else" not in by_id(read_csv(out / "sessions.csv"))

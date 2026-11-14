@@ -71,14 +71,16 @@ def lab(tmp_path, monkeypatch):
         if "run" in command:
             state["calls"].append("capture")
             sid = command[command.index("--session-id") + 1]
-            row = next(r for r in rows if r["session_id"] == sid)
+            row = next(r for r in rows if r["session_id"] == sid.split("-r")[0])  # -r<n>: a replacement
+            replaces = {"replaces": command[command.index("--replaces") + 1]} if "--replaces" in command else {}
             assert command[command.index("--expected-boot-id") + 1] == state["boot"]
             assert json.loads(command[command.index("--expected-qemu") + 1]) == state["qemu"]
             assert kw["lock_fd"] >= 0
             src = captures / sid
             src.mkdir()
             identity = {**env, "boot_id": state["boot"]}
-            write_new(src / "session.json", {**row, "schema": "hyptcn3/collection-session/1",
+            write_new(src / "session.json", {**row, "session_id": sid, **replaces,
+                       "schema": "hyptcn3/collection-session/1",
                        "campaign_id": manifest["id"], "commit": manifest["commit"], "commit_dirty": True,
                        "measurement_dirty": [], "host_context": {"qemu": state["qemu"]},
                        "protocol_sha256": manifest["protocol_sha256"], "guest_before": identity})
@@ -105,7 +107,7 @@ def lab(tmp_path, monkeypatch):
         if state["truncate_audit"]:
             report.write_text('{"schema":')
             return 2
-        row = next(r for r in rows if r["session_id"] == src.name)
+        row = next(r for r in rows if r["session_id"] == src.name.split("-r")[0])
         write_new(report, {"schema": "hyptcn3/collection-audit/1", "commit": manifest["commit"],
                   "commit_dirty": True, "measurement_dirty": state["audit_measurement_dirty"],
                   "values": {"accepted": state["audit_accepted"],
@@ -470,3 +472,28 @@ def test_test_only_protocol_gets_an_event_index_not_a_corpus(tmp_path, monkeypat
         c.event_index([*reports, event_audit(tmp_path, "s3", boot="b2")], p, "p")
     with pytest.raises(ValueError, match="unaccepted"):
         c.event_index([event_audit(tmp_path, "s4", accepted=False)], p, "p")
+
+
+def test_single_vm_campaign_replaces_a_rejected_session_only_under_a_protocol_rule(lab):
+    """Without the rule (every older protocol) a rejection stops the campaign: test above. With it:"""
+    directory = lab["directory"]
+    protocol = read_json(directory / "protocol.json")
+    protocol["replacement"] = {"max_per_campaign": 1, "same": ["vm", "role", "scenario"]}
+    (directory / "protocol.json").write_text(json.dumps(protocol))
+    manifest = read_json(directory / "campaign.json")
+    manifest["protocol_sha256"] = lab["manifest"]["protocol_sha256"] = digest(directory / "protocol.json")
+    (directory / "campaign.json").write_text(json.dumps(manifest))
+    lab["audit_accepted"] = False  # The first session and then its replacement are rejected.
+    first = lab["rows"][0]["session_id"]
+    for _ in range(2):
+        with pytest.raises(ValueError, match="audit rejected session; archived without replacement"):
+            c.execute(directory)
+    assert lab["calls"] == ["reboot", "capture", "audit", "capture", "audit"]  # One boot, one replacement.
+    records = c.rejections(directory)
+    assert [(r["session"], r["replacement"]) for r in records] == [(first, first + "-r1"), (first + "-r1", None)]
+    assert all(r["reasons"] == ["synthetic rejection"] for r in records)
+    replacement = read_json(lab["captures"] / (first + "-r1") / "session.json")
+    assert replacement["replaces"] == first and replacement["group"] == lab["rows"][0]["group"]
+    assert (lab["captures"] / first / "raw").is_symlink() and (lab["captures"] / (first + "-r1") / "raw").is_symlink()
+    assert not list((directory / "attempts").glob("*.done.json"))
+    assert [r["session"] for r in c.status(directory)["rejections"]] == [first, first + "-r1"]

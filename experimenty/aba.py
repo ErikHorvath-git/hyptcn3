@@ -150,9 +150,31 @@ def plan_doc(cfg):
 
 # --- configuration --------------------------------------------------------------------------
 
+LABCTL_PORT = 18080  # scripts/labctl.py default: the host port of the VM that needs no --vm/--port
+
+
+def lab_vm(p, name):
+    """Domain and target of the VM under test (scripts/collection.py vms/for_vm, stdlib only here).
+
+    A protocol with one domain/target is that VM; a multi-VM protocol names its VMs and E5 runs
+    on one of them (--vm), with no campaign on any other: the run holds data/collections/.lock.
+    """
+    if "vms" not in p:
+        if name is not None:
+            raise ValueError("--vm is only for a protocol that lists vms")
+        return {"domain": p["domain"], "target": p["target"]}
+    rows = {row["name"]: row for row in p["vms"]}
+    if name not in rows:
+        raise ValueError("the protocol lists several VMs; choose one with --vm: " + ", ".join(rows))
+    return {"vm": name, "port": rows[name]["port"], "domain": rows[name]["domain"],
+            "target": f"http://127.0.0.1:{rows[name]['port']}"}
+
+
 def make_config(a):
     protocol_path = (ROOT / a.protocol) if not Path(a.protocol).is_absolute() else Path(a.protocol)
     p = json.loads(protocol_path.read_text())
+    vm = lab_vm(p, getattr(a, "vm", None))
+    p = {**p, "domain": vm["domain"], "target": vm["target"]}
     if a.scenario not in p["scenarios"]:
         raise ValueError(f"unknown scenario {a.scenario!r}; protocol has {sorted(p['scenarios'])}")
     for key in ("warmup_s", "measure_s"):
@@ -169,6 +191,7 @@ def make_config(a):
             "protocol_values": {k: p[k] for k in ("domain", "target", "interval_s", "full_every", "bin_bytes",
                                                   "window_rows", "max_gap_s", "min_free_gib", "profile")},
             "domain": a.domain or p["domain"], "target": a.target or p["target"],
+            **({"vm": vm["vm"], "port": vm["port"]} if "vm" in vm else {}),
             "profile": a.profile or p["profile"], "bundle": a.bundle, "collector": a.collector,
             "threads": a.threads, "repetitions": a.repetitions, "allow_unbalanced": a.allow_unbalanced,
             "warmup_s": a.warmup_s, "measure_s": a.measure_s, "rest_s": a.rest_s,
@@ -213,7 +236,18 @@ def component_argv(cfg, condition, bdir):
 
 
 def labctl_argv(cfg, *args):
-    return [sys.executable, ROOT / "scripts/labctl.py", "--domain", cfg["domain"], *args]
+    return [sys.executable, ROOT / "scripts/labctl.py", "--domain", cfg["domain"],
+            *(["--vm", cfg["vm"], "--port", cfg["port"]] if cfg.get("vm") else []), *args]
+
+
+def guest_protocol(cfg):
+    """What scripts/collection.py guest_identity needs to reach this VM through labctl."""
+    return {"domain": cfg["domain"], **({"vm": cfg["vm"], "port": cfg["port"]} if cfg.get("vm") else {})}
+
+
+def detector_reaches_vm(cfg):
+    """Condition C: `safeguard run` calls labctl with --domain only, i.e. labctl's default host port."""
+    return cfg.get("port", LABCTL_PORT) == LABCTL_PORT
 
 
 def block_steps(cfg, block, bdir):
@@ -282,6 +316,9 @@ def dry_run(cfg, out):
         warnings.append(f"bundle missing: {cfg['bundle']}")
     if Path(out).exists():
         warnings.append(f"output exists and would be refused: {out}")
+    if not detector_reaches_vm(cfg):
+        warnings.append(f"condition C cannot run on VM {cfg['vm']}: safeguard run reaches labctl without "
+                        f"--vm/--port (host port {LABCTL_PORT}); --execute refuses")
     lines += ["", "== execute with (from the repository root):",
               "sudo env PYTHONPATH=\"$(python3 -m site --user-site)\" " + shlex.join(
                   [os.path.basename(sys.executable), "-m", "experimenty.aba", "run", "--execute", "--out", str(out),
@@ -292,7 +329,8 @@ def dry_run(cfg, out):
 
 
 def cli_options(cfg):
-    opts = ["--protocol", cfg["protocol"], "--scenario", cfg["scenario"], "--traffic-seed", cfg["traffic"]["seed"],
+    opts = ["--protocol", cfg["protocol"], *(["--vm", cfg["vm"]] if cfg.get("vm") else []),
+            "--scenario", cfg["scenario"], "--traffic-seed", cfg["traffic"]["seed"],
             "--repetitions", cfg["repetitions"], "--warmup-s", cfg["warmup_s"], "--measure-s", cfg["measure_s"],
             "--rest-s", cfg["rest_s"], "--bundle", cfg["bundle"]]
     if cfg["allow_unbalanced"]:
@@ -321,6 +359,7 @@ class Lock:
             fcntl.flock(self.stream, fcntl.LOCK_EX | fcntl.LOCK_NB)
         except BlockingIOError:
             self.release()
+            # Runners of a multi-VM campaign hold this lock shared, one per VM: any of them refuses E5.
             raise ValueError("data/collections/.lock is held: a campaign or detector is running")
 
     def release(self):
@@ -427,6 +466,9 @@ def execute(cfg, out):
     doc = plan_doc(cfg)
     if any(b["condition"] == "C" for b in doc["blocks"]) and not (ROOT / cfg["bundle"]).is_dir():
         raise ValueError("bundle not found: " + cfg["bundle"])
+    if not detector_reaches_vm(cfg):
+        raise ValueError(f"condition C cannot run on VM {cfg['vm']}: safeguard run reaches labctl without "
+                         f"--vm/--port; run E5 on the VM with host port {LABCTL_PORT}")
     collector = ROOT / cfg["collector"]
     if not collector.is_file() or not os.access(collector, os.X_OK):
         raise ValueError("collector binary unavailable; run make build as the user")
@@ -444,7 +486,7 @@ def execute(cfg, out):
                "command": shlex.join(map(str, [sys.executable, "-m", "experimenty.aba", *sys.argv[1:]])),
                "commit": commit, "commit_dirty": dirty, "measurement_dirty": col.measurement_dirty(),
                "host": platform.platform(), "config": cfg, "plan": doc,
-               "guest_before": col.guest_identity({"domain": cfg["domain"]}), "qemu": qemu,
+               "guest_before": col.guest_identity(guest_protocol(cfg)), "qemu": qemu,
                "host_memory": col.host_memory(qemu), "collector_sha256": sha256(collector),
                "aba_sha256": sha256(Path(__file__)),
                "source_sha256": {name: sha256(ROOT / name) for name in
@@ -460,7 +502,7 @@ def execute(cfg, out):
             end["blocks_done"].append(block["block_id"])
             if number + 1 < len(doc["blocks"]):
                 time.sleep(cfg["rest_s"])
-        end["guest_after"] = col.guest_identity({"domain": cfg["domain"]})
+        end["guest_after"] = col.guest_identity(guest_protocol(cfg))
         end["completed"] = True
     except BaseException as exc:
         end["error"] = f"{type(exc).__name__}: {exc}"
@@ -824,6 +866,7 @@ def main(argv=None):
     r.add_argument("--rest-s", type=float, default=DEFAULTS["rest_s"])
     r.add_argument("--bundle", default=DEFAULTS["bundle"])
     r.add_argument("--profile", help="guest profile (default: the protocol's)")
+    r.add_argument("--vm", help="VM under test; required for (and only for) a protocol that lists vms")
     r.add_argument("--domain", help="default: the protocol's")
     r.add_argument("--target", help="default: the protocol's")
     r.add_argument("--threads", type=int, default=DEFAULTS["threads"], help="safeguard --threads")
