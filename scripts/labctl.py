@@ -10,6 +10,7 @@ import os
 from pathlib import Path
 import shlex
 import re
+import shutil
 import subprocess
 import sys
 import tarfile
@@ -21,6 +22,8 @@ import xml.etree.ElementTree as ET
 REPO = Path(__file__).resolve().parents[1]
 STATE = REPO / "vms/lab-state.json"
 UNIT = "hyptcn-lab-traffic"
+PORT = 18080  # Host port of the single (legacy) lab VM; every further VM names its own.
+VM_NAME = r"[a-z0-9]{1,16}"
 
 
 def run(args, **kw):
@@ -28,10 +31,28 @@ def run(args, **kw):
 
 
 class Lab:
-    def __init__(self, uri="qemu:///session", domain="hyptcn-lab"):
+    def __init__(self, uri="qemu:///session", domain="hyptcn-lab", vm=None, port=PORT):
         if not re.fullmatch(r"[a-zA-Z0-9][a-zA-Z0-9_-]{0,50}", domain):
             raise ValueError("Invalid lab domain name")
-        self.uri, self.domain = uri, domain
+        if vm is not None and not re.fullmatch(VM_NAME, vm):
+            raise ValueError("Invalid lab VM name")
+        if type(port) is not int or not 1024 <= port <= 65535:
+            raise ValueError("Invalid host forward port")
+        self.uri, self.domain, self.vm, self.port = uri, domain, vm, port
+
+    # Without a VM name (one lab VM) the original names stay; a named VM of a
+    # multi-VM protocol has its own state file, traffic unit and status file.
+    @property
+    def state_file(self):
+        return STATE if self.vm is None else STATE.with_name(f"lab-state-{self.vm}.json")
+
+    @property
+    def unit(self):
+        return UNIT if self.vm is None else f"{UNIT}-{self.vm}"
+
+    @property
+    def traffic_status(self):
+        return REPO / "data/lab" / ("traffic.json" if self.vm is None else f"traffic-{self.vm}.json")
 
     def virsh(self, *args):
         return run(["virsh", "-c", self.uri, *args], capture_output=True, timeout=30).stdout.strip()
@@ -157,8 +178,12 @@ class Lab:
         staging = target.with_suffix(".partial.qcow2")
         if staging.exists():
             raise RuntimeError(f"Incomplete clone exists; inspect first: {staging}")
+        if self.vm is not None and shutil.which("guestfish") is None:
+            raise RuntimeError("guestfish (libguestfs) is required to give a further VM its own identity")
         print(f"Cloning stopped {source} into {target}", flush=True)
         run(["qemu-img", "convert", "-O", "qcow2", disk, staging])
+        if self.vm is not None:
+            print(json.dumps({"domain": self.domain, "machine_id": self.fresh_identity(staging)}), flush=True)
         staging.rename(target)
         domain = ET.Element("domain", type="kvm")
         ET.SubElement(domain, "name").text = self.domain
@@ -180,7 +205,7 @@ class Lab:
         ET.SubElement(nic, "backend", type="passt")
         ET.SubElement(nic, "model", type="virtio")
         forward = ET.SubElement(nic, "portForward", proto="tcp", address="127.0.0.1")
-        ET.SubElement(forward, "range", start="18080", to="8080")
+        ET.SubElement(forward, "range", start=str(self.port), to="8080")
         channel = ET.SubElement(devices, "channel", type="unix")
         ET.SubElement(channel, "target", type="virtio", name="org.qemu.guest_agent.0")
         serial = ET.SubElement(devices, "serial", type="pty")
@@ -190,10 +215,27 @@ class Lab:
         definition.write_text(ET.tostring(domain, encoding="unicode") + "\n")
         self.virsh("define", str(definition))
 
+    def fresh_identity(self, image):
+        """Offline, before the first boot: clones of one image must differ in machine-id and hostname.
+
+        No root: guestfish runs its own appliance as the calling user. The image
+        is still the staging file, so a failure leaves no usable half-made disk.
+        """
+        machine_id = uuid.uuid4().hex
+        run(["guestfish", "--rw", "--format=qcow2", "-a", image, "-i",
+             "write", "/etc/machine-id", machine_id + "\n", ":",
+             "write", "/etc/hostname", self.domain + "\n"],
+            env={**os.environ, "LIBGUESTFS_BACKEND": "direct"})
+        return machine_id
+
     def owned(self):
         xml = ET.fromstring(self.virsh("dumpxml", self.domain))
         if xml.findtext("description") != "hyptcn3 benign persistent lab":
             raise RuntimeError("Refusing to modify a domain not created by labctl")
+        # A wrong --port would reach another VM's stack and report it as this one.
+        forward = xml.find("./devices/interface/portForward/range")
+        if forward is None or forward.get("start") != str(self.port):
+            raise RuntimeError(f"Domain {self.domain} does not forward host port {self.port}")
 
     def reboot(self, timeout=180):
         self.owned()
@@ -226,7 +268,7 @@ class Lab:
                    "touch /var/lib/hyptcn-lab-network-v3; fi")
 
     def target(self):
-        return "http://127.0.0.1:18080"
+        return f"http://127.0.0.1:{self.port}"
 
     def deploy(self):
         self.owned()
@@ -268,33 +310,37 @@ class Lab:
                 if time.monotonic() >= deadline:
                     raise
                 time.sleep(1)
-        state = {"uri": self.uri, "domain": self.domain, "target": target, "health": health}
-        STATE.parent.mkdir(exist_ok=True)
-        STATE.write_text(json.dumps(state, indent=2) + "\n")
+        state = {"uri": self.uri, "domain": self.domain, "target": target, "health": health,
+                 **({} if self.vm is None else {"vm": self.vm})}
+        self.state_file.parent.mkdir(exist_ok=True)
+        self.state_file.write_text(json.dumps(state, indent=2) + "\n")
         print(json.dumps(state, indent=2))
         return target
 
     def traffic(self):
         target = self.health()
-        running = subprocess.run(["systemctl", "--user", "is-active", "--quiet", UNIT]).returncode == 0
+        running = subprocess.run(["systemctl", "--user", "is-active", "--quiet", self.unit]).returncode == 0
         if running:
-            print(f"{UNIT} is already running")
+            print(f"{self.unit} is already running")
             return
-        out = REPO / "data/lab"
-        out.mkdir(parents=True, exist_ok=True)
-        run(["systemd-run", "--user", f"--unit={UNIT}", "--collect",
+        out = self.traffic_status
+        out.parent.mkdir(parents=True, exist_ok=True)
+        run(["systemd-run", "--user", f"--unit={self.unit}", "--collect",
              "--property=Restart=on-failure", "--property=RestartSec=5",
              f"--working-directory={REPO}", sys.executable, REPO / "scripts/host_traffic.py",
              "--profile", "lab", "--target", target, "--dur", "0", "--vlakien", "4",
-             "--out", out / "traffic.json"])
+             "--out", out])
 
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("command", choices=["up", "create", "start", "deploy", "status", "stop", "reboot",
+    parser.add_argument("command", choices=["up", "create", "clone", "start", "deploy", "status", "stop", "reboot",
                                             "traffic-start", "traffic-stop", "exec", "logs", "state", "clock",
                                             "sync-clock", "segment", "journal", "event"])
     parser.add_argument("--domain", default="hyptcn-lab")
+    parser.add_argument("--vm", help="VM name of a multi-VM protocol (own state file, traffic unit and port); "
+                                     "clone: the new disk gets a fresh machine-id and hostname before its first boot")
+    parser.add_argument("--port", type=int, help="Host port forwarded to the guest's 8080 (required with --vm)")
     parser.add_argument("--uri", default="qemu:///session")
     parser.add_argument("--source", default="hyptcn-guest")
     parser.add_argument("--guest-command", help="Command for exec, executed inside the lab VM")
@@ -306,9 +352,20 @@ def main(argv=None):
     args = parser.parse_args(argv)
     if args.domain == args.source:
         parser.error("Lab domain must be different from the experiment source")
-    lab = Lab(args.uri, args.domain)
-    if args.command in ("up", "create"):
+    if (args.vm is None) != (args.port is None):
+        parser.error("--vm and --port belong together")
+    if args.command == "clone" and args.vm is None:
+        parser.error("clone creates a further VM and requires --vm and --port")
+    try:
+        lab = Lab(args.uri, args.domain, args.vm, PORT if args.port is None else args.port)
+    except ValueError as error:
+        parser.error(str(error))
+    unit = lab.unit
+    if args.command in ("up", "create", "clone"):
         lab.clone(args.source)
+    if args.command == "clone":
+        # Not started here: the first boot must already see the new identity.
+        print(f"Defined {lab.domain}; next: labctl.py up --domain {lab.domain} --vm {lab.vm} --port {lab.port}")
     if args.command in ("up", "start", "create"):
         lab.start()
     if args.command in ("up", "deploy"):
@@ -321,13 +378,13 @@ def main(argv=None):
         print(state)
         if state == "running":
             lab.health()
-        loaded = subprocess.check_output(["systemctl", "--user", "show", UNIT, "-p", "LoadState", "--value"], text=True).strip()
+        loaded = subprocess.check_output(["systemctl", "--user", "show", unit, "-p", "LoadState", "--value"], text=True).strip()
         if loaded != "not-found":
-            subprocess.run(["systemctl", "--user", "status", UNIT, "--no-pager"])
+            subprocess.run(["systemctl", "--user", "status", unit, "--no-pager"])
     if args.command in ("stop", "traffic-stop"):
-        loaded = subprocess.check_output(["systemctl", "--user", "show", UNIT, "-p", "LoadState", "--value"], text=True).strip()
+        loaded = subprocess.check_output(["systemctl", "--user", "show", unit, "-p", "LoadState", "--value"], text=True).strip()
         if loaded != "not-found":
-            subprocess.run(["systemctl", "--user", "stop", UNIT], check=True)
+            subprocess.run(["systemctl", "--user", "stop", unit], check=True)
     if args.command == "reboot":
         lab.reboot()
     if args.command == "stop":

@@ -64,6 +64,9 @@ COLLECTOR_MLOCK = True
 # drift was below 0.04 s/h (2026-10-20), so a session synchronized to 0.25 s
 # keeps that margin for its whole hour.
 CLOCK_SYNC_S = .25
+VM_NAME = r"[a-z0-9]{1,16}"
+# Session base of a multi-VM capture outside a campaign (pilot); not a valid campaign name.
+STANDALONE = "_bez-kampane"
 
 
 def digest(path):
@@ -99,7 +102,49 @@ def protocol(path):
         raise ValueError("capture runner currently supports 16 MiB bins")
     if "events" in p:
         check_events(p)
+    if "vms" in p:
+        check_vms(p)
     return p
+
+
+def check_vms(p):
+    """Several lab VMs measured concurrently on one host, each with its own domain and host port."""
+    rows = p["vms"]
+    if "domain" in p or "target" in p or type(rows) is not list or not rows:
+        raise ValueError("a protocol names either vms or one domain/target")
+    for row in rows:
+        if (type(row) is not dict or set(row) != {"name", "domain", "port"}
+                or type(row["name"]) is not str or not re.fullmatch(VM_NAME, row["name"])
+                or type(row["domain"]) is not str or not re.fullmatch(r"[a-zA-Z0-9][a-zA-Z0-9_-]{0,50}", row["domain"])
+                or type(row["port"]) is not int or not 1024 <= row["port"] <= 65535):
+            raise ValueError("invalid VM in protocol")
+    if any(len({row[key] for row in rows}) != len(rows) for key in ("name", "domain", "port")):
+        raise ValueError("VM names, domains and ports must be unique")
+    if any(count < len(rows) for count in p["roles"].values()):
+        raise ValueError("every role needs a boot group on every VM")
+
+
+def vms(p):
+    """VMs of a protocol; a protocol with one domain/target is one unnamed VM (original layout)."""
+    if "vms" not in p:
+        return [{"name": None, "domain": p["domain"], "target": p["target"]}]
+    return [{**row, "target": f"http://127.0.0.1:{row['port']}"} for row in p["vms"]]
+
+
+def for_vm(p, name):
+    """The protocol as seen by one VM's capture: its domain and target under the single-VM keys."""
+    rows = {row["name"]: row for row in vms(p)}
+    if name not in rows:
+        raise ValueError("protocol has no VM " + str(name) if name is not None else
+                         "protocol names several VMs; choose one of: " + ", ".join(rows))
+    if name is None:
+        return p
+    return {**p, "vm": name, "domain": rows[name]["domain"], "target": rows[name]["target"], "port": rows[name]["port"]}
+
+
+def labctl_args(p):
+    """labctl options selecting this VM (the unnamed VM keeps labctl's original defaults)."""
+    return ["--domain", p["domain"], *(["--vm", p["vm"], "--port", str(p["port"])] if p.get("vm") else [])]
 
 
 EVENT_KEYS = {"note", "classes", "per_session", "duration_s", "first_s", "min_gap_s", "tail_s", "grace_s", "pilot"}
@@ -147,10 +192,16 @@ def event_schedule(p, seed, deck):
 
 def plan(p):
     result = []
+    names = [row["name"] for row in vms(p)]
     # Each role/repetition is a separate boot group. Adjacent chunks of a
     # running VM cannot become independent train/calibration/test sessions.
-    for role, count in p["roles"].items():
+    for index, (role, count) in enumerate(p["roles"].items()):
         for repetition in range(count):
+            # A group is one boot of one VM. Groups of a role rotate over the VMs and the
+            # rotation shifts with every round and role (a b | b a | a b ...), so each role
+            # has groups on every VM and neither odd nor even group numbers share one VM.
+            # Each VM takes its own groups in this (role) order.
+            vm = names[(repetition + repetition // len(names) + index) % len(names)]
             scenarios = list(p["scenarios"])
             seed = int.from_bytes(hashlib.sha256(f"{role}/{repetition}".encode()).digest()[:4], "big")
             random.Random(seed).shuffle(scenarios)
@@ -158,6 +209,8 @@ def plan(p):
             for scenario in scenarios:
                 session = {"role": role, "group": f"{p.get('group_prefix', '')}{role}-{repetition + 1}",
                            "scenario": scenario, "seed": seed + len(result), "cycles": p["cycles"]}
+                if vm is not None:
+                    session["vm"] = vm
                 if "events" in p:
                     rng = random.Random(session["seed"])
                     while len(deck) < p["events"]["per_session"][1]:
@@ -165,6 +218,8 @@ def plan(p):
                     session["events"] = event_schedule(p, session["seed"], deck)
                 result.append(session)
     return {"schema": "hyptcn3/collection-plan/1", "sessions": result,
+            **({} if names == [None] else
+               {"sessions_per_vm": {name: sum(s["vm"] == name for s in result) for name in names}}),
             "planned_hours": len(result) * p["cycles"] * p["interval_s"] / 3600,
             "note": "Design allocation, not collected data; pilot and overhead runs are separate."}
 
@@ -221,25 +276,60 @@ def storage_identity(path):
 
 def lab_json(p, *args, timeout=600):
     """labctl as the VM owner (qemu:///session); its reply is one JSON document."""
-    command = [sys.executable, ROOT / "scripts/labctl.py", "--domain", p["domain"], *args]
+    command = [sys.executable, ROOT / "scripts/labctl.py", *labctl_args(p), *args]
     return json.loads(subprocess.check_output(user_command(command), cwd=ROOT, text=True, timeout=timeout))
 
 
 @contextmanager
-def collection_lock(base):
-    """A campaign passes the same open lock to its capture child only."""
+def collection_lock(base, domain=None):
+    """A campaign passes the same open lock to its capture child only.
+
+    Without a domain (single-VM protocol) the lock is exclusive for the whole
+    host, as before. A VM of a multi-VM protocol holds .lock shared - a single-VM
+    run or the detector (both exclusive) still excludes it and is excluded by it -
+    and its own .lock-<domain> exclusively, so only the same domain is refused.
+    """
     base.mkdir(parents=True, exist_ok=True)
-    path = base / ".lock"
+    path = base / (".lock" if domain is None else ".lock-" + domain)
+    shared = None
+    if domain is not None:
+        shared = os.open(base / ".lock", os.O_CREAT | os.O_RDWR, 0o644)
     inherited = os.environ.get("HYPTCN_COLLECTION_LOCK_FD")
-    fd = os.dup(int(inherited)) if inherited else os.open(path, os.O_CREAT | os.O_RDWR, 0o644)
     try:
-        stat, expected = os.fstat(fd), path.stat()
-        if (stat.st_dev, stat.st_ino) != (expected.st_dev, expected.st_ino):
-            raise ValueError("inherited collection lock refers to another file")
-        fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        yield fd
+        if shared is not None:
+            fcntl.flock(shared, fcntl.LOCK_SH | fcntl.LOCK_NB)
+        fd = os.dup(int(inherited)) if inherited else os.open(path, os.O_CREAT | os.O_RDWR, 0o644)
+        try:
+            stat, expected = os.fstat(fd), path.stat() if path.exists() else None
+            if expected is None or (stat.st_dev, stat.st_ino) != (expected.st_dev, expected.st_ino):
+                raise ValueError("inherited collection lock refers to another file")
+            fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            yield fd
+        finally:
+            os.close(fd)
     finally:
-        os.close(fd)
+        if shared is not None:
+            os.close(shared)
+
+
+def session_records(root):
+    """(path, start record) of every session under a collections directory.
+
+    Covers the flat layout (<session>) and the multi-VM one (<campaign>/<vm>/<session>).
+    Another VM's runner may be writing or retiring a session at this moment.
+    """
+    for pattern in ("*/session.json", "*/*/*/session.json"):
+        for path in sorted(Path(root).glob(pattern)):
+            for attempt in range(5):
+                try:
+                    yield path, json.loads(path.read_text())
+                    break
+                except FileNotFoundError:
+                    break  # Renamed to a numbered attempt meanwhile; that name is not in this listing.
+                except json.JSONDecodeError:
+                    if attempt == 4:
+                        raise
+                    time.sleep(.2)
 
 
 def guest_identity(p):
@@ -251,7 +341,7 @@ def guest_identity(p):
         # Active (waiting) timers can start unplanned work; lab/install.sh leaves none.
         "echo \"timers: $(systemctl list-units --type=timer --state=active --no-legend --plain"
         " | awk '{print $1}' | sort | tr '\\n' ' ')\"")
-    command = [sys.executable, ROOT / "scripts/labctl.py", "exec", "--domain", p["domain"],
+    command = [sys.executable, ROOT / "scripts/labctl.py", "exec", *labctl_args(p),
                "--guest-command", identity_command]
     lines = subprocess.check_output(user_command(command), cwd=ROOT, text=True, timeout=150).strip().splitlines()
     if len(lines) < 13 or not lines[-1].startswith("timers:"):
@@ -332,17 +422,72 @@ def is_generator(argv):
     return Path(target.decode(errors="replace")).name == "host_traffic.py"
 
 
-def generators(exclude=()):
-    """Host generator processes not started by this session."""
-    found = []
+def option(argv, name):
+    """Value of '--name value' or '--name=value' in a command line, else None."""
+    for i, arg in enumerate(argv):
+        if arg == name and i + 1 < len(argv):
+            return argv[i + 1]
+        if arg.startswith(name + b"="):
+            return arg[len(name) + 1:]
+    return None
+
+
+def is_collector(argv, domain):
+    """A vmicollect process reading the RAM of this domain."""
+    return (bool(argv) and Path(argv[0].decode(errors="replace")).name == "vmicollect"
+            and f"vm.domain={domain}".encode() in argv)
+
+
+def processes():
     for proc in Path("/proc").glob("[0-9]*"):
         try:
-            argv = [arg for arg in (proc / "cmdline").read_bytes().split(b"\0") if arg]
+            yield int(proc.name), [arg for arg in (proc / "cmdline").read_bytes().split(b"\0") if arg]
         except OSError:
             continue
-        if is_generator(argv) and int(proc.name) not in exclude:
-            found.append(int(proc.name))
-    return found
+
+
+def generators(exclude=(), target=None):
+    """Host generator processes not started by this session.
+
+    With a target (VM of a multi-VM protocol) only generators aimed at that
+    VM count; another VM's session runs its own generator at the same time.
+    """
+    return [pid for pid, argv in processes() if is_generator(argv) and pid not in exclude
+            and (target is None or option(argv, b"--target") == target.encode())]
+
+
+def collectors(domain):
+    return [pid for pid, argv in processes() if is_collector(argv, domain)]
+
+
+def foreign_traffic(p, exclude=()):
+    return generators(exclude, p["target"] if p.get("vm") else None)
+
+
+def other_vms(p):
+    """Cheap /proc view of the protocol's other VMs: is each running, collected or loaded right now."""
+    return [{"vm": row["name"], "domain": row["domain"], "qemu": qemu_process(row["domain"]),
+             "collectors": collectors(row["domain"]), "generators": generators(target=row["target"])}
+            for row in vms(p) if row["name"] != p.get("vm")]
+
+
+def monitor_matches(p):
+    """host_monitor process labels. The session's own VM keeps the original labels; the other
+    VMs of the protocol are recorded as label@vm. Host-wide CPU, memory, swap and disk
+    counters are part of every monitor record."""
+    if not p.get("vm"):
+        return [f"qemu=guest={p['domain']},", "vmicollect=vmicollect/build/vmicollect",
+                "traffic=host_traffic.py", "passt=^passt ", "monitor=host_monitor.py"]
+    matches = ["monitor=host_monitor.py"]
+    for row in vms(p):
+        suffix = "" if row["name"] == p["vm"] else "@" + row["name"]
+        domain, target = re.escape(row["domain"]), re.escape(row["target"])
+        matches += [f"qemu{suffix}=guest={domain},",
+                    f"vmicollect{suffix}=vmicollect/build/vmicollect .*vm\\.domain={domain}( |$)",
+                    f"traffic{suffix}=host_traffic\\.py .*--target[ =]{target}( |$)",
+                    # libvirt names the passt socket after the domain; the forwarded port is the fallback.
+                    f"passt{suffix}=^passt .*(-{domain}-net[0-9]+\\.socket|/{row['port']}:)"]
+    return matches
 
 
 def qemu_process(domain):
@@ -493,14 +638,25 @@ def run_session(a, p):
         raise ValueError("host eBPF capture needs sudo; plan and audit do not")
     if a.scenario not in p["scenarios"]:
         raise ValueError("unknown benign scenario")
+    vm = p.get("vm")
+    campaign = getattr(a, "campaign_id", None)
+    if vm and campaign is not None and not re.fullmatch(r"[a-zA-Z0-9][a-zA-Z0-9_-]{0,63}", campaign):
+        raise ValueError("invalid campaign ID")
     base = Path(getattr(a, "collections_dir", None) or COLLECTIONS).absolute()
     diagnostic = a.role == "diagnostic"
+    if vm and not diagnostic:
+        # One directory per VM: <campaign>/<vm>/<session>; a single-VM protocol keeps <session>.
+        base = base / (campaign or STANDALONE) / vm
     if diagnostic != base.is_relative_to(DIAGNOSTICS):
         raise ValueError("diagnostic runs (and only they) must use a directory under data/diagnostics")
     if getattr(a, "cycles", None) and not diagnostic:
         raise ValueError("--cycles is only allowed for diagnostic runs")
+    created = [d for d in (base.parent.parent, base.parent, base) if vm and not diagnostic and not d.exists()]
     base.mkdir(parents=True, exist_ok=True)
-    with collection_lock(COLLECTIONS):
+    if "SUDO_UID" in os.environ:
+        for directory in created:  # Like the sessions below them, owned by the operator.
+            os.chown(directory, int(os.environ["SUDO_UID"]), int(os.environ["SUDO_GID"]))
+    with collection_lock(COLLECTIONS, p["domain"] if vm else None):
         before = guest_identity(p)
         if getattr(a, "expected_boot_id", None) and before["boot_id"] != a.expected_boot_id:
             raise ValueError("guest boot differs from campaign group")
@@ -515,7 +671,7 @@ def run_session(a, p):
                   ] if a.role == "pilot" and "events" in p else []
         if a.role not in ("pilot", "diagnostic"):
             assignment = {"role": a.role, "group": a.group, "scenario": a.scenario,
-                          "seed": a.seed, "cycles": p["cycles"]}
+                          "seed": a.seed, "cycles": p["cycles"], **({"vm": vm} if vm else {})}
             planned = [s for s in plan(p)["sessions"] if {k: s[k] for k in assignment} == assignment]
             if not planned:
                 raise ValueError("assignment/seed not present in frozen collection plan")
@@ -535,9 +691,9 @@ def run_session(a, p):
             raise ValueError("insufficient disk budget; archive existing captures first")
         # Immutable start records, including unfinished/failed runs: a boot belongs to
         # one group attempt only, and a group (across its attempts) to one role.
-        mine = (getattr(a, "campaign_id", None), a.group, attempt)
-        for path in base.glob("*/session.json"):
-            old = json.loads(path.read_text())
+        mine = (campaign, a.group, attempt)
+        # A VM's base holds only its own sessions of one campaign; the checks need all of them.
+        for path, old in session_records(COLLECTIONS if vm and not diagnostic else base):
             theirs = (old.get("campaign_id"), old["group"], old.get("group_attempt", 1))
             if old["group"] == a.group and old["role"] != a.role:
                 raise ValueError("group already belongs to a different split")
@@ -562,6 +718,7 @@ def run_session(a, p):
         s = p["scenarios"][a.scenario]
         metadata = {"schema": SESSION_SCHEMA, "session_id": out.name,
                     "campaign_id": getattr(a, "campaign_id", None),
+                    "vm": vm, "domain": p["domain"],
                     "role": a.role, "group": a.group, "group_attempt": attempt, "scenario": a.scenario,
                     "typ": "benign", "seed": a.seed, "cycles": cycles, "guest_before": before,
                     **({"events": events, "event_grace_s": p["events"]["grace_s"]} if "events" in p else {}),
@@ -577,10 +734,12 @@ def run_session(a, p):
                                 "seed": a.seed, "workers": s["workers"], "burst": s["burst"],
                                 "catalog_share": s["catalog_share"], "write_share": s["write_share"],
                                 "summary_interval_s": 5, "load_model": "closed loop, not a fixed request rate"},
-                    "metadata_not_model_inputs": ["scenario", "seed", "traffic", "boot_id", "group", "session_id", "events"],
+                    "metadata_not_model_inputs": ["scenario", "seed", "traffic", "boot_id", "group", "session_id", "events",
+                                                  "vm", "domain"],
                     "working_storage": storage_identity(base),
                     "host_context": {"host_boot": Path("/proc/sys/kernel/random/boot_id").read_text().strip(),
-                                     "qemu": qemu, "memory": host_memory(qemu), "python": sys.executable},
+                                     "qemu": qemu, "memory": host_memory(qemu), "python": sys.executable,
+                                     **({"other_vms": other_vms(p)} if vm else {})},
                     "commit": subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip(),
                     "commit_dirty": bool(subprocess.check_output(["git", "status", "--porcelain"], cwd=ROOT)),
                     "measurement_dirty": measurement_dirty(),
@@ -668,9 +827,12 @@ def capture_session(p, out, metadata, cycles):
     try:
         # Preflight, all outside the measured interval: no other generator, a
         # functional stack, guest clock, guest state and a closed log segment.
-        subprocess.run(user_command([sys.executable, ROOT / "scripts/labctl.py", "traffic-stop"]), check=True)
-        if generators():
+        subprocess.run(user_command([sys.executable, ROOT / "scripts/labctl.py", "traffic-stop",
+                                     *(labctl_args(p) if p.get("vm") else [])]), check=True)
+        if foreign_traffic(p):
             raise ValueError("another host_traffic.py is running; refusing to mix traffic")
+        if collectors(p["domain"]):
+            raise ValueError("another collector is reading this VM; refusing a second one")
         clock = lab_json(p, "clock", timeout=60)
         if abs(clock["offset_s"]) > CLOCK_SYNC_S:
             synced = lab_json(p, "sync-clock", timeout=60)
@@ -706,8 +868,7 @@ def capture_session(p, out, metadata, cycles):
         children["monitor"] = start_child(
             [sys.executable, ROOT / "scripts/host_monitor.py", "run", "--out", out / "host_monitor.jsonl",
              "--interval-s", "1", "--session-id", out.name, "--path", str(out), "--path", "/",
-             "--match", f"qemu=guest={p['domain']},", "--match", "vmicollect=vmicollect/build/vmicollect",
-             "--match", "traffic=host_traffic.py", "--match", "passt=^passt ", "--match", "monitor=host_monitor.py"],
+             *(arg for match in monitor_matches(p) for arg in ("--match", match))],
             out / "host_monitor.log")
         children["traffic"] = start_child(
             [sys.executable, ROOT / "scripts/host_traffic.py", "--profile", "lab", "--target", p["target"],
@@ -728,7 +889,7 @@ def capture_session(p, out, metadata, cycles):
         if not metrics["ok"] or metrics["errors"] or metrics.get("logging_error"):
             raise ValueError("warmup traffic failed")
         write_json(out / "traffic_before.json", metrics)
-        if generators(exclude={children["traffic"].pid}):
+        if foreign_traffic(p, {children["traffic"].pid}):
             raise ValueError("another host_traffic.py appeared during warmup")
         os.kill(children["traffic"].pid, signal.SIGUSR1)
         status["measure_start_unix"] = time.time()
@@ -748,7 +909,7 @@ def capture_session(p, out, metadata, cycles):
                 raise ValueError("disk reserve reached; preserving partial session")
             if time.monotonic() - checked > 15:
                 checked = time.monotonic()
-                if generators(exclude={children["traffic"].pid}):
+                if foreign_traffic(p, {children["traffic"].pid}):
                     raise ValueError("another host_traffic.py appeared during capture")
             if events:
                 events.tick(status["measure_start_unix"])
@@ -769,6 +930,8 @@ def capture_session(p, out, metadata, cycles):
         if qemu_process(p["domain"]) != metadata["host_context"]["qemu"]:
             raise ValueError("VM process restarted during capture")
         status["host_memory_after"] = host_memory(metadata["host_context"]["qemu"])
+        if p.get("vm"):
+            status["other_vms_after"] = other_vms(p)
         # Larger guest logs only now, between measurements.
         segment = lab_json(p, "segment", "--label", out.name, "--dest", guest)
         write_guest("session_segment.json", segment)
@@ -1010,6 +1173,7 @@ def main(argv=None):
                      required=True)
     run.add_argument("--scenario", default="steady")
     run.add_argument("--group", required=True)
+    run.add_argument("--vm", help="VM name; required for (and only for) a protocol that lists vms")
     run.add_argument("--seed", type=int, required=True)
     run.add_argument("--pilot-report", type=Path)
     run.add_argument("--session-id", help="Exclusive output name for a frozen campaign assignment")
@@ -1033,7 +1197,7 @@ def main(argv=None):
         print(json.dumps(plan(p), indent=2))
         return 0
     if a.command == "run":
-        run_session(a, p)
+        run_session(a, for_vm(p, a.vm))
         return 0
     if a.command == "coverage":
         data = load(a.archive)
