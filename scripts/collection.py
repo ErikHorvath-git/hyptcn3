@@ -35,7 +35,7 @@ from features.windows import WindowError
 from features.quality import protocol_policy, valid_for, BEHAVIOR_POLICY
 from features.coverage import ideal_windows, scorable_windows
 from scripts.collection_logs import audit_logs
-from lab.udalosti import TYPES as EVENT_TYPES
+from lab.udalosti import CONTROLS as CONTROL_TYPES, TYPES as EVENT_TYPES
 
 DEFAULT = ROOT / "config/collection-v2.json"
 COLLECTIONS = ROOT / "data/collections"  # Global lock; diagnostics only change the session base.
@@ -104,7 +104,23 @@ def protocol(path):
         check_events(p)
     if "vms" in p:
         check_vms(p)
+    if "replacement" in p:
+        check_replacement(p)
     return p
+
+
+def check_replacement(p):
+    """Pre-registered rule for sessions rejected by the audit (scripts/campaign.py reject).
+
+    Without the key nothing is ever replaced. The only rule: at most max_per_campaign
+    rejected sessions of a campaign are captured again, each as the same assignment
+    (VM, role, group, scenario, seed) in the same group boot.
+    """
+    r = p["replacement"]
+    if (type(r) is not dict or not {"max_per_campaign", "same"} <= set(r) <= {"max_per_campaign", "same", "note"}
+            or type(r["max_per_campaign"]) is not int or r["max_per_campaign"] < 0
+            or type(r["same"]) is not list or sorted(map(str, r["same"])) != ["role", "scenario", "vm"]):
+        raise ValueError("invalid replacement rule")
 
 
 def check_vms(p):
@@ -153,8 +169,13 @@ EVENT_KEYS = {"note", "classes", "per_session", "duration_s", "first_s", "min_ga
 def check_events(p):
     """Protocol v3: benign operational events scheduled inside the measured interval."""
     e = p["events"]
-    if set(e) != EVENT_KEYS or not e["classes"] or not set(e["classes"]) <= set(EVENT_TYPES):
+    if set(e) - {"pilot_controls"} != EVENT_KEYS or not e["classes"] or not set(e["classes"]) <= set(EVENT_TYPES):
         raise ValueError("invalid event configuration")
+    controls = e.get("pilot_controls", [])
+    if not isinstance(controls, list) or any(
+            not isinstance(c, dict) or set(c) != {"type", "start_s", "duration_s"} or c["type"] not in CONTROL_TYPES
+            or any(type(c[k]) is not int or c[k] < 1 for k in ("start_s", "duration_s")) for c in controls):
+        raise ValueError("invalid pilot control configuration")
     numbers = [*e["per_session"], *e["duration_s"], e["first_s"], e["min_gap_s"], e["tail_s"], e["grace_s"]]
     if any(type(v) is not int or v < 1 for v in numbers) or e["per_session"][0] > e["per_session"][1] \
             or e["duration_s"][0] > e["duration_s"][1] or e["grace_s"] >= e["min_gap_s"]:
@@ -162,13 +183,29 @@ def check_events(p):
     longest = e["first_s"] + e["per_session"][1] * e["duration_s"][1] + (e["per_session"][1] - 1) * e["min_gap_s"]
     if longest + e["tail_s"] > p["cycles"] * p["interval_s"]:
         raise ValueError("event schedule does not fit the session")
-    check_schedule(p, e["pilot"], p["pilot_cycles"])
+    check_schedule(p, pilot_events(p), p["pilot_cycles"])
+
+
+CONTROL_CLASS = "pozitivna_kontrola"
+
+
+def pilot_events(p):
+    """Pilot schedule: the protocol's pilot events and its positive controls, by start time.
+
+    A positive control (lab/udalosti.py CONTROLS) runs only in the pilot, never in a
+    corpus or event session, and carries the class 'pozitivna_kontrola'.
+    """
+    e = p["events"]
+    merged = [dict(x, **{"class": e["classes"][x["type"]]}) for x in e["pilot"]]
+    merged += [dict(x, **{"class": CONTROL_CLASS}) for x in e.get("pilot_controls", [])]
+    return sorted(merged, key=lambda x: x["start_s"])
 
 
 def check_schedule(p, events, cycles):
     e, end = p["events"], 0
-    for event in events:
-        if event["type"] not in e["classes"] or event["start_s"] < max(e["first_s"], end + e["min_gap_s"] * bool(end)):
+    allowed = set(e["classes"]) | {c["type"] for c in e.get("pilot_controls", [])}
+    for event in sorted(events, key=lambda x: x["start_s"]):
+        if event["type"] not in allowed or event["start_s"] < max(e["first_s"], end + e["min_gap_s"] * bool(end)):
             raise ValueError("event schedule violates the protocol")
         end = event["start_s"] + event["duration_s"]
     if events and end + e["tail_s"] > cycles * p["interval_s"]:
@@ -667,8 +704,7 @@ def run_session(a, p):
         if getattr(a, "expected_qemu", None) and qemu != json.loads(a.expected_qemu):
             raise ValueError("VM process differs from campaign group (restart or restore)")
         attempt = getattr(a, "group_attempt", 1) or 1
-        events = [dict(e, **{"class": p["events"]["classes"][e["type"]]}) for e in p["events"]["pilot"]
-                  ] if a.role == "pilot" and "events" in p else []
+        events = pilot_events(p) if a.role == "pilot" and "events" in p else []
         if a.role not in ("pilot", "diagnostic"):
             assignment = {"role": a.role, "group": a.group, "scenario": a.scenario,
                           "seed": a.seed, "cycles": p["cycles"], **({"vm": vm} if vm else {})}
@@ -719,6 +755,7 @@ def run_session(a, p):
         metadata = {"schema": SESSION_SCHEMA, "session_id": out.name,
                     "campaign_id": getattr(a, "campaign_id", None),
                     "vm": vm, "domain": p["domain"],
+                    **({"replaces": a.replaces} if getattr(a, "replaces", None) else {}),
                     "role": a.role, "group": a.group, "group_attempt": attempt, "scenario": a.scenario,
                     "typ": "benign", "seed": a.seed, "cycles": cycles, "guest_before": before,
                     **({"events": events, "event_grace_s": p["events"]["grace_s"]} if "events" in p else {}),
@@ -980,6 +1017,51 @@ def capture_session(p, out, metadata, cycles):
                 os.chown(path, *owner, follow_symlinks=False)
 
 
+CONTROL_KINDS = {"kontrola_wx_memfd": {"wx", "memfd_fd"}}
+
+
+def positive_controls(result, events_path, p):
+    """Pilot gate: every row fully inside an executed positive control shows its patterns.
+
+    A row counts as inside when its snapshot time lies in [host_started + one
+    period, host_stop]. Inside, one python3 process must show every expected
+    kind (W+X and memfd). Rows with patterns outside the controls are counted
+    and reported, not judged: benign software may legitimately map W+X.
+    """
+    try:
+        events = json.loads(events_path.read_text())["events"]
+    except (OSError, ValueError, KeyError):
+        return {"problems": ["positive control: events.json missing or unreadable"], "controls": []}
+    planned = {c["type"] for c in p["events"]["pilot_controls"]}
+    out, problems, inside_any = [], [], set()
+    for record in events:
+        if record["type"] not in planned:
+            continue
+        expected = CONTROL_KINDS[record["type"]]
+        start, stop = record.get("host_started_unix"), record.get("host_stop_unix")
+        rows = [] if start is None or stop is None else [
+            i for i, t in enumerate(result["casy"]) if start + p["interval_s"] <= t <= stop]
+        inside_any.update(rows)
+        hits = 0
+        for i in rows:
+            kinds = {}
+            for pattern in result["quality"][i].get("memory_patterns", []):
+                if pattern["comm"] == "python3":
+                    kinds.setdefault(pattern["pid"], set()).add(pattern["kind"])
+            hits += any(expected <= k for k in kinds.values())
+        out.append({"type": record["type"], "executed": record.get("executed") is True,
+                    "rows": len(rows), "rows_with_patterns": hits})
+        if record.get("executed") is not True:
+            problems.append("positive control not executed: " + record["type"])
+        elif not rows or hits != len(rows):
+            problems.append(f"positive control not detected: {record['type']} {hits}/{len(rows)} rows")
+    if {c["type"] for c in out} != planned:
+        problems.append("positive control missing from events.json")
+    outside = sum(1 for i, q in enumerate(result["quality"])
+                  if i not in inside_any and q.get("memory_patterns"))
+    return {"problems": problems, "controls": out, "rows_with_patterns_outside": outside}
+
+
 def analyze_windows(result, p, session, expected_rows=None):
     """Audit the frozen input policy while retaining independent integrity gaps."""
     policy = protocol_policy(p)
@@ -1105,6 +1187,10 @@ def audit_session(directory, p, protocol_path, output=None):
                     p["max_gap_s"], quality_policy=protocol_policy(p))
     rows, windows, coverage, quality_reasons, quality = analyze_windows(result, p, directory.name, expected)
     reasons.extend(quality_reasons)
+    controls = None
+    if native and metadata.get("role") == "pilot" and p.get("events", {}).get("pilot_controls"):
+        controls = positive_controls(result, directory / "events.json", p)
+        reasons.extend(controls["problems"])
     if any(b - a != 1 for a, b in zip(result["seq"], result["seq"][1:])):
         reasons.append("sequence gap")
     if any(not 0 < b - a <= p["max_gap_s"] for a, b in zip(result["casy"], result["casy"][1:])):
@@ -1135,6 +1221,7 @@ def audit_session(directory, p, protocol_path, output=None):
               "role": metadata.get("role"), "protocol_sha256": digest(protocol_path),
               "snapshots": len(rows), "windows": len(windows), "score_coverage": coverage,
               "coverage": quality.pop("coverage", None), "logs": logs, "publication": publication,
+              **({"positive_controls": controls} if controls is not None else {}),
               "auditor_sha256": {str(f.relative_to(ROOT)): digest(f) for f in
                                   (Path(__file__), ROOT / "scripts/collection_logs.py",
                                    ROOT / "scripts/traffic_log.py", ROOT / "scripts/host_monitor.py",
@@ -1178,6 +1265,7 @@ def main(argv=None):
     run.add_argument("--pilot-report", type=Path)
     run.add_argument("--session-id", help="Exclusive output name for a frozen campaign assignment")
     run.add_argument("--campaign-id")
+    run.add_argument("--replaces", help="Campaign: session ID of the audit-rejected session this one replaces")
     run.add_argument("--expected-boot-id", help="Refuse a boot change since campaign preflight")
     run.add_argument("--expected-qemu", help="JSON identity of the group's QEMU process (refuse restart/restore)")
     run.add_argument("--group-attempt", type=int, default=1, help="Campaign group generation after a recorded restart")

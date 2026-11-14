@@ -201,6 +201,8 @@ z kap. 4 [`NAVRH_PROTOKOL_V3.sk.md`](NAVRH_PROTOKOL_V3.sk.md) aj do tréningový
 | ďalšie tvary živého čítania | v kóde (L1, L10 bod 5): pravidlo `prev` cez uzol odstránený v tom istom obraze, pravidlo `tail` pri uzle s `prev` = `LIST_POISON2`, W+X proces s neplatnými tabuľkami stránok sa vynechá (`skipped_wx`) namiesto zneplatnenia riadku; overené iba syntetickými tvarmi v testoch, v zozbieraných dátach sa neobjavili |
 | zber z dvoch VM (`campaign.py`, `labctl.py`, `collection.py`) | v kóde, testy `scripts/tests/test_multivm.py`; nič sa ešte nespustilo na zberovom PC, druhá VM neexistuje; dve súbežné session sa na SSD (62,9 GB voľných) nezmestia bez uvoľnenia miesta |
 | protokol s udalosťami v tréningu | `config/collection-v4.json` (dataset 1, udalosti vo všetkých rolách, E2' na `test_benign` cez `tcn.eval udalosti --role test_benign --final`), `config/collection-v4-events.json` (dataset 2), `config/klasifikator-v2.json`; stav `pilot_required` |
+| pravidlo náhrady (B5, rozhodnutie vlastníka 2026-11-14) | v protokoloch v4 (`replacement`: najviac 2 náhrady na kampaň s tou istou VM, rolou a profilom, v tom istom boote skupiny; potom kampaň zastaví); zamietnutie aj náhrada idú do stavu a reportu kampane s príčinou; neúplný zber (nie zamietnutie auditom) sa nenahrádza |
+| pozitívna kontrola W+X a memfd | iba v pilote (`events.pilot_controls`, typ `kontrola_wx_memfd` v `lab/udalosti.py`: jedna dotknutá anonymná stránka rwx a otvorený memfd v procese `python3` pod `nobody`); audit pilota ho prijme, iba ak ho všetky riadky počas kontroly ukážu (`positive_controls`); pilot má 600 cyklov |
 | zmrazenie kódu, pilot, kampane, tréning, vyhodnotenia | nezačaté |
 
 Balík `server-v2-benign-v6` a archívy príznakov so schémou `hyptcn3/snapshot-vektor/3`

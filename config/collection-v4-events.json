@@ -22,11 +22,20 @@
   "stride": 1,
   "full_every": 360,
   "cycles": 720,
-  "pilot_cycles": 480,
+  "pilot_cycles": 600,
   "warmup_s": 120,
   "min_free_gib": 30,
   "roles": {
     "test_events": 16
+  },
+  "replacement": {
+    "note": "Predregistrovane pravidlo (B5): session zamietnutu auditom nahradi najviac max_per_campaign krat za kampan to iste priradenie (VM, rola, skupina, scenar, seed) v tom istom boote skupiny; zamietnuta session sa archivuje, do korpusu ani indexu udalosti nejde. Dalsie zamietnutie kampan zastavi.",
+    "max_per_campaign": 2,
+    "same": [
+      "vm",
+      "role",
+      "scenario"
+    ]
   },
   "scenarios": {
     "quiet": {
@@ -102,6 +111,13 @@
         "type": "restart_databazy",
         "start_s": 1500,
         "duration_s": 180
+      }
+    ],
+    "pilot_controls": [
+      {
+        "type": "kontrola_wx_memfd",
+        "start_s": 2280,
+        "duration_s": 120
       }
     ]
   }

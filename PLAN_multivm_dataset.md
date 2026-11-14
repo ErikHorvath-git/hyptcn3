@@ -13,7 +13,7 @@ E2 (krok A) ostávajú nezmenené ako predchádzajúca iterácia.
 | 3 | Ďalšie príčiny zamietnutých session: A7 (`prev` cez odstránený uzol), A8 (`tail` s otráveným `prev`), A11 (zastarané tabuľky stránok: strop 4096 na mm, adresy mimo RAM, opakovaná tabuľka → proces sa vynechá, `skipped_wx`) | hotové v kóde | syntetické tvary v `test_defensive.py` a `test_memory_patterns.py`; na skutočných dátach: re-audit session 46 a jednej v6 session zmrazeným kódom pred pilotom |
 | 4 | Multi-VM v `scripts/labctl.py`, `scripts/campaign.py`, `scripts/collection.py` (pozri kap. 2) | hotové v kóde (34 testov `scripts/tests/test_multivm.py`); `campaign_report.py` a `experimenty/aba.py` ešte predpokladajú jednu VM | jednotkové testy bez root (stav, porty, jednotky, výber skupín per VM, exkluzivita per doména), suchý beh `campaign.py plan` pre 2 VM |
 | 5 | (hotové v kóde) Protokol v4 (`config/collection-v4.json`, `config/collection-v4-events.json`) a `config/klasifikator-v2.json`; `features/dataset.py` nesie `events.json` do korpusu, `tcn.eval udalosti` prijme korpus s rolou `test_benign` (E2') | otvorené | testy načítania a predregistrácie (rozdelenie skupín je pevné pred zberom), `check_claims` |
-| 6 | Pozitívna kontrola W+X/memfd v pilote (benígny program v hosťovi: `mmap` RWX + `memfd_create`) | návrh, čaká na súhlas | v pilotnej session musia oba príznaky v danom okne nenulovo stúpnuť a po skončení klesnúť |
+| 6 | Pozitívna kontrola W+X/memfd v pilote (benígny program v hosťovi: `mmap` RWX + `memfd_create`) | hotové v kóde (súhlas 2026-11-14), `events.pilot_controls`, brána `positive_controls` v audite pilota | v pilotnej session musia oba príznaky v danom okne nenulovo stúpnuť a po skončení klesnúť |
 
 Kód sa zmrazí po bodoch 3 až 5 (commit + tag), na zberovom PC `git pull --ff-only` a plný
 `pytest`. Každá ďalšia zmena meracieho kódu znamená nový pilot.
@@ -74,10 +74,9 @@ učí triedy udalostí, vyhodnotenie raz na odložených skupinách.
 
 ## 4. Kontrolné body s používateľom
 
-0. **Rozhodnutie o pravidle prijatia (B5):** dnes jeden neplatný riadok zamietne session a
-   kampaň sa zastaví bez náhrady (5 kampaní takto skončilo). Možnosti: ponechať; povoliť
-   náhradnú session v tej istej skupine; alebo tolerovať malý počet neplatných riadkov pri
-   pokrytí skóre ≥ 0,85. Rozhodnutie sa predregistruje v protokole v4 pred zmrazením.
+0. **Pravidlo prijatia (B5), rozhodnuté 2026-11-14:** zamietnutá session sa nahradí novou
+   s tou istou VM, rolou a profilom, najviac 2 náhrady na kampaň, potom kampaň zastaví;
+   predregistrované v `replacement` protokolov v4.
 1. Pred zmrazením: prehľad opráv a protokolu v4 (bez potreby root).
 2. Pred vytvorením druhej VM a pred akýmkoľvek `sudo` (BPF, jednotky): používateľ zadá heslo.
 3. Uvoľnenie SSD (~50,8 GB) a presun archívov HDD: iba po zálohe na Seagate a so súhlasom.

@@ -26,6 +26,15 @@ NGINX = Path("/etc/nginx/conf.d/hyptcn-lab.conf")
 BACKUPS = Path("/var/tmp/hyptcn-udrzba")
 TYPES = ("zla_konfiguracia_sluzby", "zla_konfiguracia_nginx", "restart_databazy", "restart_sluzby",
          "zamok_tabulky", "udrzba_zaloha", "zataz_pamate")
+# Pilot-only positive control of the features proc_wx and proc_memfd (protocol v4,
+# events.pilot_controls): one process with one touched W+X anonymous page and an
+# open memfd. Benign and inert: the page holds a single RET byte that is never run.
+CONTROLS = ("kontrola_wx_memfd",)
+CONTROL_PROGRAM = ("import mmap, os, time\n"
+                   "m = mmap.mmap(-1, 4096, prot=mmap.PROT_READ | mmap.PROT_WRITE | mmap.PROT_EXEC)\n"
+                   "m[0:1] = b'\\xc3'\n"
+                   "fd = os.memfd_create('hyptcn-kontrola')\n"
+                   "time.sleep(3600)\n")
 
 
 def run(*args, check=True, timeout=90):
@@ -109,8 +118,40 @@ def start(kind):
         # A legitimate report job that holds about 400 MiB of touched memory.
         background(kind, ["runuser", "-u", "nobody", "--", "python3", "-c",
                           "import time; b = bytearray(400 << 20); b[::4096] = b'x' * len(b[::4096]); time.sleep(3600)"])
+    elif kind == "kontrola_wx_memfd":
+        leader = background(kind, ["runuser", "-u", "nobody", "--", "python3", "-c", CONTROL_PROGRAM])
+        time.sleep(2)
+        if not control_evidence(leader):
+            raise SystemExit("positive control process has no rwx mapping or memfd")
     else:
         raise SystemExit("unknown event type")
+
+
+def session_members(sid, proc=Path("/proc")):
+    """PIDs whose session is `sid` (the runuser leader and its python3 child)."""
+    out = []
+    for stat in proc.glob("[0-9]*/stat"):
+        try:
+            fields = stat.read_text().rsplit(")", 1)[1].split()
+        except OSError:
+            continue
+        if int(fields[3]) == sid:
+            out.append(int(stat.parent.name))
+    return out
+
+
+def control_evidence(sid, proc=Path("/proc")):
+    """Guest-side evidence that the control holds an rwx mapping and an open memfd."""
+    for pid in session_members(sid, proc):
+        try:
+            maps = (proc / str(pid) / "maps").read_text()
+            fds = [os.readlink(f) for f in (proc / str(pid) / "fd").iterdir()]
+        except OSError:
+            continue
+        if any(line.split()[1].startswith("rwx") for line in maps.splitlines() if line.strip()) \
+                and any(f.startswith("/memfd:hyptcn-kontrola") for f in fds):
+            return True
+    return False
 
 
 def stop(kind):
@@ -139,8 +180,8 @@ def stop(kind):
 
 
 def main(argv):
-    if len(argv) != 2 or argv[0] not in ("start", "stop") or argv[1] not in TYPES:
-        raise SystemExit("usage: udalosti.py start|stop " + "|".join(TYPES))
+    if len(argv) != 2 or argv[0] not in ("start", "stop") or argv[1] not in TYPES + CONTROLS:
+        raise SystemExit("usage: udalosti.py start|stop " + "|".join(TYPES + CONTROLS))
     action, kind = argv
     began = time.time()
     error = None
