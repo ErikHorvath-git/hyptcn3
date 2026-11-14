@@ -497,3 +497,13 @@ def test_single_vm_campaign_replaces_a_rejected_session_only_under_a_protocol_ru
     assert (lab["captures"] / first / "raw").is_symlink() and (lab["captures"] / (first + "-r1") / "raw").is_symlink()
     assert not list((directory / "attempts").glob("*.done.json"))
     assert [r["session"] for r in c.status(directory)["rejections"]] == [first, first + "-r1"]
+
+
+def test_dangling_raw_link_is_not_an_attempt_without_measurement(tmp_path):
+    from scripts import campaign
+    session = tmp_path / "s"
+    session.mkdir()
+    (session / "raw").symlink_to(tmp_path / "archive-gone" / "raw", target_is_directory=True)
+    (session / "end.json").write_text('{"measurement_started": false}')
+    (session / "session.json").write_text("{}")
+    assert not campaign.ended_before_measurement(session)

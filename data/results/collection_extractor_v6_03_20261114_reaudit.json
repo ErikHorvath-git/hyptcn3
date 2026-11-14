@@ -1,0 +1,52 @@
+{
+  "schema": "hyptcn3/collection-reaudit/1",
+  "date": "2026-11-14",
+  "commit": "10db16a",
+  "host": "zberove PC (Debian 13), bez roota",
+  "guest": "Debian 12, jadro 6.1.0-42-cloud-amd64 (lab VM hyptcn-lab), snimky z kampane",
+  "command": ".venv/bin/python scripts/collection.py --protocol data/campaigns/benign-v6-20261026/protocol.json audit /mnt/ssd/hyptcn3-work/reaudit-tmp/benign-v6-20261026_03_train_bursty --out ~/hyptcn3-logs/reaudit-10db16a/v6_03.json",
+  "n": 1,
+  "session": "benign-v6-20261026_03_train_bursty",
+  "input": "docasna kopia z archivu kampane benign-v6-20261026 (zstd rozbalene, velkost a SHA-256 kazdeho suboru zhodne s archive-manifest.json), po audite zmazana",
+  "protocol": "data/campaigns/benign-v6-20261026/protocol.json",
+  "audit_report": "~/hyptcn3-logs/reaudit-10db16a/v6_03.json (zberove PC)",
+  "values": {
+    "accepted": true,
+    "reasons": [],
+    "snapshots": 720,
+    "behavior_valid_rows": 720,
+    "invalid_input_seq": [],
+    "windows": 656,
+    "score_coverage": 0.9111111111111111,
+    "process_walk": {
+      "next": 720,
+      "prev": 0,
+      "tail": 0
+    },
+    "rows_with_memory_patterns": 0,
+    "rows_with_skipped_wx": 0,
+    "proc_wx_max": 0,
+    "proc_memfd_max": 0,
+    "integrity_findings": 0,
+    "common_columns_identical_to_campaign_audit": {
+      "columns": 22,
+      "rows": 720,
+      "also_identical": [
+        "seq",
+        "casy",
+        "perbin",
+        "valid"
+      ]
+    },
+    "feature_extraction_s": {
+      "sum": 1057,
+      "mean": 1.47,
+      "p95": 1.64,
+      "max": 4.32,
+      "campaign_audit_sum_01c2088": 949
+    }
+  },
+  "conclusion": "Zmrazovany extraktor vypocita z tych istych surovych snimok bursty session v6 bajtovo rovnake hodnoty vsetkych 22 starsich stlpcov; nove proc_wx a proc_memfd su v benignej session nulove. Extrakcia je o 11 % pomalsia (W+X a memfd).",
+  "note": "Regresna kontrola kodu na jednej session, nie meranie detekcie (HONESTY P4).",
+  "audit_report_sha256": "ed4977a50a5a62dfd0070b3b28e37aed1f4462d3eca96b583cc1f09763bac470"
+}

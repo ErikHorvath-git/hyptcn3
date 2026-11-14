@@ -203,7 +203,9 @@ z kap. 4 [`NAVRH_PROTOKOL_V3.sk.md`](NAVRH_PROTOKOL_V3.sk.md) aj do tréningový
 | protokol s udalosťami v tréningu | `config/collection-v4.json` (dataset 1, udalosti vo všetkých rolách, E2' na `test_benign` cez `tcn.eval udalosti --role test_benign --final`), `config/collection-v4-events.json` (dataset 2), `config/klasifikator-v2.json`; stav `pilot_required` |
 | pravidlo náhrady (B5, rozhodnutie vlastníka 2026-11-14) | v protokoloch v4 (`replacement`: najviac 2 náhrady na kampaň s tou istou VM, rolou a profilom, v tom istom boote skupiny; potom kampaň zastaví); zamietnutie aj náhrada idú do stavu a reportu kampane s príčinou; neúplný zber (nie zamietnutie auditom) sa nenahrádza |
 | pozitívna kontrola W+X a memfd | iba v pilote (`events.pilot_controls`, typ `kontrola_wx_memfd` v `lab/udalosti.py`: jedna dotknutá anonymná stránka rwx a otvorený memfd v procese `python3` pod `nobody`); audit pilota ho prijme, iba ak ho všetky riadky počas kontroly ukážu (`positive_controls`); pilot má 600 cyklov |
-| zmrazenie kódu, pilot, kampane, tréning, vyhodnotenia | nezačaté |
+| re-audit zmrazovaným kódom (`10db16a`) | session 46 z v3: 720 z 720 riadkov platných, riadok 270 uzavrie pravidlo `tail` s jedným `deleted_links` ([záznam](../data/results/collection_process_walk_s46_20261114_reaudit.json); formálne neprijatá iba pre chýbajúce logy v diagnostickej kópii); bursty session v6 (train 03): prijatá, 22 starších stĺpcov bajtovo zhodných s auditom kampane, `proc_wx` a `proc_memfd` všade 0 ([záznam](../data/results/collection_extractor_v6_03_20261114_reaudit.json)) |
+| zmrazenie kódu | tag `freeze-v4-20261114`; každá ďalšia zmena meracieho kódu znamená nový pilot |
+| pilot, kampane, tréning, vyhodnotenia | nezačaté |
 
 Balík `server-v2-benign-v6` a archívy príznakov so schémou `hyptcn3/snapshot-vektor/3`
 (22 stĺpcov) sa s kódom od tejto zmeny nenačítajú; ich prehratie ide z commitu `500de07`.

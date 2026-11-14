@@ -1,0 +1,48 @@
+{
+  "schema": "hyptcn3/collection-reaudit/1",
+  "date": "2026-11-14",
+  "commit": "10db16a",
+  "host": "zberove PC (Debian 13), bez roota",
+  "guest": "Debian 12, jadro 6.1.0-42-cloud-amd64 (lab VM hyptcn-lab), snimky z kampane",
+  "command": ".venv/bin/python scripts/collection.py --protocol data/campaigns/events-v3-20261108/protocol.json audit data/diagnostics/torn-walk-20261112/events-v3-20261108_46_test_events_write_heavy --out ~/hyptcn3-logs/reaudit-10db16a/s46.json",
+  "n": 1,
+  "session": "events-v3-20261108_46_test_events_write_heavy",
+  "input": "data/diagnostics/torn-walk-20261112/events-v3-20261108_46_test_events_write_heavy (kopia surovych snimok bez logov hosta a hosta)",
+  "protocol": "data/campaigns/events-v3-20261108/protocol.json",
+  "audit_report": "~/hyptcn3-logs/reaudit-10db16a/s46.json (zberove PC)",
+  "audit_report_sha256": "e99c284856eb6b22aaa7cad5bde6c2cf0382c52cd32cc61d9f17b4ef99774490",
+  "values": {
+    "snapshots": 720,
+    "behavior_valid_rows": 720,
+    "invalid_input_seq": [],
+    "windows": 656,
+    "score_coverage": 0.9111111111111111,
+    "process_walk": {
+      "next": 719,
+      "prev": 0,
+      "tail": 1
+    },
+    "process_walk_tail_seq": [
+      270
+    ],
+    "tail_row_deleted_links": 1,
+    "rows_with_memory_patterns": 0,
+    "rows_with_skipped_wx": 0,
+    "proc_wx_max": 0,
+    "proc_memfd_max": 0,
+    "integrity_findings": 0,
+    "integrity_unconfirmed_seq": [
+      285,
+      481
+    ],
+    "feature_extraction_s_per_snapshot": {
+      "min": 3.59,
+      "max": 10.64,
+      "typical": 3.8
+    }
+  },
+  "accepted": false,
+  "reasons_note": "Vsetky dovody zamietnutia su 'logs: ...': diagnosticka kopia nema guest/ logy, host_monitor ani zaznam premavky, takze audit logov sa neda urobit. Ziadny dovod sa netyka priznakov ani kvality riadkov.",
+  "conclusion": "Zmrazovany extraktor prijme vsetkych 720 riadkov session 46 (povodne zamietnutej pre riadok 270); riadok 270 uzavrie pravidlo tail s jednym deleted_links, ostatne riadky su next. W+X a memfd su v celej benignej session nulove a ziadny proces sa z W+X nevynechal. Toto nemeni vysledok E2 (kampan v3 ostava neuplnou alokaciou 45 zo 48).",
+  "note": "Re-audit kodu, nie meranie detekcie (HONESTY P4)."
+}

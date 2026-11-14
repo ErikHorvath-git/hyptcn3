@@ -684,7 +684,10 @@ def audit_capture(directory, manifest, p, row, session, guard):
 
 def ended_before_measurement(session):
     """An attempt without measured phase or RAM image (failed preflight/warmup or a stop there)."""
-    if not session.is_dir() or (session / "raw").exists():
+    raw = session / "raw"
+    # An archived session keeps raw/ as a link; it may dangle once the archive was moved
+    # off this machine (owner decision 2026-11-14), which is not "no RAM image".
+    if not session.is_dir() or raw.exists() or raw.is_symlink():
         return False
     if not (session / "session.json").exists():
         return not (session / "end.json").exists()  # Failed while preparing its metadata.
