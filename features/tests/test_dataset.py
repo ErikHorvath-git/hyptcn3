@@ -116,3 +116,29 @@ def test_index_builder_and_trainer_accept_same_collection_provenance(tmp_path):
     assert frozen_protocol == config
     assert [row["role"] for row in records] == list(dataset.ROLES)
     assert all(row["protocol_sha256"] == protocol_sha for row in records)
+
+
+def test_protocol_with_events_carries_each_sessions_events(tmp_path):
+    """Protokol v4 (krok B): udalosti vo vsetkych rolach, zaznam ide do korpusu pre E2'."""
+    audits = [record(tmp_path, role, i) for i, role in enumerate(dataset.ROLES)]
+    config = dict(protocol(), events={"classes": {"zamok_tabulky": "chyba_aplikacie"}})
+    with pytest.raises(ValueError, match="no events.json"):
+        dataset.build(audits, config, "protocol-test")
+    for role in dataset.ROLES:
+        (tmp_path / f"{role}-{dataset.ROLES.index(role)}" / "events.json").write_text('{"events": []}')
+    result = dataset.build(audits, config, "protocol-test")
+    assert all(r["events_sha256"] == dataset.sha(r["events"]) for r in result["sessions"])
+    assert "events" not in dataset.build(audits, protocol(), "protocol-test")["sessions"][0]
+
+
+def test_group_names_follow_protocol_prefix(tmp_path):
+    audit = record(tmp_path, "train", 0)
+    with pytest.raises(ValueError, match="outside the planned allocation"):
+        dataset.build([audit], dict(protocol(), group_prefix="v4-"), "protocol-test")
+    meta = tmp_path / "train-0" / "session.json"
+    doc = json.loads(meta.read_text())
+    meta.write_text(json.dumps(dict(doc, group="v4-train-1")))
+    report = json.loads(audit.read_text())
+    report["values"]["session_sha256"] = dataset.sha(meta)
+    audit.write_text(json.dumps(report))
+    assert dataset.build([audit], dict(protocol(), group_prefix="v4-"), "protocol-test")["sessions"]

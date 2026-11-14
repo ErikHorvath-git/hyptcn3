@@ -53,7 +53,8 @@ def build(audits, protocol, protocol_sha):
         if assignment in assignments:
             raise ValueError("duplicate group/scenario assignment")
         assignments.add(assignment)
-        expected_groups = {f"{m['role']}-{i + 1}" for i in range(protocol["roles"][m["role"]])}
+        prefix = protocol.get("group_prefix", "")
+        expected_groups = {f"{prefix}{m['role']}-{i + 1}" for i in range(protocol["roles"][m["role"]])}
         if m["group"] not in expected_groups or m["scenario"] not in protocol["scenarios"]:
             raise ValueError("assignment is outside the planned allocation")
         feature_path = Path(v["features"])
@@ -67,7 +68,7 @@ def build(audits, protocol, protocol_sha):
             raise ValueError("incomplete features in accepted audit")
         layouts.add(json.dumps(v["layout"], sort_keys=True))
         extractors.add(json.dumps(v["extractor_sha256"], sort_keys=True))
-        records.append({"id": identity, "role": m["role"], "group": m["group"],
+        records.append({"id": identity, "role": m["role"], "group": m["group"], "vm": m.get("vm"),
                         "boot_id": m["guest_before"]["boot_id"], "kernel": m["guest_before"]["kernel"],
                         "typ": m["typ"], "guest": m["guest_before"],
                         "collector_sha256": m["collector_sha256"],
@@ -77,6 +78,13 @@ def build(audits, protocol, protocol_sha):
                         "start": float(data["casy"][0]), "end": float(data["casy"][-1]),
                         "audit": str(Path(path).resolve()), "audit_sha256": sha(path),
                         "features": str(feature_path.resolve()), "features_sha256": v["features_sha256"]})
+        if "events" in protocol:
+            # Protokol v4 (krok B): udalosti su sucastou normalu vo vsetkych rolach;
+            # ich zaznam ide do korpusu pre E2' (tcn.eval udalosti --role).
+            events = directory / "events.json"
+            if not events.is_file():
+                raise ValueError("protocol with events but session has no events.json: " + str(directory))
+            records[-1].update(events=str(events.resolve()), events_sha256=sha(events))
     if (len(layouts) > 1 or len(extractors) > 1 or len(environments) > 1
             or len({r["kernel"] for r in records}) > 1):
         raise ValueError("mixed memory layout, kernel or extraction implementation")

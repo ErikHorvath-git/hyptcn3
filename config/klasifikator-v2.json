@@ -1,0 +1,34 @@
+{
+ "schema": "hyptcn3/klasifikator-config/1",
+ "name": "klasifikator-v2",
+ "skupiny": {
+  "trening": [
+   "test_events-1",
+   "test_events-3",
+   "test_events-5",
+   "test_events-7",
+   "test_events-9",
+   "test_events-11",
+   "test_events-13",
+   "test_events-15"
+  ],
+  "test": [
+   "test_events-2",
+   "test_events-4",
+   "test_events-6",
+   "test_events-8",
+   "test_events-10",
+   "test_events-12",
+   "test_events-14",
+   "test_events-16"
+  ]
+ },
+ "poznamka": "Rozdelenie 16 bootov datasetu 2 protokolu v4 (config/collection-v4-events.json, skupiny bez predpony v4e-) je pevne pred zberom: neparne skupiny na trening klasifikatora, parne na jeho test, aby obe polovice pokryvali kampan v case rovnomerne. Kazda polovica ma po 4 skupiny na VM a aj VM b (scripts/collection.py plan), takze rozdelenie nie je rozdelenim podla VM. Prediktor (detektor anomalii) sa uci iba na datasete 1 (config/collection-v4.json) a tu sa nemeni.",
+ "seed": 0,
+ "epochs": 10,
+ "batch_size": 32,
+ "lr": 0.001,
+ "vahy_tried": "inverzna_frekvencia",
+ "vyber_checkpointu": "dev",
+ "pravidlo_znacky": "Dataset 1 (role train, dev): znacka okna = profil (scenar) relacie. Dataset 2: okno [t-(W-1)*perioda, t] s koncom t, ktore prekryva interval vykonanej udalosti [host_start_unix, host_stopped_unix], ma znacku typu udalosti; okno prekryvajuce nevykonanu udalost alebo v dozvuku 300 s po udalosti sa vynecha; ostatne okna maju znacku profilu relacie (tcn.eval.kategorie_udalosti). Cela relacia s udalostami nikdy nedostane jednu znacku."
+}

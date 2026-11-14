@@ -584,10 +584,43 @@ def alokacia_indexu_udalosti(index):
             "relacii_v_skupinach": skupiny, "rozhodnutie": a["decision"]}
 
 
-def vyhodnot_udalosti(index_cesta, prehratia, alfa=0.05):
-    """FAR dnesneho balika pocas prevadzkovych udalosti protokolu v3 (krok A), po typoch a triedach."""
+def udalosti_z_korpusu(korpus, rola):
+    """Krok B (E2'): relacie jednej roly korpusu s udalostami v tvare indexu udalosti.
+
+    Korpus musi byt uplny a jeho protokol musi mat udalosti v kazdej relacii
+    (protokol v4, NAVRH_PROTOKOL_V3 kap. 4, krok B). Rola test_benign je
+    odlozeny test; ze ho balik nevidel, overi vyhodnot_udalosti cez
+    provenance.corpus_index_sha256.
+    """
+    if korpus.get("complete") is not True:
+        raise ValueError("korpus nie je uplny index %s" % SCHEMA_KORPUS)
+    if rola not in ROLY_FAR:
+        raise ValueError("FAR pocas udalosti z korpusu sa pocita iba pre role %s" % ", ".join(ROLY_FAR))
+    if "events" not in korpus["protocol_config"]:
+        raise ValueError("protokol korpusu nema udalosti")
+    relacie = [z for z in korpus["sessions"] if z["role"] == rola]
+    if not relacie or any("events" not in z or "events_sha256" not in z for z in relacie):
+        raise ValueError("relacie roly %s nemaju zaznam udalosti" % rola)
+    return {"schema": SCHEMA_INDEX_UDALOSTI, "complete": True, "planned_sessions": len(relacie),
+            "protocol_sha256": korpus["protocol_sha256"], "protocol_config": korpus["protocol_config"],
+            "sessions": relacie}
+
+
+def vyhodnot_udalosti(index_cesta, prehratia, alfa=0.05, rola=None):
+    """FAR balika pocas prevadzkovych udalosti, po typoch a triedach.
+
+    Krok A: index udalosti testovacej kampane v3 (rola None). Krok B (E2'):
+    korpus protokolu v4 a jeho rola; balik musi byt natrenovany na tomto korpuse.
+    """
     alfa = _alfa(alfa)
     index = json.loads(open(index_cesta, encoding="utf-8").read())
+    korpus_sha = None
+    if index.get("schema") == SCHEMA_KORPUS:
+        if rola is None:
+            raise ValueError("pri korpuse treba urcit rolu")
+        index, korpus_sha = udalosti_z_korpusu(index, rola), _digest(index_cesta)
+    elif rola is not None:
+        raise ValueError("rola plati iba pre korpus %s" % SCHEMA_KORPUS)
     if index.get("schema") != SCHEMA_INDEX_UDALOSTI:
         raise ValueError("nie je index %s" % SCHEMA_INDEX_UDALOSTI)
     alokacia = alokacia_indexu_udalosti(index)
@@ -614,6 +647,8 @@ def vyhodnot_udalosti(index_cesta, prehratia, alfa=0.05):
             balik, balik_sha = manifest, _manifest_sha(manifest)
         elif _manifest_sha(manifest) != balik_sha:
             raise ValueError("%s: prehratia pouzili rozne baliky" % adresar)
+        if korpus_sha is not None and manifest["provenance"]["corpus_index_sha256"] != korpus_sha:
+            raise ValueError("%s: balik nie je natrenovany na tomto korpuse" % adresar)
         if riadky[0]["timestamp"] != zaznam["start"] or riadky[-1]["timestamp"] != zaznam["end"]:
             raise ValueError("%s: prehratie nepokryva celu relaciu" % adresar)
         if _digest(zaznam["events"]) != zaznam["events_sha256"]:
@@ -661,6 +696,7 @@ def vyhodnot_udalosti(index_cesta, prehratia, alfa=0.05):
         "schema": SCHEMA_FAR_UDALOSTI, "alfa": alfa, "dozvuk_s": DOZVUK_S,
         "index": os.path.realpath(index_cesta), "index_sha256": _digest(index_cesta),
         "protokol": protokol["name"], "protocol_sha256": index["protocol_sha256"], "alokacia": alokacia,
+        "korpus_rola": rola,
         "balik": {"manifest_sha256": balik_sha, "created_utc": balik["created_utc"],
                   "corpus_index_sha256": balik["provenance"]["corpus_index_sha256"],
                   "calibration": balik["calibration"]},
@@ -1158,8 +1194,12 @@ def _hlavny(argv=None):
     f.add_argument("--alfa", type=_arg_alfa, default=0.05)
     f.add_argument("--final", action="store_true",
                    help="povinne pre test_benign: zaverecne FAR, raz na korpus, nad commitnutym kodom")
-    u = sub.add_parser("udalosti", help="FAR dnesneho balika pocas prevadzkovych udalosti (protokol v3, krok A)")
-    u.add_argument("--index", required=True, help="events_index.json testovacej kampane v3")
+    u = sub.add_parser("udalosti", help="FAR balika pocas prevadzkovych udalosti (krok A: index v3; "
+                                        "krok B, E2': korpus v4 a rola)")
+    u.add_argument("--index", required=True, help="events_index.json kampane v3 alebo corpus.json protokolu v4")
+    u.add_argument("--role", choices=ROLY_FAR, help="iba pri korpuse: rola, z ktorej sa FAR pocita")
+    u.add_argument("--final", action="store_true",
+                   help="povinne pre test_benign: zaverecne E2', raz na korpus, nad commitnutym kodom")
     u.add_argument("--replay", required=True, nargs="+", help="vystupne adresare safeguard replay --archive")
     u.add_argument("--out", required=True, help="novy JSON; existujuci sa neprepise")
     u.add_argument("--alfa", type=_arg_alfa, default=0.05)
@@ -1223,11 +1263,30 @@ def _zaznam(values, balik, argv):
 
 
 def _udalosti(a, argv):
-    values, balik = vyhodnot_udalosti(a.index, a.replay, a.alfa)
+    if (a.role == "test_benign") != bool(a.final):
+        raise SystemExit("test_benign je zaverecny test a pusti sa iba s --final; --final plati iba pre test_benign")
+    values, balik = vyhodnot_udalosti(a.index, a.replay, a.alfa, a.role)
     doc = _zaznam(values, balik, argv)
-    doc.pop("_zmeny")
+    commit, zmeny = doc["commit"], doc.pop("_zmeny")
+    vlastny = os.path.relpath(os.path.abspath(__file__), REPO)
+    if a.final and (commit is None or zmeny is None or vlastny in zmeny):
+        raise SystemExit("--final vyzaduje git a commitnuty %s" % vlastny)
+    text = json.dumps(doc, ensure_ascii=False, indent=2, sort_keys=True, allow_nan=False) + "\n"
     with open(a.out, "x", encoding="utf-8") as fh:
-        fh.write(json.dumps(doc, ensure_ascii=False, indent=2, sort_keys=True, allow_nan=False) + "\n")
+        if a.final:
+            # Vlastny zaznam vedla korpusu: E2' sa pocita raz, z toho isteho
+            # zaverecneho prehratia test_benign ako FAR (prikaz far --final).
+            try:
+                with open(os.path.realpath(a.index) + ".test_benign-final-udalosti.json", "x",
+                          encoding="utf-8") as zaznam:
+                    json.dump({"date": doc["date"], "out": os.path.realpath(a.out), "commit": commit,
+                               "evaluator_sha256": doc["evaluator_sha256"],
+                               "manifest_sha256": values["balik"]["manifest_sha256"]}, zaznam, indent=2)
+            except FileExistsError:
+                fh.close()
+                os.unlink(a.out)
+                raise
+        fh.write(text)
     m = values["merane"]
     print(json.dumps({"relacii": doc["n"], "uplna_alokacia": values["alokacia"]["uplna"],
                       "udalosti": [values["udalosti"]["vykonanych"], values["udalosti"]["planovanych"]],

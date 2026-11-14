@@ -186,3 +186,57 @@ def test_prikaz_udalosti_zapise_novy_subor(kampan, tmp_path):
     assert doc["values"]["schema"] == "hyptcn3/safeguard-event-far/1" and doc["n"] == 2 and "_zmeny" not in doc
     with pytest.raises(FileExistsError):
         ev._hlavny(argv)
+
+
+def _korpus(index, prehratia, rola="test_benign", provenance=True):
+    """Korpus protokolu v4 (krok B, E2'): tie iste relacie ako role korpusu s udalostami."""
+    doc = json.loads(index.read_text())
+    sessions = [dict(s, role=rola) for s in doc["sessions"]] + [
+        dict(doc["sessions"][0], id="tr", role="train", features_sha256="iny")]
+    korpus = index.with_name("corpus.json")
+    korpus.write_text(json.dumps({"schema": "hyptcn3/corpus-index/1", "complete": True, "protocol_sha256": "p",
+                                  "protocol_config": PROTOKOL, "sessions": sessions}))
+    if provenance:
+        for out in prehratia:
+            konf = json.loads((out / "configuration.json").read_text())
+            konf["bundle_manifest"]["provenance"]["corpus_index_sha256"] = _sha(korpus)
+            (out / "configuration.json").write_text(json.dumps(konf))
+    return korpus
+
+
+def test_e2_z_korpusu_iba_rola_a_balik_z_toho_korpusu(kampan):
+    index, prehratia = kampan
+    korpus = _korpus(index, prehratia)
+    values, _ = ev.vyhodnot_udalosti(korpus, prehratia, rola="test_benign")
+    assert set(values["relacie"]) == {"a", "b"} and values["korpus_rola"] == "test_benign"
+    assert values["merane"]["typy"]["zamok_tabulky"]["spolu"]["udalosti_model"] == 1
+    with pytest.raises(ValueError, match="urcit rolu"):
+        ev.vyhodnot_udalosti(korpus, prehratia)
+    with pytest.raises(ValueError, match="iba pre korpus"):
+        ev.vyhodnot_udalosti(index, prehratia, rola="dev")
+    with pytest.raises(ValueError, match="nemaju zaznam udalosti|archiv nie je"):
+        ev.vyhodnot_udalosti(korpus, prehratia, rola="dev")
+
+
+def test_e2_z_korpusu_odmietne_cudzi_balik_a_korpus_bez_udalosti(kampan):
+    index, prehratia = kampan
+    korpus = _korpus(index, prehratia, provenance=False)
+    with pytest.raises(ValueError, match="nie je natrenovany na tomto korpuse"):
+        ev.vyhodnot_udalosti(korpus, prehratia, rola="test_benign")
+    doc = json.loads(korpus.read_text())
+    doc["protocol_config"] = {k: v for k, v in PROTOKOL.items() if k != "events"}
+    korpus.write_text(json.dumps(doc))
+    with pytest.raises(ValueError, match="nema udalosti"):
+        ev.vyhodnot_udalosti(korpus, prehratia, rola="test_benign")
+
+
+def test_prikaz_e2_test_benign_iba_s_final(kampan, tmp_path):
+    index, prehratia = kampan
+    korpus = _korpus(index, prehratia)
+    argv = ["udalosti", "--index", str(korpus), "--role", "test_benign", "--replay", *map(str, prehratia),
+            "--out", str(tmp_path / "e2.json")]
+    with pytest.raises(SystemExit, match="--final"):
+        ev._hlavny(argv)
+    with pytest.raises(SystemExit, match="--final"):
+        ev._hlavny(["udalosti", "--index", str(index), "--final", "--replay", *map(str, prehratia),
+                    "--out", str(tmp_path / "x.json")])

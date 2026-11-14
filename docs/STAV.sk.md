@@ -198,8 +198,9 @@ z kap. 4 [`NAVRH_PROTOKOL_V3.sk.md`](NAVRH_PROTOKOL_V3.sk.md) aj do tréningový
 |---|---|
 | roztrhnutý zoznam procesov zo session 46 | opravené v `guestparse/view.py` (L1), testy `guestparse/tests/test_defensive.py`; overené na kópii session 46 (snímky 269 až 271) |
 | príznaky `proc_wx` a `proc_memfd` | pridané (`GuestView.memory_patterns`, schéma `hyptcn3/snapshot-vektor/4`, 20 vstupov modelu, kontrakt `hyptcn3/safeguard-features/3`; L10 bod 5), testy `guestparse/tests/test_memory_patterns.py`; overené iba na piatich snímkach session 46 bez pozitívnej kontroly v hosťovi |
-| zber z dvoch VM (`campaign.py`, `labctl.py`) | nezačaté |
-| protokol s udalosťami v tréningu | nezačaté |
+| ďalšie tvary živého čítania | v kóde (L1, L10 bod 5): pravidlo `prev` cez uzol odstránený v tom istom obraze, pravidlo `tail` pri uzle s `prev` = `LIST_POISON2`, W+X proces s neplatnými tabuľkami stránok sa vynechá (`skipped_wx`) namiesto zneplatnenia riadku; overené iba syntetickými tvarmi v testoch, v zozbieraných dátach sa neobjavili |
+| zber z dvoch VM (`campaign.py`, `labctl.py`, `collection.py`) | v kóde, testy `scripts/tests/test_multivm.py`; nič sa ešte nespustilo na zberovom PC, druhá VM neexistuje; dve súbežné session sa na SSD (62,9 GB voľných) nezmestia bez uvoľnenia miesta |
+| protokol s udalosťami v tréningu | `config/collection-v4.json` (dataset 1, udalosti vo všetkých rolách, E2' na `test_benign` cez `tcn.eval udalosti --role test_benign --final`), `config/collection-v4-events.json` (dataset 2), `config/klasifikator-v2.json`; stav `pilot_required` |
 | zmrazenie kódu, pilot, kampane, tréning, vyhodnotenia | nezačaté |
 
 Balík `server-v2-benign-v6` a archívy príznakov so schémou `hyptcn3/snapshot-vektor/3`

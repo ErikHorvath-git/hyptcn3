@@ -1,6 +1,6 @@
 # Príručka k hyptcn3
 
-Vstupný dokument repozitára; stav kódu a artefaktov k 2026-11-13. Súbor je
+Vstupný dokument repozitára; stav kódu a artefaktov k 2026-11-14. Súbor je
 generovaný a needituje sa ručne — ako, hovorí kapitola 10.
 
 ## 1. Čo to je
@@ -30,7 +30,7 @@ make -C vmicollect test   # plná snímka, tri delty, obnova reťazca, kontroln�
 python3 -m pytest -q      # parser, príznaky, tcn, safeguard a skripty zberu
 ```
 
-`make test` prejde celú cestu zberu nad syntetickým obrazom veľkosti 16 MiB, ktorý si sám vyrobí. Testov je 821 prešlých a 24 preskočených v `pytest` (spolu 845 zozbieraných; preskočený test nie je prešiel) a 4 v C (`alarm_test`, `hole_test`, `perbin_test`, `retention_test`).
+`make test` prejde celú cestu zberu nad syntetickým obrazom veľkosti 16 MiB, ktorý si sám vyrobí. Testov je 879 prešlých a 24 preskočených v `pytest` (spolu 903 zozbieraných; preskočený test nie je prešiel) a 4 v C (`alarm_test`, `hole_test`, `perbin_test`, `retention_test`).
 
 ## 4. Ako vznikne snímka
 
@@ -68,15 +68,15 @@ nič nezapisuje“ v kapitole 6 platí o binárke; skript okolo nej `data/result
 | adresár | čo rieši | kde začať čítať | súborov spolu / riadkov v `.c .h .py .sh .md` |
 |---|---|---|---|
 | `vmicollect/` | zberač snímok pamäte VM: C a eBPF nad QEMU/KVM | `vmicollect/src/collector.c` | 37 / 12 152 |
-| `guestparse/` | rekonštrukcia procesov, modulov a soketov zo snímky; kontroly integrity | `guestparse/view.py` | 35 / 7 649 |
-| `features/` | per-bin referencia k C, vektor snímky, okná, kvalita riadkov, archív sedenia a index korpusu; staršia normalizácia pre `tcn/` | `features/perbin.py` | 27 / 5 364 |
-| `tcn/` | TCN bloky pre `safeguard/model.py`, baseliny a metriky; staršia diagnostická cesta tréningu a skórovania (`tcn/train.py`, `tcn/score.py`) | `tcn/model.py` | 20 / 5 690 |
+| `guestparse/` | rekonštrukcia procesov, modulov a soketov zo snímky; kontroly integrity | `guestparse/view.py` | 35 / 7 952 |
+| `features/` | per-bin referencia k C, vektor snímky, okná, kvalita riadkov, archív sedenia a index korpusu; staršia normalizácia pre `tcn/` | `features/perbin.py` | 27 / 5 429 |
+| `tcn/` | TCN bloky pre `safeguard/model.py`, baseliny a metriky; staršia diagnostická cesta tréningu a skórovania (`tcn/train.py`, `tcn/score.py`) | `tcn/model.py` | 20 / 5 803 |
 | `safeguard/` | integrovaná detekčná cesta: okná a normalizácia, modely, kalibrácia, balík a hostiteľský detektor | `safeguard/cli.py` | 16 / 3 387 |
 | `profiles/` | profil jadra hosťa: symboly a offsety polí štruktúr | `profiles/debian12-6.1.0-42-cloud-amd64/README.md` | jeden adresár na verziu jadra hosťa; nový boot rieši preukotvenie (L17) |
-| `scripts/` | zber a audit sedenia, kampaň (`scripts/campaign.py`), laboratórium a premávka, root behy, PoC techniky na validáciu citlivosti (`scripts/poc/`), kontroly tvrdení; staršie diagnostické sedenia a detektor (`scripts/session.sh`, `scripts/detektor.py`) | `scripts/collection.py` | 50 / 18 715 |
+| `scripts/` | zber a audit sedenia, kampaň (`scripts/campaign.py`), laboratórium a premávka, root behy, PoC techniky na validáciu citlivosti (`scripts/poc/`), kontroly tvrdení; staršie diagnostické sedenia a detektor (`scripts/session.sh`, `scripts/detektor.py`) | `scripts/collection.py` | 51 / 19 748 |
 | `lab/` | trvalé benígne API služby, PostgreSQL a nginx vo VM `hyptcn-lab` | `lab/services.py` | 8 / 639 |
 | `harness/` | zlatý obraz hosťa, šablóna domény `hyptcn-guest`, izolovaná sieť bez NAT a manifesty starších sedení | `harness/README.md` | 15 / 264 |
-| `config/` | zmrazené protokoly zberu korpusu: doména, perióda, okná, roly a scenáre | `config/collection-v2.json` | 5 / 0 |
+| `config/` | zmrazené protokoly zberu korpusu: doména, perióda, okná, roly a scenáre | `config/collection-v2.json` | 8 / 0 |
 | `data/` | výsledkové JSONy z meraní (`data/results/`) a pozemná pravda odobratá v hosťovi (`data/sessions/`); samotné snímky sú mimo gitu (`data/raw/`, zber korpusu `data/collections/<session>/`) | `data/results/2026-09-18_zmrazeny_host/README.md` | rastie s každým meraním, nepočíta sa |
 
 ## 6. Ako to funguje
@@ -243,10 +243,10 @@ znamenalo držať dve znenia toho istého. Nadpisy sú preto dosadené z neho, s
 
 | dokument | čo vlastní | riadkov |
 |---|---|---|
-| `docs/STAV.sk.md` | stav voči zadaniu, otvorené body, legenda blokov A1..H, prostredia | 206 |
+| `docs/STAV.sk.md` | stav voči zadaniu, otvorené body, legenda blokov A1..H, prostredia | 207 |
 | `docs/ARCHITEKTURA.md` | rozhrania, formát `.vmicd` a sidecaru, tok dát podrobne | 1609 |
 | `docs/MERANIA.md` | log meraní: čo, kedy, akým príkazom a s akým výsledkom | 3462 |
-| `docs/LIMITACIE.md` | L1 až L18: čo systém nevie a čo z toho plynie pre text | 1366 |
+| `docs/LIMITACIE.md` | L1 až L18: čo systém nevie a čo z toho plynie pre text | 1376 |
 | `docs/kontroly.md` | kontroly podozrivých vzorcov a validačný príkaz | 338 |
 | `HONESTY.md` | pravidlá pre čísla a slová v texte práce | 298 |
 | `README.md` | rozcestník repozitára, preklad a testy, pôvod kódu | 102 |
