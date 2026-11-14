@@ -895,7 +895,7 @@ def capture_session(p, out, metadata, cycles):
         step("clock", offset_s=clock["offset_s"], synced="synced_from" in clock)
         step("health", attempts=wait_healthy(p["target"]))
         smoke = subprocess.run([sys.executable, ROOT / "scripts/lab_smoke.py", "--target", p["target"],
-                                "--out", out / "preflight_smoke.json"], cwd=ROOT, capture_output=True,
+                                "--domain", p["domain"], "--out", out / "preflight_smoke.json"], cwd=ROOT, capture_output=True,
                                text=True, timeout=120)
         if smoke.returncode:
             raise ValueError("preflight functional check failed: " + (smoke.stdout + smoke.stderr)[-500:])

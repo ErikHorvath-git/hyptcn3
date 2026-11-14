@@ -19,6 +19,7 @@ def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--target", default="http://127.0.0.1:18080")
     parser.add_argument("--out", type=Path)
+    parser.add_argument("--domain", default="hyptcn-lab", help="libvirt domain behind --target (provenance only)")
     args = parser.parse_args(argv)
     checks = []
     run_id = "smoke" + datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S")
@@ -69,8 +70,8 @@ def main(argv=None):
     artifact = {
         "schema": "hyptcn3/lab-smoke/1", "commit": git("rev-parse", "HEAD"),
         "commit_dirty": bool(git("status", "--porcelain")), "date": stamp.isoformat(),
-        "host": platform.platform(), "guest": {"domain": "hyptcn-lab", "target": args.target},
-        "command": "python3 scripts/lab_smoke.py --target " + args.target,
+        "host": platform.platform(), "guest": {"domain": args.domain, "target": args.target},
+        "command": "python3 scripts/lab_smoke.py --target " + args.target + " --domain " + args.domain,
         "n": len(checks), "values": {"checks": checks, "order_completed": True,
                                     "source_sha256": {
                                         str(p.relative_to(REPO)): hashlib.sha256(p.read_bytes()).hexdigest()

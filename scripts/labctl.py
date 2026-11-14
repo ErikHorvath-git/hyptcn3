@@ -23,6 +23,16 @@ REPO = Path(__file__).resolve().parents[1]
 STATE = REPO / "vms/lab-state.json"
 UNIT = "hyptcn-lab-traffic"
 PORT = 18080  # Host port of the single (legacy) lab VM; every further VM names its own.
+# Guest disk of every named VM (protocol v4): all clones of hyptcn-guest are grown to
+# the same size the legacy lab got by hand on 2026-10-20 (docs/LAB.sk.md), so VMs of
+# one campaign differ only in machine-id and hostname.
+DISK_GIB = 20
+# Grow the root partition and file system to the disk, idempotently (growpart says
+# NOCHANGE once done). Runs in the guest through the agent on every start of a named VM.
+GROW_ROOT = ('src=$(findmnt -no SOURCE /); disk=/dev/$(lsblk -no PKNAME "$src"); '
+             'part=$(cat /sys/class/block/$(basename "$src")/partition); '
+             'growpart "$disk" "$part" >/dev/null 2>&1; resize2fs "$src" >/dev/null 2>&1; '
+             'df -B1 --output=size / | tail -1')
 VM_NAME = r"[a-z0-9]{1,16}"
 
 
@@ -183,6 +193,11 @@ class Lab:
         print(f"Cloning stopped {source} into {target}", flush=True)
         run(["qemu-img", "convert", "-O", "qcow2", disk, staging])
         if self.vm is not None:
+            size = json.loads(subprocess.check_output(["qemu-img", "info", "--output=json", str(staging)],
+                                                      text=True))["virtual-size"]
+            if size > DISK_GIB << 30:
+                raise RuntimeError(f"Source disk is larger than {DISK_GIB} GiB; refusing to shrink")
+            run(["qemu-img", "resize", staging, f"{DISK_GIB}G"])
             print(json.dumps({"domain": self.domain, "machine_id": self.fresh_identity(staging)}), flush=True)
         staging.rename(target)
         domain = ET.Element("domain", type="kvm")
@@ -266,6 +281,11 @@ class Lab:
                    "> /etc/systemd/network/00-hyptcn-lab.network; "
                    "networkctl reload && networkctl reconfigure enp1s0 && "
                    "touch /var/lib/hyptcn-lab-network-v3; fi")
+        if self.vm is not None:
+            root = int(self.guest(GROW_ROOT).split()[-1])
+            # ext4 metadata and the boot partitions take a few percent of the disk.
+            if root < 0.9 * (DISK_GIB << 30):
+                raise RuntimeError(f"Guest root file system has {root} B, expected about {DISK_GIB} GiB")
 
     def target(self):
         return f"http://127.0.0.1:{self.port}"

@@ -68,7 +68,7 @@ def test_labctl_refuses_half_named_vm_before_touching_anything(argv, monkeypatch
         labctl.main(argv)
 
 
-def fake_clone(tmp_path, monkeypatch, lab):
+def fake_clone(tmp_path, monkeypatch, lab, source_size=3 << 30):
     calls = []
     monkeypatch.setattr(labctl, "REPO", tmp_path)
     monkeypatch.setattr(labctl.shutil, "which", lambda name: "/usr/bin/" + name)
@@ -76,7 +76,7 @@ def fake_clone(tmp_path, monkeypatch, lab):
     def run(args, **kw):
         args = list(map(str, args))
         calls.append(args)
-        if args[0] == "qemu-img":
+        if args[:2] == ["qemu-img", "convert"]:
             Path(args[-1]).write_bytes(b"disk")
         if args[0] == "guestfish":
             assert Path(args[args.index("-a") + 1]).name.endswith(".partial.qcow2")  # Not yet the VM's disk.
@@ -88,6 +88,8 @@ def fake_clone(tmp_path, monkeypatch, lab):
                            "</devices></domain>"}[args[0]]
     monkeypatch.setattr(labctl, "run", run)
     monkeypatch.setattr(lab, "virsh", virsh)
+    monkeypatch.setattr(labctl.subprocess, "check_output",
+                        lambda args, **kw: json.dumps({"virtual-size": source_size}))
     lab.clone("hyptcn-guest")
     definition = ET.parse(tmp_path / "vms" / f"{lab.domain}.xml")
     return calls, definition
@@ -98,6 +100,8 @@ def test_clone_of_named_vm_gets_identity_before_first_boot(tmp_path, monkeypatch
     calls, definition = fake_clone(tmp_path, monkeypatch, lab)
     order = [call[0] for call in calls]
     assert order.index("qemu-img") < order.index("guestfish") < order.index("define")
+    assert ["qemu-img", "resize", str(tmp_path / "vms/hyptcn-lab-b.partial.qcow2"), "20G"] in calls
+    assert [c[:2] for c in calls if c[0] == "qemu-img"] == [["qemu-img", "convert"], ["qemu-img", "resize"]]
     assert "start" not in order
     guestfish = next(call for call in calls if call[0] == "guestfish")
     machine_id = guestfish[guestfish.index("/etc/machine-id") + 1]
@@ -111,6 +115,7 @@ def test_clone_of_named_vm_gets_identity_before_first_boot(tmp_path, monkeypatch
 def test_clone_of_single_vm_is_unchanged(tmp_path, monkeypatch):
     calls, definition = fake_clone(tmp_path, monkeypatch, labctl.Lab())
     assert "guestfish" not in [call[0] for call in calls]
+    assert not any(call[:2] == ["qemu-img", "resize"] for call in calls)
     assert definition.find("./devices/interface/portForward/range").get("start") == "18080"
 
 
@@ -787,3 +792,35 @@ def test_rule_without_covers_replaces_audit_rejections_only(multi):
     c.execute(directory, vm="b")  # A rejecting audit is still replaced, as before "covers" existed.
     assert [(r["cause"], r["replacement"]) for r in c.rejections(directory, "b")] == [
         ("audit_rejected", first_b + "-r1")]
+
+
+def test_clone_refuses_to_shrink_a_larger_source(tmp_path, monkeypatch):
+    lab = labctl.Lab(domain="hyptcn-lab-b", vm="b", port=18081)
+    with pytest.raises(RuntimeError, match="refusing to shrink"):
+        fake_clone(tmp_path, monkeypatch, lab, source_size=40 << 30)
+    assert not (tmp_path / "vms/hyptcn-lab-b.qcow2").exists()
+
+
+def _started(monkeypatch, lab, root_bytes):
+    commands = []
+    monkeypatch.setattr(lab, "owned", lambda: None)
+    monkeypatch.setattr(lab, "virsh", lambda *a: "running")
+    monkeypatch.setattr(lab, "wait", lambda: None)
+
+    def guest(command, **kw):
+        commands.append(command)
+        return f"{root_bytes}\n" if command == labctl.GROW_ROOT else ""
+    monkeypatch.setattr(lab, "guest", guest)
+    lab.start()
+    return commands
+
+
+def test_named_vm_grows_root_on_start_and_checks_its_size(monkeypatch):
+    lab = labctl.Lab(domain="hyptcn-lab-a", vm="a", port=18080)
+    assert labctl.GROW_ROOT in _started(monkeypatch, lab, 21_000_000_000)
+    with pytest.raises(RuntimeError, match="expected about 20 GiB"):
+        _started(monkeypatch, labctl.Lab(domain="hyptcn-lab-b", vm="b", port=18081), 2_900_000_000)
+
+
+def test_single_vm_start_does_not_touch_the_disk(monkeypatch):
+    assert labctl.GROW_ROOT not in _started(monkeypatch, labctl.Lab(), 1)

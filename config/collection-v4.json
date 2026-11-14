@@ -4,7 +4,7 @@
   "vms": [
     {
       "name": "a",
-      "domain": "hyptcn-lab",
+      "domain": "hyptcn-lab-a",
       "port": 18080
     },
     {
@@ -13,7 +13,7 @@
       "port": 18081
     }
   ],
-  "vms_note": "E5 (experimenty/aba.py, rezia monitorovania A/B/A) bezi iba na VM a (hyptcn-lab, port hostitela 18080) a iba ked nebezi ziadna kampan: safeguard run vola labctl bez --vm/--port.",
+  "vms_note": "Obe VM vznikli rovnakym postupom z toho isteho obrazu: scripts/labctl.py clone zo zdroja hyptcn-guest (Debian 12, jadro 6.1.0-42-cloud-amd64), disk zvacseny na 20 GiB (labctl DISK_GIB, growpart a resize2fs v hostovi), nove machine-id a hostname pred prvym bootom, potom labctl deploy s tym istym lab/ a novou databazou hyptcn_lab z lab/schema.sql (rovnaka pociatocna databaza). Lab predchadzajucej iteracie hyptcn-lab ostava vypnuty a nepouziva sa. E5 (experimenty/aba.py, rezia monitorovania A/B/A) bezi iba na VM a (hyptcn-lab-a, port hostitela 18080) a iba ked nebezi ziadna kampan: safeguard run vola labctl bez --vm/--port.",
   "status": "pilot_required",
   "profile": "profiles/debian12-6.1.0-42-cloud-amd64",
   "interval_s": 5,
