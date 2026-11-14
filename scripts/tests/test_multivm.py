@@ -18,7 +18,8 @@ VMS = [{"name": "a", "domain": "hyptcn-lab", "port": 18080}, {"name": "b", "doma
 
 
 ROLES = {"train": 6, "dev": 2, "calibration": 4, "test_benign": 4}  # Groups over all VMs.
-REPLACEMENT = {"max_per_campaign": 2, "same": ["vm", "role", "scenario"]}
+REPLACEMENT = {"max_per_campaign": 2, "same": ["vm", "role", "scenario"],
+               "covers": ["audit_rejected", "capture_incomplete"]}
 
 
 def multi_protocol(tmp_path, vms=VMS, **changes):
@@ -320,8 +321,8 @@ def multi(tmp_path, monkeypatch):
     write_new(directory / "campaign.json", manifest)
     state = {"directory": directory, "manifest": manifest, "p": p, "rows": rows, "captures": captures,
              "calls": [], "boot": {"a": "pilot-a", "b": "pilot-b"}, "reboots": 0, "finished": [],
-             "reject": set()}
-    qemu = lambda domain: {"pid": len(domain), "start_ticks": 1, "host_boot": "host-boot"}
+             "reject": set(), "incomplete": set(), "lose": None, "qemu_restarts": 0}
+    qemu = lambda domain: {"pid": len(domain), "start_ticks": 1 + state["qemu_restarts"], "host_boot": "host-boot"}
     monkeypatch.setattr(c, "COLLECTIONS", captures)
     monkeypatch.setattr(c, "BASE", tmp_path)
     for name in ("RETRY_PAUSE_S", "WAIT_POLL_S", "START_GRACE_S"):
@@ -366,6 +367,14 @@ def multi(tmp_path, monkeypatch):
                        "protocol_sha256": manifest["protocol_sha256"], "guest_before": identity})
             (src / "raw").mkdir()
             (src / "raw/frame.vmicd").write_bytes(b"synthetic RAM " + sid.encode())
+            if sid in state["incomplete"]:  # The collector failed in the measured phase.
+                if state["lose"] == "boot":
+                    state["boot"][vm] = "unexpected-reboot"
+                if state["lose"] == "qemu":
+                    state["qemu_restarts"] += 1
+                write_new(src / "end.json", {"completed": False, "measurement_started": True,
+                                             "error": "ValueError: collector failed; see capture.log"})
+                return 2
             write_new(src / "end.json", {"completed": True, "guest_after": identity, "measurement_started": True})
             return 0
         src = Path(command[command.index("audit") + 1])
@@ -560,6 +569,9 @@ def test_per_vm_names_of_campaign_files_and_pilots(multi, tmp_path):
 # --- pre-registered replacement of audit-rejected sessions --------------------------------------
 
 @pytest.mark.parametrize("rule", [{"max_per_campaign": 2}, {"same": ["vm", "role", "scenario"]},
+                                  {**REPLACEMENT, "covers": []}, {**REPLACEMENT, "covers": ["anything"]},
+                                  {**REPLACEMENT, "covers": "audit_rejected"},
+                                  {**REPLACEMENT, "covers": ["audit_rejected", "audit_rejected"]},
                                   {**REPLACEMENT, "max_per_campaign": -1}, {**REPLACEMENT, "max_per_campaign": "2"},
                                   {**REPLACEMENT, "same": ["vm", "role"]}, {**REPLACEMENT, "extra": 1}, None])
 def test_protocol_rejects_unclear_replacement_rules(tmp_path, rule):
@@ -629,14 +641,21 @@ def test_replacements_are_capped_per_campaign_over_all_vms(multi):
     assert not multi["finished"]
 
 
-def test_no_rule_means_no_replacement(multi):
+def freeze_other_rule(multi, rule):
+    """The same campaign frozen with another replacement rule (None: no rule at all)."""
     doc = read_json(multi["directory"] / "protocol.json")
-    del doc["replacement"]
+    doc.pop("replacement")
+    if rule is not None:
+        doc["replacement"] = rule
     (multi["directory"] / "protocol.json").write_text(json.dumps(doc))
     manifest = read_json(multi["directory"] / "campaign.json")
     manifest["protocol_sha256"] = digest(multi["directory"] / "protocol.json")
     (multi["directory"] / "campaign.json").write_text(json.dumps(manifest))
     multi["manifest"]["protocol_sha256"] = manifest["protocol_sha256"]
+
+
+def test_no_rule_means_no_replacement(multi):
+    freeze_other_rule(multi, None)
     first = multi["rows"][0]["session_id"]
     multi["reject"].add(first)
     with pytest.raises(ValueError, match="archived without replacement"):
@@ -677,3 +696,94 @@ def test_replaced_session_passes_the_corpus_builder(tmp_path):
     assert dataset.build([other, *audits[1:]], protocol(), "protocol-test")["complete"]  # The replacement alone.
     with pytest.raises(ValueError, match="duplicate group/scenario"):  # Both can never be indexed.
         dataset.build([other, *audits], protocol(), "protocol-test")
+
+
+def test_incomplete_capture_is_replaced_within_the_cap_shared_with_audit_rejections(multi):
+    directory, manifest = multi["directory"], multi["manifest"]
+    first_a = next(r for r in multi["rows"] if r["vm"] == "a")
+    first_b = next(r for r in multi["rows"] if r["vm"] == "b")
+    multi["reject"].add(first_a["session_id"])                                       # 1st: rejecting audit on VM a
+    multi["incomplete"].update({first_b["session_id"], first_b["session_id"] + "-r1"})  # 2nd and 3rd on VM b
+    c.execute(directory, vm="a")
+    for _ in range(2):  # The third case finds the shared maximum used up; a rerun captures nothing.
+        with pytest.raises(ValueError, match="incomplete capture archived; allocation stopped.*collector failed"):
+            c.execute(directory, vm="b")
+    records = c.rejections(directory)
+    assert [(r["session"], r["cause"], r["replacement"]) for r in records] == [
+        (first_a["session_id"], "audit_rejected", first_a["session_id"] + "-r1"),
+        (first_b["session_id"], "capture_incomplete", first_b["session_id"] + "-r1"),
+        (first_b["session_id"] + "-r1", "capture_incomplete", None)]
+    assert records[1]["reasons"] == ["ValueError: collector failed; see capture.log"] and "audit" not in records[1]
+    assert "audit_sha256" in records[0] and "used up" in records[2]["not_replaced"]
+    assert [r["replacements_before"] for r in records] == [0, 1, 2]
+    assert multi["reboots"] == 2 and len(session_ids(multi)) == 4  # Replacements ran in their group's boot.
+    assert not any(call[1] == "b" for call in session_ids(multi, "audit"))  # An incomplete capture is not audited.
+    replaced = c.session_dir(manifest, {**first_b, "session_id": first_b["session_id"] + "-r1"})
+    assert read_json(replaced / "session.json")["replaces"] == first_b["session_id"]
+    assert (c.session_dir(manifest, first_b) / "raw").is_symlink() and (replaced / "raw").is_symlink()  # Archived.
+    shown = c.status(directory)["vms"]["b"]["rejections"]
+    assert [(r["cause"], r["replacement"] is None) for r in shown] == [("capture_incomplete", False),
+                                                                      ("capture_incomplete", True)]
+    assert "used up" in shown[1]["not_replaced"] and shown[0]["reasons"] == records[1]["reasons"]
+    events = [read_json(e) for e in sorted((directory / "events").glob("*.json"))]
+    assert any(e["stage"] == "replacement" and e["message"].startswith("capture_incomplete (ValueError: collector")
+               for e in events)
+
+
+def test_replaced_incomplete_capture_does_not_block_the_campaign(multi):
+    first_b = next(r for r in multi["rows"] if r["vm"] == "b")
+    multi["incomplete"].add(first_b["session_id"])
+    run_to_end(multi)
+    indexed = [Path(read_json(r)["values"]["session_dir"]).name for r in multi["finished"][0][2]]
+    assert first_b["session_id"] not in indexed and first_b["session_id"] + "-r1" in indexed and len(indexed) == 8
+    assert multi["reboots"] == 8
+
+
+@pytest.mark.parametrize("lost", ["boot", "qemu"])
+def test_incomplete_capture_is_not_replaced_when_the_group_boot_is_gone(multi, lost):
+    directory = multi["directory"]
+    first = multi["rows"][0]
+    multi["incomplete"].add(first["session_id"])
+    multi["lose"] = lost  # The guest rebooted, or QEMU was restarted, during the capture.
+    with pytest.raises(ValueError, match="incomplete capture archived; allocation stopped"):
+        c.execute(directory, vm="a")
+    record, = c.rejections(directory)
+    assert (record["cause"], record["replacement"], record["replacements_before"]) == ("capture_incomplete", None, 0)
+    assert ("guest boot" if lost == "boot" else "VM process") in record["not_replaced"]
+    assert len(session_ids(multi)) == 1 and multi["reboots"] == 1  # No capture in another boot, no new boot.
+    with pytest.raises(ValueError, match="incomplete capture archived"):
+        c.execute(directory, vm="a")
+    assert len(session_ids(multi)) == 1
+
+
+def test_guest_that_cannot_be_reached_is_not_replaced(multi, monkeypatch):
+    first = multi["rows"][0]
+    multi["incomplete"].add(first["session_id"])
+    import subprocess
+    real = collection.guest_identity
+
+    def identity(p):  # Reachable for the group preflight, gone when the replacement is decided.
+        if (c.session_dir(multi["manifest"], first) / "end.json").exists():
+            raise subprocess.CalledProcessError(1, "labctl")
+        return real(p)
+    monkeypatch.setattr(collection, "guest_identity", identity)
+    with pytest.raises(ValueError, match="incomplete capture archived"):
+        c.execute(multi["directory"], vm="a")
+    assert "guest identity unavailable" in c.rejections(multi["directory"])[0]["not_replaced"]
+
+
+def test_rule_without_covers_replaces_audit_rejections_only(multi):
+    freeze_other_rule(multi, {"max_per_campaign": 2, "same": ["vm", "role", "scenario"]})
+    directory = multi["directory"]
+    first_a = next(r for r in multi["rows"] if r["vm"] == "a")["session_id"]
+    first_b = next(r for r in multi["rows"] if r["vm"] == "b")["session_id"]
+    multi["incomplete"].add(first_a)
+    multi["reject"].add(first_b)
+    with pytest.raises(ValueError, match="incomplete capture archived; allocation stopped, no automatic replacement"):
+        c.execute(directory, vm="a")
+    record, = c.rejections(directory)
+    assert (record["cause"], record["replacement"]) == ("capture_incomplete", None)
+    assert "no replacement rule for this cause" in record["not_replaced"]
+    c.execute(directory, vm="b")  # A rejecting audit is still replaced, as before "covers" existed.
+    assert [(r["cause"], r["replacement"]) for r in c.rejections(directory, "b")] == [
+        ("audit_rejected", first_b + "-r1")]

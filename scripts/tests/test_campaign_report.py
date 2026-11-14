@@ -1516,8 +1516,8 @@ def make_multi_campaign(root, monkeypatch):
     session("a", first["a"], "accepted", start, 40)
     clock.t = start  # VM b ran at the same time, on its own runner
     report = session("b", first["b"], "rejected", start + 5, 30)
-    replacement = camp.reject(directory, manifest, protocol, first["b"], report,
-                              json.loads(report.read_text())["values"])
+    replacement = camp.reject(directory, manifest, protocol, first["b"], "audit_rejected",
+                              json.loads(report.read_text())["values"]["reasons"], report)
     session("b", replacement, "accepted", clock.t + 5, 30, replaces=first["b"]["session_id"])
     return directory, rows, first, replacement
 
@@ -1556,7 +1556,8 @@ def test_multi_vm_campaign_report_lists_vms_rejections_and_replacements(tmp_path
     assert campaign["rejections"] == [{
         "session": rejected, "vm": "b", "role": "train", "group": first["b"]["group"],
         "scenario": first["b"]["scenario"], "date": campaign["rejections"][0]["date"],
-        "reasons": ["score coverage below design gate 0.6"], "replacement": replaced, "max_per_campaign": 1}]
+        "cause": "audit_rejected", "reasons": ["score coverage below design gate 0.6"], "replacement": replaced,
+        "not_replaced": None, "max_per_campaign": 1}]
     assert {g["vm"] for g in campaign["groups"]} == {"a", "b"}
     assert set(summary["per_vm"]) == {"a", "b"}
     assert summary["per_vm"]["b"]["by_status"]["rejected"] == 1 and summary["per_vm"]["a"]["by_status"]["accepted"] == 1
@@ -1567,8 +1568,9 @@ def test_multi_vm_campaign_report_lists_vms_rejections_and_replacements(tmp_path
     assert {e["vm"] for e in events} == {"a", "b"} and "replacement" in {e["stage"] for e in events}
     readme = (out / "README.md").read_text()
     assert "VMs: a, b, one runner and status file per VM" in readme
-    assert "Audit rejections recorded by the runner: 1; replaced under the protocol's rule: 1 of at most 1" in readme
-    assert f"- `{rejected}` (VM b): score coverage below design gate 0.6; replaced by `{replaced}`" in readme
+    assert "(rejecting audit or incomplete capture): 1; replaced under the protocol's rule: 1 of at most 1" in readme
+    assert f"- `{rejected}` (VM b), audit_rejected: score coverage below design gate 0.6; replaced by `{replaced}`" \
+        in readme
 
 
 def test_multi_vm_report_problems_and_stop_requests(tmp_path, monkeypatch):
@@ -1597,3 +1599,16 @@ def test_multi_vm_report_problems_and_stop_requests(tmp_path, monkeypatch):
     assert f"attempts/{replacement['session_id']}.done.json exists, but the session directory" in problems
     assert "status-b.json accepted_archived = 1, but 0 session directories have a done checkpoint" in problems
     assert "somewhere-else" not in by_id(read_csv(out / "sessions.csv"))
+    # An incomplete capture whose group boot was lost: recorded with its cause code and why it was not replaced.
+    last = next(r for r in rows if r["vm"] == "b" and r is not first["b"])
+    arc.write_new(directory / "attempts" / f"{last['session_id']}.rejected.json", {
+        "schema": "hyptcn3/campaign-rejection/1", "date": iso(T0 + 63_000), "session": last["session_id"], "vm": "b",
+        "cause": "capture_incomplete", "reasons": ["ValueError: collector failed; see capture.log"],
+        "replacement": None, "not_replaced": "guest boot or environment changed since the group started"})
+    out2 = tmp_path / "report2"
+    assert run_report(["campaign", directory, "--out", out2]) == 0
+    entry = json.loads((out2 / "summary.json").read_text())["campaign"]["rejections"][-1]
+    assert (entry["cause"], entry["replacement"]) == ("capture_incomplete", None)
+    assert (f"- `{last['session_id']}` (VM b), capture_incomplete: ValueError: collector failed; see capture.log; "
+            "not replaced (guest boot or environment changed since the group started)") \
+        in (out2 / "README.md").read_text()

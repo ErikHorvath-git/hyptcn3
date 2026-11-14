@@ -67,6 +67,8 @@ CLOCK_SYNC_S = .25
 VM_NAME = r"[a-z0-9]{1,16}"
 # Session base of a multi-VM capture outside a campaign (pilot); not a valid campaign name.
 STANDALONE = "_bez-kampane"
+# Why a campaign session is not used; the first one is what a rule without "covers" replaces.
+REPLACEMENT_CAUSES = ("audit_rejected", "capture_incomplete")
 
 
 def digest(path):
@@ -110,16 +112,29 @@ def protocol(path):
 
 
 def check_replacement(p):
-    """Pre-registered rule for sessions rejected by the audit (scripts/campaign.py reject).
+    """Pre-registered rule for sessions the campaign cannot use (scripts/campaign.py reject).
 
     Without the key nothing is ever replaced. The only rule: at most max_per_campaign
-    rejected sessions of a campaign are captured again, each as the same assignment
-    (VM, role, group, scenario, seed) in the same group boot.
+    such sessions of a campaign are captured again, each as the same assignment
+    (VM, role, group, scenario, seed) in the same group boot. "covers" names the
+    causes the rule applies to; without it only audit rejections, as before:
+      audit_rejected      the capture completed and its audit rejected it
+      capture_incomplete  the measured phase started but the capture did not complete
+                          (collector failure, interruption, guest change); replaced only
+                          while the group's boot and QEMU process are still the recorded
+                          ones - after a reboot or restart the group's boot is gone and
+                          the campaign stops
+    All causes share the one per-campaign maximum.
     """
     r = p["replacement"]
-    if (type(r) is not dict or not {"max_per_campaign", "same"} <= set(r) <= {"max_per_campaign", "same", "note"}
+    if (type(r) is not dict
+            or not {"max_per_campaign", "same"} <= set(r) <= {"max_per_campaign", "same", "covers", "note"}
             or type(r["max_per_campaign"]) is not int or r["max_per_campaign"] < 0
             or type(r["same"]) is not list or sorted(map(str, r["same"])) != ["role", "scenario", "vm"]):
+        raise ValueError("invalid replacement rule")
+    covers = r.get("covers", list(REPLACEMENT_CAUSES[:1]))
+    if (type(covers) is not list or not covers or len(set(map(str, covers))) != len(covers)
+            or not set(map(str, covers)) <= set(REPLACEMENT_CAUSES)):
         raise ValueError("invalid replacement rule")
 
 

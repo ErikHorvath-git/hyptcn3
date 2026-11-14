@@ -133,10 +133,13 @@ DEFINITIONS = {
                  "session, group and event carries its vm. Campaign events are attributed per runner: an "
                  "interval lasts until the next event of the same VM, so stage seconds are runner time summed "
                  "over the VMs and can exceed the wall-clock span."),
-    "replacement": ("An audit-rejected session may be captured again under the protocol's pre-registered "
-                    "replacement rule (protocol.json replacement.max_per_campaign): the same assignment (VM, "
-                    "role, group, scenario, seed) in the same group boot, as session <plan session>-r<n>. The "
-                    "rejected session keeps its row (status rejected, replaced_by) and is in no accepted total; "
+    "replacement": ("A session the campaign cannot use may be captured again under the protocol's "
+                    "pre-registered replacement rule (protocol.json replacement: max_per_campaign shared by the "
+                    "causes in covers): the same assignment (VM, role, group, scenario, seed) in the same group "
+                    "boot, as session <plan session>-r<n>. Causes: audit_rejected (completed capture, rejecting "
+                    "audit) and capture_incomplete (the measured phase started but the capture did not complete; "
+                    "replaced only while the group's boot and QEMU process were unchanged, see not_replaced). The "
+                    "unusable session keeps its row (its own status, replaced_by) and is in no accepted total; "
                     "the replacement has its own row (replaces). Planned counts are plan rows, so a replacement "
                     "adds an attempted session, not a planned one. Every rejection record "
                     "(attempts/<session>.rejected.json) is listed with its reasons under campaign.rejections."),
@@ -2218,7 +2221,9 @@ def build_campaign(directory, collections, inputs):
     problems += retired_problems
     rejections = [{"session": sid, "vm": doc.get("vm"), "role": doc.get("role"), "group": doc.get("group"),
                    "scenario": doc.get("scenario"), "date": doc.get("date") if isinstance(doc.get("date"), str) else None,
+                   "cause": doc.get("cause", "audit_rejected"),  # records before the cause code: audit only
                    "reasons": audit_reasons(doc), "replacement": doc.get("replacement"),
+                   "not_replaced": doc.get("not_replaced"),
                    "max_per_campaign": doc.get("max_per_campaign")}
                   for sid, doc in sorted(rejected.items(), key=lambda item: (str(item[1].get("date")), item[0]))]
     problems += [f"attempts/{r['session']}.rejected.json names a session that is not in the plan"
@@ -3222,13 +3227,16 @@ def readme(report, summary, files):
         if c["rejections"]:
             rule = c["replacement_rule"] or {}
             replaced = sum(r["replacement"] is not None for r in c["rejections"])
-            lines += [f"Audit rejections recorded by the runner: {len(c['rejections'])}; replaced under the "
+            lines += [f"Sessions the runner recorded as unusable (rejecting audit or incomplete capture): "
+                      f"{len(c['rejections'])}; replaced under the "
                       f"protocol's rule: {replaced} of at most {rule.get('max_per_campaign', 0)} per campaign. "
-                      "A rejected session is never accepted data; a replacement is the same assignment in the "
+                      "Such a session is never accepted data; a replacement is the same assignment in the "
                       "same group boot:", ""]
-            lines += [f"- `{r['session']}`" + (f" (VM {r['vm']})" if r["vm"] else "") + ": "
+            lines += [f"- `{r['session']}`" + (f" (VM {r['vm']})" if r["vm"] else "") + f", {r['cause']}: "
                       + md(one_line("; ".join(r["reasons"]) or "no reason recorded")) + "; "
-                      + (f"replaced by `{r['replacement']}`" if r["replacement"] else "not replaced")
+                      + (f"replaced by `{r['replacement']}`" if r["replacement"] else
+                         "not replaced" + (f" ({md(one_line(r['not_replaced']))})"
+                                           if isinstance(r["not_replaced"], str) else ""))
                       for r in c["rejections"]] + [""]
     else:
         lines += [f"Mode: sessions ({len(report['sessions'])} session directories read).", ""]

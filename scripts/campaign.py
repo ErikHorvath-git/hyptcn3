@@ -108,7 +108,8 @@ def chain(directory, row):
 
 
 def rejections(directory, vm=None):
-    """Audit rejections of the campaign with their causes, in time order (all VMs unless one is named)."""
+    """Sessions the campaign could not use (rejecting audit or incomplete capture), with cause and
+    reasons, in time order (all VMs unless one is named)."""
     records = [read_json(path) for path in sorted((directory / "attempts").glob("*.rejected.json"))]
     return sorted((r for r in records if vm is None or r.get("vm") == vm), key=lambda r: r["date"])
 
@@ -713,36 +714,81 @@ def retire_attempt(directory, manifest, row, session):
                  message=f"attempt {number} ended before measurement: {reason}")
 
 
-def reject(directory, manifest, p, row, report, values):
-    """Record an audit rejection with its cause; schedule its replacement if the protocol's rule allows.
+STOP_MESSAGE = {"audit_rejected": "audit rejected session; archived without replacement",
+                "capture_incomplete": "incomplete capture archived; allocation stopped, no automatic replacement"}
 
-    The rule is part of the frozen protocol (collection.check_replacement). The
-    replacement is the same assignment - VM, role, group, scenario, seed, event
-    schedule - captured again in the same boot of its group, right after the
-    rejected session and before the group's next one. So a group stays one boot
-    of one VM and the corpus still holds each group/scenario once: the rejected
-    session is archived and kept, but never indexed. Called under the audit lock,
-    so the per-campaign count is exact over all VMs. Returns the replacement row
-    or None (no rule, or its maximum is used up: the allocation stops as before).
+
+def incomplete_reasons(session):
+    """Why a capture that reached its measured phase did not complete, from its own end record."""
+    if not (session / "end.json").exists():
+        return ["no end.json: the capture recorded no end (crash, SIGKILL or power loss)"]
+    end = read_json(session / "end.json")
+    if end.get("error"):
+        return [str(end["error"])]
+    return ["guest identity changed during capture" if end.get("completed") else "end.json completed=false"]
+
+
+def group_boot_lost(directory, p, row):
+    """None while the group's boot still exists (same guest boot, same QEMU process), else why not."""
+    group = read_json(directory / "groups" / (row["group"] + ".json"))
+    try:
+        current = collection.guest_identity(p)
+    except (ValueError, OSError, subprocess.SubprocessError) as exc:
+        return f"guest identity unavailable ({type(exc).__name__})"
+    if current != group["identity"]:
+        return "guest boot or environment changed since the group started"
+    if collection.qemu_process(p["domain"]) != group.get("qemu"):
+        return "VM process changed since the group started (restart or restore)"
+    return None
+
+
+def reject(directory, manifest, p, row, cause, reasons, report=None):
+    """Record a session the campaign cannot use, with its cause; schedule its replacement if the
+    protocol's rule allows.
+
+    cause: "audit_rejected" (completed capture, rejecting audit; report = that audit) or
+    "capture_incomplete" (the measured phase started, the capture did not complete). The rule
+    is part of the frozen protocol (collection.check_replacement): which causes it covers and
+    one maximum per campaign shared by all of them. The replacement is the same assignment -
+    VM, role, group, scenario, seed, event schedule - captured again in the same boot of its
+    group, right after the unusable session and before the group's next one. So a group stays
+    one boot of one VM and the corpus still holds each group/scenario once: the unusable
+    session is archived and kept, but never indexed.
+
+    An incomplete capture is replaced only while that boot still exists: the guest identity
+    and the QEMU process equal groups/<group>.json. After a guest reboot, a VM restart or a
+    host crash there is no "same group boot" to capture in; a new boot under the same group
+    would break one boot per group, so the allocation stops as before, for review.
+
+    Called under the audit lock, so the per-campaign count is exact over all VMs. Returns the
+    replacement row or None (cause not covered, maximum used up or boot lost: the caller stops).
     """
-    limit = (p.get("replacement") or {}).get("max_per_campaign", 0)
+    rule = p.get("replacement") or {}
+    limit = rule.get("max_per_campaign", 0)
     used = sum(r.get("replacement") is not None for r in rejections(directory))
     plan_session, number = row.get("plan_session", row["session_id"]), row.get("replacement", 0) + 1
-    replacement = f"{plan_session}-r{number}" if used < limit else None
+    if cause not in rule.get("covers", collection.REPLACEMENT_CAUSES[:1] if rule else ()):
+        refused = "the protocol has no replacement rule for this cause"
+    elif used >= limit:
+        refused = f"the protocol's {limit} replacements per campaign are used up"
+    else:
+        refused = group_boot_lost(directory, p, row) if cause == "capture_incomplete" else None
+    replacement = None if refused else f"{plan_session}-r{number}"
     write_new(rejection_file(directory, row["session_id"]), {
         "schema": "hyptcn3/campaign-rejection/1", "date": now(), "session": row["session_id"],
         **{k: row[k] for k in ("vm", "role", "group", "scenario", "seed", "replaces") if k in row},
-        "reasons": values["reasons"], "audit": str(report), "audit_sha256": digest(report),
+        "cause": cause, "reasons": reasons,
+        **({} if report is None else {"audit": str(report), "audit_sha256": digest(report)}),
         "replacement": replacement, "replacements_before": used, "max_per_campaign": limit,
-        "note": "Rejected by the audit; archived, never part of the corpus or event index. "
+        **({"not_replaced": refused} if refused else {}),
+        "note": "Archived, never part of the corpus or event index. "
                 + ("Replaced by the same assignment in the same group boot (protocol replacement rule)."
-                   if replacement else "Not replaced: no replacement left under the protocol; allocation stopped.")})
+                   if replacement else "Not replaced; allocation stopped.")})
     if replacement is None:
         return None
     update_state(directory, vm=row.get("vm"), status="running", stage="replacement", session=row["session_id"],
                  replacements_used=used + 1,
-                 message=f"audit rejected ({'; '.join(values['reasons'])}); replacement {used + 1} of {limit}: "
-                         + replacement)
+                 message=f"{cause} ({'; '.join(reasons)}); replacement {used + 1} of {limit}: " + replacement)
     return {**row, "session_id": replacement, "replaces": row["session_id"], "plan_session": plan_session,
             "replacement": number}
 
@@ -848,7 +894,7 @@ def execute(directory, *, stop_after=None, vm=None):
                 if rejection_file(directory, row["session_id"]).exists():
                     record = read_json(rejection_file(directory, row["session_id"]))
                     if record.get("replacement") is None:
-                        raise ValueError("audit rejected session; archived without replacement: "
+                        raise ValueError(STOP_MESSAGE[record.get("cause", "audit_rejected")] + ": "
                                          + "; ".join(record["reasons"]))
                     continue  # Its replacement is the next row.
                 if checkpoint.exists():
@@ -908,15 +954,17 @@ def execute(directory, *, stop_after=None, vm=None):
                 with audit_lock(directory, vm=vm, session=session.name):
                     if not check_session(session, manifest, row, directory):
                         archive_capture(directory, manifest, session, p)
-                        raise ValueError("incomplete capture archived; allocation stopped, no automatic replacement")
-                    verify_frozen(directory, manifest, p)
-                    report, values = audit_capture(directory, manifest, p, row, session, guard)
-                    archive_capture(directory, manifest, session, p, report)
-                    replacement = None if values["accepted"] else reject(directory, manifest, p, row, report, values)
-                if not values["accepted"]:
+                        cause, reasons = "capture_incomplete", incomplete_reasons(session)
+                        replacement = reject(directory, manifest, p, row, cause, reasons)
+                    else:
+                        verify_frozen(directory, manifest, p)
+                        report, values = audit_capture(directory, manifest, p, row, session, guard)
+                        archive_capture(directory, manifest, session, p, report)
+                        cause, reasons = (None, None) if values["accepted"] else ("audit_rejected", values["reasons"])
+                        replacement = cause and reject(directory, manifest, p, row, cause, reasons, report)
+                if cause:
                     if replacement is None:
-                        raise ValueError("audit rejected session; archived without replacement: "
-                                         + "; ".join(values["reasons"]))
+                        raise ValueError(STOP_MESSAGE[cause] + ": " + "; ".join(reasons))
                     rows.insert(i + 1, replacement)
                     continue
                 write_new(checkpoint, {"session": session.name, "audit": str(report), "audit_sha256": digest(report),
@@ -1143,7 +1191,8 @@ def vm_status(directory, manifest, p, vm):
     state = read_json(directory / vm_file("status.json", vm))
     state["running"] = campaign_running(state)
     # Every audit rejection with its cause and, if the protocol allowed one, its replacement.
-    state["rejections"] = [{k: r.get(k) for k in ("date", "session", "reasons", "replacement")}
+    state["rejections"] = [{"cause": "audit_rejected", **{k: r[k] for k in (
+        "date", "session", "cause", "reasons", "replacement", "not_replaced") if k in r}}
                            for r in rejections(directory, vm)]
     if state.get("status") == "running" and not state["running"]:
         state["stale"] = True

@@ -13,6 +13,7 @@
       "port": 18081
     }
   ],
+  "vms_note": "E5 (experimenty/aba.py, rezia monitorovania A/B/A) bezi iba na VM a (hyptcn-lab, port hostitela 18080) a iba ked nebezi ziadna kampan: safeguard run vola labctl bez --vm/--port.",
   "status": "pilot_required",
   "profile": "profiles/debian12-6.1.0-42-cloud-amd64",
   "interval_s": 5,
@@ -32,12 +33,16 @@
     "test_benign": 4
   },
   "replacement": {
-    "note": "Predregistrovane pravidlo (B5): session zamietnutu auditom nahradi najviac max_per_campaign krat za kampan to iste priradenie (VM, rola, skupina, scenar, seed) v tom istom boote skupiny; zamietnuta session sa archivuje, do korpusu ani indexu udalosti nejde. Dalsie zamietnutie kampan zastavi.",
+    "note": "Predregistrovane pravidlo (B5): session, ktoru kampan nemoze pouzit, nahradi najviac max_per_campaign krat za kampan (spolu pre vsetky priciny v covers) to iste priradenie (VM, rola, skupina, scenar, seed) v tom istom boote skupiny. audit_rejected: zber sa dokoncil a audit ho zamietol. capture_incomplete: merana faza zacala, ale zber sa nedokoncil (zlyhanie zberaca, prerusenie, zmena hosta); nahradza sa iba vtedy, ked boot hosta aj proces QEMU skupiny su stale tie zaznamenane v groups/<skupina>.json - po reboote hosta, restarte VM alebo pade hostitela boot skupiny uz neexistuje a kampan sa zastavi ako doteraz. Nepouzita session sa archivuje, do korpusu ani indexu udalosti nejde. Po vycerpani limitu dalsi pripad kampan zastavi.",
     "max_per_campaign": 2,
     "same": [
       "vm",
       "role",
       "scenario"
+    ],
+    "covers": [
+      "audit_rejected",
+      "capture_incomplete"
     ]
   },
   "scenarios": {
