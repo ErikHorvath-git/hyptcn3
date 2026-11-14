@@ -330,9 +330,16 @@ def objekty_z_pohladu(view):
         pozn.append("procesy: zoznam dopredu sa neuzavrel (%s), uzavrel ho prechod dozadu"
                     % p["forward_stop_reason"])
     if p.get("walk") == "tail":
+        dokaz = "uzol odstraneny" if p.get("tail_content") == "deleted" else "obsah vlakna"
         pozn.append("procesy: zoznam dopredu sa neuzavrel (%s), stranka posledneho uzla podla "
-                    "init_task.prev je z ineho okamihu (obsah vlakna); zoznam je bez neho"
-                    % p["forward_stop_reason"])
+                    "init_task.prev je z ineho okamihu (%s); zoznam je bez neho"
+                    % (p["forward_stop_reason"], dokaz))
+    if p.get("deleted_links"):
+        pozn.append("procesy: %d odkaz(y) cez uzol odstraneny pocas citania (LIST_POISON2)"
+                    % p["deleted_links"])
+    if vz.get("skipped_wx"):
+        pozn.append("vzory pamate: W+X sa nepocitalo pre %d proces(y) (neplatne tabulky stranok), "
+                    "pocet je dolna hranica" % len(vz["skipped_wx"]))
     if c["summary"]["inconclusive"]:
         pozn.append("neuzavrete kontroly: %s"
                     % ", ".join(c["summary"]["inconclusive"]))
@@ -357,6 +364,8 @@ def objekty_z_pohladu(view):
             # Procesy s W+X strankami alebo memfd (pid, comm, druh).
             "memory_patterns": [{k: v for k, v in x.items() if k in ("pid", "comm", "kind")}
                                 for x in vz["patterns"]],
+            # Procesy vynechane z W+X (pid, comm, dovod); ich stranky v proc_wx chybaju.
+            "skipped_wx": [dict(x) for x in vz.get("skipped_wx", [])],
         },
     }
     hodnoty = {

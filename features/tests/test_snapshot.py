@@ -493,3 +493,25 @@ def test_determinizmus(realny, vysledok):
     znova = retazec(realny, PROFIL)
     assert znova["matica"] == vysledok["matica"]
     assert znova["snimky"] == vysledok["snimky"]
+
+
+def test_deleted_tail_and_skipped_wx_are_noted_and_kept_valid(monkeypatch):
+    from types import SimpleNamespace
+    from features import snapshot
+    procs = [{"pid": 1, "tgid": 1, "comm": "systemd", "kernel_thread": False, "task_va": 1}]
+    walk = lambda field: {field: [], "count": 0, "truncated": False, "stop_reason": None}
+    vzory = dict(_vzory(), skipped_wx=[{"pid": 7, "comm": "python3", "reason": "per-mm table cap"}])
+    view = SimpleNamespace(
+        ktext_shift=1, profile_boot_mismatch=lambda: None,
+        processes=lambda: {"processes": procs, "count": 1, "truncated": False, "stop_reason": None,
+                           "walk": "tail", "tail_content": "deleted", "deleted_links": 1,
+                           "forward_stop_reason": "nesuhlasny odkaz"},
+        modules=lambda: walk("modules"), sockets=lambda **kwargs: walk("sockets"),
+        memory_patterns=lambda **kwargs: vzory)
+    monkeypatch.setattr(snapshot.checks, "check_all", lambda *args, **kwargs: {
+        "summary": {"inconclusive": [], "syscall_hooks": 0}, "findings": []})
+    _, state, notes = objekty_z_pohladu(view)
+    assert state["quality"]["behavior_valid"] is True
+    assert state["quality"]["skipped_wx"] == [{"pid": 7, "comm": "python3", "reason": "per-mm table cap"}]
+    assert any("uzol odstraneny" in n for n in notes) and any("LIST_POISON2" in n for n in notes)
+    assert any("W+X sa nepocitalo pre 1" in n for n in notes)

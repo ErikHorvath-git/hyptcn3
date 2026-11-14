@@ -109,6 +109,7 @@ def test_bez_zapisu_na_pud_nie_je_wx():
 
 def test_velka_stranka_2mib_sa_rata_po_4kib():
     view, img = _pamat()
+    img.memsize = 4 << 20                           # velka stranka lezi v RAM hosta
     img.u64(PMD, 0x200000 | TABLE | PS)
     assert view.memory_patterns(_procs(view))["wx_pages"] == 512
 
@@ -139,3 +140,75 @@ def test_neuplny_zoznam_procesov_je_neuplny_vysledok():
     img.u64(_pa(INIT_VA) + O_TASKS + 8, 0)          # aj dozadu
     res = view.memory_patterns()
     assert res["truncated"] is True
+
+
+# ------------------- zastarana alebo znova pouzita stranka tabulky (A11)
+
+GARBAGE = 0x84000
+
+
+def _bez_skipu(res):
+    return res["truncated"] is False and res["skipped_wx"] == [] and res["skipped_tasks"] == 0
+
+
+def test_velka_stranka_mimo_ram_sa_nerata():
+    view, img = _pamat()
+    img.u64(PMD, 0x200000 | TABLE | PS)             # RAM umeleho hosta ma 1 MiB
+    res = view.memory_patterns(_procs(view))
+    assert res["wx_pages"] == 0 and res["wx_processes"] == 0 and _bez_skipu(res)
+
+
+def test_pte_mimo_ram_sa_nerata():
+    view, img = _pamat()
+    img.u64(PTE, 0x7F0000000 | TABLE)               # jedna z troch W+X stranok mimo RAM
+    res = view.memory_patterns(_procs(view))
+    assert res["wx_pages"] == 2 and _bez_skipu(res)
+
+
+def test_smetova_stranka_s_adresami_mimo_ram_nic_neprida():
+    """
+    Polozka PGD ukazuje na stranku plnu P|RW|US poloziek (data na mieste
+    uvolnenej tabulky): adresy mimo RAM, vratane 1 GiB "velkych stranok".
+    """
+    view, img = _pamat()
+    for i in range(512):
+        img.u64(GARBAGE + 8 * i, (0x40000000 + (i << 30)) | TABLE | (PS if i % 2 else 0))
+    img.u64(PGD + 8, GARBAGE | TABLE)
+    res = view.memory_patterns(_procs(view))
+    assert res["wx_pages"] == 3 and res["wx_processes"] == 1 and _bez_skipu(res)
+
+
+def test_smetova_stranka_s_adresami_v_ram_preskoci_proces():
+    """
+    Ta ista stranka, ale polozky ukazuju do RAM (na nu samu): bez ochrany by
+    prechod precital 512 * 512 "tabuliek" a ratal fantomove stranky. Proces
+    sa preskoci, riadok ostava uplny a memfd sa hlada dalej.
+    """
+    view, img = _pamat()
+    for i in range(512):
+        img.u64(GARBAGE + 8 * i, GARBAGE | TABLE)
+    img.u64(PGD + 8, GARBAGE | TABLE)
+    res = view.memory_patterns(_procs(view))
+    assert res["truncated"] is False and res["stop_reason"] is None
+    assert res["wx_pages"] == 0 and res["wx_processes"] == 0
+    assert res["skipped_tasks"] == 1
+    assert [(s["pid"], s["comm"]) for s in res["skipped_wx"]] == [(1, "proces0")]
+    assert "dvakrat" in res["skipped_wx"][0]["reason"]
+    assert [p["kind"] for p in res["patterns"]] == ["memfd_fd"]
+    assert res["tables"] < 16
+
+
+def test_strop_tabuliek_jedneho_mm_preskoci_proces_nie_riadok():
+    view, _ = _pamat()
+    res = view.memory_patterns(_procs(view), max_tables_mm=2)
+    assert res["truncated"] is False and res["stop_reason"] is None
+    assert res["wx_pages"] == 0 and res["wx_processes"] == 0
+    assert res["skipped_tasks"] == 1 and "viac nez 2" in res["skipped_wx"][0]["reason"]
+    assert res["memfd_processes"] == 1
+
+
+def test_celkovy_strop_ma_prednost_pred_stropom_mm():
+    view, _ = _pamat()
+    res = view.memory_patterns(_procs(view), max_tables=2, max_tables_mm=2)
+    assert res["truncated"] is True and "strop" in res["stop_reason"]
+    assert res["skipped_wx"] == []

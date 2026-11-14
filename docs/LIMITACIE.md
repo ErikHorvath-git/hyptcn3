@@ -160,7 +160,13 @@ tieto hashe nekontroluje. Oprava bola odložená na obdobie po vyhodnotení a do
 v tom istom obraze cez `list_del_rcu` (jeho `prev` je `LIST_POISON2` a jeho `next` je ten
 istý uzol), sa nepovažuje za roztrhnutie pred pravidlom `tail`; riadok s takým spojením
 nesie `deleted_links` (`guestparse/view.py`, `_odstraneny_pred`). Odstránený uzol v zozname
-už nie je, takže taká výnimka žiadny proces neskryje; pravidlo `prev` sa nemení. Nad kópiou
+už nie je, takže taká výnimka žiadny proces neskryje. Pravidlo `prev` takéto spojenie
+preskočí v oboch smeroch (spätný prechod pokračuje uzlom, z ktorého prišiel prechod dopredu)
+a pravidlo `tail` prijme uzol na konci aj vtedy, keď jeho vlastný `prev` je `LIST_POISON2`
+(skončený vodca skupiny v recyklovanom `task_struct`; `tail_content` je `deleted`, inak
+`thread`). Obsah vodcu skupiny bez otrávenia a dve vloženia na koniec v jednom čítaní riadok
+naďalej zneplatnia. Tieto tvary vychádzajú zo syntetických prípadov v testoch
+(`guestparse/tests/test_defensive.py`), v zozbieraných dátach sa zatiaľ neobjavili. Nad kópiou
 session 46 nové pravidlo snímku 270 uzavrie pravidlom `tail` s jedným `deleted_links` cez
 110 procesov, teda presne cez uzly pred uzlom na konci zoznamu (`forward_before_tail_node`
 v zázname vyššie), a snímky 269 a 271 ostávajú `next`. Kampane `benign-v6-20261026` a
@@ -646,7 +652,11 @@ miesta:
    dvoch procesoch odkazoval na uvoľnené uzly počas celej session, preto sa nepoužil),
    kód, ktorý stránku najprv zapíše a potom prepne na spustiteľnú bez zápisu (W^X cez
    `mprotect`), ani W+X stránku jadra. Tabuľky stránok procesu, ktorý počas čítania
-   skončil, môžu byť v snímke už uvoľnené a dať náhodný počet (L1). Na benígnej session
+   skončil, môžu byť v snímke už uvoľnené a dať náhodný počet (L1). Proti tomu sa
+   ignorujú záznamy s fyzickou adresou mimo RAM hosťa a proces s viac než 4096 tabuľkami
+   alebo s opakovanou tabuľkou sa z W+X vynechá (`skipped_wx` v kvalite riadku, poznámka
+   „pocet je dolna hranica“); riadok ostáva platný. Skutočné W+X stránky takého procesu
+   v `proc_wx` chýbajú. Na benígnej session
    `events-v3-20261108_46_test_events_write_heavy` (snímky 0, 100, 270, 500 a 719) boli
    oba počty nulové; s pozitívnou kontrolou v hosťovi ešte overené nie sú.
 

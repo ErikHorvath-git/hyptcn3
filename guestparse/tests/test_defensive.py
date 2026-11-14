@@ -371,11 +371,28 @@ def test_odstraneny_uzol_s_inym_next_nevysvetli():
 
 
 def test_odstraneny_uzol_bez_vkladania_na_konci_neuzavrie():
-    """Samotne odstranenie uprostred neuzavrie zoznam, ktory sa dopredu zacyklil inde."""
+    """
+    Samotne odstranenie uprostred neuzavrie zoznam, ktory sa dopredu zacyklil
+    inde: init_task.prev na t1 nie je ani posledny nezhodny uzol ('tail'),
+    ani zaciatok prechodu dozadu cez vsetky uzly dopredu ('prev').
+    """
+    view, img = _odstraneny_a_vkladany()
+    img.u64(_pa(INIT_VA) + O_TASKS + 8, TASK_VA[1] + O_TASKS)
+    res = view.processes()
+    assert res["truncated"] is True and res["walk"] == "next"
+    assert "ine uzly" in res["backward_stop_reason"]
+
+
+def test_odstraneny_uzol_s_init_task_prev_na_t2_uzavrie_prev():
+    """
+    init_task.prev na t2 je tvar snimky 505 s odstranenym uzlom uprostred:
+    do 2026-11-14 zamietnuty, teraz ho uzavrie pravidlo 'prev' s obchadzkou.
+    """
     view, img = _odstraneny_a_vkladany()
     img.u64(_pa(INIT_VA) + O_TASKS + 8, TASK_VA[2] + O_TASKS)
     res = view.processes()
-    assert res["truncated"] is True and res["walk"] == "next"
+    assert res["truncated"] is False and res["walk"] == "prev"
+    assert res["deleted_links"] == 1 and res["count"] == 3
 
 
 def test_odstraneny_uzol_v_uplnom_zozname_nemeni_next():
@@ -387,3 +404,140 @@ def test_odstraneny_uzol_v_uplnom_zozname_nemeni_next():
     img.u64(_pa(TASK_VA[1]) + O_TASKS + 8, GONE_VA + O_TASKS)
     res = view.processes()
     assert res["walk"] == "next" and res["truncated"] is False and res["count"] == 3
+
+
+# ------------- odstranenie uprostred spolu so zastaranym `next` na konci (prev)
+
+def _odstraneny_a_zastarany_next():
+    """
+    Tvar snimky 505 (t2.next ukazuje na ukonceny proces so starymi
+    ukazovatelmi, init_task.prev je spravne t2) a k tomu proces odstraneny
+    medzi t0 a t1 ako v snimke 270: t1.prev este ukazuje na neho.
+    """
+    view, img = _obojsmerny(DEAD_VA + O_TASKS)
+    img.u64(_pa(DEAD_VA) + O_TASKS, TASK_VA[0] + O_TASKS)
+    img.u64(_pa(DEAD_VA) + O_TASKS + 8, TASK_VA[0] + O_TASKS)
+    _task(img, GONE_VA, 190491, "postgres")
+    img.u64(_pa(GONE_VA) + O_TASKS, TASK_VA[1] + O_TASKS)
+    img.u64(_pa(GONE_VA) + O_TASKS + 8, LIST_POISON2)
+    img.u64(_pa(TASK_VA[1]) + O_TASKS + 8, GONE_VA + O_TASKS)
+    return view, img
+
+
+def test_odstraneny_uzol_pred_zastaranym_next_uzavrie_prev():
+    view, _ = _odstraneny_a_zastarany_next()
+    res = view.processes()
+    assert res["truncated"] is False and res["stop_reason"] is None
+    assert res["walk"] == "prev" and res["deleted_links"] == 1
+    assert "cyklus" in res["forward_stop_reason"]
+    assert [p["comm"] for p in res["processes"]] == ["proces0", "proces1", "proces2"]
+
+
+def test_prev_bez_odstranenia_nema_deleted_links():
+    view, img = _obojsmerny(DEAD_VA + O_TASKS)
+    img.u64(_pa(DEAD_VA) + O_TASKS, TASK_VA[0] + O_TASKS)
+    img.u64(_pa(DEAD_VA) + O_TASKS + 8, TASK_VA[0] + O_TASKS)
+    res = view.processes()
+    assert res["walk"] == "prev" and "deleted_links" not in res
+
+
+def test_prev_odstraneny_uzol_s_inym_next_nevysvetli():
+    """D nestal tesne pred t1 (D.next je t2): medzi t0 a t1 mohol byt skryty uzol."""
+    view, img = _odstraneny_a_zastarany_next()
+    img.u64(_pa(GONE_VA) + O_TASKS, TASK_VA[2] + O_TASKS)
+    res = view.processes()
+    assert res["truncated"] is True and res["walk"] == "next"
+    assert "deleted_links" not in res
+    assert "ukazovatel" in res["backward_stop_reason"]
+
+
+def test_prev_odstraneny_uzol_bez_poison_nevysvetli():
+    """D ma platny prev: je v zozname dozadu a t0.next ho preskocil."""
+    view, img = _odstraneny_a_zastarany_next()
+    img.u64(_pa(GONE_VA) + O_TASKS + 8, TASK_VA[0] + O_TASKS)
+    res = view.processes()
+    assert res["truncated"] is True and res["walk"] == "next"
+
+
+def test_prev_s_odstranenym_uzlom_a_chybajucim_uzlom_dozadu_neplati():
+    """Obchadzka nenahradi zhodu mnozin: dozadu t2 -> t0 vynecha t1."""
+    view, img = _odstraneny_a_zastarany_next()
+    img.u64(_pa(TASK_VA[2]) + O_TASKS + 8, TASK_VA[0] + O_TASKS)
+    res = view.processes()
+    assert res["truncated"] is True and res["walk"] == "next"
+
+
+# ------------------ vlozenie na koniec: stranka s odstranenym vodcom skupiny
+
+def _vkladany_s_odstranenym_vodcom():
+    """
+    Ako _vkladany_na_konci, ale recyklovany task_struct drzal ukonceneho
+    vodcu skupiny (tgid == pid, napr. backend postgres): jeho tasks.prev je
+    LIST_POISON2 a next ostal stary.
+    """
+    view, img = _vkladany_na_konci()
+    img.write(_pa(DEAD_VA) + O_TGID, struct.pack("<i", 388899))
+    img.u64(_pa(DEAD_VA) + O_TASKS + 8, LIST_POISON2)
+    return view, img
+
+
+def test_vkladany_uzol_s_odstranenym_vodcom_uzavrie_tail():
+    view, _ = _vkladany_s_odstranenym_vodcom()
+    res = view.processes()
+    assert res["truncated"] is False and res["stop_reason"] is None
+    assert res["walk"] == "tail" and res["tail_content"] == "deleted"
+    assert "cyklus" in res["forward_stop_reason"]
+    assert [p["comm"] for p in res["processes"]] == ["proces0", "proces1", "proces2"]
+
+
+def test_vkladany_uzol_s_vlaknom_ma_tail_content_thread():
+    res = _vkladany_na_konci()[0].processes()
+    assert res["walk"] == "tail" and res["tail_content"] == "thread"
+
+
+def test_odstraneny_vodca_bez_init_task_prev_neuzavrie():
+    """Otraveny prev nestaci: init_task.prev musi ukazovat prave na ten uzol."""
+    view, img = _vkladany_s_odstranenym_vodcom()
+    img.u64(_pa(INIT_VA) + O_TASKS + 8, TASK_VA[1] + O_TASKS)
+    res = view.processes()
+    assert res["truncated"] is True and res["walk"] == "next"
+
+
+def test_odstraneny_vodca_po_skorsom_nezhodnom_spojeni_neuzavrie():
+    """Prve nevysvetlene nezhodne spojenie je skor (t1.prev), nie na konci zoznamu."""
+    view, img = _vkladany_s_odstranenym_vodcom()
+    img.u64(_pa(TASK_VA[1]) + O_TASKS + 8, INIT_VA + O_TASKS)
+    res = view.processes()
+    assert res["truncated"] is True and res["walk"] == "next"
+
+
+# ------------------------------ tvary, ktore ostavaju zamietnute (A9, A10)
+
+NEW2_VA = KBASE + 0x70000
+
+
+def test_dve_vlozenia_na_koniec_ostavaju_neuplne():
+    """
+    Dva nove uzly za jednu snimku: t2.next ukazuje na prvy (stranka z casu
+    pred vlozenim), init_task.prev na druhy. Prvy nezhodny uzol nie je
+    posledny podla init_task.prev, takze 'tail' neplati.
+    """
+    view, img = _vkladany_na_konci()
+    _task(img, NEW2_VA, 999, "kworker/1:2")
+    img.u64(_pa(NEW2_VA) + O_TASKS, INIT_VA + O_TASKS)
+    img.u64(_pa(NEW2_VA) + O_TASKS + 8, DEAD_VA + O_TASKS)
+    img.u64(_pa(INIT_VA) + O_TASKS + 8, NEW2_VA + O_TASKS)
+    res = view.processes()
+    assert res["truncated"] is True and res["walk"] == "next"
+    assert "cyklus" in res["stop_reason"]
+    assert "ine uzly" in res["backward_stop_reason"]
+
+
+def test_vkladany_uzol_s_nulovou_strankou_ostava_neuplny():
+    """Stranka posledneho uzla je cela nulova: neda sa citat ako proces."""
+    view, img = _vkladany_na_konci()
+    img.write(_pa(DEAD_VA), bytes(0x100))
+    res = view.processes()
+    assert res["truncated"] is True and res["walk"] == "next"
+    assert "comm" in res["stop_reason"] and "comm" in res["backward_stop_reason"]
+    assert res["count"] == 3
