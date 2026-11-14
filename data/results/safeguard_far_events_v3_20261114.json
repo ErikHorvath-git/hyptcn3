@@ -1,0 +1,4149 @@
+{
+  "command": "python3 -m tcn.eval udalosti --index data/campaigns/events-v3-20261108/events_index.json --replay data/safeguard/far-events-v3-20261108/events-v3-20261108_01_test_events_bursty data/safeguard/far-events-v3-20261108/events-v3-20261108_02_test_events_steady data/safeguard/far-events-v3-20261108/events-v3-20261108_03_test_events_write_heavy data/safeguard/far-events-v3-20261108/events-v3-20261108_04_test_events_mixed data/safeguard/far-events-v3-20261108/events-v3-20261108_05_test_events_read_heavy data/safeguard/far-events-v3-20261108/events-v3-20261108_06_test_events_quiet data/safeguard/far-events-v3-20261108/events-v3-20261108_07_test_events_quiet data/safeguard/far-events-v3-20261108/events-v3-20261108_08_test_events_write_heavy data/safeguard/far-events-v3-20261108/events-v3-20261108_09_test_events_read_heavy data/safeguard/far-events-v3-20261108/events-v3-20261108_10_test_events_bursty data/safeguard/far-events-v3-20261108/events-v3-20261108_11_test_events_mixed data/safeguard/far-events-v3-20261108/events-v3-20261108_12_test_events_steady data/safeguard/far-events-v3-20261108/events-v3-20261108_13_test_events_quiet data/safeguard/far-events-v3-20261108/events-v3-20261108_14_test_events_write_heavy data/safeguard/far-events-v3-20261108/events-v3-20261108_15_test_events_steady data/safeguard/far-events-v3-20261108/events-v3-20261108_16_test_events_mixed data/safeguard/far-events-v3-20261108/events-v3-20261108_17_test_events_read_heavy data/safeguard/far-events-v3-20261108/events-v3-20261108_18_test_events_bursty data/safeguard/far-events-v3-20261108/events-v3-20261108_19_test_events_bursty data/safeguard/far-events-v3-20261108/events-v3-20261108_20_test_events_write_heavy data/safeguard/far-events-v3-20261108/events-v3-20261108_21_test_events_steady data/safeguard/far-events-v3-20261108/events-v3-20261108_22_test_events_read_heavy data/safeguard/far-events-v3-20261108/events-v3-20261108_23_test_events_quiet data/safeguard/far-events-v3-20261108/events-v3-20261108_24_test_events_mixed data/safeguard/far-events-v3-20261108/events-v3-20261108_25_test_events_quiet data/safeguard/far-events-v3-20261108/events-v3-20261108_26_test_events_write_heavy data/safeguard/far-events-v3-20261108/events-v3-20261108_27_test_events_bursty data/safeguard/far-events-v3-20261108/events-v3-20261108_28_test_events_mixed data/safeguard/far-events-v3-20261108/events-v3-20261108_29_test_events_steady data/safeguard/far-events-v3-20261108/events-v3-20261108_30_test_events_read_heavy data/safeguard/far-events-v3-20261108/events-v3-20261108_31_test_events_steady data/safeguard/far-events-v3-20261108/events-v3-20261108_32_test_events_write_heavy data/safeguard/far-events-v3-20261108/events-v3-20261108_33_test_events_read_heavy data/safeguard/far-events-v3-20261108/events-v3-20261108_34_test_events_bursty data/safeguard/far-events-v3-20261108/events-v3-20261108_35_test_events_quiet data/safeguard/far-events-v3-20261108/events-v3-20261108_36_test_events_mixed data/safeguard/far-events-v3-20261108/events-v3-20261108_37_test_events_bursty data/safeguard/far-events-v3-20261108/events-v3-20261108_38_test_events_mixed data/safeguard/far-events-v3-20261108/events-v3-20261108_39_test_events_quiet data/safeguard/far-events-v3-20261108/events-v3-20261108_40_test_events_write_heavy data/safeguard/far-events-v3-20261108/events-v3-20261108_41_test_events_steady data/safeguard/far-events-v3-20261108/events-v3-20261108_42_test_events_read_heavy data/safeguard/far-events-v3-20261108/events-v3-20261108_43_test_events_mixed data/safeguard/far-events-v3-20261108/events-v3-20261108_44_test_events_steady data/safeguard/far-events-v3-20261108/events-v3-20261108_45_test_events_quiet --out /tmp/claude-1000/-home-eh-projects-hyptcn3/07093d58-41fa-4430-9394-40392329f312/scratchpad/v7/safeguard_far_events_v3_20261114.json",
+  "commit": "ad04adc1fe1e4c3aed0e300509d21d7a622f49df",
+  "commit_dirty": true,
+  "commit_note": "neulozene zmeny: data/results/collection_campaign_events_v3_20261108/operator_log.md, data/results/collection_campaign_events_v3_20261108/record.py, data/results/collection_campaign_events_v3_20261108/sampler.log.xz, data/results/collection_campaign_events_v3_20261108/sampler.sh, data/results/collection_campaign_events_v3_20261108/verify_archives.log, data/results/collection_process_walk_combined_20261112.json, data/results/collection_process_walk_combined_20261112/, data/results/collection_process_walk_combined_20261112_audit.json, data/results/safeguard_far_events_v3_20261114/; kod urcuje evaluator_sha256",
+  "cwd": "/home/eh/projects/hyptcn3",
+  "date": "2026-11-14T00:41:23.636737+00:00",
+  "evaluator_sha256": "8676dc7271d8baae9f6eaee84489176a4fba4bce14ed3a4503593aa535963063",
+  "guest": "jadro 6.1.0-42-cloud-amd64, stack_sha256 3fcb9e724f031e3ed24fd3e08fb8f2946c8cd3f04416bc871d8f7dc31b3d46bc",
+  "host": "Linux-7.2.9+deb13-amd64-x86_64-with-glibc2.41",
+  "n": 45,
+  "values": {
+    "alfa": 0.05,
+    "alokacia": {
+      "indexovanych": 45,
+      "nezozbierane": [
+        "events-v3-20261108_47_test_events_bursty",
+        "events-v3-20261108_48_test_events_read_heavy"
+      ],
+      "planovanych": 48,
+      "relacii_v_skupinach": {
+        "v3-test_events-1": 6,
+        "v3-test_events-2": 6,
+        "v3-test_events-3": 6,
+        "v3-test_events-4": 6,
+        "v3-test_events-5": 6,
+        "v3-test_events-6": 6,
+        "v3-test_events-7": 6,
+        "v3-test_events-8": 3
+      },
+      "rozhodnutie": "Owner decision 2026-11-13: close events-v3-20261108 with its 45 accepted sessions and evaluate them without further collection. The rejected session stays archived with its verdict; sessions 47 and 48 were never captured. No new campaign: a fix of the process-list walk in guestparse would change extractor_sha256, so the bundle server-v2-benign-v6 and the audits of corpus benign-v6 would no longer match. Groups 1 to 7 are complete (6 scenarios each), group 8 has 3 of its 6 sessions; nothing is redistributed.",
+      "uplna": false,
+      "zamietnute": [
+        "events-v3-20261108_46_test_events_write_heavy"
+      ]
+    },
+    "balik": {
+      "calibration": {
+        "alarm_events": 1,
+        "calibration_alarm_events_per_hour": 0.09146341463414634,
+        "comparison": ">",
+        "diagnostic": false,
+        "event_definition": "k of n after n scored targets; rising edges; reset at barriers",
+        "exposure_definition": "scored targets times nominal interval; warmup/gaps excluded",
+        "fpr_design": 0.01,
+        "k": 3,
+        "method": "benign_score_quantile_higher",
+        "minimum_scores": 1000,
+        "n": 5,
+        "n_scores": 7872,
+        "note": "Calibration frequency is not a held-out false-alarm measurement or guarantee.",
+        "role": "calibration",
+        "scorable_hours": 10.933333333333334,
+        "threshold": 14.43027114868164,
+        "window_exceedance_fraction": 0.009908536585365854
+      },
+      "corpus_index_sha256": "b86e5fc35d7c4227c188cc024a7b25a142e5c80e4782807c773e9ee519dad790",
+      "created_utc": "2026-10-29T23:24:28.981200+00:00",
+      "manifest_sha256": "abbacf9580e72005f93cf636215f08466d11c00dfc241e98e25ad1260bbc4371"
+    },
+    "dozvuk_s": 300.0,
+    "index": "/home/eh/projects/hyptcn3/data/campaigns/events-v3-20261108/events_index.json",
+    "index_sha256": "f47d6976ab75bcd2bc9003205a72473e5292ed60f476c3ce16866ca9700d47ca",
+    "merane": {
+      "po_udalosti": {
+        "disperzia": {
+          "df": null,
+          "dovod": "bez udalosti modelu",
+          "p": null,
+          "x2": null
+        },
+        "far_h": {
+          "skorovany": {
+            "dolna_h": 0.0,
+            "horna_h": 0.4225251681454078,
+            "udalosti_h": 0.0
+          },
+          "sledovany": {
+            "dolna_h": 0.0,
+            "horna_h": 0.39879777882312817,
+            "udalosti_h": 0.0
+          }
+        },
+        "skupin": 8,
+        "spolu": {
+          "bez_skore_cas_podiel": 0.0561561561561561,
+          "relacii": 45,
+          "riadkov": 6660,
+          "skorovany_s": 31430.0,
+          "skorovanych": 6286,
+          "sledovany_s": 33300.0,
+          "udalosti_model": 0
+        },
+        "udalosti_integrita": 0
+      },
+      "prevadzka": {
+        "disperzia": {
+          "df": 44,
+          "dovod": null,
+          "p": 0.8673091909004592,
+          "x2": 33.788636363636364
+        },
+        "far_h": {
+          "skorovany": {
+            "dolna_h": 0.001190881410380134,
+            "horna_h": 0.262075079471876,
+            "udalosti_h": 0.04703730319461684
+          },
+          "sledovany": {
+            "dolna_h": 0.0010761450940839903,
+            "horna_h": 0.23682526958356495,
+            "udalosti_h": 0.042505460771001834
+          }
+        },
+        "skupin": 8,
+        "spolu": {
+          "bez_skore_cas_podiel": 0.09634571108093748,
+          "relacii": 45,
+          "riadkov": 16939,
+          "skorovany_s": 76535.0,
+          "skorovanych": 15307,
+          "sledovany_s": 84695.0,
+          "udalosti_model": 1
+        },
+        "udalosti_integrita": 0
+      },
+      "skupin": 8,
+      "triedy": {
+        "chyba_aplikacie": {
+          "disperzia": {
+            "df": 14,
+            "dovod": null,
+            "p": 0.9999796298615038,
+            "x2": 1.5953599006132957
+          },
+          "far_h": {
+            "skorovany": {
+              "dolna_h": 5.450566289994578,
+              "horna_h": 16.062179970667092,
+              "udalosti_h": 9.738503155996392
+            },
+            "sledovany": {
+              "dolna_h": 4.926387950777496,
+              "horna_h": 14.517487846348661,
+              "udalosti_h": 8.80195599022005
+            }
+          },
+          "skupin": 8,
+          "spolu": {
+            "bez_skore_cas_podiel": 0.09616951915240424,
+            "relacii": 15,
+            "riadkov": 1227,
+            "skorovany_s": 5545.0,
+            "skorovanych": 1109,
+            "sledovany_s": 6135.0,
+            "udalosti_model": 15
+          },
+          "udalosti_integrita": 0,
+          "voci_prevadzke": {
+            "dovod": null,
+            "p": 4.175109563658957e-17,
+            "pomer_mier": 207.03787195671777
+          }
+        },
+        "restart_sluzby": {
+          "disperzia": {
+            "df": 31,
+            "dovod": null,
+            "p": 0.705671756943672,
+            "x2": 26.323736553965762
+          },
+          "far_h": {
+            "skorovany": {
+              "dolna_h": 2.6201465173836094,
+              "horna_h": 7.721264667303775,
+              "udalosti_h": 4.681404421326398
+            },
+            "sledovany": {
+              "dolna_h": 2.3575187268346283,
+              "horna_h": 6.94733135236732,
+              "udalosti_h": 4.21216848673947
+            }
+          },
+          "skupin": 8,
+          "spolu": {
+            "bez_skore_cas_podiel": 0.10023400936037441,
+            "relacii": 32,
+            "riadkov": 2564,
+            "skorovany_s": 11535.0,
+            "skorovanych": 2307,
+            "sledovany_s": 12820.0,
+            "udalosti_model": 15
+          },
+          "udalosti_integrita": 0,
+          "voci_prevadzke": {
+            "dovod": null,
+            "p": 8.036517432061915e-13,
+            "pomer_mier": 99.52535760728219
+          }
+        },
+        "udrzba": {
+          "disperzia": {
+            "df": null,
+            "dovod": "bez udalosti modelu",
+            "p": null,
+            "x2": null
+          },
+          "far_h": {
+            "skorovany": {
+              "dolna_h": 0.0,
+              "horna_h": 2.2975719783408595,
+              "udalosti_h": 0.0
+            },
+            "sledovany": {
+              "dolna_h": 0.0,
+              "horna_h": 1.9615902562496554,
+              "udalosti_h": 0.0
+            }
+          },
+          "skupin": 8,
+          "spolu": {
+            "bez_skore_cas_podiel": 0.1462333825701625,
+            "relacii": 16,
+            "riadkov": 1354,
+            "skorovany_s": 5780.0,
+            "skorovanych": 1156,
+            "sledovany_s": 6770.0,
+            "udalosti_model": 0
+          },
+          "udalosti_integrita": 0,
+          "voci_prevadzke": {
+            "dovod": null,
+            "p": 1.0,
+            "pomer_mier": 0.0
+          }
+        },
+        "zataz_pamate": {
+          "disperzia": {
+            "df": 15,
+            "dovod": null,
+            "p": 0.9999981725122098,
+            "x2": 1.3263009000609565
+          },
+          "far_h": {
+            "skorovany": {
+              "dolna_h": 5.920350651913797,
+              "horna_h": 17.44657941965701,
+              "udalosti_h": 10.577864838393731
+            },
+            "sledovany": {
+              "dolna_h": 5.096693099160191,
+              "horna_h": 15.019357156382638,
+              "udalosti_h": 9.106239460370995
+            }
+          },
+          "skupin": 8,
+          "spolu": {
+            "bez_skore_cas_podiel": 0.1391231028667791,
+            "relacii": 16,
+            "riadkov": 1186,
+            "skorovany_s": 5105.0,
+            "skorovanych": 1021,
+            "sledovany_s": 5930.0,
+            "udalosti_model": 15
+          },
+          "udalosti_integrita": 0,
+          "voci_prevadzke": {
+            "dovod": null,
+            "p": 1.3160581273265384e-17,
+            "pomer_mier": 224.88246816846228
+          }
+        },
+        "zla_konfiguracia": {
+          "disperzia": {
+            "df": 27,
+            "dovod": null,
+            "p": 0.8869725256646673,
+            "x2": 18.51559057805607
+          },
+          "far_h": {
+            "skorovany": {
+              "dolna_h": 3.054949039467546,
+              "horna_h": 8.396497732413351,
+              "udalosti_h": 5.244215938303342
+            },
+            "sledovany": {
+              "dolna_h": 2.8867413190758104,
+              "horna_h": 7.934180448361443,
+              "udalosti_h": 4.955465587044535
+            }
+          },
+          "skupin": 8,
+          "spolu": {
+            "bez_skore_cas_podiel": 0.05506072874493928,
+            "relacii": 28,
+            "riadkov": 2470,
+            "skorovany_s": 11670.0,
+            "skorovanych": 2334,
+            "sledovany_s": 12350.0,
+            "udalosti_model": 17
+          },
+          "udalosti_integrita": 0,
+          "voci_prevadzke": {
+            "dovod": null,
+            "p": 1.8370581813597767e-14,
+            "pomer_mier": 111.49057412167951
+          }
+        }
+      },
+      "typy": {
+        "restart_databazy": {
+          "disperzia": {
+            "df": 15,
+            "dovod": null,
+            "p": 0.9993818413839115,
+            "x2": 3.21683575005773
+          },
+          "far_h": {
+            "skorovany": {
+              "dolna_h": 5.943636200200577,
+              "horna_h": 17.515199201051924,
+              "udalosti_h": 10.619469026548671
+            },
+            "sledovany": {
+              "dolna_h": 5.020496690700986,
+              "horna_h": 14.79481527198489,
+              "udalosti_h": 8.970099667774086
+            }
+          },
+          "skupin": 8,
+          "spolu": {
+            "bez_skore_cas_podiel": 0.1553156146179402,
+            "relacii": 16,
+            "riadkov": 1204,
+            "skorovany_s": 5085.0,
+            "skorovanych": 1017,
+            "sledovany_s": 6020.0,
+            "udalosti_model": 15
+          },
+          "trieda": "restart_sluzby",
+          "udalosti_integrita": 0,
+          "voci_prevadzke": {
+            "dovod": null,
+            "p": 1.2456575368989054e-17,
+            "pomer_mier": 225.7669616519174
+          }
+        },
+        "restart_sluzby": {
+          "disperzia": {
+            "df": null,
+            "dovod": "bez udalosti modelu",
+            "p": null,
+            "x2": null
+          },
+          "far_h": {
+            "skorovany": {
+              "dolna_h": 0.0,
+              "horna_h": 2.058909462761266,
+              "udalosti_h": 0.0
+            },
+            "sledovany": {
+              "dolna_h": 0.0,
+              "horna_h": 1.9529361815897306,
+              "udalosti_h": 0.0
+            }
+          },
+          "skupin": 8,
+          "spolu": {
+            "bez_skore_cas_podiel": 0.05147058823529416,
+            "relacii": 16,
+            "riadkov": 1360,
+            "skorovany_s": 6450.0,
+            "skorovanych": 1290,
+            "sledovany_s": 6800.0,
+            "udalosti_model": 0
+          },
+          "trieda": "restart_sluzby",
+          "udalosti_integrita": 0,
+          "voci_prevadzke": {
+            "dovod": null,
+            "p": 1.0,
+            "pomer_mier": 0.0
+          }
+        },
+        "udrzba_zaloha": {
+          "disperzia": {
+            "df": null,
+            "dovod": "bez udalosti modelu",
+            "p": null,
+            "x2": null
+          },
+          "far_h": {
+            "skorovany": {
+              "dolna_h": 0.0,
+              "horna_h": 2.2975719783408595,
+              "udalosti_h": 0.0
+            },
+            "sledovany": {
+              "dolna_h": 0.0,
+              "horna_h": 1.9615902562496554,
+              "udalosti_h": 0.0
+            }
+          },
+          "skupin": 8,
+          "spolu": {
+            "bez_skore_cas_podiel": 0.1462333825701625,
+            "relacii": 16,
+            "riadkov": 1354,
+            "skorovany_s": 5780.0,
+            "skorovanych": 1156,
+            "sledovany_s": 6770.0,
+            "udalosti_model": 0
+          },
+          "trieda": "udrzba",
+          "udalosti_integrita": 0,
+          "voci_prevadzke": {
+            "dovod": null,
+            "p": 1.0,
+            "pomer_mier": 0.0
+          }
+        },
+        "zamok_tabulky": {
+          "disperzia": {
+            "df": 14,
+            "dovod": null,
+            "p": 0.9999796298615038,
+            "x2": 1.5953599006132957
+          },
+          "far_h": {
+            "skorovany": {
+              "dolna_h": 5.450566289994578,
+              "horna_h": 16.062179970667092,
+              "udalosti_h": 9.738503155996392
+            },
+            "sledovany": {
+              "dolna_h": 4.926387950777496,
+              "horna_h": 14.517487846348661,
+              "udalosti_h": 8.80195599022005
+            }
+          },
+          "skupin": 8,
+          "spolu": {
+            "bez_skore_cas_podiel": 0.09616951915240424,
+            "relacii": 15,
+            "riadkov": 1227,
+            "skorovany_s": 5545.0,
+            "skorovanych": 1109,
+            "sledovany_s": 6135.0,
+            "udalosti_model": 15
+          },
+          "trieda": "chyba_aplikacie",
+          "udalosti_integrita": 0,
+          "voci_prevadzke": {
+            "dovod": null,
+            "p": 4.175109563658957e-17,
+            "pomer_mier": 207.03787195671777
+          }
+        },
+        "zataz_pamate": {
+          "disperzia": {
+            "df": 15,
+            "dovod": null,
+            "p": 0.9999981725122098,
+            "x2": 1.3263009000609565
+          },
+          "far_h": {
+            "skorovany": {
+              "dolna_h": 5.920350651913797,
+              "horna_h": 17.44657941965701,
+              "udalosti_h": 10.577864838393731
+            },
+            "sledovany": {
+              "dolna_h": 5.096693099160191,
+              "horna_h": 15.019357156382638,
+              "udalosti_h": 9.106239460370995
+            }
+          },
+          "skupin": 8,
+          "spolu": {
+            "bez_skore_cas_podiel": 0.1391231028667791,
+            "relacii": 16,
+            "riadkov": 1186,
+            "skorovany_s": 5105.0,
+            "skorovanych": 1021,
+            "sledovany_s": 5930.0,
+            "udalosti_model": 15
+          },
+          "trieda": "zataz_pamate",
+          "udalosti_integrita": 0,
+          "voci_prevadzke": {
+            "dovod": null,
+            "p": 1.3160581273265384e-17,
+            "pomer_mier": 224.88246816846228
+          }
+        },
+        "zla_konfiguracia_nginx": {
+          "disperzia": {
+            "df": 14,
+            "dovod": null,
+            "p": 0.869001956896432,
+            "x2": 8.373015873015873
+          },
+          "far_h": {
+            "skorovany": {
+              "dolna_h": 0.015435073453589087,
+              "horna_h": 3.396768197693486,
+              "udalosti_h": 0.6096528365791702
+            },
+            "sledovany": {
+              "dolna_h": 0.014548141858490592,
+              "horna_h": 3.2015827944740676,
+              "udalosti_h": 0.5746209098164405
+            }
+          },
+          "skupin": 8,
+          "spolu": {
+            "bez_skore_cas_podiel": 0.05746209098164401,
+            "relacii": 15,
+            "riadkov": 1253,
+            "skorovany_s": 5905.0,
+            "skorovanych": 1181,
+            "sledovany_s": 6265.0,
+            "udalosti_model": 1
+          },
+          "trieda": "zla_konfiguracia",
+          "udalosti_integrita": 0,
+          "voci_prevadzke": {
+            "dovod": null,
+            "p": 0.13812515214040658,
+            "pomer_mier": 12.961049957662999
+          }
+        },
+        "zla_konfiguracia_sluzby": {
+          "disperzia": {
+            "df": 12,
+            "dovod": null,
+            "p": 0.9992918418043277,
+            "x2": 2.0693856721166615
+          },
+          "far_h": {
+            "skorovany": {
+              "dolna_h": 5.710906649281784,
+              "horna_h": 16.225289046178556,
+              "udalosti_h": 9.991326973113615
+            },
+            "sledovany": {
+              "dolna_h": 5.410579594594821,
+              "horna_h": 15.372028159608773,
+              "udalosti_h": 9.465899753492193
+            }
+          },
+          "skupin": 8,
+          "spolu": {
+            "bez_skore_cas_podiel": 0.05258833196384549,
+            "relacii": 13,
+            "riadkov": 1217,
+            "skorovany_s": 5765.0,
+            "skorovanych": 1153,
+            "sledovany_s": 6085.0,
+            "udalosti_model": 16
+          },
+          "trieda": "zla_konfiguracia",
+          "udalosti_integrita": 0,
+          "voci_prevadzke": {
+            "dovod": null,
+            "p": 5.3360618262404115e-18,
+            "pomer_mier": 212.41283607979184
+          }
+        }
+      },
+      "vsetky_udalosti": {
+        "disperzia": {
+          "df": 106,
+          "dovod": null,
+          "p": 0.9994522157884115,
+          "x2": 64.79220840907058
+        },
+        "far_h": {
+          "skorovany": {
+            "dolna_h": 4.317551662677464,
+            "horna_h": 7.219183215660061,
+            "udalosti_h": 5.631386400908288
+          },
+          "sledovany": {
+            "dolna_h": 3.88878900466359,
+            "horna_h": 6.502268532046052,
+            "udalosti_h": 5.072150891944097
+          }
+        },
+        "skupin": 8,
+        "spolu": {
+          "bez_skore_cas_podiel": 0.09930689694352912,
+          "relacii": 107,
+          "riadkov": 8801,
+          "skorovany_s": 39635.0,
+          "skorovanych": 7927,
+          "sledovany_s": 44005.0,
+          "udalosti_model": 62
+        },
+        "udalosti_integrita": 0,
+        "voci_prevadzke": {
+          "dovod": null,
+          "p": 4.642203170222193e-28,
+          "pomer_mier": 119.72171060930997
+        }
+      }
+    },
+    "okno_riadkov": 32,
+    "perioda_s": 5,
+    "poznamka": "Prevadzkove udalosti su benigne; kazdy alarm je falosny. Vysledok plati iba pre tieto typy udalosti v labe a nehovori nic o detekcii utokov ani malveru (HONESTY P4).",
+    "predpoklady": [
+      "obojstranny exaktny Garwoodov interval s alfa/2 na kazdu stranu; pri 0 udalostiach je horna hranica -ln(alfa/2) udalosti",
+      "odhaduje sa miera vazena expoziciou tychto relacii; udalosti v relacii sa beru ako nezavisle (pravidlo k z n ich moze zhlukovat, casy udalosti su pri relaciach)",
+      "variabilita medzi bootmi v intervale nie je; jednotkou neistoty je skupina (METODIKA kap. 1), pocet skupin je vo vysledku",
+      "intervaly po scenaroch a skupinach nie su simultanne",
+      "okno patri udalosti, ked sa jeho snimky [t - (W-1)*perioda, t] prekryvaju s intervalom udalosti [host start, host stop hotovy]; cas udalosti obsahuje aj prechod (METODIKA kap. 3, znacka transition)",
+      "dozvuk je 300 s po poslednom okne, ktore udalost obsahovalo; mimo udalosti a dozvuku je cista prevadzka",
+      "udalost bez dokazu (executed false) a jej okna do metrik nevstupuju (NAVRH_PROTOKOL_V3 kap. 5)",
+      "porovnanie s cistou prevadzkou je podmieneny exaktny binomicky test dvoch Poissonovych mier (jednostranne: viac alarmov pri udalosti); relacie a boot nie su v teste zohladnene"
+    ],
+    "prostredie_voci_baliku": {
+      "collector_sha256": "ine",
+      "extractor_sha256": "ine",
+      "kernel": "zhodne",
+      "stack_sha256": "zhodne"
+    },
+    "protocol_sha256": "f7d69b24a6d3195fc34304a2d5baf1211f47aa0a22846f5bf964f5d4181f7378",
+    "protokol": "server-events-v3",
+    "relacie": {
+      "events-v3-20261108_01_test_events_bursty": {
+        "archiv": "/home/eh/projects/hyptcn3/data/collections/events-v3-20261108_01_test_events_bursty/campaign_audit_20261108T121151836518Z.npz",
+        "bez_skore_cas_podiel": 0.0888888888888889,
+        "bez_skore_riadkov_podiel": 0.0888888888888889,
+        "casy_udalosti_model_s": [
+          970.0,
+          1980.0
+        ],
+        "chyb_vstupu": 0,
+        "chyb_vstupu_s": 0,
+        "features_sha256": "baa6f03a57b07de790e7af3ccf9072359384d3487847947c75d9c874fb0a56ec",
+        "integrita_neuzavrete": {
+          "process_cross_view": 3,
+          "text_integrity": 720
+        },
+        "integrita_uzavretych_riadkov": 0,
+        "predikcie_aktivity": {
+          "bursty": 618,
+          "read_heavy": 15,
+          "write_heavy": 23
+        },
+        "prehratie": "/home/eh/projects/hyptcn3/data/safeguard/far-events-v3-20261108/events-v3-20261108_01_test_events_bursty",
+        "riadkov": 720,
+        "scenario": "bursty",
+        "skorovany_s": 3280,
+        "skorovanych": 656,
+        "skupina": "v3-test_events-1",
+        "sledovany_s": 3600.0,
+        "subory_sha256": {
+          "configuration.json": "5bd1313989d0a5850431f4d0a61ebd232d458fdf0be8539bd49998eb37caf891",
+          "events.jsonl": "9cca26a21d9958ea449ee7e0e1e117c9d6192b9856ed94013f4304990c58137f",
+          "status.json": "ebb8e6277e267efaa1b9c94a4cd5f94df1967023f78642ee8b6824e8aed9515f"
+        },
+        "udalosti": 2,
+        "udalosti_integrita": 0,
+        "udalosti_model": 2,
+        "udalosti_sha256": "7f986e1e9506646e9a6e9a1b0c083d8663384b8c89d6eb179ea72c6e987fb3a7",
+        "vylucenych_riadkov": 0,
+        "vypadkov": 0,
+        "vypadky_s": 0
+      },
+      "events-v3-20261108_02_test_events_steady": {
+        "archiv": "/home/eh/projects/hyptcn3/data/collections/events-v3-20261108_02_test_events_steady/campaign_audit_20261108T134040780100Z.npz",
+        "bez_skore_cas_podiel": 0.0888888888888889,
+        "bez_skore_riadkov_podiel": 0.0888888888888889,
+        "casy_udalosti_model_s": [
+          1980.0
+        ],
+        "chyb_vstupu": 0,
+        "chyb_vstupu_s": 0,
+        "features_sha256": "031dc99a67a52313baa4893634b0f1da3d67edae818cad78e76127f7134c0954",
+        "integrita_neuzavrete": {
+          "process_cross_view": 1,
+          "text_integrity": 720
+        },
+        "integrita_uzavretych_riadkov": 0,
+        "predikcie_aktivity": {
+          "bursty": 29,
+          "quiet": 1,
+          "read_heavy": 577,
+          "steady": 34,
+          "write_heavy": 15
+        },
+        "prehratie": "/home/eh/projects/hyptcn3/data/safeguard/far-events-v3-20261108/events-v3-20261108_02_test_events_steady",
+        "riadkov": 720,
+        "scenario": "steady",
+        "skorovany_s": 3280,
+        "skorovanych": 656,
+        "skupina": "v3-test_events-1",
+        "sledovany_s": 3600.0,
+        "subory_sha256": {
+          "configuration.json": "60536bbd5c14262e1284d5f9b42ac0f33be99a77ba1b5100651ac7f2639a9735",
+          "events.jsonl": "3639145538d827ff3c4008b8c9546c596ddd7b8f1ed310e9cd66e334a656c8eb",
+          "status.json": "f86659087a951fa12b3e0a62113da519a673ce66b0629d244ccc079c70614d27"
+        },
+        "udalosti": 1,
+        "udalosti_integrita": 0,
+        "udalosti_model": 1,
+        "udalosti_sha256": "164ce0accb4cd5cca1da1ea0ffeea57c2de7448882b0c081f51f6105b9d2d424",
+        "vylucenych_riadkov": 0,
+        "vypadkov": 0,
+        "vypadky_s": 0
+      },
+      "events-v3-20261108_03_test_events_write_heavy": {
+        "archiv": "/home/eh/projects/hyptcn3/data/collections/events-v3-20261108_03_test_events_write_heavy/campaign_audit_20261108T150445255994Z.npz",
+        "bez_skore_cas_podiel": 0.0888888888888889,
+        "bez_skore_riadkov_podiel": 0.0888888888888889,
+        "casy_udalosti_model_s": [],
+        "chyb_vstupu": 0,
+        "chyb_vstupu_s": 0,
+        "features_sha256": "77cd2456381cb4381ca5026a0b1183d5b4e734efe2a57a607b476ea46959f77a",
+        "integrita_neuzavrete": {
+          "text_integrity": 720
+        },
+        "integrita_uzavretych_riadkov": 0,
+        "predikcie_aktivity": {
+          "bursty": 291,
+          "mixed": 10,
+          "write_heavy": 355
+        },
+        "prehratie": "/home/eh/projects/hyptcn3/data/safeguard/far-events-v3-20261108/events-v3-20261108_03_test_events_write_heavy",
+        "riadkov": 720,
+        "scenario": "write_heavy",
+        "skorovany_s": 3280,
+        "skorovanych": 656,
+        "skupina": "v3-test_events-1",
+        "sledovany_s": 3600.0,
+        "subory_sha256": {
+          "configuration.json": "f93769b41d5e08f84ea1ba84ef6dd9900c93019d5a6202db32afebaa5b59d2b4",
+          "events.jsonl": "2ad228f2a8823c2ef2e82c98900e856d4d1abdea2caa8dcecd23b11fdac64156",
+          "status.json": "785e45bf2e93cb109e0b0e9d11b67fcbe355b709c8673e6f5bd2db3ec7d1e50a"
+        },
+        "udalosti": 0,
+        "udalosti_integrita": 0,
+        "udalosti_model": 0,
+        "udalosti_sha256": "75823781576548b4086e4eb8ef8c77d8586f83d0d68a2f95c064aff9935807c5",
+        "vylucenych_riadkov": 0,
+        "vypadkov": 0,
+        "vypadky_s": 0
+      },
+      "events-v3-20261108_04_test_events_mixed": {
+        "archiv": "/home/eh/projects/hyptcn3/data/collections/events-v3-20261108_04_test_events_mixed/campaign_audit_20261108T163114716672Z.npz",
+        "bez_skore_cas_podiel": 0.0888888888888889,
+        "bez_skore_riadkov_podiel": 0.0888888888888889,
+        "casy_udalosti_model_s": [
+          1630.0,
+          2500.0
+        ],
+        "chyb_vstupu": 0,
+        "chyb_vstupu_s": 0,
+        "features_sha256": "fd76ef538082d24a8ede74569526fdf1433f5551c3b66ed48c1de6ccc4b1a829",
+        "integrita_neuzavrete": {
+          "text_integrity": 720
+        },
+        "integrita_uzavretych_riadkov": 0,
+        "predikcie_aktivity": {
+          "bursty": 32,
+          "mixed": 521,
+          "quiet": 4,
+          "read_heavy": 11,
+          "steady": 53,
+          "write_heavy": 35
+        },
+        "prehratie": "/home/eh/projects/hyptcn3/data/safeguard/far-events-v3-20261108/events-v3-20261108_04_test_events_mixed",
+        "riadkov": 720,
+        "scenario": "mixed",
+        "skorovany_s": 3280,
+        "skorovanych": 656,
+        "skupina": "v3-test_events-1",
+        "sledovany_s": 3600.0,
+        "subory_sha256": {
+          "configuration.json": "943181f72fa306af52557403ee43323230d8c61dfb5241c5a5a715b07b684e90",
+          "events.jsonl": "2547ea7137210b0cd22691dc7c51a592112870d459b8385ca1458af18faa02e7",
+          "status.json": "8ae37538f95f57ef77ed433149ea36cc34d28205e0c65723143eec1779d7fb88"
+        },
+        "udalosti": 2,
+        "udalosti_integrita": 0,
+        "udalosti_model": 2,
+        "udalosti_sha256": "bde2f4f0b9b731e8842d15273efd56033dcee0727c87d409183682f4d40803a9",
+        "vylucenych_riadkov": 0,
+        "vypadkov": 0,
+        "vypadky_s": 0
+      },
+      "events-v3-20261108_05_test_events_read_heavy": {
+        "archiv": "/home/eh/projects/hyptcn3/data/collections/events-v3-20261108_05_test_events_read_heavy/campaign_audit_20261108T181022588150Z.npz",
+        "bez_skore_cas_podiel": 0.0888888888888889,
+        "bez_skore_riadkov_podiel": 0.0888888888888889,
+        "casy_udalosti_model_s": [
+          880.0
+        ],
+        "chyb_vstupu": 0,
+        "chyb_vstupu_s": 0,
+        "features_sha256": "bfd461655cae7b1b54ef287afd87549e5b1497cd07d4ac4bc44ddbcc41b3d3f1",
+        "integrita_neuzavrete": {
+          "text_integrity": 720
+        },
+        "integrita_uzavretych_riadkov": 0,
+        "predikcie_aktivity": {
+          "quiet": 22,
+          "steady": 634
+        },
+        "prehratie": "/home/eh/projects/hyptcn3/data/safeguard/far-events-v3-20261108/events-v3-20261108_05_test_events_read_heavy",
+        "riadkov": 720,
+        "scenario": "read_heavy",
+        "skorovany_s": 3280,
+        "skorovanych": 656,
+        "skupina": "v3-test_events-1",
+        "sledovany_s": 3600.0,
+        "subory_sha256": {
+          "configuration.json": "6ec49cca7ddf08ea33e5f8c3b52d7cc3c8af0ceabd08257898e11a1fbecd3c93",
+          "events.jsonl": "ab1db43c6a18f80cf4e403f55e1eced1218616867d3c6beedd55bc2abcaaa43d",
+          "status.json": "914b8702c7907ec9669303d22e626e8d2120c0398065033f3f0797af54011359"
+        },
+        "udalosti": 1,
+        "udalosti_integrita": 0,
+        "udalosti_model": 1,
+        "udalosti_sha256": "69928d714c8ede46ba076b941dd2174cf5ccde32105e6776caf0a36408ad9c28",
+        "vylucenych_riadkov": 0,
+        "vypadkov": 0,
+        "vypadky_s": 0
+      },
+      "events-v3-20261108_06_test_events_quiet": {
+        "archiv": "/home/eh/projects/hyptcn3/data/collections/events-v3-20261108_06_test_events_quiet/campaign_audit_20261108T195628654846Z.npz",
+        "bez_skore_cas_podiel": 0.0888888888888889,
+        "bez_skore_riadkov_podiel": 0.0888888888888889,
+        "casy_udalosti_model_s": [],
+        "chyb_vstupu": 0,
+        "chyb_vstupu_s": 0,
+        "features_sha256": "7a1402b78413633a8dc64116fc605248397be96d0e17d046d7cd9b50b7e0133d",
+        "integrita_neuzavrete": {
+          "process_cross_view": 7,
+          "text_integrity": 720
+        },
+        "integrita_uzavretych_riadkov": 0,
+        "predikcie_aktivity": {
+          "quiet": 444,
+          "read_heavy": 1,
+          "steady": 211
+        },
+        "prehratie": "/home/eh/projects/hyptcn3/data/safeguard/far-events-v3-20261108/events-v3-20261108_06_test_events_quiet",
+        "riadkov": 720,
+        "scenario": "quiet",
+        "skorovany_s": 3280,
+        "skorovanych": 656,
+        "skupina": "v3-test_events-1",
+        "sledovany_s": 3600.0,
+        "subory_sha256": {
+          "configuration.json": "9fba4be90e68acbce6898ebc94191d07c1fbbf1214169e4c945150d029f43322",
+          "events.jsonl": "b4457ae70439e3f84ad096611b64b4eec46e03923a03c3cfecd2572576f49682",
+          "status.json": "04fa763744f74d9cd84360fbcf3befaa241674d67dd416073be9197a2a8bfb3f"
+        },
+        "udalosti": 0,
+        "udalosti_integrita": 0,
+        "udalosti_model": 0,
+        "udalosti_sha256": "e49eef2911dc7e56eb5796a62b5d75a967475452232ff0e0c392a98e829db325",
+        "vylucenych_riadkov": 0,
+        "vypadkov": 0,
+        "vypadky_s": 0
+      },
+      "events-v3-20261108_07_test_events_quiet": {
+        "archiv": "/home/eh/projects/hyptcn3/data/collections/events-v3-20261108_07_test_events_quiet/campaign_audit_20261108T213825894200Z.npz",
+        "bez_skore_cas_podiel": 0.0888888888888889,
+        "bez_skore_riadkov_podiel": 0.0888888888888889,
+        "casy_udalosti_model_s": [
+          1980.0
+        ],
+        "chyb_vstupu": 0,
+        "chyb_vstupu_s": 0,
+        "features_sha256": "84e769e950c4471611161f9ff93aec1b471ee01da86673f322f3da2edf2c24f7",
+        "integrita_neuzavrete": {
+          "text_integrity": 720
+        },
+        "integrita_uzavretych_riadkov": 0,
+        "predikcie_aktivity": {
+          "quiet": 611,
+          "read_heavy": 17,
+          "write_heavy": 28
+        },
+        "prehratie": "/home/eh/projects/hyptcn3/data/safeguard/far-events-v3-20261108/events-v3-20261108_07_test_events_quiet",
+        "riadkov": 720,
+        "scenario": "quiet",
+        "skorovany_s": 3280,
+        "skorovanych": 656,
+        "skupina": "v3-test_events-2",
+        "sledovany_s": 3600.0,
+        "subory_sha256": {
+          "configuration.json": "b256244c427f8fb278070a0f3146407b08f0d0fc951884aefd7be0b231a0ff19",
+          "events.jsonl": "c6d65b6a19e41a888819147e665ed15e5a4f0c7f21f6567998c5c3033da5b58a",
+          "status.json": "277e8953e70668f16ed46b1ace1c722ae1c5b4e9d558b53e4f7635c431d06feb"
+        },
+        "udalosti": 1,
+        "udalosti_integrita": 0,
+        "udalosti_model": 1,
+        "udalosti_sha256": "065e0a0472f0d39aaba55c76ce4e2f6e5984b81ec1e4084b155876de0201f80b",
+        "vylucenych_riadkov": 0,
+        "vypadkov": 0,
+        "vypadky_s": 0
+      },
+      "events-v3-20261108_08_test_events_write_heavy": {
+        "archiv": "/home/eh/projects/hyptcn3/data/collections/events-v3-20261108_08_test_events_write_heavy/campaign_audit_20261108T231927042151Z.npz",
+        "bez_skore_cas_podiel": 0.0888888888888889,
+        "bez_skore_riadkov_podiel": 0.0888888888888889,
+        "casy_udalosti_model_s": [
+          700.0,
+          1480.0
+        ],
+        "chyb_vstupu": 0,
+        "chyb_vstupu_s": 0,
+        "features_sha256": "417d82cb8092f3c884ebc26b016a78786a800079049cb72d881267d0cdebd176",
+        "integrita_neuzavrete": {
+          "text_integrity": 720
+        },
+        "integrita_uzavretych_riadkov": 0,
+        "predikcie_aktivity": {
+          "bursty": 61,
+          "mixed": 45,
+          "quiet": 24,
+          "read_heavy": 25,
+          "steady": 1,
+          "write_heavy": 500
+        },
+        "prehratie": "/home/eh/projects/hyptcn3/data/safeguard/far-events-v3-20261108/events-v3-20261108_08_test_events_write_heavy",
+        "riadkov": 720,
+        "scenario": "write_heavy",
+        "skorovany_s": 3280,
+        "skorovanych": 656,
+        "skupina": "v3-test_events-2",
+        "sledovany_s": 3600.0,
+        "subory_sha256": {
+          "configuration.json": "fc4040a96e1411aa2e5da68d592e48f2493e7c00120abb8bd436535d3227215e",
+          "events.jsonl": "06534feaae424ee6689324e4b947c6fee47f94fc2a600b0c2572cb739518f784",
+          "status.json": "f698f3cc6f5fd5c8be0f74ec4448a7dcb9577705670b942221c2ff53577d3911"
+        },
+        "udalosti": 2,
+        "udalosti_integrita": 0,
+        "udalosti_model": 2,
+        "udalosti_sha256": "4781b1d9b12d396a74cb767d2952737367b7098ada430b6ff5aec2c95e95bb2c",
+        "vylucenych_riadkov": 0,
+        "vypadkov": 0,
+        "vypadky_s": 0
+      },
+      "events-v3-20261108_09_test_events_read_heavy": {
+        "archiv": "/home/eh/projects/hyptcn3/data/collections/events-v3-20261108_09_test_events_read_heavy/campaign_audit_20261109T011912242989Z.npz",
+        "bez_skore_cas_podiel": 0.0888888888888889,
+        "bez_skore_riadkov_podiel": 0.0888888888888889,
+        "casy_udalosti_model_s": [
+          670.0,
+          2530.0
+        ],
+        "chyb_vstupu": 0,
+        "chyb_vstupu_s": 0,
+        "features_sha256": "1b157aa5fa24bcdd3911c661fe70d166a2f54d1af70b4baa7212e9f36eec1ae3",
+        "integrita_neuzavrete": {
+          "process_cross_view": 4,
+          "text_integrity": 720
+        },
+        "integrita_uzavretych_riadkov": 0,
+        "predikcie_aktivity": {
+          "bursty": 31,
+          "quiet": 47,
+          "read_heavy": 290,
+          "steady": 243,
+          "write_heavy": 45
+        },
+        "prehratie": "/home/eh/projects/hyptcn3/data/safeguard/far-events-v3-20261108/events-v3-20261108_09_test_events_read_heavy",
+        "riadkov": 720,
+        "scenario": "read_heavy",
+        "skorovany_s": 3280,
+        "skorovanych": 656,
+        "skupina": "v3-test_events-2",
+        "sledovany_s": 3600.0,
+        "subory_sha256": {
+          "configuration.json": "cab7364f543c8b88dcb27ef7a1c33c055fcfb9d0be42b23738abf05f08a4598c",
+          "events.jsonl": "fbf1fa3b0dee9887deb54a67c3ab9f84b014b86f82a9a22138e64f465c12a1ac",
+          "status.json": "2bb15b734568b98721b8172bddd0aa345e96fdc3968242fe986c80237c723e84"
+        },
+        "udalosti": 2,
+        "udalosti_integrita": 0,
+        "udalosti_model": 2,
+        "udalosti_sha256": "4325debdaccf9d9a22eae3fc74ab43ac102489a5f35eddce720020ef99fd472a",
+        "vylucenych_riadkov": 0,
+        "vypadkov": 0,
+        "vypadky_s": 0
+      },
+      "events-v3-20261108_10_test_events_bursty": {
+        "archiv": "/home/eh/projects/hyptcn3/data/collections/events-v3-20261108_10_test_events_bursty/campaign_audit_20261109T031522177665Z.npz",
+        "bez_skore_cas_podiel": 0.0888888888888889,
+        "bez_skore_riadkov_podiel": 0.0888888888888889,
+        "casy_udalosti_model_s": [
+          1480.0
+        ],
+        "chyb_vstupu": 0,
+        "chyb_vstupu_s": 0,
+        "features_sha256": "5fe694a00b31bf3ffa89becddbc843e3e0f5b8dead10130274952e77e0c3ce49",
+        "integrita_neuzavrete": {
+          "process_cross_view": 1,
+          "text_integrity": 720
+        },
+        "integrita_uzavretych_riadkov": 0,
+        "predikcie_aktivity": {
+          "bursty": 593,
+          "quiet": 41,
+          "read_heavy": 7,
+          "steady": 6,
+          "write_heavy": 9
+        },
+        "prehratie": "/home/eh/projects/hyptcn3/data/safeguard/far-events-v3-20261108/events-v3-20261108_10_test_events_bursty",
+        "riadkov": 720,
+        "scenario": "bursty",
+        "skorovany_s": 3280,
+        "skorovanych": 656,
+        "skupina": "v3-test_events-2",
+        "sledovany_s": 3600.0,
+        "subory_sha256": {
+          "configuration.json": "84a406b3d3e92d4fa1fa1c0f5b153608d7c160a2027d12897ecac6157e6a3bbb",
+          "events.jsonl": "15a058e63b2c754d989ab2025e03d34d98a533381bc09849f91d3a76b0c7cbee",
+          "status.json": "7b0611ec27bfbaa330c2327c09363587489c17b9b24744df750c8c1c9a0d64b4"
+        },
+        "udalosti": 1,
+        "udalosti_integrita": 0,
+        "udalosti_model": 1,
+        "udalosti_sha256": "fbc20609e7669c0e613290cda42f161c2094e759626ce0e6672713311387a3a6",
+        "vylucenych_riadkov": 0,
+        "vypadkov": 0,
+        "vypadky_s": 0
+      },
+      "events-v3-20261108_11_test_events_mixed": {
+        "archiv": "/home/eh/projects/hyptcn3/data/collections/events-v3-20261108_11_test_events_mixed/campaign_audit_20261109T060712713750Z.npz",
+        "bez_skore_cas_podiel": 0.0888888888888889,
+        "bez_skore_riadkov_podiel": 0.0888888888888889,
+        "casy_udalosti_model_s": [
+          1510.0
+        ],
+        "chyb_vstupu": 0,
+        "chyb_vstupu_s": 0,
+        "features_sha256": "8d0bab2a48ffb9db5c72b4c58c9dcd34f20272a7c1d39deb396a5d274f5f70fa",
+        "integrita_neuzavrete": {
+          "process_cross_view": 1,
+          "text_integrity": 720
+        },
+        "integrita_uzavretych_riadkov": 0,
+        "predikcie_aktivity": {
+          "bursty": 28,
+          "mixed": 508,
+          "steady": 91,
+          "write_heavy": 29
+        },
+        "prehratie": "/home/eh/projects/hyptcn3/data/safeguard/far-events-v3-20261108/events-v3-20261108_11_test_events_mixed",
+        "riadkov": 720,
+        "scenario": "mixed",
+        "skorovany_s": 3280,
+        "skorovanych": 656,
+        "skupina": "v3-test_events-2",
+        "sledovany_s": 3600.0,
+        "subory_sha256": {
+          "configuration.json": "7a9516ef662ea2f10b760a36557f917407ff62c537222f0f161f88ef288a5336",
+          "events.jsonl": "1c9b6e1c36e47ccd4ca70b35622120baa2cb2231e203f75599c7c996f6374ecf",
+          "status.json": "dcd0719279715c564fae8248d78901968e30caaac703838b508ab2f046d69ca7"
+        },
+        "udalosti": 1,
+        "udalosti_integrita": 0,
+        "udalosti_model": 1,
+        "udalosti_sha256": "430460c550763d4cbc874e962eb0663bf886d868d8ab60188a8708596954d1be",
+        "vylucenych_riadkov": 0,
+        "vypadkov": 0,
+        "vypadky_s": 0
+      },
+      "events-v3-20261108_12_test_events_steady": {
+        "archiv": "/home/eh/projects/hyptcn3/data/collections/events-v3-20261108_12_test_events_steady/campaign_audit_20261109T075308068292Z.npz",
+        "bez_skore_cas_podiel": 0.0888888888888889,
+        "bez_skore_riadkov_podiel": 0.0888888888888889,
+        "casy_udalosti_model_s": [
+          940.0,
+          1660.0
+        ],
+        "chyb_vstupu": 0,
+        "chyb_vstupu_s": 0,
+        "features_sha256": "f170dd46dfa679fbcc3b5a7ce687567d64479247ce5972dd6387977983dd73d6",
+        "integrita_neuzavrete": {
+          "process_cross_view": 1,
+          "text_integrity": 720
+        },
+        "integrita_uzavretych_riadkov": 0,
+        "predikcie_aktivity": {
+          "quiet": 17,
+          "read_heavy": 25,
+          "steady": 614
+        },
+        "prehratie": "/home/eh/projects/hyptcn3/data/safeguard/far-events-v3-20261108/events-v3-20261108_12_test_events_steady",
+        "riadkov": 720,
+        "scenario": "steady",
+        "skorovany_s": 3280,
+        "skorovanych": 656,
+        "skupina": "v3-test_events-2",
+        "sledovany_s": 3600.0,
+        "subory_sha256": {
+          "configuration.json": "81196eff3a3f4586cc4335e235e737a9dda7636fda2dd51bfafbed69b38e9b60",
+          "events.jsonl": "01c0c2671b3b1fa2f84344c0640925470c41f29c32923a9327b7b32e9e711cbb",
+          "status.json": "8b840d8a30196d3c08cee33df62163622e295dd940e788719f87bb4ac2defecc"
+        },
+        "udalosti": 2,
+        "udalosti_integrita": 0,
+        "udalosti_model": 2,
+        "udalosti_sha256": "f82cb6c7b02db16bd4d7b3b8ab21bbc3bd1b2a22e8a09ddd2fa493725df59689",
+        "vylucenych_riadkov": 0,
+        "vypadkov": 0,
+        "vypadky_s": 0
+      },
+      "events-v3-20261108_13_test_events_quiet": {
+        "archiv": "/home/eh/projects/hyptcn3/data/collections/events-v3-20261108_13_test_events_quiet/campaign_audit_20261109T093944668802Z.npz",
+        "bez_skore_cas_podiel": 0.0888888888888889,
+        "bez_skore_riadkov_podiel": 0.0888888888888889,
+        "casy_udalosti_model_s": [
+          1510.0,
+          2470.0
+        ],
+        "chyb_vstupu": 0,
+        "chyb_vstupu_s": 0,
+        "features_sha256": "6d930701910b3548f8f2783303d5f2068b2f9cfeab6d3cf7ab04eaa8cdcbceca",
+        "integrita_neuzavrete": {
+          "text_integrity": 720
+        },
+        "integrita_uzavretych_riadkov": 0,
+        "predikcie_aktivity": {
+          "quiet": 593,
+          "read_heavy": 55,
+          "write_heavy": 8
+        },
+        "prehratie": "/home/eh/projects/hyptcn3/data/safeguard/far-events-v3-20261108/events-v3-20261108_13_test_events_quiet",
+        "riadkov": 720,
+        "scenario": "quiet",
+        "skorovany_s": 3280,
+        "skorovanych": 656,
+        "skupina": "v3-test_events-3",
+        "sledovany_s": 3600.0,
+        "subory_sha256": {
+          "configuration.json": "fc37d12cee3365c826f035dfaa2b09ba1070c2d21f685b147358f88380c10b1f",
+          "events.jsonl": "ad19e2aae2f37633867e3ac9d939f90e4c2aa04ffdcb48cc9fc074e7770b657d",
+          "status.json": "6e421c26d4ed03e653eafba0e23fdeea9f3605095e1f620fcb8909fe1467c170"
+        },
+        "udalosti": 2,
+        "udalosti_integrita": 0,
+        "udalosti_model": 2,
+        "udalosti_sha256": "e8e758b6a0e6fb1f57bcada64d783829ef4b202edcc7b4a90f3fbab367b7c5e5",
+        "vylucenych_riadkov": 0,
+        "vypadkov": 0,
+        "vypadky_s": 0
+      },
+      "events-v3-20261108_14_test_events_write_heavy": {
+        "archiv": "/home/eh/projects/hyptcn3/data/collections/events-v3-20261108_14_test_events_write_heavy/campaign_audit_20261109T112837417687Z.npz",
+        "bez_skore_cas_podiel": 0.0888888888888889,
+        "bez_skore_riadkov_podiel": 0.0888888888888889,
+        "casy_udalosti_model_s": [
+          1000.0,
+          2560.0
+        ],
+        "chyb_vstupu": 0,
+        "chyb_vstupu_s": 0,
+        "features_sha256": "2d7f286d54b8ae39ba5a17bb2572573dac20c5d31c8e127986ee45081644d9b7",
+        "integrita_neuzavrete": {
+          "process_cross_view": 3,
+          "text_integrity": 720
+        },
+        "integrita_uzavretych_riadkov": 0,
+        "predikcie_aktivity": {
+          "bursty": 212,
+          "mixed": 15,
+          "write_heavy": 429
+        },
+        "prehratie": "/home/eh/projects/hyptcn3/data/safeguard/far-events-v3-20261108/events-v3-20261108_14_test_events_write_heavy",
+        "riadkov": 720,
+        "scenario": "write_heavy",
+        "skorovany_s": 3280,
+        "skorovanych": 656,
+        "skupina": "v3-test_events-3",
+        "sledovany_s": 3600.0,
+        "subory_sha256": {
+          "configuration.json": "3b3d0b1a8b0f7eb218c1a4a6cc5fd3b71d4a62959ea66a4b24d9d34b0b920d4c",
+          "events.jsonl": "7129f5d8f0af10577f4d6de40054e7f995b86ff71ade6a2baffbb644d195a35e",
+          "status.json": "7d2e2cdaac8a0f6b7c4ee854ef05563938751974fc5a79d8631870b15879e56e"
+        },
+        "udalosti": 2,
+        "udalosti_integrita": 0,
+        "udalosti_model": 2,
+        "udalosti_sha256": "a34f58d59001f4700965109900f270cfa70c132706b7d0273a1d3b979c7e189a",
+        "vylucenych_riadkov": 0,
+        "vypadkov": 0,
+        "vypadky_s": 0
+      },
+      "events-v3-20261108_15_test_events_steady": {
+        "archiv": "/home/eh/projects/hyptcn3/data/collections/events-v3-20261108_15_test_events_steady/campaign_audit_20261109T132642864643Z.npz",
+        "bez_skore_cas_podiel": 0.0888888888888889,
+        "bez_skore_riadkov_podiel": 0.0888888888888889,
+        "casy_udalosti_model_s": [
+          2410.0
+        ],
+        "chyb_vstupu": 0,
+        "chyb_vstupu_s": 0,
+        "features_sha256": "f8cb87520064b5ba1a71a84312417a41f9f686feb4a64b7f9c0430315e897f19",
+        "integrita_neuzavrete": {
+          "process_cross_view": 11,
+          "text_integrity": 720
+        },
+        "integrita_uzavretych_riadkov": 0,
+        "predikcie_aktivity": {
+          "bursty": 51,
+          "quiet": 282,
+          "read_heavy": 83,
+          "steady": 202,
+          "write_heavy": 38
+        },
+        "prehratie": "/home/eh/projects/hyptcn3/data/safeguard/far-events-v3-20261108/events-v3-20261108_15_test_events_steady",
+        "riadkov": 720,
+        "scenario": "steady",
+        "skorovany_s": 3280,
+        "skorovanych": 656,
+        "skupina": "v3-test_events-3",
+        "sledovany_s": 3600.0,
+        "subory_sha256": {
+          "configuration.json": "bce5308d6ef3eb4bd0a4fb13402991442f36930fb776a3abb9494aa321d2bfb0",
+          "events.jsonl": "3b6761c4772f45497322289d404883076fae1800a0344a6b2722a35086e8555f",
+          "status.json": "4223f17c87a2b6d729703bd41fc0a80f2fe111feb446fdb9132ca47656095dcc"
+        },
+        "udalosti": 1,
+        "udalosti_integrita": 0,
+        "udalosti_model": 1,
+        "udalosti_sha256": "c7dc91b08fa393d6bbbdbfecdcdb3dd439de7fc4973afb73440bc1279352a6fa",
+        "vylucenych_riadkov": 0,
+        "vypadkov": 0,
+        "vypadky_s": 0
+      },
+      "events-v3-20261108_16_test_events_mixed": {
+        "archiv": "/home/eh/projects/hyptcn3/data/collections/events-v3-20261108_16_test_events_mixed/campaign_audit_20261109T151933681066Z.npz",
+        "bez_skore_cas_podiel": 0.0888888888888889,
+        "bez_skore_riadkov_podiel": 0.0888888888888889,
+        "casy_udalosti_model_s": [
+          2110.0
+        ],
+        "chyb_vstupu": 0,
+        "chyb_vstupu_s": 0,
+        "features_sha256": "3d212eaeb5fe4b4ce2f73bcffd9752fe54ab4ddbb42018129c378297200c8727",
+        "integrita_neuzavrete": {
+          "text_integrity": 720
+        },
+        "integrita_uzavretych_riadkov": 0,
+        "predikcie_aktivity": {
+          "bursty": 1,
+          "mixed": 519,
+          "quiet": 11,
+          "read_heavy": 29,
+          "steady": 50,
+          "write_heavy": 46
+        },
+        "prehratie": "/home/eh/projects/hyptcn3/data/safeguard/far-events-v3-20261108/events-v3-20261108_16_test_events_mixed",
+        "riadkov": 720,
+        "scenario": "mixed",
+        "skorovany_s": 3280,
+        "skorovanych": 656,
+        "skupina": "v3-test_events-3",
+        "sledovany_s": 3600.0,
+        "subory_sha256": {
+          "configuration.json": "0ae27b0f22e1f0c908e9111421a6310284745e9f58bf34106746dd7f7c226230",
+          "events.jsonl": "4351ec6554b4b032611d762217b2eeddae06cc1bdc5bd169585db4430ed776cd",
+          "status.json": "c933958c3dcd0be7d89b8783e1aef02203e6d4ba83b5e915a6037e5ecc33a03c"
+        },
+        "udalosti": 1,
+        "udalosti_integrita": 0,
+        "udalosti_model": 1,
+        "udalosti_sha256": "6db4d2ac8848b7aa3b9a6aca5aaa37f31de38b5a88ba414fa5997c7808f421cc",
+        "vylucenych_riadkov": 0,
+        "vypadkov": 0,
+        "vypadky_s": 0
+      },
+      "events-v3-20261108_17_test_events_read_heavy": {
+        "archiv": "/home/eh/projects/hyptcn3/data/collections/events-v3-20261108_17_test_events_read_heavy/campaign_audit_20261109T171716608356Z.npz",
+        "bez_skore_cas_podiel": 0.0888888888888889,
+        "bez_skore_riadkov_podiel": 0.0888888888888889,
+        "casy_udalosti_model_s": [
+          1980.0
+        ],
+        "chyb_vstupu": 0,
+        "chyb_vstupu_s": 0,
+        "features_sha256": "111d0ada8c19229c55dc931fd6953519f078f9a0f835c2d981d40ea0013b253c",
+        "integrita_neuzavrete": {
+          "process_cross_view": 1,
+          "text_integrity": 720
+        },
+        "integrita_uzavretych_riadkov": 0,
+        "predikcie_aktivity": {
+          "mixed": 1,
+          "quiet": 46,
+          "read_heavy": 22,
+          "steady": 587
+        },
+        "prehratie": "/home/eh/projects/hyptcn3/data/safeguard/far-events-v3-20261108/events-v3-20261108_17_test_events_read_heavy",
+        "riadkov": 720,
+        "scenario": "read_heavy",
+        "skorovany_s": 3280,
+        "skorovanych": 656,
+        "skupina": "v3-test_events-3",
+        "sledovany_s": 3600.0,
+        "subory_sha256": {
+          "configuration.json": "584b5df799c1e77b5aebbccf2b546fdfa920a67e1cf66caa69d8cd59c1a595e0",
+          "events.jsonl": "4684d7fbefa1b26e1669b67f06f272864265f5ff9fcbe8a225b0ea14d5335b6e",
+          "status.json": "ec03f319a6a4cde2fa89af2457441e73a27351f4f722ab1e572ab9b9da7cf755"
+        },
+        "udalosti": 1,
+        "udalosti_integrita": 0,
+        "udalosti_model": 1,
+        "udalosti_sha256": "3274587b318274a72f5686598a1eb7d762ad33629d3565790a5aab445c889325",
+        "vylucenych_riadkov": 0,
+        "vypadkov": 0,
+        "vypadky_s": 0
+      },
+      "events-v3-20261108_18_test_events_bursty": {
+        "archiv": "/home/eh/projects/hyptcn3/data/collections/events-v3-20261108_18_test_events_bursty/campaign_audit_20261109T191219714234Z.npz",
+        "bez_skore_cas_podiel": 0.0888888888888889,
+        "bez_skore_riadkov_podiel": 0.0888888888888889,
+        "casy_udalosti_model_s": [
+          940.0,
+          2740.0
+        ],
+        "chyb_vstupu": 0,
+        "chyb_vstupu_s": 0,
+        "features_sha256": "49b0c6b95fd2a076ae4bb48a6d6315c6e8c7c3fb7c8aa00eab846f52f33589cd",
+        "integrita_neuzavrete": {
+          "process_cross_view": 7,
+          "text_integrity": 720
+        },
+        "integrita_uzavretych_riadkov": 0,
+        "predikcie_aktivity": {
+          "bursty": 614,
+          "write_heavy": 42
+        },
+        "prehratie": "/home/eh/projects/hyptcn3/data/safeguard/far-events-v3-20261108/events-v3-20261108_18_test_events_bursty",
+        "riadkov": 720,
+        "scenario": "bursty",
+        "skorovany_s": 3280,
+        "skorovanych": 656,
+        "skupina": "v3-test_events-3",
+        "sledovany_s": 3600.0,
+        "subory_sha256": {
+          "configuration.json": "f994cd3eaabddd939b0eaf19b4966c7e615ce2bc23e8fc9fb079b4dacf1df038",
+          "events.jsonl": "b37401c48d0450fae9aab44d88bd1329c5cdcae553eca6c9abd813f5f4f20843",
+          "status.json": "93a05d5c9f3aee78bd7de24adb7345f0f16984e291a067efd14bfb7a107a6100"
+        },
+        "udalosti": 2,
+        "udalosti_integrita": 0,
+        "udalosti_model": 2,
+        "udalosti_sha256": "55d045f6eb14cb3c04eb438b9050d8d1a5b05cb40bde7066602ca8a5e72ae0aa",
+        "vylucenych_riadkov": 0,
+        "vypadkov": 0,
+        "vypadky_s": 0
+      },
+      "events-v3-20261108_19_test_events_bursty": {
+        "archiv": "/home/eh/projects/hyptcn3/data/collections/events-v3-20261108_19_test_events_bursty/campaign_audit_20261109T223007483738Z.npz",
+        "bez_skore_cas_podiel": 0.0888888888888889,
+        "bez_skore_riadkov_podiel": 0.0888888888888889,
+        "casy_udalosti_model_s": [
+          1000.0
+        ],
+        "chyb_vstupu": 0,
+        "chyb_vstupu_s": 0,
+        "features_sha256": "92085c56dd46b6fbc1d97ad851fefcd1463debce5882da671f976b96b329d75d",
+        "integrita_neuzavrete": {
+          "text_integrity": 720
+        },
+        "integrita_uzavretych_riadkov": 0,
+        "predikcie_aktivity": {
+          "bursty": 610,
+          "read_heavy": 12,
+          "write_heavy": 34
+        },
+        "prehratie": "/home/eh/projects/hyptcn3/data/safeguard/far-events-v3-20261108/events-v3-20261108_19_test_events_bursty",
+        "riadkov": 720,
+        "scenario": "bursty",
+        "skorovany_s": 3280,
+        "skorovanych": 656,
+        "skupina": "v3-test_events-4",
+        "sledovany_s": 3600.0,
+        "subory_sha256": {
+          "configuration.json": "f98b6eba2e1049360e4885cd9e9e374781538ea44d5752e50a9ac4ea483e127d",
+          "events.jsonl": "e863ff8b8261de54551afb64cf326201cdbf80733aa8471a7ab53c828b4ecdbf",
+          "status.json": "09f6801ed8f6cb9b5716b097fcda863a0024c38a21ca074e924a41f6dafea75a"
+        },
+        "udalosti": 1,
+        "udalosti_integrita": 0,
+        "udalosti_model": 1,
+        "udalosti_sha256": "a11125ab56fcb93f80a64d5ea8c35acb56b3118cff6cf1d09ca965b027a0d5a3",
+        "vylucenych_riadkov": 0,
+        "vypadkov": 0,
+        "vypadky_s": 0
+      },
+      "events-v3-20261108_20_test_events_write_heavy": {
+        "archiv": "/home/eh/projects/hyptcn3/data/collections/events-v3-20261108_20_test_events_write_heavy/campaign_audit_20261110T010225791581Z.npz",
+        "bez_skore_cas_podiel": 0.08888914195689479,
+        "bez_skore_riadkov_podiel": 0.0888888888888889,
+        "casy_udalosti_model_s": [
+          1240.0009999275208
+        ],
+        "chyb_vstupu": 0,
+        "chyb_vstupu_s": 0,
+        "features_sha256": "2a19453890d2fccbf31683c746ae3dbb6a5f32e8a7bb8750161e11bab26dc951",
+        "integrita_neuzavrete": {
+          "text_integrity": 720
+        },
+        "integrita_uzavretych_riadkov": 0,
+        "predikcie_aktivity": {
+          "bursty": 76,
+          "mixed": 419,
+          "write_heavy": 161
+        },
+        "prehratie": "/home/eh/projects/hyptcn3/data/safeguard/far-events-v3-20261108/events-v3-20261108_20_test_events_write_heavy",
+        "riadkov": 720,
+        "scenario": "write_heavy",
+        "skorovany_s": 3280,
+        "skorovanych": 656,
+        "skupina": "v3-test_events-4",
+        "sledovany_s": 3600.0009999275208,
+        "subory_sha256": {
+          "configuration.json": "f80558d27faf27520ebb975eba572cbbac4ed4ce338a09ea5868fa3ba5cc2282",
+          "events.jsonl": "f35ecd09f621c42e7ab0b53cb5fad78fc647ef1f9c3ae25d1e1b28584902d693",
+          "status.json": "111ca4aee94100bb9fac60718291ca8e6b5975f3c5d2f2d325e14c6990ce7fbd"
+        },
+        "udalosti": 1,
+        "udalosti_integrita": 0,
+        "udalosti_model": 1,
+        "udalosti_sha256": "c430e6ea7623a94016c213e1c9cffa3f1ad7c747daeed9d233fcae4e8744fa28",
+        "vylucenych_riadkov": 0,
+        "vypadkov": 0,
+        "vypadky_s": 0
+      },
+      "events-v3-20261108_21_test_events_steady": {
+        "archiv": "/home/eh/projects/hyptcn3/data/collections/events-v3-20261108_21_test_events_steady/campaign_audit_20261110T024816005163Z.npz",
+        "bez_skore_cas_podiel": 0.08888914195689479,
+        "bez_skore_riadkov_podiel": 0.0888888888888889,
+        "casy_udalosti_model_s": [
+          2230.0009999275208
+        ],
+        "chyb_vstupu": 0,
+        "chyb_vstupu_s": 0,
+        "features_sha256": "a14747fcdc2a84ed74e69e6e90c8f216ce0b0aaebb3f5e0f4f6c1824a690c1d7",
+        "integrita_neuzavrete": {
+          "process_cross_view": 1,
+          "text_integrity": 720
+        },
+        "integrita_uzavretych_riadkov": 0,
+        "predikcie_aktivity": {
+          "mixed": 1,
+          "quiet": 83,
+          "read_heavy": 6,
+          "steady": 561,
+          "write_heavy": 5
+        },
+        "prehratie": "/home/eh/projects/hyptcn3/data/safeguard/far-events-v3-20261108/events-v3-20261108_21_test_events_steady",
+        "riadkov": 720,
+        "scenario": "steady",
+        "skorovany_s": 3280,
+        "skorovanych": 656,
+        "skupina": "v3-test_events-4",
+        "sledovany_s": 3600.0009999275208,
+        "subory_sha256": {
+          "configuration.json": "833b022808be00453788b70c7abae3d12e8d4a83a2382c3b8c92d341cdebb766",
+          "events.jsonl": "2f31d20411bae04f9f590957fa16ea667291798127d308e48bb616454e6974c3",
+          "status.json": "4f6af6219cdb2458c1ab6d456bc50903b35f378daaf612a67b045e8c79c0dbe2"
+        },
+        "udalosti": 1,
+        "udalosti_integrita": 0,
+        "udalosti_model": 1,
+        "udalosti_sha256": "c7194847b084b62ad27f4fa34b085403662562cec4b18007ae653160a7c36a52",
+        "vylucenych_riadkov": 0,
+        "vypadkov": 0,
+        "vypadky_s": 0
+      },
+      "events-v3-20261108_22_test_events_read_heavy": {
+        "archiv": "/home/eh/projects/hyptcn3/data/collections/events-v3-20261108_22_test_events_read_heavy/campaign_audit_20261110T043555765696Z.npz",
+        "bez_skore_cas_podiel": 0.0888888888888889,
+        "bez_skore_riadkov_podiel": 0.0888888888888889,
+        "casy_udalosti_model_s": [
+          1480.0,
+          2380.0
+        ],
+        "chyb_vstupu": 0,
+        "chyb_vstupu_s": 0,
+        "features_sha256": "787629698fee05fbe6fe5837d01cebd6365e73961ad3ff171fffd7879cf5b8f2",
+        "integrita_neuzavrete": {
+          "process_cross_view": 12,
+          "text_integrity": 720
+        },
+        "integrita_uzavretych_riadkov": 0,
+        "predikcie_aktivity": {
+          "quiet": 100,
+          "read_heavy": 24,
+          "steady": 531,
+          "write_heavy": 1
+        },
+        "prehratie": "/home/eh/projects/hyptcn3/data/safeguard/far-events-v3-20261108/events-v3-20261108_22_test_events_read_heavy",
+        "riadkov": 720,
+        "scenario": "read_heavy",
+        "skorovany_s": 3280,
+        "skorovanych": 656,
+        "skupina": "v3-test_events-4",
+        "sledovany_s": 3600.0,
+        "subory_sha256": {
+          "configuration.json": "60e3d60125480ad5caaed2c4b151294a9d8b40f18fae07af0bc72e396d08a018",
+          "events.jsonl": "351647dce9e11d3008bf18be6c85035ef57f21e3f02205b3c17adde24ccf4579",
+          "status.json": "2256630b43d77039b1e06df808c0a01b46a9bfc09b0a182bb00c449c2ae2ef79"
+        },
+        "udalosti": 2,
+        "udalosti_integrita": 0,
+        "udalosti_model": 2,
+        "udalosti_sha256": "3004ae55447c81bfc29e9ddf34947fcc4c6ef0237cbe85e68951e0a58a2556eb",
+        "vylucenych_riadkov": 0,
+        "vypadkov": 0,
+        "vypadky_s": 0
+      },
+      "events-v3-20261108_23_test_events_quiet": {
+        "archiv": "/home/eh/projects/hyptcn3/data/collections/events-v3-20261108_23_test_events_quiet/campaign_audit_20261110T063009807708Z.npz",
+        "bez_skore_cas_podiel": 0.0888888888888889,
+        "bez_skore_riadkov_podiel": 0.0888888888888889,
+        "casy_udalosti_model_s": [
+          1600.0,
+          2560.0
+        ],
+        "chyb_vstupu": 0,
+        "chyb_vstupu_s": 0,
+        "features_sha256": "8434b219ade8ae8a0bf72e0a1efb480cda63afd1476290b06fc54849659ae237",
+        "integrita_neuzavrete": {
+          "process_cross_view": 1,
+          "text_integrity": 720
+        },
+        "integrita_uzavretych_riadkov": 0,
+        "predikcie_aktivity": {
+          "bursty": 33,
+          "mixed": 2,
+          "quiet": 542,
+          "steady": 23,
+          "write_heavy": 56
+        },
+        "prehratie": "/home/eh/projects/hyptcn3/data/safeguard/far-events-v3-20261108/events-v3-20261108_23_test_events_quiet",
+        "riadkov": 720,
+        "scenario": "quiet",
+        "skorovany_s": 3280,
+        "skorovanych": 656,
+        "skupina": "v3-test_events-4",
+        "sledovany_s": 3600.0,
+        "subory_sha256": {
+          "configuration.json": "c954a42f1a3d337f369b7b19e31070ab7feca7f19be8a8e14472b35870687101",
+          "events.jsonl": "d0cf891f811a2babb86d7811fd0ae6c4cca2d600bb3f51f107ee9af5faf04299",
+          "status.json": "12561d9b61610636759b3436e0dea936e456df3c93643e7f87239cb69728ef08"
+        },
+        "udalosti": 2,
+        "udalosti_integrita": 0,
+        "udalosti_model": 2,
+        "udalosti_sha256": "f88636cb01445fccfdff41f8bda27ba944df51f62b3182d90ca72f0357684808",
+        "vylucenych_riadkov": 0,
+        "vypadkov": 0,
+        "vypadky_s": 0
+      },
+      "events-v3-20261108_24_test_events_mixed": {
+        "archiv": "/home/eh/projects/hyptcn3/data/collections/events-v3-20261108_24_test_events_mixed/campaign_audit_20261110T081854293666Z.npz",
+        "bez_skore_cas_podiel": 0.0888888888888889,
+        "bez_skore_riadkov_podiel": 0.0888888888888889,
+        "casy_udalosti_model_s": [
+          2550.0
+        ],
+        "chyb_vstupu": 0,
+        "chyb_vstupu_s": 0,
+        "features_sha256": "af36323b35351507c9046a37e6f36a9b81b3a8c2bcb50d598910542bae70ac6f",
+        "integrita_neuzavrete": {
+          "process_cross_view": 1,
+          "text_integrity": 720
+        },
+        "integrita_uzavretych_riadkov": 0,
+        "predikcie_aktivity": {
+          "mixed": 211,
+          "read_heavy": 4,
+          "steady": 440,
+          "write_heavy": 1
+        },
+        "prehratie": "/home/eh/projects/hyptcn3/data/safeguard/far-events-v3-20261108/events-v3-20261108_24_test_events_mixed",
+        "riadkov": 720,
+        "scenario": "mixed",
+        "skorovany_s": 3280,
+        "skorovanych": 656,
+        "skupina": "v3-test_events-4",
+        "sledovany_s": 3600.0,
+        "subory_sha256": {
+          "configuration.json": "8853e9c421c3a4943d79a19ef142f6afb9e43170a1cbc5773f02d29fbde0e0b2",
+          "events.jsonl": "b40f37992b854079b7794a108e4b3e9aee1e82c695bd4e754690581d4e745998",
+          "status.json": "1f3f4e1f2431f4afddbea23dc15f22f2cbf7586edd653bae15d064549439992a"
+        },
+        "udalosti": 1,
+        "udalosti_integrita": 0,
+        "udalosti_model": 1,
+        "udalosti_sha256": "687cd2e25df0f9518fcd543e22bc616db52842db7b8aa710976c51fa257a98e7",
+        "vylucenych_riadkov": 0,
+        "vypadkov": 0,
+        "vypadky_s": 0
+      },
+      "events-v3-20261108_25_test_events_quiet": {
+        "archiv": "/home/eh/projects/hyptcn3/data/collections/events-v3-20261108_25_test_events_quiet/campaign_audit_20261110T110852022472Z.npz",
+        "bez_skore_cas_podiel": 0.0888888888888889,
+        "bez_skore_riadkov_podiel": 0.0888888888888889,
+        "casy_udalosti_model_s": [
+          1720.0
+        ],
+        "chyb_vstupu": 0,
+        "chyb_vstupu_s": 0,
+        "features_sha256": "6cc0f5a78ebab9779db18249d33bdd95d43ec6b3b99814dec4914ddbf1ab7485",
+        "integrita_neuzavrete": {
+          "text_integrity": 720
+        },
+        "integrita_uzavretych_riadkov": 0,
+        "predikcie_aktivity": {
+          "quiet": 625,
+          "read_heavy": 23,
+          "write_heavy": 8
+        },
+        "prehratie": "/home/eh/projects/hyptcn3/data/safeguard/far-events-v3-20261108/events-v3-20261108_25_test_events_quiet",
+        "riadkov": 720,
+        "scenario": "quiet",
+        "skorovany_s": 3280,
+        "skorovanych": 656,
+        "skupina": "v3-test_events-5",
+        "sledovany_s": 3600.0,
+        "subory_sha256": {
+          "configuration.json": "afb9892f44a086e6477256e02530c10f353c3106dc8b0ec1d8829ec991c89297",
+          "events.jsonl": "6bd60bd85de51e7b9d81c864775b820b2f8577f4e8398828d49e80cfee95a5fc",
+          "status.json": "e6a25559dc00a964b165a0a178f7c038d6ea0ef2ba649c9642be1493834cdeb4"
+        },
+        "udalosti": 1,
+        "udalosti_integrita": 0,
+        "udalosti_model": 1,
+        "udalosti_sha256": "f6d8c10be88853e82ad5d605f484a0f833dfa8ffe2427469458e9439a47505bf",
+        "vylucenych_riadkov": 0,
+        "vypadkov": 0,
+        "vypadky_s": 0
+      },
+      "events-v3-20261108_26_test_events_write_heavy": {
+        "archiv": "/home/eh/projects/hyptcn3/data/collections/events-v3-20261108_26_test_events_write_heavy/campaign_audit_20261110T130047582412Z.npz",
+        "bez_skore_cas_podiel": 0.0888888888888889,
+        "bez_skore_riadkov_podiel": 0.0888888888888889,
+        "casy_udalosti_model_s": [
+          960.0
+        ],
+        "chyb_vstupu": 0,
+        "chyb_vstupu_s": 0,
+        "features_sha256": "679cfa9510d0d5f07e0cc27d596c1ffebc5604171cf0783ab42c2186a227ae0c",
+        "integrita_neuzavrete": {
+          "process_cross_view": 4,
+          "text_integrity": 720
+        },
+        "integrita_uzavretych_riadkov": 0,
+        "predikcie_aktivity": {
+          "bursty": 65,
+          "mixed": 35,
+          "quiet": 60,
+          "read_heavy": 27,
+          "write_heavy": 469
+        },
+        "prehratie": "/home/eh/projects/hyptcn3/data/safeguard/far-events-v3-20261108/events-v3-20261108_26_test_events_write_heavy",
+        "riadkov": 720,
+        "scenario": "write_heavy",
+        "skorovany_s": 3280,
+        "skorovanych": 656,
+        "skupina": "v3-test_events-5",
+        "sledovany_s": 3600.0,
+        "subory_sha256": {
+          "configuration.json": "b9b10b3201763cd49b0b760b30f2b4978e0a3593350af279c6b3200efd95b846",
+          "events.jsonl": "db1229d4feb28521f91644cd5e8d05d2f56aacd6a565564693ee003fd3478acb",
+          "status.json": "a07e9104f8c084351fdaf5efe8136a047203df5b9d22876654e4ded012323dfd"
+        },
+        "udalosti": 1,
+        "udalosti_integrita": 0,
+        "udalosti_model": 1,
+        "udalosti_sha256": "32e39508b2f4445a819f0cf7c68c59cfca3b4690e03195f9541b8e6bf3583a77",
+        "vylucenych_riadkov": 0,
+        "vypadkov": 0,
+        "vypadky_s": 0
+      },
+      "events-v3-20261108_27_test_events_bursty": {
+        "archiv": "/home/eh/projects/hyptcn3/data/collections/events-v3-20261108_27_test_events_bursty/campaign_audit_20261110T155219915182Z.npz",
+        "bez_skore_cas_podiel": 0.0888888888888889,
+        "bez_skore_riadkov_podiel": 0.0888888888888889,
+        "casy_udalosti_model_s": [
+          820.0,
+          1625.0,
+          2410.0
+        ],
+        "chyb_vstupu": 0,
+        "chyb_vstupu_s": 0,
+        "features_sha256": "0d1de34dfa1d1fef1fed3493d6f09dfc9310e37045713d87667e8a42930c8dd9",
+        "integrita_neuzavrete": {
+          "process_cross_view": 3,
+          "text_integrity": 720
+        },
+        "integrita_uzavretych_riadkov": 0,
+        "predikcie_aktivity": {
+          "bursty": 614,
+          "write_heavy": 42
+        },
+        "prehratie": "/home/eh/projects/hyptcn3/data/safeguard/far-events-v3-20261108/events-v3-20261108_27_test_events_bursty",
+        "riadkov": 720,
+        "scenario": "bursty",
+        "skorovany_s": 3280,
+        "skorovanych": 656,
+        "skupina": "v3-test_events-5",
+        "sledovany_s": 3600.0,
+        "subory_sha256": {
+          "configuration.json": "400c864aed5ebcb8ac80af937390d220d3b9055870208818577963da73813622",
+          "events.jsonl": "bbfb10c2d0db68d5b754b2540c70373889a4c9590b715642e2bbb1cdc16a7f15",
+          "status.json": "8eee1b9c528f835bba8ea92021d39ad5ae32d7e8c1cbc1d6cdb73d489947162a"
+        },
+        "udalosti": 3,
+        "udalosti_integrita": 0,
+        "udalosti_model": 3,
+        "udalosti_sha256": "5b6828bdb7708c3682b20647aecc7fec9748af49064ac777d05f4ff5dccf99db",
+        "vylucenych_riadkov": 0,
+        "vypadkov": 0,
+        "vypadky_s": 0
+      },
+      "events-v3-20261108_28_test_events_mixed": {
+        "archiv": "/home/eh/projects/hyptcn3/data/collections/events-v3-20261108_28_test_events_mixed/campaign_audit_20261110T190401481421Z.npz",
+        "bez_skore_cas_podiel": 0.0888888888888889,
+        "bez_skore_riadkov_podiel": 0.0888888888888889,
+        "casy_udalosti_model_s": [
+          640.0,
+          1510.0
+        ],
+        "chyb_vstupu": 0,
+        "chyb_vstupu_s": 0,
+        "features_sha256": "49be6155e197b56717ef8567734dceceeb45226bc7355d60f8fffeb46200b3bb",
+        "integrita_neuzavrete": {
+          "process_cross_view": 5,
+          "text_integrity": 720
+        },
+        "integrita_uzavretych_riadkov": 0,
+        "predikcie_aktivity": {
+          "mixed": 485,
+          "quiet": 34,
+          "read_heavy": 55,
+          "steady": 79,
+          "write_heavy": 3
+        },
+        "prehratie": "/home/eh/projects/hyptcn3/data/safeguard/far-events-v3-20261108/events-v3-20261108_28_test_events_mixed",
+        "riadkov": 720,
+        "scenario": "mixed",
+        "skorovany_s": 3280,
+        "skorovanych": 656,
+        "skupina": "v3-test_events-5",
+        "sledovany_s": 3600.0,
+        "subory_sha256": {
+          "configuration.json": "37714770ea6f351927d2f193c9ea47113aa612321cb7ae7cbb9c7e3a06d56eb7",
+          "events.jsonl": "87a17bb079c723f017986b978cd11dd10f347a21c93fd587b856ed871697c7ad",
+          "status.json": "b6fc38ad4e420eaaacf52192b9795ab2974a42bf3654a633366e105277005a22"
+        },
+        "udalosti": 2,
+        "udalosti_integrita": 0,
+        "udalosti_model": 2,
+        "udalosti_sha256": "d08a1763026a07d575749f3252a8e9ed6965303bd55f0b0eb0eb2d9850a590df",
+        "vylucenych_riadkov": 0,
+        "vypadkov": 0,
+        "vypadky_s": 0
+      },
+      "events-v3-20261108_29_test_events_steady": {
+        "archiv": "/home/eh/projects/hyptcn3/data/collections/events-v3-20261108_29_test_events_steady/campaign_audit_20261110T220036839263Z.npz",
+        "bez_skore_cas_podiel": 0.0888888888888889,
+        "bez_skore_riadkov_podiel": 0.0888888888888889,
+        "casy_udalosti_model_s": [
+          2230.0
+        ],
+        "chyb_vstupu": 0,
+        "chyb_vstupu_s": 0,
+        "features_sha256": "4746cd49f1aac79682974f8d75ce1eea975f08984d725f2749b5c0d5c6e2e8a6",
+        "integrita_neuzavrete": {
+          "text_integrity": 720
+        },
+        "integrita_uzavretych_riadkov": 0,
+        "predikcie_aktivity": {
+          "bursty": 2,
+          "read_heavy": 4,
+          "steady": 621,
+          "write_heavy": 29
+        },
+        "prehratie": "/home/eh/projects/hyptcn3/data/safeguard/far-events-v3-20261108/events-v3-20261108_29_test_events_steady",
+        "riadkov": 720,
+        "scenario": "steady",
+        "skorovany_s": 3280,
+        "skorovanych": 656,
+        "skupina": "v3-test_events-5",
+        "sledovany_s": 3600.0,
+        "subory_sha256": {
+          "configuration.json": "412626a5c4c7c90e97118bbd7c393844660fac1db1753bbbdf67a1d1603756ad",
+          "events.jsonl": "9f1d56fed431e5155fcf1f4363d0923b32712fd12a664c15bc0d3e3a043ed7dc",
+          "status.json": "924386d087a21fa3185cf47d991e1e8a54f12947103a6931dceef1eb77da03ad"
+        },
+        "udalosti": 1,
+        "udalosti_integrita": 0,
+        "udalosti_model": 1,
+        "udalosti_sha256": "505c3a181052b69ec9d3933f79d1f94700e2717b24ae4b1dcfb7059c6690c8dd",
+        "vylucenych_riadkov": 0,
+        "vypadkov": 0,
+        "vypadky_s": 0
+      },
+      "events-v3-20261108_30_test_events_read_heavy": {
+        "archiv": "/home/eh/projects/hyptcn3/data/collections/events-v3-20261108_30_test_events_read_heavy/campaign_audit_20261110T235206976715Z.npz",
+        "bez_skore_cas_podiel": 0.0888888888888889,
+        "bez_skore_riadkov_podiel": 0.0888888888888889,
+        "casy_udalosti_model_s": [],
+        "chyb_vstupu": 0,
+        "chyb_vstupu_s": 0,
+        "features_sha256": "708282b5d02259d702f4c97abb3194a52daf9c5673ab97d44194e6576ff28a0b",
+        "integrita_neuzavrete": {
+          "text_integrity": 720
+        },
+        "integrita_uzavretych_riadkov": 0,
+        "predikcie_aktivity": {
+          "steady": 656
+        },
+        "prehratie": "/home/eh/projects/hyptcn3/data/safeguard/far-events-v3-20261108/events-v3-20261108_30_test_events_read_heavy",
+        "riadkov": 720,
+        "scenario": "read_heavy",
+        "skorovany_s": 3280,
+        "skorovanych": 656,
+        "skupina": "v3-test_events-5",
+        "sledovany_s": 3600.0,
+        "subory_sha256": {
+          "configuration.json": "6cf16dfc01ce3a13129cdaa208240f39a2ad32e82321518b1ef098f6d9d2917f",
+          "events.jsonl": "2bc8390d6fc108821ae888fbea7bbf957ee8dcfd9a69ccea8294676a563442dc",
+          "status.json": "1794380fe5c4fa6018d876e8d3a5337aa6c83ae9b5c3801dcf2ab340dc49fb6d"
+        },
+        "udalosti": 0,
+        "udalosti_integrita": 0,
+        "udalosti_model": 0,
+        "udalosti_sha256": "2132bf46faef0d5cd1c98f79b6a0d836570e8db086ac325bf8103c35961dd2df",
+        "vylucenych_riadkov": 0,
+        "vypadkov": 0,
+        "vypadky_s": 0
+      },
+      "events-v3-20261108_31_test_events_steady": {
+        "archiv": "/home/eh/projects/hyptcn3/data/collections/events-v3-20261108_31_test_events_steady/campaign_audit_20261111T014330470223Z.npz",
+        "bez_skore_cas_podiel": 0.0888888888888889,
+        "bez_skore_riadkov_podiel": 0.0888888888888889,
+        "casy_udalosti_model_s": [
+          1600.0,
+          1980.0,
+          2530.0
+        ],
+        "chyb_vstupu": 0,
+        "chyb_vstupu_s": 0,
+        "features_sha256": "85752c224ce918f7d5cab28068b519b9d021217b6febb7648b00dc6d54ffc1da",
+        "integrita_neuzavrete": {
+          "process_cross_view": 1,
+          "text_integrity": 720
+        },
+        "integrita_uzavretych_riadkov": 0,
+        "predikcie_aktivity": {
+          "bursty": 25,
+          "quiet": 271,
+          "read_heavy": 322,
+          "write_heavy": 38
+        },
+        "prehratie": "/home/eh/projects/hyptcn3/data/safeguard/far-events-v3-20261108/events-v3-20261108_31_test_events_steady",
+        "riadkov": 720,
+        "scenario": "steady",
+        "skorovany_s": 3280,
+        "skorovanych": 656,
+        "skupina": "v3-test_events-6",
+        "sledovany_s": 3600.0,
+        "subory_sha256": {
+          "configuration.json": "080046440f89843b3088fd1c38bbe3b3c0bbb0fba1588e033f0f05a856813e11",
+          "events.jsonl": "58d3223f8333c2dcd19e71fa29a82324fbe738815a53afe9fcd74bfab41d76bf",
+          "status.json": "2525c7a723b26c568b56e1defe17535bd2ac26106ab5369d929dcb0461c1e332"
+        },
+        "udalosti": 3,
+        "udalosti_integrita": 0,
+        "udalosti_model": 3,
+        "udalosti_sha256": "7c2b90429d14b64550740606481a851b9fc5dedc1132e6c7ed210560a69bef13",
+        "vylucenych_riadkov": 0,
+        "vypadkov": 0,
+        "vypadky_s": 0
+      },
+      "events-v3-20261108_32_test_events_write_heavy": {
+        "archiv": "/home/eh/projects/hyptcn3/data/collections/events-v3-20261108_32_test_events_write_heavy/campaign_audit_20261111T033419207003Z.npz",
+        "bez_skore_cas_podiel": 0.0888888888888889,
+        "bez_skore_riadkov_podiel": 0.0888888888888889,
+        "casy_udalosti_model_s": [
+          1600.0,
+          2380.0
+        ],
+        "chyb_vstupu": 0,
+        "chyb_vstupu_s": 0,
+        "features_sha256": "eca746e3fa8173f0a2978021bd4b1a23a02dc6f7920e1db71a9cb972794ea922",
+        "integrita_neuzavrete": {
+          "text_integrity": 720
+        },
+        "integrita_uzavretych_riadkov": 0,
+        "predikcie_aktivity": {
+          "bursty": 56,
+          "mixed": 141,
+          "quiet": 11,
+          "read_heavy": 21,
+          "steady": 6,
+          "write_heavy": 421
+        },
+        "prehratie": "/home/eh/projects/hyptcn3/data/safeguard/far-events-v3-20261108/events-v3-20261108_32_test_events_write_heavy",
+        "riadkov": 720,
+        "scenario": "write_heavy",
+        "skorovany_s": 3280,
+        "skorovanych": 656,
+        "skupina": "v3-test_events-6",
+        "sledovany_s": 3600.0,
+        "subory_sha256": {
+          "configuration.json": "a0db34fb4852d0eff7abd492ebafdb21dec23280f08080b203a2c384066ebe4b",
+          "events.jsonl": "c5682d183cdbc30ae5ae50d238d733d2f7c3851ab23138a1a61d9b71ae97a280",
+          "status.json": "996f7fb35874f2e1a6ba8cf8914ba94580434be35679cb06af3775d337bc996e"
+        },
+        "udalosti": 2,
+        "udalosti_integrita": 0,
+        "udalosti_model": 2,
+        "udalosti_sha256": "de16914b5d8dcf2b70b29b9449a599640dc9cf178afc3981787e87421b38edc7",
+        "vylucenych_riadkov": 0,
+        "vypadkov": 0,
+        "vypadky_s": 0
+      },
+      "events-v3-20261108_33_test_events_read_heavy": {
+        "archiv": "/home/eh/projects/hyptcn3/data/collections/events-v3-20261108_33_test_events_read_heavy/campaign_audit_20261111T052747902249Z.npz",
+        "bez_skore_cas_podiel": 0.0888888888888889,
+        "bez_skore_riadkov_podiel": 0.0888888888888889,
+        "casy_udalosti_model_s": [],
+        "chyb_vstupu": 0,
+        "chyb_vstupu_s": 0,
+        "features_sha256": "fc03b78fd9bba82975adb979080e873a9944a721bf752b15a23690dcbd1b3a1b",
+        "integrita_neuzavrete": {
+          "process_cross_view": 3,
+          "text_integrity": 720
+        },
+        "integrita_uzavretych_riadkov": 0,
+        "predikcie_aktivity": {
+          "quiet": 36,
+          "read_heavy": 190,
+          "steady": 428,
+          "write_heavy": 2
+        },
+        "prehratie": "/home/eh/projects/hyptcn3/data/safeguard/far-events-v3-20261108/events-v3-20261108_33_test_events_read_heavy",
+        "riadkov": 720,
+        "scenario": "read_heavy",
+        "skorovany_s": 3280,
+        "skorovanych": 656,
+        "skupina": "v3-test_events-6",
+        "sledovany_s": 3600.0,
+        "subory_sha256": {
+          "configuration.json": "18a0cc3f2377896b39bdea0c4298f6aacf74022e1e4effd6d7b685f19fd8f58e",
+          "events.jsonl": "f595ee2d01de9f1f23e9b36da8b25f430e29f91bd297fb730a320d1978603012",
+          "status.json": "ab44b4af58be0cd1987a78ab2a4fa93ceccfdac84395e6db58c300f7c4591d66"
+        },
+        "udalosti": 0,
+        "udalosti_integrita": 0,
+        "udalosti_model": 0,
+        "udalosti_sha256": "54ea218b40a265014e731ca9646f3ffbb3611aa3b5ce914806876fdb3c14f6e8",
+        "vylucenych_riadkov": 0,
+        "vypadkov": 0,
+        "vypadky_s": 0
+      },
+      "events-v3-20261108_34_test_events_bursty": {
+        "archiv": "/home/eh/projects/hyptcn3/data/collections/events-v3-20261108_34_test_events_bursty/campaign_audit_20261111T072123960414Z.npz",
+        "bez_skore_cas_podiel": 0.0888888888888889,
+        "bez_skore_riadkov_podiel": 0.0888888888888889,
+        "casy_udalosti_model_s": [
+          1235.0,
+          1990.0,
+          2710.0
+        ],
+        "chyb_vstupu": 0,
+        "chyb_vstupu_s": 0,
+        "features_sha256": "74c89e70748da3e209d5bfc6c2b92d273c9099bd02a47672758f63adf0ecc86d",
+        "integrita_neuzavrete": {
+          "process_cross_view": 5,
+          "text_integrity": 720
+        },
+        "integrita_uzavretych_riadkov": 0,
+        "predikcie_aktivity": {
+          "bursty": 538,
+          "mixed": 1,
+          "quiet": 1,
+          "read_heavy": 30,
+          "steady": 23,
+          "write_heavy": 63
+        },
+        "prehratie": "/home/eh/projects/hyptcn3/data/safeguard/far-events-v3-20261108/events-v3-20261108_34_test_events_bursty",
+        "riadkov": 720,
+        "scenario": "bursty",
+        "skorovany_s": 3280,
+        "skorovanych": 656,
+        "skupina": "v3-test_events-6",
+        "sledovany_s": 3600.0,
+        "subory_sha256": {
+          "configuration.json": "4b088fc2013f6f0af82702abfb447f0b6ff8fb7543845d2eafbb134922410711",
+          "events.jsonl": "fb6eb886c73512d0ea10eb4bfdc9d5c9c9b849a3f67b21c9c1462f02add60cc3",
+          "status.json": "7af1979df90569cafa3967dfb6ddb52c8fba7974dbaf98cafb8a300ae6218337"
+        },
+        "udalosti": 3,
+        "udalosti_integrita": 0,
+        "udalosti_model": 3,
+        "udalosti_sha256": "c25983383f39ef552fcbbdb1567752dc9965fe523731e3921c4e0f4d764e226d",
+        "vylucenych_riadkov": 0,
+        "vypadkov": 0,
+        "vypadky_s": 0
+      },
+      "events-v3-20261108_35_test_events_quiet": {
+        "archiv": "/home/eh/projects/hyptcn3/data/collections/events-v3-20261108_35_test_events_quiet/campaign_audit_20261111T100858356957Z.npz",
+        "bez_skore_cas_podiel": 0.0888888888888889,
+        "bez_skore_riadkov_podiel": 0.0888888888888889,
+        "casy_udalosti_model_s": [
+          1510.0
+        ],
+        "chyb_vstupu": 0,
+        "chyb_vstupu_s": 0,
+        "features_sha256": "f6d5b059396967d21953e4624282ebcf469174d99bf64e4b819fbf723ed0e815",
+        "integrita_neuzavrete": {
+          "process_cross_view": 1,
+          "text_integrity": 720
+        },
+        "integrita_uzavretych_riadkov": 0,
+        "predikcie_aktivity": {
+          "bursty": 1,
+          "mixed": 2,
+          "quiet": 222,
+          "read_heavy": 1,
+          "steady": 408,
+          "write_heavy": 22
+        },
+        "prehratie": "/home/eh/projects/hyptcn3/data/safeguard/far-events-v3-20261108/events-v3-20261108_35_test_events_quiet",
+        "riadkov": 720,
+        "scenario": "quiet",
+        "skorovany_s": 3280,
+        "skorovanych": 656,
+        "skupina": "v3-test_events-6",
+        "sledovany_s": 3600.0,
+        "subory_sha256": {
+          "configuration.json": "7b385b2cf1fd6f834777963c12bae2fd689a926235f83ff10962b3bd25199449",
+          "events.jsonl": "85e0b17e5fb256f4cb7abb4a2660c6f08cecbd1328eeaf93fb529838d03d7f38",
+          "status.json": "493d71e0b13b84123595c813b13852c1b99d0f99f86e1a2bccb118f54a2cb352"
+        },
+        "udalosti": 1,
+        "udalosti_integrita": 0,
+        "udalosti_model": 1,
+        "udalosti_sha256": "a6213108ba34c1d2176e85ceeb0ef936d3885a228d0dc0e2d37584e130ff37d3",
+        "vylucenych_riadkov": 0,
+        "vypadkov": 0,
+        "vypadky_s": 0
+      },
+      "events-v3-20261108_36_test_events_mixed": {
+        "archiv": "/home/eh/projects/hyptcn3/data/collections/events-v3-20261108_36_test_events_mixed/campaign_audit_20261111T115155040781Z.npz",
+        "bez_skore_cas_podiel": 0.08888914195689479,
+        "bez_skore_riadkov_podiel": 0.0888888888888889,
+        "casy_udalosti_model_s": [
+          730.0009999275208,
+          820.0009999275208,
+          1540.0009999275208
+        ],
+        "chyb_vstupu": 0,
+        "chyb_vstupu_s": 0,
+        "features_sha256": "b3ce55eae45adc4897f9ab18c46bafa80ab2f406643626c3889761b6954c5cbc",
+        "integrita_neuzavrete": {
+          "text_integrity": 720
+        },
+        "integrita_uzavretych_riadkov": 0,
+        "predikcie_aktivity": {
+          "bursty": 13,
+          "mixed": 77,
+          "quiet": 25,
+          "read_heavy": 4,
+          "steady": 512,
+          "write_heavy": 25
+        },
+        "prehratie": "/home/eh/projects/hyptcn3/data/safeguard/far-events-v3-20261108/events-v3-20261108_36_test_events_mixed",
+        "riadkov": 720,
+        "scenario": "mixed",
+        "skorovany_s": 3280,
+        "skorovanych": 656,
+        "skupina": "v3-test_events-6",
+        "sledovany_s": 3600.0009999275208,
+        "subory_sha256": {
+          "configuration.json": "a4de60159af40413904f99f8e3288035a1369113e75ac7842921d3676099d1b7",
+          "events.jsonl": "b22d213e762fe49bac3589e4f5c408e7140000a42a3ff3a6c6bc78fe7bdbf187",
+          "status.json": "704c29c845d1c8230b6281f2b50c457ff1044d33db0f36e461f6b20696476e3e"
+        },
+        "udalosti": 3,
+        "udalosti_integrita": 0,
+        "udalosti_model": 3,
+        "udalosti_sha256": "117da00845941e9af8c007266211224456d511fc4e764ae77013017f309530e4",
+        "vylucenych_riadkov": 0,
+        "vypadkov": 0,
+        "vypadky_s": 0
+      },
+      "events-v3-20261108_37_test_events_bursty": {
+        "archiv": "/home/eh/projects/hyptcn3/data/collections/events-v3-20261108_37_test_events_bursty/campaign_audit_20261111T135405937398Z.npz",
+        "bez_skore_cas_podiel": 0.08888914195689479,
+        "bez_skore_riadkov_podiel": 0.0888888888888889,
+        "casy_udalosti_model_s": [
+          850.0009999275208,
+          2560.0009999275208
+        ],
+        "chyb_vstupu": 0,
+        "chyb_vstupu_s": 0,
+        "features_sha256": "03c58be5b7d08254a996d5487cfd8dbb536f6407a8e3bea89ab483a685a23c91",
+        "integrita_neuzavrete": {
+          "process_cross_view": 5,
+          "text_integrity": 720
+        },
+        "integrita_uzavretych_riadkov": 0,
+        "predikcie_aktivity": {
+          "bursty": 540,
+          "quiet": 50,
+          "read_heavy": 31,
+          "write_heavy": 35
+        },
+        "prehratie": "/home/eh/projects/hyptcn3/data/safeguard/far-events-v3-20261108/events-v3-20261108_37_test_events_bursty",
+        "riadkov": 720,
+        "scenario": "bursty",
+        "skorovany_s": 3280,
+        "skorovanych": 656,
+        "skupina": "v3-test_events-7",
+        "sledovany_s": 3600.0009999275208,
+        "subory_sha256": {
+          "configuration.json": "3b1c7c4b1a20b25ad08e67d142aa0c0fa8ec924b9224ecd093f3f6c2bb6fc0b2",
+          "events.jsonl": "9ded95b1ccb081bf418e3ebe94fa2e4d90ea08fedf19a9a21bfe0ff8034caf89",
+          "status.json": "7054020eefa9d359ccc62962d3ab75a2a700f2147a0563995e6b6ee85edb63d5"
+        },
+        "udalosti": 2,
+        "udalosti_integrita": 0,
+        "udalosti_model": 2,
+        "udalosti_sha256": "53ce82c406ef134742f32a919f322b7f57fd074867a12665c1c32ea19fb55183",
+        "vylucenych_riadkov": 0,
+        "vypadkov": 0,
+        "vypadky_s": 0
+      },
+      "events-v3-20261108_38_test_events_mixed": {
+        "archiv": "/home/eh/projects/hyptcn3/data/collections/events-v3-20261108_38_test_events_mixed/campaign_audit_20261111T163715236324Z.npz",
+        "bez_skore_cas_podiel": 0.0888888888888889,
+        "bez_skore_riadkov_podiel": 0.0888888888888889,
+        "casy_udalosti_model_s": [],
+        "chyb_vstupu": 0,
+        "chyb_vstupu_s": 0,
+        "features_sha256": "c95e4c2931432ba7bad57046a50c057b99e63aa0ad4ca5e66728b4badf2ebab5",
+        "integrita_neuzavrete": {
+          "process_cross_view": 2,
+          "text_integrity": 720
+        },
+        "integrita_uzavretych_riadkov": 0,
+        "predikcie_aktivity": {
+          "bursty": 1,
+          "mixed": 627,
+          "write_heavy": 28
+        },
+        "prehratie": "/home/eh/projects/hyptcn3/data/safeguard/far-events-v3-20261108/events-v3-20261108_38_test_events_mixed",
+        "riadkov": 720,
+        "scenario": "mixed",
+        "skorovany_s": 3280,
+        "skorovanych": 656,
+        "skupina": "v3-test_events-7",
+        "sledovany_s": 3600.0,
+        "subory_sha256": {
+          "configuration.json": "f3a69c2d722eaba5f1d2645efcd4918aae0efbfa36a0228e40591cf4227bbd6e",
+          "events.jsonl": "b1b0ead0922b7d28db0b08f43e146b253c78192ec7f7a504ba76a31506c369cc",
+          "status.json": "1daf945f71451177c7723460ac5863bd9a46cc03d7610335fdaece6a1c00232c"
+        },
+        "udalosti": 0,
+        "udalosti_integrita": 0,
+        "udalosti_model": 0,
+        "udalosti_sha256": "5a48daf251192d551b17ec7effce74872f43af76369de7996a8af0e78f17c1d4",
+        "vylucenych_riadkov": 0,
+        "vypadkov": 0,
+        "vypadky_s": 0
+      },
+      "events-v3-20261108_39_test_events_quiet": {
+        "archiv": "/home/eh/projects/hyptcn3/data/collections/events-v3-20261108_39_test_events_quiet/campaign_audit_20261111T184146585801Z.npz",
+        "bez_skore_cas_podiel": 0.0888888888888889,
+        "bez_skore_riadkov_podiel": 0.0888888888888889,
+        "casy_udalosti_model_s": [
+          670.0
+        ],
+        "chyb_vstupu": 0,
+        "chyb_vstupu_s": 0,
+        "features_sha256": "3a7a573e9f1425af2e5ae26bb5a841908df29662471930823cf7a567aaf0debf",
+        "integrita_neuzavrete": {
+          "process_cross_view": 5,
+          "text_integrity": 720
+        },
+        "integrita_uzavretych_riadkov": 0,
+        "predikcie_aktivity": {
+          "bursty": 32,
+          "quiet": 584,
+          "steady": 6,
+          "write_heavy": 34
+        },
+        "prehratie": "/home/eh/projects/hyptcn3/data/safeguard/far-events-v3-20261108/events-v3-20261108_39_test_events_quiet",
+        "riadkov": 720,
+        "scenario": "quiet",
+        "skorovany_s": 3280,
+        "skorovanych": 656,
+        "skupina": "v3-test_events-7",
+        "sledovany_s": 3600.0,
+        "subory_sha256": {
+          "configuration.json": "70b26cda33db96e2cfbca22c704ab1b1061f19045531bfa7efb6e4136af32991",
+          "events.jsonl": "f29334c965ecacb646e600c60ced58d107086f61f73a9a451ca0520c961d703c",
+          "status.json": "363c8cc2e5c64143cb599204421f4b5593a5ab762f1159b00e06ce362120d4e6"
+        },
+        "udalosti": 1,
+        "udalosti_integrita": 0,
+        "udalosti_model": 1,
+        "udalosti_sha256": "b96d538f307654a7de917a8c2c76c6fe6be9e348e67a59fb0f3edbd88b43c4f0",
+        "vylucenych_riadkov": 0,
+        "vypadkov": 0,
+        "vypadky_s": 0
+      },
+      "events-v3-20261108_40_test_events_write_heavy": {
+        "archiv": "/home/eh/projects/hyptcn3/data/collections/events-v3-20261108_40_test_events_write_heavy/campaign_audit_20261111T202840803337Z.npz",
+        "bez_skore_cas_podiel": 0.0888888888888889,
+        "bez_skore_riadkov_podiel": 0.0888888888888889,
+        "casy_udalosti_model_s": [
+          2140.0
+        ],
+        "chyb_vstupu": 0,
+        "chyb_vstupu_s": 0,
+        "features_sha256": "204a140e60bd97d957e7f9f75f22687f9194a05465b017cbd4b2541fddea7f85",
+        "integrita_neuzavrete": {
+          "process_cross_view": 6,
+          "text_integrity": 720
+        },
+        "integrita_uzavretych_riadkov": 0,
+        "predikcie_aktivity": {
+          "bursty": 43,
+          "mixed": 550,
+          "steady": 16,
+          "write_heavy": 47
+        },
+        "prehratie": "/home/eh/projects/hyptcn3/data/safeguard/far-events-v3-20261108/events-v3-20261108_40_test_events_write_heavy",
+        "riadkov": 720,
+        "scenario": "write_heavy",
+        "skorovany_s": 3280,
+        "skorovanych": 656,
+        "skupina": "v3-test_events-7",
+        "sledovany_s": 3600.0,
+        "subory_sha256": {
+          "configuration.json": "fd4464c428c5ea0f1dce30d0f9010b67722a8acb42525464199ac80fe9c0781c",
+          "events.jsonl": "6c985ae4dd0e61534ed1ac0a57c3a5bfb0bd2bd548fd85677727a42a6cee3245",
+          "status.json": "3fd525df5f186dddfecb568c376942957aafefecc8bc3859d861a8daef113695"
+        },
+        "udalosti": 1,
+        "udalosti_integrita": 0,
+        "udalosti_model": 1,
+        "udalosti_sha256": "ff5e4b337eeb1970d3ac0a65a3b0aec2da4dfbb379e9cbaf983558c2796baba1",
+        "vylucenych_riadkov": 0,
+        "vypadkov": 0,
+        "vypadky_s": 0
+      },
+      "events-v3-20261108_41_test_events_steady": {
+        "archiv": "/home/eh/projects/hyptcn3/data/collections/events-v3-20261108_41_test_events_steady/campaign_audit_20261111T232933015053Z.npz",
+        "bez_skore_cas_podiel": 0.0888891420172353,
+        "bez_skore_riadkov_podiel": 0.0888888888888889,
+        "casy_udalosti_model_s": [
+          1510.0010001659393,
+          2230.0010001659393
+        ],
+        "chyb_vstupu": 0,
+        "chyb_vstupu_s": 0,
+        "features_sha256": "f5fcdd0452916c71697fd8d20fb6fea5767e9cfe7fa161bc5954ef10b8794ac0",
+        "integrita_neuzavrete": {
+          "text_integrity": 720
+        },
+        "integrita_uzavretych_riadkov": 0,
+        "predikcie_aktivity": {
+          "quiet": 42,
+          "read_heavy": 8,
+          "steady": 603,
+          "write_heavy": 3
+        },
+        "prehratie": "/home/eh/projects/hyptcn3/data/safeguard/far-events-v3-20261108/events-v3-20261108_41_test_events_steady",
+        "riadkov": 720,
+        "scenario": "steady",
+        "skorovany_s": 3280,
+        "skorovanych": 656,
+        "skupina": "v3-test_events-7",
+        "sledovany_s": 3600.0010001659393,
+        "subory_sha256": {
+          "configuration.json": "de1c3ad4efd0704f7b41b6d9bdcc9e95cde49803a084aa8d79685b2dcfe59830",
+          "events.jsonl": "d2256521c64375d449f880ab723f847c4f95e186fa5bdf4d4455321febcc4066",
+          "status.json": "e1cfd638da56dfb1b66dccdcdcaff103f58bf8bb2d4c9c868617a921c6cf8566"
+        },
+        "udalosti": 2,
+        "udalosti_integrita": 0,
+        "udalosti_model": 2,
+        "udalosti_sha256": "a2ef155cacaa4343ebe828d735ff6a11e7e391c69ca9004655dcd0323e27bb37",
+        "vylucenych_riadkov": 0,
+        "vypadkov": 0,
+        "vypadky_s": 0
+      },
+      "events-v3-20261108_42_test_events_read_heavy": {
+        "archiv": "/home/eh/projects/hyptcn3/data/collections/events-v3-20261108_42_test_events_read_heavy/campaign_audit_20261112T020558740103Z.npz",
+        "bez_skore_cas_podiel": 0.0888888888888889,
+        "bez_skore_riadkov_podiel": 0.0888888888888889,
+        "casy_udalosti_model_s": [
+          760.0
+        ],
+        "chyb_vstupu": 0,
+        "chyb_vstupu_s": 0,
+        "features_sha256": "1a507c80f05e79b659bf6fec085dece9786104d315400cc39cdb2bdfbd0a87c5",
+        "integrita_neuzavrete": {
+          "process_cross_view": 1,
+          "text_integrity": 720
+        },
+        "integrita_uzavretych_riadkov": 0,
+        "predikcie_aktivity": {
+          "bursty": 4,
+          "read_heavy": 1,
+          "steady": 623,
+          "write_heavy": 28
+        },
+        "prehratie": "/home/eh/projects/hyptcn3/data/safeguard/far-events-v3-20261108/events-v3-20261108_42_test_events_read_heavy",
+        "riadkov": 720,
+        "scenario": "read_heavy",
+        "skorovany_s": 3280,
+        "skorovanych": 656,
+        "skupina": "v3-test_events-7",
+        "sledovany_s": 3600.0,
+        "subory_sha256": {
+          "configuration.json": "c9b028c8c894a3e3635498b5453d4d98d590754132e5e85e34d04af0849eeb2a",
+          "events.jsonl": "27b497746aa69ce845ae32b023ad9530cc621338af70ef9bc4e780dcf5ee2cf8",
+          "status.json": "9c7a2e42c55ee3fb06b3b70dfed1fb4643065ff70250251ac6590368505e503f"
+        },
+        "udalosti": 1,
+        "udalosti_integrita": 0,
+        "udalosti_model": 1,
+        "udalosti_sha256": "5252f4ff7b5244e407eee31abf2cb7362159f6a71e4eb7ac16445d52acf92d5c",
+        "vylucenych_riadkov": 0,
+        "vypadkov": 0,
+        "vypadky_s": 0
+      },
+      "events-v3-20261108_43_test_events_mixed": {
+        "archiv": "/home/eh/projects/hyptcn3/data/collections/events-v3-20261108_43_test_events_mixed/campaign_audit_20261112T045229018672Z.npz",
+        "bez_skore_cas_podiel": 0.0888888888888889,
+        "bez_skore_riadkov_podiel": 0.0888888888888889,
+        "casy_udalosti_model_s": [
+          1180.0,
+          2080.0
+        ],
+        "chyb_vstupu": 0,
+        "chyb_vstupu_s": 0,
+        "features_sha256": "61092e686549cf60b9c3ad8418dc56a50534716cfaac22a38d479e8abd0cb522",
+        "integrita_neuzavrete": {
+          "process_cross_view": 3,
+          "text_integrity": 720
+        },
+        "integrita_uzavretych_riadkov": 0,
+        "predikcie_aktivity": {
+          "bursty": 79,
+          "mixed": 62,
+          "quiet": 37,
+          "read_heavy": 191,
+          "write_heavy": 287
+        },
+        "prehratie": "/home/eh/projects/hyptcn3/data/safeguard/far-events-v3-20261108/events-v3-20261108_43_test_events_mixed",
+        "riadkov": 720,
+        "scenario": "mixed",
+        "skorovany_s": 3280,
+        "skorovanych": 656,
+        "skupina": "v3-test_events-8",
+        "sledovany_s": 3600.0,
+        "subory_sha256": {
+          "configuration.json": "4b3baed4f5690a80def6f89870263f28998f82ecb3df7ff11599fa859b3178a1",
+          "events.jsonl": "b846807f6e979e563ab5177a71bb1aa988895aa5580fb8a8baad998f50c08bbf",
+          "status.json": "69dc0d3b6ec75a8113ffbe19ed8cf2df9de49f43c1e9191867b4d4c6daecf000"
+        },
+        "udalosti": 2,
+        "udalosti_integrita": 0,
+        "udalosti_model": 2,
+        "udalosti_sha256": "23dd064f95b8c985a205d82651c5e17c202730d1c7bd8e29c82f9924760755f4",
+        "vylucenych_riadkov": 0,
+        "vypadkov": 0,
+        "vypadky_s": 0
+      },
+      "events-v3-20261108_44_test_events_steady": {
+        "archiv": "/home/eh/projects/hyptcn3/data/collections/events-v3-20261108_44_test_events_steady/campaign_audit_20261112T073858547446Z.npz",
+        "bez_skore_cas_podiel": 0.0888888888888889,
+        "bez_skore_riadkov_podiel": 0.0888888888888889,
+        "casy_udalosti_model_s": [],
+        "chyb_vstupu": 0,
+        "chyb_vstupu_s": 0,
+        "features_sha256": "21b9459fb26958dd957275a39f2cbfa4ac93229d6aa59d9e0d4154a5f276c16f",
+        "integrita_neuzavrete": {
+          "text_integrity": 720
+        },
+        "integrita_uzavretych_riadkov": 0,
+        "predikcie_aktivity": {
+          "quiet": 480,
+          "read_heavy": 9,
+          "steady": 167
+        },
+        "prehratie": "/home/eh/projects/hyptcn3/data/safeguard/far-events-v3-20261108/events-v3-20261108_44_test_events_steady",
+        "riadkov": 720,
+        "scenario": "steady",
+        "skorovany_s": 3280,
+        "skorovanych": 656,
+        "skupina": "v3-test_events-8",
+        "sledovany_s": 3600.0,
+        "subory_sha256": {
+          "configuration.json": "c54686a068d67f09bb8b4713126b260f82bc3620737e73c0209e92b720f45dfc",
+          "events.jsonl": "b910bfb3aab688c30171bbdf5d9af27b1088420d5445c3ab5adf821daaf45dc3",
+          "status.json": "3ca45b3adfddcdd4c04cf597e2d5a35a7f74a0ce8509565c80bec9d0a46a4875"
+        },
+        "udalosti": 0,
+        "udalosti_integrita": 0,
+        "udalosti_model": 0,
+        "udalosti_sha256": "101f5a7bb27828e995d50492fdfd23a25b6379ec31198f78475449339f2df626",
+        "vylucenych_riadkov": 0,
+        "vypadkov": 0,
+        "vypadky_s": 0
+      },
+      "events-v3-20261108_45_test_events_quiet": {
+        "archiv": "/home/eh/projects/hyptcn3/data/collections/events-v3-20261108_45_test_events_quiet/campaign_audit_20261112T102209416518Z.npz",
+        "bez_skore_cas_podiel": 0.0888888888888889,
+        "bez_skore_riadkov_podiel": 0.0888888888888889,
+        "casy_udalosti_model_s": [
+          700.0,
+          2440.0
+        ],
+        "chyb_vstupu": 0,
+        "chyb_vstupu_s": 0,
+        "features_sha256": "797029edbb109f4c4a7790893d373d8ab850e4ac5e965c66d5b35b02edb1b7e9",
+        "integrita_neuzavrete": {
+          "process_cross_view": 15,
+          "text_integrity": 720
+        },
+        "integrita_uzavretych_riadkov": 0,
+        "predikcie_aktivity": {
+          "quiet": 580,
+          "read_heavy": 43,
+          "steady": 9,
+          "write_heavy": 24
+        },
+        "prehratie": "/home/eh/projects/hyptcn3/data/safeguard/far-events-v3-20261108/events-v3-20261108_45_test_events_quiet",
+        "riadkov": 720,
+        "scenario": "quiet",
+        "skorovany_s": 3280,
+        "skorovanych": 656,
+        "skupina": "v3-test_events-8",
+        "sledovany_s": 3600.0,
+        "subory_sha256": {
+          "configuration.json": "4712af55828bbc0a60e3837698895276e58ad7fef5df74c18418044cf569d0f5",
+          "events.jsonl": "0745b4193dc3ddbc1fd4e301e66cc3cab1031e7312f70ff2558ea0e19d5ea0b9",
+          "status.json": "8fd4589777dae3e0979ca36451260d338314ebc6b3277ebb91cec95289139384"
+        },
+        "udalosti": 2,
+        "udalosti_integrita": 0,
+        "udalosti_model": 2,
+        "udalosti_sha256": "71c435b756a22586b9b370ae962ec3f1a3515eb9bbd77d1f7ccb6917d26f7f95",
+        "vylucenych_riadkov": 0,
+        "vypadkov": 0,
+        "vypadky_s": 0
+      }
+    },
+    "schema": "hyptcn3/safeguard-event-far/1",
+    "udalosti": {
+      "alarm_na_konci_dozvuku": 0,
+      "planovanych": 111,
+      "priebeh": [
+        {
+          "alarm_modelu": true,
+          "alarm_na_konci_dozvuku": false,
+          "alarm_riadkov": 14,
+          "alarm_v_dozvuku_riadkov": 0,
+          "class": "restart_sluzby",
+          "dozvuk_riadkov": 60,
+          "executed": true,
+          "oneskorenie_s": 12.951045989990234,
+          "relacia": "events-v3-20261108_01_test_events_bursty",
+          "skupina": "v3-test_events-1",
+          "start_unix": 1794137253.437954,
+          "stop_unix": 1794137584.1873996,
+          "type": "restart_databazy"
+        },
+        {
+          "alarm_modelu": true,
+          "alarm_na_konci_dozvuku": false,
+          "alarm_riadkov": 20,
+          "alarm_v_dozvuku_riadkov": 0,
+          "class": "chyba_aplikacie",
+          "dozvuk_riadkov": 60,
+          "executed": true,
+          "oneskorenie_s": 92.56225085258484,
+          "relacia": "events-v3-20261108_01_test_events_bursty",
+          "skupina": "v3-test_events-1",
+          "start_unix": 1794138183.826749,
+          "stop_unix": 1794138334.9716232,
+          "type": "zamok_tabulky"
+        },
+        {
+          "alarm_modelu": true,
+          "alarm_na_konci_dozvuku": false,
+          "alarm_riadkov": 25,
+          "alarm_v_dozvuku_riadkov": 0,
+          "class": "zla_konfiguracia",
+          "dozvuk_riadkov": 60,
+          "executed": true,
+          "oneskorenie_s": 182.65366530418396,
+          "relacia": "events-v3-20261108_02_test_events_steady",
+          "skupina": "v3-test_events-1",
+          "start_unix": 1794143431.9913347,
+          "stop_unix": 1794143643.6982498,
+          "type": "zla_konfiguracia_sluzby"
+        },
+        {
+          "alarm_modelu": false,
+          "alarm_na_konci_dozvuku": false,
+          "alarm_riadkov": 0,
+          "alarm_v_dozvuku_riadkov": 0,
+          "class": "restart_sluzby",
+          "dozvuk_riadkov": 60,
+          "executed": true,
+          "oneskorenie_s": null,
+          "relacia": "events-v3-20261108_02_test_events_steady",
+          "skupina": "v3-test_events-1",
+          "start_unix": 1794144241.674555,
+          "stop_unix": 1794144602.121513,
+          "type": "restart_sluzby"
+        },
+        {
+          "alarm_modelu": false,
+          "alarm_na_konci_dozvuku": false,
+          "alarm_riadkov": 0,
+          "alarm_v_dozvuku_riadkov": 0,
+          "class": "udrzba",
+          "dozvuk_riadkov": 60,
+          "executed": true,
+          "oneskorenie_s": null,
+          "relacia": "events-v3-20261108_03_test_events_write_heavy",
+          "skupina": "v3-test_events-1",
+          "start_unix": 1794147934.3623793,
+          "stop_unix": 1794148054.7001095,
+          "type": "udrzba_zaloha"
+        },
+        {
+          "alarm_modelu": false,
+          "alarm_na_konci_dozvuku": false,
+          "alarm_riadkov": 0,
+          "alarm_v_dozvuku_riadkov": 0,
+          "class": "zla_konfiguracia",
+          "dozvuk_riadkov": 60,
+          "executed": true,
+          "oneskorenie_s": null,
+          "relacia": "events-v3-20261108_03_test_events_write_heavy",
+          "skupina": "v3-test_events-1",
+          "start_unix": 1794148654.1729178,
+          "stop_unix": 1794148805.3712256,
+          "type": "zla_konfiguracia_nginx"
+        },
+        {
+          "alarm_modelu": true,
+          "alarm_na_konci_dozvuku": false,
+          "alarm_riadkov": 34,
+          "alarm_v_dozvuku_riadkov": 0,
+          "class": "zataz_pamate",
+          "dozvuk_riadkov": 60,
+          "executed": true,
+          "oneskorenie_s": 12.35697078704834,
+          "relacia": "events-v3-20261108_04_test_events_mixed",
+          "skupina": "v3-test_events-1",
+          "start_unix": 1794153485.059029,
+          "stop_unix": 1794153755.4583197,
+          "type": "zataz_pamate"
+        },
+        {
+          "alarm_modelu": true,
+          "alarm_na_konci_dozvuku": false,
+          "alarm_riadkov": 8,
+          "alarm_v_dozvuku_riadkov": 0,
+          "class": "restart_sluzby",
+          "dozvuk_riadkov": 60,
+          "executed": true,
+          "oneskorenie_s": 12.780456781387329,
+          "relacia": "events-v3-20261108_04_test_events_mixed",
+          "skupina": "v3-test_events-1",
+          "start_unix": 1794154354.635543,
+          "stop_unix": 1794154565.1037464,
+          "type": "restart_databazy"
+        },
+        {
+          "alarm_modelu": true,
+          "alarm_na_konci_dozvuku": false,
+          "alarm_riadkov": 25,
+          "alarm_v_dozvuku_riadkov": 0,
+          "class": "zataz_pamate",
+          "dozvuk_riadkov": 60,
+          "executed": true,
+          "oneskorenie_s": 12.659491777420044,
+          "relacia": "events-v3-20261108_05_test_events_read_heavy",
+          "skupina": "v3-test_events-1",
+          "start_unix": 1794158681.062508,
+          "stop_unix": 1794158801.503486,
+          "type": "zataz_pamate"
+        },
+        {
+          "alarm_modelu": false,
+          "alarm_na_konci_dozvuku": false,
+          "alarm_riadkov": 0,
+          "alarm_v_dozvuku_riadkov": 0,
+          "class": "udrzba",
+          "dozvuk_riadkov": 60,
+          "executed": true,
+          "oneskorenie_s": null,
+          "relacia": "events-v3-20261108_05_test_events_read_heavy",
+          "skupina": "v3-test_events-1",
+          "start_unix": 1794159401.1091504,
+          "stop_unix": 1794159521.248279,
+          "type": "udrzba_zaloha"
+        },
+        {
+          "alarm_modelu": false,
+          "alarm_na_konci_dozvuku": false,
+          "alarm_riadkov": 0,
+          "alarm_v_dozvuku_riadkov": 0,
+          "class": "restart_sluzby",
+          "dozvuk_riadkov": 60,
+          "executed": true,
+          "oneskorenie_s": null,
+          "relacia": "events-v3-20261108_06_test_events_quiet",
+          "skupina": "v3-test_events-1",
+          "start_unix": 1794165502.3016443,
+          "stop_unix": 1794165862.73146,
+          "type": "restart_sluzby"
+        },
+        {
+          "alarm_modelu": false,
+          "alarm_na_konci_dozvuku": false,
+          "alarm_riadkov": 0,
+          "alarm_v_dozvuku_riadkov": 0,
+          "class": "zla_konfiguracia",
+          "dozvuk_riadkov": 60,
+          "executed": true,
+          "oneskorenie_s": null,
+          "relacia": "events-v3-20261108_06_test_events_quiet",
+          "skupina": "v3-test_events-1",
+          "start_unix": 1794166462.1982234,
+          "stop_unix": 1794166643.0640357,
+          "type": "zla_konfiguracia_nginx"
+        },
+        {
+          "alarm_modelu": true,
+          "alarm_na_konci_dozvuku": false,
+          "alarm_riadkov": 6,
+          "alarm_v_dozvuku_riadkov": 0,
+          "class": "restart_sluzby",
+          "dozvuk_riadkov": 60,
+          "executed": true,
+          "oneskorenie_s": 32.69644784927368,
+          "relacia": "events-v3-20261108_07_test_events_quiet",
+          "skupina": "v3-test_events-2",
+          "start_unix": 1794172243.6525521,
+          "stop_unix": 1794172424.0310407,
+          "type": "restart_databazy"
+        },
+        {
+          "alarm_modelu": false,
+          "alarm_na_konci_dozvuku": false,
+          "alarm_riadkov": 0,
+          "alarm_v_dozvuku_riadkov": 0,
+          "class": "restart_sluzby",
+          "dozvuk_riadkov": 60,
+          "executed": true,
+          "oneskorenie_s": null,
+          "relacia": "events-v3-20261108_07_test_events_quiet",
+          "skupina": "v3-test_events-2",
+          "start_unix": 1794173023.7305288,
+          "stop_unix": 1794173174.5055518,
+          "type": "restart_sluzby"
+        },
+        {
+          "alarm_modelu": true,
+          "alarm_na_konci_dozvuku": false,
+          "alarm_riadkov": 53,
+          "alarm_v_dozvuku_riadkov": 0,
+          "class": "zla_konfiguracia",
+          "dozvuk_riadkov": 60,
+          "executed": true,
+          "oneskorenie_s": 13.08735704421997,
+          "relacia": "events-v3-20261108_08_test_events_write_heavy",
+          "skupina": "v3-test_events-2",
+          "start_unix": 1794177045.7726429,
+          "stop_unix": 1794177227.5786886,
+          "type": "zla_konfiguracia_sluzby"
+        },
+        {
+          "alarm_modelu": true,
+          "alarm_na_konci_dozvuku": false,
+          "alarm_riadkov": 49,
+          "alarm_v_dozvuku_riadkov": 0,
+          "class": "zataz_pamate",
+          "dozvuk_riadkov": 60,
+          "executed": true,
+          "oneskorenie_s": 12.637706279754639,
+          "relacia": "events-v3-20261108_08_test_events_write_heavy",
+          "skupina": "v3-test_events-2",
+          "start_unix": 1794177826.2222936,
+          "stop_unix": 1794178066.1055775,
+          "type": "zataz_pamate"
+        },
+        {
+          "alarm_modelu": false,
+          "alarm_na_konci_dozvuku": false,
+          "alarm_riadkov": 0,
+          "alarm_v_dozvuku_riadkov": 0,
+          "class": "zla_konfiguracia",
+          "dozvuk_riadkov": 60,
+          "executed": true,
+          "oneskorenie_s": null,
+          "relacia": "events-v3-20261108_08_test_events_write_heavy",
+          "skupina": "v3-test_events-2",
+          "start_unix": 1794178666.1886811,
+          "stop_unix": 1794178997.434677,
+          "type": "zla_konfiguracia_nginx"
+        },
+        {
+          "alarm_modelu": true,
+          "alarm_na_konci_dozvuku": false,
+          "alarm_riadkov": 64,
+          "alarm_v_dozvuku_riadkov": 0,
+          "class": "chyba_aplikacie",
+          "dozvuk_riadkov": 60,
+          "executed": true,
+          "oneskorenie_s": 12.977319717407227,
+          "relacia": "events-v3-20261108_09_test_events_read_heavy",
+          "skupina": "v3-test_events-2",
+          "start_unix": 1794184202.3596802,
+          "stop_unix": 1794184504.6123433,
+          "type": "zamok_tabulky"
+        },
+        {
+          "alarm_modelu": false,
+          "alarm_na_konci_dozvuku": false,
+          "alarm_riadkov": 0,
+          "alarm_v_dozvuku_riadkov": 0,
+          "class": "udrzba",
+          "dozvuk_riadkov": 60,
+          "executed": true,
+          "oneskorenie_s": null,
+          "relacia": "events-v3-20261108_09_test_events_read_heavy",
+          "skupina": "v3-test_events-2",
+          "start_unix": 1794185103.0793147,
+          "stop_unix": 1794185463.0521948,
+          "type": "udrzba_zaloha"
+        },
+        {
+          "alarm_modelu": true,
+          "alarm_na_konci_dozvuku": false,
+          "alarm_riadkov": 65,
+          "alarm_v_dozvuku_riadkov": 0,
+          "class": "zla_konfiguracia",
+          "dozvuk_riadkov": 60,
+          "executed": true,
+          "oneskorenie_s": 12.42405366897583,
+          "relacia": "events-v3-20261108_09_test_events_read_heavy",
+          "skupina": "v3-test_events-2",
+          "start_unix": 1794186062.9129462,
+          "stop_unix": 1794186305.682879,
+          "type": "zla_konfiguracia_sluzby"
+        },
+        {
+          "alarm_modelu": false,
+          "alarm_na_konci_dozvuku": false,
+          "alarm_riadkov": 0,
+          "alarm_v_dozvuku_riadkov": 0,
+          "class": "udrzba",
+          "dozvuk_riadkov": 60,
+          "executed": true,
+          "oneskorenie_s": null,
+          "relacia": "events-v3-20261108_10_test_events_bursty",
+          "skupina": "v3-test_events-2",
+          "start_unix": 1794191198.6092029,
+          "stop_unix": 1794191378.978764,
+          "type": "udrzba_zaloha"
+        },
+        {
+          "alarm_modelu": true,
+          "alarm_na_konci_dozvuku": false,
+          "alarm_riadkov": 59,
+          "alarm_v_dozvuku_riadkov": 0,
+          "class": "chyba_aplikacie",
+          "dozvuk_riadkov": 60,
+          "executed": true,
+          "oneskorenie_s": 12.626681327819824,
+          "relacia": "events-v3-20261108_10_test_events_bursty",
+          "skupina": "v3-test_events-2",
+          "start_unix": 1794191978.7253187,
+          "stop_unix": 1794192250.5807672,
+          "type": "zamok_tabulky"
+        },
+        {
+          "alarm_modelu": false,
+          "alarm_na_konci_dozvuku": false,
+          "alarm_riadkov": 0,
+          "alarm_v_dozvuku_riadkov": 0,
+          "class": "zla_konfiguracia",
+          "dozvuk_riadkov": 60,
+          "executed": true,
+          "oneskorenie_s": null,
+          "relacia": "events-v3-20261108_10_test_events_bursty",
+          "skupina": "v3-test_events-2",
+          "start_unix": 1794192848.7665951,
+          "stop_unix": 1794193120.384795,
+          "type": "zla_konfiguracia_nginx"
+        },
+        {
+          "alarm_modelu": true,
+          "alarm_na_konci_dozvuku": false,
+          "alarm_riadkov": 10,
+          "alarm_v_dozvuku_riadkov": 0,
+          "class": "restart_sluzby",
+          "dozvuk_riadkov": 60,
+          "executed": true,
+          "oneskorenie_s": 12.648061990737915,
+          "relacia": "events-v3-20261108_11_test_events_mixed",
+          "skupina": "v3-test_events-2",
+          "start_unix": 1794202320.722938,
+          "stop_unix": 1794202531.107829,
+          "type": "restart_databazy"
+        },
+        {
+          "alarm_modelu": false,
+          "alarm_na_konci_dozvuku": false,
+          "alarm_riadkov": 0,
+          "alarm_v_dozvuku_riadkov": 0,
+          "class": "restart_sluzby",
+          "dozvuk_riadkov": 60,
+          "executed": true,
+          "oneskorenie_s": null,
+          "relacia": "events-v3-20261108_11_test_events_mixed",
+          "skupina": "v3-test_events-2",
+          "start_unix": 1794203131.0841289,
+          "stop_unix": 1794203251.1540227,
+          "type": "restart_sluzby"
+        },
+        {
+          "alarm_modelu": true,
+          "alarm_na_konci_dozvuku": false,
+          "alarm_riadkov": 25,
+          "alarm_v_dozvuku_riadkov": 0,
+          "class": "zataz_pamate",
+          "dozvuk_riadkov": 60,
+          "executed": true,
+          "oneskorenie_s": 13.052310943603516,
+          "relacia": "events-v3-20261108_12_test_events_steady",
+          "skupina": "v3-test_events-2",
+          "start_unix": 1794208109.152689,
+          "stop_unix": 1794208230.2179494,
+          "type": "zataz_pamate"
+        },
+        {
+          "alarm_modelu": true,
+          "alarm_na_konci_dozvuku": false,
+          "alarm_riadkov": 28,
+          "alarm_v_dozvuku_riadkov": 0,
+          "class": "chyba_aplikacie",
+          "dozvuk_riadkov": 60,
+          "executed": true,
+          "oneskorenie_s": 13.148964881896973,
+          "relacia": "events-v3-20261108_12_test_events_steady",
+          "skupina": "v3-test_events-2",
+          "start_unix": 1794208829.056035,
+          "stop_unix": 1794209012.875294,
+          "type": "zamok_tabulky"
+        },
+        {
+          "alarm_modelu": false,
+          "alarm_na_konci_dozvuku": false,
+          "alarm_riadkov": 0,
+          "alarm_v_dozvuku_riadkov": 0,
+          "class": "zla_konfiguracia",
+          "dozvuk_riadkov": 60,
+          "executed": true,
+          "oneskorenie_s": null,
+          "relacia": "events-v3-20261108_12_test_events_steady",
+          "skupina": "v3-test_events-2",
+          "start_unix": 1794209609.7444952,
+          "stop_unix": 1794209789.9434717,
+          "type": "zla_konfiguracia_nginx"
+        },
+        {
+          "alarm_modelu": false,
+          "alarm_na_konci_dozvuku": false,
+          "alarm_riadkov": 0,
+          "alarm_v_dozvuku_riadkov": 0,
+          "class": "udrzba",
+          "dozvuk_riadkov": 60,
+          "executed": true,
+          "oneskorenie_s": null,
+          "relacia": "events-v3-20261108_13_test_events_quiet",
+          "skupina": "v3-test_events-3",
+          "start_unix": 1794214174.1729035,
+          "stop_unix": 1794214474.467589,
+          "type": "udrzba_zaloha"
+        },
+        {
+          "alarm_modelu": true,
+          "alarm_na_konci_dozvuku": false,
+          "alarm_riadkov": 58,
+          "alarm_v_dozvuku_riadkov": 0,
+          "class": "chyba_aplikacie",
+          "dozvuk_riadkov": 60,
+          "executed": true,
+          "oneskorenie_s": 12.454126596450806,
+          "relacia": "events-v3-20261108_13_test_events_quiet",
+          "skupina": "v3-test_events-3",
+          "start_unix": 1794215074.1878734,
+          "stop_unix": 1794215438.3501177,
+          "type": "zamok_tabulky"
+        },
+        {
+          "alarm_modelu": true,
+          "alarm_na_konci_dozvuku": false,
+          "alarm_riadkov": 61,
+          "alarm_v_dozvuku_riadkov": 0,
+          "class": "zataz_pamate",
+          "dozvuk_riadkov": 60,
+          "executed": true,
+          "oneskorenie_s": 12.550093650817871,
+          "relacia": "events-v3-20261108_13_test_events_quiet",
+          "skupina": "v3-test_events-3",
+          "start_unix": 1794216034.0919063,
+          "stop_unix": 1794216334.3469024,
+          "type": "zataz_pamate"
+        },
+        {
+          "alarm_modelu": false,
+          "alarm_na_konci_dozvuku": false,
+          "alarm_riadkov": 0,
+          "alarm_v_dozvuku_riadkov": 0,
+          "class": "zla_konfiguracia",
+          "dozvuk_riadkov": 60,
+          "executed": true,
+          "oneskorenie_s": null,
+          "relacia": "events-v3-20261108_14_test_events_write_heavy",
+          "skupina": "v3-test_events-3",
+          "start_unix": 1794221847.46524,
+          "stop_unix": 1794222058.6260498,
+          "type": "zla_konfiguracia_nginx"
+        },
+        {
+          "alarm_modelu": true,
+          "alarm_na_konci_dozvuku": false,
+          "alarm_riadkov": 8,
+          "alarm_v_dozvuku_riadkov": 0,
+          "class": "restart_sluzby",
+          "dozvuk_riadkov": 60,
+          "executed": true,
+          "oneskorenie_s": 12.579356908798218,
+          "relacia": "events-v3-20261108_14_test_events_write_heavy",
+          "skupina": "v3-test_events-3",
+          "start_unix": 1794222657.377643,
+          "stop_unix": 1794222778.1831803,
+          "type": "restart_databazy"
+        },
+        {
+          "alarm_modelu": false,
+          "alarm_na_konci_dozvuku": false,
+          "alarm_riadkov": 0,
+          "alarm_v_dozvuku_riadkov": 0,
+          "class": "restart_sluzby",
+          "dozvuk_riadkov": 60,
+          "executed": true,
+          "oneskorenie_s": null,
+          "relacia": "events-v3-20261108_15_test_events_steady",
+          "skupina": "v3-test_events-3",
+          "start_unix": 1794228634.5420406,
+          "stop_unix": 1794228995.0367584,
+          "type": "restart_sluzby"
+        },
+        {
+          "alarm_modelu": true,
+          "alarm_na_konci_dozvuku": false,
+          "alarm_riadkov": 77,
+          "alarm_v_dozvuku_riadkov": 0,
+          "class": "zla_konfiguracia",
+          "dozvuk_riadkov": 60,
+          "executed": true,
+          "oneskorenie_s": 12.979405641555786,
+          "relacia": "events-v3-20261108_15_test_events_steady",
+          "skupina": "v3-test_events-3",
+          "start_unix": 1794229593.5685945,
+          "stop_unix": 1794229895.506433,
+          "type": "zla_konfiguracia_sluzby"
+        },
+        {
+          "alarm_modelu": false,
+          "alarm_na_konci_dozvuku": false,
+          "alarm_riadkov": 0,
+          "alarm_v_dozvuku_riadkov": 0,
+          "class": "restart_sluzby",
+          "dozvuk_riadkov": 60,
+          "executed": true,
+          "oneskorenie_s": null,
+          "relacia": "events-v3-20261108_16_test_events_mixed",
+          "skupina": "v3-test_events-3",
+          "start_unix": 1794235163.1159525,
+          "stop_unix": 1794235463.6556964,
+          "type": "restart_sluzby"
+        },
+        {
+          "alarm_modelu": true,
+          "alarm_na_konci_dozvuku": false,
+          "alarm_riadkov": 31,
+          "alarm_v_dozvuku_riadkov": 0,
+          "class": "zataz_pamate",
+          "dozvuk_riadkov": 60,
+          "executed": true,
+          "oneskorenie_s": 12.16492748260498,
+          "relacia": "events-v3-20261108_16_test_events_mixed",
+          "skupina": "v3-test_events-3",
+          "start_unix": 1794236063.1260724,
+          "stop_unix": 1794236213.2881339,
+          "type": "zataz_pamate"
+        },
+        {
+          "alarm_modelu": false,
+          "alarm_na_konci_dozvuku": false,
+          "alarm_riadkov": 0,
+          "alarm_v_dozvuku_riadkov": 0,
+          "class": "zla_konfiguracia",
+          "dozvuk_riadkov": 60,
+          "executed": true,
+          "oneskorenie_s": null,
+          "relacia": "events-v3-20261108_17_test_events_read_heavy",
+          "skupina": "v3-test_events-3",
+          "start_unix": 1794242076.8743203,
+          "stop_unix": 1794242287.110874,
+          "type": "zla_konfiguracia_nginx"
+        },
+        {
+          "alarm_modelu": true,
+          "alarm_na_konci_dozvuku": false,
+          "alarm_riadkov": 27,
+          "alarm_v_dozvuku_riadkov": 0,
+          "class": "chyba_aplikacie",
+          "dozvuk_riadkov": 60,
+          "executed": true,
+          "oneskorenie_s": 122.63209795951843,
+          "relacia": "events-v3-20261108_17_test_events_read_heavy",
+          "skupina": "v3-test_events-3",
+          "start_unix": 1794242886.769902,
+          "stop_unix": 1794243101.920207,
+          "type": "zamok_tabulky"
+        },
+        {
+          "alarm_modelu": false,
+          "alarm_na_konci_dozvuku": false,
+          "alarm_riadkov": 0,
+          "alarm_v_dozvuku_riadkov": 0,
+          "class": "udrzba",
+          "dozvuk_riadkov": 60,
+          "executed": true,
+          "oneskorenie_s": null,
+          "relacia": "events-v3-20261108_17_test_events_read_heavy",
+          "skupina": "v3-test_events-3",
+          "start_unix": 1794243696.913578,
+          "stop_unix": 1794244027.080186,
+          "type": "udrzba_zaloha"
+        },
+        {
+          "alarm_modelu": true,
+          "alarm_na_konci_dozvuku": false,
+          "alarm_riadkov": 83,
+          "alarm_v_dozvuku_riadkov": 0,
+          "class": "zla_konfiguracia",
+          "dozvuk_riadkov": 60,
+          "executed": true,
+          "oneskorenie_s": 12.089446306228638,
+          "relacia": "events-v3-20261108_18_test_events_bursty",
+          "skupina": "v3-test_events-3",
+          "start_unix": 1794248856.2175536,
+          "stop_unix": 1794249188.64058,
+          "type": "zla_konfiguracia_sluzby"
+        },
+        {
+          "alarm_modelu": false,
+          "alarm_na_konci_dozvuku": false,
+          "alarm_riadkov": 0,
+          "alarm_v_dozvuku_riadkov": 0,
+          "class": "restart_sluzby",
+          "dozvuk_riadkov": 60,
+          "executed": true,
+          "oneskorenie_s": null,
+          "relacia": "events-v3-20261108_18_test_events_bursty",
+          "skupina": "v3-test_events-3",
+          "start_unix": 1794249785.94933,
+          "stop_unix": 1794250056.3682284,
+          "type": "restart_databazy"
+        },
+        {
+          "alarm_modelu": true,
+          "alarm_na_konci_dozvuku": false,
+          "alarm_riadkov": 65,
+          "alarm_v_dozvuku_riadkov": 0,
+          "class": "zla_konfiguracia",
+          "dozvuk_riadkov": 60,
+          "executed": true,
+          "oneskorenie_s": 12.855152606964111,
+          "relacia": "events-v3-20261108_18_test_events_bursty",
+          "skupina": "v3-test_events-3",
+          "start_unix": 1794250655.4518473,
+          "stop_unix": 1794250898.0829482,
+          "type": "zla_konfiguracia_sluzby"
+        },
+        {
+          "alarm_modelu": true,
+          "alarm_na_konci_dozvuku": false,
+          "alarm_riadkov": 27,
+          "alarm_v_dozvuku_riadkov": 0,
+          "class": "chyba_aplikacie",
+          "dozvuk_riadkov": 60,
+          "executed": true,
+          "oneskorenie_s": 13.067699432373047,
+          "relacia": "events-v3-20261108_19_test_events_bursty",
+          "skupina": "v3-test_events-4",
+          "start_unix": 1794260778.3573005,
+          "stop_unix": 1794260900.6248376,
+          "type": "zamok_tabulky"
+        },
+        {
+          "alarm_modelu": false,
+          "alarm_na_konci_dozvuku": false,
+          "alarm_riadkov": 0,
+          "alarm_v_dozvuku_riadkov": 0,
+          "class": "restart_sluzby",
+          "dozvuk_riadkov": 60,
+          "executed": true,
+          "oneskorenie_s": null,
+          "relacia": "events-v3-20261108_19_test_events_bursty",
+          "skupina": "v3-test_events-4",
+          "start_unix": 1794261499.1001258,
+          "stop_unix": 1794261649.621851,
+          "type": "restart_databazy"
+        },
+        {
+          "alarm_modelu": false,
+          "alarm_na_konci_dozvuku": false,
+          "alarm_riadkov": 0,
+          "alarm_v_dozvuku_riadkov": 0,
+          "class": "zla_konfiguracia",
+          "dozvuk_riadkov": 60,
+          "executed": true,
+          "oneskorenie_s": null,
+          "relacia": "events-v3-20261108_19_test_events_bursty",
+          "skupina": "v3-test_events-4",
+          "start_unix": 1794262248.8455465,
+          "stop_unix": 1794262550.1200492,
+          "type": "zla_konfiguracia_nginx"
+        },
+        {
+          "alarm_modelu": true,
+          "alarm_na_konci_dozvuku": false,
+          "alarm_riadkov": 77,
+          "alarm_v_dozvuku_riadkov": 0,
+          "class": "zla_konfiguracia",
+          "dozvuk_riadkov": 60,
+          "executed": true,
+          "oneskorenie_s": 13.13953971862793,
+          "relacia": "events-v3-20261108_20_test_events_write_heavy",
+          "skupina": "v3-test_events-4",
+          "start_unix": 1794270164.3784602,
+          "stop_unix": 1794270466.2652595,
+          "type": "zla_konfiguracia_sluzby"
+        },
+        {
+          "alarm_modelu": false,
+          "alarm_na_konci_dozvuku": false,
+          "alarm_riadkov": 0,
+          "alarm_v_dozvuku_riadkov": 0,
+          "class": "restart_sluzby",
+          "dozvuk_riadkov": 60,
+          "executed": true,
+          "oneskorenie_s": null,
+          "relacia": "events-v3-20261108_20_test_events_write_heavy",
+          "skupina": "v3-test_events-4",
+          "start_unix": 1794271065.0502777,
+          "stop_unix": 1794271335.2540953,
+          "type": "restart_sluzby"
+        },
+        {
+          "alarm_modelu": false,
+          "alarm_na_konci_dozvuku": false,
+          "alarm_riadkov": 0,
+          "alarm_v_dozvuku_riadkov": 0,
+          "class": "udrzba",
+          "dozvuk_riadkov": 60,
+          "executed": true,
+          "oneskorenie_s": null,
+          "relacia": "events-v3-20261108_21_test_events_steady",
+          "skupina": "v3-test_events-4",
+          "start_unix": 1794276547.12993,
+          "stop_unix": 1794276907.8741457,
+          "type": "udrzba_zaloha"
+        },
+        {
+          "alarm_modelu": true,
+          "alarm_na_konci_dozvuku": false,
+          "alarm_riadkov": 67,
+          "alarm_v_dozvuku_riadkov": 0,
+          "class": "zataz_pamate",
+          "dozvuk_riadkov": 60,
+          "executed": true,
+          "oneskorenie_s": 12.098022937774658,
+          "relacia": "events-v3-20261108_21_test_events_steady",
+          "skupina": "v3-test_events-4",
+          "start_unix": 1794277507.350977,
+          "stop_unix": 1794277837.4423673,
+          "type": "zataz_pamate"
+        },
+        {
+          "alarm_modelu": false,
+          "alarm_na_konci_dozvuku": false,
+          "alarm_riadkov": 0,
+          "alarm_v_dozvuku_riadkov": 0,
+          "class": "restart_sluzby",
+          "dozvuk_riadkov": 60,
+          "executed": true,
+          "oneskorenie_s": null,
+          "relacia": "events-v3-20261108_22_test_events_read_heavy",
+          "skupina": "v3-test_events-4",
+          "start_unix": 1794282346.9717283,
+          "stop_unix": 1794282617.2804155,
+          "type": "restart_sluzby"
+        },
+        {
+          "alarm_modelu": true,
+          "alarm_na_konci_dozvuku": false,
+          "alarm_riadkov": 61,
+          "alarm_v_dozvuku_riadkov": 0,
+          "class": "zataz_pamate",
+          "dozvuk_riadkov": 60,
+          "executed": true,
+          "oneskorenie_s": 12.956314325332642,
+          "relacia": "events-v3-20261108_22_test_events_read_heavy",
+          "skupina": "v3-test_events-4",
+          "start_unix": 1794283216.1926856,
+          "stop_unix": 1794283517.383668,
+          "type": "zataz_pamate"
+        },
+        {
+          "alarm_modelu": true,
+          "alarm_na_konci_dozvuku": false,
+          "alarm_riadkov": 67,
+          "alarm_v_dozvuku_riadkov": 0,
+          "class": "chyba_aplikacie",
+          "dozvuk_riadkov": 60,
+          "executed": true,
+          "oneskorenie_s": 12.793276309967041,
+          "relacia": "events-v3-20261108_22_test_events_read_heavy",
+          "skupina": "v3-test_events-4",
+          "start_unix": 1794284116.3557236,
+          "stop_unix": 1794284449.5414772,
+          "type": "zamok_tabulky"
+        },
+        {
+          "alarm_modelu": false,
+          "alarm_na_konci_dozvuku": false,
+          "alarm_riadkov": 0,
+          "alarm_v_dozvuku_riadkov": 0,
+          "class": "udrzba",
+          "dozvuk_riadkov": 60,
+          "executed": true,
+          "oneskorenie_s": null,
+          "relacia": "events-v3-20261108_23_test_events_quiet",
+          "skupina": "v3-test_events-4",
+          "start_unix": 1794289323.6807096,
+          "stop_unix": 1794289593.871406,
+          "type": "udrzba_zaloha"
+        },
+        {
+          "alarm_modelu": true,
+          "alarm_na_konci_dozvuku": false,
+          "alarm_riadkov": 10,
+          "alarm_v_dozvuku_riadkov": 0,
+          "class": "restart_sluzby",
+          "dozvuk_riadkov": 60,
+          "executed": true,
+          "oneskorenie_s": 12.308093547821045,
+          "relacia": "events-v3-20261108_23_test_events_quiet",
+          "skupina": "v3-test_events-4",
+          "start_unix": 1794290193.6289065,
+          "stop_unix": 1794290554.707255,
+          "type": "restart_databazy"
+        },
+        {
+          "alarm_modelu": true,
+          "alarm_na_konci_dozvuku": false,
+          "alarm_riadkov": 59,
+          "alarm_v_dozvuku_riadkov": 0,
+          "class": "zla_konfiguracia",
+          "dozvuk_riadkov": 60,
+          "executed": true,
+          "oneskorenie_s": 12.424387454986572,
+          "relacia": "events-v3-20261108_23_test_events_quiet",
+          "skupina": "v3-test_events-4",
+          "start_unix": 1794291153.5126126,
+          "stop_unix": 1794291365.5914795,
+          "type": "zla_konfiguracia_sluzby"
+        },
+        {
+          "alarm_modelu": false,
+          "alarm_na_konci_dozvuku": false,
+          "alarm_riadkov": 0,
+          "alarm_v_dozvuku_riadkov": 0,
+          "class": "zla_konfiguracia",
+          "dozvuk_riadkov": 60,
+          "executed": true,
+          "oneskorenie_s": null,
+          "relacia": "events-v3-20261108_24_test_events_mixed",
+          "skupina": "v3-test_events-4",
+          "start_unix": 1794296804.2383764,
+          "stop_unix": 1794297075.2124095,
+          "type": "zla_konfiguracia_nginx"
+        },
+        {
+          "alarm_modelu": true,
+          "alarm_na_konci_dozvuku": false,
+          "alarm_riadkov": 1,
+          "alarm_v_dozvuku_riadkov": 0,
+          "class": "zla_konfiguracia",
+          "dozvuk_riadkov": 60,
+          "executed": true,
+          "oneskorenie_s": 2.683084011077881,
+          "relacia": "events-v3-20261108_24_test_events_mixed",
+          "skupina": "v3-test_events-4",
+          "start_unix": 1794297673.903916,
+          "stop_unix": 1794297884.2253902,
+          "type": "zla_konfiguracia_nginx"
+        },
+        {
+          "alarm_modelu": false,
+          "alarm_na_konci_dozvuku": false,
+          "alarm_riadkov": 0,
+          "alarm_v_dozvuku_riadkov": 0,
+          "class": "udrzba",
+          "dozvuk_riadkov": 60,
+          "executed": true,
+          "oneskorenie_s": null,
+          "relacia": "events-v3-20261108_25_test_events_quiet",
+          "skupina": "v3-test_events-5",
+          "start_unix": 1794306072.302619,
+          "stop_unix": 1794306432.301703,
+          "type": "udrzba_zaloha"
+        },
+        {
+          "alarm_modelu": true,
+          "alarm_na_konci_dozvuku": false,
+          "alarm_riadkov": 16,
+          "alarm_v_dozvuku_riadkov": 0,
+          "class": "zataz_pamate",
+          "dozvuk_riadkov": 60,
+          "executed": true,
+          "oneskorenie_s": 12.709105253219604,
+          "relacia": "events-v3-20261108_25_test_events_quiet",
+          "skupina": "v3-test_events-5",
+          "start_unix": 1794307031.8888948,
+          "stop_unix": 1794307242.607704,
+          "type": "zataz_pamate"
+        },
+        {
+          "alarm_modelu": false,
+          "alarm_na_konci_dozvuku": false,
+          "alarm_riadkov": 0,
+          "alarm_v_dozvuku_riadkov": 0,
+          "class": "restart_sluzby",
+          "dozvuk_riadkov": 60,
+          "executed": true,
+          "oneskorenie_s": null,
+          "relacia": "events-v3-20261108_25_test_events_quiet",
+          "skupina": "v3-test_events-5",
+          "start_unix": 1794307841.4107966,
+          "stop_unix": 1794308142.677974,
+          "type": "restart_sluzby"
+        },
+        {
+          "alarm_modelu": true,
+          "alarm_na_konci_dozvuku": false,
+          "alarm_riadkov": 77,
+          "alarm_v_dozvuku_riadkov": 0,
+          "class": "chyba_aplikacie",
+          "dozvuk_riadkov": 60,
+          "executed": true,
+          "oneskorenie_s": 2.603964328765869,
+          "relacia": "events-v3-20261108_26_test_events_write_heavy",
+          "skupina": "v3-test_events-5",
+          "start_unix": 1794312996.0290356,
+          "stop_unix": 1794313360.2195623,
+          "type": "zamok_tabulky"
+        },
+        {
+          "alarm_modelu": false,
+          "alarm_na_konci_dozvuku": false,
+          "alarm_riadkov": 0,
+          "alarm_v_dozvuku_riadkov": 0,
+          "class": "zla_konfiguracia",
+          "dozvuk_riadkov": 60,
+          "executed": true,
+          "oneskorenie_s": null,
+          "relacia": "events-v3-20261108_26_test_events_write_heavy",
+          "skupina": "v3-test_events-5",
+          "start_unix": 1794313956.1656892,
+          "stop_unix": 1794314256.9703026,
+          "type": "zla_konfiguracia_nginx"
+        },
+        {
+          "alarm_modelu": true,
+          "alarm_na_konci_dozvuku": false,
+          "alarm_riadkov": 59,
+          "alarm_v_dozvuku_riadkov": 0,
+          "class": "zla_konfiguracia",
+          "dozvuk_riadkov": 60,
+          "executed": true,
+          "oneskorenie_s": 12.578497171401978,
+          "relacia": "events-v3-20261108_27_test_events_bursty",
+          "skupina": "v3-test_events-5",
+          "start_unix": 1794323132.9915028,
+          "stop_unix": 1794323344.7131202,
+          "type": "zla_konfiguracia_sluzby"
+        },
+        {
+          "alarm_modelu": true,
+          "alarm_na_konci_dozvuku": false,
+          "alarm_riadkov": 13,
+          "alarm_v_dozvuku_riadkov": 0,
+          "class": "restart_sluzby",
+          "dozvuk_riadkov": 60,
+          "executed": true,
+          "oneskorenie_s": 7.379662990570068,
+          "relacia": "events-v3-20261108_27_test_events_bursty",
+          "skupina": "v3-test_events-5",
+          "start_unix": 1794323943.190337,
+          "stop_unix": 1794324123.0084426,
+          "type": "restart_databazy"
+        },
+        {
+          "alarm_modelu": true,
+          "alarm_na_konci_dozvuku": false,
+          "alarm_riadkov": 78,
+          "alarm_v_dozvuku_riadkov": 0,
+          "class": "zla_konfiguracia",
+          "dozvuk_riadkov": 60,
+          "executed": true,
+          "oneskorenie_s": 12.338261842727661,
+          "relacia": "events-v3-20261108_27_test_events_bursty",
+          "skupina": "v3-test_events-5",
+          "start_unix": 1794324723.231738,
+          "stop_unix": 1794325024.688593,
+          "type": "zla_konfiguracia_sluzby"
+        },
+        {
+          "alarm_modelu": true,
+          "alarm_na_konci_dozvuku": false,
+          "alarm_riadkov": 55,
+          "alarm_v_dozvuku_riadkov": 0,
+          "class": "zataz_pamate",
+          "dozvuk_riadkov": 60,
+          "executed": true,
+          "oneskorenie_s": 13.055111408233643,
+          "relacia": "events-v3-20261108_28_test_events_mixed",
+          "skupina": "v3-test_events-5",
+          "start_unix": 1794334459.3658886,
+          "stop_unix": 1794334730.7249575,
+          "type": "zataz_pamate"
+        },
+        {
+          "alarm_modelu": true,
+          "alarm_na_konci_dozvuku": false,
+          "alarm_riadkov": 42,
+          "alarm_v_dozvuku_riadkov": 0,
+          "class": "chyba_aplikacie",
+          "dozvuk_riadkov": 60,
+          "executed": true,
+          "oneskorenie_s": 12.879337310791016,
+          "relacia": "events-v3-20261108_28_test_events_mixed",
+          "skupina": "v3-test_events-5",
+          "start_unix": 1794335329.5416627,
+          "stop_unix": 1794335482.3806207,
+          "type": "zamok_tabulky"
+        },
+        {
+          "alarm_modelu": false,
+          "alarm_na_konci_dozvuku": false,
+          "alarm_riadkov": 0,
+          "alarm_v_dozvuku_riadkov": 0,
+          "class": "restart_sluzby",
+          "dozvuk_riadkov": 60,
+          "executed": true,
+          "oneskorenie_s": null,
+          "relacia": "events-v3-20261108_29_test_events_steady",
+          "skupina": "v3-test_events-5",
+          "start_unix": 1794345719.5688822,
+          "stop_unix": 1794346049.7098331,
+          "type": "restart_sluzby"
+        },
+        {
+          "alarm_modelu": true,
+          "alarm_na_konci_dozvuku": false,
+          "alarm_riadkov": 9,
+          "alarm_v_dozvuku_riadkov": 0,
+          "class": "restart_sluzby",
+          "dozvuk_riadkov": 60,
+          "executed": true,
+          "oneskorenie_s": 12.623230695724487,
+          "relacia": "events-v3-20261108_29_test_events_steady",
+          "skupina": "v3-test_events-5",
+          "start_unix": 1794346649.4107692,
+          "stop_unix": 1794346919.8784084,
+          "type": "restart_databazy"
+        },
+        {
+          "alarm_modelu": false,
+          "alarm_na_konci_dozvuku": false,
+          "alarm_riadkov": 0,
+          "alarm_v_dozvuku_riadkov": 0,
+          "class": "zla_konfiguracia",
+          "dozvuk_riadkov": 60,
+          "executed": true,
+          "oneskorenie_s": null,
+          "relacia": "events-v3-20261108_30_test_events_read_heavy",
+          "skupina": "v3-test_events-5",
+          "start_unix": 1794352227.9205842,
+          "stop_unix": 1794352348.006118,
+          "type": "zla_konfiguracia_nginx"
+        },
+        {
+          "alarm_modelu": false,
+          "alarm_na_konci_dozvuku": false,
+          "alarm_riadkov": 0,
+          "alarm_v_dozvuku_riadkov": 0,
+          "class": "udrzba",
+          "dozvuk_riadkov": 60,
+          "executed": true,
+          "oneskorenie_s": null,
+          "relacia": "events-v3-20261108_30_test_events_read_heavy",
+          "skupina": "v3-test_events-5",
+          "start_unix": 1794352947.6589904,
+          "stop_unix": 1794353188.2841022,
+          "type": "udrzba_zaloha"
+        },
+        {
+          "alarm_modelu": false,
+          "alarm_na_konci_dozvuku": false,
+          "alarm_riadkov": 0,
+          "alarm_v_dozvuku_riadkov": 0,
+          "class": "zla_konfiguracia",
+          "dozvuk_riadkov": 60,
+          "executed": true,
+          "oneskorenie_s": null,
+          "relacia": "events-v3-20261108_30_test_events_read_heavy",
+          "skupina": "v3-test_events-5",
+          "start_unix": 1794353787.3140411,
+          "stop_unix": 1794353997.6276243,
+          "type": "zla_konfiguracia_nginx"
+        },
+        {
+          "alarm_modelu": false,
+          "alarm_na_konci_dozvuku": false,
+          "alarm_riadkov": 0,
+          "alarm_v_dozvuku_riadkov": 0,
+          "class": "udrzba",
+          "dozvuk_riadkov": 60,
+          "executed": true,
+          "oneskorenie_s": null,
+          "relacia": "events-v3-20261108_31_test_events_steady",
+          "skupina": "v3-test_events-6",
+          "start_unix": 1794358519.5954332,
+          "stop_unix": 1794358789.9663177,
+          "type": "udrzba_zaloha"
+        },
+        {
+          "alarm_modelu": true,
+          "alarm_na_konci_dozvuku": false,
+          "alarm_riadkov": 47,
+          "alarm_v_dozvuku_riadkov": 0,
+          "class": "zla_konfiguracia",
+          "dozvuk_riadkov": 60,
+          "executed": true,
+          "oneskorenie_s": 13.116113424301147,
+          "relacia": "events-v3-20261108_31_test_events_steady",
+          "skupina": "v3-test_events-6",
+          "start_unix": 1794359388.7368865,
+          "stop_unix": 1794359721.0134914,
+          "type": "zla_konfiguracia_sluzby"
+        },
+        {
+          "alarm_modelu": true,
+          "alarm_na_konci_dozvuku": false,
+          "alarm_riadkov": 75,
+          "alarm_v_dozvuku_riadkov": 0,
+          "class": "chyba_aplikacie",
+          "dozvuk_riadkov": 60,
+          "executed": true,
+          "oneskorenie_s": 12.974415063858032,
+          "relacia": "events-v3-20261108_31_test_events_steady",
+          "skupina": "v3-test_events-6",
+          "start_unix": 1794360318.8785849,
+          "stop_unix": 1794360683.8321092,
+          "type": "zamok_tabulky"
+        },
+        {
+          "alarm_modelu": false,
+          "alarm_na_konci_dozvuku": false,
+          "alarm_riadkov": 0,
+          "alarm_v_dozvuku_riadkov": 0,
+          "class": "zla_konfiguracia",
+          "dozvuk_riadkov": 60,
+          "executed": true,
+          "oneskorenie_s": null,
+          "relacia": "events-v3-20261108_32_test_events_write_heavy",
+          "skupina": "v3-test_events-6",
+          "start_unix": 1794365286.5275257,
+          "stop_unix": 1794365436.728122,
+          "type": "zla_konfiguracia_nginx"
+        },
+        {
+          "alarm_modelu": true,
+          "alarm_na_konci_dozvuku": false,
+          "alarm_riadkov": 8,
+          "alarm_v_dozvuku_riadkov": 0,
+          "class": "restart_sluzby",
+          "dozvuk_riadkov": 60,
+          "executed": true,
+          "oneskorenie_s": 12.772093772888184,
+          "relacia": "events-v3-20261108_32_test_events_write_heavy",
+          "skupina": "v3-test_events-6",
+          "start_unix": 1794366036.4929063,
+          "stop_unix": 1794366217.5750499,
+          "type": "restart_databazy"
+        },
+        {
+          "alarm_modelu": true,
+          "alarm_na_konci_dozvuku": false,
+          "alarm_riadkov": 31,
+          "alarm_v_dozvuku_riadkov": 0,
+          "class": "zataz_pamate",
+          "dozvuk_riadkov": 60,
+          "executed": true,
+          "oneskorenie_s": 12.759599685668945,
+          "relacia": "events-v3-20261108_32_test_events_write_heavy",
+          "skupina": "v3-test_events-6",
+          "start_unix": 1794366816.5054004,
+          "stop_unix": 1794366966.6310859,
+          "type": "zataz_pamate"
+        },
+        {
+          "alarm_modelu": false,
+          "alarm_na_konci_dozvuku": false,
+          "alarm_riadkov": 0,
+          "alarm_v_dozvuku_riadkov": 0,
+          "class": "restart_sluzby",
+          "dozvuk_riadkov": 60,
+          "executed": true,
+          "oneskorenie_s": null,
+          "relacia": "events-v3-20261108_33_test_events_read_heavy",
+          "skupina": "v3-test_events-6",
+          "start_unix": 1794372097.5605793,
+          "stop_unix": 1794372458.178395,
+          "type": "restart_sluzby"
+        },
+        {
+          "alarm_modelu": false,
+          "alarm_na_konci_dozvuku": false,
+          "alarm_riadkov": 0,
+          "alarm_v_dozvuku_riadkov": 0,
+          "class": "udrzba",
+          "dozvuk_riadkov": 60,
+          "executed": true,
+          "oneskorenie_s": null,
+          "relacia": "events-v3-20261108_33_test_events_read_heavy",
+          "skupina": "v3-test_events-6",
+          "start_unix": 1794373057.7287173,
+          "stop_unix": 1794373358.8283787,
+          "type": "udrzba_zaloha"
+        },
+        {
+          "alarm_modelu": false,
+          "alarm_na_konci_dozvuku": false,
+          "alarm_riadkov": 0,
+          "alarm_v_dozvuku_riadkov": 0,
+          "class": "zla_konfiguracia",
+          "dozvuk_riadkov": 60,
+          "executed": true,
+          "oneskorenie_s": null,
+          "relacia": "events-v3-20261108_33_test_events_read_heavy",
+          "skupina": "v3-test_events-6",
+          "start_unix": 1794373957.6795151,
+          "stop_unix": 1794374258.1387398,
+          "type": "zla_konfiguracia_nginx"
+        },
+        {
+          "alarm_modelu": true,
+          "alarm_na_konci_dozvuku": false,
+          "alarm_riadkov": 32,
+          "alarm_v_dozvuku_riadkov": 0,
+          "class": "zataz_pamate",
+          "dozvuk_riadkov": 60,
+          "executed": true,
+          "oneskorenie_s": 7.674546957015991,
+          "relacia": "events-v3-20261108_34_test_events_bursty",
+          "skupina": "v3-test_events-6",
+          "start_unix": 1794379296.839453,
+          "stop_unix": 1794379447.0591223,
+          "type": "zataz_pamate"
+        },
+        {
+          "alarm_modelu": true,
+          "alarm_na_konci_dozvuku": false,
+          "alarm_riadkov": 28,
+          "alarm_v_dozvuku_riadkov": 0,
+          "class": "chyba_aplikacie",
+          "dozvuk_riadkov": 60,
+          "executed": true,
+          "oneskorenie_s": 12.901761770248413,
+          "relacia": "events-v3-20261108_34_test_events_bursty",
+          "skupina": "v3-test_events-6",
+          "start_unix": 1794380046.6122382,
+          "stop_unix": 1794380168.472575,
+          "type": "zamok_tabulky"
+        },
+        {
+          "alarm_modelu": true,
+          "alarm_na_konci_dozvuku": false,
+          "alarm_riadkov": 47,
+          "alarm_v_dozvuku_riadkov": 0,
+          "class": "zla_konfiguracia",
+          "dozvuk_riadkov": 60,
+          "executed": true,
+          "oneskorenie_s": 12.699417114257812,
+          "relacia": "events-v3-20261108_34_test_events_bursty",
+          "skupina": "v3-test_events-6",
+          "start_unix": 1794380766.8145828,
+          "stop_unix": 1794380918.2607872,
+          "type": "zla_konfiguracia_sluzby"
+        },
+        {
+          "alarm_modelu": false,
+          "alarm_na_konci_dozvuku": false,
+          "alarm_riadkov": 0,
+          "alarm_v_dozvuku_riadkov": 0,
+          "class": "restart_sluzby",
+          "dozvuk_riadkov": 60,
+          "executed": true,
+          "oneskorenie_s": null,
+          "relacia": "events-v3-20261108_35_test_events_quiet",
+          "skupina": "v3-test_events-6",
+          "start_unix": 1794388911.2867885,
+          "stop_unix": 1794389031.2948797,
+          "type": "restart_sluzby"
+        },
+        {
+          "alarm_modelu": true,
+          "alarm_na_konci_dozvuku": false,
+          "alarm_riadkov": 9,
+          "alarm_v_dozvuku_riadkov": 0,
+          "class": "restart_sluzby",
+          "dozvuk_riadkov": 60,
+          "executed": true,
+          "oneskorenie_s": 12.342944622039795,
+          "relacia": "events-v3-20261108_35_test_events_quiet",
+          "skupina": "v3-test_events-6",
+          "start_unix": 1794389631.0250554,
+          "stop_unix": 1794389991.2225568,
+          "type": "restart_databazy"
+        },
+        {
+          "alarm_modelu": false,
+          "alarm_na_konci_dozvuku": false,
+          "alarm_riadkov": 0,
+          "alarm_v_dozvuku_riadkov": 0,
+          "class": "udrzba",
+          "dozvuk_riadkov": 60,
+          "executed": true,
+          "oneskorenie_s": null,
+          "relacia": "events-v3-20261108_35_test_events_quiet",
+          "skupina": "v3-test_events-6",
+          "start_unix": 1794390591.0266595,
+          "stop_unix": 1794390771.4411762,
+          "type": "udrzba_zaloha"
+        },
+        {
+          "alarm_modelu": true,
+          "alarm_na_konci_dozvuku": false,
+          "alarm_riadkov": 10,
+          "alarm_v_dozvuku_riadkov": 0,
+          "class": "restart_sluzby",
+          "dozvuk_riadkov": 60,
+          "executed": true,
+          "oneskorenie_s": 12.921345949172974,
+          "relacia": "events-v3-20261108_36_test_events_mixed",
+          "skupina": "v3-test_events-6",
+          "start_unix": 1794395022.698654,
+          "stop_unix": 1794395233.5794177,
+          "type": "restart_databazy"
+        },
+        {
+          "alarm_modelu": true,
+          "alarm_na_konci_dozvuku": false,
+          "alarm_riadkov": 52,
+          "alarm_v_dozvuku_riadkov": 0,
+          "class": "zataz_pamate",
+          "dozvuk_riadkov": 60,
+          "executed": true,
+          "oneskorenie_s": 12.935247421264648,
+          "relacia": "events-v3-20261108_36_test_events_mixed",
+          "skupina": "v3-test_events-6",
+          "start_unix": 1794395832.6847525,
+          "stop_unix": 1794396103.920202,
+          "type": "zataz_pamate"
+        },
+        {
+          "alarm_modelu": false,
+          "alarm_na_konci_dozvuku": false,
+          "alarm_riadkov": 0,
+          "alarm_v_dozvuku_riadkov": 0,
+          "class": "restart_sluzby",
+          "dozvuk_riadkov": 60,
+          "executed": true,
+          "oneskorenie_s": null,
+          "relacia": "events-v3-20261108_36_test_events_mixed",
+          "skupina": "v3-test_events-6",
+          "start_unix": 1794396702.494083,
+          "stop_unix": 1794396943.1943858,
+          "type": "restart_sluzby"
+        },
+        {
+          "alarm_modelu": true,
+          "alarm_na_konci_dozvuku": false,
+          "alarm_riadkov": 76,
+          "alarm_v_dozvuku_riadkov": 0,
+          "class": "chyba_aplikacie",
+          "dozvuk_riadkov": 60,
+          "executed": true,
+          "oneskorenie_s": 12.510515928268433,
+          "relacia": "events-v3-20261108_37_test_events_bursty",
+          "skupina": "v3-test_events-7",
+          "start_unix": 1794402469.403484,
+          "stop_unix": 1794402830.4430695,
+          "type": "zamok_tabulky"
+        },
+        {
+          "alarm_modelu": false,
+          "alarm_na_konci_dozvuku": false,
+          "alarm_riadkov": 0,
+          "alarm_v_dozvuku_riadkov": 0,
+          "class": "zataz_pamate",
+          "dozvuk_riadkov": 60,
+          "executed": true,
+          "oneskorenie_s": null,
+          "relacia": "events-v3-20261108_37_test_events_bursty",
+          "skupina": "v3-test_events-7",
+          "start_unix": 1794403428.9523692,
+          "stop_unix": 1794403579.834555,
+          "type": "zataz_pamate"
+        },
+        {
+          "alarm_modelu": true,
+          "alarm_na_konci_dozvuku": false,
+          "alarm_riadkov": 10,
+          "alarm_v_dozvuku_riadkov": 0,
+          "class": "restart_sluzby",
+          "dozvuk_riadkov": 60,
+          "executed": true,
+          "oneskorenie_s": 12.784995555877686,
+          "relacia": "events-v3-20261108_37_test_events_bursty",
+          "skupina": "v3-test_events-7",
+          "start_unix": 1794404179.1290045,
+          "stop_unix": 1794404299.5992603,
+          "type": "restart_databazy"
+        },
+        {
+          "alarm_modelu": false,
+          "alarm_na_konci_dozvuku": false,
+          "alarm_riadkov": 0,
+          "alarm_v_dozvuku_riadkov": 0,
+          "class": "zla_konfiguracia",
+          "dozvuk_riadkov": 60,
+          "executed": true,
+          "oneskorenie_s": null,
+          "relacia": "events-v3-20261108_38_test_events_mixed",
+          "skupina": "v3-test_events-7",
+          "start_unix": 1794413495.13474,
+          "stop_unix": 1794413615.8961987,
+          "type": "zla_konfiguracia_nginx"
+        },
+        {
+          "alarm_modelu": false,
+          "alarm_na_konci_dozvuku": false,
+          "alarm_riadkov": 0,
+          "alarm_v_dozvuku_riadkov": 0,
+          "class": "restart_sluzby",
+          "dozvuk_riadkov": 60,
+          "executed": true,
+          "oneskorenie_s": null,
+          "relacia": "events-v3-20261108_38_test_events_mixed",
+          "skupina": "v3-test_events-7",
+          "start_unix": 1794414215.370468,
+          "stop_unix": 1794414425.759024,
+          "type": "restart_sluzby"
+        },
+        {
+          "alarm_modelu": true,
+          "alarm_na_konci_dozvuku": false,
+          "alarm_riadkov": 59,
+          "alarm_v_dozvuku_riadkov": 0,
+          "class": "zla_konfiguracia",
+          "dozvuk_riadkov": 60,
+          "executed": true,
+          "oneskorenie_s": 12.470399379730225,
+          "relacia": "events-v3-20261108_39_test_events_quiet",
+          "skupina": "v3-test_events-7",
+          "start_unix": 1794419559.2756007,
+          "stop_unix": 1794419771.0503933,
+          "type": "zla_konfiguracia_sluzby"
+        },
+        {
+          "alarm_modelu": false,
+          "alarm_na_konci_dozvuku": false,
+          "alarm_riadkov": 0,
+          "alarm_v_dozvuku_riadkov": 0,
+          "class": "udrzba",
+          "dozvuk_riadkov": 60,
+          "executed": true,
+          "oneskorenie_s": null,
+          "relacia": "events-v3-20261108_39_test_events_quiet",
+          "skupina": "v3-test_events-7",
+          "start_unix": 1794420368.5127282,
+          "stop_unix": 1794420699.8198335,
+          "type": "udrzba_zaloha"
+        },
+        {
+          "alarm_modelu": false,
+          "alarm_na_konci_dozvuku": false,
+          "alarm_riadkov": 0,
+          "alarm_v_dozvuku_riadkov": 0,
+          "class": "restart_sluzby",
+          "dozvuk_riadkov": 60,
+          "executed": true,
+          "oneskorenie_s": null,
+          "relacia": "events-v3-20261108_40_test_events_write_heavy",
+          "skupina": "v3-test_events-7",
+          "start_unix": 1794426511.1544597,
+          "stop_unix": 1794426840.623765,
+          "type": "restart_sluzby"
+        },
+        {
+          "alarm_modelu": true,
+          "alarm_na_konci_dozvuku": false,
+          "alarm_riadkov": 53,
+          "alarm_v_dozvuku_riadkov": 0,
+          "class": "zla_konfiguracia",
+          "dozvuk_riadkov": 60,
+          "executed": true,
+          "oneskorenie_s": 12.334293127059937,
+          "relacia": "events-v3-20261108_40_test_events_write_heavy",
+          "skupina": "v3-test_events-7",
+          "start_unix": 1794427441.0937068,
+          "stop_unix": 1794427622.2196844,
+          "type": "zla_konfiguracia_sluzby"
+        },
+        {
+          "alarm_modelu": true,
+          "alarm_na_konci_dozvuku": false,
+          "alarm_riadkov": 25,
+          "alarm_v_dozvuku_riadkov": 0,
+          "class": "zataz_pamate",
+          "dozvuk_riadkov": 60,
+          "executed": true,
+          "oneskorenie_s": 13.139286279678345,
+          "relacia": "events-v3-20261108_41_test_events_steady",
+          "skupina": "v3-test_events-7",
+          "start_unix": 1794437665.1027138,
+          "stop_unix": 1794437786.337604,
+          "type": "zataz_pamate"
+        },
+        {
+          "alarm_modelu": true,
+          "alarm_na_konci_dozvuku": false,
+          "alarm_riadkov": 46,
+          "alarm_v_dozvuku_riadkov": 0,
+          "class": "chyba_aplikacie",
+          "dozvuk_riadkov": 60,
+          "executed": true,
+          "oneskorenie_s": 12.438097476959229,
+          "relacia": "events-v3-20261108_41_test_events_steady",
+          "skupina": "v3-test_events-7",
+          "start_unix": 1794438385.8039026,
+          "stop_unix": 1794438597.4045587,
+          "type": "zamok_tabulky"
+        },
+        {
+          "alarm_modelu": true,
+          "alarm_na_konci_dozvuku": false,
+          "alarm_riadkov": 11,
+          "alarm_v_dozvuku_riadkov": 0,
+          "class": "restart_sluzby",
+          "dozvuk_riadkov": 60,
+          "executed": true,
+          "oneskorenie_s": 13.461957216262817,
+          "relacia": "events-v3-20261108_42_test_events_read_heavy",
+          "skupina": "v3-test_events-7",
+          "start_unix": 1794446298.461043,
+          "stop_unix": 1794446569.2134862,
+          "type": "restart_databazy"
+        },
+        {
+          "alarm_modelu": false,
+          "alarm_na_konci_dozvuku": false,
+          "alarm_riadkov": 0,
+          "alarm_v_dozvuku_riadkov": 0,
+          "class": "udrzba",
+          "dozvuk_riadkov": 60,
+          "executed": true,
+          "oneskorenie_s": null,
+          "relacia": "events-v3-20261108_42_test_events_read_heavy",
+          "skupina": "v3-test_events-7",
+          "start_unix": 1794447169.1430204,
+          "stop_unix": 1794447499.0343127,
+          "type": "udrzba_zaloha"
+        },
+        {
+          "alarm_modelu": true,
+          "alarm_na_konci_dozvuku": false,
+          "alarm_riadkov": 61,
+          "alarm_v_dozvuku_riadkov": 0,
+          "class": "zataz_pamate",
+          "dozvuk_riadkov": 60,
+          "executed": true,
+          "oneskorenie_s": 12.541820287704468,
+          "relacia": "events-v3-20261108_43_test_events_mixed",
+          "skupina": "v3-test_events-8",
+          "start_unix": 1794456704.6121798,
+          "stop_unix": 1794457005.021551,
+          "type": "zataz_pamate"
+        },
+        {
+          "alarm_modelu": true,
+          "alarm_na_konci_dozvuku": false,
+          "alarm_riadkov": 89,
+          "alarm_v_dozvuku_riadkov": 0,
+          "class": "zla_konfiguracia",
+          "dozvuk_riadkov": 60,
+          "executed": true,
+          "oneskorenie_s": 13.337181091308594,
+          "relacia": "events-v3-20261108_43_test_events_mixed",
+          "skupina": "v3-test_events-8",
+          "start_unix": 1794457603.816819,
+          "stop_unix": 1794457966.4672017,
+          "type": "zla_konfiguracia_sluzby"
+        },
+        {
+          "alarm_modelu": false,
+          "alarm_na_konci_dozvuku": false,
+          "alarm_riadkov": 0,
+          "alarm_v_dozvuku_riadkov": 0,
+          "class": "zla_konfiguracia",
+          "dozvuk_riadkov": 60,
+          "executed": true,
+          "oneskorenie_s": null,
+          "relacia": "events-v3-20261108_44_test_events_steady",
+          "skupina": "v3-test_events-8",
+          "start_unix": 1794466608.4072318,
+          "stop_unix": 1794466728.97469,
+          "type": "zla_konfiguracia_nginx"
+        },
+        {
+          "alarm_modelu": false,
+          "alarm_na_konci_dozvuku": false,
+          "alarm_riadkov": 0,
+          "alarm_v_dozvuku_riadkov": 0,
+          "class": "restart_sluzby",
+          "dozvuk_riadkov": 60,
+          "executed": true,
+          "oneskorenie_s": null,
+          "relacia": "events-v3-20261108_44_test_events_steady",
+          "skupina": "v3-test_events-8",
+          "start_unix": 1794467328.5997012,
+          "stop_unix": 1794467569.082513,
+          "type": "restart_sluzby"
+        },
+        {
+          "alarm_modelu": true,
+          "alarm_na_konci_dozvuku": false,
+          "alarm_riadkov": 63,
+          "alarm_v_dozvuku_riadkov": 0,
+          "class": "chyba_aplikacie",
+          "dozvuk_riadkov": 60,
+          "executed": true,
+          "oneskorenie_s": 12.470691204071045,
+          "relacia": "events-v3-20261108_45_test_events_quiet",
+          "skupina": "v3-test_events-8",
+          "start_unix": 1794476011.4673088,
+          "stop_unix": 1794476312.8456218,
+          "type": "zamok_tabulky"
+        },
+        {
+          "alarm_modelu": false,
+          "alarm_na_konci_dozvuku": false,
+          "alarm_riadkov": 0,
+          "alarm_v_dozvuku_riadkov": 0,
+          "class": "udrzba",
+          "dozvuk_riadkov": 60,
+          "executed": true,
+          "oneskorenie_s": null,
+          "relacia": "events-v3-20261108_45_test_events_quiet",
+          "skupina": "v3-test_events-8",
+          "start_unix": 1794476911.3826966,
+          "stop_unix": 1794477151.1598532,
+          "type": "udrzba_zaloha"
+        },
+        {
+          "alarm_modelu": true,
+          "alarm_na_konci_dozvuku": false,
+          "alarm_riadkov": 8,
+          "alarm_v_dozvuku_riadkov": 0,
+          "class": "restart_sluzby",
+          "dozvuk_riadkov": 60,
+          "executed": true,
+          "oneskorenie_s": 12.999731540679932,
+          "relacia": "events-v3-20261108_45_test_events_quiet",
+          "skupina": "v3-test_events-8",
+          "start_unix": 1794477750.9382684,
+          "stop_unix": 1794477871.3544981,
+          "type": "restart_databazy"
+        }
+      ],
+      "s_alarmom_modelu": 60,
+      "vykonanych": 111
+    }
+  }
+}

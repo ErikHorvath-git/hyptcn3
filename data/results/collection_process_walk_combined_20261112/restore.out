@@ -1,0 +1,13 @@
+{
+  "archive": "/home/eh/hyptcn3-archive/campaigns/events-v3-20261108/collections/events-v3-20261108_46_test_events_write_heavy",
+  "target": "/home/eh/projects/hyptcn3/data/diagnostics/torn-walk-20261112/s46-raw",
+  "schema": "hyptcn3/collection-archive/2",
+  "files": 1442,
+  "bytes": 15614862332,
+  "stored_bytes": 2398677885
+}
+
+real	8m8.275s
+user	2m23.621s
+sys	0m26.281s
+rc=0

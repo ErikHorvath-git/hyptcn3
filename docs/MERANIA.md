@@ -3197,3 +3197,266 @@ snímok vznikli archívy s rovnakými kľúčmi; líšil sa iba čas spracovania
 ostatné polia (`matica`, `perbin`, `valid`, `quality_json` a ďalšie) sú bajtovo rovnaké
 ([záznam](../data/results/extractor_equivalence_20261104.json)). Overená je jedna session a začiatok jej reťazca, nie celý
 korpus. Ďalšia kampaň potrebuje nový pilot, lebo sa zmenil merací kód.
+
+## 2026-11-14 — krok A protokolu v3 (E2): kampaň events-v3-20261108 uzavretá so 45 session; model v6 dáva falošné alarmy pri štyroch typoch udalostí
+
+**Kampaň.** Testovacia kampaň `events-v3-20261108` (protokol `server-events-v3`,
+[`config/collection-v3.json`](../config/collection-v3.json), commit `0f0b11f`, zberač 1.1) mala
+48 {{res:collection_campaign_events_v3_20261108.json:values.planned_sessions}}
+hodinových session v 8 skupinách (boot hosťa) po 6 scenárov, v každej 2 až 3 benígne
+prevádzkové udalosti z `lab/udalosti.py`. Zozbieralo sa
+46 {{res:collection_campaign_events_v3_20261108.json:values.captured_sessions}}
+session, audit prijal
+45 {{res:collection_campaign_events_v3_20261108.json:values.accepted_sessions}}.
+Session 46 zamietol (nižšie), session 47 a 48 sa nezačali. Prijaté session majú po
+656 {{res:collection_campaign_events_v3_20261108.json:values.summary.windows_min}}
+skórovateľných okien,
+0 {{res:collection_campaign_events_v3_20261108.json:values.summary.accepted_missed_slots}}
+zmeškaných slotov a
+0 {{res:collection_campaign_events_v3_20261108.json:values.summary.integrity_findings}}
+nálezov integrity; vykonalo sa
+111 {{res:collection_campaign_events_v3_20261108.json:values.summary.events_executed_accepted}}
+zo
+111 {{res:collection_campaign_events_v3_20261108.json:values.summary.events_planned_accepted}}
+plánovaných udalostí. Audit použil pravidlo `prev` v
+13 {{res:collection_campaign_events_v3_20261108.json:values.summary.process_walk_prev_rows}}
+a pravidlo `tail` v
+5 {{res:collection_campaign_events_v3_20261108.json:values.summary.process_walk_tail_rows}}
+riadkoch. Nepotvrdené krížové rozdiely malo
+51 {{res:collection_campaign_events_v3_20261108.json:values.summary.integrity_unconfirmed_rows}}
+riadkov zo všetkých 46 auditovaných session (
+49 {{res:collection_campaign_events_v3_20261108.json:values.summary.integrity_unconfirmed_rows_accepted}}
+v prijatých; v niektorých riadkoch dva procesy, rozdielov spolu
+63 {{res:collection_campaign_events_v3_20261108.json:values.summary.integrity_unconfirmed_differences}}
+), z toho
+11 {{res:collection_campaign_events_v3_20261108.json:values.summary.integrity_unconfirmed_rows_outside_events}}
+riadkov mimo intervalov udalostí s presahom `event_grace_s` (procesy pri vzniku alebo zániku,
+pozri `integrity_unconfirmed` po session v zázname). Najdlhší audit trval
+7432.6 {{res:collection_campaign_events_v3_20261108.json:values.summary.audit_s_max}}
+s (session 18) pri limite runnera 3 h;
+16 {{res:collection_campaign_events_v3_20261108.json:values.summary.audits_over_3600_s}}
+auditov trvalo dlhšie ako hodinu a počas
+17 {{res:collection_campaign_events_v3_20261108.json:values.summary.audits_reading_over_100_gb}}
+zo
+42 {{res:collection_campaign_events_v3_20261108.json:values.summary.audit_io_sessions}}
+auditov so záznamom vzorkovača sa zo SSD prečítalo viac ako 100 GB (počítadlá celého disku
+`sda` z `/proc/diskstats`, nie čítania samotného procesu auditu; najviac
+770.9 {{res:collection_campaign_events_v3_20261108.json:values.summary.audit_sda_read_gb_max}}
+GB). Extrakcia pri každej snímke prechádza takmer celou plnou snímkou reťazca (záznam z
+2026-10-29). Že audity opakovane čítali zo SSD snímky, ktoré page cache neudržala, je
+inferencia z objemu a z toho, že veľké čítanie prišlo až po časti auditu viazanej na CPU
+(operátorský log); záznam nemá časy extrakcie po reťazcoch a mechanizmus sa nezisťoval. `campaign.py verify-archives` overil
+46 {{res:collection_campaign_events_v3_20261108.json:values.verify_archives.n_verified}}
+archívov s kódom
+0 {{res:collection_campaign_events_v3_20261108.json:values.verify_archives.rc}}.
+Záznam kampane je [`data/results/collection_campaign_events_v3_20261108.json`](../data/results/collection_campaign_events_v3_20261108.json)
+(skripty, vzorkovač a operátorský log v adresári s rovnakým menom). Kópia na externý disk
+(Seagate) zatiaľ nie je, disk nie je pripojený.
+
+**Zamietnutá session 46 a uzavretie.** Riadok 270 mal neúplný zoznam procesov
+([záznam](../data/results/collection_process_walk_combined_20261112.json)). Snímka vznikla
+3 s po začiatku udalosti `zamok_tabulky`. Počas jedného čítania pamäte spadla služba
+`worker` a zanikol jej proces `postgres`, a jadro vložilo na koniec zoznamu nové vlákno do
+recyklovaného `task_struct`, ktorého stránka sa prečítala ešte so živým vláknom služby
+`orders` (`exit_state` 0, bez `PF_EXITING`); to vlákno počas toho istého čítania skončilo a
+jeho `task_struct` sa použil znova. Prechod dopredu sa po
+112 {{res:collection_process_walk_combined_20261112.json:values.snapshot_270.forward_count}}
+uzloch zacyklil, prechod dozadu sa uzavrel cez
+74 {{res:collection_process_walk_combined_20261112.json:values.snapshot_270.backward_count}}
+uzlov, ktoré všetky prešiel aj prechod dopredu; oproti zhodným uzlom pred prvým nezhodným
+spojením v ňom chýba proces služby `orders` a navyše je v ňom uzol na konci zoznamu. Samotné
+odstránenie by prechod dopredu nezastavilo a samotné vloženie na koniec by uzavrelo pravidlo
+`tail`. Spolu je však prvý nezhodný uzol ten za odstráneným procesom, preto neplatí pravidlo
+`tail`, a prechod dozadu začína na zastaranej stránke uzla na konci zoznamu, preto neplatí ani
+pravidlo `prev`; audit session správne zamietol (L1 v [LIMITACIE.md](LIMITACIE.md)). Vlastník 2026-11-13 rozhodol
+kampaň uzavrieť so 45 session a vyhodnotiť ich bez ďalšieho zberu. Oprava v `guestparse`
+sa odkladá: znova by zmenila extraktor, potrebovala by nové audity a nové overenie zhody
+príznakov s extraktorom balíka a nový tréning by potreboval druhé použitie `test_benign`.
+Hashe extraktora a zberača sa od balíka líšia už od commitu `625fe0f` (nižšie), preto
+`safeguard run` balík v6 a bežný `safeguard train` audity korpusu `benign-v6-20261026`
+odmietnu aj bez tejto opravy. Index udalostí `data/campaigns/events-v3-20261108/events_index.json`
+má preto `complete: false` a blok `incomplete_allocation` s týmto rozhodnutím: skupiny 1
+až 7 sú celé, skupina 8 má
+3 {{res:collection_campaign_events_v3_20261108.json:values.summary.by_group.v3-test_events-8.accepted}}
+zo 6 session. `tcn.eval udalosti` taký index od commitu `ad04adc` prijme a neúplnosť zapíše do
+`values.alokacia` výsledku.
+
+**Posun pamäte (konfunder).** Všetky skupiny bežali na jednom procese QEMU spustenom pred
+`init`; reštart hosťa pamäť nevynuluje a udalosť `zataz_pamate` (400 MiB) ju trvalo
+zaplní. Medián `mem_zero_ratio` session klesol z
+0.7219 {{res:collection_campaign_events_v3_20261108.json:values.summary.mem_zero_ratio_p50_first_session}}
+v prvej na
+0.2401 {{res:collection_campaign_events_v3_20261108.json:values.summary.mem_zero_ratio_p50_last_session}}
+v poslednej prijatej session. V skupinách 1 až 4 boli mediány session od
+0.306 {{res:safeguard_far_events_v3_20261114_summary.json:values.mem_zero_ratio_p50.groups_1_4.min}}
+do
+0.7219 {{res:safeguard_far_events_v3_20261114_summary.json:values.mem_zero_ratio_p50.groups_1_4.max}},
+v skupinách 5 až 8 od
+0.2358 {{res:safeguard_far_events_v3_20261114_summary.json:values.mem_zero_ratio_p50.groups_5_8.min}}
+do
+0.3201 {{res:safeguard_far_events_v3_20261114_summary.json:values.mem_zero_ratio_p50.groups_5_8.max}}.
+Riadky korpusu v6 ležali v roli `train` od
+0.4775 {{res:safeguard_far_events_v3_20261114_summary.json:values.mem_zero_ratio_benign_v6.train.row_min}}
+do
+0.75 {{res:safeguard_far_events_v3_20261114_summary.json:values.mem_zero_ratio_benign_v6.train.row_max}}
+a v roli `calibration` od
+0.4173 {{res:safeguard_far_events_v3_20261114_summary.json:values.mem_zero_ratio_benign_v6.calibration.row_min}}
+do
+0.44 {{res:safeguard_far_events_v3_20261114_summary.json:values.mem_zero_ratio_benign_v6.calibration.row_max}}
+(`test_benign` sa nečítala). V rozsahu roly `train` mali medián iba session 1 až 3 (
+0.7219 {{res:safeguard_far_events_v3_20261114_summary.json:values.sessions.events-v3-20261108_01_test_events_bursty.mem_zero_ratio_p50}}
+,
+0.6487 {{res:safeguard_far_events_v3_20261114_summary.json:values.sessions.events-v3-20261108_02_test_events_steady.mem_zero_ratio_p50}}
+a
+0.6196 {{res:safeguard_far_events_v3_20261114_summary.json:values.sessions.events-v3-20261108_03_test_events_write_heavy.mem_zero_ratio_p50}}
+); od session 4 (
+0.3799 {{res:safeguard_far_events_v3_20261114_summary.json:values.sessions.events-v3-20261108_04_test_events_mixed.mem_zero_ratio_p50}}
+) je medián každej session pod najnižším riadkom rolí `train`, `dev` aj `calibration`, teda
+42 zo 45 session kroku A.
+
+**E2: falošné alarmy balíka v6.** Skript
+`data/results/safeguard_far_events_v3_20261114/run.sh` prehral všetkých
+45 {{res:safeguard_far_events_v3_20261114.json:n}}
+session z
+8 {{res:safeguard_far_events_v3_20261114.json:values.merane.skupin}}
+skupín príkazom `python3 -m safeguard replay --archive` balíkom
+`data/models/server-v2-benign-v6` (ten istý `balik.manifest_sha256` ako v zázname z
+2026-11-04) a spustil `python3 -m tcn.eval udalosti`. Výsledok je
+[`data/results/safeguard_far_events_v3_20261114.json`](../data/results/safeguard_far_events_v3_20261114.json),
+commit `ad04adc`; `commit_dirty` je `true` iba pre nezapísané súbory záznamov v
+`data/results` (`commit_note`). Jadro a stack hosťa sa s balíkom zhodujú, zberač a extraktor
+nie (zberač sa po upratovaní preložil a hash extraktora sa zmenil; bajtovo rovnaké príznaky
+overil záznam z 2026-11-04 na 60 snímkach jednej session); `safeguard replay`, ktorým E2
+bežalo, tieto hashe nekontroluje. Okno patrí udalosti, keď sa prekrýva s jej
+intervalom; okno má
+32 {{res:safeguard_far_events_v3_20261114.json:values.okno_riadkov}}
+riadkov po
+5 {{res:safeguard_far_events_v3_20261114.json:values.perioda_s}}
+s, takže k udalosti (do jej expozície aj alarmov) patria aj okná končiace do 155 s po jej konci.
+Dozvuk je
+300 {{res:safeguard_far_events_v3_20261114.json:values.dozvuk_s}}
+s po poslednom okne, ktoré udalosť obsahovalo, teda okná končiace 155 až 455 s po konci
+udalosti. Intervaly sú Garwoodove pri alfa
+0.05 {{res:safeguard_far_events_v3_20261114.json:values.alfa}},
+porovnanie s čistou prevádzkou je jednostranný podmienený binomický test (`predpoklady`
+záznamu).
+
+V čistej prevádzke dal model
+1 {{res:safeguard_far_events_v3_20261114.json:values.merane.prevadzka.spolu.udalosti_model}}
+alarmovú udalosť za
+76535 {{res:safeguard_far_events_v3_20261114.json:values.merane.prevadzka.spolu.skorovany_s}}
+s skórovaného času, FAR
+0.047 {{res:safeguard_far_events_v3_20261114.json:values.merane.prevadzka.far_h.skorovany.udalosti_h}}
+za hodinu (
+0.0012 {{res:safeguard_far_events_v3_20261114.json:values.merane.prevadzka.far_h.skorovany.dolna_h}}
+až
+0.262 {{res:safeguard_far_events_v3_20261114.json:values.merane.prevadzka.far_h.skorovany.horna_h}}
+); bola to session 14 (`write_heavy`)
+1000 {{res:safeguard_far_events_v3_20261114_summary.json:values.alarm_events_outside_events.0.t_s}}
+s po jej začiatku. V dozvuku bolo
+0 {{res:safeguard_far_events_v3_20261114.json:values.merane.po_udalosti.spolu.udalosti_model}}
+alarmov za
+31430 {{res:safeguard_far_events_v3_20261114.json:values.merane.po_udalosti.spolu.skorovany_s}}
+s (horná hranica
+0.423 {{res:safeguard_far_events_v3_20261114.json:values.merane.po_udalosti.far_h.skorovany.horna_h}}
+za hodinu). Počas udalostí dal
+62 {{res:safeguard_far_events_v3_20261114.json:values.merane.vsetky_udalosti.spolu.udalosti_model}}
+alarmových udalostí za
+39635 {{res:safeguard_far_events_v3_20261114.json:values.merane.vsetky_udalosti.spolu.skorovany_s}}
+s, FAR
+5.63 {{res:safeguard_far_events_v3_20261114.json:values.merane.vsetky_udalosti.far_h.skorovany.udalosti_h}}
+za hodinu (
+4.32 {{res:safeguard_far_events_v3_20261114.json:values.merane.vsetky_udalosti.far_h.skorovany.dolna_h}}
+až
+7.22 {{res:safeguard_far_events_v3_20261114.json:values.merane.vsetky_udalosti.far_h.skorovany.horna_h}}
+); pomer mier voči čistej prevádzke je asi
+120 {{res:safeguard_far_events_v3_20261114.json:values.merane.vsetky_udalosti.voci_prevadzke.pomer_mier}}
+(p < 0,001; presné p v zázname). Alarm modelu malo
+60 {{res:safeguard_far_events_v3_20261114.json:values.udalosti.s_alarmom_modelu}}
+zo
+111 {{res:safeguard_far_events_v3_20261114.json:values.udalosti.vykonanych}}
+vykonaných udalostí; na konci dozvuku alarm trval po
+0 {{res:safeguard_far_events_v3_20261114.json:values.udalosti.alarm_na_konci_dozvuku}}
+udalostiach, alarm teda odznie najneskôr do 155 s po konci udalosti (skôr sa okná počítajú
+k udalosti). Alarmov integrity bolo počas udalostí
+0 {{res:safeguard_far_events_v3_20261114.json:values.merane.vsetky_udalosti.udalosti_integrita}}
+a v čistej prevádzke
+0 {{res:safeguard_far_events_v3_20261114.json:values.merane.prevadzka.udalosti_integrita}}.
+Tieto nuly sú dané prijatím, nie meraním kontrol integrity: alarm `kernel_integrity` vzniká
+iba z nálezu, audit session s nálezom integrity zamieta a index udalostí obsahuje iba prijaté
+session; kontrola textu jadra bola neuzavretá vo všetkých riadkoch (L18 v
+[LIMITACIE.md](LIMITACIE.md)). Správanie krížovej kontroly procesov pri udalostiach ukazujú
+iba nepotvrdené rozdiely zo záznamu kampane (vyššie), ktoré alarm nevyvolajú.
+
+| typ udalosti | výskyty s alarmom modelu | medián oneskorenia | FAR za skórovanú hodinu (interval) | voči čistej prevádzke |
+|---|---|---|---|---|
+| `restart_databazy` | 14 {{res:safeguard_far_events_v3_20261114_summary.json:values.by_type.restart_databazy.with_model_alarm}} zo 16 {{res:safeguard_far_events_v3_20261114_summary.json:values.by_type.restart_databazy.occurrences}} | 12.8 {{res:safeguard_far_events_v3_20261114_summary.json:values.by_type.restart_databazy.delay_s.median}} s | 10.62 {{res:safeguard_far_events_v3_20261114.json:values.merane.typy.restart_databazy.far_h.skorovany.udalosti_h}} (5.94 {{res:safeguard_far_events_v3_20261114.json:values.merane.typy.restart_databazy.far_h.skorovany.dolna_h}} až 17.52 {{res:safeguard_far_events_v3_20261114.json:values.merane.typy.restart_databazy.far_h.skorovany.horna_h}}) | p < 0,001 |
+| `zamok_tabulky` | 15 {{res:safeguard_far_events_v3_20261114_summary.json:values.by_type.zamok_tabulky.with_model_alarm}} z 15 {{res:safeguard_far_events_v3_20261114_summary.json:values.by_type.zamok_tabulky.occurrences}} | 12.9 {{res:safeguard_far_events_v3_20261114_summary.json:values.by_type.zamok_tabulky.delay_s.median}} s | 9.74 {{res:safeguard_far_events_v3_20261114.json:values.merane.typy.zamok_tabulky.far_h.skorovany.udalosti_h}} (5.45 {{res:safeguard_far_events_v3_20261114.json:values.merane.typy.zamok_tabulky.far_h.skorovany.dolna_h}} až 16.06 {{res:safeguard_far_events_v3_20261114.json:values.merane.typy.zamok_tabulky.far_h.skorovany.horna_h}}) | p < 0,001 |
+| `zataz_pamate` | 15 {{res:safeguard_far_events_v3_20261114_summary.json:values.by_type.zataz_pamate.with_model_alarm}} zo 16 {{res:safeguard_far_events_v3_20261114_summary.json:values.by_type.zataz_pamate.occurrences}} | 12.7 {{res:safeguard_far_events_v3_20261114_summary.json:values.by_type.zataz_pamate.delay_s.median}} s | 10.58 {{res:safeguard_far_events_v3_20261114.json:values.merane.typy.zataz_pamate.far_h.skorovany.udalosti_h}} (5.92 {{res:safeguard_far_events_v3_20261114.json:values.merane.typy.zataz_pamate.far_h.skorovany.dolna_h}} až 17.45 {{res:safeguard_far_events_v3_20261114.json:values.merane.typy.zataz_pamate.far_h.skorovany.horna_h}}) | p < 0,001 |
+| `zla_konfiguracia_sluzby` | 15 {{res:safeguard_far_events_v3_20261114_summary.json:values.by_type.zla_konfiguracia_sluzby.with_model_alarm}} z 15 {{res:safeguard_far_events_v3_20261114_summary.json:values.by_type.zla_konfiguracia_sluzby.occurrences}} | 12.7 {{res:safeguard_far_events_v3_20261114_summary.json:values.by_type.zla_konfiguracia_sluzby.delay_s.median}} s | 9.99 {{res:safeguard_far_events_v3_20261114.json:values.merane.typy.zla_konfiguracia_sluzby.far_h.skorovany.udalosti_h}} (5.71 {{res:safeguard_far_events_v3_20261114.json:values.merane.typy.zla_konfiguracia_sluzby.far_h.skorovany.dolna_h}} až 16.23 {{res:safeguard_far_events_v3_20261114.json:values.merane.typy.zla_konfiguracia_sluzby.far_h.skorovany.horna_h}}) | p < 0,001 |
+| `zla_konfiguracia_nginx` | 1 {{res:safeguard_far_events_v3_20261114_summary.json:values.by_type.zla_konfiguracia_nginx.with_model_alarm}} zo 17 {{res:safeguard_far_events_v3_20261114_summary.json:values.by_type.zla_konfiguracia_nginx.occurrences}} | 2.7 {{res:safeguard_far_events_v3_20261114_summary.json:values.by_type.zla_konfiguracia_nginx.delay_s.median}} s (jediný výskyt) | 0.61 {{res:safeguard_far_events_v3_20261114.json:values.merane.typy.zla_konfiguracia_nginx.far_h.skorovany.udalosti_h}} (0.015 {{res:safeguard_far_events_v3_20261114.json:values.merane.typy.zla_konfiguracia_nginx.far_h.skorovany.dolna_h}} až 3.40 {{res:safeguard_far_events_v3_20261114.json:values.merane.typy.zla_konfiguracia_nginx.far_h.skorovany.horna_h}}) | p = 0.138 {{res:safeguard_far_events_v3_20261114.json:values.merane.typy.zla_konfiguracia_nginx.voci_prevadzke.p}} |
+| `restart_sluzby` | 0 {{res:safeguard_far_events_v3_20261114_summary.json:values.by_type.restart_sluzby.with_model_alarm}} zo 16 {{res:safeguard_far_events_v3_20261114_summary.json:values.by_type.restart_sluzby.occurrences}} | — | 0 (do 2.06 {{res:safeguard_far_events_v3_20261114.json:values.merane.typy.restart_sluzby.far_h.skorovany.horna_h}}) | p = 1 |
+| `udrzba_zaloha` | 0 {{res:safeguard_far_events_v3_20261114_summary.json:values.by_type.udrzba_zaloha.with_model_alarm}} zo 16 {{res:safeguard_far_events_v3_20261114_summary.json:values.by_type.udrzba_zaloha.occurrences}} | — | 0 (do 2.30 {{res:safeguard_far_events_v3_20261114.json:values.merane.typy.udrzba_zaloha.far_h.skorovany.horna_h}}) | p = 1 |
+
+Oneskorenie sa meria od začiatku udalosti; medián okolo 13 s zodpovedá pravidlu 3 z 5 pri
+perióde 5 s. Jediný alarm pri `zla_konfiguracia_nginx` (session 24) nabehol
+2.7 {{res:safeguard_far_events_v3_20261114_summary.json:values.by_type.zla_konfiguracia_nginx.delay_s.median}}
+s po začiatku udalosti a trval
+1 {{res:safeguard_far_events_v3_20261114_summary.json:values.by_type.zla_konfiguracia_nginx.alarm_rows}}
+riadok; aspoň dve prekročenia prahu v hlasovaní 3 z 5 preto pochádzajú z okien pred
+udalosťou a udalosti ho nemožno jednoznačne pripísať.
+
+Že alarmy pri štyroch typoch prichádzajú pri takmer každom výskyte a nie v zhlukoch
+niekoľkých session, ukazujú počty výskytov v tabuľke a to, že alarm modelu malo
+39 {{res:safeguard_far_events_v3_20261114_summary.json:values.sessions_with_model_alarm}}
+zo 45 session vo všetkých
+8 {{res:safeguard_far_events_v3_20261114_summary.json:values.groups_with_model_alarm}}
+skupinách. Pearsonov test rozptylu (`disperzia` v zázname) o zhlukovaní nič nehovorí. V čistej
+prevádzke je jediná alarmová udalosť, X²
+33.8 {{res:safeguard_far_events_v3_20261114.json:values.merane.prevadzka.disperzia.x2}}
+(p
+0.867 {{res:safeguard_far_events_v3_20261114.json:values.merane.prevadzka.disperzia.p}}
+) teda závisí iba od toho, v ktorej session alarm nastal. Pri udalostiach jednotkou nie je
+session, ale dvojica session a typu (
+107 {{res:safeguard_far_events_v3_20261114.json:values.merane.vsetky_udalosti.spolu.relacii}}
+jednotiek) so spoločnou mierou všetkých siedmich typov; X²
+64.8 {{res:safeguard_far_events_v3_20261114.json:values.merane.vsetky_udalosti.disperzia.x2}}
+pri df
+106 {{res:safeguard_far_events_v3_20261114.json:values.merane.vsetky_udalosti.disperzia.df}}
+(p
+0.99945 {{res:safeguard_far_events_v3_20261114.json:values.merane.vsetky_udalosti.disperzia.p}}
+) preto nezachytí ani rozdiel medzi typmi z tabuľky a očakávané počty na jednotku sú pod 1.
+Intervaly a binomický test berú alarmové udalosti ako nezávislé a variabilitu medzi bootmi
+neobsahujú (`predpoklady` záznamu), hoci jednotkou neistoty má byť skupina
+([NAVRH_PROTOKOL_V3.sk.md](NAVRH_PROTOKOL_V3.sk.md), kap. 4).
+
+Podiel výskytov s alarmom bol pri štyroch typoch podobný v skupinách 1 až 4 aj 5 až 8
+(`by_type.*.groups_1_4` a `groups_5_8` v
+[súhrne](../data/results/safeguard_far_events_v3_20261114_summary.json)). Posun pamäte tým
+rozdelenie neoddelí: od session 4 sú obe polovice pod rozsahom korpusu v6 (vyššie) a podiely sú
+v oboch blízko 100 %. Proti tomu, že alarmy dáva samotný posun bez udalosti, hovorí čistá
+prevádzka tých istých session (jedna alarmová udalosť, vyššie) a nula alarmov pri
+`restart_sluzby` a `udrzba_zaloha`. V session 1 až 3, ktoré ležia v rozsahu roly `train`, mali
+alarm všetky tri výskyty týchto štyroch typov: `restart_databazy` po
+13.0 {{res:safeguard_far_events_v3_20261114.json:values.udalosti.priebeh.0.oneskorenie_s}}
+s, `zamok_tabulky` po
+92.6 {{res:safeguard_far_events_v3_20261114.json:values.udalosti.priebeh.1.oneskorenie_s}}
+s a `zla_konfiguracia_sluzby` po
+182.7 {{res:safeguard_far_events_v3_20261114.json:values.udalosti.priebeh.2.oneskorenie_s}}
+s; `zataz_pamate` v nich nebola. Či posun mení odozvu modelu na udalosť (napríklad
+oneskorenie), záznam pre tri výskyty nevylučuje. Rozdelenie je opisné, skupiny sa líšia aj
+časom a bootom.
+
+**Rozhodovacie pravidlá.** FAR počas udalostí je pri `restart_databazy`, `zamok_tabulky`,
+`zataz_pamate` a `zla_konfiguracia_sluzby` štatisticky vyššia ako v čistej prevádzke. Pri
+`zla_konfiguracia_nginx`, `restart_sluzby` a `udrzba_zaloha` rozdiel preukázaný nie je, pri
+krátkej expozícii však horné hranice siahajú do 2.06 až 3.40 alarmu za hodinu (tabuľka). Podľa
+[NAVRH_PROTOKOL_V3.sk.md](NAVRH_PROTOKOL_V3.sk.md) (kap. 4) model teda pre tieto situácie
+použiteľný nie je a nasledoval by krok B. Podľa plánu z 2026-11-14 sa nová kampaň nezbiera;
+výsledok sa iba hlási a o kroku B rozhodne vlastník. Výsledok sa uvádza tak, ako je (HONESTY P8).
+
+Čo záznam neukazuje: detekciu útokov ani malvéru (žiaden nebežal, HONESTY P4), iné typy
+udalostí ako týchto sedem, úplnú alokáciu (skupina 8 má 3 zo 6 session), správanie pri
+pamäti v rozsahu korpusu v6 (v ňom boli iba session 1 až 3, posun vyššie), falošné alarmy
+kontrol integrity (nula je daná prijatím), živý beh `safeguard run` ani
+latenciu snímka → skóre počas zberu.

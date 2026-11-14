@@ -117,6 +117,51 @@ v 3 {{res:collection_campaign_benign_v6_20261026.json:values.summary.process_wal
 riadkoch; počet procesov v nich ležal v rozsahu susedných snímok (porovnanie počtov,
 nie zoznamov) a audit prijal všetky session ([záznam](../data/results/collection_campaign_benign_v6_20261026.json), [MERANIA.md](MERANIA.md) 2026-10-29).
 
+V kampani `events-v3-20261108` sa v jednej snímke stretlo odstránenie procesu uprostred
+zoznamu s vložením na koniec ([záznam](../data/results/collection_process_walk_combined_20261112.json)). Snímku 270 session 46
+zberač prečítal 3 s po začiatku udalosti `zamok_tabulky`. Počas čítania spadla služba `worker`
+a zanikol jej proces `postgres`. Stránka nasledujúceho uzla sa prečítala skôr, preto jeho
+`prev` ukazoval na uzol, ktorý ten istý obraz už ukazuje odstránený (`prev` je
+`LIST_POISON2`). Je to zrkadlový tvar k snímke 505: zastarané je spojenie `prev`, nie `next`,
+takže samo prechod dopredu nezastaví. Zároveň jadro zapojilo na koniec zoznamu nové vlákno do
+recyklovaného `task_struct`. Jeho stránka sa prečítala skôr, keď v ňom bolo ešte živé vlákno
+služby `orders` (`exit_state` 0, bez `PF_EXITING`); to vlákno počas toho istého čítania
+skončilo a jeho `task_struct` sa použil znova (snímka 271 v ňom ukazuje `kworker/1:2`).
+Prechod dopredu sa po
+112 {{res:collection_process_walk_combined_20261112.json:values.snapshot_270.forward_count}}
+uzloch zacyklil a prechod dozadu sa uzavrel cez
+74 {{res:collection_process_walk_combined_20261112.json:values.snapshot_270.backward_count}}
+uzlov, ktoré všetky prešiel aj prechod dopredu: `prev` uzla na konci zoznamu viedol rovno na
+proces pred procesom služby `orders`, takže oproti uzlom pred prvým nezhodným spojením chýba
+proces služby `orders` a navyše je v ňom uzol na konci zoznamu. Samotné vloženie na koniec by
+uzavrelo pravidlo `tail`. Prvý nezhodný uzol je však uzol za odstráneným procesom (vodca
+skupiny, nie vlákno), na ktorý `init_task.prev` neukazuje, preto pravidlo `tail` neplatí;
+a keďže prechod dozadu začína na zastaranej stránke uzla na konci zoznamu, neplatí ani
+pravidlo `prev`. Riadok preto ostal `truncated` a audit session zamietol. Uzly dopredu pred
+uzlom na konci zoznamu (
+110 {{res:collection_process_walk_combined_20261112.json:values.forward_before_tail_node.count}}
+) sa od susedných snímok (
+109 {{res:collection_process_walk_combined_20261112.json:values.forward_before_tail_node.counts.269}}
+a
+113 {{res:collection_process_walk_combined_20261112.json:values.forward_before_tail_node.counts.271}}
+procesov) líšia iba procesmi, ktoré okolo udalosti zanikli alebo vznikli. Pravidlo pre tento
+prípad (pravidlo `tail` by muselo pripustiť skoršie nezhodné spojenie, ktorého `prev` ukazuje
+na uzol odstránený v tom istom obraze, `middle_node_prev_is_deleted` v zázname) sa nedoplnilo
+(rozhodnutie vlastníka 2026-11-13): oprava by znova zmenila `extractor_sha256`, potrebovala by
+nové audity a nové overenie zhody príznakov s extraktorom, z ktorého sa učil balík
+`server-v2-benign-v6`, a nový tréning by potreboval druhé použitie `test_benign`. Hashe
+prostredia nesedia už dnes: extraktor sa zmenil commitom `625fe0f` a zberač sa po ňom preložil
+(`prostredie_voci_baliku` v [zázname E2](../data/results/safeguard_far_events_v3_20261114.json)),
+`safeguard run` preto balík `server-v2-benign-v6` odmietne a bežný `safeguard train` odmietne
+audity korpusu `benign-v6-20261026` aj bez tejto opravy; prehratie `safeguard replay --archive`
+tieto hashe nekontroluje. Oprava je odložená na obdobie po vyhodnotení. Kampaň
+`events-v3-20261108` je preto neúplná alokácia 45 zo 48 session ([MERANIA.md](MERANIA.md)
+2026-11-14). V jej session audit použil pravidlo `prev` v
+13 {{res:collection_campaign_events_v3_20261108.json:values.summary.process_walk_prev_rows}}
+a pravidlo `tail` v
+5 {{res:collection_campaign_events_v3_20261108.json:values.summary.process_walk_tail_rows}}
+riadkoch.
+
 **Formulácia do textu práce.**
 
 > Snímka je živá: virtuálny stroj sa počas čítania nezastavuje, pretože použité rozhranie

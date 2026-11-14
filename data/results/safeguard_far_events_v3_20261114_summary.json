@@ -1,0 +1,633 @@
+{
+  "commit": "ad04adc1fe1e4c3aed0e300509d21d7a622f49df",
+  "commit_dirty": true,
+  "commit_note": "HEAD when this record was generated. The script data/results/safeguard_far_events_v3_20261114/summary.py is not part of this commit; it is committed together with this file. It only reads saved files; the E2 result names its own commit.",
+  "date": "2026-11-14T01:55:52.640967+00:00",
+  "host": "Linux-7.2.9+deb13-amd64-x86_64-with-glibc2.41",
+  "guest": "jadro 6.1.0-42-cloud-amd64, stack_sha256 3fcb9e724f031e3ed24fd3e08fb8f2946c8cd3f04416bc871d8f7dc31b3d46bc",
+  "command": "data/results/safeguard_far_events_v3_20261114/summary.py data/results/safeguard_far_events_v3_20261114.json data/results/safeguard_far_events_v3_20261114_summary.json",
+  "n": 45,
+  "values": {
+    "e2": {
+      "path": "/home/eh/projects/hyptcn3/data/results/safeguard_far_events_v3_20261114.json",
+      "sha256": "7fcab511b5d1742bfab84c46726475ad8f7d0ceb19eec1d78d9d33c38d1d7555",
+      "commit": "ad04adc1fe1e4c3aed0e300509d21d7a622f49df",
+      "alokacia_uplna": false
+    },
+    "events": {
+      "occurrences": 111,
+      "with_model_alarm": 60
+    },
+    "sessions_with_model_alarm": 39,
+    "groups_with_model_alarm": 8,
+    "by_type": {
+      "restart_databazy": {
+        "class": "restart_sluzby",
+        "occurrences": 16,
+        "with_model_alarm": 14,
+        "delay_s": {
+          "min": 7.4,
+          "median": 12.8,
+          "max": 32.7
+        },
+        "alarm_rows": 134,
+        "alarm_rows_in_afterglow": 0,
+        "alarm_at_end_of_afterglow": 0,
+        "groups_1_4": {
+          "occurrences": 8,
+          "with_model_alarm": 6,
+          "delay_s": {
+            "min": 12.3,
+            "median": 12.7,
+            "max": 32.7
+          },
+          "alarm_rows": 56,
+          "alarm_rows_in_afterglow": 0,
+          "alarm_at_end_of_afterglow": 0
+        },
+        "groups_5_8": {
+          "occurrences": 8,
+          "with_model_alarm": 8,
+          "delay_s": {
+            "min": 7.4,
+            "median": 12.8,
+            "max": 13.5
+          },
+          "alarm_rows": 78,
+          "alarm_rows_in_afterglow": 0,
+          "alarm_at_end_of_afterglow": 0
+        }
+      },
+      "restart_sluzby": {
+        "class": "restart_sluzby",
+        "occurrences": 16,
+        "with_model_alarm": 0,
+        "delay_s": null,
+        "alarm_rows": 0,
+        "alarm_rows_in_afterglow": 0,
+        "alarm_at_end_of_afterglow": 0,
+        "groups_1_4": {
+          "occurrences": 8,
+          "with_model_alarm": 0,
+          "delay_s": null,
+          "alarm_rows": 0,
+          "alarm_rows_in_afterglow": 0,
+          "alarm_at_end_of_afterglow": 0
+        },
+        "groups_5_8": {
+          "occurrences": 8,
+          "with_model_alarm": 0,
+          "delay_s": null,
+          "alarm_rows": 0,
+          "alarm_rows_in_afterglow": 0,
+          "alarm_at_end_of_afterglow": 0
+        }
+      },
+      "udrzba_zaloha": {
+        "class": "udrzba",
+        "occurrences": 16,
+        "with_model_alarm": 0,
+        "delay_s": null,
+        "alarm_rows": 0,
+        "alarm_rows_in_afterglow": 0,
+        "alarm_at_end_of_afterglow": 0,
+        "groups_1_4": {
+          "occurrences": 8,
+          "with_model_alarm": 0,
+          "delay_s": null,
+          "alarm_rows": 0,
+          "alarm_rows_in_afterglow": 0,
+          "alarm_at_end_of_afterglow": 0
+        },
+        "groups_5_8": {
+          "occurrences": 8,
+          "with_model_alarm": 0,
+          "delay_s": null,
+          "alarm_rows": 0,
+          "alarm_rows_in_afterglow": 0,
+          "alarm_at_end_of_afterglow": 0
+        }
+      },
+      "zamok_tabulky": {
+        "class": "chyba_aplikacie",
+        "occurrences": 15,
+        "with_model_alarm": 15,
+        "delay_s": {
+          "min": 2.6,
+          "median": 12.9,
+          "max": 122.6
+        },
+        "alarm_rows": 757,
+        "alarm_rows_in_afterglow": 0,
+        "alarm_at_end_of_afterglow": 0,
+        "groups_1_4": {
+          "occurrences": 8,
+          "with_model_alarm": 8,
+          "delay_s": {
+            "min": 12.5,
+            "median": 13.0,
+            "max": 122.6
+          },
+          "alarm_rows": 350,
+          "alarm_rows_in_afterglow": 0,
+          "alarm_at_end_of_afterglow": 0
+        },
+        "groups_5_8": {
+          "occurrences": 7,
+          "with_model_alarm": 7,
+          "delay_s": {
+            "min": 2.6,
+            "median": 12.5,
+            "max": 13.0
+          },
+          "alarm_rows": 407,
+          "alarm_rows_in_afterglow": 0,
+          "alarm_at_end_of_afterglow": 0
+        }
+      },
+      "zataz_pamate": {
+        "class": "zataz_pamate",
+        "occurrences": 16,
+        "with_model_alarm": 15,
+        "delay_s": {
+          "min": 7.7,
+          "median": 12.7,
+          "max": 13.1
+        },
+        "alarm_rows": 625,
+        "alarm_rows_in_afterglow": 0,
+        "alarm_at_end_of_afterglow": 0,
+        "groups_1_4": {
+          "occurrences": 8,
+          "with_model_alarm": 8,
+          "delay_s": {
+            "min": 12.1,
+            "median": 12.6,
+            "max": 13.1
+          },
+          "alarm_rows": 353,
+          "alarm_rows_in_afterglow": 0,
+          "alarm_at_end_of_afterglow": 0
+        },
+        "groups_5_8": {
+          "occurrences": 8,
+          "with_model_alarm": 7,
+          "delay_s": {
+            "min": 7.7,
+            "median": 12.8,
+            "max": 13.1
+          },
+          "alarm_rows": 272,
+          "alarm_rows_in_afterglow": 0,
+          "alarm_at_end_of_afterglow": 0
+        }
+      },
+      "zla_konfiguracia_nginx": {
+        "class": "zla_konfiguracia",
+        "occurrences": 17,
+        "with_model_alarm": 1,
+        "delay_s": {
+          "min": 2.7,
+          "median": 2.7,
+          "max": 2.7
+        },
+        "alarm_rows": 1,
+        "alarm_rows_in_afterglow": 0,
+        "alarm_at_end_of_afterglow": 0,
+        "groups_1_4": {
+          "occurrences": 10,
+          "with_model_alarm": 1,
+          "delay_s": {
+            "min": 2.7,
+            "median": 2.7,
+            "max": 2.7
+          },
+          "alarm_rows": 1,
+          "alarm_rows_in_afterglow": 0,
+          "alarm_at_end_of_afterglow": 0
+        },
+        "groups_5_8": {
+          "occurrences": 7,
+          "with_model_alarm": 0,
+          "delay_s": null,
+          "alarm_rows": 0,
+          "alarm_rows_in_afterglow": 0,
+          "alarm_at_end_of_afterglow": 0
+        }
+      },
+      "zla_konfiguracia_sluzby": {
+        "class": "zla_konfiguracia",
+        "occurrences": 15,
+        "with_model_alarm": 15,
+        "delay_s": {
+          "min": 12.1,
+          "median": 12.7,
+          "max": 182.7
+        },
+        "alarm_rows": 936,
+        "alarm_rows_in_afterglow": 0,
+        "alarm_at_end_of_afterglow": 0,
+        "groups_1_4": {
+          "occurrences": 8,
+          "with_model_alarm": 8,
+          "delay_s": {
+            "min": 12.1,
+            "median": 12.9,
+            "max": 182.7
+          },
+          "alarm_rows": 504,
+          "alarm_rows_in_afterglow": 0,
+          "alarm_at_end_of_afterglow": 0
+        },
+        "groups_5_8": {
+          "occurrences": 7,
+          "with_model_alarm": 7,
+          "delay_s": {
+            "min": 12.3,
+            "median": 12.6,
+            "max": 13.3
+          },
+          "alarm_rows": 432,
+          "alarm_rows_in_afterglow": 0,
+          "alarm_at_end_of_afterglow": 0
+        }
+      }
+    },
+    "alarm_events_by_category": {
+      "prevadzka": 1,
+      "restart_databazy": 15,
+      "zamok_tabulky": 15,
+      "zataz_pamate": 15,
+      "zla_konfiguracia_nginx": 1,
+      "zla_konfiguracia_sluzby": 16
+    },
+    "alarm_events_outside_events": [
+      {
+        "session": "events-v3-20261108_14_test_events_write_heavy",
+        "group": "v3-test_events-3",
+        "t_s": 1000.0,
+        "category": "prevadzka"
+      }
+    ],
+    "mem_zero_ratio_p50": {
+      "groups_1_4": {
+        "min": 0.306,
+        "max": 0.7219,
+        "sessions": 24
+      },
+      "groups_5_8": {
+        "min": 0.2358,
+        "max": 0.3201,
+        "sessions": 21
+      }
+    },
+    "mem_zero_ratio_benign_v6": {
+      "train": {
+        "sessions": 18,
+        "p50_min": 0.478,
+        "p50_max": 0.7001,
+        "row_min": 0.4775,
+        "row_max": 0.75
+      },
+      "dev": {
+        "sessions": 6,
+        "p50_min": 0.4615,
+        "p50_max": 0.4648,
+        "row_min": 0.4501,
+        "row_max": 0.4674
+      },
+      "calibration": {
+        "sessions": 12,
+        "p50_min": 0.4269,
+        "p50_max": 0.4375,
+        "row_min": 0.4173,
+        "row_max": 0.44
+      }
+    },
+    "sessions": {
+      "events-v3-20261108_01_test_events_bursty": {
+        "group": "v3-test_events-1",
+        "scenario": "bursty",
+        "mem_zero_ratio_p50": 0.7219,
+        "model_alarm_events": 2
+      },
+      "events-v3-20261108_02_test_events_steady": {
+        "group": "v3-test_events-1",
+        "scenario": "steady",
+        "mem_zero_ratio_p50": 0.6487,
+        "model_alarm_events": 1
+      },
+      "events-v3-20261108_03_test_events_write_heavy": {
+        "group": "v3-test_events-1",
+        "scenario": "write_heavy",
+        "mem_zero_ratio_p50": 0.6196,
+        "model_alarm_events": 0
+      },
+      "events-v3-20261108_04_test_events_mixed": {
+        "group": "v3-test_events-1",
+        "scenario": "mixed",
+        "mem_zero_ratio_p50": 0.3799,
+        "model_alarm_events": 2
+      },
+      "events-v3-20261108_05_test_events_read_heavy": {
+        "group": "v3-test_events-1",
+        "scenario": "read_heavy",
+        "mem_zero_ratio_p50": 0.3648,
+        "model_alarm_events": 1
+      },
+      "events-v3-20261108_06_test_events_quiet": {
+        "group": "v3-test_events-1",
+        "scenario": "quiet",
+        "mem_zero_ratio_p50": 0.3672,
+        "model_alarm_events": 0
+      },
+      "events-v3-20261108_07_test_events_quiet": {
+        "group": "v3-test_events-2",
+        "scenario": "quiet",
+        "mem_zero_ratio_p50": 0.372,
+        "model_alarm_events": 1
+      },
+      "events-v3-20261108_08_test_events_write_heavy": {
+        "group": "v3-test_events-2",
+        "scenario": "write_heavy",
+        "mem_zero_ratio_p50": 0.3597,
+        "model_alarm_events": 2
+      },
+      "events-v3-20261108_09_test_events_read_heavy": {
+        "group": "v3-test_events-2",
+        "scenario": "read_heavy",
+        "mem_zero_ratio_p50": 0.3587,
+        "model_alarm_events": 2
+      },
+      "events-v3-20261108_10_test_events_bursty": {
+        "group": "v3-test_events-2",
+        "scenario": "bursty",
+        "mem_zero_ratio_p50": 0.3634,
+        "model_alarm_events": 1
+      },
+      "events-v3-20261108_11_test_events_mixed": {
+        "group": "v3-test_events-2",
+        "scenario": "mixed",
+        "mem_zero_ratio_p50": 0.3689,
+        "model_alarm_events": 1
+      },
+      "events-v3-20261108_12_test_events_steady": {
+        "group": "v3-test_events-2",
+        "scenario": "steady",
+        "mem_zero_ratio_p50": 0.3526,
+        "model_alarm_events": 2
+      },
+      "events-v3-20261108_13_test_events_quiet": {
+        "group": "v3-test_events-3",
+        "scenario": "quiet",
+        "mem_zero_ratio_p50": 0.3321,
+        "model_alarm_events": 2
+      },
+      "events-v3-20261108_14_test_events_write_heavy": {
+        "group": "v3-test_events-3",
+        "scenario": "write_heavy",
+        "mem_zero_ratio_p50": 0.3237,
+        "model_alarm_events": 2
+      },
+      "events-v3-20261108_15_test_events_steady": {
+        "group": "v3-test_events-3",
+        "scenario": "steady",
+        "mem_zero_ratio_p50": 0.3268,
+        "model_alarm_events": 1
+      },
+      "events-v3-20261108_16_test_events_mixed": {
+        "group": "v3-test_events-3",
+        "scenario": "mixed",
+        "mem_zero_ratio_p50": 0.3287,
+        "model_alarm_events": 1
+      },
+      "events-v3-20261108_17_test_events_read_heavy": {
+        "group": "v3-test_events-3",
+        "scenario": "read_heavy",
+        "mem_zero_ratio_p50": 0.3262,
+        "model_alarm_events": 1
+      },
+      "events-v3-20261108_18_test_events_bursty": {
+        "group": "v3-test_events-3",
+        "scenario": "bursty",
+        "mem_zero_ratio_p50": 0.3284,
+        "model_alarm_events": 2
+      },
+      "events-v3-20261108_19_test_events_bursty": {
+        "group": "v3-test_events-4",
+        "scenario": "bursty",
+        "mem_zero_ratio_p50": 0.3155,
+        "model_alarm_events": 1
+      },
+      "events-v3-20261108_20_test_events_write_heavy": {
+        "group": "v3-test_events-4",
+        "scenario": "write_heavy",
+        "mem_zero_ratio_p50": 0.3141,
+        "model_alarm_events": 1
+      },
+      "events-v3-20261108_21_test_events_steady": {
+        "group": "v3-test_events-4",
+        "scenario": "steady",
+        "mem_zero_ratio_p50": 0.3141,
+        "model_alarm_events": 1
+      },
+      "events-v3-20261108_22_test_events_read_heavy": {
+        "group": "v3-test_events-4",
+        "scenario": "read_heavy",
+        "mem_zero_ratio_p50": 0.306,
+        "model_alarm_events": 2
+      },
+      "events-v3-20261108_23_test_events_quiet": {
+        "group": "v3-test_events-4",
+        "scenario": "quiet",
+        "mem_zero_ratio_p50": 0.3076,
+        "model_alarm_events": 2
+      },
+      "events-v3-20261108_24_test_events_mixed": {
+        "group": "v3-test_events-4",
+        "scenario": "mixed",
+        "mem_zero_ratio_p50": 0.3115,
+        "model_alarm_events": 1
+      },
+      "events-v3-20261108_25_test_events_quiet": {
+        "group": "v3-test_events-5",
+        "scenario": "quiet",
+        "mem_zero_ratio_p50": 0.3086,
+        "model_alarm_events": 1
+      },
+      "events-v3-20261108_26_test_events_write_heavy": {
+        "group": "v3-test_events-5",
+        "scenario": "write_heavy",
+        "mem_zero_ratio_p50": 0.315,
+        "model_alarm_events": 1
+      },
+      "events-v3-20261108_27_test_events_bursty": {
+        "group": "v3-test_events-5",
+        "scenario": "bursty",
+        "mem_zero_ratio_p50": 0.3201,
+        "model_alarm_events": 3
+      },
+      "events-v3-20261108_28_test_events_mixed": {
+        "group": "v3-test_events-5",
+        "scenario": "mixed",
+        "mem_zero_ratio_p50": 0.2984,
+        "model_alarm_events": 2
+      },
+      "events-v3-20261108_29_test_events_steady": {
+        "group": "v3-test_events-5",
+        "scenario": "steady",
+        "mem_zero_ratio_p50": 0.2982,
+        "model_alarm_events": 1
+      },
+      "events-v3-20261108_30_test_events_read_heavy": {
+        "group": "v3-test_events-5",
+        "scenario": "read_heavy",
+        "mem_zero_ratio_p50": 0.2992,
+        "model_alarm_events": 0
+      },
+      "events-v3-20261108_31_test_events_steady": {
+        "group": "v3-test_events-6",
+        "scenario": "steady",
+        "mem_zero_ratio_p50": 0.3077,
+        "model_alarm_events": 3
+      },
+      "events-v3-20261108_32_test_events_write_heavy": {
+        "group": "v3-test_events-6",
+        "scenario": "write_heavy",
+        "mem_zero_ratio_p50": 0.3048,
+        "model_alarm_events": 2
+      },
+      "events-v3-20261108_33_test_events_read_heavy": {
+        "group": "v3-test_events-6",
+        "scenario": "read_heavy",
+        "mem_zero_ratio_p50": 0.2997,
+        "model_alarm_events": 0
+      },
+      "events-v3-20261108_34_test_events_bursty": {
+        "group": "v3-test_events-6",
+        "scenario": "bursty",
+        "mem_zero_ratio_p50": 0.3006,
+        "model_alarm_events": 3
+      },
+      "events-v3-20261108_35_test_events_quiet": {
+        "group": "v3-test_events-6",
+        "scenario": "quiet",
+        "mem_zero_ratio_p50": 0.3022,
+        "model_alarm_events": 1
+      },
+      "events-v3-20261108_36_test_events_mixed": {
+        "group": "v3-test_events-6",
+        "scenario": "mixed",
+        "mem_zero_ratio_p50": 0.275,
+        "model_alarm_events": 3
+      },
+      "events-v3-20261108_37_test_events_bursty": {
+        "group": "v3-test_events-7",
+        "scenario": "bursty",
+        "mem_zero_ratio_p50": 0.2589,
+        "model_alarm_events": 2
+      },
+      "events-v3-20261108_38_test_events_mixed": {
+        "group": "v3-test_events-7",
+        "scenario": "mixed",
+        "mem_zero_ratio_p50": 0.2599,
+        "model_alarm_events": 0
+      },
+      "events-v3-20261108_39_test_events_quiet": {
+        "group": "v3-test_events-7",
+        "scenario": "quiet",
+        "mem_zero_ratio_p50": 0.2614,
+        "model_alarm_events": 1
+      },
+      "events-v3-20261108_40_test_events_write_heavy": {
+        "group": "v3-test_events-7",
+        "scenario": "write_heavy",
+        "mem_zero_ratio_p50": 0.2615,
+        "model_alarm_events": 1
+      },
+      "events-v3-20261108_41_test_events_steady": {
+        "group": "v3-test_events-7",
+        "scenario": "steady",
+        "mem_zero_ratio_p50": 0.2537,
+        "model_alarm_events": 2
+      },
+      "events-v3-20261108_42_test_events_read_heavy": {
+        "group": "v3-test_events-7",
+        "scenario": "read_heavy",
+        "mem_zero_ratio_p50": 0.2569,
+        "model_alarm_events": 1
+      },
+      "events-v3-20261108_43_test_events_mixed": {
+        "group": "v3-test_events-8",
+        "scenario": "mixed",
+        "mem_zero_ratio_p50": 0.2358,
+        "model_alarm_events": 2
+      },
+      "events-v3-20261108_44_test_events_steady": {
+        "group": "v3-test_events-8",
+        "scenario": "steady",
+        "mem_zero_ratio_p50": 0.2375,
+        "model_alarm_events": 0
+      },
+      "events-v3-20261108_45_test_events_quiet": {
+        "group": "v3-test_events-8",
+        "scenario": "quiet",
+        "mem_zero_ratio_p50": 0.2401,
+        "model_alarm_events": 2
+      }
+    },
+    "inputs_sha256": {
+      "e2": "7fcab511b5d1742bfab84c46726475ad8f7d0ceb19eec1d78d9d33c38d1d7555",
+      "index": "f47d6976ab75bcd2bc9003205a72473e5292ed60f476c3ce16866ca9700d47ca",
+      "benign_v6_corpus": "b86e5fc35d7c4227c188cc024a7b25a142e5c80e4782807c773e9ee519dad790",
+      "features": {
+        "events-v3-20261108_01_test_events_bursty": "baa6f03a57b07de790e7af3ccf9072359384d3487847947c75d9c874fb0a56ec",
+        "events-v3-20261108_02_test_events_steady": "031dc99a67a52313baa4893634b0f1da3d67edae818cad78e76127f7134c0954",
+        "events-v3-20261108_03_test_events_write_heavy": "77cd2456381cb4381ca5026a0b1183d5b4e734efe2a57a607b476ea46959f77a",
+        "events-v3-20261108_04_test_events_mixed": "fd76ef538082d24a8ede74569526fdf1433f5551c3b66ed48c1de6ccc4b1a829",
+        "events-v3-20261108_05_test_events_read_heavy": "bfd461655cae7b1b54ef287afd87549e5b1497cd07d4ac4bc44ddbcc41b3d3f1",
+        "events-v3-20261108_06_test_events_quiet": "7a1402b78413633a8dc64116fc605248397be96d0e17d046d7cd9b50b7e0133d",
+        "events-v3-20261108_07_test_events_quiet": "84e769e950c4471611161f9ff93aec1b471ee01da86673f322f3da2edf2c24f7",
+        "events-v3-20261108_08_test_events_write_heavy": "417d82cb8092f3c884ebc26b016a78786a800079049cb72d881267d0cdebd176",
+        "events-v3-20261108_09_test_events_read_heavy": "1b157aa5fa24bcdd3911c661fe70d166a2f54d1af70b4baa7212e9f36eec1ae3",
+        "events-v3-20261108_10_test_events_bursty": "5fe694a00b31bf3ffa89becddbc843e3e0f5b8dead10130274952e77e0c3ce49",
+        "events-v3-20261108_11_test_events_mixed": "8d0bab2a48ffb9db5c72b4c58c9dcd34f20272a7c1d39deb396a5d274f5f70fa",
+        "events-v3-20261108_12_test_events_steady": "f170dd46dfa679fbcc3b5a7ce687567d64479247ce5972dd6387977983dd73d6",
+        "events-v3-20261108_13_test_events_quiet": "6d930701910b3548f8f2783303d5f2068b2f9cfeab6d3cf7ab04eaa8cdcbceca",
+        "events-v3-20261108_14_test_events_write_heavy": "2d7f286d54b8ae39ba5a17bb2572573dac20c5d31c8e127986ee45081644d9b7",
+        "events-v3-20261108_15_test_events_steady": "f8cb87520064b5ba1a71a84312417a41f9f686feb4a64b7f9c0430315e897f19",
+        "events-v3-20261108_16_test_events_mixed": "3d212eaeb5fe4b4ce2f73bcffd9752fe54ab4ddbb42018129c378297200c8727",
+        "events-v3-20261108_17_test_events_read_heavy": "111d0ada8c19229c55dc931fd6953519f078f9a0f835c2d981d40ea0013b253c",
+        "events-v3-20261108_18_test_events_bursty": "49b0c6b95fd2a076ae4bb48a6d6315c6e8c7c3fb7c8aa00eab846f52f33589cd",
+        "events-v3-20261108_19_test_events_bursty": "92085c56dd46b6fbc1d97ad851fefcd1463debce5882da671f976b96b329d75d",
+        "events-v3-20261108_20_test_events_write_heavy": "2a19453890d2fccbf31683c746ae3dbb6a5f32e8a7bb8750161e11bab26dc951",
+        "events-v3-20261108_21_test_events_steady": "a14747fcdc2a84ed74e69e6e90c8f216ce0b0aaebb3f5e0f4f6c1824a690c1d7",
+        "events-v3-20261108_22_test_events_read_heavy": "787629698fee05fbe6fe5837d01cebd6365e73961ad3ff171fffd7879cf5b8f2",
+        "events-v3-20261108_23_test_events_quiet": "8434b219ade8ae8a0bf72e0a1efb480cda63afd1476290b06fc54849659ae237",
+        "events-v3-20261108_24_test_events_mixed": "af36323b35351507c9046a37e6f36a9b81b3a8c2bcb50d598910542bae70ac6f",
+        "events-v3-20261108_25_test_events_quiet": "6cc0f5a78ebab9779db18249d33bdd95d43ec6b3b99814dec4914ddbf1ab7485",
+        "events-v3-20261108_26_test_events_write_heavy": "679cfa9510d0d5f07e0cc27d596c1ffebc5604171cf0783ab42c2186a227ae0c",
+        "events-v3-20261108_27_test_events_bursty": "0d1de34dfa1d1fef1fed3493d6f09dfc9310e37045713d87667e8a42930c8dd9",
+        "events-v3-20261108_28_test_events_mixed": "49be6155e197b56717ef8567734dceceeb45226bc7355d60f8fffeb46200b3bb",
+        "events-v3-20261108_29_test_events_steady": "4746cd49f1aac79682974f8d75ce1eea975f08984d725f2749b5c0d5c6e2e8a6",
+        "events-v3-20261108_30_test_events_read_heavy": "708282b5d02259d702f4c97abb3194a52daf9c5673ab97d44194e6576ff28a0b",
+        "events-v3-20261108_31_test_events_steady": "85752c224ce918f7d5cab28068b519b9d021217b6febb7648b00dc6d54ffc1da",
+        "events-v3-20261108_32_test_events_write_heavy": "eca746e3fa8173f0a2978021bd4b1a23a02dc6f7920e1db71a9cb972794ea922",
+        "events-v3-20261108_33_test_events_read_heavy": "fc03b78fd9bba82975adb979080e873a9944a721bf752b15a23690dcbd1b3a1b",
+        "events-v3-20261108_34_test_events_bursty": "74c89e70748da3e209d5bfc6c2b92d273c9099bd02a47672758f63adf0ecc86d",
+        "events-v3-20261108_35_test_events_quiet": "f6d5b059396967d21953e4624282ebcf469174d99bf64e4b819fbf723ed0e815",
+        "events-v3-20261108_36_test_events_mixed": "b3ce55eae45adc4897f9ab18c46bafa80ab2f406643626c3889761b6954c5cbc",
+        "events-v3-20261108_37_test_events_bursty": "03c58be5b7d08254a996d5487cfd8dbb536f6407a8e3bea89ab483a685a23c91",
+        "events-v3-20261108_38_test_events_mixed": "c95e4c2931432ba7bad57046a50c057b99e63aa0ad4ca5e66728b4badf2ebab5",
+        "events-v3-20261108_39_test_events_quiet": "3a7a573e9f1425af2e5ae26bb5a841908df29662471930823cf7a567aaf0debf",
+        "events-v3-20261108_40_test_events_write_heavy": "204a140e60bd97d957e7f9f75f22687f9194a05465b017cbd4b2541fddea7f85",
+        "events-v3-20261108_41_test_events_steady": "f5fcdd0452916c71697fd8d20fb6fea5767e9cfe7fa161bc5954ef10b8794ac0",
+        "events-v3-20261108_42_test_events_read_heavy": "1a507c80f05e79b659bf6fec085dece9786104d315400cc39cdb2bdfbd0a87c5",
+        "events-v3-20261108_43_test_events_mixed": "61092e686549cf60b9c3ad8418dc56a50534716cfaac22a38d479e8abd0cb522",
+        "events-v3-20261108_44_test_events_steady": "21b9459fb26958dd957275a39f2cbfa4ac93229d6aa59d9e0d4154a5f276c16f",
+        "events-v3-20261108_45_test_events_quiet": "797029edbb109f4c4a7790893d373d8ab850e4ac5e965c66d5b35b02edb1b7e9"
+      }
+    },
+    "note": "Descriptive split of the E2 result; FAR, intervals and tests are in the E2 result. with_model_alarm counts event occurrences whose window held a model alarm event (priebeh), alarm events are the rising edges of the k of n rule. The groups 1-4 and 5-8 differ in time, boot and memory drift at once, so the split cannot separate the drift from other changes."
+  }
+}

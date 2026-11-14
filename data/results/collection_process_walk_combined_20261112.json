@@ -1,0 +1,702 @@
+{
+  "commit": "ad04adc1fe1e4c3aed0e300509d21d7a622f49df",
+  "commit_dirty": true,
+  "commit_note": "HEAD when this record was generated. The record script data/results/collection_process_walk_combined_20261112/record.py and its probe outputs are not part of this commit; they are committed together with this file. The campaign audit ran on the campaign commit in values.campaign_audit.commit.",
+  "date": "2026-11-14T01:53:20.746491+00:00",
+  "host": "Linux-7.2.9+deb13-amd64-x86_64-with-glibc2.41",
+  "guest": {
+    "kernel": "6.1.0-42-cloud-amd64",
+    "boot_id": "8c9c7841-2946-48c9-a41d-596d4aac9f0e",
+    "machine_id": "180ac982142b4714a979599073c96cdd",
+    "stack_sha256": "3fcb9e724f031e3ed24fd3e08fb8f2946c8cd3f04416bc871d8f7dc31b3d46bc",
+    "stack_manifest": [
+      "c346dc8bc1c8c3649fc96064fddfc07172f740f7c82d1830dbb935b16c488271  /opt/hyptcn-lab/services.py",
+      "d7372422553f866333177456ac6daec4847f5660c1c854a646e602d0be0fcf6c  /opt/hyptcn-lab/schema.sql",
+      "a8e5ef8843ebae83eed8691f8eb7e1d186448d36e4be7d4406efeaa96291d5e3  /opt/hyptcn-lab/guest_state.py",
+      "62f55e4374b5db4522d0ce84c911f26ccd580e8f55bc570c09ee63c64be234c6  /etc/nginx/conf.d/hyptcn-lab.conf",
+      "af75eee623f3c7a0b7a1c10a35c2216684c6f4b610d44e46560de137ef3d6962  /etc/systemd/system/hyptcn-lab@.service",
+      "nginx\t1.22.1-9+deb12u10",
+      "postgresql\t15+248+deb12u1",
+      "python3\t3.11.2-1+b1",
+      "python3-psycopg2\t2.9.5-1+b1",
+      "timers:"
+    ]
+  },
+  "command": "data/results/collection_process_walk_combined_20261112/record.py data/campaigns/events-v3-20261108 data/diagnostics/torn-walk-20261112/events-v3-20261108_46_test_events_write_heavy data/results/collection_process_walk_combined_20261112_audit.json data/results/collection_process_walk_combined_20261112/restore.out data/results/collection_process_walk_combined_20261112.json",
+  "n": 3,
+  "values": {
+    "campaign_halt": {
+      "status": "stopped",
+      "stage": "error",
+      "message": "audit rejected session; archived without replacement: incomplete model inputs under behavioral-inputs-v1",
+      "accepted_archived": 45,
+      "session": "events-v3-20261108_46_test_events_write_heavy",
+      "updated_at": "2026-11-12T14:52:02.527288+00:00"
+    },
+    "campaign_close": {
+      "date": "2026-11-13T23:24:35.960917+00:00",
+      "reason": "Session 46 (events-v3-20261108_46_test_events_write_heavy) was rejected by the audit: row seq 270 had an incomplete process list (behavioral-inputs-v1). One live read held two torn spots of the tasks list: the hyptcn-lab@worker process (python3 190484) crashed under the zamok_tabulky lock and its postgres backend 190491 exited mid-list, and a new kernel thread (kworker/1:2 253787) was linked at the tail into the recycled task_struct of an exited orders thread whose page was read before its initialization. The rules prev (0b61ffd) and tail (b065ee4) each cover one of these shapes, not both, so the row was correctly refused. Owner decision 2026-11-13: close the campaign with its 45 accepted sessions (groups 1-7 complete, group 8 has sessions 43-45) and evaluate them as an explicitly incomplete allocation; no new campaign, and features/ and guestparse/ stay unchanged (a walk fix would change extractor_sha256). The combined shape is a documented limitation."
+    },
+    "campaign_audit": {
+      "accepted": false,
+      "reasons": [
+        "incomplete model inputs under behavioral-inputs-v1"
+      ],
+      "windows": 623,
+      "commit": "0f0b11fe8646eb9dfd3b5bd737b0b60e30d09e26",
+      "measurement_dirty": [],
+      "quality": {
+        "behavior_valid_rows": 719,
+        "invalid_input_seq": [
+          270
+        ],
+        "integrity_findings": 0,
+        "integrity_unconfirmed_seq": [
+          285,
+          481
+        ],
+        "process_walk_prev_seq": [],
+        "process_walk_tail_seq": [],
+        "integrity_inconclusive_rows": {
+          "modules": 0,
+          "process_cross_view": 8,
+          "syscall_table": 0,
+          "text_integrity": 720
+        }
+      },
+      "row_quality": {
+        "traversals_complete": false,
+        "behavior_valid": false,
+        "process_walk": "next",
+        "inconclusive": [
+          "process_cross_view",
+          "text_integrity"
+        ]
+      },
+      "row_note": "profil: preukotvenie KASLR o +16777216; procesy: prechod sa neuzavrel (cyklus v zozname), pocet je dolna hranica; neuzavrete kontroly: process_cross_view, text_integrity"
+    },
+    "snapshot_270": {
+      "timestamp": "2026-11-12T12:19:05.143Z",
+      "full": false,
+      "paused": false,
+      "capture_ms": 814.911,
+      "backend_read_ms": 316.091,
+      "chunk_bytes": 1048576,
+      "chunks": 2050,
+      "forward_count": 112,
+      "forward_stop": "cycle at node 0xffff8d15c6013c10 (index 74)",
+      "backward_count": 74,
+      "backward_stop": null,
+      "inconsistent_forward_links": [
+        {
+          "at_index": 74,
+          "node": "0xffff8d15c6013c10",
+          "pid": 190492,
+          "comm": "postgres",
+          "prev": "0xffff8d15f6663c10",
+          "came_from": "0xffff8d161f86d5d0"
+        },
+        {
+          "at_index": 110,
+          "node": "0xffff8d15c5dfd5d0",
+          "pid": 253762,
+          "comm": "python3",
+          "prev": "0xffff8d161f86a250",
+          "came_from": "0xffff8d15f6660890"
+        },
+        {
+          "at_index": 111,
+          "node": "0xffff8d1620a43c10",
+          "pid": 190484,
+          "comm": "python3",
+          "prev": "0xdead000000000122",
+          "came_from": "0xffff8d15c5dfd5d0"
+        }
+      ],
+      "forward_only": 38,
+      "backward_only": 0,
+      "backward_head": [
+        [
+          "0xffff8d15c5dfd5d0",
+          253762,
+          "python3"
+        ],
+        [
+          "0xffff8d161f86a250",
+          190482,
+          "python3"
+        ],
+        [
+          "0xffff8d1620a555d0",
+          190480,
+          "python3"
+        ],
+        [
+          "0xffff8d161f850890",
+          190468,
+          "postgres"
+        ]
+      ],
+      "middle_node_prev_is_deleted": true,
+      "tail_node_is_thread": true,
+      "init_task_prev_is_tail_node": true,
+      "page_read_order": [
+        {
+          "role": "tail_node",
+          "node": "0xffff8d15c5dfd5d0",
+          "pa": "0x5dfcd40",
+          "chunk": 93
+        },
+        {
+          "role": "middle_node",
+          "node": "0xffff8d15c6013c10",
+          "pa": "0x6013380",
+          "chunk": 96
+        },
+        {
+          "role": "tail_node_came_from",
+          "node": "0xffff8d15f6660890",
+          "pa": "0x36660000",
+          "chunk": 870
+        },
+        {
+          "role": "middle_node_prev",
+          "node": "0xffff8d15f6663c10",
+          "pa": "0x36663380",
+          "chunk": 870
+        },
+        {
+          "role": "middle_node_came_from",
+          "node": "0xffff8d161f86d5d0",
+          "pa": "0x5f86cd40",
+          "chunk": 1528
+        },
+        {
+          "role": "init_task",
+          "pa": "0x6041aa40",
+          "chunk": 1540
+        },
+        {
+          "role": "dead_node",
+          "node": "0xffff8d1620a43c10",
+          "pa": "0x60a43380",
+          "chunk": 1546
+        }
+      ],
+      "init_task_links": {
+        "269": {
+          "pa": "0x6041aa40",
+          "tasks_next": "0xffff8d15c1210890",
+          "tasks_prev": "0xffff8d1620a52250"
+        },
+        "270": {
+          "pa": "0x6041aa40",
+          "tasks_next": "0xffff8d15c1210890",
+          "tasks_prev": "0xffff8d15c5dfd5d0"
+        },
+        "271": {
+          "pa": "0x6041aa40",
+          "tasks_next": "0xffff8d15c1210890",
+          "tasks_prev": "0xffff8d1620a40890"
+        }
+      },
+      "nodes": {
+        "269": [
+          {
+            "node": "0xffff8d161f86a250",
+            "pa": "0x5f8699c0",
+            "pid": 190482,
+            "tgid": 190482,
+            "comm": "python3",
+            "next": "0xffff8d161f86d5d0",
+            "prev": "0xffff8d1620a555d0",
+            "real_parent_pid": 1,
+            "flags": "0x400100",
+            "exit_state": 0,
+            "mm_null": false,
+            "start_time": 22363831565004
+          },
+          {
+            "node": "0xffff8d161f86d5d0",
+            "pa": "0x5f86cd40",
+            "pid": 190483,
+            "tgid": 190483,
+            "comm": "python3",
+            "next": "0xffff8d1620a43c10",
+            "prev": "0xffff8d161f86a250",
+            "real_parent_pid": 1,
+            "flags": "0x400100",
+            "exit_state": 0,
+            "mm_null": false,
+            "start_time": 22363833485806
+          },
+          {
+            "node": "0xffff8d1620a43c10",
+            "pa": "0x60a43380",
+            "pid": 190484,
+            "tgid": 190484,
+            "comm": "python3",
+            "next": "0xffff8d15f6663c10",
+            "prev": "0xffff8d161f86d5d0",
+            "real_parent_pid": 1,
+            "flags": "0x400100",
+            "exit_state": 0,
+            "mm_null": false,
+            "start_time": 22363835302500
+          },
+          {
+            "node": "0xffff8d15c6013c10",
+            "pa": "0x6013380",
+            "pid": 190492,
+            "tgid": 190492,
+            "comm": "postgres",
+            "next": "0xffff8d15c6012250",
+            "prev": "0xffff8d15f6663c10",
+            "real_parent_pid": 190462,
+            "flags": "0x400040",
+            "exit_state": 0,
+            "mm_null": false,
+            "start_time": 22364011058737
+          },
+          {
+            "node": "0xffff8d15f6663c10",
+            "pa": "0x36663380",
+            "pid": 190491,
+            "tgid": 190491,
+            "comm": "postgres",
+            "next": "0xffff8d15c6013c10",
+            "prev": "0xffff8d1620a43c10",
+            "real_parent_pid": 190462,
+            "flags": "0x400040",
+            "exit_state": 0,
+            "mm_null": false,
+            "start_time": 22363965298057
+          },
+          {
+            "node": "0xffff8d15f6660890",
+            "pa": "0x36660000",
+            "pid": 253688,
+            "tgid": 190480,
+            "comm": "python3",
+            "next": "0xffff8d161f86a250",
+            "prev": "0xffff8d161f850890",
+            "real_parent_pid": 1,
+            "flags": "0x40804c",
+            "exit_state": 16,
+            "mm_null": true,
+            "start_time": 30549894746804
+          },
+          {
+            "node": "0xffff8d15c5dfd5d0",
+            "pa": "0x5dfcd40",
+            "pid": 253673,
+            "tgid": 190482,
+            "comm": "python3",
+            "next": "0xffff8d161f86d5d0",
+            "prev": "0xffff8d1620a555d0",
+            "real_parent_pid": 1,
+            "flags": "0x40804c",
+            "exit_state": 16,
+            "mm_null": true,
+            "start_time": 30549701812411
+          },
+          {
+            "node": "0xffff8d15f66655d0",
+            "pa": "0x36664d40",
+            "pid": 253678,
+            "tgid": 190480,
+            "comm": "python3",
+            "next": "0xffff8d161f86a250",
+            "prev": "0xffff8d161f850890",
+            "real_parent_pid": 1,
+            "flags": "0x40804c",
+            "exit_state": 16,
+            "mm_null": true,
+            "start_time": 30549760425025
+          },
+          {
+            "node": "0xffff8d15c6e6d5d0",
+            "pa": "0x6e6cd40",
+            "pid": 253671,
+            "tgid": 190480,
+            "comm": "python3",
+            "next": "0xffff8d161f86a250",
+            "prev": "0xffff8d161f850890",
+            "real_parent_pid": 1,
+            "flags": "0x40804c",
+            "exit_state": 16,
+            "mm_null": true,
+            "start_time": 30549694063011
+          },
+          {
+            "node": "0xffff8d1620a52250",
+            "pa": "0x60a519c0",
+            "pid": 234514,
+            "tgid": 234514,
+            "comm": "kworker/u4:3",
+            "next": "0xffffffffb321b2d0",
+            "prev": "0xffff8d15c12ba250",
+            "real_parent_pid": 2,
+            "flags": "0x4208060",
+            "exit_state": 0,
+            "mm_null": true,
+            "start_time": 30089068835773
+          }
+        ],
+        "270": [
+          {
+            "node": "0xffff8d161f86a250",
+            "pa": "0x5f8699c0",
+            "pid": 190482,
+            "tgid": 190482,
+            "comm": "python3",
+            "next": "0xffff8d161f86d5d0",
+            "prev": "0xffff8d1620a555d0",
+            "real_parent_pid": 1,
+            "flags": "0x400100",
+            "exit_state": 0,
+            "mm_null": false,
+            "start_time": 22363831565004
+          },
+          {
+            "node": "0xffff8d161f86d5d0",
+            "pa": "0x5f86cd40",
+            "pid": 190483,
+            "tgid": 190483,
+            "comm": "python3",
+            "next": "0xffff8d15c6013c10",
+            "prev": "0xffff8d161f86a250",
+            "real_parent_pid": 1,
+            "flags": "0x400100",
+            "exit_state": 0,
+            "mm_null": false,
+            "start_time": 22363833485806
+          },
+          {
+            "node": "0xffff8d1620a43c10",
+            "pa": "0x60a43380",
+            "pid": 190484,
+            "tgid": 190484,
+            "comm": "python3",
+            "next": "0xffff8d15c6013c10",
+            "prev": "0xdead000000000122",
+            "real_parent_pid": 1,
+            "flags": "0x40810c",
+            "exit_state": 16,
+            "mm_null": true,
+            "start_time": 22363835302500
+          },
+          {
+            "node": "0xffff8d15c6013c10",
+            "pa": "0x6013380",
+            "pid": 190492,
+            "tgid": 190492,
+            "comm": "postgres",
+            "next": "0xffff8d15c6012250",
+            "prev": "0xffff8d15f6663c10",
+            "real_parent_pid": 190462,
+            "flags": "0x400040",
+            "exit_state": 0,
+            "mm_null": false,
+            "start_time": 22364011058737
+          },
+          {
+            "node": "0xffff8d15f6663c10",
+            "pa": "0x36663380",
+            "pid": 190491,
+            "tgid": 190491,
+            "comm": "postgres",
+            "next": "0xffff8d15c6013c10",
+            "prev": "0xdead000000000122",
+            "real_parent_pid": 190462,
+            "flags": "0x40804c",
+            "exit_state": 16,
+            "mm_null": true,
+            "start_time": 22363965298057
+          },
+          {
+            "node": "0xffff8d15f6660890",
+            "pa": "0x36660000",
+            "pid": 253760,
+            "tgid": 253760,
+            "comm": "postgres",
+            "next": "0xffff8d15c5dfd5d0",
+            "prev": "0xffff8d15f66655d0",
+            "real_parent_pid": 190462,
+            "flags": "0x400040",
+            "exit_state": 0,
+            "mm_null": false,
+            "start_time": 30551606428310
+          },
+          {
+            "node": "0xffff8d15c5dfd5d0",
+            "pa": "0x5dfcd40",
+            "pid": 253762,
+            "tgid": 190483,
+            "comm": "python3",
+            "next": "0xffff8d1620a43c10",
+            "prev": "0xffff8d161f86a250",
+            "real_parent_pid": 1,
+            "flags": "0x400040",
+            "exit_state": 0,
+            "mm_null": false,
+            "start_time": 30551728720769
+          },
+          {
+            "node": "0xffff8d15f66655d0",
+            "pa": "0x36664d40",
+            "pid": 253753,
+            "tgid": 253753,
+            "comm": "psql",
+            "next": "0xffff8d15f6660890",
+            "prev": "0xffff8d15c6e6d5d0",
+            "real_parent_pid": 253750,
+            "flags": "0x400100",
+            "exit_state": 0,
+            "mm_null": false,
+            "start_time": 30551570874047
+          },
+          {
+            "node": "0xffff8d15c6e6d5d0",
+            "pa": "0x6e6cd40",
+            "pid": 253750,
+            "tgid": 253750,
+            "comm": "runuser",
+            "next": "0xffff8d15f66655d0",
+            "prev": "0xffff8d1620a52250",
+            "real_parent_pid": 1,
+            "flags": "0x400100",
+            "exit_state": 0,
+            "mm_null": false,
+            "start_time": 30551567956696
+          },
+          {
+            "node": "0xffff8d1620a52250",
+            "pa": "0x60a519c0",
+            "pid": 234514,
+            "tgid": 234514,
+            "comm": "kworker/u4:3",
+            "next": "0xffff8d15c6e6d5d0",
+            "prev": "0xffff8d15c12ba250",
+            "real_parent_pid": 2,
+            "flags": "0x4208060",
+            "exit_state": 0,
+            "mm_null": true,
+            "start_time": 30089068835773
+          }
+        ],
+        "271": [
+          {
+            "node": "0xffff8d161f86a250",
+            "pa": "0x5f8699c0",
+            "pid": 190482,
+            "tgid": 190482,
+            "comm": "python3",
+            "next": "0xffff8d161f86d5d0",
+            "prev": "0xffff8d1620a555d0",
+            "real_parent_pid": 1,
+            "flags": "0x400100",
+            "exit_state": 0,
+            "mm_null": false,
+            "start_time": 22363831565004
+          },
+          {
+            "node": "0xffff8d161f86d5d0",
+            "pa": "0x5f86cd40",
+            "pid": 190483,
+            "tgid": 190483,
+            "comm": "python3",
+            "next": "0xffff8d15c6013c10",
+            "prev": "0xffff8d161f86a250",
+            "real_parent_pid": 1,
+            "flags": "0x400100",
+            "exit_state": 0,
+            "mm_null": false,
+            "start_time": 22363833485806
+          },
+          {
+            "node": "0xffff8d1620a43c10",
+            "pa": "0x60a43380",
+            "pid": 253808,
+            "tgid": 253808,
+            "comm": "python3",
+            "next": "0xffff8d1620a40890",
+            "prev": "0xffff8d15c5dfd5d0",
+            "real_parent_pid": 1,
+            "flags": "0x400100",
+            "exit_state": 0,
+            "mm_null": false,
+            "start_time": 30558007156612
+          },
+          {
+            "node": "0xffff8d15c6013c10",
+            "pa": "0x6013380",
+            "pid": 190492,
+            "tgid": 190492,
+            "comm": "postgres",
+            "next": "0xffff8d15c6012250",
+            "prev": "0xffff8d161f86d5d0",
+            "real_parent_pid": 190462,
+            "flags": "0x400040",
+            "exit_state": 0,
+            "mm_null": false,
+            "start_time": 22364011058737
+          },
+          {
+            "node": "0xffff8d15f6663c10",
+            "pa": "0x36663380",
+            "pid": 253792,
+            "tgid": 190483,
+            "comm": "python3",
+            "next": "0xffff8d15c6013c10",
+            "prev": "0xffff8d161f86a250",
+            "real_parent_pid": 1,
+            "flags": "0x40804c",
+            "exit_state": 16,
+            "mm_null": true,
+            "start_time": 30555433602386
+          },
+          {
+            "node": "0xffff8d15f6660890",
+            "pa": "0x36660000",
+            "pid": 253760,
+            "tgid": 253760,
+            "comm": "postgres",
+            "next": "0xffff8d15c5dfd5d0",
+            "prev": "0xffff8d15f66655d0",
+            "real_parent_pid": 190462,
+            "flags": "0x400040",
+            "exit_state": 0,
+            "mm_null": false,
+            "start_time": 30551606428310
+          },
+          {
+            "node": "0xffff8d15c5dfd5d0",
+            "pa": "0x5dfcd40",
+            "pid": 253787,
+            "tgid": 253787,
+            "comm": "kworker/1:2",
+            "next": "0xffff8d1620a43c10",
+            "prev": "0xffff8d15f6660890",
+            "real_parent_pid": 2,
+            "flags": "0x4208060",
+            "exit_state": 0,
+            "mm_null": true,
+            "start_time": 30554968079926
+          },
+          {
+            "node": "0xffff8d15f66655d0",
+            "pa": "0x36664d40",
+            "pid": 253753,
+            "tgid": 253753,
+            "comm": "psql",
+            "next": "0xffff8d15f6660890",
+            "prev": "0xffff8d15c6e6d5d0",
+            "real_parent_pid": 253750,
+            "flags": "0x400100",
+            "exit_state": 0,
+            "mm_null": false,
+            "start_time": 30551570874047
+          },
+          {
+            "node": "0xffff8d15c6e6d5d0",
+            "pa": "0x6e6cd40",
+            "pid": 253750,
+            "tgid": 253750,
+            "comm": "runuser",
+            "next": "0xffff8d15f66655d0",
+            "prev": "0xffff8d1620a52250",
+            "real_parent_pid": 1,
+            "flags": "0x400100",
+            "exit_state": 0,
+            "mm_null": false,
+            "start_time": 30551567956696
+          },
+          {
+            "node": "0xffff8d1620a52250",
+            "pa": "0x60a519c0",
+            "pid": 234514,
+            "tgid": 234514,
+            "comm": "kworker/u4:3",
+            "next": "0xffff8d15c6e6d5d0",
+            "prev": "0xffff8d15c12ba250",
+            "real_parent_pid": 2,
+            "flags": "0x4208060",
+            "exit_state": 0,
+            "mm_null": true,
+            "start_time": 30089068835773
+          }
+        ]
+      },
+      "neighbors": {
+        "269": {
+          "forward_count": 109,
+          "backward_count": 109,
+          "forward_stop": null,
+          "backward_stop": null
+        },
+        "271": {
+          "forward_count": 113,
+          "backward_count": 113,
+          "forward_stop": null,
+          "backward_stop": null
+        }
+      }
+    },
+    "forward_before_tail_node": {
+      "count": 110,
+      "vs_previous_snapshot": {
+        "gone_pids": [
+          190484,
+          190491
+        ],
+        "new_pids": [
+          253750,
+          253753,
+          253760
+        ]
+      },
+      "vs_next_snapshot": {
+        "gone_pids": [],
+        "new_pids": [
+          253787,
+          253808,
+          253809
+        ]
+      },
+      "counts": {
+        "269": 109,
+        "270": 112,
+        "271": 113
+      }
+    },
+    "guest_journal": {
+      "event_start": "2026-11-12T12:19:01.983947+0000",
+      "worker_traceback": "2026-11-12T12:19:05.397716+0000",
+      "worker_exit": "2026-11-12T12:19:05.401782+0000",
+      "worker_restart": "2026-11-12T12:19:08.493107+0000",
+      "source": "data/collections/events-v3-20261108_46_test_events_write_heavy/guest/events-v3-20261108_46_test_events_write_heavy-journal-journal.txt.gz",
+      "source_sha256": "44d64e57789704375cda7e6ad38fdac3ef688be5385ab7f1650eb0e154fa68aa"
+    },
+    "restore": {
+      "archive": "/home/eh/hyptcn3-archive/campaigns/events-v3-20261108/collections/events-v3-20261108_46_test_events_write_heavy",
+      "target": "/home/eh/projects/hyptcn3/data/diagnostics/torn-walk-20261112/s46-raw",
+      "schema": "hyptcn3/collection-archive/2",
+      "files": 1442,
+      "bytes": 15614862332,
+      "stored_bytes": 2398677885
+    },
+    "inputs_sha256": {
+      "audit": "4829957a4441ce568372135bb2f634112850cac839d9a0dd933d5ebf0a7d9728",
+      "audit_npz": "a60a6e80bb978f8d122b3e2bb45ed0c7135f32243e3b8501aa11ff2ed785f8da",
+      "restore_out": "e70f9668bb62119667d4fe0c76cc0cd76e167001aeabec9a83b62a831e489e76",
+      "closed.json": "cfbbe3e47ad12442472cdf5d1dbdab28fa6b08f80e13a732cdb1be36f563d484",
+      "sidecar_270": "d02e962d8449c6fa2ab748937069a2d0496150914becfadab41b4244975c28d9",
+      "walk_probe.jsonl": "af7519651de5b416573db268d2a264fb72dd657ff4ce1d133d52bd63810aea28",
+      "node_probe.jsonl": "1ee4f381183c1a3703889c0c8f09815fcf6ce4fb21cbdc5dde2da5a8741b18c4",
+      "walk_lists.jsonl": "2ede421d38b594f4074db179bc41fc848bbe518c371c26da3c9b12808519b2e3",
+      "journal_excerpt.txt": "a355f1bf7ef8adc3c141d39d66dc829c3a9d83531b8328c5bfbdf2f5f28a236f"
+    },
+    "note": "Evidence of the torn process list that stopped campaign events-v3-20261108. The probes read a copy of session 46 restored from its archive (values.restore), moved to data/diagnostics/torn-walk-20261112/events-v3-20261108_46_test_events_write_heavy/raw next to copies of the session's metadata files, because the parser takes the guest boot identity from session.json beside raw/; the session directory and the archive of the campaign are unchanged. page_read_order relies on the collector reading guest physical memory in ascending order in chunk_bytes pieces (vmicollect/src/backend.c, vmic_capture_timed). nodes hold the task_struct fields as read from each snapshot image. The forward walk has two torn spots. At the middle node its prev still names a node that the same image shows deleted from the list (prev LIST_POISON2, next the middle node): the worker process and its database backend left the list during the read, after the middle node's page and before the pages of the nodes around them. A stale prev alone does not stop the forward walk. At the tail node the page holds a live thread of the orders process (exit_state 0, PF_EXITING clear, mm set), while init_task.prev and the previous node's next, read later, already name it: during the read that thread exited, its task_struct was reused and a new task was linked at the tail into it (snapshot 271 shows kworker/1:2 in it). Alone, that tail insertion is the shape the rule tail of b065ee4 closes. Together, the first torn link is the middle node, which init_task.prev does not name, so the rule tail does not apply; and the backward walk starts on the stale tail page and jumps from it to the leader's predecessor, so it does not pass the forward nodes before the first torn link and the rule prev of 0b61ffd does not apply either. The row was refused. forward_before_tail_node shows that the forward nodes up to the tail node differ from both neighbours only by the processes that ended or started around the event; it is a consistency check, not an accepted list. The owner decided not to change guestparse (extractor_sha256 of the bundle and of corpus benign-v6), so this shape stays a known limitation."
+  }
+}

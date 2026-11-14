@@ -1,0 +1,31 @@
+# source: data/collections/events-v3-20261108_46_test_events_write_heavy/guest/events-v3-20261108_46_test_events_write_heavy-journal-journal.txt.gz
+# sha256: 44d64e57789704375cda7e6ad38fdac3ef688be5385ab7f1650eb0e154fa68aa
+# lines 2026-11-12T12:19:01 to 12:19:09 without request lines (' request rid=') and worker progress lines ('"completed"')
+2026-11-12T12:19:01.983947+0000 hyptcn-lab qemu-ga[374]: info: guest-exec called: "/bin/bash -lc python3 /opt/hyptcn-lab/udalosti.py start zamok_tabulky"
+2026-11-12T12:19:02.001395+0000 hyptcn-lab qemu-ga[374]: info: guest-exec-status called, pid: 253740
+2026-11-12T12:19:02.038820+0000 hyptcn-lab runuser[253750]: pam_unix(runuser:session): session opened for user postgres(uid=104) by (uid=0)
+2026-11-12T12:19:02.320694+0000 hyptcn-lab qemu-ga[374]: info: guest-exec-status called, pid: 253740
+2026-11-12T12:19:05.206322+0000 hyptcn-lab python3[190483]: 127.0.0.1 - - [12/Nov/2026 12:19:05] dependency error: canceling statement due to statement timeout\x0a
+2026-11-12T12:19:05.397716+0000 hyptcn-lab python3[190484]: Traceback (most recent call last):
+2026-11-12T12:19:05.397716+0000 hyptcn-lab python3[190484]:   File "/opt/hyptcn-lab/services.py", line 228, in <module>
+2026-11-12T12:19:05.397716+0000 hyptcn-lab python3[190484]:     main()
+2026-11-12T12:19:05.397716+0000 hyptcn-lab python3[190484]:   File "/opt/hyptcn-lab/services.py", line 217, in main
+2026-11-12T12:19:05.397716+0000 hyptcn-lab python3[190484]:     worker()
+2026-11-12T12:19:05.397716+0000 hyptcn-lab python3[190484]:   File "/opt/hyptcn-lab/services.py", line 191, in worker
+2026-11-12T12:19:05.397716+0000 hyptcn-lab python3[190484]:     cursor.execute("UPDATE orders SET status='completed' WHERE id IN (SELECT id FROM orders WHERE status='pending' ORDER BY id LIMIT 50 FOR UPDATE SKIP LOCKED)")
+2026-11-12T12:19:05.397716+0000 hyptcn-lab python3[190484]: psycopg2.errors.QueryCanceled: canceling statement due to statement timeout
+2026-11-12T12:19:05.401782+0000 hyptcn-lab systemd[1]: hyptcn-lab@worker.service: Main process exited, code=exited, status=1/FAILURE
+2026-11-12T12:19:05.401918+0000 hyptcn-lab systemd[1]: hyptcn-lab@worker.service: Failed with result 'exit-code'.
+2026-11-12T12:19:05.402162+0000 hyptcn-lab systemd[1]: hyptcn-lab@worker.service: Consumed 3.197s CPU time.
+2026-11-12T12:19:05.588710+0000 hyptcn-lab python3[190483]: 127.0.0.1 - - [12/Nov/2026 12:19:05] dependency error: canceling statement due to statement timeout\x0a
+2026-11-12T12:19:05.842668+0000 hyptcn-lab python3[190483]: 127.0.0.1 - - [12/Nov/2026 12:19:05] dependency error: canceling statement due to statement timeout\x0a
+2026-11-12T12:19:05.900133+0000 hyptcn-lab python3[190483]: 127.0.0.1 - - [12/Nov/2026 12:19:05] dependency error: canceling statement due to statement timeout\x0a
+2026-11-12T12:19:06.080893+0000 hyptcn-lab python3[190483]: 127.0.0.1 - - [12/Nov/2026 12:19:06] dependency error: canceling statement due to statement timeout\x0a
+2026-11-12T12:19:06.092138+0000 hyptcn-lab python3[190483]: 127.0.0.1 - - [12/Nov/2026 12:19:06] dependency error: canceling statement due to statement timeout\x0a
+2026-11-12T12:19:08.211968+0000 hyptcn-lab python3[190483]: 127.0.0.1 - - [12/Nov/2026 12:19:08] dependency error: canceling statement due to statement timeout\x0a
+2026-11-12T12:19:08.474059+0000 hyptcn-lab systemd[1]: hyptcn-lab@worker.service: Scheduled restart job, restart counter is at 1.
+2026-11-12T12:19:08.474257+0000 hyptcn-lab systemd[1]: Stopped hyptcn-lab@worker.service - hyptcn benign lab worker.
+2026-11-12T12:19:08.474299+0000 hyptcn-lab systemd[1]: hyptcn-lab@worker.service: Consumed 3.197s CPU time.
+2026-11-12T12:19:08.493107+0000 hyptcn-lab systemd[1]: Started hyptcn-lab@worker.service - hyptcn benign lab worker.
+2026-11-12T12:19:08.846856+0000 hyptcn-lab python3[190483]: 127.0.0.1 - - [12/Nov/2026 12:19:08] dependency error: canceling statement due to statement timeout\x0a
+2026-11-12T12:19:08.905081+0000 hyptcn-lab python3[190483]: 127.0.0.1 - - [12/Nov/2026 12:19:08] dependency error: canceling statement due to statement timeout\x0a

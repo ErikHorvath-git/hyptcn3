@@ -1,7 +1,8 @@
 # Návrh protokolu v3: prevádzkové udalosti bez malvéru
 
-**Stav: návrh z 2026-11-04, krok A implementovaný (kap. 7), prvý pilot audit
-zamietol (kap. 7), zber ešte nebežal.** Protokol kroku A je [`config/collection-v3.json`](../config/collection-v3.json)
+**Stav: návrh z 2026-11-04, krok A implementovaný (kap. 7), zozbieraný (kampaň
+`events-v3-20261108`, uzavretá so 45 zo 48 session ako neúplná alokácia) a vyhodnotený
+([`MERANIA.md`](MERANIA.md), 2026-11-14); o kroku B rozhodne vlastník.** Protokol kroku A je [`config/collection-v3.json`](../config/collection-v3.json)
 (`server-events-v3`). Platný trénovací protokol ostáva `server-normal-v2`
 ([`METODIKA_ZBERU.sk.md`](METODIKA_ZBERU.sk.md),
 [`config/collection-v2.json`](../config/collection-v2.json)), stav práce voči zadaniu
