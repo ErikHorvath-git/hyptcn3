@@ -543,12 +543,54 @@ def porovnanie_mier(k1, e1, k0, e0):
     return {"p": float(test.pvalue), "pomer_mier": (k1 / e1) / (k0 / e0) if k0 else None, "dovod": None}
 
 
+def alokacia_indexu_udalosti(index):
+    """
+    Alokacia indexu udalosti: uplna, alebo vyslovne prijata neuplna.
+
+    Bezec kampane zapise index iba pri uplnej alokacii (scripts/campaign.py
+    finish_corpus). Index uzavretej kampane s mensim poctom relacii ma
+    complete false a blok incomplete_allocation s rozhodnutim vlastnika
+    (zostavuje ho zaznam kampane v data/results). Bez neho sa neuplny index
+    odmietne, uplny index s takym blokom tiez (protireci si). S blokom musia
+    sediet pocty: planovane = indexovane + zamietnute +
+    nezozbierane, mena sa neopakuju a pocty v skupinach su zo zaznamov.
+    Popis ide do vysledku, aby sa neuplnost nestratila.
+    """
+    a = index.get("incomplete_allocation")
+    if index.get("complete") is True:
+        if a is not None:
+            raise ValueError("index udalosti je uplny a zaroven ma blok neuplnej alokacie")
+        return {"uplna": True}
+    if index.get("complete") is not False or not isinstance(a, dict) or a.get("accepted") is not True:
+        raise ValueError("neuplny index %s bez vyslovne prijatej neuplnej alokacie" % SCHEMA_INDEX_UDALOSTI)
+    if not isinstance(a.get("decision"), str) or not a["decision"].strip():
+        raise ValueError("neuplna alokacia indexu udalosti nema rozhodnutie")
+    ostatne = {}
+    for kluc in ("rejected", "not_captured"):
+        zoznam = a.get(kluc)
+        if not isinstance(zoznam, list) or any(not isinstance(z, dict) or not isinstance(z.get("id"), str)
+                                               for z in zoznam):
+            raise ValueError("neuplna alokacia indexu udalosti: %s musi byt zoznam relacii s id" % kluc)
+        ostatne[kluc] = [z["id"] for z in zoznam]
+    relacie = [z["id"] for z in index["sessions"]]
+    vsetky = relacie + ostatne["rejected"] + ostatne["not_captured"]
+    skupiny = dict(sorted(collections.Counter(z["group"] for z in index["sessions"]).items()))
+    if (len(set(vsetky)) != len(vsetky) or len(vsetky) != index.get("planned_sessions")
+            or a.get("planned_sessions") != index.get("planned_sessions")
+            or a.get("indexed_sessions") != len(relacie) or a.get("sessions_per_group") != skupiny):
+        raise ValueError("pocty neuplnej alokacie indexu udalosti nesedia so zaznamami")
+    return {"uplna": False, "planovanych": index["planned_sessions"], "indexovanych": len(relacie),
+            "zamietnute": ostatne["rejected"], "nezozbierane": ostatne["not_captured"],
+            "relacii_v_skupinach": skupiny, "rozhodnutie": a["decision"]}
+
+
 def vyhodnot_udalosti(index_cesta, prehratia, alfa=0.05):
     """FAR dnesneho balika pocas prevadzkovych udalosti protokolu v3 (krok A), po typoch a triedach."""
     alfa = _alfa(alfa)
     index = json.loads(open(index_cesta, encoding="utf-8").read())
-    if index.get("schema") != SCHEMA_INDEX_UDALOSTI or index.get("complete") is not True:
-        raise ValueError("nie je uplny index %s" % SCHEMA_INDEX_UDALOSTI)
+    if index.get("schema") != SCHEMA_INDEX_UDALOSTI:
+        raise ValueError("nie je index %s" % SCHEMA_INDEX_UDALOSTI)
+    alokacia = alokacia_indexu_udalosti(index)
     protokol = index["protocol_config"]
     perioda, max_medzera, okno = protokol["interval_s"], protokol["max_gap_s"], protokol["window_rows"]
     triedy = protokol["events"]["classes"]
@@ -618,7 +660,7 @@ def vyhodnot_udalosti(index_cesta, prehratia, alfa=0.05):
     return {
         "schema": SCHEMA_FAR_UDALOSTI, "alfa": alfa, "dozvuk_s": DOZVUK_S,
         "index": os.path.realpath(index_cesta), "index_sha256": _digest(index_cesta),
-        "protokol": protokol["name"], "protocol_sha256": index["protocol_sha256"],
+        "protokol": protokol["name"], "protocol_sha256": index["protocol_sha256"], "alokacia": alokacia,
         "balik": {"manifest_sha256": balik_sha, "created_utc": balik["created_utc"],
                   "corpus_index_sha256": balik["provenance"]["corpus_index_sha256"],
                   "calibration": balik["calibration"]},
@@ -1187,7 +1229,8 @@ def _udalosti(a, argv):
     with open(a.out, "x", encoding="utf-8") as fh:
         fh.write(json.dumps(doc, ensure_ascii=False, indent=2, sort_keys=True, allow_nan=False) + "\n")
     m = values["merane"]
-    print(json.dumps({"relacii": doc["n"], "udalosti": [values["udalosti"]["vykonanych"], values["udalosti"]["planovanych"]],
+    print(json.dumps({"relacii": doc["n"], "uplna_alokacia": values["alokacia"]["uplna"],
+                      "udalosti": [values["udalosti"]["vykonanych"], values["udalosti"]["planovanych"]],
                       "prevadzka_far_h": m["prevadzka"] and m["prevadzka"]["far_h"]["skorovany"],
                       "udalosti_far_h": m["vsetky_udalosti"] and m["vsetky_udalosti"]["far_h"]["skorovany"]},
                      ensure_ascii=False))

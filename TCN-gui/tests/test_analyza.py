@@ -70,6 +70,7 @@ def test_rejects_directory_without_snapshots(tmp_path):
 
 
 def test_one_figure_renders_without_a_window(setup, tmp_path):
+    pytest.importorskip("matplotlib", reason="matplotlib je volitelny (iba TCN-gui), v requirements.txt nie je")
     root, _, odd = setup
     out = tmp_path / "session.png"
     assert tcn_gui.main(["--bundle", str(root / "models" / "synthetic"), "--input", str(odd),
@@ -113,6 +114,7 @@ def test_cka_ignores_channel_order_and_scale():
 
 
 def test_compare_two_trainings_on_one_session(setup, tmp_path):
+    pytest.importorskip("matplotlib", reason="matplotlib je volitelny (iba TCN-gui), v requirements.txt nie je")
     import porovnanie
     root, test, odd = setup
     second = tmp_path / "tyzden-2"

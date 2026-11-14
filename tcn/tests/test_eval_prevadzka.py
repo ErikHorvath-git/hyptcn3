@@ -114,6 +114,69 @@ def test_odmietne_zmeneny_zaznam_udalosti_a_chybajuce_prehratie(kampan):
         ev.vyhodnot_udalosti(index, prehratia)
 
 
+def _neuplny(index, **zmena):
+    """Index s complete false a blokom, aky zostavi zaznam uzavretej kampane (jedna zamietnuta, jedna chyba)."""
+    doc = json.loads(index.read_text())
+    blok = {"accepted": True, "decision": "rozhodnutie vlastnika", "planned_sessions": 4, "indexed_sessions": 2,
+            "sessions_per_group": {"v3-test_events-a": 1, "v3-test_events-b": 1},
+            "rejected": [{"id": "c", "reasons": ["incomplete model inputs under behavioral-inputs-v1"]}],
+            "not_captured": [{"id": "d"}]}
+    blok.update(zmena)
+    doc.update(complete=False, planned_sessions=4, incomplete_allocation=blok)
+    index.write_text(json.dumps(doc))
+
+
+def test_uplny_index_ma_uplnu_alokaciu(kampan):
+    index, prehratia = kampan
+    values, _ = ev.vyhodnot_udalosti(index, prehratia)
+    assert values["alokacia"] == {"uplna": True}
+
+
+def test_neuplny_index_iba_s_vyslovnym_prijatim(kampan):
+    index, prehratia = kampan
+    doc = json.loads(index.read_text())
+    index.write_text(json.dumps(dict(doc, complete=False)))
+    with pytest.raises(ValueError, match="bez vyslovne prijatej"):
+        ev.vyhodnot_udalosti(index, prehratia)
+    _neuplny(index, accepted="ano")
+    with pytest.raises(ValueError, match="bez vyslovne prijatej"):
+        ev.vyhodnot_udalosti(index, prehratia)
+    _neuplny(index, decision=" ")
+    with pytest.raises(ValueError, match="rozhodnutie"):
+        ev.vyhodnot_udalosti(index, prehratia)
+    _neuplny(index)
+    values, _ = ev.vyhodnot_udalosti(index, prehratia)
+    assert values["alokacia"] == {"uplna": False, "planovanych": 4, "indexovanych": 2, "zamietnute": ["c"],
+                                  "nezozbierane": ["d"], "relacii_v_skupinach": {"v3-test_events-a": 1,
+                                                                                  "v3-test_events-b": 1},
+                                  "rozhodnutie": "rozhodnutie vlastnika"}
+    assert set(values["relacie"]) == {"a", "b"}
+
+
+@pytest.mark.parametrize("complete", ["<chyba>", None, 0, "false", 1, True])
+def test_blok_neuplnej_alokacie_iba_pri_complete_false(kampan, complete):
+    index, prehratia = kampan
+    _neuplny(index)
+    doc = json.loads(index.read_text())
+    if complete == "<chyba>":
+        del doc["complete"]
+    else:
+        doc["complete"] = complete
+    index.write_text(json.dumps(doc))
+    with pytest.raises(ValueError, match="bez vyslovne prijatej|uplny a zaroven"):
+        ev.vyhodnot_udalosti(index, prehratia)
+
+
+@pytest.mark.parametrize("zmena", [
+    {"planned_sessions": 5}, {"indexed_sessions": 3}, {"not_captured": []}, {"not_captured": [{"id": "a"}]},
+    {"sessions_per_group": {"v3-test_events-a": 2}}, {"rejected": "c"}, {"rejected": [{"meno": "c"}]}])
+def test_neuplny_index_s_nesediacimi_poctami_odmietne(kampan, zmena):
+    index, prehratia = kampan
+    _neuplny(index, **zmena)
+    with pytest.raises(ValueError, match="pocty|zoznam relacii"):
+        ev.vyhodnot_udalosti(index, prehratia)
+
+
 def test_prikaz_udalosti_zapise_novy_subor(kampan, tmp_path):
     index, prehratia = kampan
     out = tmp_path / "far_udalosti.json"
