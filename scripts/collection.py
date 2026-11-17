@@ -73,7 +73,43 @@ REPLACEMENT_CAUSES = ("audit_rejected", "capture_incomplete")
 
 def digest(path):
     with Path(path).open("rb") as stream:
-        return hashlib.file_digest(stream, "sha256").hexdigest()
+        value = hashlib.file_digest(stream, "sha256").hexdigest()
+        drop_cache(stream.fileno())
+        return value
+
+
+DROP_CACHE_MIN = 16 << 20
+
+
+def drop_cache(fd):
+    """Release the page cache of a large file just read or written (best effort).
+
+    Campaign normal-v4-20261115: hashing, auditing and archiving a 17 GB session
+    filled the page cache, the kernel swapped the idle QEMU of the other VM to
+    the HDD, and that VM's guest agent and collector then missed their deadlines.
+    """
+    try:
+        if os.fstat(fd).st_size >= DROP_CACHE_MIN:
+            os.posix_fadvise(fd, 0, 0, os.POSIX_FADV_DONTNEED)
+    except (OSError, AttributeError):
+        pass
+
+
+# Background work beside another VM's capture (audit, archive compression): lowest
+# CPU and best-effort IO priority. As root the audit also gets its own transient
+# scope whose memory (including its page cache) is capped and never swapped, so the
+# kernel reclaims inside the scope instead of pushing other VMs' QEMU to swap.
+BACKGROUND_NICE = ["nice", "-n", "19", "ionice", "-c", "2", "-n", "7"]
+BACKGROUND_SCOPE = ["systemd-run", "--scope", "--quiet", "--collect",
+                    "-p", "MemoryHigh=3G", "-p", "MemorySwapMax=0",
+                    "-p", "CPUWeight=20", "-p", "IOWeight=20", "--"]
+
+
+def background_command(command):
+    prefix = BACKGROUND_NICE if all(shutil.which(c) for c in ("nice", "ionice")) else []
+    if os.geteuid() == 0 and shutil.which("systemd-run"):
+        prefix = BACKGROUND_SCOPE + prefix
+    return [*prefix, *map(str, command)]
 
 
 def write_json(path, doc):
@@ -1122,6 +1158,10 @@ def analyze_windows(result, p, session, expected_rows=None):
         # own links were read before it was linked in.
         "process_walk_tail_seq": [seq for seq, q in zip(result["seq"], result["quality"])
                                   if q.get("process_walk") == "tail"],
+        # Process lists closed where the consistent forward and backward parts meet on one
+        # node read at another moment (guestparse.view _stretnutie, rule 'meet').
+        "process_walk_meet_seq": [seq for seq, q in zip(result["seq"], result["quality"])
+                                  if q.get("process_walk") == "meet"],
     }
     if detail is not None:
         quality["coverage"] = detail

@@ -428,10 +428,21 @@ class GuestView:
         bez otraveneho `prev` riadok dalej zneplatni (rovnaky obraz da uzol,
         pred ktorym sa medzi citaniami odstranili ine).
 
+        Pravidlo 'meet' (od 2026-11-17, kampan normal-v4-20261115, snimky
+        306 session 11_b a 120 session 12_b pri hraniciach udalosti
+        zamok_tabulky a restart_databazy) plati, ked 'prev' ani 'tail' nie:
+        zhodna cast dopredu a zhodna cast dozadu sa stretnu na jednom uzle,
+        ktoreho stranka je z ineho okamihu (_stretnutie). Zhodna cast dopredu
+        smie preskocit proces ukonceny pocas citania uprostred zoznamu
+        (_preskok_dozadu, 'skipped_links'). Uzol stretnutia je v
+        'stale_node' a zapocita sa iba so zivym obsahom (exit_state 0)
+        a vlastnym pid.
+
         Vracia {'processes', 'count', 'truncated', 'stop_reason', 'walk'}.
-        'walk' je 'next', 'prev', ked zoznam potvrdil prechod dozadu, alebo
+        'walk' je 'next', 'prev', ked zoznam potvrdil prechod dozadu,
         'tail', ked prvy nezhodny uzol je podla init_task.prev posledny a
-        jeho obsah je vlakno procesu zo zoznamu alebo odstraneny uzol;
+        jeho obsah je vlakno procesu zo zoznamu alebo odstraneny uzol, alebo
+        'meet';
         pri 'prev' a 'tail' je dovod zastavenia dopredu vo
         'forward_stop_reason'. 'truncated' znamena, ze zoznam sa neuzavrel -
         vysledok je dolna hranica z prechodu dopredu a 'backward_stop_reason'
@@ -480,9 +491,76 @@ class GuestView:
             if vysvetlene["odstranene"]:
                 res["deleted_links"] = vysvetlene["odstranene"]
             return res
+        stretnutie = self._stretnutie(out, spat, vysvetlene, init_pa, init_va, m, limit)
+        if stretnutie is not None:
+            res = dict(self._result("processes", stretnutie["processes"], False, None),
+                       walk="meet", forward_stop_reason=stop,
+                       stale_node={k: stretnutie["node"][k]
+                                   for k in ("pid", "comm", "task_va", "counted", "exit_state")})
+            for kluc, hodnota in (("deleted_links", vysvetlene["odstranene"]),
+                                  ("skipped_links", vysvetlene["preskocene"])):
+                if hodnota:
+                    res[kluc] = hodnota
+            return res
         return dict(self._result("processes", out, True, stop), walk="next",
                     backward_stop_reason=stop_spat
                     or "prechod dozadu presiel ine uzly ako zhodne spojenia dopredu")
+
+    def _stretnutie(self, out, spat, vysvetlene, init_pa, init_va, m, limit):
+        """
+        Pravidlo 'meet' (session normal-v4-20261115 11_b snimka 306 a 12_b
+        snimka 120): prechod dopredu je zhodny po uzol D (pripadne cez uzly
+        odstranene pocas citania, _odstraneny_pred a _preskok_dozadu) a
+        prechod dozadu cez `prev` je zhodny (Y.next == odkial) po ten isty
+        uzol D. Na D ukazuju `next` posledneho uzla zhodnej casti dopredu aj
+        `prev` posledneho uzla zhodnej casti dozadu (alebo init_task.prev),
+        ale jeho vlastne spojenia nesedia ani s jednym z nich: stranka D je
+        z ineho okamihu (kratko zijuci alebo recyklovany task_struct). Kruh
+        init_task -> zhodna cast dopredu -> D -> zhodna cast dozadu ->
+        init_task je uzavrety, takze zoznam tvoria obe zhodne casti bez D;
+        D je v 'stale_node'. Pravidlo 'tail' je jeho specialny pripad
+        (zhodna cast dozadu je prazdna), ktory naviac pozaduje dokaz z obsahu D.
+        Vrati {'processes', 'node'} alebo None.
+        """
+        k = vysvetlene["zhodne_meet"]
+        if not 0 < k < len(out):
+            return None
+        d = out[k]
+        spat_d = None
+        for i, pr in enumerate(spat):
+            if pr["task_va"] == d["task_va"]:
+                spat_d = i
+                break
+        if spat_d is None:
+            return None
+        q = spat[:spat_d]
+        # Zhodnost casti dozadu: kazdy uzol Y ma Y.next == uzol, z ktoreho sa k nemu prislo.
+        odkial = init_va + m["tasks"]
+        for pr in q + [d]:
+            ypa = self.to_pa(pr["task_va"])
+            if ypa is None:
+                return None
+            if self.u64(ypa + m["tasks"]) != odkial:
+                if pr is not d:
+                    return None
+            elif pr is d:
+                return None                            # D sedi so susedom dozadu: nie je z ineho okamihu
+            odkial = pr["task_va"] + m["tasks"]
+        p_set = {pr["task_va"] for pr in out[:k]}
+        q_set = {pr["task_va"] for pr in q}
+        if p_set & q_set or d["task_va"] in p_set | q_set:
+            return None
+        # D je clenom kruhu (vedu nan obe zhodne casti), iba jeho stranka je z
+        # ineho okamihu. Zapocita sa, ak jeho obsah je zivy proces s vlastnym
+        # pid; vynecha sa, ak obsah je ukonceny proces (exit_state != 0) alebo
+        # kopia ineho procesu (rovnaky pid ako uzol zo zoznamu).
+        o_exit = self.p.member("task_struct", "exit_state")
+        dpa = self.to_pa(d["task_va"])
+        exit_state = self.i32(dpa + o_exit) if o_exit is not None and dpa is not None else None
+        pids = {pr["pid"] for pr in out[:k] + q}
+        counted = exit_state == 0 and d["pid"] not in pids
+        zoznam = out[:k] + ([d] if counted else []) + q[::-1]
+        return {"processes": zoznam, "node": dict(d, counted=counted, exit_state=exit_state)}
 
     def _prechod_tasks(self, init_pa, init_va, m, smer, limit, obchadzky=None):
         """
@@ -502,7 +580,9 @@ class GuestView:
         out, seen = [], set()
         stop = None
         odkial, zhodne = head_va, None
-        vysvetlene = {"zhodne": None, "odstranene": 0, "obchadzky": {}}
+        vysvetlene = {"zhodne": None, "odstranene": 0, "obchadzky": {},
+                      "zhodne_meet": None, "preskocene": 0}
+        poradie = {}
         nxt = self.u64(init_pa + m["tasks"] + smer)
         while True:
             if nxt == head_va:
@@ -535,12 +615,21 @@ class GuestView:
             if opacne != odkial:
                 if zhodne is None:
                     zhodne = len(out)
+                odstraneny = smer == 0 and self._odstraneny_pred(opacne, nxt, m, seen)
                 if vysvetlene["zhodne"] is None:
-                    if smer == 0 and self._odstraneny_pred(opacne, nxt, m, seen):
+                    if odstraneny:
                         vysvetlene["odstranene"] += 1
                         vysvetlene["obchadzky"][nxt] = odkial
                     else:
                         vysvetlene["zhodne"] = len(out)
+                if smer == 0 and vysvetlene["zhodne_meet"] is None:
+                    if odstraneny:
+                        pass                           # zapocitane v 'odstranene'
+                    elif self._preskok_dozadu(opacne, nxt, len(out), poradie, m):
+                        vysvetlene["preskocene"] += 1
+                    else:
+                        vysvetlene["zhodne_meet"] = len(out)
+            poradie[nxt] = len(out)
             out.append({
                 "pid": pid,
                 "tgid": tgid,
@@ -554,7 +643,30 @@ class GuestView:
                 nxt = obchadzky[odkial]
         if vysvetlene["zhodne"] is None:
             vysvetlene["zhodne"] = len(out)
+        if vysvetlene["zhodne_meet"] is None:
+            vysvetlene["zhodne_meet"] = len(out)
         return out, stop, len(out) if zhodne is None else zhodne, vysvetlene
+
+    PRESKOK_MAX = 64
+
+    def _preskok_dozadu(self, opacne, uzol, index, poradie, m):
+        """
+        Pravidlo 'meet': `prev` uzla X ukazuje na uzol, ktory prechod dopredu
+        presiel skor nez na predchodcu (preskakuje 1 az PRESKOK_MAX uzlov).
+        Uprostred zoznamu jadro uzly iba odstranuje (nove ide vzdy na koniec),
+        takze preskocene uzly boli odstranene medzi precitanim ich stranok a
+        stranky X. Plati iba vtedy, ked spojenie za X je zhodne (X.next.prev
+        == X): uzol so starymi spojeniami z ineho okamihu to nesplni.
+        """
+        j = poradie.get(opacne)
+        if j is None or not 1 <= index - 1 - j <= self.PRESKOK_MAX:
+            return False
+        tpa = self.to_pa(uzol - m["tasks"])
+        dalsi = self.u64(tpa + m["tasks"]) if tpa is not None else None
+        if dalsi is None or not self._plausible_va(dalsi):
+            return False
+        dpa = self.to_pa(dalsi - m["tasks"])
+        return dpa is not None and self.u64(dpa + m["tasks"] + 8) == uzol
 
     def _odstraneny_pred(self, uzol, nasledovnik, m, seen):
         """

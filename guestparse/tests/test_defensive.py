@@ -14,7 +14,7 @@ KBASE = 0xFFFFFFFF80000000      # VA zaciatku umeleho obrazu jadra
 MEMSIZE = 1 << 20
 
 # offsety poli v umelom task_struct
-O_TASKS, O_COMM, O_PID, O_TGID, O_MM = 0x10, 0x20, 0x30, 0x34, 0x38
+O_TASKS, O_COMM, O_PID, O_TGID, O_MM, O_EXIT = 0x10, 0x20, 0x30, 0x34, 0x38, 0x40
 
 INIT_VA = KBASE + 0x10000
 TASK_VA = [KBASE + 0x20000, KBASE + 0x30000, KBASE + 0x40000]
@@ -65,7 +65,7 @@ class FakeProfile:
         self.sym = {"init_task": INIT_VA}
         self.off = {"task_struct": {"size": 0x100, "members": {
             "tasks": O_TASKS, "comm": O_COMM, "pid": O_PID,
-            "tgid": O_TGID, "mm": O_MM}}}
+            "tgid": O_TGID, "mm": O_MM, "exit_state": O_EXIT}}}
 
     def addr(self, name):
         return self.sym.get(name)
@@ -214,10 +214,11 @@ def test_prechod_dozadu_bez_uzla_zo_zhodnych_spojeni_neplati():
     img.u64(_pa(DEAD_VA) + O_TASKS, TASK_VA[0] + O_TASKS)
     img.u64(_pa(TASK_VA[2]) + O_TASKS + 8, TASK_VA[0] + O_TASKS)  # dozadu t2 -> t0
     res = view.processes()
-    assert res["truncated"] is True and res["walk"] == "next"
-    assert "cyklus" in res["stop_reason"]
-    assert "ine uzly" in res["backward_stop_reason"]
-    assert res["count"] == 4                    # dopredu vratane ukonceneho procesu
+    # Od 2026-11-17 pravidlo 'meet': dopredu aj dozadu sa zhodne casti stretnu
+    # na t2 (t2.prev aj t2.next su z ineho okamihu); t2 je zivy, zapocita sa.
+    assert res["truncated"] is False and res["walk"] == "meet"
+    assert [p["comm"] for p in res["processes"]] == ["proces0", "proces1", "proces2"]
+    assert res["stale_node"]["pid"] == 3 and res["stale_node"]["counted"] is True
 
 
 def test_roztrhnutie_uprostred_prechod_dozadu_nedoplni():
@@ -283,8 +284,11 @@ def test_vkladany_uzol_s_obsahom_vodcu_skupiny_nepotvrdi():
     view, img = _vkladany_na_konci()
     img.write(_pa(DEAD_VA) + O_TGID, struct.pack("<i", 388899))
     res = view.processes()
-    assert res["truncated"] is True and res["walk"] == "next"
-    assert "cyklus" in res["stop_reason"]
+    # 'tail' to stale nepotvrdi; 'meet' uzol so zivym obsahom zapocita, takze
+    # ani pri uzle, pred ktorym sa odstranili ine, sa ziadny proces nestrati.
+    assert res["walk"] == "meet" and res["truncated"] is False
+    assert [p["pid"] for p in res["processes"]] == [1, 2, 3, 388899]
+    assert res["stale_node"]["counted"] is True
 
 
 def test_vlakno_bez_vodcu_v_zozname_nepotvrdi():
@@ -296,8 +300,9 @@ def test_vlakno_bez_vodcu_v_zozname_nepotvrdi():
     view, img = _vkladany_na_konci()
     img.write(_pa(DEAD_VA) + O_TGID, struct.pack("<i", 4))
     res = view.processes()
-    assert res["truncated"] is True and res["walk"] == "next"
-    assert "cyklus" in res["stop_reason"]
+    # 'meet' uzol zapocita (zivy obsah), takze proces vlakna v zozname ostane.
+    assert res["walk"] == "meet" and res["count"] == 4
+    assert res["processes"][-1]["tgid"] == 4
 
 
 def test_init_task_prev_na_inom_uzle_vkladanie_nepotvrdi():
@@ -464,7 +469,9 @@ def test_prev_s_odstranenym_uzlom_a_chybajucim_uzlom_dozadu_neplati():
     view, img = _odstraneny_a_zastarany_next()
     img.u64(_pa(TASK_VA[2]) + O_TASKS + 8, TASK_VA[0] + O_TASKS)
     res = view.processes()
-    assert res["truncated"] is True and res["walk"] == "next"
+    # Ani 'prev', ani 'tail'; 'meet' na zivom t2, ktory sa zapocita.
+    assert res["walk"] == "meet" and res["count"] == 3
+    assert res["stale_node"]["pid"] == 3 and res["stale_node"]["counted"] is True
 
 
 # ------------------ vlozenie na koniec: stranka s odstranenym vodcom skupiny
@@ -528,9 +535,10 @@ def test_dve_vlozenia_na_koniec_ostavaju_neuplne():
     img.u64(_pa(NEW2_VA) + O_TASKS + 8, DEAD_VA + O_TASKS)
     img.u64(_pa(INIT_VA) + O_TASKS + 8, NEW2_VA + O_TASKS)
     res = view.processes()
-    assert res["truncated"] is True and res["walk"] == "next"
-    assert "cyklus" in res["stop_reason"]
-    assert "ine uzly" in res["backward_stop_reason"]
+    # 'tail' neplati; 'meet': zhodna cast dozadu je [kworker/1:2], stretnu sa na
+    # prvom novom uzle, ktory ma zivy obsah a zapocita sa.
+    assert res["walk"] == "meet" and res["truncated"] is False
+    assert [p["pid"] for p in res["processes"]] == [1, 2, 3, 388899, 999]
 
 
 def test_vkladany_uzol_s_nulovou_strankou_ostava_neuplny():
@@ -541,3 +549,97 @@ def test_vkladany_uzol_s_nulovou_strankou_ostava_neuplny():
     assert res["truncated"] is True and res["walk"] == "next"
     assert "comm" in res["stop_reason"] and "comm" in res["backward_stop_reason"]
     assert res["count"] == 3
+
+
+# ------------------ pravidlo 'meet' (normal-v4-20261115, 2026-11-17)
+
+EXTRA_VA = KBASE + 0x80000
+
+
+def _kruh(uzly):
+    """init_task <-> uzly v poradi, so spravnymi next aj prev."""
+    view, img = _view(INIT_VA + O_TASKS)
+    ring = [INIT_VA] + uzly
+    for i, va in enumerate(ring):
+        img.u64(_pa(va) + O_TASKS, ring[(i + 1) % len(ring)] + O_TASKS)
+        img.u64(_pa(va) + O_TASKS + 8, ring[i - 1] + O_TASKS)
+    return view, img
+
+
+def test_meet_snimka_120_odstraneny_uprostred_a_recyklovany_na_konci():
+    """
+    12_b snimka 120: t1 skoncil pocas citania (t0.next aj t1.next su stare,
+    t2.prev uz preskakuje t1), novy proces na konci je v recyklovanom
+    task_struct, ktoreho stranka je este ukonceny postmaster (prev
+    LIST_POISON2, next doprostred zoznamu, exit_state EXIT_DEAD).
+    """
+    _task_extra = lambda img: _task(img, EXTRA_VA, 50, "postgres")
+    view, img = _kruh(TASK_VA + [EXTRA_VA, DEAD_VA])
+    _task_extra(img)
+    _task(img, DEAD_VA, 112488, "postgres")
+    img.u64(_pa(TASK_VA[2]) + O_TASKS + 8, TASK_VA[0] + O_TASKS)     # t2.prev preskakuje t1
+    img.u64(_pa(DEAD_VA) + O_TASKS, TASK_VA[0] + O_TASKS)            # next doprostred: cyklus
+    img.u64(_pa(DEAD_VA) + O_TASKS + 8, LIST_POISON2)
+    img.write(_pa(DEAD_VA) + O_EXIT, struct.pack("<i", 16))
+    res = view.processes()
+    assert res["walk"] == "meet" and res["truncated"] is False
+    assert [p["pid"] for p in res["processes"]] == [1, 2, 3, 50]
+    assert res["skipped_links"] == 1
+    assert res["stale_node"] == {"pid": 112488, "comm": "postgres", "task_va": DEAD_VA,
+                                 "counted": False, "exit_state": 16}
+
+
+def test_meet_snimka_306_kratko_zijuci_uzol_medzi_castami():
+    """
+    11_b snimka 306: dopredu ... t2 -> D, D.prev aj D.next su spojenia jeho
+    rodica z ineho okamihu; dozadu init_task <- N <- D. Obe zhodne casti sa
+    stretnu na D, ktory uz skoncil (exit_state 16) a nezapocita sa.
+    """
+    view, img = _kruh(TASK_VA + [DEAD_VA, NEW2_VA])
+    _task(img, DEAD_VA, 620354, "python3")
+    _task(img, NEW2_VA, 620155, "postgres")
+    img.u64(_pa(DEAD_VA) + O_TASKS, TASK_VA[1] + O_TASKS)            # next do stredu
+    img.u64(_pa(DEAD_VA) + O_TASKS + 8, TASK_VA[0] + O_TASKS)        # prev do stredu
+    img.write(_pa(DEAD_VA) + O_EXIT, struct.pack("<i", 16))
+    res = view.processes()
+    assert res["walk"] == "meet"
+    assert [p["pid"] for p in res["processes"]] == [1, 2, 3, 620155]
+    assert res["stale_node"]["counted"] is False and "skipped_links" not in res
+
+
+def test_meet_nezapocita_kopiu_s_rovnakym_pid():
+    view, img = _kruh(TASK_VA + [DEAD_VA, NEW2_VA])
+    _task(img, DEAD_VA, 2, "proces1")                                # kopia rodica t1
+    _task(img, NEW2_VA, 77, "postgres")
+    img.u64(_pa(DEAD_VA) + O_TASKS, TASK_VA[1] + O_TASKS)
+    img.u64(_pa(DEAD_VA) + O_TASKS + 8, TASK_VA[0] + O_TASKS)
+    res = view.processes()
+    assert res["walk"] == "meet" and [p["pid"] for p in res["processes"]] == [1, 2, 3, 77]
+    assert res["stale_node"]["counted"] is False
+
+
+def test_meet_neplati_ked_sa_casti_stretnu_na_roznych_uzloch():
+    """Dozadu sa zhoda zlomi uz pred D: kruh nie je uzavrety, riadok ostava neuplny."""
+    view, img = _kruh(TASK_VA + [DEAD_VA, NEW2_VA, EXTRA_VA])
+    _task(img, DEAD_VA, 620354, "python3")
+    _task(img, NEW2_VA, 620155, "postgres")
+    _task(img, EXTRA_VA, 620156, "postgres")
+    img.u64(_pa(DEAD_VA) + O_TASKS, TASK_VA[1] + O_TASKS)
+    img.u64(_pa(DEAD_VA) + O_TASKS + 8, TASK_VA[0] + O_TASKS)
+    img.u64(_pa(NEW2_VA) + O_TASKS, INIT_VA + O_TASKS)              # NEW2.next nesedi s EXTRA
+    res = view.processes()
+    assert res["truncated"] is True and res["walk"] == "next"
+
+
+def test_preskok_dozadu_bez_zhodneho_pokracovania_nevysvetli():
+    """Uzol so starym prev, za ktorym spojenie nesedi, nie je odstranenie uprostred."""
+    view, img = _kruh(TASK_VA + [DEAD_VA])
+    _task(img, DEAD_VA, 9, "python3")
+    img.u64(_pa(DEAD_VA) + O_TASKS + 8, TASK_VA[0] + O_TASKS)        # preskakuje t1, t2
+    img.u64(_pa(DEAD_VA) + O_TASKS, TASK_VA[1] + O_TASKS)            # a pokracuje do stredu
+    img.write(_pa(DEAD_VA) + O_EXIT, struct.pack("<i", 16))
+    res = view.processes()
+    # Bez preskoku je D prvy nezhodny uzol; dozadu init_task <- D, D.next nesedi:
+    # 'meet' ho ako ukonceny nezapocita a zoznam ostane t0, t1, t2.
+    assert "skipped_links" not in res
+    assert res["walk"] == "meet" and res["count"] == 3 and res["stale_node"]["counted"] is False

@@ -1,0 +1,67 @@
+{
+  "schema": "hyptcn3/process-walk-probe/1",
+  "date": "2026-11-17",
+  "commit": "pred commitom pravidla meet (76dba66 + pracovny strom)",
+  "host": "zberove PC (Debian 13), bez roota",
+  "guest": "Debian 12, jadro 6.1.0-42-cloud-amd64 (hyptcn-lab-b)",
+  "command": "cycle_probe.py, union_probe.py, check_new.py nad docasne rozbalenymi prefixmi retazcov z archivu kampane (~/hyptcn3-logs/torn-cycle-20261117/)",
+  "n": 2,
+  "values": {
+    "normal-v4-20261115_12_b_train_steady": {
+      "seq": 120,
+      "event": "restart_databazy (start, PostgreSQL 3,28 s, snimka 0,11 s pred koncom)",
+      "old_result": {
+        "walk": "next",
+        "truncated": true,
+        "stop_reason": "cyklus v zozname",
+        "count": 87
+      },
+      "shape": "uprostred: pg_ctlcluster 1105414 skoncil medzi precitanim jeho stranky a stranky nasledovnika (postgres 1105419.prev preskakuje 1 uzol); na konci: novy proces v recyklovanom task_struct, ktoreho stranka je este ukonceny postmaster 112488 (exit_state 16, prev LIST_POISON2, next doprostred zoznamu); init_task.prev ukazuje na tento uzol",
+      "neighbours": {
+        "119": 110,
+        "121": 112
+      },
+      "ended_between_119_and_120": {
+        "postgres": 30,
+        "python3": 4
+      },
+      "new_result": {
+        "walk": "meet",
+        "count": 86,
+        "skipped_links": 1,
+        "stale_node": {
+          "pid": 112488,
+          "comm": "postgres",
+          "exit_state": 16,
+          "counted": false
+        }
+      }
+    },
+    "normal-v4-20261115_11_b_train_bursty": {
+      "seq": 306,
+      "event": "zamok_tabulky (stop, snimka 0,7 s po skonceni stopu)",
+      "old_result": {
+        "walk": "next",
+        "truncated": true,
+        "stop_reason": "cyklus v zozname",
+        "count": 108
+      },
+      "shape": "dopredu zhodne po uzol python3 620354 (exit_state 16), ktoreho prev aj next su spojenia z ineho okamihu (prev postgres 112494, next python3 206788 doprostred zoznamu); dozadu zhodne 5 najnovsich uzlov po ten isty uzol; spojenie dopredu (kworker/1:2.next) aj dozadu (psql 618065.prev) ukazuju na neho",
+      "neighbours": {
+        "305": 112,
+        "307": 111
+      },
+      "new_result": {
+        "walk": "meet",
+        "count": 112,
+        "stale_node": {
+          "pid": 620354,
+          "comm": "python3",
+          "exit_state": 16,
+          "counted": false
+        }
+      }
+    }
+  },
+  "note": "Rozbor zamietnutych snimok, nie meranie detekcie (HONESTY P4). Susedne snimky (119, 121, 305, 307) ostavaju 'next' aj s novym kodom."
+}

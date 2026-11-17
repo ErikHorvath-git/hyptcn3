@@ -164,9 +164,25 @@ už nie je, takže taká výnimka žiadny proces neskryje. Pravidlo `prev` také
 preskočí v oboch smeroch (spätný prechod pokračuje uzlom, z ktorého prišiel prechod dopredu)
 a pravidlo `tail` prijme uzol na konci aj vtedy, keď jeho vlastný `prev` je `LIST_POISON2`
 (skončený vodca skupiny v recyklovanom `task_struct`; `tail_content` je `deleted`, inak
-`thread`). Obsah vodcu skupiny bez otrávenia a dve vloženia na koniec v jednom čítaní riadok
-naďalej zneplatnia. Tieto tvary vychádzajú zo syntetických prípadov v testoch
-(`guestparse/tests/test_defensive.py`), v zozbieraných dátach sa zatiaľ neobjavili. Nad kópiou
+`thread`). Tieto tvary vychádzajú zo syntetických prípadov v testoch
+(`guestparse/tests/test_defensive.py`), v zozbieraných dátach sa zatiaľ neobjavili.
+Kampaň `normal-v4-20261115` (2026-11-16 a 17) však stratila dve session pre ďalší tvar
+na hraniciach udalostí `zamok_tabulky` a `restart_databazy`, keď naraz končia desiatky
+procesov PostgreSQL: snímka 306 session `11_b_train_bursty` a snímka 120 session
+`12_b_train_steady`. Od 2026-11-17 ich uzavrie pravidlo `meet` (`_stretnutie`): zhodná časť
+dopredu a zhodná časť dozadu sa stretnú na jednom uzle, ktorého vlastné spojenia nesedia ani
+s jedným susedom, takže jeho stránka je z iného okamihu. Kruh init_task, časť dopredu, uzol,
+časť dozadu je uzavretý, takže v zozname nič iné nechýba. Uzol sa započíta iba so živým
+obsahom (`exit_state` 0) a vlastným pid; v oboch snímkach bol ukončený (`exit_state` 16) a
+nezapočítal sa. Časť dopredu smie preskočiť proces ukončený počas čítania uprostred zoznamu,
+ak je spojenie za ním znova zhodné (`skipped_links`; jadro uprostred zoznamu uzly iba
+odstraňuje). Obe snímky tak dostanú 86 a 112 procesov, zhodne so susednými snímkami (110 a
+112, resp. 112 a 111) po odpočítaní 34 procesov ukončených reštartom databázy
+([rozbor](../data/results/collection_process_walk_meet_20261117.json)). Obmedzenie: uzol so
+živým obsahom z iného okamihu sa započíta pod pid, ktorý mal v tej stránke, takže pri
+vlákne nahradenom cez exec alebo pri novom procese s kópiou rodiča môže byť pid alebo comm
+v riadku nepresné; počet procesov sedí. Dve vloženia na koniec a obsah vodcu skupiny bez
+otrávenia, ktoré predtým riadok zneplatnili, `meet` uzavrie tiež. Nad kópiou
 session 46 nové pravidlo snímku 270 uzavrie pravidlom `tail` s jedným `deleted_links` cez
 110 procesov, teda presne cez uzly pred uzlom na konci zoznamu (`forward_before_tail_node`
 v zázname vyššie), a snímky 269 a 271 ostávajú `next`. Kampane `benign-v6-20261026` a

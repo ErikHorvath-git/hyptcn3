@@ -334,6 +334,15 @@ def objekty_z_pohladu(view):
         pozn.append("procesy: zoznam dopredu sa neuzavrel (%s), stranka posledneho uzla podla "
                     "init_task.prev je z ineho okamihu (%s); zoznam je bez neho"
                     % (p["forward_stop_reason"], dokaz))
+    if p.get("walk") == "meet":
+        uzol = p["stale_node"]
+        pozn.append("procesy: zoznam dopredu sa neuzavrel (%s), zhodne casti dopredu a dozadu sa "
+                    "stretli na uzle z ineho okamihu (pid %d %s, %s)"
+                    % (p["forward_stop_reason"], uzol["pid"], uzol["comm"],
+                       "zapocitany" if uzol["counted"] else "nezapocitany"))
+    if p.get("skipped_links"):
+        pozn.append("procesy: %d odkaz(y) preskakuju proces ukonceny pocas citania"
+                    % p["skipped_links"])
     if p.get("deleted_links"):
         pozn.append("procesy: %d odkaz(y) cez uzol odstraneny pocas citania (LIST_POISON2)"
                     % p["deleted_links"])
