@@ -21,7 +21,7 @@ import subprocess
 import sys
 import uuid
 
-from scripts.collection import digest
+from scripts.collection import BACKGROUND_NICE, digest, drop_cache
 
 
 MANIFEST = "archive-manifest.json"
@@ -153,7 +153,8 @@ def check_file(path, item):
 def run_zstd(args, **kw):
     """A missing or failing zstd is a verification failure, never an authorization."""
     try:
-        done = subprocess.run([ZSTD, *args], stdin=subprocess.DEVNULL, stderr=subprocess.PIPE, **kw)
+        prefix = BACKGROUND_NICE if all(shutil.which(c) for c in ("nice", "ionice")) else []
+        done = subprocess.run([*prefix, ZSTD, *args], stdin=subprocess.DEVNULL, stderr=subprocess.PIPE, **kw)
     except OSError as error:
         raise ValueError(f"zstd unavailable: {error}") from error
     if done.returncode:
@@ -178,6 +179,8 @@ def stage_copy(source, temp):
         shutil.copyfileobj(src, dst, CHUNK)
         dst.flush()
         os.fsync(dst.fileno())
+        drop_cache(src.fileno())
+        drop_cache(dst.fileno())
 
 
 def stage_zstd(source, temp, args):
@@ -186,6 +189,9 @@ def stage_zstd(source, temp, args):
         run_zstd([*args, str(source)], stdout=dst)
         dst.flush()
         os.fsync(dst.fileno())
+        drop_cache(dst.fileno())
+    with Path(source).open("rb") as src:
+        drop_cache(src.fileno())
 
 
 def decompressed_identity(path):
@@ -203,6 +209,8 @@ def decompressed_identity(path):
         error = proc.stderr.read()
     if proc.returncode:
         raise ValueError(f"zstd failed ({proc.returncode}): " + error.decode(errors="replace").strip())
+    with Path(path).open("rb") as stored:
+        drop_cache(stored.fileno())
     return size, sha.hexdigest()
 
 

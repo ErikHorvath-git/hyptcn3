@@ -663,9 +663,9 @@ def audit_capture(directory, manifest, p, row, session, guard):
             report = session / f"campaign_audit_{stamp()}.json"
             update_state(directory, vm=row.get("vm"), status="running", stage="audit", session=session.name,
                          message=None)
-            command = collection.user_command([sys.executable, ROOT / "scripts/collection.py",
-                                               "--protocol", directory / "protocol.json",
-                                               "audit", session, "--out", report])
+            command = collection.background_command(collection.user_command(
+                [sys.executable, ROOT / "scripts/collection.py", "--protocol", directory / "protocol.json",
+                 "audit", session, "--out", report]))
             rc = run_child(command, directory / "logs" / f"audit_{stamp()}.log",
                            timeout=max(600, p["cycles"] * 15), guard=guard)
             if rc not in (0, 2) or not report.exists():

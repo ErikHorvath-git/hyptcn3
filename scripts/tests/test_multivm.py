@@ -824,3 +824,51 @@ def test_named_vm_grows_root_on_start_and_checks_its_size(monkeypatch):
 
 def test_single_vm_start_does_not_touch_the_disk(monkeypatch):
     assert labctl.GROW_ROOT not in _started(monkeypatch, labctl.Lab(), 1)
+
+
+def test_agent_uses_long_timeout_and_retries_only_idempotent_commands(monkeypatch):
+    import subprocess
+    lab = labctl.Lab(domain="hyptcn-lab-b", vm="b", port=18081)
+    calls = []
+
+    def run(args, **kw):
+        calls.append((list(args), kw.get("timeout")))
+        if len(calls) == 1:
+            raise subprocess.CalledProcessError(1, args, "", "agent didn't respond")
+        return subprocess.CompletedProcess(args, 0, json.dumps({"return": {"exited": False}}), "")
+    monkeypatch.setattr(labctl, "run", run)
+    monkeypatch.setattr(labctl.time, "sleep", lambda s: None)
+    assert lab.agent("guest-exec-status", {"pid": 1}) == {"exited": False}
+    assert len(calls) == 2
+    args, timeout = calls[0]
+    assert args[args.index("--timeout") + 1] == str(labctl.AGENT_TIMEOUT_S) and timeout > labctl.AGENT_TIMEOUT_S
+    calls.clear()
+    with pytest.raises(subprocess.CalledProcessError):
+        lab.agent("guest-file-read", {"handle": 1, "count": 1})
+    assert len(calls) == 1
+
+
+def test_audit_runs_in_a_capped_low_priority_scope_as_root(monkeypatch):
+    from scripts import collection
+    monkeypatch.setattr(collection.shutil, "which", lambda name: "/usr/bin/" + name)
+    monkeypatch.setattr(collection.os, "geteuid", lambda: 0)
+    command = collection.background_command(["python3", "audit"])
+    assert command[:3] == ["systemd-run", "--scope", "--quiet"]
+    assert "MemoryHigh=3G" in command and "MemorySwapMax=0" in command and "CPUWeight=20" in command
+    assert command[command.index("--") + 1:] == ["nice", "-n", "19", "ionice", "-c", "2", "-n", "7",
+                                                 "python3", "audit"]
+    monkeypatch.setattr(collection.os, "geteuid", lambda: 1000)
+    assert collection.background_command(["x"])[0] == "nice"
+
+
+def test_digest_releases_page_cache_of_large_files(tmp_path, monkeypatch):
+    from scripts import collection
+    seen = []
+    monkeypatch.setattr(collection.os, "posix_fadvise", lambda fd, a, b, advice: seen.append(advice))
+    big, small = tmp_path / "big", tmp_path / "small"
+    big.write_bytes(b"\0" * (collection.DROP_CACHE_MIN + 1))
+    small.write_bytes(b"x")
+    collection.digest(small)
+    assert seen == []
+    collection.digest(big)
+    assert seen == [collection.os.POSIX_FADV_DONTNEED]

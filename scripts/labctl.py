@@ -27,6 +27,9 @@ PORT = 18080  # Host port of the single (legacy) lab VM; every further VM names 
 # the same size the legacy lab got by hand on 2026-10-20 (docs/LAB.sk.md), so VMs of
 # one campaign differ only in machine-id and hostname.
 DISK_GIB = 20
+AGENT_TIMEOUT_S = 60
+AGENT_RETRIES = 2
+AGENT_IDEMPOTENT = {"guest-exec-status", "guest-ping", "guest-info", "guest-get-time"}
 # Grow the root partition and file system to the disk, idempotently (growpart says
 # NOCHANGE once done). Runs in the guest through the agent on every start of a named VM.
 GROW_ROOT = ('src=$(findmnt -no SOURCE /); disk=/dev/$(lsblk -no PKNAME "$src"); '
@@ -64,14 +67,30 @@ class Lab:
     def traffic_status(self):
         return REPO / "data/lab" / ("traffic.json" if self.vm is None else f"traffic-{self.vm}.json")
 
-    def virsh(self, *args):
-        return run(["virsh", "-c", self.uri, *args], capture_output=True, timeout=30).stdout.strip()
+    def virsh(self, *args, timeout=30):
+        return run(["virsh", "-c", self.uri, *args], capture_output=True, timeout=timeout).stdout.strip()
 
     def agent(self, command, arguments=None):
+        """One guest-agent command with AGENT_TIMEOUT_S (virsh defaults to 5 s).
+
+        Campaign normal-v4-20261115 lost session 10_b: guest-file-read missed the
+        5 s default while the host was reading swap for the other VM. Commands
+        without side effects (AGENT_IDEMPOTENT) are retried; a read or write on
+        a file handle is not, because the guest may have advanced the handle.
+        """
         req = {"execute": command}
         if arguments is not None:
             req["arguments"] = arguments
-        reply = json.loads(self.virsh("qemu-agent-command", self.domain, json.dumps(req)))
+        attempts = AGENT_RETRIES + 1 if command in AGENT_IDEMPOTENT else 1
+        for attempt in range(attempts):
+            try:
+                reply = json.loads(self.virsh("qemu-agent-command", "--timeout", str(AGENT_TIMEOUT_S),
+                                              self.domain, json.dumps(req), timeout=AGENT_TIMEOUT_S + 30))
+                break
+            except (subprocess.CalledProcessError, subprocess.TimeoutExpired):
+                if attempt + 1 == attempts:
+                    raise
+                time.sleep(2)
         if "error" in reply:
             raise RuntimeError(str(reply["error"]))
         return reply["return"]
