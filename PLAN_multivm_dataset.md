@@ -110,3 +110,16 @@ Spolu ~2 až 2,5 týždňa; ak disk nedovolí 2 súbežné VM, kampane bežia po
 
 Míľniky sa hlásia diplomovka-8a: kód zmrazený, pilot prijatý, štart a koniec kampaní, tréning
 a vyhodnotenia hotové (čísla a commity).
+
+## 7. Kampaň normal-v4-20261115 a oprava (2026-11-17)
+
+Prvá kampaň datasetu 1 sa zastavila na 10 z 96 session (4 zamietnutia, náhrady minuté):
+- rušenie medzi VM (audit a archivácia jednej VM vytlačili QEMU druhej do swapu): opravené
+  izoláciou auditu (systemd scope s obmedzenou pamäťou, nízka priorita), uvoľňovaním page
+  cache a timeoutom agenta hosťa 60 s (`2d7af76`);
+- roztrhnutý zoznam procesov na hraniciach udalostí: pravidlo `meet` (`2fcc4b3`), overené na
+  oboch skutočných snímkach;
+- pravidlo prijatia: `invalid_rows` najviac 3 riadky (iba prechod procesov) a 6 náhrad.
+
+Ďalej: uzavretie starej kampane, nové zmrazenie, re-audit oboch zamietnutých session a jednej
+prijatej novým kódom, piloty na oboch VM, nová kampaň datasetu 1.

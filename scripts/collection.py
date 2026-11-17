@@ -144,7 +144,44 @@ def protocol(path):
         check_vms(p)
     if "replacement" in p:
         check_replacement(p)
+    if "invalid_rows" in p:
+        check_invalid_rows(p)
     return p
+
+
+INVALID_ROW_TRAVERSALS = ("processes", "modules", "sockets", "memory_patterns")
+
+
+def check_invalid_rows(p):
+    """Pre-registered tolerance of a few rows whose traversal did not close (owner, 2026-11-17).
+
+    Without the key every invalid row rejects the session. With it a session is
+    admitted when at most `max` rows are invalid, each only because one of the
+    named traversals did not close (no RAM read error or zero fill), and the
+    score coverage gate still holds. Invalid rows are never scored (their windows
+    are not scorable) and the audit lists them.
+    """
+    r = p["invalid_rows"]
+    if (type(r) is not dict or not {"max", "traversals"} <= set(r) <= {"max", "traversals", "note"}
+            or type(r["max"]) is not int or r["max"] < 0 or type(r["traversals"]) is not list
+            or not r["traversals"] or not set(map(str, r["traversals"])) <= set(INVALID_ROW_TRAVERSALS)):
+        raise ValueError("invalid invalid_rows rule")
+
+
+def tolerated_invalid_rows(result, p):
+    """Seq of invalid rows the protocol tolerates, [] when all are valid, None when not tolerated."""
+    bad = [(seq, q) for seq, q, good in zip(result["seq"], result["quality"], result["valid"]) if not good]
+    if not bad:
+        return []
+    rule = p.get("invalid_rows")
+    if rule is None or len(bad) > rule["max"]:
+        return None
+    allowed = set(rule["traversals"])
+    for _, q in bad:
+        names = set(q.get("truncated_traversals") or [])
+        if not names or not names <= allowed or q.get("read_errors") or q.get("filled_zero"):
+            return None
+    return [seq for seq, _ in bad]
 
 
 def check_replacement(p):
@@ -1129,7 +1166,8 @@ def analyze_windows(result, p, session, expected_rows=None):
         windows = okna(rows, dlzka=p["window_rows"], max_medzera_s=p["max_gap_s"])
     coverage = len(windows) / (expected_rows if expected_rows is not None else len(rows))
     reasons = []
-    if not all(result["valid"]):
+    tolerated = tolerated_invalid_rows(result, p)
+    if not all(result["valid"]) and tolerated is None:
         reasons.append("incomplete model inputs under " + policy)
     if any(q["findings"] for q in result["quality"]):
         reasons.append("integrity findings require review before benign admission")
@@ -1143,6 +1181,8 @@ def analyze_windows(result, p, session, expected_rows=None):
         "behavior_valid_rows": sum(q["behavior_valid"] for q in result["quality"]),
         "legacy_valid_rows": sum(q["model_valid"] for q in result["quality"]),
         "invalid_input_seq": [seq for seq, good in zip(result["seq"], result["valid"]) if not good],
+        # Invalid rows admitted under the protocol's pre-registered invalid_rows rule.
+        "tolerated_invalid_seq": tolerated or [],
         "integrity_inconclusive_rows": {
             name: sum(name in q["inconclusive"] for q in result["quality"]) for name in sorted(checks)},
         "integrity_finding_rows": sum(bool(q["findings"]) for q in result["quality"]),

@@ -142,3 +142,27 @@ def test_group_names_follow_protocol_prefix(tmp_path):
     report["values"]["session_sha256"] = dataset.sha(meta)
     audit.write_text(json.dumps(report))
     assert dataset.build([audit], dict(protocol(), group_prefix="v4-"), "protocol-test")["sessions"]
+
+
+def test_tolerated_invalid_rows_enter_the_corpus_only_within_the_rule(tmp_path):
+    import numpy as np
+    audits = [record(tmp_path, role, i) for i, role in enumerate(dataset.ROLES)]
+    path = audits[0]
+    report = json.loads(path.read_text())
+    data = dict(np.load(report["values"]["features"], allow_pickle=False))
+    quality = json.loads(str(data["quality_json"]))
+    quality[1]["behavior_valid"] = False
+    quality[1]["truncated_traversals"] = ["processes"]
+    data["quality_json"] = np.array(json.dumps(quality))
+    data["valid"] = np.array([i != 1 for i in range(len(data["valid"]))])
+    np.savez(report["values"]["features"], **data)
+    report["values"]["features_sha256"] = dataset.sha(report["values"]["features"])
+    path.write_text(json.dumps(report))
+    with pytest.raises(ValueError, match="incomplete features"):
+        dataset.build(audits, protocol(), "protocol-test")
+    report["values"]["quality"] = {"tolerated_invalid_seq": [int(data["seq"][1])]}
+    path.write_text(json.dumps(report))
+    with pytest.raises(ValueError, match="more invalid rows"):
+        dataset.build(audits, protocol(), "protocol-test")
+    tolerant = dict(protocol(), invalid_rows={"max": 3, "traversals": ["processes"]})
+    assert dataset.build(audits, tolerant, "protocol-test")["complete"]

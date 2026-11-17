@@ -361,6 +361,10 @@ def objekty_z_pohladu(view):
                                    if f["check"] in KRIZOVE_NALEZY),
         "quality": {
             "traversals_complete": not any(r["truncated"] for r in (p, m, s, vz)),
+            # Ktore prechody sa neuzavreli (pravidlo invalid_rows protokolu v4).
+            "truncated_traversals": [meno for meno, r in (("processes", p), ("modules", m),
+                                                          ("sockets", s), ("memory_patterns", vz))
+                                     if r["truncated"]],
             "behavior_valid": not any(r["truncated"] for r in (p, m, s, vz)),
             "inconclusive": list(c["summary"]["inconclusive"]),
             "findings": c["findings"],

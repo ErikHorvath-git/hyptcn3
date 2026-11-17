@@ -1,6 +1,6 @@
 # Príručka k hyptcn3
 
-Vstupný dokument repozitára; stav kódu a artefaktov k 2026-11-14. Súbor je
+Vstupný dokument repozitára; stav kódu a artefaktov k 2026-11-17. Súbor je
 generovaný a needituje sa ručne — ako, hovorí kapitola 10.
 
 ## 1. Čo to je
@@ -30,7 +30,7 @@ make -C vmicollect test   # plná snímka, tri delty, obnova reťazca, kontroln�
 python3 -m pytest -q      # parser, príznaky, tcn, safeguard a skripty zberu
 ```
 
-`make test` prejde celú cestu zberu nad syntetickým obrazom veľkosti 16 MiB, ktorý si sám vyrobí. Testov je 931 prešlých a 24 preskočených v `pytest` (spolu 955 zozbieraných; preskočený test nie je prešiel) a 4 v C (`alarm_test`, `hole_test`, `perbin_test`, `retention_test`).
+`make test` prejde celú cestu zberu nad syntetickým obrazom veľkosti 16 MiB, ktorý si sám vyrobí. Testov je 938 prešlých a 24 preskočených v `pytest` (spolu 962 zozbieraných; preskočený test nie je prešiel) a 4 v C (`alarm_test`, `hole_test`, `perbin_test`, `retention_test`).
 
 ## 4. Ako vznikne snímka
 
@@ -69,11 +69,11 @@ nič nezapisuje“ v kapitole 6 platí o binárke; skript okolo nej `data/result
 |---|---|---|---|
 | `vmicollect/` | zberač snímok pamäte VM: C a eBPF nad QEMU/KVM | `vmicollect/src/collector.c` | 37 / 12 152 |
 | `guestparse/` | rekonštrukcia procesov, modulov a soketov zo snímky; kontroly integrity | `guestparse/view.py` | 35 / 8 166 |
-| `features/` | per-bin referencia k C, vektor snímky, okná, kvalita riadkov, archív sedenia a index korpusu; staršia normalizácia pre `tcn/` | `features/perbin.py` | 27 / 5 459 |
+| `features/` | per-bin referencia k C, vektor snímky, okná, kvalita riadkov, archív sedenia a index korpusu; staršia normalizácia pre `tcn/` | `features/perbin.py` | 27 / 5 491 |
 | `tcn/` | TCN bloky pre `safeguard/model.py`, baseliny a metriky; staršia diagnostická cesta tréningu a skórovania (`tcn/train.py`, `tcn/score.py`) | `tcn/model.py` | 20 / 5 803 |
 | `safeguard/` | integrovaná detekčná cesta: okná a normalizácia, modely, kalibrácia, balík a hostiteľský detektor | `safeguard/cli.py` | 16 / 3 387 |
 | `profiles/` | profil jadra hosťa: symboly a offsety polí štruktúr | `profiles/debian12-6.1.0-42-cloud-amd64/README.md` | jeden adresár na verziu jadra hosťa; nový boot rieši preukotvenie (L17) |
-| `scripts/` | zber a audit sedenia, kampaň (`scripts/campaign.py`), laboratórium a premávka, root behy, PoC techniky na validáciu citlivosti (`scripts/poc/`), kontroly tvrdení; staršie diagnostické sedenia a detektor (`scripts/session.sh`, `scripts/detektor.py`) | `scripts/collection.py` | 52 / 20 833 |
+| `scripts/` | zber a audit sedenia, kampaň (`scripts/campaign.py`), laboratórium a premávka, root behy, PoC techniky na validáciu citlivosti (`scripts/poc/`), kontroly tvrdení; staršie diagnostické sedenia a detektor (`scripts/session.sh`, `scripts/detektor.py`) | `scripts/collection.py` | 52 / 20 908 |
 | `lab/` | trvalé benígne API služby, PostgreSQL a nginx vo VM `hyptcn-lab` | `lab/services.py` | 10 / 717 |
 | `harness/` | zlatý obraz hosťa, šablóna domény `hyptcn-guest`, izolovaná sieť bez NAT a manifesty starších sedení | `harness/README.md` | 15 / 264 |
 | `config/` | zmrazené protokoly zberu korpusu: doména, perióda, okná, roly a scenáre | `config/collection-v2.json` | 8 / 0 |

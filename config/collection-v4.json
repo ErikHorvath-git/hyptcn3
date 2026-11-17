@@ -33,8 +33,8 @@
     "test_benign": 4
   },
   "replacement": {
-    "note": "Predregistrovane pravidlo (B5): session, ktoru kampan nemoze pouzit, nahradi najviac max_per_campaign krat za kampan (spolu pre vsetky priciny v covers) to iste priradenie (VM, rola, skupina, scenar, seed) v tom istom boote skupiny. audit_rejected: zber sa dokoncil a audit ho zamietol. capture_incomplete: merana faza zacala, ale zber sa nedokoncil (zlyhanie zberaca, prerusenie, zmena hosta); nahradza sa iba vtedy, ked boot hosta aj proces QEMU skupiny su stale tie zaznamenane v groups/<skupina>.json - po reboote hosta, restarte VM alebo pade hostitela boot skupiny uz neexistuje a kampan sa zastavi ako doteraz. Nepouzita session sa archivuje, do korpusu ani indexu udalosti nejde. Po vycerpani limitu dalsi pripad kampan zastavi.",
-    "max_per_campaign": 2,
+    "note": "Predregistrovane pravidlo (B5): session, ktoru kampan nemoze pouzit, nahradi najviac max_per_campaign krat za kampan (spolu pre vsetky priciny v covers) to iste priradenie (VM, rola, skupina, scenar, seed) v tom istom boote skupiny. audit_rejected: zber sa dokoncil a audit ho zamietol. capture_incomplete: merana faza zacala, ale zber sa nedokoncil (zlyhanie zberaca, prerusenie, zmena hosta); nahradza sa iba vtedy, ked boot hosta aj proces QEMU skupiny su stale tie zaznamenane v groups/<skupina>.json - po reboote hosta, restarte VM alebo pade hostitela boot skupiny uz neexistuje a kampan sa zastavi ako doteraz. Nepouzita session sa archivuje, do korpusu ani indexu udalosti nejde. Po vycerpani limitu dalsi pripad kampan zastavi. Limit 6 (predtym 2) urcil vlastnik 2026-11-17 po kampani normal-v4-20261115.",
+    "max_per_campaign": 6,
     "same": [
       "vm",
       "role",
@@ -128,5 +128,12 @@
         "duration_s": 120
       }
     ]
+  },
+  "invalid_rows": {
+    "max": 3,
+    "traversals": [
+      "processes"
+    ],
+    "note": "Predregistrovane rozhodnutim vlastnika 2026-11-17 po kampani normal-v4-20261115 (dve session stratene pre jeden neplatny riadok): session sa prijme pri najviac 3 riadkoch, ktore su neplatne iba preto, ze sa neuzavrel prechod zoznamu procesov (bez chyb citania RAM), ak plati brana pokrytia skore min_score_coverage. Neplatne riadky sa neskoruju a audit ich uvadza v quality.tolerated_invalid_seq. Zmeskane sloty zberaca, chyby citania a ostatne prechody su dalej dovodom zamietnutia."
   }
 }

@@ -83,3 +83,38 @@ def test_nevykonana_alebo_chybajuca_kontrola(tmp_path):
     empty = tmp_path / "e.json"
     empty.write_text(json.dumps({"events": []}))
     assert any("missing" in x for x in collection.positive_controls(_vysledok([]), empty, p)["problems"])
+
+
+# ------------------ pravidlo invalid_rows (rozhodnutie vlastnika 2026-11-17)
+
+def _riadky(zle):
+    """Vysledok extrakcie so 6 riadkami; `zle` = {index: kvalita neplatneho riadku}."""
+    quality = [dict(zle.get(i, {"truncated_traversals": []})) for i in range(6)]
+    return {"seq": list(range(6)), "quality": quality, "valid": [i not in zle for i in range(6)]}
+
+
+PROCESY = {"truncated_traversals": ["processes"]}
+
+
+def test_tolerancia_iba_pre_neuzavrete_procesy_a_do_limitu():
+    p = collection.protocol(V4)
+    assert p["invalid_rows"]["max"] == 3 and p["invalid_rows"]["traversals"] == ["processes"]
+    assert collection.tolerated_invalid_rows(_riadky({}), p) == []
+    assert collection.tolerated_invalid_rows(_riadky({1: PROCESY, 4: PROCESY}), p) == [1, 4]
+    assert collection.tolerated_invalid_rows(_riadky({i: PROCESY for i in range(4)}), p) is None
+    assert collection.tolerated_invalid_rows(_riadky({1: {"truncated_traversals": ["sockets"]}}), p) is None
+    assert collection.tolerated_invalid_rows(_riadky({1: dict(PROCESY, read_errors=1)}), p) is None
+    assert collection.tolerated_invalid_rows(_riadky({1: {"truncated_traversals": []}}), p) is None
+    bez = {k: v for k, v in p.items() if k != "invalid_rows"}
+    assert collection.tolerated_invalid_rows(_riadky({1: PROCESY}), bez) is None
+
+
+@pytest.mark.parametrize("zle", [{"max": -1, "traversals": ["processes"]}, {"max": 3, "traversals": []},
+                                 {"max": 3, "traversals": ["slots"]}, {"max": 3}, {"max": "3", "traversals": ["processes"]}])
+def test_neplatne_pravidlo_invalid_rows(tmp_path, zle):
+    doc = json.loads(V4.read_text())
+    doc["invalid_rows"] = zle
+    path = tmp_path / "p.json"
+    path.write_text(json.dumps(doc))
+    with pytest.raises(ValueError, match="invalid_rows"):
+        collection.protocol(path)
