@@ -123,3 +123,70 @@ Prvá kampaň datasetu 1 sa zastavila na 10 z 96 session (4 zamietnutia, náhrad
 
 Ďalej: uzavretie starej kampane, nové zmrazenie, re-audit oboch zamietnutých session a jednej
 prijatej novým kódom, piloty na oboch VM, nová kampaň datasetu 1.
+
+## 8. Dodatok k protokolu v4: pokračovacia kampaň (predregistrované 2026-11-19)
+
+Tento dodatok je zapísaný a odoslaný do repozitára pred zberom prvej session rolí `calibration`
+a `test_benign` a pred akýmkoľvek tréningom na dátach v4. Rozhodnutie vlastníka z 2026-11-19.
+
+### 8.1 Stav pri zápise (2026-11-19 21:03 UTC)
+
+Kampaň `normal-v4c-20261117` (commit `c7cf446`, protokol `config/collection-v4.json`,
+sha256 `ca0ea98c4c0d321c9b13f0fd0bb690bf062df46264457c232abc60ab8594bbe5`) beží od
+2026-11-17 16:45 UTC. Prijaté a archivované: `train` 36 z 36, `dev` 7 z 12, `calibration` 0 z 24,
+`test_benign` 0 z 24. Zamietnutých je 5 session, všetky nahradené; zo 6 náhrad ostáva 1.
+
+| Zamietnutá session | Dátum (UTC) | Príčina |
+|---|---|---|
+| `15_b_train_write_heavy` | 2026-11-18 10:20 | zmeškaný slot: pamäť VM b odložená do swapu počas archivácie VM a, cyklus 6,7 s |
+| `15_b_train_write_heavy-r1` | 2026-11-18 12:16 | to isté, cykly 6,6 s a 5,9 s |
+| `23_a_train_bursty` | 2026-11-18 13:21 | to isté na VM a, cyklus 11,6 s (zber 11:24 až 12:24, pred zmenou swapu) |
+| `33_b_train_mixed` | 2026-11-19 02:54 | chyba lab aplikácie v hosťovi (timeout backendu, traceback), brána logov |
+| `39_b_dev_quiet` | 2026-11-19 17:50 | 3 neplatné riadky (cyklus v zozname procesov, 308, 343, 358), pokrytie 0,842 < 0,85 |
+
+Zásah operátora 2026-11-18 13:23 UTC: `MemorySwapMax=0` (runtime) na cgroup, v ktorej bežia obe
+QEMU (`session-2730.scope`). Odvtedy žiadna session nezmeškala slot. Kód ani protokol sa nemenil.
+
+Z 26 session meraných po tomto zásahu boli 2 zamietnuté (24 prijatých). Pri tejto miere sa
+zvyšných 53 session s jednou náhradou pravdepodobne nedokončí. Bežiaca kampaň sa zmeniť nedá: `verify_frozen` ju
+viaže na commit a hash protokolu a zamietnutie bez náhrady ju zastaví natrvalo.
+
+### 8.2 Pravidlo
+
+1. **Kedy.** Ak sa kampaň `normal-v4c-20261117` zastaví preto, že pravidlo `replacement` už
+   session nahradiť nemôže (limit je minutý alebo boot skupiny zanikol), vlastník ju uzavrie
+   (`campaign.py close`) a zvyšok rozvrhu zozbiera jedna pokračovacia kampaň.
+2. **Rovnaký protokol.** Pokračovacia kampaň používa bajtovo zhodný súbor protokolu (ten istý
+   sha256). Brány auditu, `invalid_rows`, `min_score_coverage`, scenáre, udalosti, rozvrh skupín
+   a semená sa nemenia. Nemení sa ani kód zberu, auditu a extrakcie (`features/`, `guestparse/`,
+   `vmicollect/`, `lab/`, `scripts/collection.py`, `scripts/collection_archive.py`); mení sa iba
+   `scripts/campaign.py` (ktoré session sa spustia). Pred pokračovaním prebehne nový pilot na
+   oboch VM, ako pri každej zmene meracieho kódu.
+3. **Prevzaté skupiny.** Skupina, ktorej všetkých 6 priradení je prijatých a archivovaných, sa
+   prevezme bez zmeny (jej audity a príznaky sa nepočítajú znova).
+4. **Neúplné skupiny.** Skupina, ktorá pri zastavení nie je úplná (vrátane tej so zamietnutím bez
+   náhrady a rozpracovanej skupiny druhej VM), sa do korpusu nedostane ani čiastočne. Jej session
+   ostanú v archíve. Celá skupina sa zozbiera znova v novom boote tej istej VM, s tými istými
+   scenármi a semenami. Platí teda ďalej: jedna skupina je jeden boot jednej VM.
+5. **Poradie rolí** ostáva (`train`, `dev`, `calibration`, `test_benign`), aj medzi kampaňami.
+6. **Limit náhrad.** Pre pokračovaciu kampaň platí limit protokolu znova (6), spolu teda najviac
+   12 náhrad. Ďalšia pokračovacia kampaň nie je dovolená: ak sa zastaví aj táto, zber datasetu 1
+   podľa protokolu v4 sa končí bez korpusu a rozhoduje vlastník (nový protokol, nový zber).
+7. **Vykazovanie.** Práca uvedie všetky nepoužité session oboch kampaní podľa príčin, zahodené
+   skupiny a to, že korpus tvoria dve kampane. Ako obmedzenie uvedie, že „normál“ tvoria iba
+   session, ktoré prešli auditom (bez chyby aplikácie v hosťovi a s uzavretým zoznamom procesov).
+
+### 8.3 Zdôvodnenie
+
+Dodatok nemení, ktorá session je prijateľná, iba koľkokrát sa smie neprijateľná session
+zopakovať. O prijatí rozhodujú brány auditu zapísané pred zberom; výsledky modelu neexistujú,
+tréning sa začne až po úplnom korpuse. Limit 6 bol určený bez znalosti miery zamietnutí pri
+dvoch súbežných VM a jeho účel (zastaviť zber na kontrolu, nie potichu nahrádzať) ostáva: každé
+zamietnutie je zaznamenané s príčinou a vykázané.
+
+### 8.4 Zistenie k pravidlu `invalid_rows`
+
+Tolerancia najviac 3 neplatných riadkov sa s bránou pokrytia 0,85 prekrýva: každý osamotený
+neplatný riadok vyradí približne 16 okien (656 okien pri 720 riadkoch, pokrytie 0,911). Tri
+osamotené riadky dajú 0,842 a session zamietne brána pokrytia (`39_b_dev_quiet`). V praxi teda
+prejdú najviac dva osamotené neplatné riadky. Pravidlo sa nemení, uvádza sa ako zistenie.
