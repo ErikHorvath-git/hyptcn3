@@ -8,6 +8,11 @@ group belongs to one VM, audits and archiving are serialized over the VMs and
 sessions live under data/collections/<campaign>/<vm>/. A failed capture or rejected
 audit stops the allocation; retries never silently replace a research session.
 Only an attempt that ended before its measured phase (no RAM image) is retried.
+
+init --continue: one continuation of a campaign that stopped for good and was
+closed (PLAN_multivm_dataset.md, chapter 8). Same protocol file, extractor,
+collector and guest environment; groups the closed campaign completed are taken
+over as they are, every other group is captured again as a whole in a new boot.
 """
 import argparse
 from contextlib import ExitStack, contextmanager
@@ -119,6 +124,32 @@ def is_done(directory, row):
     return (directory / "attempts" / (chain(directory, row)[-1]["session_id"] + ".done.json")).exists()
 
 
+def taken_over(manifest, row):
+    """Continuation campaign: the frozen record of an assignment its closed predecessor completed, else None."""
+    return manifest.get("continues", {}).get("sessions", {}).get(row["session_id"])
+
+
+def finished(directory, manifest, row):
+    """Nothing is left to capture for the assignment: accepted and archived here, or taken over."""
+    return taken_over(manifest, row) is not None or is_done(directory, row)
+
+
+def taken_report(record):
+    """The predecessor's selected audit of a taken-over assignment; it must still be the frozen one."""
+    report = Path(record["audit"])
+    if digest(report) != record["audit_sha256"]:
+        raise ValueError("audit of a taken-over session changed: " + record["session_id"])
+    return report
+
+
+def final_report(directory, manifest, row):
+    """The accepted audit that represents the assignment in the index."""
+    taken = taken_over(manifest, row)
+    if taken is not None:
+        return taken_report(taken)
+    return Path(read_json(directory / "attempts" / (chain(directory, row)[-1]["session_id"] + ".audit.json"))["path"])
+
+
 def stamp():
     return datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")
 
@@ -225,7 +256,7 @@ def capacity_guard(manifest, p, remaining, directory=None):
     needed = manifest["estimated_session_bytes_with_reserve"]
     archived = manifest.get("estimated_archive_bytes_per_session", needed) * remaining
     for vm in manifest.get("vms", {}) if directory is not None else ():
-        pending = [r for r in manifest["sessions"] if r["vm"] == vm and not is_done(directory, r)]
+        pending = [r for r in manifest["sessions"] if r["vm"] == vm and not finished(directory, manifest, r)]
         if vm == manifest["vm"] or not pending:
             continue
         other = manifest["vms"][vm]
@@ -360,11 +391,14 @@ def initialize(a):
                 "working_storage": collection.storage_identity(COLLECTIONS),
                 "sessions": planned["sessions"], "planned_capture_hours": planned["planned_hours"],
                 "note": "Frozen allocation, not a measurement or a completed corpus."}
+    if getattr(a, "continues", None) is not None:
+        manifest["continues"] = take_over(a.continues, manifest, p)
+    todo = {vm: [r for r in planned["sessions"] if r.get("vm") == vm and taken_over(manifest, r) is None]
+            for vm in per_vm}
     COLLECTIONS.mkdir(exist_ok=True, parents=True)
     archive_root.mkdir(exist_ok=True, parents=True)
     for vm in per_vm:
-        capacity_guard(vm_view(manifest, p, vm)[0], p,
-                       sum(r.get("vm") == vm for r in planned["sessions"]), directory)
+        capacity_guard(vm_view(manifest, p, vm)[0], p, len(todo[vm]), directory)
     # Group names repeat in every campaign of a protocol. Only a campaign
     # explicitly closed by the operator releases them (its data stays).
     groups = {r["group"] for r in planned["sessions"]}
@@ -385,10 +419,16 @@ def initialize(a):
     for filename in frozen_files(manifest):
         copy_exclusive(directory / filename, external / filename)
     for vm in per_vm:
-        update_state(directory, vm=vm, status="ready", stage="initialized", accepted_archived=0,
-                     total=sum(r.get("vm") == vm for r in planned["sessions"]))
+        total = sum(r.get("vm") == vm for r in planned["sessions"])
+        update_state(directory, vm=vm, status="ready", stage="initialized",
+                     accepted_archived=total - len(todo[vm]), total=total)
     print(json.dumps({"campaign": str(directory), "sessions": len(planned["sessions"]),
                       "capture_hours": planned["planned_hours"],
+                      **({"continues": manifest["continues"]["campaign"],
+                          "taken_over_sessions": len(manifest["continues"]["sessions"]),
+                          "sessions_to_capture": sum(map(len, todo.values())),
+                          "discarded_groups": [g["group"] for g in manifest["continues"]["discarded_groups"]]}
+                         if "continues" in manifest else {}),
                       "archive": str(external)}, indent=2))
     return directory
 
@@ -430,6 +470,7 @@ def load_campaign(directory):
     if (m["id"] != directory.name or rows != expected
             or digest(directory / "protocol.json") != m["protocol_sha256"]
             or list(m.get("vms", [None])) != vm_names(p)
+            or not set(m.get("continues", {}).get("sessions", {})) <= {row["session_id"] for row in m["sessions"]}
             or any(digest(directory / vm_file("pilot.json", vm)) != vm_view(m, p, vm)[0]["pilot_report_sha256"]
                    for vm in vm_names(p))):
         raise ValueError("campaign plan or frozen inputs changed")
@@ -439,6 +480,119 @@ def load_campaign(directory):
         if not re.fullmatch(r"[a-zA-Z0-9][a-zA-Z0-9_-]{0,159}", row["session_id"]):
             raise ValueError("unsafe session ID")
     return m, p
+
+
+def taken_session(previous, old, final, group):
+    """One accepted, archived session of the closed campaign as the continuation takes it over.
+
+    Its records must still agree with each other, as a resumed run of that
+    campaign would require: checkpoint, selected audit, session metadata,
+    features, archive manifest and the boot recorded for its group.
+    """
+    name = final["session_id"]
+    try:
+        done = read_json(previous / "attempts" / (name + ".done.json"))
+        pointer = read_json(previous / "attempts" / (name + ".audit.json"))
+        report, session, archive = Path(pointer["path"]), session_dir(old, final), archive_dest(old, final)
+        doc, meta = read_json(report), read_json(session / "session.json")
+        v = doc["values"]
+        checks = {
+            "selected audit": digest(report) == pointer["sha256"] == done["audit_sha256"],
+            "audit verdict and provenance": v["accepted"] is True and audit_environment(doc, old)
+                                            and v["session_dir"] == str(session) and v["role"] == final["role"],
+            "session metadata": digest(session / "session.json") == v["session_sha256"]
+                                and all(meta[k] == final[k] for k in ("role", "group", "scenario", "seed", "session_id"))
+                                and meta.get("vm") == final.get("vm") and meta.get("campaign_id") == old["id"],
+            "features": digest(v["features"]) == v["features_sha256"],
+            "archive": digest(archive / "archive-manifest.json") == done["manifest_sha256"]
+                       and (session / "raw").is_symlink() and os.readlink(session / "raw") == str(archive / "raw"),
+            "group boot": meta["guest_before"] == group["identity"]}
+    except (OSError, KeyError, json.JSONDecodeError) as exc:
+        raise ValueError(f"session {name} cannot be taken over ({type(exc).__name__}: {exc})") from None
+    if not all(checks.values()):
+        raise ValueError(f"session {name} cannot be taken over, records disagree: "
+                         + ", ".join(k for k, ok in checks.items() if not ok))
+    return {"campaign": old["id"], "session_id": name, "group": final["group"], "audit": str(report),
+            "audit_sha256": pointer["sha256"], "boot_id": meta["guest_before"]["boot_id"]}
+
+
+def take_over(previous, manifest, p):
+    """What a new campaign takes from the closed campaign it continues (PLAN_multivm_dataset.md, chapter 8).
+
+    The predecessor stopped for good - a session its replacement rule could not
+    replace, or a lost group boot - and the operator closed it. The continuation
+    has the same protocol file, plan, extractor, profile, runtime and guest
+    environments, so the sessions of both pass one index (features/dataset.py).
+
+    A group whose every assignment is accepted and archived there is taken over:
+    not captured and not audited again, indexed through its frozen audit. Every
+    other group is captured again as a whole in a new boot of its VM. What the
+    predecessor has of such a group stays archived, is listed under
+    discarded_groups and is never indexed: a group remains one boot of one VM.
+
+    A campaign is continued once, and a continuation is never continued. Only a
+    continuation that was closed before it captured anything may be set up again.
+    """
+    previous = Path(previous).resolve()
+    old, old_p = load_campaign(previous)
+    if not (previous / "closed.json").exists():
+        raise ValueError("only a campaign closed by the operator can be continued")
+    if "continues" in old:
+        raise ValueError("a continuation campaign cannot be continued again")
+    for other in sorted(BASE.glob("*/campaign.json")):
+        if read_json(other).get("continues", {}).get("campaign") != old["id"]:
+            continue
+        measured = [f for kind in ("done", "rejected", "audit") for f in (other.parent / "attempts").glob(f"*.{kind}.json")]
+        if measured or not (other.parent / "closed.json").exists():
+            raise ValueError("campaign already has a continuation: " + other.parent.name)
+    strip = lambda rows: [{k: v for k, v in row.items() if k != "session_id"} for row in rows]
+    differing = [key for key in ("protocol_sha256", "profile_sha256", "extractor_sha256", "runtime")
+                 if old.get(key) != manifest.get(key)]
+    if list(old.get("vms", [None])) != list(manifest.get("vms", [None])) \
+            or strip(old["sessions"]) != strip(manifest["sessions"]):
+        differing.append("plan")
+    else:
+        differing += ["guest_environment" + (f" ({vm})" if vm else "") for vm in vm_names(p)
+                      if vm_view(old, old_p, vm)[0]["guest_environment"]
+                      != vm_view(manifest, p, vm)[0]["guest_environment"]]
+    if differing:
+        raise ValueError("continuation differs from the closed campaign: " + ", ".join(differing))
+    guard_mount(old["archive_root"], old["archive_mount"])
+    groups = {}
+    for before, row in zip(old["sessions"], manifest["sessions"]):
+        groups.setdefault(row["group"], []).append((before, row))
+    sessions, discarded, complete = {}, [], {}
+    for name, members in groups.items():
+        first = members[0][1]
+        finals = [chain(previous, before)[-1] for before, _ in members]
+        accepted = [final for (before, _), final in zip(members, finals) if is_done(previous, before)]
+        record = previous / "groups" / (name + ".json")
+        complete[name] = len(accepted) == len(members)
+        if not complete[name]:
+            if record.exists():  # Started: it has a boot and possibly sessions, none of them indexed.
+                discarded.append({"group": name, "role": first["role"], **({"vm": first["vm"]} if "vm" in first else {}),
+                                  "boot_id": read_json(record)["identity"]["boot_id"],
+                                  "accepted_sessions": [final["session_id"] for final in accepted]})
+            continue
+        group = read_json(record)
+        for (_, row), final in zip(members, finals):
+            sessions[row["session_id"]] = taken_session(previous, old, final, group)
+    # The role order of the plan holds over both campaigns only if no later role was completed
+    # there before an earlier one; the runners never do that, a damaged directory could.
+    order = list(p["roles"])
+    role = {name: order.index(members[0][1]["role"]) for name, members in groups.items()}
+    if any(complete[late] and not complete[early] and role[early] < role[late] for late in groups for early in groups):
+        raise ValueError("closed campaign completed a later role before an earlier one")
+    unused = rejections(previous)
+    return {"campaign": old["id"], "directory": str(previous), "commit": old["commit"],
+            "campaign_sha256": digest(previous / "campaign.json"),
+            "closed_sha256": digest(previous / "closed.json"),
+            "closed_reason": read_json(previous / "closed.json")["reason"],
+            "replacements_used": sum(r.get("replacement") is not None for r in unused),
+            "not_replaced": [r["session"] for r in unused if r.get("replacement") is None],
+            "sessions": sessions, "discarded_groups": discarded,
+            "note": "Taken-over sessions are indexed through the closed campaign's frozen audits. Discarded groups "
+                    "are captured again as a whole; what the closed campaign has of them is never indexed."}
 
 
 def verify_frozen(directory, manifest, p):
@@ -810,7 +964,7 @@ def earlier_roles(directory, manifest, p, row):
     """Other VMs' sessions of roles that precede this row's role and are not archived yet."""
     order = list(p["roles"])
     return [r for r in manifest["sessions"] if r.get("vm") != row.get("vm")
-            and order.index(r["role"]) < order.index(row["role"]) and not is_done(directory, r)]
+            and order.index(r["role"]) < order.index(row["role"]) and not finished(directory, manifest, r)]
 
 
 def wait_for_earlier_roles(directory, manifest, p, row):
@@ -891,6 +1045,10 @@ def execute(directory, *, stop_after=None, vm=None):
             processed = 0
             guard = lambda: guard_mount(manifest["archive_root"], manifest["archive_mount"])
             for i, row in enumerate(rows):
+                taken = taken_over(manifest, row)
+                if taken is not None:  # Completed by the closed campaign this one continues.
+                    reports.append(taken_report(taken))
+                    continue
                 session = session_dir(manifest, row)
                 destination = archive_dest(manifest, row)
                 checkpoint = directory / "attempts" / (row["session_id"] + ".done.json")
@@ -931,7 +1089,7 @@ def execute(directory, *, stop_after=None, vm=None):
                     if attempts:
                         verify_frozen(directory, manifest, p)
                     attempts += 1
-                    capacity_guard(manifest, p, len(rows) - i, directory)
+                    capacity_guard(manifest, p, sum(taken_over(manifest, r) is None for r in rows[i:]), directory)
                     group = ensure_group(directory, manifest, p, row)
                     update_state(directory, vm=vm, status="running", stage="capture", capture_started_at=now(),
                                  message=None)
@@ -985,13 +1143,11 @@ def execute(directory, *, stop_after=None, vm=None):
                 return 0
             # The runner that archives the campaign's last session builds the index of all VMs.
             with audit_lock(directory, vm=vm):
-                if not all(is_done(directory, r) for r in manifest["sessions"]):
+                if not all(finished(directory, manifest, r) for r in manifest["sessions"]):
                     update_state(directory, vm=vm, status="complete", stage="vm-complete", message=None,
                                  accepted_archived=len(reports))
                     return 0
-                reports = [Path(read_json(directory / "attempts" / (chain(directory, r)[-1]["session_id"]
-                                                                     + ".audit.json"))["path"])
-                           for r in manifest["sessions"]]
+                reports = [final_report(directory, manifest, r) for r in manifest["sessions"]]
                 finish_corpus(directory, manifest, protocol, reports)
             return 0
     except BaseException as exc:
@@ -1052,6 +1208,18 @@ def event_index(reports, p, protocol_sha):
             "note": "Benign operational events; test-only sessions, never training data."}
 
 
+def continuation_note(manifest):
+    """For the index of a continuation campaign: which sessions come from the closed campaign."""
+    record = manifest.get("continues")
+    if record is None:
+        return {}
+    return {"continues": {"campaign": record["campaign"], "commit": record["commit"],
+                          "taken_over_sessions": sorted(s["session_id"] for s in record["sessions"].values()),
+                          "discarded_groups": record["discarded_groups"],
+                          "replacements_used": record["replacements_used"],
+                          "not_replaced": record["not_replaced"]}}
+
+
 def finish_corpus(directory, manifest, p, reports):
     vm = manifest.get("vm")  # Multi-VM: the status file of the runner that builds the index.
     if "train" not in p["roles"]:
@@ -1059,6 +1227,7 @@ def finish_corpus(directory, manifest, p, reports):
         index = directory / "events_index.json"
         doc = event_index(reports, p, manifest["protocol_sha256"])
         doc["protocol"] = str(directory / "protocol.json")
+        doc.update(continuation_note(manifest))
         if not doc["complete"]:
             raise ValueError("campaign ended without a complete event allocation")
         if index.exists():
@@ -1075,6 +1244,7 @@ def finish_corpus(directory, manifest, p, reports):
     index = directory / "corpus.json"
     doc = build(reports, p, manifest["protocol_sha256"])
     doc["protocol"] = str(directory / "protocol.json")
+    doc.update(continuation_note(manifest))
     if not doc["complete"]:
         raise ValueError("campaign ended without a complete corpus allocation")
     if index.exists():
@@ -1203,6 +1373,10 @@ def vm_status(directory, manifest, p, vm):
                          "the current session is incomplete and the next run records an unclean end")
     state["sleep_inhibitor_active"] = sleep_inhibited()
     state["campaign"] = str(directory)
+    if "continues" in manifest:
+        state["continues"] = manifest["continues"]["campaign"]
+        state["taken_over"] = sum(r.get("vm") == vm and taken_over(manifest, r) is not None
+                                  for r in manifest["sessions"])
     state["planned_capture_hours"] = manifest["planned_capture_hours"]
     if state.get("session"):
         raw = session_dir(manifest, {"session_id": state["session"], **({} if vm is None else {"vm": vm})}) / "raw"
@@ -1223,6 +1397,9 @@ def main(argv=None):
     init.add_argument("--archive-on-system-disk", action="store_true",
                       help="Explicitly allow an archive on the root filesystem (no second disk)")
     init.add_argument("--archive-compression", choices=["zstd", "none"], default="zstd")
+    init.add_argument("--continue", dest="continues", type=Path, metavar="CAMPAIGN_DIR",
+                      help="Continue this closed campaign of the same protocol: take over its complete "
+                           "groups, capture every other group again (once per campaign)")
     for verb in ("run", "launch", "status", "verify-archives", "request-stop", "close"):
         cmd = sub.add_parser(verb)
         cmd.add_argument("directory", type=Path)

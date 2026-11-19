@@ -293,7 +293,46 @@ bootových skupín (`train-1` …) pre novú kampaň; `init` inak odmietne
 skupinu, ktorá už má dáta. Dokončenú kampaň (stav `complete`) `close`
 odmietne, jej skupiny preto pre novú kampaň zostávajú obsadené. Nová kampaň
 potrebuje prijatý pilot so súčasným meracím kódom; prijaté session uzavretej
-kampane sa do jej korpusu nepresúvajú.
+kampane sa do jej korpusu nepresúvajú. Jediná výnimka je pokračovacia kampaň.
+
+### Pokračovacia kampaň
+
+Kampaň, ktorá sa zastavila natrvalo (session, ktorú pravidlo `replacement` už
+nenahradí, alebo zaniknutý boot skupiny) a ktorú operátor uzavrel, môže mať
+jedno pokračovanie. Pravidlo je predregistrované v `PLAN_multivm_dataset.md`,
+kap. 8.
+
+```sh
+.venv/bin/python scripts/campaign.py init --continue data/campaigns/<uzavretá kampaň> \
+  --protocol config/collection-v4.json --name <nová kampaň> \
+  --pilot-report a=<audit pilota a> --pilot-report b=<audit pilota b> \
+  --archive-root <archív>
+```
+
+`init --continue` odmietne pokračovanie, ak sa oproti uzavretej kampani líši
+súbor protokolu (sha256), rozvrh, extraktor (`features/`, `guestparse/`),
+profil, runtime (hostiteľ, Python, balíky, kolektor, `vm.swappiness`) alebo
+prostredie hosťa niektorej VM. Odmietne aj neuzavretú kampaň, pokračovanie
+pokračovania a druhé pokračovanie tej istej kampane. Výnimkou je pokračovanie
+uzavreté skôr, než čokoľvek zmeralo; to sa smie založiť znova.
+
+- **Prevzaté skupiny.** Skupina, ktorej všetky priradenia sú v uzavretej
+  kampani prijaté a archivované, sa nezbiera ani neaudituje znova. `init`
+  overí zhodu jej záznamov (kontrolný bod, vybraný audit, `session.json`,
+  príznaky, manifest archívu, boot skupiny) a zapíše ju do `campaign.json`
+  pod `continues.sessions`. Do indexu ide cez pôvodný audit; každý beh znova
+  overí jeho sha256.
+- **Zahodené skupiny.** Každá iná začatá skupina je v `continues.discarded_groups`.
+  Zozbiera sa znova celá v novom boote tej istej VM, s tými istými scenármi
+  a semenami. Jej pôvodné session ostávajú v archíve a do indexu nejdú.
+- **Náhrady.** Limit `replacement.max_per_campaign` sa počíta pre pokračovanie
+  znova.
+- **Index.** `corpus.json` pokračovania pokrýva obe kampane a pod kľúčom
+  `continues` uvádza prevzaté session, zahodené skupiny a počet náhrad
+  uzavretej kampane.
+
+`status` ukazuje pri každej VM `continues` a `taken_over` (počet prevzatých
+priradení); `accepted_archived` ich započítava.
 
 Úplnú opätovnú kontrolu archivovaných dát možno vykonať mimo merania:
 
@@ -336,6 +375,9 @@ Testy používajú syntetické súbory a nahradené procesy zberača/auditu na
 overenie riadenia kampane. Pokrývajú zlyhanie, opätovné spustenie, bootové
 hranice, zámok, poškodenie dát, prerušenie kopírovania a prerušenie uvoľnenia
 pracovnej kópie. Nie sú dôkazom dokončeného živého korpusu.
+Pokračovaciu kampaň (`init --continue`) pokrývajú zatiaľ iba tieto testy
+(`scripts/tests/test_continuation.py`, rozloženie s dvoma VM); na živých dátach
+a pre kampaň s jednou VM je UNVERIFIED.
 `scripts/validate_campaign_archive.py` samostatne overuje reálny disk:
 kopíruje existujúci pilot bez zmeny pôvodných dát a uvoľňovanie skúša na
 syntetickej pracovnej kópii. Beh z 2026-10-13
