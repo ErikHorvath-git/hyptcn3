@@ -17,14 +17,16 @@ celym audit_session (nahradena je iba extrakcia z RAM), jej zaznam da stavbe
 korpusu a drzi tvar rucne zlozeneho zaznamu pri tom, co pise audit.
 
 Druha polovica drzi opacnu stranu, kazde miesto tym, co samo cita. Ostra
-kontrola indexu odmietne rozdelenie mimo planu protokolu (skupina bez predpony
-alebo s predponou navyse, chybajuca skupina). Trening a metody odmietnu archiv
-s riadkom neuvedenym v audite, nad pocet alebo s inou pricinou. Prehratie
-a vyhodnotenie (FAR aj udalosti) zoznam tolerovanych riadkov v audite necitaju
-(vyhodnotenie udalosti berie z auditu relacie iba hashe extrakcie): odmietnu
-riadok nad pocet alebo s inou pricinou. Vyhodnotenie odmietne aj iny dovod
-chyby vstupu a stav prehratia, ktory nesedi s jeho riadkami; prehratie odmietne
-aj pravidlo s chybnym tvarom a archiv bez riadkov a nad suborom archivu, ktory
+kontrola indexu odmietne rozdelenie mimo planu protokolu (skupina bez predpony,
+s predponou navyse alebo s inym poradim, chybajuca skupina). Trening a metody
+odmietnu archiv s riadkom neuvedenym v audite, nad pocet alebo s inou pricinou,
+v kazdej role, ktoru nacitaju, a kazdu relaciu posudia zoznamom v jej vlastnom
+audite. Prehratie a vyhodnotenie (FAR aj udalosti) zoznam tolerovanych riadkov
+v audite necitaju (vyhodnotenie udalosti berie z auditu relacie iba hashe
+extrakcie): odmietnu riadok nad pocet alebo s inou pricinou. Vyhodnotenie
+odmietne aj iny dovod chyby vstupu a stav prehratia, ktory nesedi s jeho
+riadkami; prehratie pod manifestom bez pravidla netoleruje nic, odmietne
+pravidlo s chybnym tvarom a archiv bez riadkov a nad suborom archivu, ktory
 sa neda precitat, nevrati nulu.
 
 Iba MECHANIKA na syntetickych riadkoch - ziadne cislo tu nie je vysledok
@@ -44,7 +46,7 @@ import numpy as np
 import pytest
 import torch
 
-from features import dataset
+from features import dataset, quality  # quality.INVALID_ROW_TRAVERSALS az pri behu: pred balikom B1 to meno nie je
 from features.archive import save
 from features.snapshot import MENA, SCHEMA
 from safeguard import cli
@@ -56,6 +58,7 @@ from tcn import porovnanie as po
 KAMPAN = "odovzdanie-v5-test"
 CYKLY, PLNA_KAZDA, OKNO = 96, 64, 8
 RIADOK = 30  # seq tolerovaneho riadku: mimo plnej snimky aj jej zahrievania
+INDE = 80  # ina poloha tolerovaneho riadku, za druhou plnou snimkou; stoji rovnako window_rows + 1 okien
 FPR = 0.05
 ROZLOZENIE = {"bin_bytes": 16777216, "page_size": 4096, "bins": [[i, 4096] for i in range(3)],
               "regions": [{"gpa": 0, "bytes": 50331648}], "memsize": 50331648, "vcpus": 2}
@@ -129,10 +132,11 @@ def _vysledok(sid, t0, scenar_i, seed, neplatne=None):
             "poznamky": [[] for _ in t], "layout": ROZLOZENIE, "max_medzera_s": 7.5}
 
 
-def _kampan(koren, predpona="v5-"):
+def _kampan(koren, predpona="v5-", riadok_b=RIADOK):
     """Uzavreta kampan v adresari koren: relacie podla planu protokolu, prijate kodom auditu, a index korpusu.
 
     predpona=None: protokol bez group_prefix, skupiny planu sa volaju iba rolou a poradim.
+    riadok_b: seq tolerovaneho riadku v relaciach VM b; relacie VM a ho maju vzdy na RIADOK.
     """
     koren.mkdir(parents=True, exist_ok=True)
     profil = koren / "profile"
@@ -156,7 +160,8 @@ def _kampan(koren, predpona="v5-"):
         miesto.append(sid)
         relacie[sid] = {"sid": sid, "t0": t0, "scenar_i": list(p["scenarios"]).index(s["scenario"]),
                         "seed": s["seed"]}
-        vysledok = _vysledok(**relacie[sid], neplatne={RIADOK: NEUZAVRETY} if s_neplatnym else None)
+        riadok = riadok_b if s["vm"] == "b" else RIADOK
+        vysledok = _vysledok(**relacie[sid], neplatne={riadok: NEUZAVRETY} if s_neplatnym else None)
         if s_neplatnym:
             s_riadkom.add(sid)
         riadky, okna_relacie, pokrytie, dovody, kvalita = collection.analyze_windows(vysledok, p, sid, p["cycles"])
@@ -198,10 +203,13 @@ def _kampan(koren, predpona="v5-"):
             "dev": [z for z in doc["sessions"] if z["role"] == "dev"]}
 
 
-def _podvrh(kampan, neplatne, uvedene):
-    """Index, v ktorom archiv jednej relacie train a zoznam v jej audite vymenil niekto mimo stavby korpusu."""
+def _podvrh(kampan, rola, ktora, neplatne, uvedene):
+    """Index, v ktorom archiv jednej relacie roly a zoznam v jej audite vymenil niekto mimo stavby korpusu.
+
+    ktora: poradie medzi relaciami roly s tolerovanym riadkom v indexe (0 prva, -1 posledna).
+    """
     doc = json.loads(kampan["index"].read_text())
-    zaznam = next(z for z in doc["sessions"] if z["role"] == "train" and z["id"] in kampan["s_riadkom"])
+    zaznam = [z for z in doc["sessions"] if z["role"] == rola and z["id"] in kampan["s_riadkom"]][ktora]
     archiv, audit_cesta = Path(zaznam["features"]), Path(zaznam["audit"])
     archiv.unlink()
     save(archiv, _vysledok(**kampan["relacie"][zaznam["id"]], neplatne=neplatne))
@@ -212,6 +220,13 @@ def _podvrh(kampan, neplatne, uvedene):
     zaznam["features_sha256"], zaznam["audit_sha256"] = _sha(archiv), _sha(audit_cesta)
     kampan["index"].write_text(json.dumps(doc))
     return kampan["index"]
+
+
+def _archivy_s_riadkom(kam):
+    """Pre kazdy prechod, aky moze pravidlo uvadzat, archiv s jednym riadkom, ktoremu sa neuzavrel iba on."""
+    return {prechod: save(kam / f"riadok-{prechod}.npz", _vysledok(
+        "mimo", 1700090000.0, 0, 7, {RIADOK: dict(NEUZAVRETY, truncated_traversals=[prechod])}))
+        for prechod in quality.INVALID_ROW_TRAVERSALS}
 
 
 def _relacia_cez_audit(koren, monkeypatch, riadok):
@@ -381,6 +396,15 @@ def test_ostra_kontrola_indexu_odmietne_skupinu_bez_predpony(tmp_path):
         validate_index(_premenuj_skupinu(index, "v5-train-1", "train-1"))
 
 
+@pytest.mark.parametrize("nova", ["v5-train-9", "v5-train-02"], ids=["mimo_poctu", "s_nulou"])
+def test_ostra_kontrola_indexu_odmietne_skupinu_s_inym_poradim(tmp_path, nova):
+    """Skupiny planu maju poradie od 1 po pocet skupin roly: spravna predpona, rola a pocet skupin nestacia."""
+    index = _kampan(tmp_path / "kampan")["index"]
+    validate_index(index)
+    with pytest.raises(ValueError, match="incomplete planned allocation"):
+        validate_index(_premenuj_skupinu(index, "v5-train-2", nova))
+
+
 def test_ostra_kontrola_indexu_odmietne_chybajucu_skupinu(tmp_path):
     """Index bez jednej skupiny planu neprejde, aj ked sa sam oznacuje za uplny."""
     index = _kampan(tmp_path / "kampan")["index"]
@@ -484,11 +508,13 @@ def test_prehratie_odmietne_chybne_pravidlo_pred_zapisom(kampan, balik, metody, 
             assert not out.exists()
 
 
-@pytest.mark.parametrize("protokol", ["chyba", None, {}], ids=["bez_kluca", "null", "prazdny"])
+@pytest.mark.parametrize("protokol", ["chyba", None, {}, "bez_provenance"],
+                         ids=["bez_kluca", "null", "prazdny", "bez_provenance"])
 def test_prehratie_bez_protokolu_v_manifeste_nic_netoleruje(kampan, balik, metody, tmp_path, protokol):
     """Manifest, ktory nenesie protokol, nema pravidlo: riadok, ktory pravidlo korpusu toleruje, prehratie kazi.
 
-    Metodu porovnania bez protokolu nacitanie prijme a verdikt prehratia bez pravidla netoleruje nic.
+    Metodu porovnania bez protokolu (aj bez celeho kluca provenance) nacitanie prijme a verdikt prehratia
+    bez pravidla netoleruje nic: ani riadok, ktoremu sa neuzavrel iny prechod, nez aky uvadza pravidlo korpusu.
     Hlavny balik bez protokolu odmietne uz nacitanie (safeguard/bundle.py), skor nez prehratie nieco zapise;
     null namiesto protokolu tam konci vynimkou, ktoru prikaz nezachyti.
     """
@@ -499,6 +525,8 @@ def test_prehratie_bez_protokolu_v_manifeste_nic_netoleruje(kampan, balik, metod
         assert manifest["provenance"]["protocol"]["invalid_rows"] == {"max": 1, "traversals": ["processes"]}
         if protokol == "chyba":
             del manifest["provenance"]["protocol"]
+        elif protokol == "bez_provenance":
+            del manifest["provenance"]
         else:
             manifest["provenance"]["protocol"] = protokol
         (kopia / "manifest.json").write_text(json.dumps(manifest))
@@ -509,6 +537,12 @@ def test_prehratie_bez_protokolu_v_manifeste_nic_netoleruje(kampan, balik, metod
             stav = json.loads((out / "status.json").read_text())
             assert kod == 2 and stav["ok"] is False
             assert stav["input_errors"] == 1 and stav["tolerated_invalid_rows"] == 0
+            for prechod, archiv in _archivy_s_riadkom(tmp_path).items():
+                out = tmp_path / ("model-" + prechod)
+                kod, _ = _prikaz(hlavny, "--threads", 2, "replay", volba, kopia, "--archive", archiv, "--out", out)
+                stav = json.loads((out / "status.json").read_text())
+                assert kod == 2 and stav["ok"] is False, prechod
+                assert stav["input_errors"] == 1 and stav["tolerated_invalid_rows"] == 0, prechod
         elif protokol is None:
             with pytest.raises(AttributeError):
                 _prikaz(hlavny, *argv)
@@ -516,6 +550,33 @@ def test_prehratie_bez_protokolu_v_manifeste_nic_netoleruje(kampan, balik, metod
         else:
             kod, chyby = _prikaz(hlavny, *argv)
             assert kod == 2 and chyby.startswith("safeguard: ") and not out.exists()
+
+
+def test_prehratie_s_protokolom_bez_pravidla_nic_netoleruje(balik, metody, tmp_path):
+    """Protokol v manifeste, ktory pravidlo invalid_rows nema, netoleruje nic: prehratie si pravidlo nedoplni.
+
+    Taky manifest prijme aj nacitanie hlavneho balika, preto sem dojdu oba prikazy. Archiv s riadkom
+    procesov je pritom taky, aky pod nezmenenym manifestom prehratie nekazi.
+    """
+    archivy = _archivy_s_riadkom(tmp_path)
+    for hlavny, volba, model in ((cli.main, "--bundle", balik), (po._hlavny, "--model", metody["zscore"])):
+        meno = volba.strip("-")
+        out = tmp_path / (meno + "-s-pravidlom")
+        kod, chyby = _prikaz(hlavny, "--threads", 2, "replay", volba, model,
+                             "--archive", archivy["processes"], "--out", out)
+        stav = json.loads((out / "status.json").read_text())
+        assert kod == 0 and stav["ok"] is True, (meno, chyby)
+        assert stav["input_errors"] == stav["tolerated_invalid_rows"] == 1, meno
+        kopia = Path(shutil.copytree(model, tmp_path / meno))
+        manifest = json.loads((kopia / "manifest.json").read_text())
+        assert manifest["provenance"]["protocol"].pop("invalid_rows") == {"max": 1, "traversals": ["processes"]}
+        (kopia / "manifest.json").write_text(json.dumps(manifest))
+        for prechod, archiv in archivy.items():
+            out = tmp_path / f"{meno}-{prechod}"
+            kod, _ = _prikaz(hlavny, "--threads", 2, "replay", volba, kopia, "--archive", archiv, "--out", out)
+            stav = json.loads((out / "status.json").read_text())
+            assert kod == 2 and stav["ok"] is False, (meno, prechod)
+            assert stav["input_errors"] == 1 and stav["tolerated_invalid_rows"] == 0, (meno, prechod)
 
 
 def test_prehratie_archivu_bez_riadkov_neskonci_nulou(balik, metody, tmp_path):
@@ -689,6 +750,8 @@ def test_vyhodnotenie_odmietne_stav_ktory_nesedi_s_riadkami(kampan, prehratia, t
             ev.vyhodnot_udalosti(kampan["index"], adresare[meno], rola="dev")
 
 
+@pytest.mark.parametrize("rola", ROLES[:-1])
+@pytest.mark.parametrize("ktora", [0, -1], ids=["prva", "posledna"])
 @pytest.mark.parametrize("neplatne, uvedene, hlaska", [
     ({RIADOK: NEUZAVRETY}, [], "incomplete features in accepted audit"),
     ({RIADOK: NEUZAVRETY, RIADOK + 20: NEUZAVRETY}, [RIADOK, RIADOK + 20],
@@ -696,14 +759,38 @@ def test_vyhodnotenie_odmietne_stav_ktory_nesedi_s_riadkami(kampan, prehratia, t
     ({RIADOK: INY_PRECHOD}, [RIADOK], "cause the protocol does not tolerate"),
     ({RIADOK: CHYBA_CITANIA}, [RIADOK], "cause the protocol does not tolerate"),
 ], ids=["neuvedeny_v_audite", "nad_pocet", "iny_prechod", "chyba_citania"])
-def test_trening_a_metody_odmietnu_riadok_mimo_pravidla(tmp_path, neplatne, uvedene, hlaska):
-    """Index, ktory nevznikol stavbou korpusu: nacitanie treningu aj metod pravidlo overi samo."""
-    index = _podvrh(_kampan(tmp_path / "kampan"), neplatne, uvedene)
+def test_trening_a_metody_odmietnu_riadok_mimo_pravidla(tmp_path, neplatne, uvedene, hlaska, ktora, rola):
+    """Index, ktory nevznikol stavbou korpusu: nacitanie treningu aj metod pravidlo overi samo.
+
+    V kazdej role, ktoru nacitaju, a v prvej aj poslednej jej relacii s riadkom. Druha relacia roly
+    s riadkom ho ma na tom istom seq a vo svojom audite ho uvadza: zoznam z ineho auditu riadok nezachrani.
+    """
+    index = _podvrh(_kampan(tmp_path / "kampan"), rola, ktora, neplatne, uvedene)
     validate_index(index)
     with pytest.raises(ValueError, match=hlaska):
         train_bundle(index, tmp_path / "balik", window_rows=OKNO, max_gap_s=7.5, epochs=1, batch_size=64, fpr=FPR)
     with pytest.raises(ValueError, match=hlaska):
         po.nacitaj_role(index)
+
+
+def test_trening_a_metody_posudia_relaciu_jej_auditom(tmp_path):
+    """Relacie jednej roly s tolerovanym riadkom na roznych miestach: kazdu posudi zoznam v jej vlastnom audite.
+
+    Zoznam prevzaty z auditu inej relacie tej istej roly by riadok tejto relacie neuvadzal.
+    """
+    kampan = _kampan(tmp_path / "kampan", riadok_b=INDE)
+    relacie = json.loads(kampan["index"].read_text())["sessions"]
+    for rola in ROLES:
+        uvedene = {z["vm"]: json.loads(Path(z["audit"]).read_text())["values"]["quality"]["tolerated_invalid_seq"]
+                   for z in relacie if z["role"] == rola and z["id"] in kampan["s_riadkom"]}
+        assert uvedene == {"a": [RIADOK], "b": [INDE]}, rola
+    okna = {rola: 2 * 80 + 2 * 71 for rola in ROLES[:-1]}  # riadok na inom mieste stoji tiez window_rows + 1 okien
+    assert {rola: kampan["okna"][rola] for rola in okna} == okna
+    validate_index(kampan["index"])
+    assert {rola: len(data.indices) for rola, data in po.nacitaj_role(kampan["index"])["data"].items()} == okna
+    vysledok = train_bundle(kampan["index"], tmp_path / "balik", window_rows=OKNO, max_gap_s=7.5, epochs=1,
+                            batch_size=64, fpr=FPR)
+    assert vysledok["training"]["windows"] == okna
 
 
 def test_zaznam_celeho_auditu_prijme_stavba_korpusu(kampan, tmp_path, monkeypatch):
