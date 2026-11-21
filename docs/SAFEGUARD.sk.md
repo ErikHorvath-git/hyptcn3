@@ -177,6 +177,35 @@ obnov do nového adresára `raw` a vedľa neho skopíruj `session.json`
 [AUTOMATICKY_ZBER.sk.md](AUTOMATICKY_ZBER.sk.md)); potom použi
 `--snapshots <nový>/raw`.
 
+Príkaz skončí kódom 0, keď `status.json` nesie `ok=true`, a kódom 2, keď nesie
+`ok=false` alebo keď príkaz chybu zachytí skôr, než `status.json` vznikne. Prázdny
+alebo skrátený súbor archívu medzi zachytené chyby nepatrí: príkaz vtedy skončí
+výnimkou s kódom 1 a `status.json` nezapíše. Prerušenie z klávesnice končí kódom 130.
+Neplatný riadok archívu detektor neskóruje a zapíše ho ako `input_error` s dôvodom
+`invalid_input`. Prehratie archívu (`--archive`) číta pravidlo `invalid_rows`
+z protokolu, ktorý je v manifeste balíka (`provenance.protocol`). Keď sú všetky
+chyby vstupu iba také riadky a pravidlo ich toleruje (počet najviac `max`, neuzavretý
+iba prechod z `traversals`, žiadna chyba čítania ani doplnené nuly), prehratie končí
+`ok=true` a ich počet uvádza `tolerated_invalid_rows`; `input_errors` ich počíta
+naďalej. Iná chyba vstupu, riadok mimo pravidla, neplatný riadok pri balíku bez
+pravidla alebo archív bez riadkov znamená `ok=false`. Pravidlo s chybným tvarom
+ukončí prehratie skôr, než vznikne výstupný adresár.
+
+Pole `ok` je verdikt prehratia; `state` a `last` opisujú iba posledný riadok. Stav
+s `ok=true` môže niesť `input_errors` väčšie než nula (tolerované riadky) a, keď je
+tolerovaný riadok posledný, aj `state` `input_error`. Verdikt porovnáva riadky
+prehratia s pravidlom protokolu balíka. Audit session prehratie nečíta: nezisťuje, či
+audit ten riadok uviedol ani či balík vznikol z korpusu tejto session. Tolerovaný
+riadok zruší okno aj hlasy pravidla k z n; alarm modelu, ktorý trval cez taký riadok,
+sa po novom naplnení okna a hlasov počíta ako ďalšia alarmová udalosť. Schéma
+`status.json` sa nezmenila a stav zapísaný starším kódom pole `tolerated_invalid_rows`
+nemá. To isté pravidlo (`features/quality.py`) používa audit session, stavba korpusu,
+tréning aj základné metódy `tcn/porovnanie.py` vrátane ich prehratia
+(`python3 -m tcn.porovnanie replay` rozhoduje o `ok` rovnako, chybu čítania archívu
+a chybné pravidlo však nezachytáva a končí výnimkou). Prehratie surových snímok
+(`--snapshots`), `watch` ani `run` pravidlo neuplatňujú: každá chyba vstupu tam
+znamená `ok=false`.
+
 **Vyhodnotenie FAR a klasifikátora z prehratí:**
 
 ```sh
@@ -191,7 +220,9 @@ Skončí chybou, keď index nie je úplný; keď archív nepatrí session tejto 
 session chýba, je prehratá dvakrát či nie celá (prehratie musí skončiť `replay_complete`
 a pokryť session od začiatku po koniec); keď prehratia použili rôzne balíky,
 diagnostický balík, balík z iného indexu alebo s inou dĺžkou okna či maximálnou
-medzerou než protokol indexu; aj keď `status.json` nesedí s `events.jsonl`.
+medzerou než protokol indexu; keď `status.json` nesedí s `events.jsonl`; aj keď
+prehratie obsahuje chybu vstupu, ktorú pravidlo `invalid_rows` protokolu indexu
+netoleruje.
 
 `test_benign` vyhodnotí iba s `--final` a `--final` platí iba pre `test_benign`.
 Vyžaduje git a `tcn/eval.py` bez neuložených zmien a beží raz na korpus: po vytvorení
@@ -211,8 +242,18 @@ FAR za hodinu sledovaného aj skórovaného času s exaktným Garwoodovým inter
 podiel času bez skóre a Pearsonov test rozptylu udalostí medzi session; spolu,
 po skupinách a po scenároch. Počty udalostí integrity, výpadkov senzora a chýb vstupu
 sú v `values.dane_prijatim_korpusu` bez intervalu: prijatie do korpusu zamieta session
-s nálezom integrity, medzerou, chybou čítania alebo neplatným riadkom, takže tieto počty
-nie sú meraním detektora; počty neuzavretých kontrol integrity sú tam tiež.
+s nálezom integrity, medzerou, chybou čítania alebo neplatným riadkom mimo pravidla
+`invalid_rows` protokolu, takže tieto počty nie sú meraním detektora; počty neuzavretých
+kontrol integrity sú tam tiež. Riadok tolerovaný tým pravidlom detektor neskóruje:
+prehratie ho uvádza ako chybu vstupu, vyhodnotenie ho počíta v `chyb_vstupu` aj
+v `neplatnych_riadkov` a okná s ním sú v podiele času bez skóre. Schéma výsledku
+sa s poľom `neplatnych_riadkov` nezmenila; výsledok zapísaný starším kódom ho nemá.
+`tcn.eval udalosti` (FAR počas prevádzkových udalostí) odmieta prehratie pre tie isté
+dve príčiny (`status.json` nesedí s `events.jsonl`, chyba vstupu mimo pravidla)
+a počty chýb vstupu a neplatných riadkov (`chyb_vstupu`, `neplatnych_riadkov`) uvádza
+vo `values.dane_prijatim_relacii`. Tie počty sú za celé session: zahŕňajú aj riadok
+vo vylúčenom úseku (udalosť bez dôkazu a jej dozvuk), ktorý nie je v čase žiadnej
+kategórie.
 `values.klasifikacia_aktivit` hodnotí klasifikátor profilu záťaže (trieda okna je scenár
 jeho session): presnosť a macro-F1 na okná, metriky tried, maticu zámen a počet session
 so správnou väčšinovou predikciou s Clopperovým-Pearsonovým intervalom, lebo okná jednej

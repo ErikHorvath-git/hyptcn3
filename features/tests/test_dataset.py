@@ -166,3 +166,30 @@ def test_tolerated_invalid_rows_enter_the_corpus_only_within_the_rule(tmp_path):
         dataset.build(audits, protocol(), "protocol-test")
     tolerant = dict(protocol(), invalid_rows={"max": 3, "traversals": ["processes"]})
     assert dataset.build(audits, tolerant, "protocol-test")["complete"]
+
+
+@pytest.mark.parametrize("cause", [
+    {"truncated_traversals": ["modules"]},
+    {"truncated_traversals": ["processes", "modules"]},
+    {"truncated_traversals": ["processes"], "read_errors": 1},
+    {"truncated_traversals": ["processes"], "filled_zero": 4096},
+    {"truncated_traversals": []},
+], ids=["other_traversal", "two_traversals", "read_error", "filled_zero", "no_traversal"])
+def test_listed_invalid_row_with_a_cause_outside_the_rule_stays_out_of_the_corpus(tmp_path, cause):
+    """The audit's list alone admits nothing: corpus building checks the cause of each invalid row itself."""
+    import numpy as np
+    audits = [record(tmp_path, role, i) for i, role in enumerate(dataset.ROLES)]
+    path = audits[0]
+    report = json.loads(path.read_text())
+    data = dict(np.load(report["values"]["features"], allow_pickle=False))
+    quality = json.loads(str(data["quality_json"]))
+    quality[1].update(cause, behavior_valid=False)
+    data["quality_json"] = np.array(json.dumps(quality))
+    data["valid"] = np.array([i != 1 for i in range(len(data["valid"]))])
+    np.savez(report["values"]["features"], **data)
+    report["values"]["features_sha256"] = dataset.sha(report["values"]["features"])
+    report["values"]["quality"] = {"tolerated_invalid_seq": [int(data["seq"][1])]}
+    path.write_text(json.dumps(report))
+    tolerant = dict(protocol(), invalid_rows={"max": 3, "traversals": ["processes"]})
+    with pytest.raises(ValueError, match="cause the protocol does not tolerate"):
+        dataset.build(audits, tolerant, "protocol-test")

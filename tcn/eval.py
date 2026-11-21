@@ -31,9 +31,14 @@ jednej roly korpusu a pocita podla docs/METODIKA_ZBERU.sk.md, kap. 7: alarmove
 UDALOSTI (nabezna hrana pravidla k z n, pole alarm_event), nie okna nad prahom;
 FAR za hodinu k celemu sledovanemu casu aj k efektivnemu casu skorovania, vzdy
 s exaktnym intervalom neistoty (nula udalosti neznamena nulovu mieru); podiel
-casu bez skore. Integrita, vypadky a chyby vstupu su na prijatych relaciach
-korpusu nulove uz z prijatia (scripts/collection.py audit), preto idu do casti
-'dane_prijatim_korpusu' bez intervalu. test_benign je zaverecny test (kap. 5):
+casu bez skore. Nalezy integrity, vypadky a chyby vstupu na prijatych relaciach
+korpusu urcuje uz prijatie (scripts/collection.py audit): nalezy a vypadky su
+nulove, chybou vstupu je iba riadok, ktory toleruje pravidlo invalid_rows
+protokolu. Taky riadok detektor neskoruje a prehratie ho uvadza ako chybu
+vstupu. Preto idu tieto pocty do casti 'dane_prijatim_korpusu' bez intervalu
+a prehratie s chybou vstupu mimo toho pravidla prikaz odmietne. Tak isto to
+overuje `python3 -m tcn.eval udalosti` (cast 'dane_prijatim_relacii').
+test_benign je zaverecny test (kap. 5):
 prikaz ho pusti iba s --final, nad commitnutym tcn/eval.py a iba raz na korpus
 (zaznam '<corpus>.test_benign-final.json' vedla indexu vznikne az po --out). Detekciu utokov ani
 cas do detekcie z toho odvodit nemozno. Ten isty prikaz vyhodnoti aj
@@ -239,6 +244,8 @@ def suhrn_relacie(riadky, perioda_s, max_medzera_s):
     medzery = [b - a for a, b in zip(casy, casy[1:]) if b - a > max_medzera_s]
     skorovanych = sum(r["score"] is not None for r in riadky)
     chyb = sum(r["model_state"] == "input_error" for r in riadky)
+    # Neplatny riadok archivu (detektor ho neskoruje); iba taku chybu vstupu moze tolerovat pravidlo invalid_rows.
+    neplatnych = sum(r["model_state"] == "input_error" and r.get("reason") == "invalid_input" for r in riadky)
     udalosti = [r for r in riadky if r["alarm_event"]]
     model = [r for r in udalosti if "model_anomaly" in r["alarm_sources"]]
     sledovany = casy[-1] - casy[0] + perioda_s
@@ -255,6 +262,7 @@ def suhrn_relacie(riadky, perioda_s, max_medzera_s):
         "bez_skore_riadkov_podiel": 1 - skorovanych / len(riadky),
         "chyb_vstupu": chyb,
         "chyb_vstupu_s": chyb * perioda_s,
+        "neplatnych_riadkov": neplatnych,
         "vypadkov": len(medzery),
         "vypadky_s": sum(d - perioda_s for d in medzery),
         "integrita_uzavretych_riadkov": sum(bool(r["integrity"]["conclusive"]) for r in riadky),
@@ -365,6 +373,22 @@ def _manifest_sha(manifest):
     return hashlib.sha256(json.dumps(manifest, sort_keys=True).encode()).hexdigest()
 
 
+def _over_chyby_vstupu(adresar, stav, riadky, suhrn, protokol):
+    """Stav prehratia sedi s riadkami a chybou vstupu je iba riadok, ktory toleruje pravidlo invalid_rows.
+
+    Relacie korpusu aj indexu udalosti prijal audit podla protokolu, takze v
+    prehrati prijateho archivu moze byt chybou vstupu iba riadok tolerovany tym
+    pravidlom. Je to to iste pravidlo ako v audite, stavbe korpusu a treningu
+    (features/quality.py); prehratie s inou chybou vstupu sa nevyhodnocuje.
+    """
+    from features.quality import tolerated_input_errors
+    if (stav.get("scored"), stav.get("input_errors"), stav.get("alarm_events")) != (
+            suhrn["skorovanych"], suhrn["chyb_vstupu"], suhrn["udalosti"]):
+        raise ValueError("%s: status.json nesedi s events.jsonl" % adresar)
+    if tolerated_input_errors(riadky, protokol) is None:
+        raise ValueError("%s: chyba vstupu, ktoru pravidlo invalid_rows protokolu netoleruje" % adresar)
+
+
 def vyhodnot_far(korpus, rola, prehratia, alfa=0.05, final=False, kampan=None):
     """FAR jednej roly korpusu z prehrati; kazda relacia roly prave raz."""
     alfa = _alfa(alfa)
@@ -405,9 +429,8 @@ def vyhodnot_far(korpus, rola, prehratia, alfa=0.05, final=False, kampan=None):
         if riadky[0]["timestamp"] != zaznam["start"] or riadky[-1]["timestamp"] != zaznam["end"]:
             raise ValueError("%s: prehratie nepokryva celu relaciu" % adresar)
         suhrn = suhrn_relacie(riadky, perioda, max_medzera)
-        if (stav.get("scored"), stav.get("input_errors"), stav.get("alarm_events")) != (
-                suhrn["skorovanych"], suhrn["chyb_vstupu"], suhrn["udalosti"]):
-            raise ValueError("%s: status.json nesedi s events.jsonl" % adresar)
+        # Chyby vstupu sa nizsie uvadzaju ako dane prijatim korpusu; to plati iba pre riadky tolerovane pravidlom.
+        _over_chyby_vstupu(adresar, stav, riadky, suhrn, protokol)
         relacie[zaznam["id"]] = dict(suhrn, scenario=zaznam["scenario"], skupina=zaznam["group"],
                                      features_sha256=zaznam["features_sha256"],
                                      archiv=os.path.realpath(konf["archive"]),
@@ -451,13 +474,16 @@ def vyhodnot_far(korpus, rola, prehratia, alfa=0.05, final=False, kampan=None):
         "dane_prijatim_korpusu": {
             "udalosti_integrita": sum(s["udalosti_integrita"] for s in zoznam),
             "chyb_vstupu": sum(s["chyb_vstupu"] for s in zoznam),
+            "neplatnych_riadkov": sum(s["neplatnych_riadkov"] for s in zoznam),
             "vypadkov": sum(s["vypadkov"] for s in zoznam),
             "vypadky_s": sum(s["vypadky_s"] for s in zoznam),
             "integrita_uzavretych_riadkov": sum(s["integrita_uzavretych_riadkov"] for s in zoznam),
             "integrita_neuzavrete": dict(sorted(neuzavrete.items())),
             "poznamka": ("prijatie do korpusu zamieta relacie s nalezom integrity, medzerou, chybou citania "
-                         "alebo neplatnym riadkom (scripts/collection.py audit), takze tieto hodnoty nie su "
-                         "meranim detektora; vypadky senzora a integritu bez vyberu meria safeguard run"),
+                         "alebo neplatnym riadkom mimo pravidla invalid_rows protokolu (scripts/collection.py "
+                         "audit), takze tieto hodnoty nie su meranim detektora; riadok tolerovany tym pravidlom "
+                         "detektor neskoruje, prehratie ho uvadza ako chybu vstupu (neplatnych_riadkov) a okna "
+                         "s nim su v podiele bez skore; vypadky senzora a integritu bez vyberu meria safeguard run"),
         },
         "klasifikacia_aktivit": klasifikacia_aktivit(relacie, balik["classes"], alfa),
         "relacie": relacie, "zdroje_udalosti": zdroje, "predpoklady": PREDPOKLADY, "poznamka": poznamka,
@@ -601,6 +627,12 @@ def udalosti_z_korpusu(korpus, rola):
     relacie = [z for z in korpus["sessions"] if z["role"] == rola]
     if not relacie or any("events" not in z or "events_sha256" not in z for z in relacie):
         raise ValueError("relacie roly %s nemaju zaznam udalosti" % rola)
+    # Index udalosti nesie hashe extrakcie pri kazdej relacii; korpus ich ma v audite relacie, na ktory sa viaze hashom.
+    for i, z in enumerate(relacie):
+        if _digest(z["audit"]) != z["audit_sha256"]:
+            raise ValueError("audit relacie %s sa zmenil od indexu korpusu" % z["id"])
+        audit = json.loads(open(z["audit"], encoding="utf-8").read())
+        relacie[i] = dict(z, extractor_sha256=audit["values"]["extractor_sha256"])
     return {"schema": SCHEMA_INDEX_UDALOSTI, "complete": True, "planned_sessions": len(relacie),
             "protocol_sha256": korpus["protocol_sha256"], "protocol_config": korpus["protocol_config"],
             "sessions": relacie}
@@ -655,6 +687,7 @@ def vyhodnot_udalosti(index_cesta, prehratia, alfa=0.05, rola=None):
             raise ValueError("%s: events.json sa zmenil od indexu" % adresar)
         udalosti = json.loads(open(zaznam["events"], encoding="utf-8").read())["events"]
         suhrn = suhrn_relacie(riadky, perioda, max_medzera)
+        _over_chyby_vstupu(adresar, stav, riadky, suhrn, protokol)
         kategorie = kategorie_udalosti(riadky, udalosti, perioda, okno)
         for kategoria, e in _expozicia(riadky, kategorie, perioda).items():
             po_kategoriach[kategoria].append(dict(e, relacia=zaznam["id"], skupina=zaznam["group"]))
@@ -714,6 +747,17 @@ def vyhodnot_udalosti(index_cesta, prehratia, alfa=0.05, rola=None):
                      "s_alarmom_modelu": sum(p["alarm_modelu"] for p in vykonane),
                      "alarm_na_konci_dozvuku": sum(p["alarm_na_konci_dozvuku"] for p in vykonane),
                      "priebeh": priebehy},
+        "dane_prijatim_relacii": {
+            "chyb_vstupu": sum(s["chyb_vstupu"] for s in relacie.values()),
+            "neplatnych_riadkov": sum(s["neplatnych_riadkov"] for s in relacie.values()),
+            "poznamka": ("prijatie relacie (scripts/collection.py audit) zamieta neplatny riadok mimo pravidla "
+                         "invalid_rows protokolu, takze tieto hodnoty nie su meranim detektora; riadok tolerovany "
+                         "tym pravidlom detektor neskoruje, prehratie ho uvadza ako chybu vstupu a riadky bez skore "
+                         "(on a zahrievanie okna po nom) su v sledovanom case svojej kategorie, nie v skorovanom; "
+                         "pocty su za cele relacie, takze zahrnaju aj riadok vo vylucenom useku (udalost bez dokazu "
+                         "a jej dozvuk), ktory nie je v case ziadnej kategorie a relacia ho ma vo vylucenych_riadkov; "
+                         "prehratie s inou chybou vstupu sa nevyhodnoti"),
+        },
         "relacie": relacie, "predpoklady": [*PREDPOKLADY, *PREDPOKLADY_UDALOSTI],
         "poznamka": ("Prevadzkove udalosti su benigne; kazdy alarm je falosny. Vysledok plati iba pre tieto typy "
                      "udalosti v labe a nehovori nic o detekcii utokov ani malveru (HONESTY P4)."),

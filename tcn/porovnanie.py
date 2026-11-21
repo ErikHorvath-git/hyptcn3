@@ -29,7 +29,11 @@ mu podstrci iba objekt s rozhranim balika (contract, threshold, k, n,
 manifest, score). Riadky events.jsonl maju preto schemu a tvar
 hyptcn3/safeguard-events/1 a adresar prehratia je ten, ktory cita
 tcn.eval._nacitaj_prehratie (configuration.json, status.json, events.jsonl);
-vyhodnot_udalosti ho spracuje bez zmeny.
+vyhodnot_udalosti ho spracuje bez zmeny. Neplatny riadok, ktory audit prijal
+podla pravidla invalid_rows protokolu (features/quality.py), nacitanie roly
+prijme rovnako ako train_bundle: okno s nim nevznikne, takze sa neuci ani
+neskoruje. Prehratie, ktoreho chyby vstupu su iba take riadky, konci ok=true
+a navratovym kodom 0 (pole tolerated_invalid_rows v status.json).
 
 CO BASELINY VIDIA
 -----------------
@@ -71,6 +75,7 @@ import torch
 from torch import nn
 
 from features.archive import load as load_archive
+from features.quality import accepted_invalid_rows, invalid_rows_rule, tolerated_input_errors
 from safeguard.bundle import digest
 from safeguard.features import (GLOBAL_NAMES, LOCAL_NAMES, FeatureNormalizer, WindowBuffer,
                                 arrays, check_frame, feature_contract, frames_from_archive)
@@ -124,11 +129,13 @@ def nacitaj_role(korpus, *, diagnostic=False):
         snimky = list(frames_from_archive(load_archive(zaznam["features"]), zaznam["id"]))
         if not snimky or snimky[0].timestamp != zaznam["start"] or snimky[-1].timestamp != zaznam["end"]:
             raise ValueError("casy archivu sa lisia od indexu korpusu")
-        if any(not s.valid for s in snimky):
-            raise ValueError("prijaty archiv obsahuje neplatne riadky")
+        audit = json.loads(Path(zaznam["audit"]).read_text())["values"]
+        # Neplatne riadky iba tak, ako ich prijal audit (pravidlo invalid_rows) - ta ista kontrola ako train_bundle.
+        accepted_invalid_rows([s.seq for s in snimky], [s.valid for s in snimky],
+                              [s.quality for s in snimky], audit, protokol)
         if kontrakt is None:
             kontrakt = feature_contract(snimky[0], window_rows, max_gap)
-        if snimky[0].layout != json.loads(Path(zaznam["audit"]).read_text())["values"]["layout"]:
+        if snimky[0].layout != audit["layout"]:
             raise ValueError("layout archivu sa lisi od auditu")
         for s in snimky:
             check_frame(s, kontrakt)
@@ -553,6 +560,9 @@ def replay(model, archiv, out, *, allow_diagnostic=False, argv=None):
     """Prehratie archivu tym istym Detectorom ako `safeguard replay --archive`; ten isty vystup."""
     balik = nacitaj(model, allow_diagnostic=allow_diagnostic)
     out, archiv = Path(out), Path(archiv)
+    # Verdikt nizsie uplatnuje pravidlo invalid_rows protokolu balika; chybne pravidlo ukonci prehratie pred zapisom.
+    protokol = balik.manifest.get("provenance", {}).get("protocol") or {}
+    invalid_rows_rule(protokol)
     out.mkdir(parents=True, exist_ok=False)
     (out / "evidence").mkdir()
     _zapis(out / "configuration.json", {
@@ -578,7 +588,10 @@ def replay(model, archiv, out, *, allow_diagnostic=False, argv=None):
             "alarm_events": sum(r["alarm_event"] for r in riadky),
             "fatal": any(r["fatal"] for r in riadky), "stop_reason": "replay_complete",
             "state": riadky[-1]["state"] if riadky else "input_error", "last": riadky[-1] if riadky else None}
-    stav["ok"] = bool(riadky) and not stav["input_errors"]
+    # Chyba vstupu, ktorou je iba riadok tolerovany pravidlom invalid_rows protokolu balika, prehratie nekazi.
+    tolerovane = tolerated_input_errors(riadky, protokol)
+    stav["tolerated_invalid_rows"] = len(tolerovane or [])
+    stav["ok"] = bool(riadky) and tolerovane is not None
     _zapis(out / "status.json", stav)
     return stav
 

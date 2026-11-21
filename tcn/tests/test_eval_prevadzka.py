@@ -102,6 +102,35 @@ def test_far_po_typoch_triedach_a_voci_prevadzke(kampan):
                                                 "collector_sha256": "ine", "extractor_sha256": "zhodne"}
 
 
+def test_tolerovany_riadok_vo_vylucenom_useku_je_iba_v_poctoch_relacii(kampan):
+    """Pocty v dane_prijatim_relacii su za cele relacie; riadok vo vylucenom useku nie je v case ziadnej kategorie.
+
+    Relacia b ma nevykonanu udalost v case 200 az 300 s. Riadok v case 250 s je tu jediny bez skore
+    (zahrievanie okna po nom synteticke riadky nemaju); drzi sa iba to, kam ho vyhodnotenie zarata.
+    """
+    index, prehratia = kampan
+    doc = json.loads(index.read_text())
+    doc["protocol_config"] = dict(PROTOKOL, invalid_rows={"max": 1, "traversals": ["processes"]})
+    index.write_text(json.dumps(doc))
+    riadky = [json.loads(r) for r in (prehratia[1] / "events.jsonl").read_text().splitlines()]
+    i, = [i for i, r in enumerate(riadky) if r["timestamp"] == 250.0]
+    riadky[i] = dict({k: v for k, v in riadky[i].items() if k != "activity"}, seq=i, score=None, fatal=False,
+                     model_state="input_error", reason="invalid_input",
+                     quality={"truncated_traversals": ["processes"], "read_errors": 0, "filled_zero": 0})
+    (prehratia[1] / "events.jsonl").write_text("".join(json.dumps(r) + "\n" for r in riadky))
+    stav = json.loads((prehratia[1] / "status.json").read_text())
+    (prehratia[1] / "status.json").write_text(json.dumps(dict(stav, scored=stav["scored"] - 1, input_errors=1)))
+    values, _ = ev.vyhodnot_udalosti(index, prehratia)
+    dane = values["dane_prijatim_relacii"]
+    assert (dane["chyb_vstupu"], dane["neplatnych_riadkov"]) == (1, 1)
+    assert "vylucenom useku" in dane["poznamka"]
+    assert (values["relacie"]["b"]["neplatnych_riadkov"], values["relacie"]["b"]["vylucenych_riadkov"]) == (1, 24 + 60)
+    # Riadok bez skore nechyba v skorovanom case ziadnej kategorie: do casu kategorii nevstupil vobec.
+    prevadzka = values["merane"]["prevadzka"]["spolu"]
+    assert prevadzka["sledovany_s"] == prevadzka["skorovany_s"] == (116 + 116) * T
+    assert set(values["merane"]["typy"]) == {"zamok_tabulky"}
+
+
 def test_odmietne_zmeneny_zaznam_udalosti_a_chybajuce_prehratie(kampan):
     index, prehratia = kampan
     with pytest.raises(ValueError, match="chybaju"):
@@ -188,11 +217,23 @@ def test_prikaz_udalosti_zapise_novy_subor(kampan, tmp_path):
         ev._hlavny(argv)
 
 
-def _korpus(index, prehratia, rola="test_benign", provenance=True):
-    """Korpus protokolu v4 (krok B, E2'): tie iste relacie ako role korpusu s udalostami."""
+def _korpus(index, prehratia, rola="test_benign", provenance=True, uprav=None):
+    """Korpus protokolu v4 (krok B, E2'): tie iste relacie ako role korpusu s udalostami.
+
+    Zaznam korpusu (features/dataset.py) nema extractor_sha256 ako zaznam indexu
+    udalosti; nesie ho audit relacie, na ktory sa zaznam viaze hashom.
+    uprav(zaznamy roly) moze zaznamy pred zapisom korpusu zmenit.
+    """
     doc = json.loads(index.read_text())
-    sessions = [dict(s, role=rola) for s in doc["sessions"]] + [
-        dict(doc["sessions"][0], id="tr", role="train", features_sha256="iny")]
+    sessions = []
+    for s in doc["sessions"]:
+        audit = index.with_name("audit_" + s["id"] + ".json")
+        audit.write_text(json.dumps({"values": {"extractor_sha256": s["extractor_sha256"]}}))
+        sessions.append(dict({k: v for k, v in s.items() if k != "extractor_sha256"}, role=rola,
+                             audit=str(audit), audit_sha256=_sha(audit)))
+    if uprav:
+        uprav(sessions)
+    sessions.append(dict(sessions[0], id="tr", role="train", features_sha256="iny"))
     korpus = index.with_name("corpus.json")
     korpus.write_text(json.dumps({"schema": "hyptcn3/corpus-index/1", "complete": True, "protocol_sha256": "p",
                                   "protocol_config": PROTOKOL, "sessions": sessions}))
@@ -228,6 +269,45 @@ def test_e2_z_korpusu_odmietne_cudzi_balik_a_korpus_bez_udalosti(kampan):
     korpus.write_text(json.dumps(doc))
     with pytest.raises(ValueError, match="nema udalosti"):
         ev.vyhodnot_udalosti(korpus, prehratia, rola="test_benign")
+
+
+@pytest.mark.parametrize("ktora", [0, 1])
+def test_e2_z_korpusu_berie_extrakciu_z_auditu_relacie(kampan, ktora):
+    """Prostredie voci baliku sa pri korpuse cita z auditu relacie; zmeneny audit ktorejkolvek relacie sa odmietne."""
+    index, prehratia = kampan
+    korpus = _korpus(index, prehratia)
+    doc = json.loads(korpus.read_text())
+    assert all("extractor_sha256" not in z for z in doc["sessions"])
+    values, _ = ev.vyhodnot_udalosti(korpus, prehratia, rola="test_benign")
+    assert values["prostredie_voci_baliku"]["extractor_sha256"] == "zhodne"
+    with open(doc["sessions"][ktora]["audit"], "a") as fh:
+        fh.write(" ")
+    with pytest.raises(ValueError, match="audit relacie %s " % "ab"[ktora]):
+        ev.vyhodnot_udalosti(korpus, prehratia, rola="test_benign")
+
+
+def test_e2_z_korpusu_cita_audit_kazdej_relacie(kampan):
+    """Ina extrakcia v audite jedinej relacie sa prejavi, aj ked ta relacia nie je v role prva."""
+    index, prehratia = kampan
+
+    def ina_extrakcia(zaznamy):
+        audit = index.with_name("audit_" + zaznamy[-1]["id"] + ".json")
+        audit.write_text(json.dumps({"values": {"extractor_sha256": {"features/a.py": "iny"}}}))
+        zaznamy[-1]["audit_sha256"] = _sha(audit)
+
+    korpus = _korpus(index, prehratia, uprav=ina_extrakcia)
+    values, _ = ev.vyhodnot_udalosti(korpus, prehratia, rola="test_benign")
+    assert values["prostredie_voci_baliku"]["extractor_sha256"] == "ine"
+
+
+def test_e2_z_korpusu_neberie_extrakciu_zo_zaznamu(kampan):
+    """Hash extrakcie zapisany v zazname korpusu sa necita; plati ten z auditu, na ktory sa zaznam viaze."""
+    index, prehratia = kampan
+    korpus = _korpus(index, prehratia,
+                     uprav=lambda zaznamy: zaznamy[-1].update(extractor_sha256={"features/a.py": "iny"}))
+    assert json.loads(korpus.read_text())["sessions"][1]["extractor_sha256"] == {"features/a.py": "iny"}
+    values, _ = ev.vyhodnot_udalosti(korpus, prehratia, rola="test_benign")
+    assert values["prostredie_voci_baliku"]["extractor_sha256"] == "zhodne"
 
 
 def test_prikaz_e2_test_benign_iba_s_final(kampan, tmp_path):

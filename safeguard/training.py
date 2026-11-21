@@ -20,7 +20,7 @@ import torch
 from torch import nn
 
 from features.archive import load as load_archive
-from features.quality import BEHAVIOR_POLICY, protocol_policy
+from features.quality import BEHAVIOR_POLICY, accepted_invalid_rows, protocol_policy
 from .bundle import SCHEMA, digest
 from .features import (FeatureNormalizer, WindowBuffer, arrays, check_frame,
                        feature_contract, frames_from_archive)
@@ -152,7 +152,9 @@ def validate_index(path, diagnostic=False):
         if not selected:
             raise ValueError("missing corpus role: " + role)
         if not diagnostic:
-            expected = {f"{role}-{i + 1}" for i in range(protocol["roles"][role])}
+            # Same group names as scripts/collection.py plan and features/dataset.py build.
+            prefix = protocol.get("group_prefix", "")
+            expected = {f"{prefix}{role}-{i + 1}" for i in range(protocol["roles"][role])}
             for scenario in protocol["scenarios"]:
                 if {r["group"] for r in selected if r["scenario"] == scenario} != expected:
                     raise ValueError("incomplete planned allocation")
@@ -283,11 +285,13 @@ def train_bundle(corpus_path, output_dir, *, window_rows=32, max_gap_s=7.5,
         frames = list(frames_from_archive(load_archive(record["features"]), record["id"]))
         if not frames or frames[0].timestamp != record["start"] or frames[-1].timestamp != record["end"]:
             raise ValueError("feature times differ from frozen session index")
-        if any(not frame.valid for frame in frames):
-            raise ValueError("accepted corpus archive contains invalid model rows")
+        audit = _json(record["audit"])["values"]
+        # Invalid rows only as the audit admitted them (protocol invalid_rows); they are never fitted or scored.
+        accepted_invalid_rows([frame.seq for frame in frames], [frame.valid for frame in frames],
+                              [frame.quality for frame in frames], audit, protocol)
         if contract is None:
             contract = feature_contract(frames[0], window_rows, max_gap_s)
-        if frames[0].layout != _json(record["audit"])["values"]["layout"]:
+        if frames[0].layout != audit["layout"]:
             raise ValueError("feature/audit layout mismatch")
         for frame in frames:
             check_frame(frame, contract)

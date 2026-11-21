@@ -9,7 +9,7 @@ import json
 from pathlib import Path
 
 from .archive import load
-from .quality import require_log_audit
+from .quality import accepted_invalid_rows, require_log_audit
 
 
 ROLES = ("train", "dev", "calibration", "test_benign")
@@ -64,12 +64,7 @@ def build(audits, protocol, protocol_sha):
         from .quality import protocol_policy
         if str(data["quality_policy"]) != protocol_policy(protocol):
             raise ValueError("feature quality policy differs from corpus protocol")
-        tolerated = set((v.get("quality") or {}).get("tolerated_invalid_seq", []))
-        invalid = {int(seq) for seq, good in zip(data["seq"], data["valid"]) if not good}
-        if invalid - tolerated:
-            raise ValueError("incomplete features in accepted audit")
-        if invalid and len(invalid) > protocol.get("invalid_rows", {}).get("max", 0):
-            raise ValueError("more invalid rows than the protocol tolerates")
+        accepted_invalid_rows(data["seq"], data["valid"], json.loads(str(data["quality_json"])), v, protocol)
         layouts.add(json.dumps(v["layout"], sort_keys=True))
         extractors.add(json.dumps(v["extractor_sha256"], sort_keys=True))
         records.append({"id": identity, "role": m["role"], "group": m["group"], "vm": m.get("vm"),

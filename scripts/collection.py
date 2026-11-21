@@ -32,7 +32,8 @@ from features.snapshot import retazec, MENA
 from features.windows import okna, snimky_z_matice
 from features.perbin import FeatureError
 from features.windows import WindowError
-from features.quality import protocol_policy, valid_for, BEHAVIOR_POLICY
+from features.quality import (protocol_policy, valid_for, BEHAVIOR_POLICY,
+                              invalid_rows_rule, tolerated_invalid_rows)
 from features.coverage import ideal_windows, scorable_windows
 from scripts.collection_logs import audit_logs
 from lab.udalosti import CONTROLS as CONTROL_TYPES, TYPES as EVENT_TYPES
@@ -151,9 +152,6 @@ def protocol(path):
     return p
 
 
-INVALID_ROW_TRAVERSALS = ("processes", "modules", "sockets", "memory_patterns")
-
-
 def check_invalid_rows(p):
     """Pre-registered tolerance of a few rows whose traversal did not close (owner, 2026-11-17).
 
@@ -169,31 +167,11 @@ def check_invalid_rows(p):
     under version 2 the two rules could contradict each other (v4: 3 rows allowed,
     1 passed the gate).
     """
-    r = p["invalid_rows"]
-    if (type(r) is not dict or not {"max", "traversals"} <= set(r) <= {"max", "traversals", "note"}
-            or type(r["max"]) is not int or r["max"] < 0 or type(r["traversals"]) is not list
-            or not r["traversals"] or not set(map(str, r["traversals"])) <= set(INVALID_ROW_TRAVERSALS)):
-        raise ValueError("invalid invalid_rows rule")
+    r = invalid_rows_rule(p)  # The shape check is shared with every reader of the rule (features/quality.py).
     if p["schema"] == "hyptcn3/collection-protocol/3":
         left = ideal_windows(p["cycles"], p["window_rows"], p["full_every"]) - r["max"] * (p["window_rows"] + 1)
         if left / p["cycles"] < p.get("min_score_coverage", .85):
             raise ValueError("invalid_rows.max is unreachable under the score coverage gate")
-
-
-def tolerated_invalid_rows(result, p):
-    """Seq of invalid rows the protocol tolerates, [] when all are valid, None when not tolerated."""
-    bad = [(seq, q) for seq, q, good in zip(result["seq"], result["quality"], result["valid"]) if not good]
-    if not bad:
-        return []
-    rule = p.get("invalid_rows")
-    if rule is None or len(bad) > rule["max"]:
-        return None
-    allowed = set(rule["traversals"])
-    for _, q in bad:
-        names = set(q.get("truncated_traversals") or [])
-        if not names or not names <= allowed or q.get("read_errors") or q.get("filled_zero"):
-            return None
-    return [seq for seq, _ in bad]
 
 
 def check_replacement(p):

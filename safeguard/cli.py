@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 import sys
 
+from features.quality import invalid_rows_rule, tolerated_input_errors
 from .bundle import load_bundle
 from .runtime import replay_archive, run_directory
 
@@ -81,6 +82,10 @@ def execute(a):
         return supervise(bundle, a.protocol, a.profile, a.domain, a.out, cycles=a.cycles)
     if a.command == "replay" and a.archive:
         from .demo import write_json
+        # The verdict below applies the invalid_rows rule of the bundle's protocol; a malformed rule ends the
+        # replay before it writes anything.
+        protocol = bundle.manifest.get("provenance", {}).get("protocol") or {}
+        invalid_rows_rule(protocol)
         a.out.mkdir(parents=True, exist_ok=False)
         (a.out / "evidence").mkdir()
         write_json(a.out / "configuration.json", {"schema": "hyptcn3/safeguard-configuration/1",
@@ -107,7 +112,10 @@ def execute(a):
                   "alarm_events": sum(r["alarm_event"] for r in rows),
                   "fatal": any(r["fatal"] for r in rows), "stop_reason": "replay_complete",
                   "state": rows[-1]["state"] if rows else "input_error", "last": rows[-1] if rows else None}
-        result["ok"] = bool(rows) and not result["input_errors"]
+        # An input error that is only a row the bundle protocol's invalid_rows rule tolerates does not fail the replay.
+        tolerated = tolerated_input_errors(rows, protocol)
+        result["tolerated_invalid_rows"] = len(tolerated or [])
+        result["ok"] = bool(rows) and tolerated is not None
         write_json(a.out / "status.json", result)
         return result
     from .supervisor import _termination_handlers
