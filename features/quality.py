@@ -28,7 +28,8 @@ def protocol_policy(protocol):
         if "quality_policy" in protocol:
             raise ValueError("quality policy changes require protocol version 2")
         return LEGACY_POLICY
-    if (schema == "hyptcn3/collection-protocol/2"
+    # Version 3 only adds a load-time check of the acceptance rule (scripts/collection.py).
+    if (schema in ("hyptcn3/collection-protocol/2", "hyptcn3/collection-protocol/3")
             and protocol.get("quality_policy") == BEHAVIOR_POLICY):
         return BEHAVIOR_POLICY
     raise ValueError("unsupported collection protocol/quality policy")

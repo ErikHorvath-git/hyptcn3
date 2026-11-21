@@ -1,0 +1,239 @@
+{
+  "schema": "hyptcn3/worker-restart-resonance/1",
+  "date": "2026-11-20",
+  "commit": "cb7556d1e63443d909b66d389f94beea07df0185",
+  "host": "zberove PC (Debian 13), bez roota",
+  "guest": "Debian 12, jadro 6.1.0-42-cloud-amd64 (hyptcn-lab-a, hyptcn-lab-b)",
+  "command": ".venv/bin/python data/results/collection_worker_resonance_20261120/record.py",
+  "n": 54,
+  "values": {
+    "campaign": "normal-v4c-20261117",
+    "attempts": 54,
+    "rows": 38880,
+    "invalid_rows": 13,
+    "rows_closed_by_rule": {
+      "prev": 28,
+      "tail": 12,
+      "meet": 0
+    },
+    "lock_event": {
+      "type": "zamok_tabulky",
+      "attempts": 20,
+      "exposure_rows": 999,
+      "invalid_rows_inside": 9,
+      "rows_closed_by_rule_inside": 16,
+      "attempts_in_step": 4,
+      "attempts_in_step_rejected_by_coverage": 3,
+      "window": "host_start_unix .. host_stopped_unix + grace_s of the event"
+    },
+    "invalid_rows_outside_lock_event": [
+      {
+        "session": "normal-v4c-20261117_16_b_train_steady",
+        "seq": 246
+      },
+      {
+        "session": "normal-v4c-20261117_29_a_train_quiet",
+        "seq": 124
+      },
+      {
+        "session": "normal-v4c-20261117_44_a_dev_bursty",
+        "seq": 468
+      },
+      {
+        "session": "normal-v4c-20261117_48_a_dev_mixed",
+        "seq": 252
+      }
+    ],
+    "worker_restart": {
+      "sessions": 20,
+      "period_s_mean": 6.25,
+      "period_s_min": 6.242,
+      "period_s_max": 6.251,
+      "four_periods_s": 25.0,
+      "capture_interval_s": 5,
+      "start_after_capture_s_min": 0.04,
+      "start_after_capture_s_max": 0.35
+    },
+    "in_step_sessions": {
+      "normal-v4c-20261117_23_a_train_bursty": {
+        "accepted": false,
+        "score_coverage": 0.8667,
+        "reasons": [],
+        "guest_clock_offset_s": 0.005892276763916016,
+        "rows": [
+          {
+            "seq": 240,
+            "row": "prev",
+            "worker_start_after_capture_s": 0.34
+          },
+          {
+            "seq": 245,
+            "row": "prev",
+            "worker_start_after_capture_s": 0.35
+          },
+          {
+            "seq": 250,
+            "row": "prev",
+            "worker_start_after_capture_s": 0.35
+          },
+          {
+            "seq": 255,
+            "row": "prev",
+            "worker_start_after_capture_s": 0.34
+          },
+          {
+            "seq": 260,
+            "row": "prev",
+            "worker_start_after_capture_s": 0.34
+          },
+          {
+            "seq": 265,
+            "row": "prev",
+            "worker_start_after_capture_s": 0.35
+          },
+          {
+            "seq": 270,
+            "row": "prev",
+            "worker_start_after_capture_s": 0.34
+          }
+        ]
+      },
+      "normal-v4c-20261117_39_b_dev_quiet": {
+        "accepted": false,
+        "score_coverage": 0.8417,
+        "reasons": [
+          "score coverage below design gate 0.85"
+        ],
+        "guest_clock_offset_s": -0.0017061233520507812,
+        "rows": [
+          {
+            "seq": 308,
+            "row": "invalid",
+            "worker_start_after_capture_s": 0.04
+          },
+          {
+            "seq": 343,
+            "row": "invalid",
+            "worker_start_after_capture_s": 0.04
+          },
+          {
+            "seq": 348,
+            "row": "tail",
+            "worker_start_after_capture_s": 0.04
+          },
+          {
+            "seq": 353,
+            "row": "tail",
+            "worker_start_after_capture_s": 0.04
+          },
+          {
+            "seq": 358,
+            "row": "invalid",
+            "worker_start_after_capture_s": 0.04
+          },
+          {
+            "seq": 363,
+            "row": "tail",
+            "worker_start_after_capture_s": 0.04
+          }
+        ]
+      },
+      "normal-v4c-20261117_47_a_dev_quiet": {
+        "accepted": false,
+        "score_coverage": 0.8375,
+        "reasons": [
+          "incomplete model inputs under behavioral-inputs-v1",
+          "score coverage below design gate 0.85"
+        ],
+        "guest_clock_offset_s": 0.0092926025390625,
+        "rows": [
+          {
+            "seq": 468,
+            "row": "tail",
+            "worker_start_after_capture_s": 0.12
+          },
+          {
+            "seq": 473,
+            "row": "invalid",
+            "worker_start_after_capture_s": 0.12
+          },
+          {
+            "seq": 478,
+            "row": "invalid",
+            "worker_start_after_capture_s": 0.12
+          },
+          {
+            "seq": 483,
+            "row": "invalid",
+            "worker_start_after_capture_s": 0.12
+          },
+          {
+            "seq": 488,
+            "row": "invalid",
+            "worker_start_after_capture_s": 0.12
+          },
+          {
+            "seq": 493,
+            "row": "invalid",
+            "worker_start_after_capture_s": 0.12
+          },
+          {
+            "seq": 508,
+            "row": "tail",
+            "worker_start_after_capture_s": 0.12
+          }
+        ]
+      },
+      "normal-v4c-20261117_48_a_dev_mixed": {
+        "accepted": false,
+        "score_coverage": 0.8194,
+        "reasons": [
+          "score coverage below design gate 0.85"
+        ],
+        "guest_clock_offset_s": 0.0006699562072753906,
+        "rows": [
+          {
+            "seq": 483,
+            "row": "tail",
+            "worker_start_after_capture_s": 0.05
+          },
+          {
+            "seq": 488,
+            "row": "tail",
+            "worker_start_after_capture_s": 0.05
+          },
+          {
+            "seq": 493,
+            "row": "tail",
+            "worker_start_after_capture_s": 0.05
+          },
+          {
+            "seq": 503,
+            "row": "invalid",
+            "worker_start_after_capture_s": 0.04
+          }
+        ]
+      }
+    },
+    "coverage_gate": {
+      "cycles": 720,
+      "ideal_windows": 656,
+      "windows_lost_per_isolated_invalid_row": 33,
+      "min_score_coverage": 0.85,
+      "invalid_rows_max": 3,
+      "coverage_by_isolated_invalid_rows": {
+        "0": 0.9111,
+        "1": 0.8653,
+        "2": 0.8194,
+        "3": 0.7736
+      }
+    },
+    "plan": {
+      "sessions": 96,
+      "with_lock_event": 35,
+      "not_captured": 54,
+      "not_captured_with_lock_event": 21
+    }
+  },
+  "note": "Citanie auditov, events.json, archivov priznakov a zurnalu hosta kampane; ziadna snimka sa neparsovala znova. Cas snimky je cas hostitela, cas startu sluzby je cas hosta (posun hodin je pri kazdej session v guest_clock_offset_s). 'in step' = aspon 3 roztrhnute riadky (neplatne alebo uzavrete pravidlom) v okne udalosti. Rozbor priciny zamietnuti, nie meranie detekcie (HONESTY P4)."
+}

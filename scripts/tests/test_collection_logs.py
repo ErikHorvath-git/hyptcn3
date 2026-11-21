@@ -290,6 +290,32 @@ def test_event_session_stays_strict_outside_windows(tmp_path, case, problem):
     assert problem in result["problem_counts"], result["problems"]
 
 
+def add_journal_line(d, line):
+    path, doc_path = d / "guest/journal-journal.txt.gz", d / "guest/journal_segment.json"
+    doc = logs.read_json(doc_path)
+    index = next(i for i, f in enumerate(doc["files"]) if f["name"].endswith("journal.txt"))
+    doc["files"][index] = pack(d, "journal-journal.txt", gzip.decompress(path.read_bytes()).decode() + line)
+    write(doc_path, doc)
+    seal(d)
+
+
+def test_worker_statement_timeout_is_admitted_only_inside_an_event_window(tmp_path):
+    """lab/services.py reports a round that hit the statement timeout instead of exiting (protocol v5)."""
+    line = "guest python3[5]: " + logs.WORKER_ERROR + "canceling statement due to statement timeout\n"
+    d = build(tmp_path / "inside", event=True)
+    add_journal_line(d, f"{utc(1.5)} {line}")
+    result = logs.audit_logs(d, snapshot_times=[BASE + 1.1, BASE + 2.5])
+    assert result["accepted"], result["problems"]
+    assert result["sections"]["correlation"]["tolerated_in_events"]["worker_errors"] == 1
+    d = build(tmp_path / "outside", event=True)
+    add_journal_line(d, f"{utc(2.5)} {line}")
+    result = logs.audit_logs(d, snapshot_times=[BASE + 1.1, BASE + 2.5])
+    assert not result["accepted"] and "journal_error_or_loss" in result["problem_counts"], result["problems"]
+    d = build(tmp_path / "no-events")
+    add_journal_line(d, f"{utc(1.5)} {line}")
+    assert "journal_error_or_loss" in logs.audit_logs(d)["problem_counts"]
+
+
 def test_failed_request_outside_event_window_is_rejected(tmp_path):
     d = build(tmp_path, event=True)
     events = logs.read_json(d / "events.json")

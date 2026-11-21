@@ -24,6 +24,9 @@ from psycopg2.pool import ThreadedConnectionPool
 PORTS = {"catalog": 8081, "auth": 8082, "orders": 8083}
 SECRET = os.environ.get("LAB_SECRET", "").encode()
 POOL = None
+# Journal line of a worker round that failed on a statement timeout; scripts/collection_logs.py
+# admits it only inside an event window, like a traceback.
+WORKER_ERROR = "worker dependency error: "
 
 
 @contextmanager
@@ -187,12 +190,21 @@ def worker():
     signal.signal(signal.SIGTERM, lambda *_: stop.set())
     signal.signal(signal.SIGINT, lambda *_: stop.set())
     while not stop.is_set():
-        with database() as cursor:
-            cursor.execute("UPDATE orders SET status='completed' WHERE id IN (SELECT id FROM orders WHERE status='pending' ORDER BY id LIMIT 50 FOR UPDATE SKIP LOCKED)")
-            completed = cursor.rowcount
-            cursor.execute("INSERT INTO worker_heartbeat(id,updated_at) VALUES (1,now()) ON CONFLICT (id) DO UPDATE SET updated_at=now()")
-            # Keep persistent demonstration traffic bounded on disk.
-            cursor.execute("DELETE FROM orders WHERE created_at < now() - interval '1 day' AND status='completed'")
+        completed = 0
+        try:
+            with database() as cursor:
+                cursor.execute("UPDATE orders SET status='completed' WHERE id IN (SELECT id FROM orders WHERE status='pending' ORDER BY id LIMIT 50 FOR UPDATE SKIP LOCKED)")
+                completed = cursor.rowcount
+                cursor.execute("INSERT INTO worker_heartbeat(id,updated_at) VALUES (1,now()) ON CONFLICT (id) DO UPDATE SET updated_at=now()")
+                # Keep persistent demonstration traffic bounded on disk.
+                cursor.execute("DELETE FROM orders WHERE created_at < now() - interval '1 day' AND status='completed'")
+        except psycopg2.errors.QueryCanceled as error:
+            # A statement that waits on a held lock runs into the 3 s timeout. The round is rolled
+            # back and tried again after the usual pause. Exiting here made systemd restart the
+            # worker every 6.25 s for as long as the lock was held: four restarts per five 5 s
+            # snapshots, so a restart that met one capture met every fifth one (docs/LIMITACIE.md L1).
+            # Any other database error still ends the process and systemd restarts it.
+            print(WORKER_ERROR + str(error).strip(), flush=True)
         if completed:
             print(json.dumps({"service": "worker", "completed": completed}), flush=True)
         stop.wait(1)

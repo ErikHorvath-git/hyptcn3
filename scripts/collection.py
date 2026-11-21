@@ -46,7 +46,9 @@ MEASUREMENT_DIRS = ("features", "guestparse", "safeguard", "scripts", "lab", "vm
 SOURCE_SUFFIXES = (".py", ".c", ".h", ".sh", ".sql", ".conf", ".service")
 # Reporting/documentation tools do not take part in capture, audit or archival.
 NOT_MEASUREMENT = {"scripts/campaign_report.py", "scripts/gen_prirucka.py", "scripts/check_claims.sh",
-                   "scripts/check_prirucka.sh"}
+                   "scripts/check_prirucka.sh",
+                   # Keeps the chain of readiness records; each record stores this file's own hash.
+                   "scripts/gates.py"}
 # Measured 2026-10-20 on the working SSD with fsync: full snapshots took
 # 4.7-10.7 s (period 5 s) after sustained delta writes. Without fsync a
 # snapshot is published from the page cache; its SHA-256 (sidecar) is re-checked
@@ -160,12 +162,22 @@ def check_invalid_rows(p):
     named traversals did not close (no RAM read error or zero fill), and the
     score coverage gate still holds. Invalid rows are never scored (their windows
     are not scorable) and the audit lists them.
+
+    One invalid row away from the others costs window_rows + 1 windows: the row itself
+    and the window_rows rows that refill the buffer. Protocol version 3 therefore
+    requires that `max` such rows still pass the coverage gate in a full session;
+    under version 2 the two rules could contradict each other (v4: 3 rows allowed,
+    1 passed the gate).
     """
     r = p["invalid_rows"]
     if (type(r) is not dict or not {"max", "traversals"} <= set(r) <= {"max", "traversals", "note"}
             or type(r["max"]) is not int or r["max"] < 0 or type(r["traversals"]) is not list
             or not r["traversals"] or not set(map(str, r["traversals"])) <= set(INVALID_ROW_TRAVERSALS)):
         raise ValueError("invalid invalid_rows rule")
+    if p["schema"] == "hyptcn3/collection-protocol/3":
+        left = ideal_windows(p["cycles"], p["window_rows"], p["full_every"]) - r["max"] * (p["window_rows"] + 1)
+        if left / p["cycles"] < p.get("min_score_coverage", .85):
+            raise ValueError("invalid_rows.max is unreachable under the score coverage gate")
 
 
 def tolerated_invalid_rows(result, p):

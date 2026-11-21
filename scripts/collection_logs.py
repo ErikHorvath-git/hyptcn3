@@ -32,9 +32,10 @@ REQUIRED_UNITS = ("nginx", "postgresql@15-main", "hyptcn-lab@auth", "hyptcn-lab@
 APPS = ("hyptcn-lab@auth", "hyptcn-lab@catalog", "hyptcn-lab@orders", "hyptcn-lab@worker")
 # Units a protocol-v3 event restarts by design (lab/udalosti.py); any other restart stays a problem.
 EVENT_UNITS = {"zla_konfiguracia_sluzby": ("hyptcn-lab@catalog",), "restart_sluzby": ("hyptcn-lab@orders",),
-               "restart_databazy": ("postgresql@15-main", *APPS),
-               # The worker's statement hits the 3 s timeout on the locked table; systemd restarts it.
-               "zamok_tabulky": ("hyptcn-lab@worker",)}
+               "restart_databazy": ("postgresql@15-main", *APPS)}
+# zamok_tabulky restarts nothing: the worker reports the statement timeout and tries again
+# (lab/services.py). Its journal line is admitted only inside an event window, like a traceback.
+WORKER_ERROR = "worker dependency error: "
 NGINX_TIME = re.compile(r"^(\d{4}/\d\d/\d\d \d\d:\d\d:\d\d) ")
 
 
@@ -289,9 +290,9 @@ def audit_logs(directory, *, snapshot_times=()):
                     catalog_calls[m[2]] += 1
             if re.search(r"Suppressed \d+ messages|Missed \d+ journal messages", line):
                 problems.add("journal_error_or_loss", line[:180])
-            elif "Traceback (most recent call last)" in line:
+            elif "Traceback (most recent call last)" in line or WORKER_ERROR in line:
                 if windows and in_window(unix(line.split(" ", 1)[0])):
-                    tolerated["journal_tracebacks"] += 1
+                    tolerated["worker_errors" if WORKER_ERROR in line else "journal_tracebacks"] += 1
                 else:
                     problems.add("journal_error_or_loss", line[:180])
 

@@ -3460,3 +3460,62 @@ udalostí ako týchto sedem, úplnú alokáciu (skupina 8 má 3 zo 6 session), s
 pamäti v rozsahu korpusu v6 (v ňom boli iba session 1 až 3, posun vyššie), falošné alarmy
 kontrol integrity (nula je daná prijatím), živý beh `safeguard run` ani
 latenciu snímka → skóre počas zberu.
+
+## 2026-11-20 — kampane protokolu v4 zastavené, príčina v laboratóriu; staré datasety zmazané; audit kódu pre protokol v5
+
+**Kampane.** Obe kampane datasetu 1 podľa protokolu v4 sa zastavili na limite náhrad:
+`normal-v4-20261115` po 10 z 96 prijatých session, `normal-v4c-20261117` po 47 z 96. Úhrnný
+záznam kampaní (prijaté, zamietnuté po príčinách, časy krokov) nevznikol a po zmazaní dát sa už
+vyrobiť nedá; tieto dva počty sú z `PLAN_multivm_dataset.md` a `docs/STAV.sk.md`, nie zo záznamu.
+
+**Príčina zamietnutí bránou pokrytia** ([záznam](../data/results/collection_worker_resonance_20261120.json),
+vyrobený z auditov, `events.json` a žurnálu hosťa pred zmazaním dát). Počas udalosti
+`zamok_tabulky` končila služba `worker` na 3 s limite príkazu a systemd ju reštartoval. Perióda
+bola 6.25 {{res:collection_worker_resonance_20261120.json:values.worker_restart.period_s_mean}} s
+vo všetkých 20 {{res:collection_worker_resonance_20261120.json:values.worker_restart.sessions}}
+pokusoch s touto udalosťou, štyri periódy sú
+25.0 {{res:collection_worker_resonance_20261120.json:values.worker_restart.four_periods_s}} s,
+teda päť intervalov zberu. V 4 {{res:collection_worker_resonance_20261120.json:values.lock_event.attempts_in_step}}
+pokusoch padol štart procesu 0.04 {{res:collection_worker_resonance_20261120.json:values.worker_restart.start_after_capture_s_min}}
+až 0.35 {{res:collection_worker_resonance_20261120.json:values.worker_restart.start_after_capture_s_max}} s
+po čase snímky a zoznam procesov bol roztrhnutý v každom piatom riadku;
+3 {{res:collection_worker_resonance_20261120.json:values.lock_event.attempts_in_step_rejected_by_coverage}}
+z nich zamietla brána pokrytia. „Zosynchronizovaný“ je definícia záznamu určená až po zbere
+(aspoň tri roztrhnuté riadky v okne udalosti). Oprava služby je na vetve `v5-protocol`
+(`lab/services.py`), overená iba jednotkovým testom s atrapou databázy; v hosťovi UNVERIFIED.
+
+**Pravidlo prijatia.** Z 656 {{res:collection_worker_resonance_20261120.json:values.coverage_gate.ideal_windows}}
+ideálnych okien session vyradí jeden osamotený neplatný riadok
+33 {{res:collection_worker_resonance_20261120.json:values.coverage_gate.windows_lost_per_isolated_invalid_row}}.
+Protokol v4 povoľoval 3 {{res:collection_worker_resonance_20261120.json:values.coverage_gate.invalid_rows_max}}
+neplatné riadky, brána pokrytia však pustila jeden. `PLAN_multivm_dataset.md` kap. 8.4 uvádza
+16 okien na riadok a dva prijateľné riadky; je to chyba textu, platí tento záznam.
+
+**Zmazanie datasetov.** Vlastník 2026-11-20 rozhodol začať odznova podľa nového protokolu.
+Zmazané boli zálohy na externom disku (jediná kópia korpusov `benign-v6-20261026`
+a `events-v3-20261108`) a session, záznamy kampaní a diagnostiky na zberovom PC. Dôsledok:
+výsledky predchádzajúcej iterácie (tréning, FAR, E2) sa už nedajú prepočítať, ostávajú iba
+záznamy v `data/results/`. Pokračovanie kampane podľa `PLAN_multivm_dataset.md` kap. 8 sa ruší.
+
+**Audit kódu** ([záznam](../data/results/audit_kodu_v5_20261120.json)). Šesť oblastí, každý
+nález overený druhým čitateľom proti kódu a záznamom: 53 potvrdených, 15 spresnených, žiadny
+vyvrátený (počty zo záznamu, kľúč `values.verdicts`). Sú to nálezy z čítania kódu, nie merania.
+Z neho vychádza [NAVRH_PROTOKOL_V5.sk.md](NAVRH_PROTOKOL_V5.sk.md).
+
+Čo tento zápis neukazuje: mieru zamietnutí po oprave služby (žiadna session s ňou nebežala),
+správanie dvoch VM pri archivácii po zákaze swapu (iba ručné nastavenie operátora, bez
+záznamu), ani žiadny výsledok modelu s 20 vstupmi (tréning nad dátami v4 nezačal).
+
+## 2026-11-21 — staré dáta zmazané aj z vývojového PC; rozhodnutia k protokolu v5
+
+Na pokyn vlastníka boli z vývojového PC zmazané staré zbery: tri session z 2026-10-13
+(`data/collections`), behy zo septembra a októbra v `data/raw`, štyri z piatich validačných
+snímok v `data/sessions`, záznam kampane `benign-v2-20261013` a odvodené súbory v `data/lab`.
+Časť patrí rootovi a čaká na príkaz vlastníka. Ponechané sú balíky a obraz jadra pre profil
+(`data/raw/debs`, `data/raw/profile-assets`), staré skúšobné modely (`data/raw/models`) a jedna
+validačná snímka (`data/sessions/20260918T154914Z_validate/snap`), ktorú testy parsera menujú
+ako vstup. Záznamy v `data/results/`, ktoré na zmazané adresáre odkazujú, ostávajú; ich vstupy
+sa už nedajú prečítať znova.
+
+Otvorené otázky návrhu protokolu v5 rozhodol autor návrhu z poverenia vlastníka; rozhodnutia
+s podkladom sú v [NAVRH_PROTOKOL_V5.sk.md](NAVRH_PROTOKOL_V5.sk.md), kap. 12. Nie sú to merania.
