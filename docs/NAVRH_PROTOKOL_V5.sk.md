@@ -532,7 +532,10 @@ alarmov** znamená: prah každej metódy sa nastaví tak, aby mala na čistej pr
 | Z5 | lineárna autoregresia (ridge) na tom istom okne | lineárna štruktúra |
 | M | TCN, päť seedov | skúmaný model |
 
-Rozšírenia: PCA, izolačný les, malá sieť bez času, GRU v tom istom obale.
+Opisné metódy jadra (rozhodnutie vedúceho 2026-11-22 z pokynu vlastníka nemeniť, čo text práce už sľubuje;
+doplnok kostry B7): z-skóre, izolačný les, prediktor GRU a prediktor LSTM v tom istom obale ako Z0 až Z5
+(tie isté okná, normalizér, pravidlo 3 z 5, zhodná miera alarmov; GRU a LSTM so seedmi 0 až 4). Protokol ich
+zapíše vopred ako vlastný zoznam; o K1 a K2 nerozhodujú. Rozšírenia: PCA a malá sieť bez času.
 
 Každá metóda s voľnými parametrami má vopred zapísanú mriežku a jeden postup výberu na
 `dev`. Keď je vybraná epocha posledná, tréning sa raz zopakuje s dvojnásobným stropom.
@@ -874,7 +877,8 @@ sudo spúšťa vlastník.
 | G5: kampaň 132 session | áno | 5,9 až 6,5 dňa |
 | G6: vyhodnotenie a správa | áno | 2 až 3 dni |
 | réžia A/B/A a živý beh (O7, O8) | áno | 1 až 2 dni, mimo kampane |
-| profily `batch`, `idle`; PCA, izolačný les, sieť bez času, GRU | rozšírenie | 4 až 6 dní |
+| opisné metódy z-skóre, izolačný les, GRU a LSTM (od 2026-11-22 v jadre, B7a) | áno | odhad prepočíta B7a |
+| profily `batch`, `idle`; PCA, sieť bez času | rozšírenie | 4 až 6 dní (odhad z 20. 11. zahŕňal aj izolačný les a GRU) |
 
 Jadro spolu je zhruba 30 až 45 dní práce a zberu, teda šesť až deväť týždňov. Najmenší rozsah,
 ktorý ešte odpovie na otázku o modeli: jeden profil s premenlivou záťažou a dávkami, zásahy
