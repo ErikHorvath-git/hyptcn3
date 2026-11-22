@@ -77,25 +77,25 @@ def _sha(cesta):
 
 
 def _protokol(profil):
-    # Schema 3 nesie od balika B3 hranice kontrol auditu a register vynimiek (scripts/tests/boundary_sessions.py).
-    from scripts.tests.boundary_sessions import audit_sections
+    # Schema 3 nesie od balika B3 hranice kontrol auditu a register vynimiek a od balika B4 oddiely rozlozenia v5
+    # (scripts/tests/boundary_sessions.py v5_sections); udalost planuje protokol v kazdej relacii jednu.
+    from scripts.tests.boundary_sessions import audit_sections, v5_sections
+    v5 = v5_sections(("steady", "bursty"), {"train": 2, "dev": 2, "calibration": 2, "test_benign": 2},
+                     group_sessions=2, window_rows=OKNO)
     return {
-        **audit_sections(5),
+        **v5, **audit_sections(5),
         "schema": "hyptcn3/collection-protocol/3", "name": "odovzdanie-korpusu-test",
         "quality_policy": "behavioral-inputs-v1", "profile": str(profil),
         "interval_s": 5, "max_gap_s": 7.5, "bin_bytes": 16777216, "window_rows": OKNO, "stride": 1,
         "full_every": PLNA_KAZDA, "cycles": CYKLY, "pilot_cycles": CYKLY, "min_score_coverage": 0.7,
-        "scenarios": {"steady": {"workers": 4, "burst": 1, "catalog_share": 0.6, "write_share": 0.1},
-                      "bursty": {"workers": 4, "burst": 8, "catalog_share": 0.6, "write_share": 0.1}},
-        "roles": {"train": 2, "dev": 2, "calibration": 2, "test_benign": 2},
         "vms": [{"name": "a", "domain": "hyptcn-test-a", "port": 28080},
                 {"name": "b", "domain": "hyptcn-test-b", "port": 28081}],
         "group_prefix": "v5-",
-        "events": {"note": "synteticky rozvrh testu",
-                   "classes": {"zamok_tabulky": "chyba_aplikacie", "udrzba_zaloha": "udrzba"},
-                   "per_session": [1, 1], "duration_s": [30, 60], "first_s": 60, "min_gap_s": 60,
-                   "tail_s": 60, "grace_s": 10,
-                   "pilot": [{"type": "zamok_tabulky", "start_s": 60, "duration_s": 30}]},
+        "events": dict(v5["events"], note="synteticky rozvrh testu",
+                       types={"zamok_tabulky": "chyba_aplikacie", "udrzba_zaloha": "udrzba"},
+                       per_session=[1], duration_s=[30, 60], first_s=60, min_gap_s=60, tail_s=60, grace_s=10,
+                       # Every role with events is named; this small test corpus asks for no minimum count.
+                       min_per_type=dict.fromkeys(("train", "dev", "calibration", "test_benign"), 0)),
         "invalid_rows": {"max": 1, "traversals": ["processes"]},
     }
 
@@ -138,7 +138,8 @@ def _vysledok(sid, t0, scenar_i, seed, neplatne=None):
 def _kampan(koren, predpona="v5-", riadok_b=RIADOK):
     """Uzavreta kampan v adresari koren: relacie podla planu protokolu, prijate kodom auditu, a index korpusu.
 
-    predpona=None: protokol bez group_prefix, skupiny planu sa volaju iba rolou a poradim.
+    predpona=None: protokol bez predpony skupin, skupiny planu sa volaju iba rolou a poradim. Schema 3 (od balika B4
+    rozlozenie v5) uvadza kazdy kluc, takze taky protokol ma prazdnu group_prefix.
     riadok_b: seq tolerovaneho riadku v relaciach VM b; relacie VM a ho maju vzdy na RIADOK.
     """
     koren.mkdir(parents=True, exist_ok=True)
@@ -148,12 +149,14 @@ def _kampan(koren, predpona="v5-", riadok_b=RIADOK):
     protokol_cesta = koren / "protocol.json"
     protokol = _protokol(profil)
     if predpona is None:
-        del protokol["group_prefix"]
+        protokol["group_prefix"] = ""
     collection.write_json(protokol_cesta, protokol)
     p = collection.protocol(protokol_cesta)
     protokol_sha = _sha(protokol_cesta)
     plan = collection.plan(p)["sessions"]
-    poradie, audity, relacie, s_riadkom, okna = {}, [], {}, set(), dict.fromkeys(p["roles"], 0)
+    # Okna po rolach, ktore planuju skupiny (test_controls schemy 3 ich v tomto protokole nema).
+    okna = dict.fromkeys((rola for rola, pocet in p["roles"].items() if pocet), 0)
+    poradie, audity, relacie, s_riadkom = {}, [], {}, set()
     for i, s in enumerate(plan):
         sid = "_".join([KAMPAN, f"{i + 1:02d}", s["vm"], s["role"], s["scenario"]])
         miesto = poradie.setdefault((s["role"], s["vm"]), [])
@@ -440,10 +443,10 @@ def test_ostra_kontrola_indexu_odmietne_chybajucu_skupinu(tmp_path):
 
 
 def test_ostra_kontrola_indexu_bez_predpony_v_protokole(tmp_path):
-    """Protokol bez group_prefix: skupiny planu predponu nemaju a skupina s predponou do planu nepatri."""
+    """Protokol bez predpony skupin: skupiny planu predponu nemaju a skupina s predponou do planu nepatri."""
     index = _kampan(tmp_path / "kampan", predpona=None)["index"]
     _, protokol, zaznamy = validate_index(index)
-    assert "group_prefix" not in protokol
+    assert protokol["group_prefix"] == ""  # od balika B4 schema 3 uvadza kazdy kluc
     assert {z["group"] for z in zaznamy} == {f"{rola}-{i}" for rola in ROLES for i in (1, 2)}
     with pytest.raises(ValueError, match="incomplete planned allocation"):
         validate_index(_premenuj_skupinu(index, "train-1", "v5-train-1"))

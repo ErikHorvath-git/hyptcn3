@@ -19,7 +19,8 @@ from scripts import campaign, collection
 from scripts.tests import boundary_sessions as bs
 
 # One test-only role per family, as the place is used in production. V4 has another role name, so a decision
-# that ignores the session's role cannot pass every family.
+# that ignores the session's role cannot pass every family. Since package B4 schema 3 is the v5 layout with its
+# five roles, so S3 plans test_benign and gives the other four roles no group.
 # places: accepted sessions on the planned places, in plan order (label "<cell>-spare": the same cell again);
 # rejected: sessions built for place 0 (the forgery place); record: the accepted record the field cases edit.
 FAMILIES = {
@@ -27,7 +28,7 @@ FAMILIES = {
             "rejected": ("k3i", "k4i", "k4c"), "record": "k1"},
     "V4": {"role": "test_operations", "count": 1, "places": ("k0", "k1"), "rejected": ("k2i", "k3i"),
            "record": "k1"},
-    "S3": {"role": "test_events", "count": 1, "places": ("k0", "k3i"), "rejected": ("k4i", "k4c"),
+    "S3": {"role": "test_benign", "count": 1, "places": ("k0", "k3i"), "rejected": ("k4i", "k4c"),
            "record": "k3i"},
 }
 OTHER_BOOT = ("S2G", "k3i-boot")  # A rejected cell at place 0 under another boot id (order case "mapping").
@@ -95,7 +96,9 @@ def world(tmp_path_factory):
     out = {}
     for name, spec in FAMILIES.items():
         root = tmp_path_factory.mktemp(name.lower())
-        doc = dict(bs.family(name, bs.profile_dir(root / "profile")), roles={spec["role"]: spec["count"]})
+        doc = bs.family(name, bs.profile_dir(root / "profile"))
+        roles = {spec["role"]: spec["count"]}
+        doc["roles"] = {**dict.fromkeys(doc["roles"], 0), **roles} if doc["schema"].endswith("/3") else roles
         path = bs.write_protocol(root / "protocol.json", doc)
         p = collection.protocol(path)
         places = bs.places(p)
@@ -640,21 +643,22 @@ def test_earlier_of_two_checks_before_the_decision_wins(world, extras, case, tmp
 
 
 # A planned role named "diagnostic" (addendum 4, part D): the index hands the session's recorded length to the
-# decision, as the audit does. Each test builds its own world under tmp_path; nothing above is used or changed
+# decision, as the audit does. Since package B4 schema 3 names the five v5 roles only, so the family is S2G (the
+# same shape under schema 2). Each test builds its own world under tmp_path; nothing above is used or changed
 # except the helpers forge, stored, refused and the message constants.
 
 Planned = namedtuple("Planned", "p sha path root places")
-DIAGNOSTIC_WINDOWS = {"pilot_cycles": 64, "cycles": 80}  # Clean S3 sessions of 80 and 96 rows (W 8, F 64).
+DIAGNOSTIC_WINDOWS = {"pilot_cycles": 64, "cycles": 80}  # Clean S2G sessions of 80 and 96 rows (W 8, F 64).
 
 
 def planned_diagnostic(tmp_path):
-    """Family S3 whose only planned role is named diagnostic: two places, one group, one boot."""
+    """Family S2G whose only planned role is named diagnostic: two places, one group, one boot."""
     root = tmp_path / "planned"
-    doc = dict(bs.family("S3", bs.profile_dir(root / "profile")), roles={"diagnostic": 1})
+    doc = dict(bs.family("S2G", bs.profile_dir(root / "profile")), roles={"diagnostic": 1})
     path = bs.write_protocol(root / "protocol.json", doc)
     p = collection.protocol(path)
     places = bs.places(p)
-    assert [(s["role"], s["group"]) for s in places] == [("diagnostic", "s3-diagnostic-1")] * 2
+    assert [(s["role"], s["group"]) for s in places] == [("diagnostic", "s2g-diagnostic-1")] * 2
     assert (p["pilot_cycles"], p["cycles"]) == (80, 96)
     return Planned(p, sha(path), path, root, places)
 

@@ -22,8 +22,11 @@ a dôkazy stupňa, nie zdôvodnenie vykonávateľa.
 `scripts/gates.py` drží poradie. Stupeň platí, keď jeho najnovší záznam
 `data/results/gate_<stupeň>_<čas>.json`:
 
-- nesie hash súboru protokolu a hash meracieho kódu, ktoré sa zhodujú s aktuálnym stavom
-  (commit dokumentácie stupeň nezruší, zmena meracieho kódu alebo protokolu áno);
+- nesie hash protokolu podľa stupňa (G0 až G3b: kanonický JSON bez ciest, ktoré `determined_at`
+  priraďuje neskorším stupňom; G4 až G6 a protokol bez `determined_at`: bajty súboru; pravidlo je
+  v zázname ako `protocol_hash_rule`) a hash meracieho kódu, ktoré sa zhodujú s aktuálnym stavom
+  (commit dokumentácie stupeň nezruší, zmena meracieho kódu alebo protokolu mimo hodnôt neskorších
+  stupňov áno);
 - obsahuje presne kritériá stupňa (`CRITERIA` v `scripts/gates.py`), každé splnené a s dôkazom;
 - obsahuje nezávislé overenie, v ktorom je každé kritérium potvrdené.
 

@@ -61,10 +61,21 @@ def sections(interval_s):
     return audit_sections(interval_s)
 
 
+def v5(doc, max_per_campaign=0):
+    """The sections a schema-3 document takes from config/collection-v5.json since package B4 (schema 3 is the v5
+    layout): for the document's scenarios, roles and window (scripts/tests/boundary_sessions.py v5_sections)."""
+    from scripts.tests.boundary_sessions import v5_sections
+    return v5_sections(list(doc.get("scenarios", {"steady": None})), doc.get("roles", {}),
+                       group_sessions=len(doc.get("scenarios", {"steady": None})), window_rows=doc["window_rows"],
+                       max_per_campaign=max_per_campaign)
+
+
 def schema3(tmp_path, **changes):
-    """The v4 protocol under schema 3; no v5 protocol file exists until the proposal is approved."""
+    """The v4 protocol under schema 3, as a v5 document: the v4 grid, gate, rule, VMs, roles and scenario names
+    with the v5 sections (no event planned; the v4 replacement limit)."""
     doc = json.loads(V4.read_text())
-    doc.update(schema=SCHEMA + "3", **sections(doc["interval_s"]), **changes)
+    doc.update(schema=SCHEMA + "3", **v5(doc, doc["replacement"]["max_per_campaign"]), **sections(doc["interval_s"]),
+               **changes)
     path = tmp_path / "p.json"
     path.write_text(json.dumps(doc))
     return path
@@ -134,22 +145,33 @@ def test_schema_3_refuses_a_rule_the_gate_cannot_admit(tmp_path):
         collection.protocol(schema3(tmp_path, min_score_coverage=gate + 1 / v4["cycles"]))
 
 
-def test_schema_3_keeps_the_plan(tmp_path):
+def test_schema_3_plans_by_protocol_v5(tmp_path):
+    """Since package B4 schema 3 is the v5 layout and plans the v5 schedule; the schema-2 file keeps its plan."""
+    from scripts import protocol_v5
     gate = v4_gate(json.loads(V4.read_text()), {100, 250, 500})
     a, b = collection.protocol(V4), collection.protocol(schema3(tmp_path, min_score_coverage=gate))
-    assert collection.plan(a) == collection.plan(b)
+    assert collection.plan(b) == protocol_v5.plan(b, mode="campaign") != collection.plan(a)
+    assert collection.plan(a)["schema"] == "hyptcn3/collection-plan/1"
 
 
 # T09: the gate is mandatory under schema 3; versions 1 and 2 keep their default.
 
 def smallest(schema, window_rows, full_every, cycles, pilot_cycles, gate=None, rule=None):
-    """The smallest document collection.protocol() takes (both trees); `rule` is invalid_rows.max."""
+    """The smallest document collection.protocol() takes (both trees); `rule` is invalid_rows.max.
+
+    Since package B4 a schema-3 document has every key of the v5 layout, and so an invalid_rows rule: without
+    `rule` it tolerates no row (max 0), which the loader decides as it decides a document without a rule.
+    """
     doc = {"schema": SCHEMA + str(schema), "interval_s": 1, "max_gap_s": 1.5, "stride": 1, "bin_bytes": 16777216,
            "window_rows": window_rows, "full_every": full_every, "cycles": cycles, "pilot_cycles": pilot_cycles}
     if schema > 1:
         doc["quality_policy"] = BEHAVIOR
     if schema == 3:
-        doc.update(sections(doc["interval_s"]))
+        doc.update(name="smallest", profile="profiles/smallest", domain="smallest", target="http://127.0.0.1:18080",
+                   group_prefix="sm-", roles=dict.fromkeys(("train", "dev", "calibration", "test_benign"), 1),
+                   scenarios={"steady": None}, **sections(doc["interval_s"]))
+        doc.update(v5(doc))
+        rule = 0 if rule is None else rule
     if gate is not None:
         doc["min_score_coverage"] = gate
     if rule is not None:
@@ -182,7 +204,8 @@ def test_the_smallest_document_needs_every_key(tmp_path):
 def test_schema_3_requires_the_coverage_gate(tmp_path):
     doc = smallest(3, 1, 20, 20, 40, rule=0)  # clean shares 19/20 and 38/40, above the old default
     assert window_count(20, 1, 20) / 20 >= DEFAULT_GATE and window_count(40, 1, 20) / 40 >= DEFAULT_GATE
-    with pytest.raises(ValueError, match="^protocol schema 3 requires min_score_coverage$"):
+    # Since package B4 the loader names every missing key of the v5 layout before the gate's reader is asked.
+    with pytest.raises(ValueError, match="^missing protocol key: min_score_coverage$"):
         collection.protocol(write(tmp_path / "p.json", doc))
     assert load(tmp_path / "p.json", doc | {"min_score_coverage": DEFAULT_GATE}) == "loads"
 
@@ -265,8 +288,9 @@ def test_schema_3_tells_a_missing_gate_from_a_stated_gate_of_the_wrong_type(tmp_
     assert stated(tmp_path / "p.json", 3, DEFAULT_GATE) == "loads"
     missing = load(tmp_path / "p.json", smallest(3, *GATE_SHAPE))
     wrong = {stated(tmp_path / "p.json", 3, gate) for gate in WRONG_TYPE.values()}
-    # Two refusals, two messages: the key is absent, or it is there and holds no number in (0, 1].
-    assert (missing, wrong) == ("protocol schema 3 requires min_score_coverage", {INVALID_GATE})
+    # Two refusals, two messages: the key is absent, or it is there and holds no number in (0, 1]. Since package B4
+    # the loader names the missing key of the v5 layout before the gate's reader is asked.
+    assert (missing, wrong) == ("missing protocol key: min_score_coverage", {INVALID_GATE})
 
 
 # T15: the protocol files in the repository load unchanged.
@@ -302,7 +326,8 @@ def s3_gate():
 
 
 def family(tmp_path, schema, gate, **changes):
-    """Protocol file of a criterion family (section 3 of the plan): one unnamed VM, no events, vms, replacement."""
+    """Protocol file of a criterion family (section 3 of the plan): one unnamed VM, no events, vms, replacement;
+    under schema 3 the v5 sections, by which no event is planned and nothing is replaced."""
     f = S3 | changes
     profile = tmp_path / "profile"
     profile.mkdir(exist_ok=True)
@@ -318,7 +343,7 @@ def family(tmp_path, schema, gate, **changes):
     if schema == 1:
         del doc["quality_policy"]
     if schema == 3:
-        doc.update(sections(doc["interval_s"]))
+        doc.update(**v5(doc), **sections(doc["interval_s"]))
     path = tmp_path / f"s{schema}.json"
     path.write_text(json.dumps(doc))
     return path, doc

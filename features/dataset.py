@@ -21,6 +21,7 @@ def sha(path):
 
 
 def build(audits, protocol, protocol_sha):
+    from scripts.protocol_v5 import plans_events  # Under schema 3 every protocol has an events section.
     records, seen_ids, seen_features = [], set(), set()
     boot_roles, group_roles, layouts, extractors, environments = {}, {}, set(), set(), set()
     boot_groups, group_boots, assignments = {}, {}, set()
@@ -81,7 +82,8 @@ def build(audits, protocol, protocol_sha):
                         "audit": str(Path(path).resolve()), "audit_sha256": sha(path),
                         "features": str(feature_path.resolve()), "features_sha256": v["features_sha256"],
                         "log_audit": log_audit})
-        if "events" in protocol:
+        # events.json is asked for when the protocol plans events (as the log audit) or the session lists them.
+        if plans_events(protocol) or "events" in protocol and "events" in m:
             # Protokol v4 (krok B): udalosti su sucastou normalu vo vsetkych rolach;
             # ich zaznam ide do korpusu pre E2' (tcn.eval udalosti --role).
             events = directory / "events.json"

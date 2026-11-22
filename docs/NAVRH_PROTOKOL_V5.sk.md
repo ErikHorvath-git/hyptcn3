@@ -737,6 +737,7 @@ a nahradené session po príčinách, odchýlky a zapísané znenia záverov.
 | `fpr` 0,01 a pravidlo 3 z 5 | G0 | prevzaté; citlivosť na pravidlo sa vykáže (kap. 8.5) |
 | hranice m pre K1 a K2 | G1 | 95. percentil na dátach bez štruktúry, aspoň 20 seedov |
 | mriežky metód, maska stĺpcov | G3a | podľa pravidiel zapísaných v G0 |
+| očakávané počty v registri výnimiek | G3a | najväčší počet na prijatú session posledného behu G3a; G3b ich porovná s pozorovanými (vedúci 2026-11-22, odpoveď na otázku Q2) |
 | limit náhrad | G3b | kap. 7.5 |
 | tolerancia neplatných riadkov na session | G2 | najmenšie číslo, pri ktorom je podľa miery na hranicu udalosti z G2 pravdepodobnosť prekročenia v jednej session pod 1 %; najviac 6 |
 | strop riadkov uzavretých pravidlom na session; hranica skorého zastavenia | G3b | 99. percentil Poissonovho rozdelenia pri miere z G2 a G3b spolu, na typ udalosti |

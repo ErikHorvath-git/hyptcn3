@@ -1,0 +1,387 @@
+{
+  "schema": "hyptcn3/collection-protocol/3",
+  "name": "server-normal-v5",
+  "status": "g0",
+  "note": "Protocol v5 (docs/NAVRH_PROTOKOL_V5.sk.md; package B4, lead's skeleton dokazy/B4/kostra/KOSTRA.md). Schema 3 is the v5 layout: scripts/protocol_v5.py reads every section; python3 scripts/collection.py --protocol config/collection-v5.json selfcheck checks the file and its plan. A value a later stage determines (proposal 10.9) is null or preliminary at its one place, and determined_at names the stage of each such path. The numbers of the G0 rows of proposal 10.9 are the author's proposal by judgment; the owner may change them before G1.",
+  "profile": "profiles/debian12-6.1.0-42-cloud-amd64",
+  "vms": [
+    {
+      "name": "a",
+      "domain": "hyptcn-lab-a",
+      "port": 18080
+    },
+    {
+      "name": "b",
+      "domain": "hyptcn-lab-b",
+      "port": 18081
+    }
+  ],
+  "vms_note": "The two lab VMs of config/collection-v4.json: one image (scripts/labctl.py clone from hyptcn-guest, Debian 12, kernel 6.1.0-42-cloud-amd64), every service deployed on both; the scenario decides the traffic only (proposal 5.2).",
+  "interval_s": 5,
+  "max_gap_s": 7.5,
+  "bin_bytes": 16777216,
+  "window_rows": 32,
+  "stride": 1,
+  "full_every": 360,
+  "cycles": 720,
+  "pilot_cycles": 600,
+  "warmup_s": 120,
+  "min_free_gib": 30,
+  "quality_policy": "behavioral-inputs-v1",
+  "min_score_coverage": 0.7736111111111111,
+  "invalid_rows": {
+    "max": 3,
+    "traversals": [
+      "processes"
+    ],
+    "note": "Preliminary until G2 (POKYNY 2026-11-22 section 4): max 3 and the gate 557/720 above, bound by the inequality (ideal - 33 (max + 1)) / cycles < gate <= (ideal - 33 max) / cycles; G2 determines max by the formula of proposal 10.9 (at most 6) and the gate follows from it."
+  },
+  "replacement": {
+    "max_per_campaign": null,
+    "same": [
+      "vm",
+      "role",
+      "scenario"
+    ],
+    "covers": [
+      "audit_rejected",
+      "capture_incomplete"
+    ],
+    "note": "Proposal 7.5: the limit is the smallest number with a predicted probability of completing the plan of at least 0.95 at the rejection rate of the confirmatory rehearsal; null until G3b. A replacement keeps the VM, role, group, position, scenario and the event types or control kinds in order, and draws new times and a new traffic seed with its attempt number (proposal 7.3)."
+  },
+  "group_prefix": "v5-",
+  "group_sessions": 3,
+  "roles": {
+    "train": 12,
+    "dev": 4,
+    "calibration": 8,
+    "test_benign": 12,
+    "test_controls": 8
+  },
+  "interleave": [
+    [
+      "test_benign",
+      "test_controls"
+    ]
+  ],
+  "scenarios": {
+    "eshop_low": {
+      "profile": "eshop",
+      "intensity": "low",
+      "rate": null
+    },
+    "eshop_high": {
+      "profile": "eshop",
+      "intensity": "high",
+      "rate": null
+    },
+    "corp_low": {
+      "profile": "corp",
+      "intensity": "low",
+      "rate": null
+    },
+    "corp_high": {
+      "profile": "corp",
+      "intensity": "high",
+      "rate": null
+    }
+  },
+  "scenario_rule": {
+    "peak_share": {
+      "low": 0.3,
+      "high": 0.8
+    },
+    "min_peak_to_mean": 2,
+    "basis": "rate is the peak of the arrival envelope: the share peak_share of the throughput measured at saturation in G2 for the scenario's intensity; the mean follows from the envelope",
+    "note": "Peak shares 0.3 and 0.8 are the author's judgment (skeleton section 1); the peak-to-mean ratio of at least 2 is proposal 5.7 (author's proposal, judgment). The lab test on the VM after B5 checks the rule before G2 fixes rate."
+  },
+  "events": {
+    "types": {
+      "zla_konfiguracia_sluzby": "zla_konfiguracia",
+      "restart_databazy": "restart_sluzby",
+      "zamok_tabulky": "chyba_aplikacie",
+      "udrzba_zaloha": "udrzba",
+      "zataz_pamate": "zataz_pamate",
+      "naprazdno": "naprazdno"
+    },
+    "per_session": [
+      0,
+      3
+    ],
+    "duration_s": [
+      120,
+      360
+    ],
+    "first_s": 300,
+    "min_gap_s": 480,
+    "tail_s": 360,
+    "grace_s": 60,
+    "min_per_type": {
+      "train": 12,
+      "dev": 4,
+      "calibration": 8,
+      "test_benign": 12
+    },
+    "note": "Five types and the empty event (decision D8). A session has no event or three; exactly one session of every group has none (proposal 5.5, 7.2). Durations are drawn continuously in duration_s; the free time of the session is split at random over all gaps. first_s 300, min_gap_s 480, tail_s 360 and grace_s 60 are the author's judgment (skeleton section 4): the gap is the reverberation of 300 s plus one full window of 160 s and a reserve, the tail the reverberation and the fading of the stop, the start the first window and two minutes of scored clean traffic. min_per_type is the table of proposal 7.2 (judgment by proposal 10.9)."
+  },
+  "full_snapshot_guard": {
+    "before_s": 60,
+    "note": "Proposal 5.5: no event and no control starts from before_s before a full snapshot to the first scored row after it, that is the full snapshot's row + window_rows (judgment by proposal 10.9)."
+  },
+  "controls": {
+    "kinds": {
+      "kontrola_wx_memfd": {
+        "class": "A"
+      },
+      "kontrola_modul_jadra": {
+        "class": "A"
+      },
+      "kontrola_pocuvajuci_soket": {
+        "class": "A"
+      },
+      "kontrola_zapisovac_pamate": {
+        "class": "B"
+      },
+      "kontrola_davka_procesov": {
+        "class": "B"
+      }
+    },
+    "per_kind": 7,
+    "negatives_per_kind": 7,
+    "slots_per_session": 3,
+    "min_duration_s": 60,
+    "duration_s": [
+      120,
+      360
+    ],
+    "horizon_s": 180,
+    "note": "Controls on the VM, classes A (edge) and B (volume), proposal 7.4: 7 controls and 7 paired negatives per kind, at least 60 s each, horizon 180 s from the start, only in role test_controls with three slots per session; 70 controls fill 70 of the 72 slots and the plan records the two empty ones (skeleton section 6). Durations as the events (B8 skeleton). B8 adds the doses, columns and expectation of each kind. The numbers are the author's judgment by proposal 10.9."
+  },
+  "streams": {
+    "purposes": [
+      "scenario_order",
+      "event_free_position",
+      "event_deck",
+      "control_deck",
+      "event_times",
+      "traffic"
+    ],
+    "rule": "seed = int(sha256(json.dumps([name, group, session, attempt, purpose])).hexdigest()[:16], 16) with the protocol name (the rehearsal's own name in rehearsal mode); session-level purposes (event_times, traffic) take the group name, the position and the attempt; role-level ones (event_free_position, event_deck, control_deck) the role name as group, session -1 and attempt 0; scenario_order is drawn per block of len(scenarios) groups of a role, with group <role>/<block>, session -1 and attempt 0",
+    "note": "Every purpose has its own random stream (proposal 5.5); the seeds are new, the v4 schedule was looked at during the fault analysis (proposal 7.3)."
+  },
+  "audit": {
+    "lateness_max_s": 0.5,
+    "cycle_ms_max": {
+      "delta": 1500,
+      "full": 3500
+    },
+    "periodicity": {
+      "equal_spacings": 3,
+      "min_spacing_rows": 2,
+      "note": "author's judgment in G0 (proposal 10.9), not a mechanism; the spacings are those between the starts of bursts of flagged rows (lead's remarks on B3, part 2)"
+    },
+    "warnings_allowed": null,
+    "rule_closed_rows_max": null
+  },
+  "exceptions": {
+    "invalid_rows": {
+      "cause": "rows invalid only because a named traversal did not close",
+      "decision": "invalid_rows rule of the protocol (owner 2026-11-17): at most max such rows, never scored",
+      "expected": null
+    },
+    "rule_closed_rows": {
+      "cause": "process lists a parser rule closed (prev, tail, meet)",
+      "decision": "complete lists, only reported; rule_closed_rows_max caps them from G3b",
+      "expected": null
+    },
+    "unconfirmed_findings": {
+      "cause": "cross-view differences seen in one snapshot only",
+      "decision": "a difference of the live read is a finding once the next snapshot confirms it",
+      "expected": null
+    },
+    "inconclusive_integrity": {
+      "cause": "integrity checks that could not conclude",
+      "decision": "integrity availability is no behaviour input (features/quality.py)",
+      "expected": null
+    },
+    "collector_warnings": {
+      "cause": "collector warnings that match an allowed pattern",
+      "decision": "audit.warnings_allowed, determined in G2; null allows none",
+      "expected": null
+    },
+    "event_traffic_exit": {
+      "cause": "traffic generator exit code 1 in an event session",
+      "decision": "failed requests inside an event window are evidence of the event",
+      "expected": null
+    },
+    "event_unit_restarts": {
+      "cause": "units an event type restarts by design (EVENT_UNITS)",
+      "decision": "any other restart stays a problem",
+      "expected": null
+    },
+    "event_window_requests": {
+      "cause": "requests inside an event window",
+      "decision": "inside [host start - 1 s, host stop done + grace] failures are expected",
+      "expected": null
+    },
+    "event_window_health_checks": {
+      "cause": "health polls without request id inside a window",
+      "decision": "lab/udalosti.py polls health without a request id",
+      "expected": null
+    },
+    "event_window_journal": {
+      "cause": "tracebacks and worker errors inside a window",
+      "decision": "outside every window they reject the session",
+      "expected": null
+    },
+    "event_window_nginx_errors": {
+      "cause": "nginx error lines inside a window",
+      "decision": "outside every window they reject the session",
+      "expected": null
+    }
+  },
+  "analysis": {
+    "architecture": {
+      "model": "safeguard/model.py TCN",
+      "window_rows": 32,
+      "note": "The TCN of the current code (proposal 10.1 point 3) on the collection window."
+    },
+    "stopping": {
+      "rule": "best dev loss, patience",
+      "patience_epochs": 10,
+      "max_epochs": 100,
+      "repeat_if_last_epoch": "once with twice the cap",
+      "note": "Proposal 8.3: when the selected epoch is the last one, training is repeated once with twice the cap. Patience 10 and the cap of 100 epochs are the author's judgment."
+    },
+    "seeds": [
+      0,
+      1,
+      2,
+      3,
+      4
+    ],
+    "deploy_seed": 0,
+    "fpr": 0.01,
+    "alarm_rule": {
+      "k": 3,
+      "n": 5
+    },
+    "methods": {
+      "Z0": {
+        "what": "never alarms; random alarms at the matched alarm rate",
+        "grid": null
+      },
+      "Z1": {
+        "what": "a threshold per column on its value, first difference, rolling mean and CUSUM; also a threshold on mem_changed_max",
+        "grid": null
+      },
+      "Z2": {
+        "what": "some count differs from its mode",
+        "grid": null
+      },
+      "Z3": {
+        "what": "prediction by the last value, the window mean and EWMA, nothing learned",
+        "grid": null
+      },
+      "Z4": {
+        "what": "a threshold on the offered load; regression of the features on the load",
+        "grid": null
+      },
+      "Z5": {
+        "what": "linear autoregression (ridge) on the same window",
+        "grid": null
+      },
+      "M": {
+        "what": "the TCN of architecture, seeds 0 to 4",
+        "grid": null
+      }
+    },
+    "selection": "One procedure on dev for every method with free parameters: the grid point with the best value of the method's own criterion on dev (prediction loss for Z3, Z5 and M; alarms per observed hour at the matched threshold for Z1, Z2 and Z4), ties to the first grid point; never on a test role (author's judgment, proposal 8.3).",
+    "column_mask": null,
+    "k1": {
+      "statistic": "I = 1 - loss(M)/loss(Z) per boot",
+      "compare": [
+        "Z3",
+        "Z5"
+      ],
+      "m": null,
+      "rule": "95th percentile on >= 20 structure-free seeds (G1)"
+    },
+    "k2a": {
+      "statistic": "D = share of detected interventions of M minus that of Z per boot",
+      "compare": [
+        "Z1",
+        "Z2"
+      ],
+      "m": null,
+      "rule": "95th percentile on >= 20 structure-free seeds (G1)"
+    },
+    "k2b": {
+      "statistic": "D = share of detected interventions of M minus that of Z per boot",
+      "compare": [
+        "Z3",
+        "Z5"
+      ],
+      "m": null,
+      "rule": "95th percentile on >= 20 structure-free seeds (G1)"
+    },
+    "interventions": {
+      "C": {
+        "lengths": [
+          6,
+          12,
+          24,
+          48
+        ],
+        "per_boot": 6
+      },
+      "D": {
+        "lengths": [
+          6,
+          12,
+          24,
+          48
+        ],
+        "per_boot": 6
+      },
+      "boots": 20,
+      "validity": "every column, its first difference and rolling mean inside train quantiles"
+    },
+    "horizon_s": 180,
+    "reverberation_s": 300,
+    "evaluable": {
+      "first_s": 60,
+      "scored_share": 0.5
+    },
+    "min_occurrences": 8,
+    "note": "The analysis plan of proposal 10.1 point 3 (chapters 6.4, 7.4, 8.3, 8.4): the model enters K1 and K2 by its median over the five seeds, the deployed bundle is seed 0 (D14); fpr 0.01 and the rule 3 of 5 are kept (chapter 12); K1 against the prediction methods, K2a against the threshold methods, K2b against the methods with time and no learning; an occurrence is evaluable when at least half of its first 60 s is scored; a type or class with fewer than 8 evaluable occurrences is not evaluated. The bounds m are set in G1, the grids and the column mask in G3a. The numbers of the G0 rows are the author's judgment by proposal 10.9."
+  },
+  "rehearsal": {
+    "name_suffix": "-generalka",
+    "group_prefix": "g5-",
+    "groups_per_role": 2,
+    "note": "Proposal 10.4 and POKYNY 2026-11-22 section 4 (question 10): a rehearsal is a mode of this file, with its own name and group prefix and 2 groups per role (10 groups, 30 sessions, every role on every VM); its scenario counts differ by at most 1 over the whole plan (skeleton section 6)."
+  },
+  "determined_at": {
+    "G1": [
+      "analysis.k1.m",
+      "analysis.k2a.m",
+      "analysis.k2b.m"
+    ],
+    "G2": [
+      "invalid_rows.max",
+      "min_score_coverage",
+      "scenarios.*.rate",
+      "audit.warnings_allowed"
+    ],
+    "G3a": [
+      "analysis.methods.*.grid",
+      "analysis.column_mask",
+      "exceptions.*.expected"
+    ],
+    "G3b": [
+      "replacement.max_per_campaign",
+      "audit.rule_closed_rows_max"
+    ]
+  }
+}

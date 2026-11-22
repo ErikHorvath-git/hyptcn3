@@ -25,6 +25,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 from features.audit_policy import audit_bounds, tolerate
 from scripts import host_monitor, traffic_log
+from scripts.protocol_v5 import plans_events
 
 SCHEMA = "hyptcn3/collection-logs-audit/1"
 REQUIRED = ("preflight_smoke.json", "host_monitor.jsonl", "host_monitor.log", "traffic.json", "traffic.log",
@@ -477,9 +478,9 @@ def audit_logs(directory, *, snapshot_times=()):
         planned = "events" in read_json(directory / "session.json")
     except (OSError, ValueError):
         planned = False  # The metadata section has already recorded why.
-    # A protocol with events plans them for each of its sessions (collection.run_session): a session.json
-    # without them fails the events section instead of skipping it.
-    if planned or "events" in protocol:
+    # A protocol that plans events plans them for each of its sessions (collection.run_session): a session.json
+    # without them fails the events section instead of skipping it (under schema 3: per_session above 0).
+    if planned or plans_events(protocol):
         section("events", events)
     section("guest", guest)
     contents, requests = {}, []
@@ -514,7 +515,7 @@ def main(argv=None):
     result["date"] = datetime.now(timezone.utc).isoformat()
     result["auditor_sha256"] = {str(p.relative_to(ROOT)): digest(p) for p in
                                (Path(__file__), ROOT / "scripts/traffic_log.py", ROOT / "scripts/host_monitor.py",
-                                ROOT / "features/audit_policy.py")}
+                                ROOT / "features/audit_policy.py", ROOT / "scripts/protocol_v5.py")}
     if args.out:
         with args.out.open("x") as stream:
             json.dump(result, stream, indent=2, ensure_ascii=False, allow_nan=False)

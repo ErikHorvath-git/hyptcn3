@@ -30,7 +30,7 @@ make -C vmicollect test   # plná snímka, tri delty, obnova reťazca, kontroln�
 python3 -m pytest -q      # parser, príznaky, tcn, safeguard a skripty zberu
 ```
 
-`make test` prejde celú cestu zberu nad syntetickým obrazom veľkosti 16 MiB, ktorý si sám vyrobí. Testov je 3481 prešlých a 41 preskočených v `pytest` (spolu 3522 zozbieraných; preskočený test nie je prešiel) a 4 v C (`alarm_test`, `hole_test`, `perbin_test`, `retention_test`).
+`make test` prejde celú cestu zberu nad syntetickým obrazom veľkosti 16 MiB, ktorý si sám vyrobí. Testov je 3556 prešlých a 41 preskočených v `pytest` (spolu 3597 zozbieraných; preskočený test nie je prešiel) a 4 v C (`alarm_test`, `hole_test`, `perbin_test`, `retention_test`).
 
 ## 4. Ako vznikne snímka
 
@@ -69,14 +69,14 @@ nič nezapisuje“ v kapitole 6 platí o binárke; skript okolo nej `data/result
 |---|---|---|---|
 | `vmicollect/` | zberač snímok pamäte VM: C a eBPF nad QEMU/KVM | `vmicollect/src/collector.c` | 37 / 12 152 |
 | `guestparse/` | rekonštrukcia procesov, modulov a soketov zo snímky; kontroly integrity | `guestparse/view.py` | 35 / 8 248 |
-| `features/` | per-bin referencia k C, vektor snímky, okná, kvalita riadkov, rozhodnutie o prijatí sedenia, archív sedenia a index korpusu; staršia normalizácia pre `tcn/` | `features/perbin.py` | 31 / 7 649 |
-| `tcn/` | TCN bloky pre `safeguard/model.py`, baseliny a metriky; staršia diagnostická cesta tréningu a skórovania (`tcn/train.py`, `tcn/score.py`) | `tcn/model.py` | 22 / 7 896 |
+| `features/` | per-bin referencia k C, vektor snímky, okná, kvalita riadkov, rozhodnutie o prijatí sedenia, archív sedenia a index korpusu; staršia normalizácia pre `tcn/` | `features/perbin.py` | 31 / 7 923 |
+| `tcn/` | TCN bloky pre `safeguard/model.py`, baseliny a metriky; staršia diagnostická cesta tréningu a skórovania (`tcn/train.py`, `tcn/score.py`) | `tcn/model.py` | 22 / 7 904 |
 | `safeguard/` | integrovaná detekčná cesta: okná a normalizácia, modely, kalibrácia, balík a hostiteľský detektor | `safeguard/cli.py` | 16 / 3 436 |
 | `profiles/` | profil jadra hosťa: symboly a offsety polí štruktúr | `profiles/debian12-6.1.0-42-cloud-amd64/README.md` | jeden adresár na verziu jadra hosťa; nový boot rieši preukotvenie (L17) |
-| `scripts/` | zber a audit sedenia, kampaň (`scripts/campaign.py`), laboratórium a premávka, root behy, PoC techniky na validáciu citlivosti (`scripts/poc/`), kontroly tvrdení; staršie diagnostické sedenia a detektor (`scripts/session.sh`, `scripts/detektor.py`) | `scripts/collection.py` | 67 / 26 545 |
+| `scripts/` | zber a audit sedenia, kampaň (`scripts/campaign.py`), laboratórium a premávka, root behy, PoC techniky na validáciu citlivosti (`scripts/poc/`), kontroly tvrdení; staršie diagnostické sedenia a detektor (`scripts/session.sh`, `scripts/detektor.py`) | `scripts/collection.py` | 68 / 28 239 |
 | `lab/` | trvalé benígne API služby, PostgreSQL a nginx vo VM `hyptcn-lab` | `lab/services.py` | 11 / 824 |
 | `harness/` | zlatý obraz hosťa, šablóna domény `hyptcn-guest`, izolovaná sieť bez NAT a manifesty starších sedení | `harness/README.md` | 15 / 264 |
-| `config/` | zmrazené protokoly zberu korpusu: doména, perióda, okná, roly a scenáre | `config/collection-v2.json` | 8 / 0 |
+| `config/` | zmrazené protokoly zberu korpusu: doména, perióda, okná, roly a scenáre | `config/collection-v2.json` | 9 / 0 |
 | `data/` | výsledkové JSONy z meraní (`data/results/`) a pozemná pravda odobratá v hosťovi (`data/sessions/`); samotné snímky sú mimo gitu (`data/raw/`, zber korpusu `data/collections/<session>/`) | `data/results/2026-09-18_zmrazeny_host/README.md` | rastie s každým meraním, nepočíta sa |
 
 ## 6. Ako to funguje
@@ -147,7 +147,7 @@ sa trénoval iba na krátkych benígnych sedeniach, nie na korpuse `benign-v6-20
 
 Prepínače: `-c, --config F` konfiguracny subor (INI), `-o, --set K=V` prebi jeden parameter (da sa opakovat), `-v, --verbose` log na urovni DEBUG, `-q, --quiet` log iba ERROR.
 
-Podpríkazy: `python3 -m guestparse` — `ps` zoznam procesov z init_task.tasks, `lsmod` zoznam nacitanych modulov, `ss` sietove spojenia (IPv4 aj IPv6), `info` profil, posun jadra a krizova kontrola prekladu adries, `checks` kontroly podozrivych vzorcov, `validate` porovnanie s pozemnou pravdou z hosta, `textbaseline` baseline textu jadra (kontrola (d); zapise text_baseline.json do profilu). Bez --vmlinux ide o baseline z cistej snimky, s --vmlinux z linkovaneho obrazu (silnejsia, boot-independent)., `procmap` ktoremu procesu patria zmenene stranky binov (A4); `python3 -m features` — `perbin` spocitaj vektor jednej snimky, `crosscheck` porovnaj referenciu s vektorom z C modulu, `session` pamat aj objekty hosta do jedneho vektora na snimku; `python3 -m safeguard` (`docs/SAFEGUARD.sk.md`) — `train`, `inspect`, `replay`, `watch`, `run`, `status`, `smoke`; `scripts/collection.py` (`docs/METODIKA_ZBERU.sk.md`) — `plan`, `run`, `audit`, `coverage`; `scripts/campaign.py` (`docs/AUTOMATICKY_ZBER.sk.md`) — `init`, `run`, `launch`, `status`, `verify-archives`, `request-stop`, `close`.
+Podpríkazy: `python3 -m guestparse` — `ps` zoznam procesov z init_task.tasks, `lsmod` zoznam nacitanych modulov, `ss` sietove spojenia (IPv4 aj IPv6), `info` profil, posun jadra a krizova kontrola prekladu adries, `checks` kontroly podozrivych vzorcov, `validate` porovnanie s pozemnou pravdou z hosta, `textbaseline` baseline textu jadra (kontrola (d); zapise text_baseline.json do profilu). Bez --vmlinux ide o baseline z cistej snimky, s --vmlinux z linkovaneho obrazu (silnejsia, boot-independent)., `procmap` ktoremu procesu patria zmenene stranky binov (A4); `python3 -m features` — `perbin` spocitaj vektor jednej snimky, `crosscheck` porovnaj referenciu s vektorom z C modulu, `session` pamat aj objekty hosta do jedneho vektora na snimku; `python3 -m safeguard` (`docs/SAFEGUARD.sk.md`) — `train`, `inspect`, `replay`, `watch`, `run`, `status`, `smoke`; `scripts/collection.py` (`docs/METODIKA_ZBERU.sk.md`) — `plan`, `run`, `audit`, `coverage`, `selfcheck`; `scripts/campaign.py` (`docs/AUTOMATICKY_ZBER.sk.md`) — `init`, `run`, `launch`, `status`, `verify-archives`, `request-stop`, `close`.
 
 **Konfiguračné kľúče** (`vmicollect config --keys`, prebijú sa cez `-o sekcia.kluc=hodnota`):
 

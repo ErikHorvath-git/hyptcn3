@@ -181,7 +181,9 @@ def _korpus(rodina, koren, raz):
     p = collection.protocol(cesta)
     n, w, f = p["cycles"], p["window_rows"], p["full_every"]
     prijate = [b for b in BUNKY if ROZHODNUTIA[rodina][b][0] in PRIJATE]
-    assert prijate[0] == "k0" and list(p["roles"]) == list(ROLY)
+    # Od balika B4 je schema 3 rozlozenim v5: S3 ma navyse rolu test_controls, bez skupiny.
+    assert prijate[0] == "k0" and [rola for rola in p["roles"] if p["roles"][rola]] == list(ROLY)
+    assert p["roles"].get("test_controls", 0) == 0
     miesta, bunky, navyse, okna, audity = {}, {}, {}, {}, []
     for rola in ROLY:
         planovane = bs.places(p, rola)
@@ -712,13 +714,14 @@ SCHEMY = {1: "hyptcn3/collection-protocol/1", 2: "hyptcn3/collection-protocol/2"
 
 
 def _protokol_brany(tmp_path, schema, kluc, navyse):
-    """S3 pod danou schemou s branou na cistom podiele dlzky `kluc` plus `navyse` okien (sekcia 7, L8)."""
-    doc = bs.family("S3", bs.profile_dir(tmp_path / "profil"))
+    """S3 pod danou schemou s branou na cistom podiele dlzky `kluc` plus `navyse` okien (sekcia 7, L8).
+
+    Pod schemou 1 a 2 je to tvar S3 z rodiny S2G: oddiely auditu a vynimiek (balik B3) a rozlozenia v5 (balik B4)
+    nesie iba schema 3."""
+    doc = bs.family("S3" if schema == 3 else "S2G", bs.profile_dir(tmp_path / "profil"))
     doc["schema"] = SCHEMY[schema]
     if schema == 1:
         del doc["quality_policy"]  # schema 1 politiku nenesie (legacy)
-    if schema != 3:  # oddiely auditu a vynimiek nesie iba schema 3 (balik B3)
-        del doc["audit"], doc["exceptions"]
     if kluc == "cycles":
         doc["pilot_cycles"] = 128  # dlhsi pilot: jeho cisty podiel (112 zo 128) je nad podielom session
     dlzka = doc[kluc]

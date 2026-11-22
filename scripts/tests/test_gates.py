@@ -1,5 +1,6 @@
 """scripts/gates.py: a stage counts only with a complete, verified record for this protocol and code."""
 from datetime import datetime, timedelta, timezone
+import hashlib
 import json
 
 import pytest
@@ -7,6 +8,32 @@ import pytest
 from scripts import gates
 
 T0 = datetime(2026, 1, 1, tzinfo=timezone.utc)
+# A small schema-3-like protocol: values of later stages are null or preliminary, determined_at says which.
+STAGED = {
+    "schema": "hyptcn3/collection-protocol/3", "name": "p", "note": "úsudok autora",
+    "invalid_rows": {"max": 3, "traversals": ["processes"]}, "min_score_coverage": 557 / 720,
+    "scenarios": {"low": {"intensity": "low", "rate": None}, "high": {"intensity": "high", "rate": None}},
+    "analysis": {"k1": {"m": None, "rule": "95th percentile"}, "methods": {"Z1": {"grid": None}, "M": {"grid": None}}},
+    "replacement": {"max_per_campaign": None, "same": ["vm"]},
+    "determined_at": {"G1": ["analysis.k1.m"], "G2": ["invalid_rows.max", "min_score_coverage", "scenarios.*.rate"],
+                      "G3a": ["analysis.methods.*.grid"], "G3b": ["replacement.max_per_campaign"]},
+}
+
+
+def text(doc, **dumps):
+    return json.dumps(doc, ensure_ascii=False, **(dumps or {"indent": 1})) + "\n"
+
+
+def changed(doc, values):
+    """`doc` written with the value at each dotted path of `values` replaced."""
+    doc = json.loads(json.dumps(doc))
+    for path, value in values.items():
+        *parents, key = path.split(".")
+        node = doc
+        for name in parents:
+            node = node[name]
+        node[key] = value
+    return text(doc)
 
 
 @pytest.fixture
@@ -95,6 +122,69 @@ def test_changed_measurement_code_or_protocol_reopens_every_stage(world):
     state["measurement"] = "m1"
     protocol.write_text('{"name": "other"}\n')
     assert gates.status(results, protocol)[0]["problems"] == ["protocol file changed since the record"]
+
+
+@pytest.mark.parametrize("before,after,valid_after", [
+    # G2 determines its values (a '*' path among them): G0 and G1 stay valid
+    (text(STAGED), changed(STAGED, {"scenarios.low.rate": 120.5, "scenarios.high.rate": 410.0, "invalid_rows.max": 4,
+                                    "min_score_coverage": 524 / 720}), ["G0", "G1"]),
+    # a changed G1 value reopens G1 and every later stage, not G0
+    (text(STAGED), changed(STAGED, {"analysis.k1.m": 0.04}), ["G0"]),
+    # G3b determines its value: G0 to G3a stay valid
+    (text(STAGED), changed(STAGED, {"replacement.max_per_campaign": 2}), ["G0", "G1", "G2", "G3a"]),
+    # a value outside determined_at reopens every stage, also beside a path of a later stage
+    (text(STAGED), changed(STAGED, {"invalid_rows.traversals": []}), []),
+    # moving a path to another stage changes determined_at itself
+    (text(STAGED), changed(STAGED, {"determined_at.G1": [], "determined_at.G2": [
+        "invalid_rows.max", "min_score_coverage", "scenarios.*.rate", "analysis.k1.m"]}), []),
+    # the same document in other bytes: only G4 and later hash the file
+    (text(STAGED), text(STAGED, indent=None), ["G0", "G1", "G2", "G3a", "G3b"]),
+    # without determined_at (schemas 1 and 2) every stage hashes the file, as before stage hashes
+    (text({"name": "p"}), text({"name": "p"}, indent=None), []),
+], ids=["G2_determined", "G1_changed", "G3b_determined", "outside", "determined_at_moved", "bytes_only",
+        "no_determined_at"])
+def test_a_stage_binds_the_protocol_without_the_values_of_later_stages(world, before, after, valid_after):
+    protocol, results, _ = world
+    protocol.write_text(before)
+    for minutes, stage in enumerate(gates.STAGES):
+        assert write(world, stage, minutes)[1] == []
+    assert valid(world) == list(gates.STAGES)
+    protocol.write_text(after)
+    reopened = [row["stage"] for row in gates.status(results, protocol)
+                if row["problems"] == ["protocol file changed since the record"]]
+    assert valid(world) == valid_after and reopened == [s for s in gates.STAGES if s not in valid_after]
+
+
+def test_a_record_carries_its_stage_hash_and_names_the_rule(world):
+    protocol, _, _ = world
+    protocol.write_text(text(STAGED))
+    values = json.loads(write(world, "G0")[0].read_text())["values"]
+    view = {"schema": "hyptcn3/collection-protocol/3", "name": "p", "note": "úsudok autora",
+            "invalid_rows": {"traversals": ["processes"]},
+            "scenarios": {"low": {"intensity": "low"}, "high": {"intensity": "high"}},
+            "analysis": {"k1": {"rule": "95th percentile"}, "methods": {"Z1": {}, "M": {}}},
+            "replacement": {"same": ["vm"]}, "determined_at": STAGED["determined_at"]}
+    canonical = json.dumps(view, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode()
+    assert values["protocol_sha256"] == hashlib.sha256(canonical).hexdigest() == gates.stage_sha256(protocol, "G0")
+    assert values["protocol_hash_rule"] == (
+        "sha256 of the UTF-8 of json.dumps(sort_keys=True, separators=(',', ':'), ensure_ascii=False) of the "
+        "protocol without the paths that determined_at assigns to stages after G0")
+    assert gates.stage_binding(protocol, "G4") == (gates.sha256(protocol), "sha256 of the file bytes")
+
+
+@pytest.mark.parametrize("determined_at,error", [
+    ({"G2": ["invalid_rows.max"], "G7": ["name"]}, "determined_at must map stage names to lists of dotted paths"),
+    ({"G2": ["determined_at.G1"]}, "determined_at path must start with a protocol key other than determined_at: "
+                                   "determined_at.G1"),
+    ({"G1": ["analysis.k1.m"], "G2": ["analysis.k1"]},
+     "determined_at path analysis.k1 (G2) would delete analysis.k1.m (G1)"),
+], ids=["unknown_stage", "itself", "deletes_earlier"])
+def test_a_determined_at_that_could_unbind_a_value_of_its_own_stage_is_refused(world, determined_at, error):
+    protocol, results, _ = world
+    protocol.write_text(text(dict(STAGED, determined_at=determined_at)))
+    with pytest.raises(ValueError) as refused:
+        write(world, "G0")
+    assert str(refused.value) == error and list(results.iterdir()) == []
 
 
 def test_the_newest_record_decides_and_records_are_never_overwritten(world):

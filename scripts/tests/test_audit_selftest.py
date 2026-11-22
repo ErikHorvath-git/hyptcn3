@@ -19,7 +19,7 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[2]
 REFUSED = "no valid audit self-test record for the current code and protocol"
-SELFTEST_PROTOCOL = ROOT / "scripts/tests/selftest_protocol.json"
+SELFTEST_PROTOCOL = ROOT / "config/collection-v5.json"  # The self-test protocol since package B4.
 
 
 def pytest_generate_tests(metafunc):
@@ -87,6 +87,7 @@ def test_clean_session_is_accepted_with_every_registered_exception(small):
     assert v["audit_bounds"] == p["audit"]
     assert v["timing"]["periodic_run"] == {"equal_spacings": 0, "spacing": None, "min_spacing_rows": 2,
                                            "flagged_rows": 0}
+    assert v["timing"]["spacing_mode"] == {"spacing": None, "count": 0, "spacings": 0}
     assert v["timing"]["delta_ms_max"] < p["audit"]["cycle_ms_max"]["delta"] < v["timing"]["full_ms_max"]
     assert v["timing"]["full_ms_max"] <= p["audit"]["cycle_ms_max"]["full"]
 
@@ -167,6 +168,8 @@ def test_main_writes_a_passed_record_bound_to_protocol_code_and_cases(recorded):
     assert doc["commit"] == subprocess.run(["git", "-C", str(ROOT), "rev-parse", "HEAD"], capture_output=True,
                                            text=True).stdout.strip()
     assert doc["clean"] == {"code": 0, "reasons": []}
+    # The provenance of every record of data/results (scripts/check_claims.sh, check E).
+    assert doc["n"] == len(doc["cases"]) and doc["guest"] == audit_selftest.GUEST and doc["host"].count(", kernel ") == 1
     assert [c["id"] for c in doc["cases"]] == recorded.ids and all(c["passed"] and c["code"] == 2 for c in doc["cases"])
     assert all(c["reasons"] == c["expected"] for c in doc["cases"])
     assert "collection.retazec" in doc["replaced"]
@@ -332,13 +335,17 @@ def test_every_tolerated_condition_of_the_audit_is_registered(tmp_path):
     assert {name for _, _, name in audit_policy.sites(sources)} == set(audit_policy.TOLERATED)
 
 
-@pytest.mark.parametrize("change, message", [
-    (lambda doc: doc.pop("audit"), "protocol schema 3 requires the audit section"),
-    (lambda doc: doc.pop("exceptions"), "protocol schema 3 requires the exceptions section"),
+# Since package B4 the loader names a missing section of the v5 layout first; the section's reader keeps its message.
+@pytest.mark.parametrize("change, message, reader", [
+    (lambda doc: doc.pop("audit"), "missing protocol key: audit", "protocol schema 3 requires the audit section"),
+    (lambda doc: doc.pop("exceptions"), "missing protocol key: exceptions",
+     "protocol schema 3 requires the exceptions section"),
     (lambda doc: doc["exceptions"].pop("rule_closed_rows"),
+     "register of exceptions differs from the exceptions the audit admits",
      "register of exceptions differs from the exceptions the audit admits"),
 ], ids=["no_audit", "no_exceptions", "register_misses_an_id"])
-def test_schema_3_protocol_without_its_sections_is_refused(small, tmp_path, change, message):
+def test_schema_3_protocol_without_its_sections_is_refused(small, tmp_path, change, message, reader):
+    from features import audit_policy
     from scripts import collection
     p, _, _ = small
     doc = copy.deepcopy(p)
@@ -347,6 +354,9 @@ def test_schema_3_protocol_without_its_sections_is_refused(small, tmp_path, chan
     path.write_text(json.dumps(doc))
     with pytest.raises(ValueError, match="^" + message + "$"):
         collection.protocol(path)
+    with pytest.raises(ValueError, match="^" + reader + "$"):
+        audit_policy.audit_bounds(doc)
+        audit_policy.register(doc)
 
 
 def test_selftest_protocol_carries_the_bounds_of_g0_and_the_whole_register():
@@ -392,10 +402,11 @@ def _open(seq):
     ({"rule_closed_seq": [10, 12, 14]}, []),  # two equal spacings
     ({"rule_closed_seq": [10, 12, 14, 16]}, ["periodicity"]),
     ({"invalid_rows": [_open(10), _open(14)], "rule_closed_seq": [12, 16], "windows": 67}, ["periodicity"]),
+    ({"rule_closed_seq": [0, 1, 5, 6, 10, 11, 15, 16]}, ["periodicity"]),  # bursts every 5 rows (must_fix 3, B4)
     ({"smallest_gap_s": 0., "span_s": 120., "rule_closed_seq": [10, 12, 14, 16], "sequence_contiguous": False},
      ["sequence", "timing:gap", "timing:period", "periodicity"]),
 ], ids=["clean", "gap_zero", "gap_negative", "gap_at_max", "gap_above_max", "span_one_off", "span_beyond",
-        "rule_closed_without_cap", "burst", "two_spacings", "periodic", "periodic_union", "order"])
+        "rule_closed_without_cap", "burst", "two_spacings", "periodic", "periodic_union", "periodic_bursts", "order"])
 def test_timing_and_flagged_rows_rules_of_the_verdict(small, changes, codes):
     from features import acceptance
     p, _, _ = small
@@ -416,9 +427,42 @@ def test_cap_of_rule_closed_rows_once_it_is_set(small, closed, codes):
 
 @pytest.mark.parametrize("seqs, spacing, run", [
     ([], 2, (0, None)), ([5], 2, (0, None)), ([5, 6, 7, 8, 9], 2, (0, None)), ([5, 7, 9, 11], 2, (3, 2)),
-    ([5, 7, 9, 11], 3, (0, None)), ([11, 5, 9, 7, 7], 2, (3, 2)), ([0, 5, 10, 11, 16, 21, 26], 2, (3, 5)),
+    ([5, 7, 9, 11], 3, (0, None)), ([11, 5, 9, 7, 7], 2, (3, 2)),
+    ([0, 5, 10, 11, 16, 21, 26], 2, (2, 5)),  # the burst 10, 11 starts at 10: spacings 5, 5, 6, 5, 5
     ([0, 4, 8, 20, 32], 2, (2, 4)),
-], ids=["none", "one", "burst", "run", "below_min_spacing", "any_order", "run_after_burst", "first_of_equal_runs"])
-def test_periodic_run_is_the_longest_run_of_one_spacing(seqs, spacing, run):
+    # The lead's cases (must_fix 3 on B3): two rows every five, and four of five on 20 rows.
+    ([0, 1, 5, 6, 10, 11, 15, 16], 2, (3, 5)), ([seq for seq in range(20) if seq % 5 != 4], 2, (3, 5)),
+], ids=["none", "one", "burst", "run", "below_min_spacing", "any_order", "spacing_from_burst_start",
+        "first_of_equal_runs", "two_every_five", "four_of_five"])
+def test_periodic_run_is_the_longest_run_of_one_spacing_between_burst_starts(seqs, spacing, run):
     from features import acceptance
     assert acceptance.periodic_run(seqs, spacing) == run
+
+
+# Rule-closed rows in bursts of two whose starts are 5, 5, 6, 5, 5, 6 rows apart: a resonance that scatters.
+RESONANCE = [10, 11, 15, 16, 20, 21, 26, 27, 31, 32, 36, 37, 42, 43]
+
+
+@pytest.mark.parametrize("seqs, mode", [
+    ([], {"spacing": None, "count": 0, "spacings": 0}), ([3, 4, 5], {"spacing": None, "count": 0, "spacings": 0}),
+    (RESONANCE, {"spacing": 5, "count": 4, "spacings": 6}),
+    ([0, 4, 8, 14, 20], {"spacing": 4, "count": 2, "spacings": 4}),
+], ids=["none", "one_burst", "scattered_resonance", "tie_takes_the_smaller"])
+def test_spacing_mode_is_the_most_frequent_spacing_between_burst_starts(seqs, mode):
+    from features import acceptance
+    assert acceptance.spacing_mode(seqs) == mode
+
+
+def test_spacing_mode_is_recorded_and_never_a_reason(small):
+    """The scattered resonance as rule-closed rows: no three equal spacings in a row, so the session is accepted;
+    the record says spacing 5 four times in six (lead's remarks on B3, part 2)."""
+    from scripts.tests import audit_cases, boundary_sessions as bs
+    from scripts.tests.audit_case import Case
+    p, path, root = small
+    case = Case("resonance", "rule-closed rows of a scattered resonance", [],
+                audit_cases._rows_quality(lambda p: {seq: bs.rule_closed_row() for seq in RESONANCE}))
+    audit = audit_cases.run_case(root / "resonance", p, path, case)
+    assert (audit.code, audit.values["accepted"], audit.values["reasons"]) == (0, True, [])
+    assert audit.values["timing"]["spacing_mode"] == {"spacing": 5, "count": 4, "spacings": 6}
+    assert audit.values["timing"]["periodic_run"]["equal_spacings"] == 2
+    assert audit.values["exceptions"]["rule_closed_rows"]["observed"] == len(RESONANCE)

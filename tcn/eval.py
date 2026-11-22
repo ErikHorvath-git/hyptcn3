@@ -658,7 +658,8 @@ def vyhodnot_udalosti(index_cesta, prehratia, alfa=0.05, rola=None):
     alokacia = alokacia_indexu_udalosti(index)
     protokol = index["protocol_config"]
     perioda, max_medzera, okno = protokol["interval_s"], protokol["max_gap_s"], protokol["window_rows"]
-    triedy = protokol["events"]["classes"]
+    # Schema 3 (protocol v5, scripts/protocol_v5.py) names the map of event types to classes events.types.
+    triedy = protokol["events"]["types" if protokol.get("schema") == "hyptcn3/collection-protocol/3" else "classes"]
     zaznamy = {z["features_sha256"]: z for z in index["sessions"]}
     balik, balik_sha, relacie, priebehy = None, None, {}, []
     po_kategoriach = collections.defaultdict(list)

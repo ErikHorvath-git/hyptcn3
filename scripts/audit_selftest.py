@@ -19,6 +19,7 @@ from datetime import datetime, timezone
 import hashlib
 import json
 from pathlib import Path
+import platform
 import shutil
 import subprocess
 import sys
@@ -91,13 +92,29 @@ def run(protocol_path, work):
             "passed": clean.code == 0 and clean.values["reasons"] == [] and all(c["passed"] for c in out)}
 
 
+# The provenance every record of data/results carries (scripts/check_claims.sh, check E: commit, date, host,
+# guest, command, n). The self-test reads no VM.
+GUEST = "none: synthetic sessions built from scripts/tests/audit_cases.py and audit_cases_logs.py; no VM is contacted"
+
+
+def host():
+    """This machine as the records of data/results name it: its operating system and kernel."""
+    try:
+        pretty = next(line.split("=", 1)[1].strip().strip('"') for line in
+                      Path("/etc/os-release").read_text().splitlines() if line.startswith("PRETTY_NAME="))
+    except (OSError, StopIteration):
+        pretty = platform.system()
+    return f"{pretty}, kernel {platform.release()}"
+
+
 def record(protocol_path, work, now=None):
     """The self-test record of the protocol file (not written)."""
     started = time.monotonic()
     values = run(protocol_path, work)
     now = now or datetime.now(timezone.utc)
     return {"schema": SCHEMA, "date": now.isoformat(timespec="seconds"), "commit": commit(),
-            "command": " ".join(map(str, sys.argv)), "protocol": str(Path(protocol_path).resolve()),
+            "command": " ".join(map(str, sys.argv)), "host": host(), "guest": GUEST, "n": len(values["cases"]),
+            "protocol": str(Path(protocol_path).resolve()),
             "protocol_sha256": digest(protocol_path), "measurement_sha256": measurement_sha256(),
             "cases_sha256": cases_sha256(), "replaced": REPLACED, **values,
             "seconds": round(time.monotonic() - started, 1),

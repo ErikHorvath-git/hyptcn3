@@ -6,11 +6,13 @@ generator below; only collection.retazec (feature extraction from guest RAM) is 
 Window counts are predicted by window_count(), an oracle that reads no product code. Nothing here imports a
 name package B2 adds, so the same module runs on the code before and after B2. Since B3 every key the audit
 reads is written with a clean value: the VM identity, lateness, cycle and publication fields of each sidecar,
-and in session.json the host context, the collector settings and the lab/ files with the guest's manifest.
+and in session.json the host context, the collector settings and the lab/ files with the guest's manifest. Since
+B4 a schema-3 protocol is a v5 document: it takes the v5 sections from config/collection-v5.json (v5_sections).
 """
 from collections import namedtuple
 import contextlib
 import copy
+import functools
 import hashlib
 import io
 import json
@@ -252,9 +254,9 @@ def audit_sections(interval_s, min_spacing_rows=2):
 
     The bounds of proposal 6.2 for an interval of 5 s scaled to `interval_s`: the cycle starts at most a tenth of
     the interval late, a delta cycle takes at most 30 % of it and a full one 70 %. Periodicity: 3 equal spacings in
-    a row, each of at least `min_spacing_rows` rows (the author's judgment in G0). No collector warning is allowed
-    and the cap of rule-closed rows is not set, as until G2 and G3b. Every TOLERATED id is registered (REGISTER),
-    with no expected count.
+    a row between the starts of bursts, each of at least `min_spacing_rows` rows (the author's judgment in G0). No
+    collector warning is allowed and the cap of rule-closed rows is not set, as until G2 and G3b. Every TOLERATED
+    id is registered (REGISTER), with no expected count.
     """
     from features import audit_policy  # A module of package B3: imported here, so this file collects before it.
     return {"audit": {"lateness_max_s": interval_s / 10,
@@ -266,9 +268,47 @@ def audit_sections(interval_s, min_spacing_rows=2):
                            for name in audit_policy.TOLERATED}}
 
 
+V5 = collection.ROOT / "config/collection-v5.json"
+# The keys v5_sections() gives a schema-3 test protocol; the document states the others itself (its grid, gate,
+# rule, name, profile, VM and group prefix) and the audit sections scaled to its interval (audit_sections).
+V5_SECTIONS = ("status", "warmup_s", "min_free_gib", "replacement", "group_sessions", "roles", "interleave",
+               "scenarios", "scenario_rule", "events", "full_snapshot_guard", "controls", "streams", "analysis",
+               "rehearsal", "determined_at")
+
+
+@functools.lru_cache(maxsize=None)
+def _v5_file():
+    """config/collection-v5.json as JSON, read once (callers copy what they take)."""
+    return json.loads(V5.read_text())
+
+
+def v5_sections(scenarios, roles, *, group_sessions, window_rows, max_per_campaign=0):
+    """The sections of config/collection-v5.json (package B4) a schema-3 test protocol takes over.
+
+    Schema 3 is the v5 layout, so every schema-3 test document has every key of it. Taken from the file (read
+    here, so this module collects before B4) with: the scenario names given, each with a v5 entry {profile,
+    intensity, rate} in the file's order; the roles given plus test_controls with no group; group_sessions given
+    (the families give len(scenarios), so every group holds every scenario); no interleaving; events whose
+    per_session [0] plans no event; the analysis on the document's window; replacement.max_per_campaign as the
+    document had (0: a document without a rule replaced nothing); status test_only.
+    """
+    v5 = _v5_file()
+    out = {key: copy.deepcopy(v5[key]) for key in V5_SECTIONS}
+    entries = list(v5["scenarios"].values())
+    out.update(status="test_only", group_sessions=group_sessions, interleave=[],
+               roles={**{role: count for role, count in roles.items() if role != "test_controls"}, "test_controls": 0},
+               scenarios={name: dict(entries[i % len(entries)]) for i, name in enumerate(scenarios)},
+               events=dict(out["events"], per_session=[0]),
+               replacement=dict(out["replacement"], max_per_campaign=max_per_campaign))
+    out["analysis"]["architecture"]["window_rows"] = window_rows
+    return out
+
+
 def protocol_doc(profile, *, schema, cycles, pilot_cycles, window_rows, full_every, gate, rule=RULE, roles_each=3,
                  scenarios=SCENARIOS, group_prefix="bt-", name="boundary"):
-    """Protocol of plan section 3: interval 1 s, gap 1.5 s, one unnamed VM, no events; rule None omits invalid_rows."""
+    """Protocol of plan section 3: interval 1 s, gap 1.5 s, one unnamed VM, no events; rule None omits invalid_rows.
+    Schema 3 adds the v5 sections (v5_sections: no event is planned, nothing is replaced) and the audit sections
+    of audit_sections(1)."""
     doc = {"schema": schema, "name": name, "quality_policy": fq.BEHAVIOR_POLICY, "profile": str(profile),
            "domain": DOMAIN, "target": "http://127.0.0.1:28080", "interval_s": 1, "max_gap_s": 1.5,
            "bin_bytes": BIN_BYTES, "window_rows": window_rows, "stride": 1, "full_every": full_every,
@@ -277,6 +317,9 @@ def protocol_doc(profile, *, schema, cycles, pilot_cycles, window_rows, full_eve
            "roles": {role: roles_each for role in ("train", "dev", "calibration", "test_benign")}}
     if rule is not None:
         doc["invalid_rows"] = copy.deepcopy(rule)
+    if schema == "hyptcn3/collection-protocol/3":
+        doc.update(v5_sections(list(scenarios), doc["roles"], group_sessions=len(scenarios), window_rows=window_rows),
+                   **audit_sections(doc["interval_s"]))
     return doc
 
 
@@ -289,10 +332,11 @@ def worst_gate(cycles, window_rows, full_every, count, extra=0):
 def family(name, profile):
     """Protocol document of family S3, S2G or V4 (plan section 3), or of the file S3+ (S3 with the S2G gate).
 
-    S3 and S3+ (schema 3) carry the audit and exceptions sections of audit_sections(1): no B2 construction meets
-    a new rule there. Every row is sampled on the grid and no row is closed by a parser rule; the flagged rows of
-    a cell are at most four isolated rows (isolated_seqs, full_every // 6 = 10 apart) or adjacent ones, so the
-    periodicity bound counts spacings of full_every // 6 + 1 = 11 rows and more only.
+    S3 and S3+ (schema 3) carry the v5 sections of v5_sections (no event, nothing replaced) and the audit and
+    exceptions sections of audit_sections(1): no B2 construction meets a new rule there. Every row is sampled on
+    the grid and no row is closed by a parser rule; the flagged rows of a cell are at most four isolated rows
+    (isolated_seqs, full_every // 6 = 10 apart) or adjacent ones, so the periodicity bound counts spacings of
+    full_every // 6 + 1 = 11 rows and more only.
     """
     if name == "V4":
         config = json.loads((collection.ROOT / "config/collection-v4.json").read_text())

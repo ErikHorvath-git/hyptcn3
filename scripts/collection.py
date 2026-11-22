@@ -38,9 +38,10 @@ from features.windows import WindowError
 from features.quality import protocol_policy, coverage_gate, invalid_rows_rule, tolerated_invalid_rows
 # ideal_windows is kept for a tracked record script under data/results, which reads it from this module.
 from features.coverage import ideal_windows, scorable_windows
-from features.acceptance import assignment, flagged_seq, judge, periodic_run, protocol_reachability
+from features.acceptance import assignment, flagged_seq, judge, periodic_run, protocol_reachability, spacing_mode
 from features.audit_policy import audit_bounds, exceptions_record, register, tolerate
 from scripts.collection_logs import audit_logs
+from scripts import protocol_v5
 from lab.udalosti import CONTROLS as CONTROL_TYPES, TYPES as EVENT_TYPES
 
 DEFAULT = ROOT / "config/collection-v2.json"
@@ -128,6 +129,11 @@ def write_json(path, doc):
 
 def protocol(path):
     p = json.loads(Path(path).read_text())
+    schema3 = type(p) is dict and p.get("schema") == protocol_v5.SCHEMA
+    if schema3:
+        # Schema 3 is the v5 layout: no unknown and no missing key, and well-formed v5 sections. Balance, role sizes,
+        # the place of null values and the gate's binding to invalid_rows.max are the self-check's (selfcheck).
+        protocol_v5.check_layout(p)
     protocol_policy(p)
     coverage_gate(p)
     for key in ("interval_s", "window_rows", "full_every", "cycles", "pilot_cycles", "bin_bytes"):
@@ -149,7 +155,7 @@ def protocol(path):
             raise ValueError("score coverage gate is unreachable for " + case["key"])
     if p["bin_bytes"] != 16777216:
         raise ValueError("capture runner currently supports 16 MiB bins")
-    if "events" in p:
+    if "events" in p and not schema3:  # Schema 3 events are checked by protocol_v5.check_layout.
         check_events(p)
     if "vms" in p:
         check_vms(p)
@@ -197,12 +203,16 @@ def check_replacement(p):
                           while the group's boot and QEMU process are still the recorded
                           ones - after a reboot or restart the group's boot is gone and
                           the campaign stops
-    All causes share the one per-campaign maximum.
+    All causes share the one per-campaign maximum. Under schema 3 the maximum may be null until stage G3b
+    determines it (proposal 7.5).
     """
     r = p["replacement"]
+    limit = r.get("max_per_campaign") if type(r) is dict else None
+    if p.get("schema") == protocol_v5.SCHEMA and type(r) is dict and "covers" not in r:
+        raise ValueError("missing protocol key: replacement.covers")  # Schema 3 states every cause (no default).
     if (type(r) is not dict
             or not {"max_per_campaign", "same"} <= set(r) <= {"max_per_campaign", "same", "covers", "note"}
-            or type(r["max_per_campaign"]) is not int or r["max_per_campaign"] < 0
+            or not (type(limit) is int and limit >= 0 or limit is None and p.get("schema") == protocol_v5.SCHEMA)
             or type(r["same"]) is not list or sorted(map(str, r["same"])) != ["role", "scenario", "vm"]):
         raise ValueError("invalid replacement rule")
     covers = r.get("covers", list(REPLACEMENT_CAUSES[:1]))
@@ -224,7 +234,9 @@ def check_vms(p):
             raise ValueError("invalid VM in protocol")
     if any(len({row[key] for row in rows}) != len(rows) for key in ("name", "domain", "port")):
         raise ValueError("VM names, domains and ports must be unique")
-    if any(count < len(rows) for count in p["roles"].values()):
+    # A schema-3 role may plan no group at all (a test protocol's test_controls); the self-check judges sizes.
+    planned = [n for n in p["roles"].values() if n or p.get("schema") != protocol_v5.SCHEMA]
+    if any(count < len(rows) for count in planned):
         raise ValueError("every role needs a boot group on every VM")
 
 
@@ -316,6 +328,8 @@ def event_schedule(p, seed, deck):
 
 
 def plan(p):
+    if p.get("schema") == protocol_v5.SCHEMA:
+        return protocol_v5.plan(p, mode="campaign")  # The v5 schedule (balanced blocks, streams, events, controls).
     result = []
     names = [row["name"] for row in vms(p)]
     # Each role/repetition is a separate boot group. Adjacent chunks of a
@@ -1463,7 +1477,8 @@ def audit_session(directory, p, protocol_path, output=None):
     if logs is not None:
         reasons.extend("logs: " + problem for problem in logs["problems"])
         counts.update(logs["tolerated"])
-    # Recorded for every session, a bound only under schema 3: G2 and G3a judge the bound by this run.
+    # Recorded for every session, a bound only under schema 3: G2 and G3a judge the bound by this run. The most
+    # frequent spacing between burst starts (spacing_mode) is recorded only and never a reason.
     flagged = flagged_seq(verdict["facts"])
     spacing_min = bounds["periodicity"]["min_spacing_rows"] if bounds is not None else 2
     run, spacing = periodic_run(flagged, spacing_min)
@@ -1488,11 +1503,13 @@ def audit_session(directory, p, protocol_path, output=None):
                          "full_ms_max": max(timing["full_ms"], default=None),
                          "periodic_run": {"equal_spacings": run, "spacing": spacing, "min_spacing_rows": spacing_min,
                                           "flagged_rows": len(flagged)},
+                         "spacing_mode": spacing_mode(flagged),
                          "grid_phase_s": phase},
               "auditor_sha256": {str(f.relative_to(ROOT)): digest(f) for f in
                                   (Path(__file__), ROOT / "scripts/collection_logs.py",
                                    ROOT / "scripts/traffic_log.py", ROOT / "scripts/host_monitor.py",
-                                   ROOT / "safeguard/features.py", ROOT / "features/audit_policy.py")},
+                                   ROOT / "safeguard/features.py", ROOT / "features/audit_policy.py",
+                                   ROOT / "scripts/protocol_v5.py")},
               "quality": quality,
               "raw_bytes": total_bytes, "source_sha256": source_hashes,
               "session_sha256": digest(directory / "session.json") if native else None,
@@ -1546,7 +1563,23 @@ def main(argv=None):
     coverage.add_argument("--expected-snapshots", type=int, required=True,
                           help="assigned cycle count, including missing snapshots")
     coverage.add_argument("--out", type=Path)
+    check = sub.add_parser(
+        "selfcheck", help="self-check of a schema-3 protocol file and its plan (scripts/protocol_v5.py); exit 0 only "
+                          "when every check passed: lab_register stays pending until packages B5 and B8 register "
+                          "their names in lab/, so the command exits 2 until B8")
+    # The skeleton's form `collection.py selfcheck --protocol P` works too: given here, it replaces the global one.
+    check.add_argument("--protocol", type=Path, default=argparse.SUPPRESS, help="the protocol file to check")
+    check.add_argument("--mode", choices=protocol_v5.MODES, default="campaign")
+    check.add_argument("--stage", choices=protocol_v5.STAGES, default="G0",
+                       help="every path determined_at assigns to this stage or an earlier one must hold a value")
+    check.add_argument("--out", type=Path, help="also write the report to this new file")
     a = ap.parse_args(argv)
+    if a.command == "selfcheck":  # It reads the file itself and does not need the loader to pass.
+        report = protocol_v5.selfcheck(a.protocol, mode=a.mode, stage=a.stage)
+        if a.out:
+            write_json(a.out, report)
+        print(json.dumps(report, indent=2, ensure_ascii=False))
+        return 0 if report["passed"] else 2
     p = protocol(a.protocol)
     if a.command == "plan":
         print(json.dumps(plan(p), indent=2))

@@ -129,7 +129,8 @@ def nacitaj_index_udalosti(cesta, konfig, kontrakt, perioda_s, diagnostic=False)
     if (p["interval_s"], p["max_gap_s"], p["window_rows"]) != (
             perioda_s, kontrakt["max_gap_s"], kontrakt["window_rows"]):
         raise ValueError("perioda, medzera alebo okno indexu sa lisia od balika")
-    typy = p["events"]["classes"]
+    # Schema 3 (protocol v5, scripts/protocol_v5.py) names the map of event types to classes events.types.
+    typy = p["events"]["types" if p.get("schema") == "hyptcn3/collection-protocol/3" else "classes"]
     predpona = p.get("group_prefix", "")
     relacie = {"trening": [], "test": []}
     for z in index["sessions"]:

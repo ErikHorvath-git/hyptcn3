@@ -17,12 +17,18 @@ gate ask the same function instead of repeating a part of the rule:
     require_recorded()       an audit record still means acceptance (the archive is not opened)
     require_accepted()       the same, and the archive itself yields the recorded verdict
     protocol_reachability()  whether a faultless session, and the worst one the rule tolerates, can be accepted
-    periodic_run()           the longest run of one spacing between flagged rows (the audit records it always)
+    worst_witness()          where max tolerable rows cost the most windows, without two equal spacings
+    gate_interval()          the coverage gates that admit exactly invalid_rows.max such rows
+    max_witness_cases()      the verdicts of the witness of max and of max + 1 rows (the protocol self-check)
+    periodic_run()           the longest run of one spacing between the starts of bursts of flagged rows (the
+                             audit records it always)
+    spacing_mode()           the most frequent of those spacings (the audit records it; never a reason)
 
 The time gap and the sampling period are decided here from the row times of the archive. What no reader of an
 archive can derive, and what therefore stays with the audit alone: the sidecars, the logs, the cadence of full
 snapshots and the image hashes.
 """
+from collections import Counter
 import json
 import math
 from types import SimpleNamespace
@@ -112,16 +118,25 @@ def _check_facts(facts):
         raise ValueError("invalid session facts")
 
 
-def periodic_run(seqs, min_spacing):
-    """The longest run of equal spacings between consecutive flagged rows: (run, spacing), (0, None) without one.
-
-    `seqs` are the flagged rows in any order. Only a spacing of at least `min_spacing` rows counts: adjacent rows
-    (spacing 1) are a burst, which the invalid_rows rule and the cap of rule-closed rows judge, not periodicity.
-    On runs of equal length the first one is reported.
-    """
+def _burst_starts(seqs):
+    """The first row of every burst of flagged rows (adjacent flagged rows form one burst), in seq order."""
     rows = sorted(set(seqs))
+    return [b for a, b in zip([None] + rows, rows) if a is None or b - a > 1]
+
+
+def periodic_run(seqs, min_spacing):
+    """The longest run of one spacing between the starts of consecutive bursts: (run, spacing), (0, None) if none.
+
+    `seqs` are the flagged rows in any order. Adjacent flagged rows form a burst, and the rule reads the spacings
+    between the first rows of consecutive bursts (lead's must_fix 3 on B3): "two rows every five" (spacings 1, 4,
+    1, 4) and "four of five" (1, 1, 1, 2), the resonance of a periodic guest process with the sampling grid, run at
+    spacing 5. Only a spacing of at least `min_spacing` rows counts; a shorter one breaks the run. How long a burst
+    is the invalid_rows rule and the cap of rule-closed rows judge, not periodicity. On runs of equal length the
+    first one is reported.
+    """
+    starts = _burst_starts(seqs)
     best, run, last = (0, None), 0, None
-    for step in (b - a for a, b in zip(rows, rows[1:])):
+    for step in (b - a for a, b in zip(starts, starts[1:])):
         if step < min_spacing:
             run, last = 0, None
             continue
@@ -129,6 +144,22 @@ def periodic_run(seqs, min_spacing):
         if run > best[0]:
             best = (run, step)
     return best
+
+
+def spacing_mode(seqs):
+    """The most frequent spacing between the starts of consecutive bursts of flagged rows (ties: the smallest).
+
+    {"spacing": that spacing, "count": how often it occurs, "spacings": how many such spacings there are}; None,
+    0 and 0 without two bursts. The audit records it next to periodic_run() and it is never a reason: a real
+    resonance scatters (5, 5, 6, 5, 5, 6 has no three equal spacings in a row), and G3a decides from this count
+    whether the rule of equal spacings in a row suffices (lead's remarks on B3, part 2).
+    """
+    starts = _burst_starts(seqs)
+    steps = Counter(b - a for a, b in zip(starts, starts[1:]))
+    if not steps:
+        return {"spacing": None, "count": 0, "spacings": 0}
+    spacing = min(steps, key=lambda step: (-steps[step], step))
+    return {"spacing": spacing, "count": steps[spacing], "spacings": sum(steps.values())}
 
 
 def flagged_seq(facts):
@@ -383,6 +414,126 @@ def worst_invalid_rows(length, window_rows, full_every, count):
     return sorted(seq for _, seq in slots[:count])
 
 
+# Placements worst_witness() examines before it gives up: a bound of the computation, not of any protocol (author's
+# judgment). The witnesses of the protocols in this repository take a few hundred at most (v5: 33 per row, 231 for
+# the 7 rows of max 6 + 1); examining all 200000 takes about 0.2 s.
+WITNESS_STEPS = 200000
+
+
+class _NoWitness(ValueError):
+    """worst_witness() found no placement with its property."""
+
+
+def _chain_windows(length, window_rows, full_every, invalid):
+    """Windows of a session on the grid with these invalid rows: over chains and the maximal runs of valid rows of
+    a chain, max(0, len(run) - window_rows); synthetic_windows() counts the same with the buffer of the model."""
+    invalid, total = set(invalid), 0
+    for start in range(0, length, full_every):
+        run = 0
+        for seq in range(start, min(start + full_every, length)):
+            if seq in invalid:
+                total, run = total + max(0, run - window_rows), 0
+            else:
+                run += 1
+        total += max(0, run - window_rows)
+    return total
+
+
+def worst_witness(length, window_rows, full_every, count):
+    """Seq of `count` invalid rows that cost as many windows as worst_invalid_rows() and have no two equal spacings.
+
+    worst_invalid_rows() places its rows window_rows + 1 apart, so four of them in a chain repeat one spacing three
+    times and the audit refuses them as periodic (v5: equal_spacings 3). The coverage gate is bound to a session
+    the audit can accept (lead's answer to Q1, 2026-11-22): this witness costs exactly as many windows, and since
+    no two of its spacings are equal it is periodic under no bound the audit section admits (equal_spacings 2 and
+    more); its rows are isolated, so each one starts a burst of its own. The rows are taken in seq order, each at
+    the smallest spacing not used yet that still lets the remaining rows cost the worst case (a bound from the
+    slots of the rest of the session, as worst_invalid_rows() counts them), going back when none does; in the first
+    chain of a long session that gives the offsets W, W + (W + 1), W + (W + 1) + (W + 2), ... ValueError when no
+    such placement exists or none is found within WITNESS_STEPS placements.
+    """
+    w, f = window_rows, full_every
+    refusal = f"no placement of {count} invalid rows costs the worst case without two equal spacings"
+    # k - 1 distinct spacings need a span of 1 + 2 + ... + (k - 1) rows at least.
+    if count > length or count * (count - 1) // 2 > length - 1:
+        raise _NoWitness(refusal)
+    target = _chain_windows(length, w, f, worst_invalid_rows(length, w, f, count))
+    chains = [(start, min(f, length - start)) for start in range(0, length, f)]
+
+    def run(n):
+        """Windows of n valid rows that start a chain or follow an invalid row."""
+        return max(0, n - w)
+
+    before = [0]  # before[c]: windows of the chains before chain c without invalid rows
+    for _, n in chains:
+        before.append(before[-1] + run(n))
+    whole_after = [sum(run(n) // (w + 1) for _, n in chains[c + 1:]) for c in range(len(chains))]
+    rest_after = [[run(n) % (w + 1) for _, n in chains[c + 1:] if run(n) % (w + 1)] for c in range(len(chains))]
+
+    def fewest(x, r):
+        """Fewest windows the rows after row x keep with r more invalid rows there (each costs at most one slot)."""
+        c = x // f
+        tail = chains[c][1] - (x - chains[c][0]) - 1
+        windows = run(tail) + before[-1] - before[c + 1]
+        whole = run(tail) // (w + 1) + whole_after[c]
+        if r <= whole:
+            return windows - r * (w + 1)
+        rests = sorted([run(tail) % (w + 1)] + rest_after[c], reverse=True)
+        return windows - whole * (w + 1) - sum(rests[:r - whole])
+
+    def between(x, y):
+        """Windows that end after row x (None: from the start of the session) and before row y."""
+        cy = y // f
+        if x is not None and x // f == cy:
+            return run(y - x - 1)
+        if x is None:
+            done = before[cy]
+        else:
+            cx = x // f
+            done = run(chains[cx][1] - (x - chains[cx][0]) - 1) + before[cy] - before[cx + 1]
+        return done + run(y - chains[cy][0])
+
+    rows, used, steps = [], set(), [0]
+
+    def place(x, kept):
+        left = count - len(rows)
+        if left == 0:
+            return kept + fewest(x, 0) == target
+        for y in range(0 if x is None else x + 1, length):
+            spacing = () if x is None else (y - x,)  # the first row has no spacing
+            if used.intersection(spacing):
+                continue
+            steps[0] += 1
+            if steps[0] > WITNESS_STEPS:
+                raise _NoWitness(refusal + f" within {WITNESS_STEPS} placements")
+            here = kept + between(x, y)
+            if here + fewest(y, left - 1) > target:
+                continue
+            rows.append(y)
+            used.update(spacing)
+            if place(y, here):
+                return True
+            rows.pop()
+            used.difference_update(spacing)
+        return False
+
+    if count and not place(None, 0):
+        raise _NoWitness(refusal)
+    return rows
+
+
+def _worst_rows(length, window_rows, full_every, count):
+    """The rows the verdicts of the worst case read: worst_witness(), and where no placement without two equal
+    spacings costs as much, worst_invalid_rows(). That happens when the rows fill all or nearly all slots of
+    window_rows + 1 windows of the session (short test sessions; on the v5 grid above 16 rows). Both leave the
+    same windows; the verdict then says whether the protocol's periodicity bound refuses rows with equal
+    spacings."""
+    try:
+        return worst_witness(length, window_rows, full_every, count)
+    except _NoWitness:
+        return worst_invalid_rows(length, window_rows, full_every, count)
+
+
 def synthetic_windows(protocol, length, invalid=()):
     """Scorable windows of a session sampled exactly on the protocol's grid, with the given invalid rows.
 
@@ -405,33 +556,75 @@ def synthetic_windows(protocol, length, invalid=()):
     return count
 
 
+def _synthetic_case(protocol, key, case, rule, count):
+    """The entry of one case of protocol_reachability(): `count` rows where they cost the most (_worst_rows()),
+    decided under the resolved `rule` as the audit decides a session of protocol[key] rows."""
+    length = _length(protocol, key)
+    invalid = _worst_rows(length, _length(protocol, "window_rows"), _length(protocol, "full_every"), count)
+    windows = synthetic_windows(protocol, length, invalid)  # It refuses an interval_s that is no grid.
+    interval = protocol["interval_s"]
+    facts = {"snapshots": length, "sequence_contiguous": True, "integrity_findings": 0,
+             "invalid_rows": [{"seq": seq, "truncated_traversals": [str(rule["traversals"][0])],
+                               "read_errors": 0, "filled_zero": 0} for seq in invalid],
+             "windows": windows, "rule_closed_seq": [],
+             "smallest_gap_s": interval if length > 1 else None, "largest_gap_s": interval if length > 1 else None,
+             "span_s": (length - 1) * interval}
+    verdict = _verdict(protocol, None, length, rule, True, facts)
+    return {"key": key, "case": case, "rows": length, "invalid_seq": invalid, "windows": verdict["windows"],
+            "score_coverage": verdict["score_coverage"], "gate": verdict["gate"],
+            "accepted": verdict["accepted"], "codes": verdict["codes"]}
+
+
 def protocol_reachability(protocol):
     """Can the sessions this protocol assigns be accepted at all? One entry per case, decided as the audit decides.
 
     Cases: a faultless pilot and a faultless session of `cycles` rows ("clean"), and when the protocol has an
-    invalid_rows rule also the session of `cycles` rows with `max` tolerable rows where they cost the most
-    ("worst"). Every case is sampled exactly on the grid (each gap one interval, the span (rows - 1) intervals)
-    and has no row closed by a parser rule. Each entry holds key, case, rows, invalid_seq, windows,
-    score_coverage, gate, accepted and codes.
+    invalid_rows rule also the session of `cycles` rows with `max` tolerable rows where they cost the most, with
+    no two equal spacings where such a placement exists ("worst", worst_witness()). Every case is sampled exactly
+    on the grid (each gap one interval, the span (rows - 1) intervals) and has no row closed by a parser rule.
+    Each entry holds key, case, rows, invalid_seq, windows, score_coverage, gate, accepted and codes.
     """
     rule = invalid_rows_rule(protocol)
     cases = [("pilot_cycles", "clean", NO_TOLERANCE, 0), ("cycles", "clean", rule, 0)]
     if rule is not None:
         cases.append(("cycles", "worst", rule, rule["max"]))
-    out = []
-    for key, case, role_rule, count in cases:
-        length = _length(protocol, key)
-        invalid = worst_invalid_rows(length, _length(protocol, "window_rows"), _length(protocol, "full_every"), count)
-        windows = synthetic_windows(protocol, length, invalid)  # It refuses an interval_s that is no grid.
-        interval = protocol["interval_s"]
-        facts = {"snapshots": length, "sequence_contiguous": True, "integrity_findings": 0,
-                 "invalid_rows": [{"seq": seq, "truncated_traversals": [str(rule["traversals"][0])],
-                                   "read_errors": 0, "filled_zero": 0} for seq in invalid],
-                 "windows": windows, "rule_closed_seq": [],
-                 "smallest_gap_s": interval if length > 1 else None, "largest_gap_s": interval if length > 1 else None,
-                 "span_s": (length - 1) * interval}
-        verdict = _verdict(protocol, None, length, role_rule, True, facts)
-        out.append({"key": key, "case": case, "rows": length, "invalid_seq": invalid, "windows": verdict["windows"],
-                    "score_coverage": verdict["score_coverage"], "gate": verdict["gate"],
-                    "accepted": verdict["accepted"], "codes": verdict["codes"]})
-    return out
+    return [_synthetic_case(protocol, key, case, role_rule, count) for key, case, role_rule, count in cases]
+
+
+def _max_rule(protocol):
+    rule = invalid_rows_rule(protocol)
+    if rule is None:
+        raise ValueError("protocol has no invalid_rows rule")
+    return rule
+
+
+def gate_interval(protocol):
+    """(low, high): a coverage gate admits exactly invalid_rows.max isolated rows in a session of `cycles` rows iff
+    low < gate <= high (POKYNY 2026-11-22 section 4).
+
+    high is the coverage of the witness of max rows, low that of max + 1 rows (worst_witness(), the rows of
+    max_witness_cases()): whole windows of the buffer that feeds the model divided by cycles, the division the
+    verdict makes, so the two inequalities hold exactly when the coverage gate admits the first and refuses the
+    second. ValueError for a protocol without an invalid_rows rule.
+    """
+    rule = _max_rule(protocol)
+    length = _length(protocol, "cycles")
+    window_rows, full_every = _length(protocol, "window_rows"), _length(protocol, "full_every")
+    high, low = (synthetic_windows(protocol, length, _worst_rows(length, window_rows, full_every, count)) / length
+                 for count in (rule["max"], rule["max"] + 1))
+    return low, high
+
+
+def max_witness_cases(protocol):
+    """The verdicts of the witness of invalid_rows.max rows ("worst") and of max + 1 rows ("worst+1") in a session
+    of `cycles` rows, as protocol_reachability() entries, for the self-check of the protocol.
+
+    The first is decided under the protocol's rule and must be accepted. The second is decided under the rule
+    with max + 1, since the rule's own count refuses max + 1 rows anyway: what refuses it there is the coverage
+    gate or the periodicity bound, and the self-check wants the gate alone (refused, and no "periodicity" among
+    its codes). Where no placement without two equal spacings costs the worst case, the entry holds the rows of
+    worst_invalid_rows() (_worst_rows()). ValueError for a protocol without an invalid_rows rule.
+    """
+    rule = _max_rule(protocol)
+    return [_synthetic_case(protocol, "cycles", "worst", rule, rule["max"]),
+            _synthetic_case(protocol, "cycles", "worst+1", dict(rule, max=rule["max"] + 1), rule["max"] + 1)]

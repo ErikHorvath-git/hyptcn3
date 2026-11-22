@@ -7,7 +7,10 @@
 
 A stage has passed when its newest record
   - names this protocol file and the current measurement code by sha256 (a documentation
-    commit does not invalidate a stage, a change of measurement code or protocol does),
+    commit does not invalidate a stage, a change of measurement code or protocol does);
+    stages G0 to G3b hash the protocol without the values that its determined_at assigns to
+    later stages, so determining such a value keeps them valid, and G4 to G6 hash the file's
+    bytes (stage_binding),
   - lists exactly the criteria of the stage (CRITERIA below), each passed with evidence,
   - carries an independent verification in which every criterion is confirmed.
 The tool keeps the chain honest. What a criterion means is written in
@@ -47,10 +50,81 @@ CRITERIA = {
     "G6": ("single_final_run", "report", "claims_check"),
 }
 VERDICTS = ("confirmed", "refuted", "unverifiable")
+# What a record's protocol_sha256 is the hash of; the record names it as protocol_hash_rule.
+BYTES_RULE = "sha256 of the file bytes"
+STAGE_RULE = ("sha256 of the UTF-8 of json.dumps(sort_keys=True, separators=(',', ':'), ensure_ascii=False) of the "
+              "protocol without the paths that determined_at assigns to stages after {stage}")
 
 
 def sha256(path):
     return hashlib.sha256(Path(path).read_bytes()).hexdigest()
+
+
+def canonical(doc):
+    """The canonical JSON of a protocol document, as STAGE_RULE names it."""
+    return json.dumps(doc, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+
+
+def later_paths(determined_at, stage):
+    """The paths (lists of keys) that determined_at assigns to stages after `stage`.
+
+    Refuses a determined_at under which a record could stop binding a value of its own or an
+    earlier stage: one that does not map stage names to lists of dotted paths, a path that starts
+    at determined_at itself or with '*', and a path that would delete a path of an earlier stage.
+    """
+    if type(determined_at) is not dict or any(
+            name not in STAGES or type(paths) is not list
+            or not all(type(path) is str and all(path.split(".")) for path in paths)
+            for name, paths in determined_at.items()):
+        raise ValueError("determined_at must map stage names to lists of dotted paths")
+    found = [(STAGES.index(name), name, path, path.split("."))
+             for name, paths in determined_at.items() for path in paths]
+    for order, name, path, keys in found:
+        if keys[0] in ("*", "determined_at"):
+            raise ValueError("determined_at path must start with a protocol key other than determined_at: " + path)
+        for earlier, earlier_name, other, other_keys in found:
+            if earlier < order and len(keys) <= len(other_keys) and all(
+                    a == b or "*" in (a, b) for a, b in zip(keys, other_keys)):
+                raise ValueError(f"determined_at path {path} ({name}) would delete {other} ({earlier_name})")
+    return [keys for order, _, _, keys in found if order > STAGES.index(stage)]
+
+
+def delete_path(node, keys):
+    """Delete from `node` the keys that the path `keys` names; '*' stands for every key of an object."""
+    if type(node) is dict:
+        for name in list(node) if keys[0] == "*" else [keys[0]] if keys[0] in node else []:
+            if len(keys) > 1:
+                delete_path(node[name], keys[1:])
+            else:
+                del node[name]
+
+
+def stage_binding(protocol_path, stage):
+    """(sha256, rule) with which a record of `stage` binds the protocol file.
+
+    G0 to G3b hash the canonical JSON of the document without the paths that its determined_at
+    assigns to a later stage (the keys deleted), so filling or changing a value of a later stage
+    keeps them valid, while every other change, determined_at itself included, reopens them.
+    G4 to G6 hash the file's bytes, as does every stage of a document without determined_at
+    (schemas 1 and 2) and of a file that is not a JSON object.
+    """
+    if stage not in STAGES:
+        raise ValueError("unknown stage: " + str(stage))
+    data = Path(protocol_path).read_bytes()
+    try:
+        doc = json.loads(data)
+    except ValueError:
+        doc = None
+    if type(doc) is not dict or "determined_at" not in doc or STAGES.index(stage) >= STAGES.index("G4"):
+        return hashlib.sha256(data).hexdigest(), BYTES_RULE
+    for keys in later_paths(doc["determined_at"], stage):
+        delete_path(doc, keys)
+    return hashlib.sha256(canonical(doc).encode()).hexdigest(), STAGE_RULE.format(stage=stage)
+
+
+def stage_sha256(protocol_path, stage):
+    """The protocol hash that a valid record of `stage` carries (stage_binding)."""
+    return stage_binding(protocol_path, stage)[0]
 
 
 def measurement_sha256():
@@ -63,7 +137,10 @@ def commit():
 
 
 def problems(record, stage, protocol_sha, measurement):
-    """Why this record does not prove the stage for the current protocol and code; [] when it does."""
+    """Why this record does not prove the stage for the current protocol and code; [] when it does.
+
+    protocol_sha is the current stage_sha256 of the protocol for this stage.
+    """
     out = []
     v = record.get("values", {})
     if record.get("schema") != SCHEMA or v.get("stage") != stage:
@@ -100,11 +177,11 @@ def newest(results, stage):
 
 
 def status(results, protocol):
-    protocol_sha, measurement = sha256(protocol), measurement_sha256()
+    measurement = measurement_sha256()
     rows, open_before = [], False
     for stage in STAGES:
         path, record = newest(results, stage)
-        why = ["no record"] if record is None else problems(record, stage, protocol_sha, measurement)
+        why = ["no record"] if record is None else problems(record, stage, stage_sha256(protocol, stage), measurement)
         if open_before and not why:
             why = ["an earlier stage is not valid"]
         rows.append({"stage": stage, "passed": not why, "record": str(path) if path else None, "problems": why})
@@ -125,7 +202,8 @@ def write_record(results, protocol, stage, criteria, verification, command, now=
     """Write a stage record. Refuses a stage whose predecessors are not valid, and refuses to overwrite."""
     require(results, protocol, stage)
     now = now or datetime.now(timezone.utc)
-    values = {"stage": stage, "protocol": str(protocol), "protocol_sha256": sha256(protocol),
+    protocol_sha, rule = stage_binding(protocol, stage)
+    values = {"stage": stage, "protocol": str(protocol), "protocol_sha256": protocol_sha, "protocol_hash_rule": rule,
               "measurement_sha256": measurement_sha256(), "harness_sha256": sha256(__file__),
               "criteria": criteria, "verification": verification}
     record = {"schema": SCHEMA, "date": now.isoformat(timespec="seconds"), "commit": commit(),

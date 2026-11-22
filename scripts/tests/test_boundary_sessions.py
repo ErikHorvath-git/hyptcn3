@@ -110,21 +110,34 @@ def test_families_carry_the_parameters_of_section_3(tmp_path):
             "S3+": (dict(s3, schema="hyptcn3/collection-protocol/3", min_score_coverage=54 / 96), 3),
             "V4": (dict(common, **{key: config[key] for key in from_config}), 2)}
     roles = ("train", "dev", "calibration", "test_benign")
+    # Since B4 a schema-3 family is a v5 document (bs.v5_sections): test_controls without a group, the scenario
+    # names with v5 entries, events of which none can be planned and a replacement rule that replaces nothing.
+    v5_scenarios = {"steady": {"profile": "eshop", "intensity": "low", "rate": None},
+                    "bursty": {"profile": "eshop", "intensity": "high", "rate": None}}
     for name, (row, each) in rows.items():
         doc = bs.family(name, profile)
+        v5 = doc["schema"] == "hyptcn3/collection-protocol/3"
         assert {key: doc.get(key) for key in row} == row, name
-        assert list(doc["roles"].items()) == [(role, each) for role in roles], name
-        assert len(doc["scenarios"]) == 2 and doc["scenarios"] == bs.SCENARIOS, name
+        assert list(doc["roles"].items()) == [(role, each) for role in roles] + [("test_controls", 0)] * v5, name
+        assert len(doc["scenarios"]) == 2 and doc["scenarios"] == (v5_scenarios if v5 else bs.SCENARIOS), name
         assert type(doc.get("group_prefix")) is str and doc["group_prefix"], name
         assert all(type(doc.get(key)) is str and doc[key] for key in ("domain", "target")), name  # One unnamed VM.
-        assert not {"events", "vms", "replacement"} & set(doc), name
+        assert "vms" not in doc, name
+        if v5:
+            assert (doc["group_sessions"], doc["events"]["per_session"], doc["replacement"]["max_per_campaign"],
+                    doc["interleave"]) == (2, [0], 0, []), name
+        else:
+            assert not {"events", "replacement"} & set(doc), name
 
 
 def test_places_lanes_and_boot_ids(families):
     for name, roles_each in (("S3", 3), ("V4", 2)):
         p = families[0][name][0]
-        assert list(p["roles"]) == ["train", "dev", "calibration", "test_benign"]
-        for role in p["roles"]:
+        roles = ["train", "dev", "calibration", "test_benign"]
+        # Since B4 the schema-3 family also names test_controls, with no group and so no place (bs.v5_sections).
+        assert list(p["roles"]) == roles + ["test_controls"] * (name == "S3")
+        assert bs.places(p, "test_controls") == []
+        for role in roles:
             rows = bs.places(p, role)
             assert len(rows) == 2 * roles_each and all("vm" not in r for r in rows)
             assert len({bs.boot_id(r["group"]) for r in rows}) == roles_each

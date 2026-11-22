@@ -103,7 +103,14 @@ def protocol(version=3, **changes):
         del p["quality_policy"]
     p.update(changes)
     if p.get("schema") == "hyptcn3/collection-protocol/3":
-        p = {**sections(), **p}  # A change may still replace or drop a section.
+        # Since package B4 schema 3 is the v5 layout: the v5 sections of the S3 shape (no event planned, nothing
+        # replaced) and test_controls without a group among the roles. A change may still replace or drop a section.
+        from scripts.tests.boundary_sessions import v5_sections
+        v5 = v5_sections(("steady", "bursty"), p["roles"] if type(p["roles"]) is dict else {}, group_sessions=2,
+                         window_rows=W)
+        p = {**v5, **sections(), **p}
+        if type(p["roles"]) is dict:
+            p["roles"] = {**p["roles"], "test_controls": 0}
     return {k: v for k, v in p.items() if v is not DROP}
 
 
@@ -989,6 +996,7 @@ def test_reachability_cases_are_decided_on_the_oracles_worst_session(length, win
             assert cases[key]["windows"] == windows and cases[key]["rows"] == rows
             assert cases[key]["accepted"] is (windows / rows >= gate)
         assert len(cases[("cycles", "worst")]["invalid_seq"]) == count
+        assert len(set(spacings(cases[("cycles", "worst")]["invalid_seq"]))) == count - 1  # the witness (Q1, B4)
 
 
 # Addendum 4a (K4-A): NaN in the recorded lists and counts that the cases of test_value_json_cannot_state_is_refused
@@ -1013,3 +1021,74 @@ def test_nan_among_recorded_lists_and_counts_is_refused(case, tmp_path):
         acceptance.require_recorded(p, "train", values)
     with pytest.raises(ValueError, match="^" + accepted_message + "$"):
         acceptance.require_accepted(data, p, "s", "train", values)
+
+
+# The witness of the worst case (lead's answer to Q1, package B4) and the gate interval it binds (POKYNY 2026-11-22
+# section 4). Names of B4 are read from the module inside the tests.
+
+V5_SHAPE = (720, 32, 360)  # cycles, window_rows, full_every of config/collection-v5.json (the grid of v4)
+SHAPES = {"v5": V5_SHAPE, "S3": (N, W, F)}
+
+
+def spacings(seqs):
+    return [b - a for a, b in zip(seqs, seqs[1:])]
+
+
+def v5_grid(max_rows, gate):
+    """A schema-3 protocol on the v5 grid (5 s, 720 rows, windows of 32, a full snapshot every 360) with the
+    strictest periodicity bound its audit section admits (two equal spacings of two rows or more in a row), so a
+    witness it accepts is periodic under no bound."""
+    return {"schema": "hyptcn3/collection-protocol/3", "quality_policy": BEHAVIOR, "interval_s": 5,
+            "max_gap_s": 7.5, "stride": 1, "bin_bytes": BIN_BYTES, "window_rows": 32, "full_every": 360,
+            "cycles": 720, "pilot_cycles": 600, "min_score_coverage": gate,
+            "invalid_rows": {"max": max_rows, "traversals": ["processes"]},
+            "audit": {"lateness_max_s": .5, "cycle_ms_max": {"delta": 1500, "full": 3500},
+                      "periodicity": {"equal_spacings": 2, "min_spacing_rows": 2, "note": "strictest test bound"},
+                      "warnings_allowed": None, "rule_closed_rows_max": None}}
+
+
+@pytest.mark.parametrize("count", range(1, 8))
+@pytest.mark.parametrize("shape", SHAPES.values(), ids=SHAPES)
+def test_worst_witness_costs_the_worst_case_without_two_equal_spacings(shape, count):
+    """invalid_rows.max 1 to 6 and the 7 rows gate_interval reads for max 6: (a) the oracle's windows of the
+    witness equal those of worst_invalid_rows, (b) no two spacings of the witness are equal."""
+    witness = acceptance.worst_witness(*shape, count)
+    assert witness == sorted(set(witness)) and len(witness) == count and set(witness) <= set(range(shape[0]))
+    assert window_count(*shape, set(witness)) == window_count(*shape, set(acceptance.worst_invalid_rows(*shape, count)))
+    assert len(set(spacings(witness))) == count - 1
+
+
+def test_worst_witness_refuses_rather_than_repeat_a_spacing(monkeypatch):
+    """The 8 costliest rows of S3 are 2 in chain 1 and 6 in chain 0, whose 5 spacings of 9 rows or more must fit
+    into 47 rows: only 9 + 9 + 9 + 9 + 9 (45) or with 2 more, never 5 distinct ones (9 + 10 + 11 + 12 + 13 = 55)."""
+    with pytest.raises(ValueError, match="^no placement of 8 invalid rows costs the worst case without two equal "
+                                         "spacings$"):
+        acceptance.worst_witness(N, W, F, 8)
+    monkeypatch.setattr(acceptance, "WITNESS_STEPS", 10)  # v5 needs 33 placements per row
+    with pytest.raises(ValueError, match="^no placement of 3 invalid rows costs the worst case without two equal "
+                                         "spacings within 10 placements$"):
+        acceptance.worst_witness(*V5_SHAPE, 3)
+
+
+# Windows the witness leaves on the v5 grid, written by hand: 656 of a clean session (two chains of 360 - 32), 33 less
+# per row. The gate of the v5 file, 557/720 at max 3, is the third row.
+@pytest.mark.parametrize("max_rows, low, high", [(1, 590, 623), (2, 557, 590), (3, 524, 557), (4, 491, 524),
+                                                 (5, 458, 491), (6, 425, 458)])
+def test_gate_bound_to_max_admits_the_witness_of_max_rows_and_its_coverage_refuses_one_more(max_rows, low, high):
+    p = v5_grid(max_rows, high / 720)
+    assert acceptance.gate_interval(p) == (low / 720, high / 720)
+    worst, beyond = acceptance.max_witness_cases(p)
+    assert (worst["case"], worst["windows"], worst["accepted"], worst["codes"]) == ("worst", high, True, [])
+    assert (beyond["case"], beyond["windows"], beyond["accepted"], beyond["codes"]) == (
+        "worst+1", low, False, ["coverage"])
+    assert len(worst["invalid_seq"]) == max_rows and len(beyond["invalid_seq"]) == max_rows + 1
+    # The loader's worst case is the same placement and verdict.
+    assert [c for c in acceptance.protocol_reachability(p) if c["case"] == "worst"] == [worst]
+
+
+@pytest.mark.parametrize("function", ["gate_interval", "max_witness_cases"])
+def test_gate_interval_and_witness_cases_need_an_invalid_rows_rule(function):
+    p = v5_grid(3, 557 / 720)
+    del p["invalid_rows"]
+    with pytest.raises(ValueError, match="^protocol has no invalid_rows rule$"):
+        getattr(acceptance, function)(p)

@@ -493,6 +493,7 @@ PAYLOAD_BY_SCHEMA = {
     "hyptcn3/env/1": ["values", "vmicollect", "prikazy"],
     "hyptcn3/snapshots/1": ["values", "snapshots"],
     "hyptcn3/optim/1": ["values", "pred", "po"],
+    "hyptcn3/audit-selftest/1": ["cases", "clean"],
 }
 DEFAULT_PAYLOAD = ["values"]
 for dirpath, dirnames, filenames in os.walk(root):
