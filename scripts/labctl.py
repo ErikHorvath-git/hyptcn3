@@ -2,15 +2,18 @@
 """Host-side lifecycle for the benign server VM; no host root required."""
 import argparse
 import base64
+import fnmatch
 import gzip
 import hashlib
 import io
 import json
 import os
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 import shlex
 import re
 import shutil
+import signal
+import socket
 import subprocess
 import sys
 import tarfile
@@ -37,10 +40,172 @@ GROW_ROOT = ('src=$(findmnt -no SOURCE /); disk=/dev/$(lsblk -no PKNAME "$src");
              'growpart "$disk" "$part" >/dev/null 2>&1; resize2fs "$src" >/dev/null 2>&1; '
              'df -B1 --output=size / | tail -1')
 VM_NAME = r"[a-z0-9]{1,16}"
+PROC = Path("/proc")
+CGROUPS = Path("/sys/fs/cgroup")
+# Read-back of memory.swap.max after the scope job: 20 tries 0.25 s apart (executor's judgment, B5a).
+SWAP_TRIES, SWAP_PAUSE_S = 20, .25
+# Way 1 of the QEMU swap ban (KOSTRA B5, addendum 20:50Z; dokazy/B5/skuska_swapu.md): the session daemon of libvirt
+# runs in this transient unit of the user's systemd manager, so every QEMU it starts inherits the unit's cgroup
+# without swap (libvirt manages no cgroup under qemu:///session). KillMode=process: stopping the daemon leaves the
+# QEMU of running domains alive in the unit (the default control-group kills them, reported only as "Stopped").
+DAEMON_UNIT = "hyptcn-libvirtd"
+DAEMON_SERVICE = DAEMON_UNIT + ".service"
+SESSION_URI = "qemu:///session"
+# The command line libvirt itself gives a session daemon it starts on demand: it quits 120 s after its last
+# running domain and client.
+LIBVIRTD = ("/usr/sbin/libvirtd", "--timeout=120")
+# Way 2 moves QEMU into a scope of this name; way 1's unit and these scopes are the cgroups labctl makes for QEMU.
+QEMU_SCOPES = "hyptcn-qemu-*.scope"
+# The old daemon's exit after SIGTERM, and the new daemon's socket: 120 tries 0.25 s apart, 30 s each (judgment, B5a).
+DAEMON_TRIES, DAEMON_PAUSE_S = 120, .25
+# systemctl --user and systemd-run --user of the daemon unit, and virsh list: 60 s each (judgment, B5a).
+UNIT_TIMEOUT_S = 60
 
 
 def run(args, **kw):
     return subprocess.run([str(a) for a in args], check=True, text=True, **kw)
+
+
+def qemu_pid(domain):
+    """PID of the domain's QEMU process, found as scripts/collection.py qemu_process finds it; None if none runs."""
+    marker = f"guest={domain},".encode()
+    found = []
+    for entry in PROC.glob("[0-9]*"):
+        try:
+            argv = (entry / "cmdline").read_bytes()
+        except OSError:
+            continue
+        if argv.startswith(b"/usr/bin/qemu-system") and marker in argv:
+            found.append(int(entry.name))
+    if len(found) > 1:
+        raise RuntimeError(f"several QEMU processes run domain {domain}: {sorted(found)}")
+    return found[0] if found else None
+
+
+def swap_max(pid):
+    """(cgroup v2 path, text of its memory.swap.max) of the process; the text is None when the file is missing."""
+    for line in (PROC / str(pid) / "cgroup").read_text().splitlines():
+        hierarchy, _, path = line.split(":", 2)
+        if hierarchy == "0":
+            try:
+                return path, (CGROUPS / path.lstrip("/") / "memory.swap.max").read_text().strip()
+            except OSError:
+                return path, None
+    return None, None
+
+
+def vm_swap_kb(pid):
+    """VmSwap of the process in kB (/proc/<pid>/status, as scripts/collection.py qemu_swap_kb reads it); None when
+    unreadable."""
+    try:
+        return int(re.search(r"^VmSwap:\s+(\d+) kB$", (PROC / str(pid) / "status").read_text(), re.M)[1])
+    except (OSError, TypeError):
+        return None
+
+
+def kb_text(kb):
+    return "unreadable" if kb is None else f"{kb} kB"
+
+
+def in_user_unit(cgroup, unit):
+    """True when the cgroup v2 path is a unit of this user's systemd manager whose name matches the glob `unit`."""
+    return (f"/user@{os.getuid()}.service/" in (cgroup or "")
+            and fnmatch.fnmatchcase(PurePosixPath(cgroup).name, unit))
+
+
+def labctl_cgroup(cgroup):
+    """True for the cgroups labctl makes for QEMU without swap: the daemon unit (way 1) and a hyptcn-qemu scope
+    (way 2). A login session scope is none of them, whatever its memory.swap.max: it ends with the login."""
+    return in_user_unit(cgroup, DAEMON_SERVICE) or in_user_unit(cgroup, QEMU_SCOPES)
+
+
+def owner_command(domain, pid):
+    """The owner's command when both ways failed: the system manager moves this QEMU into a scope of its own without
+    swap. Never a property of a login session scope, which would bind everything that runs in the login (KOSTRA B5,
+    addendum 20:50Z)."""
+    return ("sudo busctl call org.freedesktop.systemd1 /org/freedesktop/systemd1 org.freedesktop.systemd1.Manager "
+            f'StartTransientUnit "ssa(sv)a(sa(sv))" hyptcn-qemu-{domain}-{pid}.scope fail 2 PIDs au 1 {pid} '
+            "MemorySwapMax t 0 0")
+
+
+def runtime_dir():
+    """$XDG_RUNTIME_DIR/libvirt: the pid file and the socket of the session daemon."""
+    if not os.environ.get("XDG_RUNTIME_DIR"):
+        raise RuntimeError("XDG_RUNTIME_DIR is not set (libvirt's session daemon and systemd --user live there)")
+    return Path(os.environ["XDG_RUNTIME_DIR"]) / "libvirt"
+
+
+def is_daemon(pid):
+    """True while process `pid` is a libvirtd of this user (its exe, its real and effective uid): the pid of a stale
+    pid file may belong to another process by now, and labctl signals no process it has not identified."""
+    try:
+        exe = os.readlink(PROC / str(pid) / "exe")
+        uid = re.search(r"^Uid:\s+(\d+)\s+(\d+)", (PROC / str(pid) / "status").read_text(), re.M)
+    except OSError:
+        return False  # Gone, or a zombie (it has no exe).
+    return (PurePosixPath(exe.removesuffix(" (deleted)")).name == "libvirtd" and uid is not None
+            and int(uid[1]) == int(uid[2]) == os.getuid())
+
+
+def session_daemon():
+    """(pid, cgroup v2 path, memory.swap.max there) of this user's libvirt session daemon, found by its pid file;
+    (None, None, None) when the file is missing or names no libvirtd of this user."""
+    try:
+        pid = int((runtime_dir() / "libvirtd.pid").read_text().strip())
+        if is_daemon(pid):
+            return (pid, *swap_max(pid))
+    except (OSError, ValueError):
+        pass
+    return None, None, None
+
+
+def listening(path):
+    """True when a process accepts connections on the unix socket `path`. A socket file left behind by a daemon
+    that is gone refuses them, and virsh would then start a daemon of its own, outside the unit."""
+    with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as probe:
+        try:
+            probe.connect(str(path))
+        except OSError:
+            return False
+    return True
+
+
+def poll(ready, what):
+    """Wait until ready() is true: DAEMON_TRIES tries DAEMON_PAUSE_S apart, else RuntimeError naming `what`."""
+    for _ in range(DAEMON_TRIES):
+        if ready():
+            return
+        time.sleep(DAEMON_PAUSE_S)
+    raise RuntimeError(f"{what} after {DAEMON_TRIES * DAEMON_PAUSE_S:g} s")
+
+
+def start_daemon_unit(done):
+    """Run the session daemon in its unit; then wait until the daemon of the pid file runs there and accepts
+    connections on its socket. The commands run are appended to `done`.
+
+    The unit stays loaded, inactive, while processes of a stopped run remain in it (the QEMU of running domains,
+    KillMode=process): then systemctl start runs the daemon again, and a second systemd-run of the name would fail
+    ("already loaded"). Otherwise systemd-run creates it (skuska_swapu.md)."""
+    state = run(["systemctl", "--user", "show", DAEMON_SERVICE, "-p", "LoadState", "--value"],
+                capture_output=True, timeout=UNIT_TIMEOUT_S).stdout.strip()
+    command = (["systemctl", "--user", "start", DAEMON_SERVICE] if state == "loaded" else
+               ["systemd-run", "--user", "--unit", DAEMON_UNIT, "-p", "MemorySwapMax=0", "-p", "KillMode=process",
+                *LIBVIRTD])
+    run(command, capture_output=True, timeout=UNIT_TIMEOUT_S)
+    done.append(" ".join(command))
+    poll(lambda: in_user_unit(session_daemon()[1], DAEMON_SERVICE) and listening(runtime_dir() / "libvirt-sock"),
+         f"no daemon of {DAEMON_SERVICE} accepts connections on its socket")
+
+
+def stored_effect(effect):
+    """The effect of an event's stop reply as the event record keeps it (KOSTRA B5, section 3): the guest's own
+    when it is a dict with a boolean ok and evidence, otherwise a false one naming what came back, so the record
+    never claims an effect the guest did not report."""
+    if type(effect) is dict and type(effect.get("ok")) is bool and "evidence" in effect:
+        return effect
+    return {"ok": False, "predicate": None,
+            "evidence": {"error": "stop reply without a well-formed effect (lab/udalosti.py older than B5?)",
+                         "guest_effect": effect}}
 
 
 class Lab:
@@ -52,6 +217,7 @@ class Lab:
         if type(port) is not int or not 1024 <= port <= 65535:
             raise ValueError("Invalid host forward port")
         self.uri, self.domain, self.vm, self.port = uri, domain, vm, port
+        self.swap_error = None  # Why qemu_swap_off() failed in this command (swap_step); main() ends with it.
 
     # Without a VM name (one lab VM) the original names stay; a named VM of a
     # multi-VM protocol has its own state file, traffic unit and status file.
@@ -147,9 +313,15 @@ class Lab:
                                      + " ".join(shlex.quote(str(a)) for a in args), timeout=timeout))
 
     def event(self, action, kind, timeout=180):
-        """Start or stop one benign operational event (lab/udalosti.py) and parse its JSON reply."""
-        return json.loads(self.guest("python3 /opt/hyptcn-lab/udalosti.py "
-                                     + shlex.quote(action) + " " + shlex.quote(kind), timeout=timeout))
+        """Start or stop one benign operational event (lab/udalosti.py) and parse its JSON reply.
+
+        The guest evaluates the effect predicate in stop, before it restores the lab; the stop record keeps
+        that effect (stored_effect), the log audit refuses an event whose effect is not ok."""
+        reply = json.loads(self.guest("python3 /opt/hyptcn-lab/udalosti.py "
+                                      + shlex.quote(action) + " " + shlex.quote(kind), timeout=timeout))
+        if action == "stop":
+            reply["effect"] = stored_effect(reply.get("effect"))
+        return reply
 
     def fetch_segment(self, doc, dest):
         """Fetch gzip copies, verify transfer and content hashes, then delete them in the guest."""
@@ -291,6 +463,7 @@ class Lab:
     def start(self):
         self.owned()
         if self.virsh("domstate", self.domain) == "shut off":
+            self.daemon_step()  # Way 1 of the swap ban: the daemon that starts this QEMU runs in a unit without swap.
             self.virsh("start", self.domain)
         self.wait()
         # passt provides DHCP and forwards only the local development port.
@@ -306,12 +479,115 @@ class Lab:
             if root < 0.9 * (DISK_GIB << 30):
                 raise RuntimeError(f"Guest root file system has {root} B, expected about {DISK_GIB} GiB")
 
+    def daemon_step(self):
+        """Way 1 of the swap ban, before every virsh start of a lab VM (KOSTRA B5, addendum 20:50Z): the session
+        daemon of libvirt runs in DAEMON_SERVICE (MemorySwapMax=0, KillMode=process), so the QEMU it starts
+        inherits a cgroup without swap.
+
+        A daemon in the unit is left as it is. Without a daemon the unit is started. A daemon outside the unit is
+        replaced (SIGTERM to its exact pid, its exit awaited, then the unit) only while no domain runs, at the start
+        of a group; while one runs it stays, and the new QEMU goes through way 2 (qemu_swap_off). The record of what
+        was found and done is printed (qemu_way: "unit" when the daemon now runs in the unit without swap, else
+        "scope"). A failure is recorded, not raised: way 2 and the check follow after the start, and only both ways
+        failing ends the command with the owner's command."""
+        record = {"unit": DAEMON_SERVICE, "found": None, "daemon_pid_before": None, "cgroup_before": None, "done": []}
+        try:
+            pid, cgroup, _ = session_daemon()
+            record.update(daemon_pid_before=pid, cgroup_before=cgroup)
+            if pid is None:
+                record["found"] = "none"
+                start_daemon_unit(record["done"])
+            elif in_user_unit(cgroup, DAEMON_SERVICE):
+                record["found"] = "unit"
+            else:
+                record["found"] = "outside"
+                record["running_domains"] = run(["virsh", "-c", SESSION_URI, "list", "--state-running", "--name"],
+                                                capture_output=True, timeout=UNIT_TIMEOUT_S).stdout.split()
+                if not record["running_domains"]:
+                    os.kill(pid, signal.SIGTERM)
+                    record["done"].append(f"SIGTERM {pid}")
+                    poll(lambda: not is_daemon(pid), f"libvirtd {pid} has not exited")
+                    start_daemon_unit(record["done"])
+        except (OSError, RuntimeError, subprocess.SubprocessError) as error:
+            stderr = (getattr(error, "stderr", None) or "").strip()
+            record["error"] = (f"{error}: {stderr}" if stderr else str(error))[:500]
+        try:
+            pid, cgroup, value = session_daemon()
+        except RuntimeError:  # No XDG_RUNTIME_DIR: the error above says so.
+            pid = cgroup = value = None
+        way = "unit" if "error" not in record and in_user_unit(cgroup, DAEMON_SERVICE) and value == "0" else "scope"
+        record.update(daemon_pid=pid, cgroup=cgroup, memory_swap_max=value, qemu_way=way)
+        print(json.dumps({"libvirtd": record}, sort_keys=True), flush=True)
+        return record
+
+    def qemu_swap_off(self):
+        """Way 2 of the swap ban and the check, right after every start of the VM (KOSTRA B5, addendum 20:50Z;
+        proposal 6.2: run_session refuses a start unless memory.swap.max is 0 and VmSwap 0 kB). Campaigns v4 and
+        v4c lost slots to a swapped QEMU.
+
+        QEMU stays where it is only in a cgroup labctl made (labctl_cgroup: the daemon unit of way 1 or a
+        hyptcn-qemu scope) whose memory.swap.max is 0. Anywhere else, a login session scope with 0 included, it is
+        moved into a transient scope of the user's systemd manager with MemorySwapMax=0 (StartTransientUnit with
+        PIDs, no root needed: skuska_swapu.md) and read back there. Then memory.swap.max must be 0 and VmSwap 0 kB,
+        else RuntimeError with both values: a process moved late may keep pages swapped out before the move. A
+        failed move (both ways failed) names the owner's command."""
+        pid = qemu_pid(self.domain)
+        if pid is None:
+            raise RuntimeError(f"QEMU process of domain {self.domain} not found")
+        cgroup, value = swap_max(pid)
+        record = {"domain": self.domain, "qemu_pid": pid, "cgroup_before": cgroup, "swap_max_before": value}
+        scope = None
+        if not (value == "0" and labctl_cgroup(cgroup)):
+            scope = f"hyptcn-qemu-{self.domain}-{pid}.scope"
+            reply = subprocess.run(
+                ["busctl", "--user", "call", "org.freedesktop.systemd1", "/org/freedesktop/systemd1",
+                 "org.freedesktop.systemd1.Manager", "StartTransientUnit", "ssa(sv)a(sa(sv))", scope, "fail", "3",
+                 "PIDs", "au", "1", str(pid), "MemorySwapMax", "t", "0",
+                 "Description", "s", f"hyptcn3 QEMU of {self.domain} without swap", "0"],
+                capture_output=True, text=True, timeout=30)
+            if reply.returncode != 0:
+                raise RuntimeError(f"cannot move QEMU {pid} of {self.domain} (memory.swap.max {value!r} in {cgroup}, "
+                                   f"VmSwap {kb_text(vm_swap_kb(pid))}) into {scope} with MemorySwapMax=0: "
+                                   f"{reply.stderr.strip()[:300]}; the owner can run: "
+                                   + owner_command(self.domain, pid))
+            for _ in range(SWAP_TRIES):
+                cgroup, value = swap_max(pid)
+                if value == "0" and in_user_unit(cgroup, scope):
+                    break
+                time.sleep(SWAP_PAUSE_S)
+            else:
+                missing = " (no memory.swap.max: the memory controller is not enabled there)" if value is None else ""
+                raise RuntimeError(f"memory.swap.max of QEMU {pid} ({self.domain}) is {value!r} in {cgroup}{missing} "
+                                   f"after the move into {scope}, VmSwap {kb_text(vm_swap_kb(pid))}; the owner can "
+                                   f"run: {owner_command(self.domain, pid)}")
+        kb = vm_swap_kb(pid)
+        if kb != 0:
+            raise RuntimeError(f"QEMU {pid} ({self.domain}) has VmSwap {kb_text(kb)} with memory.swap.max {value!r} in "
+                               f"{cgroup}: pages swapped out before its cgroup forbade swap stay in swap until QEMU "
+                               "touches them; a VM started again begins without them")
+        return {**record, "scope": scope, "cgroup": cgroup, "memory_swap_max": value, "vm_swap_kb": kb}
+
+    def swap_step(self):
+        """qemu_swap_off() as a step right after every start of the VM: its record is printed. A failure ends the
+        command with an error (main), but only after the command's other steps: a lab deployed with swap is still
+        usable outside a collection (the lab test on the VM), and run_session refuses to collect from a QEMU whose
+        memory.swap.max is not 0 or whose VmSwap is not 0 kB, so the failure stays loud without blocking what needs
+        no collection."""
+        try:
+            record = self.qemu_swap_off()
+        except RuntimeError as error:
+            self.swap_error = str(error)
+            record = {"domain": self.domain, "memory_swap_max": None, "error": self.swap_error}
+        print(json.dumps({"qemu_swap": record}, sort_keys=True), flush=True)
+        return record
+
     def target(self):
         return f"http://127.0.0.1:{self.port}"
 
     def deploy(self):
         self.owned()
         self.start()
+        self.swap_step()
         # Guest NAT may be unavailable on the development host. Transfer the
         # one extra Debian driver over the serial guest-agent channel instead.
         present = self.guest("python3 -c 'import psycopg2' >/dev/null 2>&1 && echo yes || echo no").strip()
@@ -407,6 +683,7 @@ def main(argv=None):
         print(f"Defined {lab.domain}; next: labctl.py up --domain {lab.domain} --vm {lab.vm} --port {lab.port}")
     if args.command in ("up", "start", "create"):
         lab.start()
+        lab.swap_step()
     if args.command in ("up", "deploy"):
         lab.deploy()
         lab.health()
@@ -462,6 +739,8 @@ def main(argv=None):
                 parser.error("journal requires --since and --until")
             doc = lab.helper("journal", args.label, args.since, args.until)
         print(json.dumps(lab.fetch_segment(doc, args.dest), sort_keys=True))
+    if lab.swap_error:
+        raise RuntimeError("QEMU swap is not disabled: " + lab.swap_error)
     return 0
 
 

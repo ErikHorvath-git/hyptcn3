@@ -18,7 +18,7 @@ ROOT = Path(__file__).resolve().parents[2]
 V5 = ROOT / "config/collection-v5.json"
 CHECKS = ("keys", "loader", "reachability", "role_sizes", "scenario_balance", "events", "controls",
           "full_snapshot_guard", "phases", "streams", "role_order", "analysis", "rehearsal", "lab_register")
-PENDING = ("registered by B5 and B8: naprazdno, corp, eshop, kontrola_davka_procesov, kontrola_modul_jadra, "
+PENDING = ("registered by B5 and B8: corp, eshop, kontrola_davka_procesov, kontrola_modul_jadra, "
            "kontrola_pocuvajuci_soket, kontrola_zapisovac_pamate")
 TYPES = ("naprazdno", "restart_databazy", "udrzba_zaloha", "zamok_tabulky", "zataz_pamate", "zla_konfiguracia_sluzby")
 UNREACHABLE = "protocol(): invalid_rows.max is unreachable under the score coverage gate"

@@ -4,13 +4,19 @@
 Orchestration helper only (not a security agent and not a RAM collector):
 it reports service/database state and closes nginx/journal log segments
 between measured sessions so that each segment belongs to exactly one run.
+Protocol v5 (proposal 5.4): `reset --seed S` returns the database and the
+documents to the seeded level of lab/seed.py, `pretouch` lets one process
+touch as much memory as the largest event and exit, `levels` prints the
+level values recorded at the start of each session.
 """
 import gzip
 import hashlib
 import json
 import os
 from pathlib import Path
+import pwd
 import re
+import resource
 import signal
 import subprocess
 import sys
@@ -18,14 +24,28 @@ import time
 
 LOGS = Path("/var/log/hyptcn-lab")
 SEGMENTS = LOGS / "segments"
-UNITS = ["hyptcn-lab@auth", "hyptcn-lab@catalog", "hyptcn-lab@orders", "hyptcn-lab@worker",
+DATA = Path("/var/lib/hyptcn-lab")  # lab/services.py DATA: documents, reports, report spool, document log.
+PROC = Path("/proc")
+LAB_USER = "hyptcnlab"
+UNITS = ["hyptcn-lab@auth", "hyptcn-lab@catalog", "hyptcn-lab@orders", "hyptcn-lab@docs", "hyptcn-lab@worker",
+         "hyptcn-lab-udrzba.timer", "hyptcn-lab-udrzba.service",
          "nginx", "postgresql@15-main", "qemu-guest-agent", "systemd-timesyncd", "systemd-journald"]
-RETENTION = ("worker marks pending orders completed (batches of 50, ~1 s loop) and deletes "
-             "completed orders with created_at older than 1 day; nothing else is deleted")
+RETENTION = ("worker marks pending orders completed (batches of 50, 0.8-1.2 s loop) and deletes "
+             "completed orders with created_at older than 1 day; it keeps the newest 100 reports and "
+             "hyptcn-lab-udrzba the newest 12 compressed document logs; reset --seed returns the "
+             "database and the documents to the seeded level; nothing else is deleted")
+MEMINFO = ("MemTotal", "MemFree", "MemAvailable", "Buffers", "Cached", "Dirty", "Shmem", "AnonPages",
+           "SwapTotal", "SwapFree")
+LEVELS = ("SELECT (SELECT count(*) FROM products), (SELECT count(*) FROM customers), (SELECT count(*) FROM employees), "
+          "(SELECT count(*) FROM orders), (SELECT count(*) FROM orders WHERE status='pending'), "
+          "(SELECT count(*) FROM order_items), (SELECT count(*) FROM cart_items), (SELECT count(*) FROM documents), "
+          "pg_database_size('hyptcn_lab'), (SELECT count(*) FROM pg_stat_activity WHERE datname='hyptcn_lab')")
+LEVEL_NAMES = ("products", "customers", "employees", "orders", "pending", "order_items", "cart_items", "documents",
+               "database_bytes", "connections")
 
 
-def run(*args, check=True):
-    return subprocess.run(args, check=check, capture_output=True, text=True, timeout=120).stdout
+def run(*args, check=True, input=None, timeout=120):
+    return subprocess.run(args, check=check, capture_output=True, text=True, input=input, timeout=timeout).stdout
 
 
 def holders(paths):
@@ -168,9 +188,93 @@ def cleanup(label):
     print(json.dumps({"label": label, "removed": sorted(removed)}))
 
 
+def _clear(directory):
+    for path in directory.glob("*"):
+        if path.is_file():
+            path.unlink()
+
+
+def reset(seed_value):
+    """Database and documents to the seeded level of `seed_value` (lab/seed.py); reports, the report spool and
+    the document logs emptied. Static files are written at deployment and stay."""
+    import seed
+    started = time.time()
+    data = seed.generate(seed_value)
+    run("runuser", "-u", LAB_USER, "--", "psql", "-X", "-q", "-v", "ON_ERROR_STOP=1", "-d", "hyptcn_lab", "-f", "-",
+        input=seed.sql_script(data, started), timeout=600)
+    owner = pwd.getpwnam(LAB_USER)
+    for directory in (DATA / "docs", DATA / "reports", DATA / "spool/queued", DATA / "spool/running",
+                      DATA / "spool/failed", DATA / "logs"):
+        _clear(directory)
+    written = 0
+    for doc in data["documents"]:
+        content = seed.document_content(seed_value, doc["id"], doc["bytes"])
+        if hashlib.sha256(content).hexdigest() != doc["sha256"]:
+            raise SystemExit(f"seeded document {doc['id']} differs from its hash")
+        path = DATA / "docs" / f"{doc['id']}.bin"
+        path.write_bytes(content)
+        os.chown(path, owner.pw_uid, owner.pw_gid)
+        written += len(content)
+    print(json.dumps({"schema": "hyptcn3/guest-reset/1", "seed": seed_value, "data_sha256": seed.digest(data),
+                      "counts": {name: len(data[name]) for name in ("products", "customers", "employees", "orders",
+                                                                     "order_items", "cart_items", "documents")},
+                      "documents_bytes": written, "started_unix": started, "finished_unix": time.time()},
+                     sort_keys=True))
+
+
+def meminfo():
+    values = {line.split(":")[0]: int(line.split()[1]) for line in (PROC / "meminfo").read_text().splitlines()}
+    return {name: values.get(name) for name in MEMINFO}
+
+
+def pretouch():
+    """One process touches as much memory as the largest event (lab/udalosti.py zataz_pamate) and exits; run once
+    before the first session of a group (proposal 5.4), so that this first touch is not inside a session."""
+    import udalosti
+    before, started = meminfo(), time.monotonic()
+    result = subprocess.run(["runuser", "-u", "nobody", "--", "python3", "-c", udalosti.load_program(0)],
+                            capture_output=True, text=True, timeout=300)
+    peak = resource.getrusage(resource.RUSAGE_CHILDREN).ru_maxrss
+    print(json.dumps({"schema": "hyptcn3/guest-pretouch/1", "mib": udalosti.LOAD_MIB, "exit_code": result.returncode,
+                      "peak_rss_kib": peak, "touched": result.returncode == 0 and peak >= udalosti.LOAD_MIN_KIB,
+                      "seconds": round(time.monotonic() - started, 3), "meminfo_kb_before": before,
+                      "meminfo_kb_after": meminfo(), "stderr": result.stderr[-300:]}, sort_keys=True))
+    if result.returncode != 0 or peak < udalosti.LOAD_MIN_KIB:
+        raise SystemExit("pretouch did not touch the memory of the largest event")
+
+
+def files(directory, pattern="*"):
+    found = [p for p in directory.glob(pattern) if p.is_file()]
+    return {"files": len(found), "bytes": sum(p.stat().st_size for p in found)}
+
+
+def levels():
+    """Level values at the start of a session (proposal 5.4): processes, memory, database rows and sizes, files."""
+    processes = threads = 0
+    for status in PROC.glob("[0-9]*/status"):
+        try:
+            text = status.read_text()
+        except OSError:
+            continue
+        processes += 1
+        threads += next((int(line.split()[1]) for line in text.splitlines() if line.startswith("Threads:")), 0)
+    out = run("runuser", "-u", "postgres", "--", "psql", "-XtAF", "|", "hyptcn_lab", "-c", LEVELS).strip()
+    stat = os.statvfs("/")
+    print(json.dumps({"schema": "hyptcn3/guest-levels/1", "utc_unix": time.time(), "processes": processes,
+                      "threads": threads, "meminfo_kb": meminfo(),
+                      "loadavg": (PROC / "loadavg").read_text().split()[:3],
+                      "database": dict(zip(LEVEL_NAMES, map(int, out.split("|")))),
+                      "files": {"documents": files(DATA / "docs", "*.bin"), "reports": files(DATA / "reports"),
+                                "reports_queued": files(DATA / "spool/queued"), "static": files(DATA / "static"),
+                                "document_logs": files(DATA / "logs")},
+                      "root_fs": {"total_bytes": stat.f_blocks * stat.f_frsize,
+                                  "free_bytes": stat.f_bavail * stat.f_frsize}}, sort_keys=True))
+
+
 def main(argv):
     if not argv:
-        raise SystemExit("usage: guest_state.py state|segment LABEL|journal LABEL SINCE UNTIL|cleanup LABEL")
+        raise SystemExit("usage: guest_state.py state|segment LABEL|journal LABEL SINCE UNTIL|cleanup LABEL|"
+                         "reset --seed S|pretouch|levels")
     command, args = argv[0], argv[1:]
     if command == "state" and not args:
         state()
@@ -180,6 +284,12 @@ def main(argv):
         journal(*args)
     elif command == "cleanup" and len(args) == 1:
         cleanup(*args)
+    elif command == "reset" and len(args) == 2 and args[0] == "--seed" and re.fullmatch(r"[0-9]{1,18}", args[1]):
+        reset(int(args[1]))
+    elif command == "pretouch" and not args:
+        pretouch()
+    elif command == "levels" and not args:
+        levels()
     else:
         raise SystemExit("invalid guest_state.py arguments")
 

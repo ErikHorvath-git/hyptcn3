@@ -376,9 +376,11 @@ def user_command(command):
 
 
 def is_measurement(name):
-    """Code that captures, checks or archives data (tests and reports excluded)."""
+    """Code that captures, checks or archives data (tests and reports excluded), and every file `labctl deploy`
+    puts into the guest (lab_files(): the top-level files of lab/, whatever their suffix; finding S7 of B3)."""
     path = Path(name)
-    return (path.parts[0] in MEASUREMENT_DIRS and path.suffix in SOURCE_SUFFIXES
+    deployed = len(path.parts) == 2 and path.parts[0] == "lab"
+    return (path.parts[0] in MEASUREMENT_DIRS and (path.suffix in SOURCE_SUFFIXES or deployed)
             and "tests" not in path.parts and name not in NOT_MEASUREMENT)
 
 
@@ -871,6 +873,9 @@ def run_session(a, p):
         if memory["qemu_swap_max"] != "0":
             raise ValueError("QEMU swap was not disabled before start: memory.swap.max is "
                              + repr(memory["qemu_swap_max"]))
+        # memory.swap.max 0 forbids new swap only: a QEMU moved into its cgroup late keeps what was swapped before.
+        if type(memory["qemu_swap_kb"]) is not int or memory["qemu_swap_kb"] != 0:
+            raise ValueError("QEMU memory was swapped before start: qemu_swap_kb is " + repr(memory["qemu_swap_kb"]))
         attempt = getattr(a, "group_attempt", 1) or 1
         events = pilot_events(p) if a.role == "pilot" and "events" in p else []
         if a.role not in ("pilot", "diagnostic"):
@@ -912,7 +917,7 @@ def run_session(a, p):
         prof = ROOT / p["profile"]
         shutil.copytree(prof, out / "profile")
         source_files = [f for directory in MEASUREMENT_DIRS for f in (ROOT / directory).rglob("*")
-                        if f.is_file() and f.suffix in SOURCE_SUFFIXES]
+                        if f.is_file() and (f.suffix in SOURCE_SUFFIXES or f.parent == ROOT / "lab")]
         source_hashes = {str(f.relative_to(ROOT)): digest(f) for f in source_files}
         subprocess.run(user_command(["make", "-C", ROOT / "vmicollect"]), check=True)
         s = p["scenarios"][a.scenario]
@@ -995,6 +1000,9 @@ class Events:
         record["host_stop_unix"] = time.time()
         record["stop"] = self.call(record, "stop")
         record["host_stopped_unix"] = time.time()
+        # The guest computes the effect in stop, before it restores the lab (lab/udalosti.py; labctl keeps it in
+        # the reply); the log audit reads it at the top of the record, so a failed stop call leaves none.
+        record["effect"] = record["stop"].get("effect")
         restored = record["stop"].get("ok") is True and record["stop"].get("health") == 200
         record["executed"] = record.get("start", {}).get("ok") is True and restored
         self.step("event-stop", type=record["type"], executed=record["executed"])
@@ -1372,6 +1380,10 @@ def audit_session(directory, p, protocol_path, output=None):
         swap = need(metadata, session, "host_context.memory.qemu_swap_max")
         if present(swap) and swap != "0":
             reasons.append("QEMU swap was not disabled before start")
+        # And no QEMU memory in swap at the start (VmSwap 0 kB): swap.max 0 set late keeps the pages swapped before.
+        swapped = need(metadata, session, "host_context.memory.qemu_swap_kb")
+        if present(swapped) and (type(swapped) is not int or swapped != 0):
+            reasons.append("QEMU memory was swapped before start")
         lab = need(metadata, session, "lab_sha256")
         if present(lab, need(metadata, session, "guest_before.stack_manifest")) and guest_mismatch(
                 metadata["guest_before"], lab):

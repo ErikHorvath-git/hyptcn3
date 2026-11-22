@@ -278,7 +278,7 @@ def _over_period(d, p, result):
 
 SESSION_KEYS = ("protocol_sha256", "guest_before", "profile_sha256", "collector_sha256", "collector_settings.mlock",
                 "role", "cycles", "domain", "host_context.qemu.pid", "host_context.memory.qemu_swap_max",
-                "lab_sha256")
+                "host_context.memory.qemu_swap_kb", "lab_sha256")
 END_KEYS = ("completed", "guest_after")
 CAPTURE_KEYS = ("values.collector_sha256", "values.full_every", "values.interval_s", "values.mlock")
 SIDECAR_KEYS = ("output.full", "output.sha256", "sched.skipped_before", "sched.lateness_s", "capture.total_ms",
@@ -386,6 +386,9 @@ RAM_CASES = [
          _frame(lambda side: side["vm"].update(vmid=side["vm"]["vmid"] + 1))),
     Case("qemu_swap", "6.2 QEMU swap forbidden before start", ["QEMU swap was not disabled before start"],
          _session(_set("host_context.memory.qemu_swap_max", "max"))),
+    # memory.swap.max 0 and yet 4 kB in swap: pages swapped out before a late move (KOSTRA B5, addendum 20:50Z).
+    Case("qemu_swapped", "6.2 no QEMU memory in swap before start", ["QEMU memory was swapped before start"],
+         _session(_set("host_context.memory.qemu_swap_kb", 4))),
     Case("guest_file_differs", "6.2 deployed guest files equal lab/", ["deployed guest files differ from lab/"],
          _lab_hash),
     Case("guest_file_missing", "6.2 deployed guest files equal lab/ (a file not hashed)",

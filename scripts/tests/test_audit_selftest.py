@@ -272,6 +272,17 @@ def test_run_session_refuses_qemu_swap_that_is_not_forbidden(small, tmp_path, mo
     assert message == "QEMU swap was not disabled before start: memory.swap.max is " + repr(value)
 
 
+@pytest.mark.parametrize("value", [8592, None])
+def test_run_session_refuses_qemu_memory_that_was_swapped_before_start(small, tmp_path, monkeypatch, value):
+    """memory.swap.max 0 is not enough: a QEMU moved into its cgroup late keeps the pages swapped out before (KOSTRA
+    B5, addendum 20:50Z); unreadable (None) is not 0 either."""
+    from scripts import collection
+    p, path, _ = small
+    message = _root_run(p, path, tmp_path, monkeypatch, _identity(collection.lab_sha256()),
+                        {"vm_swappiness": 1, "qemu_swap_kb": value, "qemu_swap_max": "0"})
+    assert message == "QEMU memory was swapped before start: qemu_swap_kb is " + repr(value)
+
+
 def test_guest_identity_hashes_every_deployed_file(monkeypatch):
     """Every top-level file of lab/ under /opt/hyptcn-lab and the two copies lab/install.sh installs."""
     from scripts import collection

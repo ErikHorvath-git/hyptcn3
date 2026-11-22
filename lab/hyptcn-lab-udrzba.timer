@@ -1,0 +1,13 @@
+[Unit]
+Description=hyptcn benign lab maintenance every 10 minutes with a random delay
+
+[Timer]
+# KOSTRA B5 section 1: every 10 minutes with RandomizedDelaySec=300, in every profile; the delay is drawn
+# anew for every run. AccuracySec=1s keeps systemd from moving the run onto its own one-minute grid.
+OnCalendar=*:0/10
+RandomizedDelaySec=300
+AccuracySec=1s
+Persistent=false
+
+[Install]
+WantedBy=timers.target

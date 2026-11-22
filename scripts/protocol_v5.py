@@ -41,9 +41,10 @@ PURPOSES = {"scenario_order": "block", "event_free_position": "role", "event_dec
 METHODS = ("Z0", "Z1", "Z2", "Z3", "Z4", "Z5", "M")
 MAX_INVALID_ROWS = 6  # Proposal 10.9 and D4: six event boundaries of a session with three events.
 MAX_DRAWS = 1000  # Redraws of a schedule that meets a full-snapshot guard, or of unbalanced scenario blocks.
-# Names the protocol uses that lab/ registers only from package B5 (the empty event, the profiles) and B8 (the
-# four new control kinds); the check lab_register stays pending while one of them is unknown to lab/.
-PENDING_IN_LAB = ("naprazdno", "eshop", "corp", "kontrola_modul_jadra", "kontrola_pocuvajuci_soket",
+# Names the protocol uses that are registered only from package B5b (the profiles of the generator) and B8 (the
+# four new control kinds); the check lab_register stays pending while one of them is unknown. B5a registered the
+# empty event naprazdno in lab/udalosti.py.
+PENDING_IN_LAB = ("eshop", "corp", "kontrola_modul_jadra", "kontrola_pocuvajuci_soket",
                   "kontrola_zapisovac_pamate", "kontrola_davka_procesov")
 
 # Every top-level key of a schema-3 protocol; vms or the pair domain/target as in schema 2, two optional notes.

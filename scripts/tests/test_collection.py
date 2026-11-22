@@ -153,15 +153,30 @@ def test_only_running_generator_scripts_count_as_foreign_traffic(argv, expected)
 
 def test_measurement_dirty_ignores_notes_reports_and_tests(monkeypatch):
     from scripts import collection
+    # A note in a measurement directory is ignored; a top-level file of lab/ is deployed into the guest, so it is a
+    # measurement source whatever its suffix (finding S7 of B3).
     status = (b" M scripts/collection.py\0?? scripts/campaign_report.py\0?? scripts/tests/test_new.py\0"
-              b"R  features/renamed.py\0features/original.py\0 M lab/README.md\0?? vmicollect/new.c\0")
+              b"R  features/renamed.py\0features/original.py\0 M scripts/README.md\0?? vmicollect/new.c\0"
+              b" M lab/periods.json\0")
     calls = []
     monkeypatch.setattr(collection.subprocess, "check_output", lambda args, **kw: calls.append(args) or status)
-    assert collection.measurement_dirty() == ["features/original.py", "features/renamed.py",
+    assert collection.measurement_dirty() == ["features/original.py", "features/renamed.py", "lab/periods.json",
                                               "scripts/collection.py", "vmicollect/new.c"]
     assert calls[0][-len(collection.MEASUREMENT_DIRS):] == list(collection.MEASUREMENT_DIRS)
     monkeypatch.setattr(collection.subprocess, "check_output", lambda args, **kw: b"")
     assert collection.measurement_dirty() == []
+
+
+def test_every_file_labctl_deploys_is_a_measurement_source():
+    """Finding S7 of the B3 verification: lab/dependencies.json was deployed and in lab_sha256 but no measurement
+    source, so its uncommitted change left a self-test record valid. Every file lab_files() deploys is one now."""
+    from scripts import collection
+    deployed = [f"lab/{f.name}" for f in collection.lab_files()]
+    assert {"lab/dependencies.json", "lab/periods.json", "lab/hyptcn-lab-udrzba.timer"} <= set(deployed)
+    assert [name for name in deployed if not collection.is_measurement(name)] == []
+    assert set(deployed) <= set(collection.measurement_sources())
+    assert not any(map(collection.is_measurement, ("lab/tests/test_services.py", "lab/__pycache__/seed.pyc",
+                                                   "scripts/README.md")))
 
 
 def test_working_storage_identity_ignores_device_names(monkeypatch):
