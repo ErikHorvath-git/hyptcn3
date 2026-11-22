@@ -464,8 +464,9 @@ def test_role_the_protocol_does_not_assign(tmp_path, case):
         "cycles", "window_rows", "full_every"))) == 80
     if case == "train":
         assert (a.code, v["accepted"], v["reasons"], v["score_coverage"]) == (0, True, [], 80 / w.p["cycles"])
-    else:  # No assigned length, hence no coverage either.
-        assert (a.code, v["accepted"], v["reasons"], v["score_coverage"]) == (2, False, [ROLE], None)
+    else:  # No assigned length, hence no coverage either. Since B3 a role not stated is a missing key too.
+        missing = ["missing key: session.json:role"] if case == "missing" else []
+        assert (a.code, v["accepted"], v["reasons"], v["score_coverage"]) == (2, False, missing + [ROLE], None)
 
 
 # L10 (NEW only): pilot_gate reaches the one acceptance function and keeps no coverage rule of its own.

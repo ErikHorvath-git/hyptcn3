@@ -456,7 +456,10 @@ def event_audit(tmp_path, name, p, role="test_events", group="v3-test_events-1",
     values = {"accepted": accepted, "protocol_sha256": "p", "session_dir": str(session),
               "session_sha256": digest(session / "session.json"), "features": str(session / "f.npz"),
               "features_sha256": digest(session / "f.npz"), "logs": logs, "extractor_sha256": {}}
-    facts = {"snapshots": 2, "sequence_contiguous": True, "invalid_rows": [], "integrity_findings": 0, "windows": 1}
+    facts = {"snapshots": 2, "sequence_contiguous": True, "invalid_rows": [], "integrity_findings": 0, "windows": 1,
+             # Two rows one interval apart (features.acceptance reads the grid since package B3).
+             "rule_closed_seq": [], "smallest_gap_s": p["interval_s"], "largest_gap_s": p["interval_s"],
+             "span_s": p["interval_s"]}
     verdict = decide(p, role, facts)
     values.update(reasons=[], role=role, snapshots=verdict["snapshots"], windows=verdict["windows"],
                   score_coverage=verdict["score_coverage"],
@@ -469,7 +472,8 @@ def test_test_only_protocol_gets_an_event_index_not_a_corpus(tmp_path, monkeypat
     import features.archive
     monkeypatch.setattr(features.archive, "load", lambda path: {"casy": [10.0, 15.0]})
     p = {"schema": "hyptcn3/collection-protocol/2", "quality_policy": "behavioral-inputs-v1", "cycles": 2,
-         "min_score_coverage": 0.5, "roles": {"test_events": 1}, "scenarios": {"quiet": {}, "steady": {}}}
+         "min_score_coverage": 0.5, "roles": {"test_events": 1}, "scenarios": {"quiet": {}, "steady": {}},
+         "interval_s": 5, "max_gap_s": 7.5}
     reports = [event_audit(tmp_path, "s1", p), event_audit(tmp_path, "s2", p)]
     doc = c.event_index(reports, p, "p")
     assert doc["complete"] and [r["id"] for r in doc["sessions"]] == ["s1", "s2"]

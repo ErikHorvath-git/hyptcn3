@@ -5,10 +5,12 @@ Original protocol tooling for hyptcn3. Data and verdicts are written exclusively
 failed sessions remain on disk. Run audit again with a new output name.
 """
 import argparse
+from collections import Counter
 from contextlib import contextmanager
 import ctypes
 from datetime import datetime, timezone
 import fcntl
+import functools
 import gzip
 import hashlib
 import json
@@ -17,6 +19,7 @@ from pathlib import Path
 import platform
 import random
 import re
+import shlex
 import shutil
 import signal
 import subprocess
@@ -35,7 +38,8 @@ from features.windows import WindowError
 from features.quality import protocol_policy, coverage_gate, invalid_rows_rule, tolerated_invalid_rows
 # ideal_windows is kept for a tracked record script under data/results, which reads it from this module.
 from features.coverage import ideal_windows, scorable_windows
-from features.acceptance import assignment, judge, protocol_reachability
+from features.acceptance import assignment, flagged_seq, judge, periodic_run, protocol_reachability
+from features.audit_policy import audit_bounds, exceptions_record, register, tolerate
 from scripts.collection_logs import audit_logs
 from lab.udalosti import CONTROLS as CONTROL_TYPES, TYPES as EVENT_TYPES
 
@@ -135,6 +139,10 @@ def protocol(path):
         raise ValueError("gap must distinguish a missed sampling slot")
     if p["full_every"] <= p["window_rows"] or p["pilot_cycles"] <= p["full_every"] + p["window_rows"]:
         raise ValueError("pilot must cover two full snapshots and score after both")
+    # Schema 3 states the bounds of the audit checks and the register of what the audit admits; both readers
+    # refuse a missing or malformed section, and older schemas carry neither (features/audit_policy.py).
+    audit_bounds(p)
+    register(p)
     # A faultless session of each assigned length must be acceptable, decided as the audit decides it.
     for case in protocol_reachability(p):
         if case["case"] == "clean" and not case["accepted"]:
@@ -449,11 +457,48 @@ def session_records(root):
                     time.sleep(.2)
 
 
+LAB_DEPLOYED = "/opt/hyptcn-lab/"  # labctl deploy unpacks every top-level file of lab/ here.
+# lab/install.sh installs two of them once more outside the deployment directory.
+LAB_INSTALLED = {"/etc/nginx/conf.d/hyptcn-lab.conf": "lab/nginx.conf",
+                 "/etc/systemd/system/hyptcn-lab@.service": "lab/hyptcn-lab@.service"}
+
+
+def lab_files():
+    """Every top-level file of lab/: the set `labctl deploy` puts into the guest."""
+    return [f for f in sorted((ROOT / "lab").iterdir()) if f.is_file()]
+
+
+def lab_sha256():
+    """{lab/<name>: SHA-256} of the deployed set (session.json lab_sha256)."""
+    return {f"lab/{f.name}": digest(f) for f in lab_files()}
+
+
+def deployed_paths(names):
+    """Guest path -> lab/ source of every file a deployment of the lab/ files `names` leaves in the guest."""
+    paths = {LAB_DEPLOYED + Path(name).name: name for name in sorted(names)}
+    paths.update(LAB_INSTALLED)
+    return paths
+
+
+def guest_mismatch(identity, lab):
+    """Deployed guest paths whose hash in identity["stack_manifest"] differs from lab/ (`lab` as lab_sha256 gives
+    it) or is missing there; [] when the guest runs exactly the lab/ files of this commit."""
+    seen = {}
+    manifest = identity.get("stack_manifest") if type(identity) is dict else None
+    for line in manifest if type(manifest) is list else []:
+        match = re.fullmatch(r"([0-9a-f]{64})  (/\S+)", line) if type(line) is str else None
+        if match:  # A sha256sum line; the package and timer lines of the manifest are not files.
+            seen[match[2]] = match[1]
+    lab = lab if type(lab) is dict else {}
+    return sorted(path for path, source in deployed_paths(lab).items() if seen.get(path) != lab.get(source))
+
+
 def guest_identity(p):
+    paths = list(deployed_paths(f"lab/{f.name}" for f in lab_files()))
     identity_command = (
         "uname -r; cat /proc/sys/kernel/random/boot_id; cat /etc/machine-id; "
-        "sha256sum /opt/hyptcn-lab/services.py /opt/hyptcn-lab/schema.sql /opt/hyptcn-lab/guest_state.py "
-        "/etc/nginx/conf.d/hyptcn-lab.conf /etc/systemd/system/hyptcn-lab@.service && "
+        # Every deployed file of lab/ and the two installed copies (guest_mismatch compares them with lab/).
+        f"sha256sum {' '.join(map(shlex.quote, paths))} && "
         "dpkg-query -W nginx postgresql python3 python3-psycopg2 && "
         # Active (waiting) timers can start unplanned work; lab/install.sh leaves none.
         "echo \"timers: $(systemctl list-units --type=timer --state=active --no-legend --plain"
@@ -461,7 +506,8 @@ def guest_identity(p):
     command = [sys.executable, ROOT / "scripts/labctl.py", "exec", *labctl_args(p),
                "--guest-command", identity_command]
     lines = subprocess.check_output(user_command(command), cwd=ROOT, text=True, timeout=150).strip().splitlines()
-    if len(lines) < 13 or not lines[-1].startswith("timers:"):
+    # Three identity lines, one line per hashed file, four packages and the timers.
+    if len(lines) < 3 + len(paths) + 5 or not lines[-1].startswith("timers:"):
         raise ValueError("cannot establish guest identity")
     return {**dict(zip(("kernel", "boot_id", "machine_id"), lines[:3])),
             "stack_sha256": hashlib.sha256("\n".join(lines[3:]).encode()).hexdigest(),
@@ -629,6 +675,21 @@ def qemu_swap_kb(pid):
         return None
 
 
+def qemu_swap_max(pid, proc=Path("/proc"), cgroups=Path("/sys/fs/cgroup")):
+    """Text of memory.swap.max of the process's cgroup v2 ("0" forbids swap), None when unreadable.
+
+    Reading only: the VM start sets it (package B5); campaigns v4 and v4c lost slots to a swapped QEMU.
+    """
+    try:
+        for line in (Path(proc) / str(pid) / "cgroup").read_text().splitlines():
+            hierarchy, _, path = line.split(":", 2)
+            if hierarchy == "0":  # The unified (v2) hierarchy.
+                return (Path(cgroups) / path.lstrip("/") / "memory.swap.max").read_text().strip()
+    except (OSError, ValueError):
+        pass
+    return None
+
+
 def host_memory(qemu):
     """Swap policy and swapped-out QEMU memory. A full snapshot reads all guest RAM.
 
@@ -637,7 +698,8 @@ def host_memory(qemu):
     925 MiB in 7.3 s (period 5 s) and dropped a sampling slot.
     """
     return {"vm_swappiness": int(Path("/proc/sys/vm/swappiness").read_text()),
-            "qemu_swap_kb": qemu_swap_kb(qemu["pid"]) if qemu else None}
+            "qemu_swap_kb": qemu_swap_kb(qemu["pid"]) if qemu else None,
+            "qemu_swap_max": qemu_swap_max(qemu["pid"]) if qemu else None}
 
 
 def swapped_ranges(smaps):
@@ -751,6 +813,9 @@ def nginx_lines(path):
 
 
 def run_session(a, p):
+    # No capture without a passed self-test of the audit checks for this code and this protocol file.
+    from scripts.audit_selftest import require_selftest
+    require_selftest(a.protocol)
     if os.geteuid() != 0:
         raise ValueError("host eBPF capture needs sudo; plan and audit do not")
     if a.scenario not in p["scenarios"]:
@@ -775,6 +840,10 @@ def run_session(a, p):
             os.chown(directory, int(os.environ["SUDO_UID"]), int(os.environ["SUDO_GID"]))
     with collection_lock(COLLECTIONS, p["domain"] if vm else None):
         before = guest_identity(p)
+        lab = lab_sha256()
+        mismatch = guest_mismatch(before, lab)
+        if mismatch:
+            raise ValueError("deployed guest files differ from lab/ in this commit: " + ", ".join(mismatch))
         if getattr(a, "expected_boot_id", None) and before["boot_id"] != a.expected_boot_id:
             raise ValueError("guest boot differs from campaign group")
         qemu = qemu_process(p["domain"])
@@ -783,6 +852,11 @@ def run_session(a, p):
         # A restore keeps the guest boot ID but starts a new QEMU process.
         if getattr(a, "expected_qemu", None) and qemu != json.loads(a.expected_qemu):
             raise ValueError("VM process differs from campaign group (restart or restore)")
+        # Before the session directory exists: swapped QEMU pages stall the reads of a cycle (v4, v4c).
+        memory = host_memory(qemu)
+        if memory["qemu_swap_max"] != "0":
+            raise ValueError("QEMU swap was not disabled before start: memory.swap.max is "
+                             + repr(memory["qemu_swap_max"]))
         attempt = getattr(a, "group_attempt", 1) or 1
         events = pilot_events(p) if a.role == "pilot" and "events" in p else []
         if a.role not in ("pilot", "diagnostic"):
@@ -836,7 +910,7 @@ def run_session(a, p):
                     "typ": "benign", "seed": a.seed, "cycles": cycles, "guest_before": before,
                     **({"events": events, "event_grace_s": p["events"]["grace_s"]} if "events" in p else {}),
                     "protocol_sha256": digest(a.protocol), "source_sha256": source_hashes,
-                    "measurement_sha256": measurement_sources(),
+                    "lab_sha256": lab, "measurement_sha256": measurement_sources(),
                     "profile_sha256": {str(f.relative_to(prof)): digest(f) for f in prof.rglob("*") if f.is_file()},
                     "collector_sha256": digest(ROOT / "vmicollect/build/vmicollect"),
                     "collector_settings": {"writer": "delta", "fsync": COLLECTOR_FSYNC, "hash": "sha256",
@@ -851,7 +925,7 @@ def run_session(a, p):
                                                   "vm", "domain"],
                     "working_storage": storage_identity(base),
                     "host_context": {"host_boot": Path("/proc/sys/kernel/random/boot_id").read_text().strip(),
-                                     "qemu": qemu, "memory": host_memory(qemu), "python": sys.executable,
+                                     "qemu": qemu, "memory": memory, "python": sys.executable,
                                      **({"other_vms": other_vms(p)} if vm else {})},
                     "commit": subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip(),
                     "commit_dirty": bool(subprocess.check_output(["git", "status", "--porcelain"], cwd=ROOT)),
@@ -1138,14 +1212,26 @@ def positive_controls(result, events_path, p):
     return {"problems": problems, "controls": out, "rows_with_patterns_outside": outside}
 
 
-def analyze_windows(result, p, session, role, recorded_rows=None):
+SKIPPED_TASKS = ("sockets", "memory_patterns")  # The traversals whose skipped tasks the row quality counts.
+
+
+def analyze_windows(result, p, session, role, recorded_rows=None, counts=None):
     """Audit the frozen input policy while retaining independent integrity gaps.
 
     Returns rows, windows, the acceptance verdict and the quality summary. The verdict is the one decision
     of features/acceptance.py: `role` selects the assigned length and the tolerance of invalid rows, a
-    diagnostic session also passes the length it recorded for itself (`recorded_rows`).
+    diagnostic session also passes the length it recorded for itself (`recorded_rows`). What the audit admits
+    instead of rejecting is counted into `counts` (a Counter) under its id of the register of exceptions.
     """
+    counts = Counter() if counts is None else counts
     verdict, windows, detail = judge(result, p, session, role, recorded_rows)
+    # Admitted, so counted (features/audit_policy.py TOLERATED): rows the invalid_rows rule covered, process
+    # lists a parser rule closed (below the cap, which is null until G3b), cross-view differences seen in one
+    # snapshot only, and integrity checks that could not conclude, by row.
+    tolerate(counts, "invalid_rows", len(verdict["tolerated_invalid_seq"] or []))
+    tolerate(counts, "rule_closed_rows", len(verdict["facts"]["rule_closed_seq"]))
+    tolerate(counts, "unconfirmed_findings", sum(bool(q.get("unconfirmed_findings")) for q in result["quality"]))
+    tolerate(counts, "inconclusive_integrity", sum(bool(q["inconclusive"]) for q in result["quality"]))
     policy = protocol_policy(p)
     rows = snimky_z_matice(session, result["matica"], MENA, result["casy"],
                           result["seq"], result["valid"])
@@ -1178,40 +1264,106 @@ def analyze_windows(result, p, session, role, recorded_rows=None):
         # node read at another moment (guestparse.view _stretnutie, rule 'meet').
         "process_walk_meet_seq": [seq for seq, q in zip(result["seq"], result["quality"])
                                   if q.get("process_walk") == "meet"],
+        # Process lists the forward walk closed whose backward walk did not close over the same tasks in reverse:
+        # a prev link the forward walk alone does not read (proposal 6.2, recorded only).
+        "process_walk_backward_disagrees_seq": [
+            seq for seq, q in zip(result["seq"], result["quality"])
+            if q.get("process_walk") == "next" and (q.get("process_walk_backward") or {}).get("agrees") is not True],
+        # Tasks the socket and memory-pattern traversals skipped (their sockets and pages are not counted), and
+        # the rows that record no such count (the traversal returned early, recorded only).
+        "skipped_tasks": {name: sum((q.get("skipped_tasks") or {}).get(name) or 0 for q in result["quality"])
+                          for name in SKIPPED_TASKS},
+        "skipped_tasks_unrecorded_seq": [
+            seq for seq, q in zip(result["seq"], result["quality"])
+            if any(type((q.get("skipped_tasks") or {}).get(name)) is not int for name in SKIPPED_TASKS)],
     }
     if detail is not None:
         quality["coverage"] = detail
     return rows, windows, verdict, quality
 
 
+MISSING = object()  # A key the audit reads is absent; required() records the reason instead of using a default.
+
+
+def required(reasons, doc, name, path):
+    """The value at the dotted `path` of the JSON object `doc` read from the file `name`.
+
+    When a key on the path is absent it returns MISSING and adds `missing key: <name>:<path>` to `reasons`; the
+    check that reads the value is then not evaluated (the missing key is its reason), never passed by a default.
+    """
+    value = doc
+    for key in path.split("."):
+        if type(value) is not dict or key not in value:
+            reasons.append(f"missing key: {name}:{path}")
+            return MISSING
+        value = value[key]
+    return value
+
+
+def present(*values):
+    return all(value is not MISSING for value in values)
+
+
 def audit_session(directory, p, protocol_path, output=None):
+    """Audit one session directory under protocol `p` (read from `protocol_path`); 0 accepted, 2 refused.
+
+    A managed session (session.json present) must state every key the audit reads from session.json, end.json,
+    raw/capture.json and the sidecars: a missing one is the reason `missing key: <file>:<dotted.path>`
+    (validate_sidecar still refuses a structurally broken sidecar). The checks with a bound apply only when the
+    protocol has an audit section (schema 3, features/audit_policy.py); the record states the section or null
+    (values.audit_bounds), what the audit admitted next to the register of exceptions (values.exceptions) and
+    the timing of the collector (values.timing).
+    """
     directory = Path(directory).resolve()
     native = (directory / "session.json").exists()
     raw = directory / "raw" if native else directory
     metadata = json.loads((directory / "session.json").read_text()) if native else {}
+    bounds = audit_bounds(p)
     reasons = []
+    need = functools.partial(required, reasons)
+    session = "session.json"
+    role = cycles = None
+    mlock = domain = vmid = MISSING
     if not native:
         reasons.append("historical capture without protocol/session provenance; exploratory only")
-    elif metadata["protocol_sha256"] != digest(protocol_path):
-        reasons.append("protocol hash mismatch")
-    end = json.loads((directory / "end.json").read_text()) if native and (directory / "end.json").exists() else {}
-    if native and (not end.get("completed") or end.get("guest_after") != metadata["guest_before"]):
-        reasons.append("incomplete capture or changed guest identity")
-    if native:
+    else:
+        recorded = need(metadata, session, "protocol_sha256")
+        if present(recorded) and recorded != digest(protocol_path):
+            reasons.append("protocol hash mismatch")
+        end = json.loads((directory / "end.json").read_text()) if (directory / "end.json").exists() else {}
+        completed, after = need(end, "end.json", "completed"), need(end, "end.json", "guest_after")
+        before = need(metadata, session, "guest_before")
+        if present(completed) and not completed or present(after, before) and after != before:
+            reasons.append("incomplete capture or changed guest identity")
         hashes = {str(f.relative_to(directory / "profile")): digest(f)
                   for f in (directory / "profile").rglob("*") if f.is_file()}
-        if hashes != metadata["profile_sha256"]:
+        profile = need(metadata, session, "profile_sha256")
+        if present(profile) and hashes != profile:
             reasons.append("kernel profile changed since capture")
         capture = json.loads((raw / "capture.json").read_text())
-        if (capture["values"]["collector_sha256"] != metadata["collector_sha256"]
-                or capture["values"]["full_every"] != p["full_every"]
-                or capture["values"]["interval_s"] != p["interval_s"]):
+        captured = {key: need(capture, "raw/capture.json", "values." + key)
+                    for key in ("collector_sha256", "full_every", "interval_s", "mlock")}
+        collector = need(metadata, session, "collector_sha256")
+        if (present(collector, captured["collector_sha256"]) and captured["collector_sha256"] != collector
+                or present(captured["full_every"]) and captured["full_every"] != p["full_every"]
+                or present(captured["interval_s"]) and captured["interval_s"] != p["interval_s"]):
             reasons.append("collector binary or temporal settings mismatch")
-    settings = metadata.get("collector_settings") or {}
-    # Sessions with the writer-thread collector also record memory locking; the flag passed to the
-    # collector (capture.json) and the one in every sidecar must match the session settings.
-    if native and "mlock" in settings and capture["values"].get("mlock") != settings["mlock"]:
-        reasons.append("collector memory locking differs from session settings")
+        # The flag passed to the collector (capture.json) and the one in every sidecar match the session settings.
+        mlock = need(metadata, session, "collector_settings.mlock")
+        if present(mlock, captured["mlock"]) and captured["mlock"] != mlock:
+            reasons.append("collector memory locking differs from session settings")
+        # Every sidecar names the session's VM: its domain and the QEMU pid (the eBPF backend writes it as vmid).
+        domain, vmid = need(metadata, session, "domain"), need(metadata, session, "host_context.qemu.pid")
+        # The VM start forbids swap for the QEMU cgroup (package B5); the session records what it found.
+        swap = need(metadata, session, "host_context.memory.qemu_swap_max")
+        if present(swap) and swap != "0":
+            reasons.append("QEMU swap was not disabled before start")
+        lab = need(metadata, session, "lab_sha256")
+        if present(lab, need(metadata, session, "guest_before.stack_manifest")) and guest_mismatch(
+                metadata["guest_before"], lab):
+            reasons.append("deployed guest files differ from lab/")
+        role, cycles = (None if value is MISSING else value
+                        for value in (need(metadata, session, "role"), need(metadata, session, "cycles")))
     sidecars = []
     for path in raw.glob("*.json"):
         doc = json.loads(path.read_text())
@@ -1227,79 +1379,120 @@ def audit_session(directory, p, protocol_path, output=None):
         reasons.append("image/sidecar count mismatch")
     # The role decides the assigned length (features/acceptance.py); diagnostic runs are shorter by design and
     # their recorded length is the target. A role the protocol does not assign is rejected by the verdict below.
-    assigned, _, assigned_role = assignment(p, metadata.get("role"), metadata.get("cycles"))
+    assigned, _, assigned_role = assignment(p, role, cycles)
     if assigned_role and len(sidecars) != assigned:
         reasons.append("snapshot count differs from assigned protocol")
     if [d["seq"] for _, d in sidecars] != list(range(len(sidecars))):
         reasons.append("sequence must start at zero and be contiguous")
     source_hashes = {}
     total_bytes = 0
-    for path, side in sidecars:
-        image = path.with_suffix(".vmicd")
+    timing = {"lateness_s": [], "delta_ms": [], "full_ms": []}
+    published = {"data_closed_ms": [], "queue_bytes": [], "queue_jobs": [], "queue_wait_ms": []}
+    first_lateness = MISSING
+    for index, (path, side) in enumerate(sidecars):
+        name, image = path.name, path.with_suffix(".vmicd")
         sha = digest(image)
         source_hashes[image.name] = sha
-        source_hashes[path.name] = digest(path)
+        source_hashes[name] = digest(path)
         total_bytes += image.stat().st_size
-        if native and side["output"]["full"] != (side["seq"] % p["full_every"] == 0):
+        full = need(side, name, "output.full")
+        if native and present(full) and full != (side["seq"] % p["full_every"] == 0):
             reasons.append("full snapshot cadence differs from protocol")
-        if native and side["output"].get("sha256") != sha:
-            reasons.append("image checksum mismatch: " + image.name)
-        if side["stats"]["read_errors"] or side["stats"]["filled_zero"] or side["sched"]["skipped_before"]:
+        if native:
+            recorded = need(side, name, "output.sha256")
+            if present(recorded) and recorded != sha:
+                reasons.append("image checksum mismatch: " + image.name)
+        skipped = need(side, name, "sched.skipped_before")
+        if side["stats"]["read_errors"] or side["stats"]["filled_zero"] or present(skipped) and skipped:
             reasons.append("read errors/fill/missed slots: " + image.name)
-        if side["capture"]["total_ms"] >= p["interval_s"] * 1000:
+        total = need(side, name, "capture.total_ms")
+        if present(total) and total >= p["interval_s"] * 1000:
             reasons.append("collector cycle exceeded period")
-        if native and "mlock" in settings and side["output"].get("mlock") != settings["mlock"]:
-            reasons.append("collector memory locking differs from session settings")
+        if present(total, full):
+            timing["full_ms" if full else "delta_ms"].append(total)
+            # A full snapshot reads every guest page, a delta the changed ones only (proposal 6.2).
+            if bounds is not None and total > bounds["cycle_ms_max"]["full" if full else "delta"]:
+                reasons.append("collector cycle time above the audit bound")
+        lateness = need(side, name, "sched.lateness_s")
+        first_lateness = lateness if index == 0 else first_lateness
+        if present(lateness):
+            timing["lateness_s"].append(lateness)
+            if bounds is not None and lateness > bounds["lateness_max_s"]:
+                reasons.append("cycle start later than the audit bound")
+        if native:
+            recorded = need(side, name, "output.mlock")
+            if present(recorded, mlock) and recorded != mlock:
+                reasons.append("collector memory locking differs from session settings")
+            side_domain, side_vmid = need(side, name, "vm.domain"), need(side, name, "vm.vmid")
+            if present(side_domain, domain) and side_domain != domain or present(side_vmid, vmid) and side_vmid != vmid:
+                reasons.append("sidecar VM identity differs from session")
         # A wait for queue memory happens inside the live read and stretches it; it means the writer
         # thread fell far behind. Strict: never accepted, even when the cycle stayed below the period.
-        if side["capture"].get("queue_wait_ms", 0) > 0:
+        wait = need(side, name, "capture.queue_wait_ms")
+        if present(wait) and wait > 0:
             reasons.append("collector waited for queue memory: " + image.name)
+        for key, value in (("queue_wait_ms", wait), *((key, need(side, name, "output." + key))
+                                                       for key in ("data_closed_ms", "queue_bytes", "queue_jobs"))):
+            if present(value):
+                published[key].append(value)
     result = retazec(str(raw), str(directory / "profile" if native else ROOT / p["profile"]),
                     p["max_gap_s"], quality_policy=protocol_policy(p))
-    rows, windows, verdict, quality = analyze_windows(result, p, directory.name, metadata.get("role"),
-                                                      metadata.get("cycles"))
+    counts = Counter()
+    rows, windows, verdict, quality = analyze_windows(result, p, directory.name, role, cycles, counts)
     reasons.extend(verdict["reasons"])
     controls = None
-    if native and metadata.get("role") == "pilot" and p.get("events", {}).get("pilot_controls"):
+    if native and role == "pilot" and p.get("events", {}).get("pilot_controls"):
         controls = positive_controls(result, directory / "events.json", p)
         reasons.extend(controls["problems"])
+    # The timestamp gap and the sampling period are reasons of the verdict (features/acceptance.py).
     if any(b - a != 1 for a, b in zip(result["seq"], result["seq"][1:])):
         reasons.append("sequence gap")
-    if any(not 0 < b - a <= p["max_gap_s"] for a, b in zip(result["casy"], result["casy"][1:])):
-        reasons.append("timestamp gap")
-    span = result["casy"][-1] - result["casy"][0]
-    if abs(span - (len(rows) - 1) * p["interval_s"]) > p["interval_s"]:
-        reasons.append("sampling period differs from protocol")
     logs = audit_logs(directory, snapshot_times=result["casy"]) if native else None
     # Publication runs on the collector's writer thread after the cycle: reported, not a gate (the
     # offline corpus depends on the sampling instants only; live latency is a separate experiment).
     # The p95 is nearest rank, as in soft_rt_check and campaign_report.
-    closed = sorted(d["output"]["data_closed_ms"] for _, d in sidecars if "data_closed_ms" in d["output"])
+    closed = sorted(published["data_closed_ms"])
     publication = None if not closed else {
         # data_closed_ms: cycle start to the snapshot data written and closed; the sidecar and both
         # renames follow, so this is a lower bound of the publication time.
         "snapshots": len(closed), "data_closed_ms_max": closed[-1],
         "data_closed_ms_p95": closed[-(-95 * len(closed) // 100) - 1],
-        "queue_bytes_max": max(d["output"].get("queue_bytes", 0) for _, d in sidecars),
-        "queue_jobs_max": max(d["output"].get("queue_jobs", 0) for _, d in sidecars),
-        "queue_wait_ms_max": max(d["capture"].get("queue_wait_ms", 0) for _, d in sidecars)}
+        "queue_bytes_max": max(published["queue_bytes"], default=None),
+        "queue_jobs_max": max(published["queue_jobs"], default=None),
+        "queue_wait_ms_max": max(published["queue_wait_ms"], default=None)}
     if logs is not None:
         reasons.extend("logs: " + problem for problem in logs["problems"])
+        counts.update(logs["tolerated"])
+    # Recorded for every session, a bound only under schema 3: G2 and G3a judge the bound by this run.
+    flagged = flagged_seq(verdict["facts"])
+    spacing_min = bounds["periodicity"]["min_spacing_rows"] if bounds is not None else 2
+    run, spacing = periodic_run(flagged, spacing_min)
+    # Phase of the collector's grid: frame 0 was due at its timestamp minus its lateness. Recorded only;
+    # pairing the grids of two VMs is package B9.
+    phase = (round((sidecars[0][1]["timestamp_unix"] - first_lateness) % p["interval_s"], 6)
+             if present(first_lateness) else None)
     stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")
     output = Path(output).resolve() if output else directory / f"audit_{stamp}.json"
     feature_path = output.with_suffix(".npz")
     save(feature_path, result)
     values = {"accepted": not reasons, "reasons": sorted(set(reasons)),
-              "role": metadata.get("role"), "protocol_sha256": digest(protocol_path),
+              "role": role, "protocol_sha256": digest(protocol_path),
               # The verdict of the one acceptance decision; the three fields before it repeat it for older readers.
               "snapshots": verdict["snapshots"], "windows": verdict["windows"],
               "score_coverage": verdict["score_coverage"], "acceptance": verdict,
               "coverage": quality.pop("coverage", None), "logs": logs, "publication": publication,
               **({"positive_controls": controls} if controls is not None else {}),
+              "audit_bounds": bounds, "exceptions": exceptions_record(p, counts),
+              "timing": {"lateness_s_max": max(timing["lateness_s"], default=None),
+                         "delta_ms_max": max(timing["delta_ms"], default=None),
+                         "full_ms_max": max(timing["full_ms"], default=None),
+                         "periodic_run": {"equal_spacings": run, "spacing": spacing, "min_spacing_rows": spacing_min,
+                                          "flagged_rows": len(flagged)},
+                         "grid_phase_s": phase},
               "auditor_sha256": {str(f.relative_to(ROOT)): digest(f) for f in
                                   (Path(__file__), ROOT / "scripts/collection_logs.py",
                                    ROOT / "scripts/traffic_log.py", ROOT / "scripts/host_monitor.py",
-                                   ROOT / "safeguard/features.py")},
+                                   ROOT / "safeguard/features.py", ROOT / "features/audit_policy.py")},
               "quality": quality,
               "raw_bytes": total_bytes, "source_sha256": source_hashes,
               "session_sha256": digest(directory / "session.json") if native else None,

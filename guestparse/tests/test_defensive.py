@@ -8,6 +8,8 @@ pripade zastavi a POVIE to ('truncated'), namiesto tichej polovice zoznamu.
 
 import struct
 
+import pytest
+
 from guestparse.view import GuestView
 
 KBASE = 0xFFFFFFFF80000000      # VA zaciatku umeleho obrazu jadra
@@ -643,3 +645,55 @@ def test_preskok_dozadu_bez_zhodneho_pokracovania_nevysvetli():
     # 'meet' ho ako ukonceny nezapocita a zoznam ostane t0, t1, t2.
     assert "skipped_links" not in res
     assert res["walk"] == "meet" and res["count"] == 3 and res["stale_node"]["counted"] is False
+
+
+# ------------ prechod dozadu pri kazdom vysledku (navrh protokolu v5, kap. 6.2)
+
+def _closed_list_with_deleted_node():
+    """_odstraneny_a_zastarany_next, ale t2.next uz vedie do init_task: zoznam sa uzavrie dopredu."""
+    view, img = _odstraneny_a_zastarany_next()
+    img.u64(_pa(TASK_VA[2]) + O_TASKS, INIT_VA + O_TASKS)
+    return view
+
+
+@pytest.mark.parametrize("build, walk", [
+    (lambda: _obojsmerny(INIT_VA + O_TASKS)[0], "next"),
+    # Spojenie, ktore vysvetli odstranenie uzla v tom istom obraze, nie je
+    # nezhoda: prechod dozadu ide tou istou obchadzkou ako pravidla.
+    (_closed_list_with_deleted_node, "next"),
+    # Pri 'prev' sa prechod dozadu porovnava so zoznamom riadku, nie s
+    # prechodom dopredu (ten presiel aj ukonceny proces na konci).
+    (lambda: _odstraneny_a_zastarany_next()[0], "prev"),
+], ids=["closed", "deleted-node", "prev"])
+def test_backward_walk_agrees_with_the_row_list(build, walk):
+    """Prechod dozadu bezi pri kazdom vysledku a zhoduje sa so zoznamom riadku."""
+    res = build().processes()
+    assert res["walk"] == walk and res["truncated"] is False
+    assert [p["comm"] for p in res["processes"]] == ["proces0", "proces1", "proces2"]
+    assert res["backward"] == {"closed": True, "agrees": True}
+
+
+@pytest.mark.parametrize("prev, backward", [
+    # Snimka 529 session benign-v3-20261022_03_train_bursty v malom: t2.prev
+    # preskakuje t1, dozadu sa zoznam uzavrie cez ine ulohy.
+    ([(TASK_VA[2], TASK_VA[0])], {"closed": True, "agrees": False}),
+    # t0.prev ukazuje na t2: dozadu tie iste ulohy v opacnom poradi, ale
+    # prechod sa zacykli namiesto navratu do init_task.
+    ([(TASK_VA[0], TASK_VA[2])], {"closed": False, "agrees": False}),
+    # Dozadu sa zoznam uzavrie cez tie iste ulohy, ale v inom poradi.
+    ([(INIT_VA, TASK_VA[1]), (TASK_VA[1], TASK_VA[2]), (TASK_VA[2], TASK_VA[0])],
+     {"closed": True, "agrees": False}),
+], ids=["other-tasks", "cycle", "other-order"])
+def test_inconsistent_prev_in_forward_closed_list_is_recorded(prev, backward):
+    """
+    Nezhodne spojenie `prev` v zozname, ktory sa dopredu uzavrel, sa predtym
+    zahodilo. Vysledok ostava rovnaky ('next', tie iste procesy); zapise sa
+    iba prechod dozadu.
+    """
+    view, img = _obojsmerny(INIT_VA + O_TASKS)
+    for va, target in prev:
+        img.u64(_pa(va) + O_TASKS + 8, target + O_TASKS)
+    res = view.processes()
+    assert res["walk"] == "next" and res["truncated"] is False and res["stop_reason"] is None
+    assert [p["comm"] for p in res["processes"]] == ["proces0", "proces1", "proces2"]
+    assert res["backward"] == backward

@@ -191,11 +191,12 @@ def summarize(requests_path, intervals_path, *, session_id=None):
     reqs, ivs = kind(requests, "request"), kind(intervals, "interval")
     marks_r, marks_i = kind(requests, "phase"), kind(intervals, "phase")
 
+    # host_traffic.py writes every field read below into both end records; a missing one is a problem.
     for name, end, records in (("requests", end_r, requests), ("intervals", end_i, intervals)):
         if end is None:
             problems.add(f"{name}:end_missing")
             continue
-        if not end.get("clean") or end.get("write_errors"):
+        if not end.get("clean") or end.get("write_errors") != 0:
             problems.add(f"{name}:end_not_clean")
         if end.get("records") != len(records):
             problems.add(f"{name}:records_mismatch", f"{end.get('records')}!={len(records)}")
@@ -203,10 +204,10 @@ def summarize(requests_path, intervals_path, *, session_id=None):
             problems.add(f"{name}:requests_logged_mismatch", f"{end.get('requests_logged')}!={len(reqs)}")
         if end.get("requests_started") != len(reqs):
             problems.add(f"{name}:requests_started_mismatch", f"{end.get('requests_started')}!={len(reqs)}")
-        if end.get("in_flight_at_stop"):
-            problems.add(f"{name}:in_flight_at_stop", end["in_flight_at_stop"])
-        if end.get("worker_errors"):
-            problems.add(f"{name}:worker_errors", end["worker_errors"])
+        if end.get("in_flight_at_stop") != 0:
+            problems.add(f"{name}:in_flight_at_stop", end.get("in_flight_at_stop"))
+        if end.get("worker_errors") != 0:
+            problems.add(f"{name}:worker_errors", end.get("worker_errors"))
     if header_r and header_i:
         if header_r.get("run_id") != header_i.get("run_id"):
             problems.add("run_id_mismatch")
@@ -288,9 +289,9 @@ def summarize(requests_path, intervals_path, *, session_id=None):
     for index in by_interval:
         if index not in seen:
             problems.add("interval_missing", index)
-    if ivs and abs(ivs[0].get("mono_start", math.nan)) > 1e-9:
+    if ivs and not abs(ivs[0].get("mono_start", math.nan)) <= 1e-9:  # NaN (a missing key) fails too
         problems.add("intervals_not_from_origin", ivs[0].get("mono_start"))
-    if ivs and end_i and abs(ivs[-1].get("mono_end", math.nan) - end_i.get("end_mono", math.nan)) > 1e-9:
+    if ivs and end_i and not abs(ivs[-1].get("mono_end", math.nan) - end_i.get("end_mono", math.nan)) <= 1e-9:
         problems.add("intervals_not_to_end", f"{ivs[-1].get('mono_end')}!={end_i.get('end_mono')}")
 
     phases = {}

@@ -24,7 +24,7 @@ BIN_BYTES = 16777216
 LAYOUT = {"bin_bytes": BIN_BYTES, "page_size": 4096, "bins": [[0, 4096]], "regions": [{"gpa": 0, "bytes": BIN_BYTES}],
           "memsize": BIN_BYTES, "vcpus": 1}
 GOOD = {"model_valid": True, "behavior_valid": True, "traversals_complete": True, "truncated_traversals": [],
-        "inconclusive": ["text_integrity"], "findings": [], "read_errors": 0, "filled_zero": 0}
+        "inconclusive": ["text_integrity"], "findings": [], "read_errors": 0, "filled_zero": 0, "process_walk": "next"}
 # The one cause the rule tolerates: the process walk did not close. The others are invalid for another cause.
 UNCLOSED = dict(GOOD, model_valid=False, behavior_valid=False, traversals_complete=False,
                 truncated_traversals=["processes"])
@@ -70,6 +70,7 @@ BEHAVIOR, LEGACY = quality.BEHAVIOR_POLICY, quality.LEGACY_POLICY
 REASON = {"role": "session role is not assigned by the protocol",
           "rows": "snapshot count differs from assigned protocol",
           "sequence": "sequence must start at zero and be contiguous",
+          "timing:gap": "timestamp gap",
           "integrity": "integrity findings require review before benign admission",
           "coverage": f"score coverage below design gate {GATE:g}"}
 ORDER = ("role", "rows", "sequence", "invalid_rows", "integrity", "coverage")
@@ -78,6 +79,18 @@ DIFFERS = "audit record differs from the acceptance decision"
 INCOMPLETE = "incomplete features in accepted audit"
 TOO_MANY = "more invalid rows than the protocol tolerates"
 CAUSE = "invalid rows have a cause the protocol does not tolerate"
+
+
+def sections():
+    """The audit and exceptions sections schema 3 states since package B3 (features/audit_policy.py). No
+    construction here meets their bounds: rows lie on the 1 s grid, none is closed by a parser rule, and the
+    flagged rows are adjacent or STEP apart, below the smallest spacing the periodicity rule counts."""
+    from features import audit_policy
+    return {"audit": {"lateness_max_s": .1, "cycle_ms_max": {"delta": 300, "full": 700},
+                      "periodicity": {"equal_spacings": 3, "min_spacing_rows": STEP + 1, "note": "test bounds"},
+                      "warnings_allowed": None, "rule_closed_rows_max": None},
+            "exceptions": {name: {"cause": "synthetic", "decision": "synthetic", "expected": None}
+                           for name in audit_policy.TOLERATED}}
 
 
 def protocol(version=3, **changes):
@@ -89,6 +102,8 @@ def protocol(version=3, **changes):
     if version == 1:
         del p["quality_policy"]
     p.update(changes)
+    if p.get("schema") == "hyptcn3/collection-protocol/3":
+        p = {**sections(), **p}  # A change may still replace or drop a section.
     return {k: v for k, v in p.items() if v is not DROP}
 
 
@@ -101,10 +116,13 @@ def row(seq, q=UNCLOSED):
 
 
 def facts(rows=N, invalid=(), *, contiguous=True, findings=0, windows=None, q=UNCLOSED):
-    """Facts of a session written by hand; windows default to the oracle of the S3 shape."""
+    """Facts of a session written by hand; windows default to the oracle of the S3 shape. The rows lie on the
+    protocol's 1 s grid and none is closed by a parser rule."""
     return {"snapshots": rows, "sequence_contiguous": contiguous, "invalid_rows": [row(s, q) for s in sorted(invalid)],
             "integrity_findings": findings,
-            "windows": window_count(rows, W, F, set(invalid)) if windows is None else windows}
+            "windows": window_count(rows, W, F, set(invalid)) if windows is None else windows,
+            "rule_closed_seq": [], "smallest_gap_s": 1. if rows > 1 else None,
+            "largest_gap_s": 1. if rows > 1 else None, "span_s": float(rows - 1) if rows else None}
 
 
 def extraction(rows=N, invalid=None, *, seqs=None, policy=BEHAVIOR, full_every=F):
@@ -404,8 +422,8 @@ def test_record_of_another_role_is_refused_although_it_is_honest_for_its_own(tmp
 SHAPES = {
     "last_row_missing": (list(range(N - 1)), ["rows"]),
     "last_20_rows_missing": (list(range(N - 20)), ["rows"]),
-    "row_missing_mid_chain": ([s for s in range(N) if s != F // 2], ["rows", "sequence"]),
-    "one_seq_skipped": ([s for s in range(N + 1) if s != F // 2], ["sequence"]),
+    "row_missing_mid_chain": ([s for s in range(N) if s != F // 2], ["rows", "sequence", "timing:gap"]),
+    "one_seq_skipped": ([s for s in range(N + 1) if s != F // 2], ["sequence", "timing:gap"]),
     "starts_at_one": (list(range(1, N + 1)), ["sequence"]),
     "one_row_too_many": (list(range(N + 1)), ["rows"]),
     "first_chain_only": (list(range(F)), ["rows"]),
@@ -626,11 +644,13 @@ def test_session_that_violates_everything_through_its_archive(tmp_path):
     result = extraction(invalid=invalid, seqs=[s for s in range(N) if s != F // 2 + STEP])
     for data in (result, stored(result, tmp_path)):
         verdict = acceptance.judge(data, p, "s", "train")[0]
-        assert verdict["codes"] == ["rows", "sequence", "invalid_rows:over_max", "integrity", "coverage"]
-        assert verdict["reasons"] == [REASON["rows"], REASON["sequence"], "incomplete model inputs under " + BEHAVIOR,
-                                      REASON["integrity"], REASON["coverage"]]
+        assert verdict["codes"] == ["rows", "sequence", "timing:gap", "invalid_rows:over_max", "integrity",
+                                    "coverage"]
+        assert verdict["reasons"] == [REASON["rows"], REASON["sequence"], REASON["timing:gap"],
+                                      "incomplete model inputs under " + BEHAVIOR, REASON["integrity"],
+                                      REASON["coverage"]]
         assert acceptance.judge(data, p, "s", None)[0]["codes"] == [
-            "role", "sequence", "invalid_rows:no_tolerance", "integrity"]
+            "role", "sequence", "timing:gap", "invalid_rows:no_tolerance", "integrity"]
 
 
 def test_clustered_rows_over_the_maximum_are_refused_by_their_count_only(tmp_path):
@@ -647,15 +667,14 @@ def test_clustered_rows_over_the_maximum_are_refused_by_their_count_only(tmp_pat
 
 def test_equality_at_the_gate_with_the_v4_numbers():
     v4 = json.loads(CONFIG_V4.read_text())
-    p = dict(protocol(), **{k: v4[k] for k in ("schema", "cycles", "pilot_cycles", "window_rows", "full_every",
-                                               "min_score_coverage", "invalid_rows", "quality_policy")})
+    p = protocol(**{k: v4[k] for k in ("schema", "cycles", "pilot_cycles", "window_rows", "full_every",
+                                       "min_score_coverage", "invalid_rows", "quality_policy")})
     gate = p["min_score_coverage"]
     for role, key in (("train", "cycles"), ("pilot", "pilot_cycles")):
         rows = p[key]
         smallest = min(w for w in range(rows + 1) if w / rows >= gate)
         assert smallest / rows == gate  # The v4 numbers reach the gate exactly.
-        at = acceptance.decide(p, role, {"snapshots": rows, "sequence_contiguous": True, "invalid_rows": [],
-                                         "integrity_findings": 0, "windows": smallest})
+        at = acceptance.decide(p, role, facts(rows, windows=smallest))
         below = acceptance.decide(p, role, dict(at["facts"], windows=smallest - 1))
         assert at["accepted"] and at["score_coverage"] == gate
         assert below["codes"] == ["coverage"] and below["reasons"] == [f"score coverage below design gate {gate:g}"]

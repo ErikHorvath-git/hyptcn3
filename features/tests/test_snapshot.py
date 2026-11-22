@@ -536,3 +536,26 @@ def test_meet_walk_is_noted_and_kept_valid(monkeypatch):
     assert state["quality"]["behavior_valid"] is True and state["quality"]["process_walk"] == "meet"
     assert any("stretli" in n and "112488" in n and "nezapocitany" in n for n in notes)
     assert any("preskakuju" in n for n in notes)
+
+
+@pytest.mark.parametrize("sockets, patterns", [(2, 0), (0, 3)], ids=["sockets", "memory_patterns"])
+def test_row_quality_records_backward_walk_and_skipped_tasks(monkeypatch, sockets, patterns):
+    """Prechod dozadu a preskocene ulohy soketov a vzorov pamate su v kvalite riadku iba ako zapis."""
+    from types import SimpleNamespace
+    from features import snapshot
+    procs = [{"pid": 1, "tgid": 1, "comm": "systemd", "kernel_thread": False, "task_va": 1}]
+    walk = lambda field: {field: [], "count": 0, "truncated": False, "stop_reason": None}
+    view = SimpleNamespace(
+        ktext_shift=1, profile_boot_mismatch=lambda: None,
+        processes=lambda: {"processes": procs, "count": 1, "truncated": False, "stop_reason": None,
+                           "walk": "next", "backward": {"closed": True, "agrees": False}},
+        modules=lambda: walk("modules"),
+        sockets=lambda **kwargs: dict(walk("sockets"), skipped_tasks=sockets),
+        memory_patterns=lambda **kwargs: dict(_vzory(), skipped_tasks=patterns))
+    monkeypatch.setattr(snapshot.checks, "check_all", lambda *args, **kwargs: {
+        "summary": {"inconclusive": [], "syscall_hooks": 0}, "findings": []})
+    values, state, _ = objekty_z_pohladu(view)
+    q = state["quality"]
+    assert q["process_walk_backward"] == {"closed": True, "agrees": False}
+    assert q["skipped_tasks"] == {"sockets": sockets, "memory_patterns": patterns}
+    assert q["behavior_valid"] is True and values["proc_total"] == 1

@@ -63,7 +63,7 @@ FPR = 0.05
 ROZLOZENIE = {"bin_bytes": 16777216, "page_size": 4096, "bins": [[i, 4096] for i in range(3)],
               "regions": [{"gpa": 0, "bytes": 50331648}], "memsize": 50331648, "vcpus": 2}
 DOBRY = {"model_valid": True, "behavior_valid": True, "traversals_complete": True, "truncated_traversals": [],
-         "inconclusive": ["text_integrity"], "findings": [], "read_errors": 0, "filled_zero": 0}
+         "inconclusive": ["text_integrity"], "findings": [], "read_errors": 0, "filled_zero": 0, "process_walk": "next"}
 # Riadok, ktoremu sa neuzavrel prechod procesov: jediny druh, ktory pravidlo protokolu toleruje.
 NEUZAVRETY = dict(DOBRY, model_valid=False, behavior_valid=False, traversals_complete=False,
                   truncated_traversals=["processes"])
@@ -77,7 +77,10 @@ def _sha(cesta):
 
 
 def _protokol(profil):
+    # Schema 3 nesie od balika B3 hranice kontrol auditu a register vynimiek (scripts/tests/boundary_sessions.py).
+    from scripts.tests.boundary_sessions import audit_sections
     return {
+        **audit_sections(5),
         "schema": "hyptcn3/collection-protocol/3", "name": "odovzdanie-korpusu-test",
         "quality_policy": "behavioral-inputs-v1", "profile": str(profil),
         "interval_s": 5, "max_gap_s": 7.5, "bin_bytes": 16777216, "window_rows": OKNO, "stride": 1,
@@ -254,39 +257,42 @@ def _relacia_cez_audit(koren, monkeypatch, riadok):
     from features.tests.test_collection_contract import sample_sidecar
     from features.tests.test_coverage import data
     from safeguard.tests.test_features import sample as snimka
-    from scripts.tests import test_collection_logs as dokazy
+    from scripts.tests import boundary_sessions as bs, test_collection_logs as dokazy
 
     adresar = dokazy.build(koren, event=True)
     (adresar / "profile").mkdir()
     (adresar / "profile" / "symbols.txt").write_text("synteticky profil testu\n")
     # Dokazy pomocky maju desat snimok v dvoch sekundach; brana pokrytia je preto nizsie nez v kampani.
     p = dict(_protokol(adresar / "profile"), interval_s=.1, max_gap_s=.15, window_rows=3, cycles=10,
-             min_score_coverage=.25)
+             min_score_coverage=.25, **bs.audit_sections(.1))
     protokol_cesta = adresar / "protocol.json"
     dokazy.write(protokol_cesta, p)
     meta = json.loads((adresar / "session.json").read_text())
+    # Polia riadenej relacie, ktore audit cita (balik B3), ciste; VM a ma domenu hyptcn-test-a.
     meta.update(role="train", typ="benign", group="v5-train-1", scenario="steady", vm="a",
-                guest_before=dict(meta["guest_before"], stack_sha256="5" * 64),
+                **bs.managed_fields(p, dict(meta["guest_before"], stack_sha256="5" * 64), domain="hyptcn-test-a"),
                 profile_sha256={"symbols.txt": _sha(adresar / "profile" / "symbols.txt")},
                 protocol_sha256=_sha(protokol_cesta))
     dokazy.write(adresar / "session.json", meta)
     koniec = json.loads((adresar / "end.json").read_text())
     dokazy.write(adresar / "end.json", dict(koniec, guest_after=meta["guest_before"]))
     zber = json.loads((adresar / "raw/capture.json").read_text())
-    zber["values"].update(interval_s=p["interval_s"], full_every=p["full_every"])
+    zber["values"].update(interval_s=p["interval_s"], full_every=p["full_every"], mlock=True)
     dokazy.write(adresar / "raw/capture.json", zber)
     snimky = [snimka(i, full=i == 0, predecessor=i not in (0, riadok + 1), timestamp=dokazy.BASE + 1.1 + i * .1)
               for i in range(10)]
     snimky[riadok] = replace(snimky[riadok], quality=copy.deepcopy(NEUZAVRETY))
     vysledok = data(snimky)
     vysledok.update(snimky=[str(i) for i in range(10)], poznamky=[[]] * 10, trvanie_s=[0.] * 10, max_medzera_s=.15)
+    for kvalita in vysledok["quality"]:
+        kvalita.setdefault("process_walk", "next")  # zoznam procesov uzavrel prechod dopredu
     for s in snimky:
         obraz = adresar / "raw" / f"frame{s.seq}.vmicd"
         obraz.write_bytes(b"synteticka RAM")
         sidecar = sample_sidecar()
         sidecar.update(seq=s.seq, timestamp_unix=s.timestamp, sched={"skipped_before": 0}, capture={"total_ms": .1})
         sidecar["output"].update(full=s.full, sha256=_sha(obraz))
-        dokazy.write(obraz.with_suffix(".json"), sidecar)
+        dokazy.write(obraz.with_suffix(".json"), bs.clean_sidecar(sidecar, "hyptcn-test-a"))
     monkeypatch.setattr(collection, "retazec", lambda *a, **kw: vysledok)
     dokazy.seal(adresar)
     audit = adresar / "audit_test.json"

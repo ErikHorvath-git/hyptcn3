@@ -371,13 +371,13 @@ class GuestView:
         pochadzat z ineho okamihu nez uzol, na ktory ukazuje (session
         benign-v3-20261022_03_train_bursty, snimka 505: `next` posledneho
         vlakna ukazoval na uz ukonceny proces so starymi ukazovatelmi a
-        prechod sa zacyklil). Ked sa zoznam dopredu neuzavrie, prejde sa
-        dozadu cez `prev`. Zoznam potom tvoria uzly, ktore prechod dopredu
-        presiel pred prvym spojenim nezhodnym s opacnym smerom (uzol.prev
-        neukazuje tam, odkial sa k nemu prislo), ale iba ak sa prechod dozadu
-        uzavrel cez presne tie iste uzly. Samotne uzavretie nestaci: v tej
-        istej session sa prechod dozadu v snimke 529 uzavrel cez 78 procesov
-        namiesto 110.
+        prechod sa zacyklil). Preto sa zoznam prejde aj dozadu cez `prev`
+        (pri kazdom vysledku, pozri 'backward' nizsie). Ked sa dopredu
+        neuzavrie, tvoria ho uzly, ktore prechod dopredu presiel pred prvym
+        spojenim nezhodnym s opacnym smerom (uzol.prev neukazuje tam, odkial
+        sa k nemu prislo), ale iba ak sa prechod dozadu uzavrel cez presne
+        tie iste uzly. Samotne uzavretie nestaci: v tej istej session sa
+        prechod dozadu v snimke 529 uzavrel cez 78 procesov namiesto 110.
 
         Opacny pripad je vlozenie na koniec (session
         benign-v5-20261025_18_train_quiet, snimka 613): kthreadd vlozil nove
@@ -447,6 +447,20 @@ class GuestView:
         'forward_stop_reason'. 'truncated' znamena, ze zoznam sa neuzavrel -
         vysledok je dolna hranica z prechodu dopredu a 'backward_stop_reason'
         hovori, preco ho nepotvrdil prechod dozadu.
+
+        Kazdy vysledok prechodu nesie aj 'backward' {'closed', 'agrees'}
+        (navrh protokolu v5, kap. 6.2). Prechod dozadu je ten isty, z ktoreho
+        citaju pravidla (s obchadzkami spojeni, ktore vysvetlilo odstranenie
+        uzla v tom istom obraze), a bezi aj vtedy, ked sa zoznam dopredu
+        uzavrel. 'closed': vratil sa do init_task. 'agrees': uzavrel sa cez
+        presne tie iste ulohy ako 'processes', v opacnom poradi; prechod,
+        ktory sa neuzavrel, sa nezhoduje s nicim. Pravidla ani pocty to
+        nemeni, riadok to iba zapise. Pri 'next' je to jediny zaznam o tom,
+        ze spojenia `prev` zoznamu uzavreteho dopredu nesedia (predtym sa to
+        zahodilo); pri 'prev' sa smery zhoduju vzdy, pri 'tail' a 'meet'
+        nikdy, lebo prechod dozadu ide cez uzol z ineho okamihu. Bez offsetov
+        task_struct alebo bez posunu jadra sa zoznam neprechadza a vysledok
+        nema ani 'walk', ani 'backward'.
         """
         need = ("tasks", "comm", "pid", "tgid", "mm")
         m = {}
@@ -461,13 +475,27 @@ class GuestView:
             return self._result("processes", [], True, "neznamy posun jadra")
 
         out, stop, _, vysvetlene = self._prechod_tasks(init_pa, init_va, m, 0, limit)
+        # Aj po uzavretom prechode dopredu: bez toho by sa nezhodne spojenie
+        # `prev` zahodilo a uzavretie samo nie je dokaz (snimka 529 vyssie).
+        spat, stop_spat, _, _ = self._prechod_tasks(init_pa, init_va, m, 8, limit,
+                                                    vysvetlene["obchadzky"])
+        res = self._walk_rules(out, stop, vysvetlene, spat, stop_spat, init_pa, init_va, m, limit)
+        tasks = [pr["task_va"] for pr in res["processes"]]
+        res["backward"] = {"closed": stop_spat is None,
+                           "agrees": stop_spat is None and [pr["task_va"] for pr in spat] == tasks[::-1]}
+        return res
+
+    def _walk_rules(self, out, stop, vysvetlene, spat, stop_spat, init_pa, init_va, m, limit):
+        """
+        Zoznam procesov z prechodu dopredu (`out`, `stop`, `vysvetlene`) a
+        dozadu (`spat`, `stop_spat`) podla pravidiel 'next', 'prev', 'tail'
+        a 'meet' (pozri processes); vysledok este bez 'backward'.
+        """
         if stop is None:
             return dict(self._result("processes", out, False, None), walk="next")
         # Uzly dopredu pred prvym nezhodnym spojenim, ktore nevysvetli
         # odstranenie uzla v tom istom obraze.
         koniec = vysvetlene["zhodne"]
-        spat, stop_spat, _, _ = self._prechod_tasks(init_pa, init_va, m, 8, limit,
-                                                    vysvetlene["obchadzky"])
         if stop_spat is None and koniec and ({pr["task_va"] for pr in spat}
                                              == {pr["task_va"] for pr in out[:koniec]}):
             res = dict(self._result("processes", out[:koniec], False, None),

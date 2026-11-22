@@ -57,7 +57,7 @@ def make_corpus(directory, session_schema="hyptcn3/collection-session/1"):
             times = 1000 + 1000 * role_index + 100 * scenario_index + np.arange(rows, dtype=float)
             quality = [{"model_valid": True, "behavior_valid": True, "traversals_complete": True,
                         "inconclusive": ["text_integrity"], "findings": [],
-                        "read_errors": 0, "filled_zero": 0} for _ in range(rows)]
+                        "read_errors": 0, "filled_zero": 0, "process_walk": "next"} for _ in range(rows)]
             feature_path = save(location / "features.npz", {
                 "matica": matrix, "seq": list(range(rows)), "casy": times,
                 "valid": [True] * rows, "perbin": local, "biny": [0, 1, 2],

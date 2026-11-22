@@ -188,7 +188,8 @@ def entry(w, b, report):
             "audit": str(Path(report).resolve()), "audit_sha256": sha(report),
             "features": str(Path(b.audit.archive).resolve()), "features_sha256": sha(b.audit.archive),
             "events": str(d / "events.json"), "events_sha256": sha(d / "events.json"),
-            "guest": {"kernel": bs.KERNEL, "boot_id": boot, "stack_sha256": bs.STACK},
+            "guest": {"kernel": bs.KERNEL, "boot_id": boot, "stack_sha256": bs.STACK,
+                      "stack_manifest": bs.STACK_MANIFEST},
             "collector_sha256": json.loads((d / "session.json").read_text())["collector_sha256"],
             "extractor_sha256": b.audit.values["extractor_sha256"]}
 

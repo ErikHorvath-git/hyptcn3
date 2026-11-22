@@ -40,6 +40,9 @@ def pack(directory, name, text):
 
 # Protocol v3 variant: restart_sluzby of orders, host bounds 1.45-1.6 s, grace .1 s -> window .45-1.7 s.
 EVENT = {"type": "restart_sluzby", "class": "restart_sluzby", "start_s": 0, "duration_s": 1}
+# SHA-256 of lab/udalosti.py in session.json and in both replies of the event script.
+SCRIPT_SHA256 = hashlib.sha256(b"synthetic lab/udalosti.py").hexdigest()
+QEMU_PID = 4242  # The session VM's QEMU in every host monitor sample (label qemu), never swapped.
 
 
 @pytest.fixture
@@ -68,9 +71,9 @@ def build(tmp_path, event=False, *, session_name="synthetic-session", base=BASE,
     write(d / "session.json", {"schema": "hyptcn3/collection-session/2", "session_id": d.name, "cycles": snapshots,
                                "guest_before": identity, "seed": 1, "traffic": config,
                                "protocol_sha256": logs.digest(d / "protocol.json"), "collector_sha256": "test",
-                               **({"events": [EVENT], "event_grace_s": .1, "source_sha256": {"lab/udalosti.py": "u"}}
-                                  if event else {})})
-    write(d / "end.json", {"schema": "hyptcn3/collection-end/2", "completed": True,
+                               **({"events": [EVENT], "event_grace_s": .1,
+                                   "source_sha256": {"lab/udalosti.py": SCRIPT_SHA256}} if event else {})})
+    write(d / "end.json", {"schema": "hyptcn3/collection-end/2", "completed": True, "interrupted": False,
                            "guest_after": identity, "collector_rc": 0, "traffic_rc": int(event),
                            "monitor": {"rc": 0}, "measure_start_unix": base + 1, "measure_end_unix": base + stop})
     reqs = [sample.request(0, 0, "warmup", .1, 3, method="POST", route="/api/auth/token"),
@@ -99,7 +102,8 @@ def build(tmp_path, event=False, *, session_name="synthetic-session", base=BASE,
     write(d / "traffic.json", {"run_id": sample.RUN, "session_id": d.name, "started_at": at(0),
                               "final": True, "requests": len(reqs), "requests_logged": len(reqs),
                               "ok": sum(r["outcome"] == "ok" for r in reqs),
-                              "errors": sum(r["outcome"] != "ok" for r in reqs)})
+                              "errors": sum(r["outcome"] != "ok" for r in reqs), "logging_error": None,
+                              "worker_errors": 0})
     units = {name: {"ActiveState": "active", "Result": "success", "NRestarts": "0", "InvocationID": name,
                     "ExecMainPID": str(100 + i), "ExecMainStartTimestampMonotonic": "1"}
              for i, name in enumerate(logs.REQUIRED_UNITS)}
@@ -140,9 +144,10 @@ def build(tmp_path, event=False, *, session_name="synthetic-session", base=BASE,
         errors = (f"{datetime.fromtimestamp(base + 1, timezone.utc):%Y/%m/%d %H:%M:%S} [error] 7#7: *1 connect() "
                   "failed (111: Connection refused) while connecting to upstream\n")
         write(d / "events.json", {"schema": "hyptcn3/session-events/1", "events": [dict(
-            EVENT, executed=True, host_start_unix=base + 1.45, host_started_unix=base + 1.5,
-            host_stop_unix=base + 1.55, host_stopped_unix=base + 1.6, start={"ok": True, "script_sha256": "u"},
-            stop={"ok": True, "health": 200, "script_sha256": "u",
+            EVENT, executed=True, effect={"ok": True, "predicate": "synthetic"}, host_start_unix=base + 1.45,
+            host_started_unix=base + 1.5, host_stop_unix=base + 1.55, host_stopped_unix=base + 1.6,
+            start={"ok": True, "script_sha256": SCRIPT_SHA256},
+            stop={"ok": True, "health": 200, "script_sha256": SCRIPT_SHA256,
                   "units": {"hyptcn-lab@orders": {"ExecMainPID": "999"}}})]})
     for name, suffix, text in (("pre", "nginx-access.jsonl", json.dumps({"rid": "smoke", "status": 401}) + "\n"),
                                ("session", "nginx-access.jsonl", "".join(json.dumps(r) + "\n" for r in nginx)),
@@ -155,12 +160,15 @@ def build(tmp_path, event=False, *, session_name="synthetic-session", base=BASE,
             "files": entries})
     jsonl(d / "host_monitor.jsonl", [
         {"schema": host_monitor.SCHEMA, "type": "header", "session_id": d.name, "interval_s": 1},
-        *[{"type": "sample", "i": i, "t_mono": float(i), "t_utc": at(i), "cpu": {}} for i in range(stop + 2)],
+        *[{"type": "sample", "i": i, "t_mono": float(i), "t_utc": at(i), "cpu": {},
+           "procs": {"qemu": [{"pid": QEMU_PID, "rss_kb": 1048576, "swap_kb": 0}]}} for i in range(stop + 2)],
         {"type": "end", "samples": stop + 2, "clean": True, "missed_ticks": 0}])
     write(d / "raw/capture.json", {"values": {"snapshots": snapshots, "requested_cycles": snapshots,
                                                "collector_exit_code": 0, "collector_sha256": "test"}})
-    (d / "raw/collect.log").write_text(f"{datetime.fromtimestamp(base + stop, timezone.utc):%Y-%m-%dT%H:%M:%SZ} "
-                                       f"INFO koniec: {snapshots} snimok, 0 chyb, 0 zmeskanych slotov\n")
+    # The collector's text format (vmicollect/src/log.c): milliseconds, the level padded to five characters.
+    (d / "raw/collect.log").write_text(f"{datetime.fromtimestamp(base + stop, timezone.utc):%Y-%m-%dT%H:%M:%S}.000Z "
+                                       f"INFO  koniec: {snapshots} snimok, 0 chyb, 0 zmeskanych slotov, najvacsie "
+                                       "meskanie 0.000 s, spolu 0 B\n")
     for name in ("traffic.log", "capture.log", "host_monitor.log", "domain.xml"):
         (d / name).touch()
     seal(d)
@@ -299,7 +307,7 @@ def test_builder_parameters_reach_the_audited_evidence(tmp_path):
     happened, = logs.read_json(d / "events.json")["events"]
     assert [happened[k] - base for k in ("host_start_unix", "host_started_unix", "host_stop_unix",
                                          "host_stopped_unix")] == pytest.approx([1.45, 1.5, 1.55, 1.6])
-    assert (d / "raw/collect.log").read_text().startswith(utc(101, base)[:19] + "Z ")
+    assert (d / "raw/collect.log").read_text().startswith(utc(101, base)[:19] + ".000Z ")
     # Snapshots in the default window, or after the default end, show which window the evidence claims.
     for times in ([BASE + 1.1], [base + 1 + measure_s + 1]):
         problems = logs.audit_logs(d, snapshot_times=times)["problem_counts"]
@@ -398,6 +406,34 @@ def test_failed_request_outside_event_window_is_rejected(tmp_path):
     assert {"request_failed", "journal_error_or_loss", "nginx_error_log_nonempty"} <= set(result["problem_counts"])
 
 
+WARN_LINE = "2026-01-01T00:00:03.000Z WARN  planovac: cyklus 7 trval 5.200 s (perioda 5.000 s)"
+
+
+@pytest.mark.parametrize("schema,allowed,unlisted", [
+    (3, None, True),                                   # null until G2: no warning is allowed
+    (3, [r"planovac: cyklus \d+ trval [0-9.]+ s \(perioda [0-9.]+ s\)"], False),
+    (3, ["planovac: cyklus"], True),                   # a pattern must match the whole message
+    (2, None, False),                                  # no audit bounds: warnings are recorded only
+], ids=["null", "full_match", "partial_match", "schema2"])
+def test_collector_warning_is_judged_by_the_allowed_patterns(session, schema, allowed, unlisted):
+    doc = {"schema": f"hyptcn3/collection-protocol/{schema}", "interval_s": 5}
+    if schema == 3:
+        doc["audit"] = {"lateness_max_s": .5, "cycle_ms_max": {"delta": 1500, "full": 3500},
+                        "periodicity": {"equal_spacings": 3, "min_spacing_rows": 2, "note": "test"},
+                        "warnings_allowed": allowed, "rule_closed_rows_max": None}
+    write(session / "protocol.json", doc)
+    meta = logs.read_json(session / "session.json")
+    write(session / "session.json", dict(meta, protocol_sha256=logs.digest(session / "protocol.json")))
+    with (session / "raw/collect.log").open("a") as stream:
+        stream.write(WARN_LINE + "\n")
+    seal(session)
+    result = logs.audit_logs(session)
+    message = WARN_LINE.split("WARN  ", 1)[1]
+    assert result["problems"] == (["collector_warning_unlisted:" + message] if unlisted else [])
+    assert result["tolerated"]["collector_warnings"] == int(schema == 3 and not unlisted)
+    assert result["sections"]["collector"]["warnings"] == [WARN_LINE]
+
+
 def test_snapshot_must_be_inside_traffic_phase(session):
     result = logs.audit_logs(session, snapshot_times=[BASE + 3.1])
     assert not result["accepted"] and "traffic_snapshot_coverage" in result["problem_counts"]
@@ -433,6 +469,7 @@ def test_full_collection_audit_cannot_accept_good_features_with_failed_logs(sess
     from features.tests.test_collection_contract import sample_sidecar
     from features.tests.test_coverage import data
     from safeguard.tests.test_features import sample as frame
+    from scripts.tests import boundary_sessions as bs
 
     # Fake only expensive RAM parsing. Real sidecar, window and log validators
     # plus the immutable JSON/NPZ writer are exercised together.
@@ -440,23 +477,28 @@ def test_full_collection_audit_cannot_accept_good_features_with_failed_logs(sess
              window_rows=3, min_score_coverage=.5)
     write(session / "protocol.json", p)
     meta = logs.read_json(session / "session.json")
-    meta.update(role="diagnostic", profile_sha256={}, protocol_sha256=logs.digest(session / "protocol.json"))
+    # The fields of a managed capture the audit reads (package B3), clean; the guest's after the capture too.
+    meta.update(role="diagnostic", profile_sha256={}, protocol_sha256=logs.digest(session / "protocol.json"),
+                **bs.managed_fields(p, meta["guest_before"]))
     write(session / "session.json", meta)
+    write(session / "end.json", dict(logs.read_json(session / "end.json"), guest_after=meta["guest_before"]))
     (session / "profile").mkdir()
     capture = logs.read_json(session / "raw/capture.json")
-    capture["values"].update(interval_s=p["interval_s"], full_every=p["full_every"])
+    capture["values"].update(interval_s=p["interval_s"], full_every=p["full_every"], mlock=True)
     write(session / "raw/capture.json", capture)
     frames = [frame(i, full=i == 0, predecessor=i != 0, timestamp=BASE + 1.1 + i * .1) for i in range(10)]
     result = data(frames)
     result.update(snimky=[str(i) for i in range(10)], poznamky=[[]] * 10, trvanie_s=[0.] * 10,
                   max_medzera_s=.15)
+    for quality in result["quality"]:
+        quality["process_walk"] = "next"  # The forward walk closed every process list.
     for f in frames:
         image = session / "raw" / f"frame{f.seq}.vmicd"
         image.write_bytes(b"synthetic RAM")
         side = sample_sidecar()
         side.update(seq=f.seq, timestamp_unix=f.timestamp, sched={"skipped_before": 0}, capture={"total_ms": .1})
         side["output"].update(full=f.full, sha256=logs.digest(image))
-        write(image.with_suffix(".json"), side)
+        write(image.with_suffix(".json"), bs.clean_sidecar(side, meta["domain"]))
     monkeypatch.setattr(collection, "retazec", lambda *a, **kw: result)
     seal(session)
     good = session / "audit_good.json"

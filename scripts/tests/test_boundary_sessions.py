@@ -208,15 +208,17 @@ def test_finding_and_read_error_rows(families):
 
 
 def test_rows_carry_the_quality_fields_and_float_times_of_the_extractor():
-    # features/snapshot.py: objekty_z_pohladu records nine fields, potvrd_krizove the unconfirmed cross-view
+    # features/snapshot.py: objekty_z_pohladu records eleven fields, potvrd_krizove the unconfirmed cross-view
     # differences, _retazec_cyklus the read errors and the zero fill of the frame.
     fields = {"traversals_complete", "truncated_traversals", "behavior_valid", "inconclusive", "findings",
-              "model_valid", "process_walk", "memory_patterns", "skipped_wx", "unconfirmed_findings", "read_errors",
-              "filled_zero"}
+              "model_valid", "process_walk", "process_walk_backward", "memory_patterns", "skipped_wx", "skipped_tasks",
+              "unconfirmed_findings", "read_errors", "filled_zero"}
     rows = [bs.complete_row(), bs.unclosed_row(), bs.finding_row(), bs.read_error_row()]
     assert [set(q) for q in rows] == [fields] * len(rows)
-    # A clean snapshot: the forward walk closed the process list, no pattern, no process skipped, nothing unconfirmed.
-    clean = {"process_walk": "next", "memory_patterns": [], "skipped_wx": [], "unconfirmed_findings": []}
+    # A clean snapshot: both walks closed the process list over the same tasks, no pattern, no process or task
+    # skipped, nothing unconfirmed.
+    clean = {"process_walk": "next", "process_walk_backward": {"closed": True, "agrees": True}, "memory_patterns": [],
+             "skipped_wx": [], "skipped_tasks": {"sockets": 0, "memory_patterns": 0}, "unconfirmed_findings": []}
     assert {key: bs.complete_row()[key] for key in clean} == clean
     result, _ = bs.extraction_result("types", 10, 4, t0=100, quality={3: bs.unclosed_row()})
     assert [set(q) for q in result["quality"]] == [fields] * 10
@@ -235,7 +237,7 @@ def test_session_identity_and_truthful_frames(families):
                                                                          ("role", "group", "scenario", "seed")}
     assert (meta["vm"], meta["domain"], meta["typ"], meta["cycles"]) == (None, p["domain"], "benign", p["cycles"])
     assert meta["guest_before"] == {"kernel": bs.KERNEL, "boot_id": bs.boot_id(place["group"]),
-                                    "stack_sha256": bs.STACK}
+                                    "stack_sha256": bs.STACK, "stack_manifest": bs.STACK_MANIFEST}
     assert meta["measurement_sha256"] == extra["measurement_sha256"]
     assert meta["traffic"]["seed"] == meta["seed"]  # Only the seed: the other traffic fields are placeholders.
     profile = digests(p["profile"])  # The protocol's own profile; the audit compares only with the session's copy.
@@ -260,7 +262,8 @@ def test_explicit_boot_id_reaches_every_guest_record(families):
     d = session.directory
     meta, end = (json.loads((d / name).read_text()) for name in ("session.json", "end.json"))
     assert meta["guest_before"] == end["guest_after"] == {"kernel": bs.KERNEL, "boot_id": boot,
-                                                          "stack_sha256": bs.STACK}
+                                                          "stack_sha256": bs.STACK,
+                                                          "stack_manifest": bs.STACK_MANIFEST}
     for when in ("before", "after"):
         state = json.loads((d / "guest" / f"state_{when}.json").read_text())
         assert (state["boot_id"], state["kernel"]) == (boot, bs.KERNEL)

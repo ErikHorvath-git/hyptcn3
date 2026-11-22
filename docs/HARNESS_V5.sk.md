@@ -11,6 +11,7 @@ návrh; rozpor sa zapíše do denníka odchýlok
 |---|---|---|
 | vlastník | autor práce | rozhoduje (návrh, kap. 12), spúšťa kroky so sudo, podpisuje stupne G3b a G4 |
 | vykonávateľ | Claude Code na zberovom PC („pcc“) | píše kód, spúšťa stupne, vyrába dôkazy a záznamy |
+| vedúci | Claude na vývojovom PC, z poverenia vlastníka od 2026-11-22 | píše kostry balíkov, rozhoduje otázky o návrhu, číta odoslané commity |
 | overovateľ | nezávislý čitateľ: nový agent bez kontextu vykonávateľa; pri G3b a G4 aj Claude na vývojovom PC | pokúša sa každé kritérium vyvrátiť |
 
 Vykonávateľ nikdy neoveruje vlastnú prácu. Overovateľ dostane iba návrh, tento dokument, kód
@@ -54,6 +55,11 @@ toho stupňa.
 
 Poradie je záväzné tam, kde je uvedená závislosť. Každý balík končí testami, ktoré pred
 zmenou zlyhajú a po nej prejdú, a nezávislým prečítaním.
+
+Poradie práce od 2026-11-22 (pokyn vedúceho): B1, B2, B3, B4, B5, skúška labu na VM (kap. 5,
+bod 11), B8, B6, B7, B9, B10, záznam G0. Od B4 závisí päť balíkov, preto ide hneď po B3. Strana
+labu (B5, B8) ide pred analýzou (B6, B7, B9), aby VM mohli bežať dlhú skúšku labu, kým sa píše
+kód, ktorý VM nepotrebuje. Závislosti v tabuľke toto poradie spĺňa.
 
 | Balík | Obsah | Hotové, keď | Závisí od |
 |---|---|---|---|
@@ -101,6 +107,15 @@ sú čisté na zberovom PC.
 9. **Počas zberu sa repozitár ani hostiteľ nezaťažuje** (žiadne testy, audity mimo fronty,
    prehľadávanie diskov).
 10. **Čo nebežalo, je UNVERIFIED** (HONESTY P5). Číslo bez záznamu sa do dokumentácie nepíše.
+11. **Skúška labu na VM po B5** je jediná výnimka zo stupňa G0 bez VM (návrh, kap. 10.1; denník
+    odchýlok, zápis 3). Smie sa `labctl deploy` na jednu VM a generátor prevádzky pre každý zo
+    štyroch scenárov po 10 minút, potom na pozadí dlhá skúška (hodina na scenár, s udalosťami),
+    počas ktorej sa pokračuje balíkom B8. Merajú sa metriky realizmu (kap. 5.7), priepustnosť pri
+    nasýtení a zo žurnálu hosťa periódy slučiek a reštartov (kap. 5.6). Bez zberača, bez sudo, bez
+    session a bez dát v `data/collections`. Výstup je jeden záznam stupňa `skuska` v `data/results/`
+    a jedna strana hlásenia (čo plní, čo neplní, navrhnuté hodnoty `rate`); záznam nie je dôkazom
+    žiadneho kritéria G0 ani G2. Keď lab požiadavku kap. 5.7 neplní, opravuje sa lab (B5), nie
+    požiadavka.
 
 ## 6. Nezávislé overenie
 
@@ -120,6 +135,11 @@ doložené, čo je ďalšie) a na konci každého stupňa cestou k záznamu. Zas
 - nález ukáže, že niektoré rozhodnutie z kap. 12 stojí na nepravdivom predpoklade;
 - pravidlo zastavenia kampane sa naplní.
 
+Od 2026-11-22 rozhoduje otázky o návrhu vedúci. Otázka (aj pri vyvrátenom kritériu alebo pri
+nepravdivom predpoklade) sa zapíše do `OTAZKY_VEDUCEMU.md` vedľa `STAV_PRACE.md`: jedna otázka,
+návrh odpovede a čo vykonávateľ spraví, kým odpoveď nepríde; práca pokračuje podľa toho návrhu.
+Na vlastníka sa čaká iba pri sudo, termíne práce, rozhodnutí v G3b a zmrazení v G4.
+
 ## 8. Pracovný denník
 
 `~/hyptcn3-logs/v5/STAV_PRACE.md` na zberovom PC: aktuálny balík, posledný commit, čo je
@@ -133,9 +153,10 @@ Platí od 2026-11-22 z pokynu vlastníka. Dopĺňa kap. 6 a 8; kde sa od nich l�
 ### 9.1 Modely
 
 - Hlavná relácia vykonávateľa beží na Opuse.
-- Fable sa volá iba ako agent, a to na **kostru balíka**: jeden krátky výstup na balík, najviac jedna
-  strana (ktoré súbory sa menia, v akom poradí, aké testy to doložia, čo zo zadania je sporné). Druhé
-  použitie je posúdenie verdiktu `refuted` alebo `unverifiable`, ak by oprava menila návrh.
+- **Kostru balíka** (najviac jedna strana: ktoré súbory sa menia, v akom poradí, aké testy to doložia,
+  čo zo zadania je sporné) píše od 2026-11-22 vedúci do `dokazy/<balík>/kostra/KOSTRA.md` pred
+  začatím balíka. Fable sa volá iba ako agent: na kostru, keď ju vedúci pri začatí balíka nenapísal,
+  a na posúdenie verdiktu `refuted` alebo `unverifiable`, ak by oprava menila návrh.
 - Kód, testy, behy, overenie a hlásenia robí Opus.
 
 ### 9.2 Rozpočet overenia na balík
@@ -157,8 +178,11 @@ Balík je hotový, keď platí toto a nič viac:
 ### 9.3 Denník a kontext
 
 - `STAV_PRACE.md` (kap. 8) má najviac 120 riadkov: kde sme, čo je rozpracované, čo čaká na vlastníka,
-  ďalší krok.
+  ďalší krok, a tabuľku balíkov (začiatok, koniec, hodiny relácie, nové testy, verdikt overenia, commit).
 - Podrobnosti patria do `dennik/<balík>.md` v tom istom adresári; tie sa nečítajú celé, iba cez `grep`
   alebo po úsekoch. Rovnako sa číta starý denník `dennik/DENNIK_do_2026-11-22T12Z.md`.
 - Výstupy príkazov a agentov idú do súborov; do kontextu iba posledné riadky a počty.
-- Po každom uzavretom balíku sa začína nová relácia a pokračuje sa zo `STAV_PRACE.md`.
+- Po uzavretí balíka sa nečaká: zapíše sa `STAV_PRACE.md`, hlásenie a `dennik/<balík>.md` a v tej istej
+  relácii sa začne ďalší balík v poradí z kap. 3. Kontext sa zhrnie sám; čo má prežiť zhrnutie, musí
+  byť v `STAV_PRACE.md`. Zastaví sa iba pri kroku vlastníka (kap. 7) alebo keď balík prekročí strop
+  6 hodín; dôvod sa zapíše jednou vetou do oddielu „Čaká na vlastníka“.

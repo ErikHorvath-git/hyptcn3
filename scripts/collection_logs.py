@@ -4,6 +4,11 @@
 python3 scripts/collection_logs.py SESSION [--out NEW.json]
 Exit 0 = evidence checks passed, 2 = rejected/incomplete evidence. This verdict
 does not admit a session to training: collection.py also checks RAM and features.
+
+The bounds come from the session's own protocol.json (features/audit_policy.py audit_bounds; the metadata
+section checks its hash). Every key a check reads is mandatory: a missing one fails that check (or its section),
+it never passes on a default. Each condition the audit admits instead of rejecting counts one registered
+exception (features/audit_policy.py tolerate); result["tolerated"] holds the counts of LOG_EXCEPTIONS.
 """
 import argparse
 from collections import Counter, defaultdict
@@ -18,6 +23,7 @@ import sys
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
+from features.audit_policy import audit_bounds, tolerate
 from scripts import host_monitor, traffic_log
 
 SCHEMA = "hyptcn3/collection-logs-audit/1"
@@ -37,6 +43,13 @@ EVENT_UNITS = {"zla_konfiguracia_sluzby": ("hyptcn-lab@catalog",), "restart_sluz
 # (lab/services.py). Its journal line is admitted only inside an event window, like a traceback.
 WORKER_ERROR = "worker dependency error: "
 NGINX_TIME = re.compile(r"^(\d{4}/\d\d/\d\d \d\d:\d\d:\d\d) ")
+# vmicollect/src/log.c, text format: "<UTC time with milliseconds>Z <level padded to 5> <message>"; with log.json
+# one object {"ts", "level", "msg"} per line.
+COLLECTOR_TEXT = re.compile(r"^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{3}Z (DEBUG|INFO |WARN |ERROR) (.*)$")
+SHA256 = re.compile(r"[0-9a-f]{64}")
+# The exceptions of features/audit_policy.py TOLERATED that this audit admits, in result["tolerated"].
+LOG_EXCEPTIONS = ("collector_warnings", "event_traffic_exit", "event_unit_restarts", "event_window_requests",
+                  "event_window_health_checks", "event_window_journal", "event_window_nginx_errors")
 
 
 def digest(path):
@@ -72,6 +85,29 @@ def read_json(path):
     return doc
 
 
+def collector_line(line):
+    """(level, message) of one collect.log line in either format of vmicollect/src/log.c; (None, line) otherwise."""
+    if line.startswith("{"):
+        try:
+            doc = json.loads(line)
+        except ValueError:
+            doc = None
+        if type(doc) is dict and type(doc.get("level")) is str and type(doc.get("msg")) is str:
+            return doc["level"], doc["msg"]
+        return None, line
+    match = COLLECTOR_TEXT.match(line)
+    return (match[1].strip(), match[2]) if match else (None, line)
+
+
+def qemu_unswapped(sample):
+    """The session VM's QEMU (label qemu in both layouts of collection.monitor_matches) is in this host monitor
+    sample and none of its processes has swapped memory; a sample without it proves nothing."""
+    procs = sample.get("procs")
+    entries = procs.get("qemu") if type(procs) is dict else None
+    return (type(entries) is list and bool(entries)
+            and all(type(e) is dict and type(e.get("swap_kb")) is int and e["swap_kb"] == 0 for e in entries))
+
+
 def audit_logs(directory, *, snapshot_times=()):
     directory = Path(directory).resolve()
     problems = traffic_log.Problems()
@@ -79,6 +115,13 @@ def audit_logs(directory, *, snapshot_times=()):
     # Protocol v3: [host start - 1 s, host stop done + grace] of each event. Failures inside a window
     # are expected evidence of the event; outside every window the checks stay as strict as in v2.
     windows, event_types, known_pids = [], [], {}
+    # Requests inside an event window: one exception each, counted in traffic(); traffic() and correlation()
+    # relax their checks for exactly these.
+    during = set()
+    counts = Counter()  # Exceptions admitted, by id of features/audit_policy.py TOLERATED.
+    # The session's protocol and its audit bounds (None: schema 1 or 2). Until protocol.json has been read the
+    # bounds are unknown and admit nothing.
+    protocol, limits, limits_read = {}, None, False
 
     def in_window(*times):
         return any(lo <= t <= hi for t in times for lo, hi in windows)
@@ -96,20 +139,30 @@ def audit_logs(directory, *, snapshot_times=()):
         except (OSError, EOFError, ValueError, TypeError, KeyError, IndexError, AttributeError, OverflowError) as exc:
             problems.add(name + ":unreadable", f"{type(exc).__name__}: {exc}")
 
+    def read_bounds():
+        nonlocal protocol, limits, limits_read
+        protocol = read_json(directory / "protocol.json")
+        limits, limits_read = audit_bounds(protocol), True
+        return limits
+
     def metadata():
         meta = read_json(directory / "session.json")
         end = read_json(directory / "end.json")
         check(meta.get("schema") == "hyptcn3/collection-session/2", "session_schema")
         check(end.get("schema") == "hyptcn3/collection-end/2", "end_schema")
         check(meta.get("session_id") == directory.name, "session_identity")
-        check(end.get("completed") is True and not end.get("interrupted") and not end.get("error"),
+        # capture_session writes "interrupted" always and "error" only when the capture failed.
+        check(end.get("completed") is True and end.get("interrupted") is False and "error" not in end,
               "incomplete_capture")
-        check(end.get("guest_after") == meta.get("guest_before"), "guest_identity_changed")
+        check("guest_after" in end and "guest_before" in meta and end["guest_after"] == meta["guest_before"],
+              "guest_identity_changed")
         for name in ("collector", "traffic", "monitor"):
             rc = end.get(name + "_rc", end.get(name, {}).get("rc"))
             # host_traffic exits 1 after any failed request; outside the event windows those still fail below.
-            allowed = (0, 1) if name == "traffic" and "events" in meta else (0,)
-            check(type(rc) is int and rc in allowed, "child_exit", f"{name}:{rc}")
+            if name == "traffic" and type(rc) is int and rc == 1 and meta.get("events"):
+                tolerate(counts, "event_traffic_exit")
+                continue
+            check(type(rc) is int and rc == 0, "child_exit", f"{name}:{rc}")
         start, stop = finite(end["measure_start_unix"]), finite(end["measure_end_unix"])
         check(start < stop, "invalid_measure_interval")
         check(all(start <= finite(t) <= stop for t in snapshot_times), "snapshot_outside_measure")
@@ -132,10 +185,11 @@ def audit_logs(directory, *, snapshot_times=()):
                 path = local_file(directory, name)
                 check(path.stat().st_size == expected["size"] and digest(path) == expected["sha256"],
                       "evidence_hash", name)
-                if "lines" in expected or "terminated" in expected:
+                # write_logs_manifest records lines and termination of every .jsonl and .log file.
+                if name.endswith((".jsonl", ".log")) or "lines" in expected or "terminated" in expected:
                     data = path.read_bytes()
-                    check(data.count(b"\n") == expected["lines"] and (not data or data.endswith(b"\n"))
-                          == expected["terminated"], "evidence_lines", name)
+                    check(data.count(b"\n") == expected.get("lines") and (not data or data.endswith(b"\n"))
+                          == expected.get("terminated"), "evidence_lines", name)
                     check(not data or data.endswith(b"\n"), "torn_evidence", name)
                 verified += 1
             except (OSError, ValueError, KeyError, TypeError) as exc:
@@ -159,6 +213,7 @@ def audit_logs(directory, *, snapshot_times=()):
         restarted = {unit for kind in event_types for unit in EVENT_UNITS.get(kind, ())}
         for unit in REQUIRED_UNITS:
             if unit in restarted:
+                tolerate(counts, "event_unit_restarts")
                 continue
             a, b = before["units"].get(unit, {}), after["units"].get(unit, {})
             check(all(k in a and k in b and a[k] == b[k] for k in
@@ -208,15 +263,15 @@ def audit_logs(directory, *, snapshot_times=()):
             problems.add("traffic", problem)
         header = records[0]
         intervals, _ = traffic_log.read_jsonl(directory / "traffic_intervals.jsonl", traffic_log.INTERVAL_SCHEMA)
-        check(intervals[0].get("config") == header.get("config") and
-              intervals[0].get("start_unix") == header.get("start_unix"), "traffic_headers_disagree")
+        check("config" in header and "start_unix" in header and intervals[0].get("config") == header["config"]
+              and intervals[0].get("start_unix") == header["start_unix"], "traffic_headers_disagree")
         phase_fields = lambda rows: [{k: v for k, v in r.items() if k not in ("schema", "n")}
                                      for r in rows if r.get("type") == "phase"]
         check(phase_fields(records) == phase_fields(intervals), "traffic_phase_times_disagree")
         expected = dict(meta["traffic"], seed=meta["seed"], initial_phase="warmup")
         for key in ("target", "profile", "seed", "workers", "burst", "catalog_share", "write_share",
                     "summary_interval_s", "initial_phase"):
-            check(header["config"].get(key) == expected[key], "traffic_config", key)
+            check(key in header["config"] and header["config"][key] == expected[key], "traffic_config", key)
         check([m["phase"] for m in summary["phase_markers"]] == ["measure", "post"], "traffic_phases")
         bounds = {m["phase"]: unix(m["t_utc"]) for m in summary["phase_markers"]}
         check(abs(bounds["measure"] - finite(end["measure_start_unix"])) <= 1 and
@@ -230,12 +285,17 @@ def audit_logs(directory, *, snapshot_times=()):
             check(0 <= finite(row["t_start_mono"]) <= finite(row["t_end_mono"]) and finite(row["duration_ms"]) >= 0,
                   "request_timing", row.get("rid"))
             check(unix(row["t_start_utc"]) <= unix(row["t_end_utc"]), "request_wall_clock", row.get("rid"))
-            check(row["outcome"] == "ok" and type(row["status"]) is int and 200 <= row["status"] < 300
-                  or in_window(unix(row["t_start_utc"]), unix(row["t_end_utc"])), "request_failed", row.get("rid"))
+            if in_window(unix(row["t_start_utc"]), unix(row["t_end_utc"])):
+                tolerate(counts, "event_window_requests")  # May fail; nginx and services are not correlated.
+                during.add(row.get("rid"))
+                continue
+            check(row["outcome"] == "ok" and type(row["status"]) is int and 200 <= row["status"] < 300,
+                  "request_failed", row.get("rid"))
         status = read_json(directory / "traffic.json")
         before = read_json(directory / "traffic_before.json")
-        check(status.get("final") is True and not status.get("logging_error") and not status.get("worker_errors"),
-              "traffic_status_incomplete")
+        # host_traffic.py writes both fields in every status: logging_error null, worker_errors 0 when clean.
+        check(status.get("final") is True and "logging_error" in status and not status["logging_error"]
+              and status.get("worker_errors") == 0, "traffic_status_incomplete")
         check(status.get("session_id") == directory.name and status.get("run_id") == header["run_id"] and
               before.get("run_id") == header["run_id"] and before["started_at"] == status["started_at"],
               "traffic_status_identity")
@@ -246,7 +306,6 @@ def audit_logs(directory, *, snapshot_times=()):
 
     def correlation(contents, requests):
         expected = {r["rid"]: r for r in requests}
-        during = {rid for rid, r in expected.items() if in_window(unix(r["t_start_utc"]), unix(r["t_end_utc"]))}
         matched, tolerated = Counter(), Counter()
         for line in contents["session:nginx-access.jsonl"].splitlines():
             row = json.loads(line)
@@ -255,6 +314,7 @@ def audit_logs(directory, *, snapshot_times=()):
             if (rid == "" and row["method"] == "GET" and row["uri"] == "/healthz"
                     and in_window(finite(row["msec"]))):
                 tolerated["event_health_checks"] += 1  # lab/udalosti.py polls health with no request id.
+                tolerate(counts, "event_window_health_checks")
                 continue
             if rid not in expected:
                 problems.add("nginx_unknown_request", rid)
@@ -277,7 +337,7 @@ def audit_logs(directory, *, snapshot_times=()):
             row = json.loads(line)
             pre[row["rid"]].append(row["status"])
         for row in smoke["values"]["checks"]:
-            check(row["status"] == row.get("expected"), "preflight_failed", row["rid"])
+            check("expected" in row and row["status"] == row["expected"], "preflight_failed", row["rid"])
             check(pre[row["rid"]] == [row["status"]], "preflight_correlation", row["rid"])
         pids = {name: known_pids[name] for name in ("auth", "catalog", "orders")}
         service, catalog_calls = Counter(), Counter()
@@ -293,6 +353,7 @@ def audit_logs(directory, *, snapshot_times=()):
             elif "Traceback (most recent call last)" in line or WORKER_ERROR in line:
                 if windows and in_window(unix(line.split(" ", 1)[0])):
                     tolerated["worker_errors" if WORKER_ERROR in line else "journal_tracebacks"] += 1
+                    tolerate(counts, "event_window_journal")
                 else:
                     problems.add("journal_error_or_loss", line[:180])
 
@@ -303,7 +364,7 @@ def audit_logs(directory, *, snapshot_times=()):
             name = "auth" if route.startswith("/api/auth/") else "catalog" if route.startswith("/api/catalog") else "orders"
             if route == "/":
                 continue  # nginx serves this route without an API call.
-            if rid in during:
+            if rid in during:  # Counted as an exception in traffic().
                 tolerated["requests_in_events"] += 1
                 tolerated["failed_in_events"] += req["outcome"] != "ok" or not 200 <= req["status"] < 300
                 continue
@@ -322,6 +383,7 @@ def audit_logs(directory, *, snapshot_times=()):
             stamp = m and datetime.strptime(m[1], "%Y/%m/%d %H:%M:%S").replace(tzinfo=timezone.utc).timestamp()
             if stamp and windows and in_window(stamp, stamp + 1):
                 tolerated["nginx_error_lines"] += 1
+                tolerate(counts, "event_window_nginx_errors")
             elif line.strip():
                 problems.add("nginx_error_log_nonempty", line[:180])
         return {"requests": len(expected), "nginx_matched_once": sum(matched[rid] == 1 for rid in expected),
@@ -340,6 +402,8 @@ def audit_logs(directory, *, snapshot_times=()):
               records[-1].get("samples") == len(samples) and bool(samples), "monitor_end_counts")
         check(all(b["i"] > a["i"] and finite(b["t_mono"]) > finite(a["t_mono"])
                   and unix(b["t_utc"]) > unix(a["t_utc"]) for a, b in zip(samples, samples[1:])), "monitor_order")
+        # Proposal 6.2: swapped QEMU memory stalls a full snapshot (missed slots of campaigns v4 and v4c).
+        check(all(qemu_unswapped(sample) for sample in samples), "qemu_swap")
         return summary
 
     def collector():
@@ -356,10 +420,21 @@ def audit_logs(directory, *, snapshot_times=()):
             check(errors == skipped == 0, "collector_errors_or_missed_slots")
         check(capture["collector_exit_code"] == 0, "collector_exit_code")
         check(capture["collector_sha256"] == meta["collector_sha256"], "collector_hash")
-        errors = [line for line in log.splitlines() if re.search(r"\sERROR\s", line)]
+        lines = [(line, *collector_line(line)) for line in log.splitlines()]
+        errors = [line for line, level, _ in lines if level == "ERROR" or re.search(r"\sERROR\s", line)]
         check(not errors, "collector_error_log")
-        return {"sha256": digest(directory / "raw/collect.log"),
-                "warnings": [line for line in log.splitlines() if re.search(r"\sWARN\s", line)],
+        warnings = [(line, message) for line, level, message in lines
+                    if level == "WARN" or level is None and re.search(r"\sWARN\s", line)]
+        # Proposal 6.2: a warning no pattern of warnings_allowed matches in full rejects (null: none matches).
+        # Protocols of schema 1 and 2 have no bounds: their warnings are recorded only.
+        if limits is not None or not limits_read:
+            allowed = limits["warnings_allowed"] if limits else None
+            for _, message in warnings:
+                if any(re.fullmatch(pattern, message) for pattern in allowed or ()):
+                    tolerate(counts, "collector_warnings")
+                else:
+                    problems.add("collector_warning_unlisted", message[:180])
+        return {"sha256": digest(directory / "raw/collect.log"), "warnings": [line for line, _ in warnings],
                 "errors": errors, "end": ends[-1] if ends else None}
 
     def events():
@@ -369,6 +444,10 @@ def audit_logs(directory, *, snapshot_times=()):
         planned = [{k: r[k] for k in ("type", "class", "start_s", "duration_s")} for r in doc["events"]]
         check(planned == meta["events"], "events_differ_from_plan")
         for record in doc["events"]:
+            check(record.get("executed") is True, "event_not_executed", record["type"])
+            # The predicate of the event type fills effect (package B5): {"ok": bool, "predicate": str, ...}.
+            effect = record.get("effect")
+            check(type(effect) is dict and effect.get("ok") is True, "event_without_effect", record["type"])
             if "host_start_unix" not in record:
                 problems.add("event_not_started", record["type"])
                 continue
@@ -378,25 +457,29 @@ def audit_logs(directory, *, snapshot_times=()):
             windows.append((finite(record["host_start_unix"]) - 1,
                             finite(record["host_stopped_unix"]) + finite(meta["event_grace_s"])))
             event_types.append(record["type"])
-            # The deployed guest script must be the one hashed at session start.
+            # The deployed guest script must be the one hashed at session start: a SHA-256 on both sides.
             script = meta["source_sha256"].get("lab/udalosti.py")
-            check(all(record.get(step, {}).get("script_sha256") == script for step in ("start", "stop")),
-                  "event_script_differs", record["type"])
+            check(type(script) is str and SHA256.fullmatch(script) is not None
+                  and all(type(record.get(step)) is dict and record[step].get("script_sha256") == script
+                          for step in ("start", "stop")), "event_script_differs", record["type"])
             for state in (record.get("start", {}), record["stop"]):
                 for name in ("auth", "catalog", "orders"):
                     pid = state.get("units", {}).get("hyptcn-lab@" + name, {}).get("ExecMainPID")
                     if pid and pid != "0":
                         known_pids.setdefault(name, set()).add(str(pid))
-        return {"events": len(doc["events"]), "executed": sum(r["executed"] is True for r in doc["events"]),
+        return {"events": len(doc["events"]), "executed": sum(r.get("executed") is True for r in doc["events"]),
                 "windows": windows, "types": event_types}
 
+    section("audit_bounds", read_bounds)
     section("metadata", metadata)
     section("manifest", manifest)
     try:
         planned = "events" in read_json(directory / "session.json")
     except (OSError, ValueError):
         planned = False  # The metadata section has already recorded why.
-    if planned:
+    # A protocol with events plans them for each of its sessions (collection.run_session): a session.json
+    # without them fails the events section instead of skipping it.
+    if planned or "events" in protocol:
         section("events", events)
     section("guest", guest)
     contents, requests = {}, []
@@ -417,6 +500,7 @@ def audit_logs(directory, *, snapshot_times=()):
     section("monitor", monitor)
     section("collector", collector)
     result.update(problems=problems.result(), problem_counts=dict(problems.counts), accepted=not problems.counts,
+                  tolerated={name: counts[name] for name in LOG_EXCEPTIONS},
                   note="Evidence only. RAM, feature coverage and model validation require separate checks.")
     return result
 
@@ -429,7 +513,8 @@ def main(argv=None):
     result = audit_logs(args.directory)
     result["date"] = datetime.now(timezone.utc).isoformat()
     result["auditor_sha256"] = {str(p.relative_to(ROOT)): digest(p) for p in
-                               (Path(__file__), ROOT / "scripts/traffic_log.py", ROOT / "scripts/host_monitor.py")}
+                               (Path(__file__), ROOT / "scripts/traffic_log.py", ROOT / "scripts/host_monitor.py",
+                                ROOT / "features/audit_policy.py")}
     if args.out:
         with args.out.open("x") as stream:
             json.dump(result, stream, indent=2, ensure_ascii=False, allow_nan=False)

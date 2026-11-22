@@ -335,7 +335,8 @@ def _zaznam_indexu(cesta_auditu, sha):
             "session": str(meta.resolve()), "session_sha256": _sha(meta), "scenario": m["scenario"],
             "seed": m["seed"], "start": float(casy[0]), "end": float(casy[-1]),
             "audit": str(Path(cesta_auditu).resolve()), "audit_sha256": _sha(cesta_auditu),
-            "features": str(Path(v["features"]).resolve()), "features_sha256": _sha(v["features"])}
+            "features": str(Path(v["features"]).resolve()), "features_sha256": _sha(v["features"]),
+            "log_audit": "repeated"}  # kazda session testu ma svoje logy, stavba audit logov zopakuje (B3)
 
 
 def _index_s(k, nahrady, ciel):
@@ -526,7 +527,9 @@ def test_rola_mimo_protokolu_na_audite(rodina, pripad, tmp_path):
     n, w, f = p["cycles"], p["window_rows"], p["full_every"]
     rel = _relacia_mimo(tmp_path, p, cesta, pripad)
     v = rel.a.values
-    assert (rel.a.code, v["accepted"], v["reasons"], v["score_coverage"]) == (2, False, [ROLA_MIMO], None)
+    # Od balika B3 je chybajuca rola aj chybajucim klucom session.json (audit cita kazdy kluc povinne).
+    chyba = ["missing key: session.json:role"] if pripad == "missing" else []
+    assert (rel.a.code, v["accepted"], v["reasons"], v["score_coverage"]) == (2, False, chyba + [ROLA_MIMO], None)
     assert (v["snapshots"], v["windows"]) == (n, bs.window_count(n, w, f)) == (n, ROZHODNUTIA[rodina]["k0"][1])
     verdikt = v.get("acceptance")
     assert type(verdikt) is dict
@@ -714,6 +717,8 @@ def _protokol_brany(tmp_path, schema, kluc, navyse):
     doc["schema"] = SCHEMY[schema]
     if schema == 1:
         del doc["quality_policy"]  # schema 1 politiku nenesie (legacy)
+    if schema != 3:  # oddiely auditu a vynimiek nesie iba schema 3 (balik B3)
+        del doc["audit"], doc["exceptions"]
     if kluc == "cycles":
         doc["pilot_cycles"] = 128  # dlhsi pilot: jeho cisty podiel (112 zo 128) je nad podielom session
     dlzka = doc[kluc]

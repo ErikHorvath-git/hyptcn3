@@ -19,7 +19,7 @@ RULE = {"invalid_rows": {"max": 2, "traversals": ["processes"]}}
 OPEN = {"truncated_traversals": ["processes"], "read_errors": 0, "filled_zero": 0}
 GOOD = {"truncated_traversals": [], "read_errors": 0, "filled_zero": 0}
 RECORD = dict(GOOD, model_valid=True, behavior_valid=True, traversals_complete=True, inconclusive=["text_integrity"],
-              findings=[])
+              findings=[], process_walk="next")
 LAYOUT = {"bin_bytes": 16777216, "page_size": 4096, "bins": [[0, 4096]],
           "regions": [{"gpa": 0, "bytes": 16777216}], "memsize": 16777216, "vcpus": 1}
 # One chain of 8 rows (a full snapshot at seq 0): windows of 2 rows end at seq 2..7, an invalid row at s silences

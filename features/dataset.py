@@ -35,7 +35,6 @@ def build(audits, protocol, protocol_sha):
         environments.add((m["guest_before"]["stack_sha256"], m["collector_sha256"]))
         if v.get("session_sha256") != sha(meta_path):
             raise ValueError("session metadata changed since audit")
-        require_log_audit(m, v)
         if m["typ"] != "benign" or m["role"] not in ROLES:
             raise ValueError("pilot/attack data must not enter the benign corpus")
         identity = m["session_id"]
@@ -67,6 +66,8 @@ def build(audits, protocol, protocol_sha):
             raise ValueError("feature quality policy differs from corpus protocol")
         # The acceptance is decided again from the archive and must equal the audit record (features/acceptance.py).
         require_accepted(data, protocol, directory.name, m["role"], v)
+        # So is the log audit where the session still keeps its logs; the row says whether (features/quality.py).
+        log_audit = require_log_audit(m, v, snapshot_times=data["casy"])
         layouts.add(json.dumps(v["layout"], sort_keys=True))
         extractors.add(json.dumps(v["extractor_sha256"], sort_keys=True))
         records.append({"id": identity, "role": m["role"], "group": m["group"], "vm": m.get("vm"),
@@ -78,7 +79,8 @@ def build(audits, protocol, protocol_sha):
                         "scenario": m["scenario"], "seed": m["seed"],
                         "start": float(data["casy"][0]), "end": float(data["casy"][-1]),
                         "audit": str(Path(path).resolve()), "audit_sha256": sha(path),
-                        "features": str(feature_path.resolve()), "features_sha256": v["features_sha256"]})
+                        "features": str(feature_path.resolve()), "features_sha256": v["features_sha256"],
+                        "log_audit": log_audit})
         if "events" in protocol:
             # Protokol v4 (krok B): udalosti su sucastou normalu vo vsetkych rolach;
             # ich zaznam ide do korpusu pre E2' (tcn.eval udalosti --role).

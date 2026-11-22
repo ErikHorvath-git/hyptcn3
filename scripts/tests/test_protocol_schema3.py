@@ -55,10 +55,16 @@ def worst_by_chains(rows, window_rows, full_every, count):
                if sum(split) == count and all(k <= n for n, k in zip(chains, split)))
 
 
+def sections(interval_s):
+    """The audit and exceptions sections schema 3 requires since package B3 (bounds scaled to the interval)."""
+    from scripts.tests.boundary_sessions import audit_sections
+    return audit_sections(interval_s)
+
+
 def schema3(tmp_path, **changes):
     """The v4 protocol under schema 3; no v5 protocol file exists until the proposal is approved."""
     doc = json.loads(V4.read_text())
-    doc.update(schema=SCHEMA + "3", **changes)
+    doc.update(schema=SCHEMA + "3", **sections(doc["interval_s"]), **changes)
     path = tmp_path / "p.json"
     path.write_text(json.dumps(doc))
     return path
@@ -142,6 +148,8 @@ def smallest(schema, window_rows, full_every, cycles, pilot_cycles, gate=None, r
            "window_rows": window_rows, "full_every": full_every, "cycles": cycles, "pilot_cycles": pilot_cycles}
     if schema > 1:
         doc["quality_policy"] = BEHAVIOR
+    if schema == 3:
+        doc.update(sections(doc["interval_s"]))
     if gate is not None:
         doc["min_score_coverage"] = gate
     if rule is not None:
@@ -309,6 +317,8 @@ def family(tmp_path, schema, gate, **changes):
            "invalid_rows": {"max": f["max"], "traversals": ["processes"]}}
     if schema == 1:
         del doc["quality_policy"]
+    if schema == 3:
+        doc.update(sections(doc["interval_s"]))
     path = tmp_path / f"s{schema}.json"
     path.write_text(json.dumps(doc))
     return path, doc

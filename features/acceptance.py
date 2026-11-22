@@ -1,11 +1,15 @@
 """One acceptance decision for a collected session.
 
 A session is accepted for a role the protocol assigns when it has the assigned number of rows in an unbroken
-sequence, every invalid row is covered by the rule of that role (the protocol's invalid_rows rule; none for the
-pilot), no integrity finding is recorded and its scorable windows reach the protocol's coverage gate. _verdict(),
-reached through decide(), judge() and protocol_reachability(), is the only place that turns these facts into a
-verdict. The session audit records the verdict; the protocol loader, the corpus build, the event index, training,
-the comparison methods and the pilot gate ask the same function instead of repeating a part of the rule:
+sequence sampled on the protocol's grid (no gap between row times above max_gap_s, none of zero or less, and a
+span that differs from (rows - 1) * interval_s by at most one interval), every invalid row is covered by the rule
+of that role (the protocol's invalid_rows rule; none for the pilot), no integrity finding is recorded and its
+scorable windows reach the protocol's coverage gate. A protocol of schema 3 adds the bounds of its audit section
+(features/audit_policy.py): at most rule_closed_rows_max rows whose process list a parser rule closed, and no
+periodic pattern among the flagged rows. _verdict(), reached through decide(), judge() and
+protocol_reachability(), is the only place that turns these facts into a verdict. The session audit records the
+verdict; the protocol loader, the corpus build, the event index, training, the comparison methods and the pilot
+gate ask the same function instead of repeating a part of the rule:
 
     session_facts()          what an extraction result or a feature archive shows
     decide()                 protocol + role + facts -> verdict
@@ -13,21 +17,29 @@ the comparison methods and the pilot gate ask the same function instead of repea
     require_recorded()       an audit record still means acceptance (the archive is not opened)
     require_accepted()       the same, and the archive itself yields the recorded verdict
     protocol_reachability()  whether a faultless session, and the worst one the rule tolerates, can be accepted
+    periodic_run()           the longest run of one spacing between flagged rows (the audit records it always)
 
-What no reader of an archive can derive, and what therefore stays with the audit alone: the sidecars and logs,
-the sampling period and cadence, the gaps between sidecar timestamps and the image hashes.
+The time gap and the sampling period are decided here from the row times of the archive. What no reader of an
+archive can derive, and what therefore stays with the audit alone: the sidecars, the logs, the cadence of full
+snapshots and the image hashes.
 """
 import json
+import math
 from types import SimpleNamespace
 
 import numpy as np
 
+from .audit_policy import audit_bounds
 from .quality import (BEHAVIOR_POLICY, NO_TOLERANCE, coverage_gate, invalid_rows_rule, protocol_policy,
                       row_rule_failure, valid_for)
 
 SCHEMA = "hyptcn3/session-acceptance/1"
-FACT_KEYS = ("snapshots", "sequence_contiguous", "invalid_rows", "integrity_findings", "windows")
+FACT_KEYS = ("snapshots", "sequence_contiguous", "invalid_rows", "integrity_findings", "windows",
+             "rule_closed_seq", "smallest_gap_s", "largest_gap_s", "span_s")
 ROW_KEYS = ("seq", "truncated_traversals", "read_errors", "filled_zero")
+# Process lists that a parser rule closed instead of the forward walk (guestparse/view.py processes, the quality
+# field process_walk): the backward walk (prev), a cut before a stale tail node (tail), the parts meeting (meet).
+RULE_CLOSED_WALKS = ("prev", "tail", "meet")
 
 
 def _length(protocol, key):
@@ -62,6 +74,21 @@ def _count(value):
     return type(value) is int and value >= 0
 
 
+def _seconds(value):
+    """A time in seconds as JSON states it: a finite int or float (never a bool)."""
+    return type(value) in (int, float) and math.isfinite(value)
+
+
+def _grid(protocol):
+    """The sampling grid the timing rules read: (interval_s, max_gap_s), both positive and finite."""
+    interval, gap = protocol.get("interval_s"), protocol.get("max_gap_s")
+    if not _seconds(interval) or interval <= 0:
+        raise ValueError("invalid interval_s")
+    if not _seconds(gap) or gap <= 0:
+        raise ValueError("invalid max_gap_s")
+    return interval, gap
+
+
 def _check_facts(facts):
     if (type(facts) is not dict or set(facts) != set(FACT_KEYS) or not _count(facts["snapshots"])
             or type(facts["sequence_contiguous"]) is not bool or type(facts["invalid_rows"]) is not list
@@ -73,11 +100,47 @@ def _check_facts(facts):
         if type(row) is not dict or set(row) != set(ROW_KEYS) or not _count(row["seq"]) or row["seq"] in seen:
             raise ValueError("invalid session facts")
         seen.add(row["seq"])
+    closed, rows = facts["rule_closed_seq"], facts["snapshots"]
+    if (type(closed) is not list or len(closed) > rows or not all(_count(seq) for seq in closed)
+            or closed != sorted(set(closed))):
+        raise ValueError("invalid session facts")
+    # Gaps exist between two rows and more, the span from one row on; a time JSON cannot state is no fact.
+    smallest, largest, span = facts["smallest_gap_s"], facts["largest_gap_s"], facts["span_s"]
+    if (rows < 2 and (smallest, largest) != (None, None)
+            or rows >= 2 and not (_seconds(smallest) and _seconds(largest) and smallest <= largest)
+            or (span is not None if rows < 1 else not _seconds(span))):
+        raise ValueError("invalid session facts")
+
+
+def periodic_run(seqs, min_spacing):
+    """The longest run of equal spacings between consecutive flagged rows: (run, spacing), (0, None) without one.
+
+    `seqs` are the flagged rows in any order. Only a spacing of at least `min_spacing` rows counts: adjacent rows
+    (spacing 1) are a burst, which the invalid_rows rule and the cap of rule-closed rows judge, not periodicity.
+    On runs of equal length the first one is reported.
+    """
+    rows = sorted(set(seqs))
+    best, run, last = (0, None), 0, None
+    for step in (b - a for a, b in zip(rows, rows[1:])):
+        if step < min_spacing:
+            run, last = 0, None
+            continue
+        run, last = (run + 1 if step == last else 1), step
+        if run > best[0]:
+            best = (run, step)
+    return best
+
+
+def flagged_seq(facts):
+    """Rows the periodicity rule reads: the invalid rows and the rows a parser rule closed (v4c gave both)."""
+    return sorted({row["seq"] for row in facts["invalid_rows"]} | set(facts["rule_closed_seq"]))
 
 
 def _verdict(protocol, role, assigned, rule, known, facts):
     policy = protocol_policy(protocol)
     gate = coverage_gate(protocol)
+    interval, max_gap = _grid(protocol)
+    bounds = audit_bounds(protocol)
     _check_facts(facts)
     reasons, codes = [], []
 
@@ -92,10 +155,22 @@ def _verdict(protocol, role, assigned, rule, known, facts):
         reject("rows", "snapshot count differs from assigned protocol")
     if not facts["sequence_contiguous"]:
         reject("sequence", "sequence must start at zero and be contiguous")
+    if facts["smallest_gap_s"] is not None and (facts["smallest_gap_s"] <= 0 or facts["largest_gap_s"] > max_gap):
+        reject("timing:gap", "timestamp gap")
+    if facts["span_s"] is not None and abs(facts["span_s"] - (facts["snapshots"] - 1) * interval) > interval:
+        reject("timing:period", "sampling period differs from protocol")
     bad = [(row["seq"], row) for row in facts["invalid_rows"]]
     failure = row_rule_failure(bad, rule)
     if failure:
         reject("invalid_rows:" + failure, "incomplete model inputs under " + policy)
+    if bounds is not None:
+        # Until G3b the cap is null: the count is recorded by the audit and never a reason (audit_policy).
+        cap = bounds["rule_closed_rows_max"]
+        if type(cap) is int and len(facts["rule_closed_seq"]) > cap:
+            reject("rule_closed", "rows closed by a parser rule above the cap")
+        periodicity = bounds["periodicity"]
+        if periodic_run(flagged_seq(facts), periodicity["min_spacing_rows"])[0] >= periodicity["equal_spacings"]:
+            reject("periodicity", "periodic flagged rows")
     if facts["integrity_findings"]:
         reject("integrity", "integrity findings require review before benign admission")
     # Coverage is the share of the assigned rows that end a scorable window; without an assignment there is none.
@@ -113,9 +188,10 @@ def decide(protocol, role, facts, recorded_rows=None):
 
     `facts` is what session_facts() returns, `recorded_rows` the length a diagnostic session recorded for itself.
     The protocol is read as it is and never completed, so a protocol taken from a corpus index or a bundle
-    manifest gives the verdict its file gave. A malformed protocol (rule, policy, gate, the length the role
-    needs) and malformed facts raise ValueError; everything else is a verdict, also for a session the protocol
-    does not accept. Its reasons keep one order: role, rows, sequence, invalid_rows, integrity, coverage.
+    manifest gives the verdict its file gave. A malformed protocol (rule, policy, gate, grid, audit bounds, the
+    length the role needs) and malformed facts raise ValueError; everything else is a verdict, also for a session
+    the protocol does not accept. Its reasons keep one order: role, rows, sequence, timing:gap, timing:period,
+    invalid_rows, rule_closed, periodicity, integrity, coverage.
     """
     assigned, rule, known = assignment(protocol, role, recorded_rows)
     return _verdict(protocol, role, assigned, rule, known, facts)
@@ -132,9 +208,21 @@ def _rows(data):
         raise ValueError("invalid sequence, validity or quality types")
     if not len(seq) == len(valid) == len(quality):
         raise ValueError("rows, validity and quality differ in length")
-    if any(type(q) is not dict or type(q.get("findings")) is not list for q in quality):
+    # Without process_walk a row could hide a list closed by a parser rule: such a record is not read.
+    if any(type(q) is not dict or type(q.get("findings")) is not list or "process_walk" not in q for q in quality):
         raise ValueError("invalid quality record")
     return seq.tolist(), valid.tolist(), quality
+
+
+def _times(data, rows):
+    """Row times of an extraction result or a loaded feature archive as float64, one per row."""
+    try:
+        times = np.asarray(data["casy"], dtype=np.float64)
+    except (TypeError, ValueError):
+        raise ValueError("invalid row times") from None
+    if times.shape != (rows,) or not np.isfinite(times).all():
+        raise ValueError("invalid row times")
+    return times
 
 
 def session_facts(data, protocol, session, assigned=None):
@@ -142,16 +230,21 @@ def session_facts(data, protocol, session, assigned=None):
 
     The facts are plain JSON values, so the audit can record them and a later reader can decide from the record
     again. An invalid row carries exactly the quality fields the row rule reads; a field the quality record
-    lacks is None and is never tolerated. Windows are counted by the code that feeds the model: under the
-    behavioral policy by safeguard.features.WindowBuffer (with the coverage report of features.coverage), under
-    the legacy policy by features.windows.okna (no report). The report is made against the assigned length
-    when the session fits into it and against the observed span otherwise; such a session is rejected by its
-    row count or its role, never by an exception. Data that cannot be read as frames stays an error.
+    lacks is None and is never tolerated. Rows whose process list a parser rule closed (quality process_walk
+    prev, tail or meet) are listed by seq; the smallest and largest difference of consecutive row times (None for
+    one row) and the span from the first to the last row time are what the timing rules read. Windows are
+    counted by the code that feeds the model: under the behavioral policy by safeguard.features.WindowBuffer (with
+    the coverage report of features.coverage), under the legacy policy by features.windows.okna (no report). The
+    report is made against the assigned length when the session fits into it and against the observed span
+    otherwise; such a session is rejected by its row count or its role, never by an exception. Data that cannot
+    be read as frames stays an error.
     """
     policy = protocol_policy(protocol)
     if (str(data["quality_policy"]) if "quality_policy" in data else "") != policy:
         raise ValueError("extraction quality policy differs from protocol")
     seq, valid, quality = _rows(data)
+    times = _times(data, len(seq))
+    gaps = np.diff(times)
     try:
         mask = [valid_for(q, policy) for q in quality]
     except KeyError:
@@ -176,7 +269,11 @@ def session_facts(data, protocol, session, assigned=None):
     except TypeError:
         raise ValueError("invalid quality record") from None
     facts = {"snapshots": len(seq), "sequence_contiguous": seq == list(range(len(seq))), "invalid_rows": invalid,
-             "integrity_findings": sum(len(q["findings"]) for q in quality), "windows": len(windows)}
+             "integrity_findings": sum(len(q["findings"]) for q in quality), "windows": len(windows),
+             "rule_closed_seq": sorted({s for s, q in zip(seq, quality) if q["process_walk"] in RULE_CLOSED_WALKS}),
+             "smallest_gap_s": float(gaps.min()) if len(gaps) else None,
+             "largest_gap_s": float(gaps.max()) if len(gaps) else None,
+             "span_s": float(times[-1] - times[0])}
     return facts, windows, report
 
 
@@ -313,7 +410,9 @@ def protocol_reachability(protocol):
 
     Cases: a faultless pilot and a faultless session of `cycles` rows ("clean"), and when the protocol has an
     invalid_rows rule also the session of `cycles` rows with `max` tolerable rows where they cost the most
-    ("worst"). Each entry holds key, case, rows, invalid_seq, windows, score_coverage, gate, accepted and codes.
+    ("worst"). Every case is sampled exactly on the grid (each gap one interval, the span (rows - 1) intervals)
+    and has no row closed by a parser rule. Each entry holds key, case, rows, invalid_seq, windows,
+    score_coverage, gate, accepted and codes.
     """
     rule = invalid_rows_rule(protocol)
     cases = [("pilot_cycles", "clean", NO_TOLERANCE, 0), ("cycles", "clean", rule, 0)]
@@ -323,10 +422,14 @@ def protocol_reachability(protocol):
     for key, case, role_rule, count in cases:
         length = _length(protocol, key)
         invalid = worst_invalid_rows(length, _length(protocol, "window_rows"), _length(protocol, "full_every"), count)
+        windows = synthetic_windows(protocol, length, invalid)  # It refuses an interval_s that is no grid.
+        interval = protocol["interval_s"]
         facts = {"snapshots": length, "sequence_contiguous": True, "integrity_findings": 0,
                  "invalid_rows": [{"seq": seq, "truncated_traversals": [str(rule["traversals"][0])],
                                    "read_errors": 0, "filled_zero": 0} for seq in invalid],
-                 "windows": synthetic_windows(protocol, length, invalid)}
+                 "windows": windows, "rule_closed_seq": [],
+                 "smallest_gap_s": interval if length > 1 else None, "largest_gap_s": interval if length > 1 else None,
+                 "span_s": (length - 1) * interval}
         verdict = _verdict(protocol, None, length, role_rule, True, facts)
         out.append({"key": key, "case": case, "rows": length, "invalid_seq": invalid, "windows": verdict["windows"],
                     "score_coverage": verdict["score_coverage"], "gate": verdict["gate"],

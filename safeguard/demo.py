@@ -71,7 +71,7 @@ def create_corpus(output, *, layout=None, rows=96, window_rows=8):
             times = (1700000000 + (2 * role_i + scenario_i) * (rows + 20) * 5 + t * 5).astype(float)
             quality = [{"model_valid": True, "behavior_valid": True, "traversals_complete": True,
                         "inconclusive": ["text_integrity"], "findings": [],
-                        "read_errors": 0, "filled_zero": 0} for _ in t]
+                        "read_errors": 0, "filled_zero": 0, "process_walk": "next"} for _ in t]
             archive = save(directory / "features.npz", {
                 "matica": matrix, "perbin": local, "seq": t, "casy": times,
                 "valid": np.ones(rows, dtype=bool), "biny": [b[0] for b in layout["bins"]],

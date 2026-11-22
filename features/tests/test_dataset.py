@@ -11,7 +11,7 @@ from features.snapshot import MENA
 LAYOUT = {"bin_bytes": 16777216, "page_size": 4096, "bins": [[0, 4096]],
           "regions": [{"gpa": 0, "bytes": 16777216}], "memsize": 16777216, "vcpus": 1}
 GOOD = {"model_valid": True, "behavior_valid": True, "traversals_complete": True, "truncated_traversals": [],
-        "inconclusive": ["text_integrity"], "findings": [], "read_errors": 0, "filled_zero": 0}
+        "inconclusive": ["text_integrity"], "findings": [], "read_errors": 0, "filled_zero": 0, "process_walk": "next"}
 ROW = dict.fromkeys(MENA, 0.) | {
     "mem_changed_ratio": .1, "mem_bins_active": 1, "mem_changed_max": .1, "mem_changed_p95": .1,
     "mem_entropy_mean": 4, "mem_entropy_max": 4, "mem_zero_ratio": .2, "proc_total": 20, "proc_user": 15,
@@ -254,3 +254,31 @@ def test_listed_invalid_row_with_a_cause_outside_the_rule_stays_out_of_the_corpu
     invalidate(path, cause)
     with pytest.raises(ValueError, match="cause the protocol does not tolerate"):
         dataset.build(audits, tolerant, "protocol-test")
+
+
+@pytest.mark.parametrize("case", ["repeated", "rewritten", "reclaimed"])
+def test_log_audit_is_repeated_where_the_session_keeps_its_logs(tmp_path, case):
+    """B2 deferred point 6: on a session that keeps its logs the corpus build runs the log audit again, so a record
+    whose logs section was rewritten is refused; a session whose raw/ went to the archive is trusted, and the index
+    row says which of the two happened."""
+    from scripts import collection
+    from scripts.tests import boundary_sessions as bs
+    path = bs.write_protocol(tmp_path / "protocol.json", bs.family("S2G", bs.profile_dir(tmp_path / "profile")))
+    p = collection.protocol(path)
+    place = bs.places(p, "train")[0]
+    session = bs.build_session(tmp_path / "sessions", p, path, place, session_id="train-0",
+                               base=bs.time_base(p, "train", 0))
+    audit = bs.audit(session, p)
+    assert audit.code == 0, audit.values["reasons"]
+    if case == "rewritten":
+        report = json.loads(audit.path.read_text())
+        report["values"]["logs"]["sections"]["monitor"]["samples"] += 1
+        audit.path.write_text(json.dumps(report))
+        with pytest.raises(ValueError, match="^log audit differs from the record$"):
+            dataset.build([audit.path], p, dataset.sha(path))
+        return
+    if case == "reclaimed":  # scripts/collection_archive.py: raw/ becomes a link to the verified archive copy
+        (session.directory / "raw").rename(tmp_path / "archive-raw")
+        (session.directory / "raw").symlink_to(tmp_path / "archive-raw", target_is_directory=True)
+    row, = dataset.build([audit.path], p, dataset.sha(path))["sessions"]
+    assert row["log_audit"] == ("repeated" if case == "repeated" else "not repeated")

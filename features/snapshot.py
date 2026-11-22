@@ -301,6 +301,11 @@ def objekty_z_pohladu(view):
     zvyskove riziko z L1 v docs/LIMITACIE.md (exec vedlajsieho vlakna procesu
     na konci zoznamu).
 
+    Kvalita riadku nesie aj vysledok prechodu zoznamu procesov dozadu
+    (quality["process_walk_backward"]) a pocty uloh, ktore prechod soketov a
+    vzorov pamate preskocil (quality["skipped_tasks"]); navrh protokolu v5,
+    kap. 6.2. Oboje sa iba zapisuje: platnost riadku ani vektor nemeni.
+
     Krizove rozdiely su tu este nepotvrdene; `stav["krizove_kluce"]` ich
     nesie do dalsej snimky a potvrdzuje ich vektor_snimky (potvrd_krizove).
     """
@@ -374,11 +379,20 @@ def objekty_z_pohladu(view):
                 and not (set(c["summary"]["inconclusive"]) - {"text_integrity"}),
             # Smer, ktorym sa zoznam procesov uzavrel (view.processes).
             "process_walk": p.get("walk"),
+            # Prechod dozadu pri kazdom riadku {closed, agrees} (view.processes); iba zapis.
+            # None, ked sa zoznam vobec neprechadzal (profilu chyba offset alebo init_task).
+            "process_walk_backward": dict(p["backward"]) if "backward" in p else None,
             # Procesy s W+X strankami alebo memfd (pid, comm, druh).
             "memory_patterns": [{k: v for k, v in x.items() if k in ("pid", "comm", "kind")}
                                 for x in vz["patterns"]],
             # Procesy vynechane z W+X (pid, comm, dovod); ich stranky v proc_wx chybaju.
             "skipped_wx": [dict(x) for x in vz.get("skipped_wx", [])],
+            # 'skipped_tasks' z view.sockets a view.memory_patterns: ulohy, ktore prechod
+            # preskocil (task_struct, subory alebo tabulky stranok sa nedali prelozit), takze
+            # ich sokety a stranky v poctoch chybaju a riadok ostava platny. Iba zapis;
+            # None, ked prechod pocet nevratil.
+            "skipped_tasks": {"sockets": s.get("skipped_tasks"),
+                              "memory_patterns": vz.get("skipped_tasks")},
         },
     }
     hodnoty = {

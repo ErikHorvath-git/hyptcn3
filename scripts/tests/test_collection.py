@@ -40,9 +40,12 @@ def test_protocol_rejects_unreachable_score_coverage(tmp_path):
 
 
 def test_unprivileged_run_fails_before_mutating(monkeypatch):
+    from scripts import audit_selftest
+    # A valid self-test record is asked first (package B3, tested in test_audit_selftest.py); here it is given.
+    monkeypatch.setattr(audit_selftest, "require_selftest", lambda protocol_path, directory=None: None)
     monkeypatch.setattr("os.geteuid", lambda: 1000)
     with pytest.raises(ValueError, match="sudo"):
-        run_session(SimpleNamespace(), protocol(DEFAULT))
+        run_session(SimpleNamespace(protocol=DEFAULT), protocol(DEFAULT))
 
 
 def test_v1_cannot_silently_change_input_policy(tmp_path):
@@ -61,7 +64,7 @@ def test_pilot_gate_distinguishes_input_loss_from_integrity_gap(primary_complete
     p = protocol(DEFAULT)
     matrix = [[0.] * len(MENA) for _ in range(p["pilot_cycles"])]
     quality = [{"model_valid": True, "behavior_valid": True, "inconclusive": [], "findings": [],
-                "traversals_complete": True, "read_errors": 0, "filled_zero": 0}
+                "traversals_complete": True, "read_errors": 0, "filled_zero": 0, "process_walk": "next"}
                for _ in matrix]
     for i, row in enumerate(matrix):
         row[-2:] = [i != 0, i % p["full_every"] == 0]
