@@ -3,11 +3,14 @@
 Original project code. Artifacts carry diagnostic markers through every layer.
 """
 import json
+import math
 from pathlib import Path
 
 import numpy as np
 
-from features.archive import save
+from features.acceptance import judge
+from features.archive import load, save
+from features.coverage import ideal_windows
 from features.snapshot import MENA
 from .bundle import digest, load_bundle
 from .runtime import replay_archive
@@ -29,10 +32,16 @@ def create_corpus(output, *, layout=None, rows=96, window_rows=8):
                   "regions": [{"gpa": 0, "bytes": 50331648}],
                   "memsize": 50331648, "vcpus": 2}
     roles = ("train", "dev", "calibration", "test_benign")
+    # Each session has rows rows; a full snapshot starts a new chain every full_every rows.
+    full_every = 64
+    # Round gate at or below the coverage the generated sessions reach; that coverage itself where rounding gives 0.
+    reached = ideal_windows(rows, window_rows, full_every) / rows
     protocol = {"schema": "hyptcn3/collection-protocol/2", "name": "synthetic-mechanics-only",
                 "quality_policy": "behavioral-inputs-v1",
                 "diagnostic": True, "interval_s": 5, "max_gap_s": 7.5,
                 "window_rows": window_rows, "bin_bytes": layout["bin_bytes"],
+                "cycles": rows, "full_every": full_every, "stride": 1,
+                "min_score_coverage": math.floor(10 * reached) / 10 or reached,
                 "roles": dict.fromkeys(roles, 1), "scenarios": {"quiet": {}, "steady": {}}}
     protocol_path = output / "protocol.json"
     write_json(protocol_path, protocol)
@@ -51,7 +60,7 @@ def create_corpus(output, *, layout=None, rows=96, window_rows=8):
             matrix[:, 8:18] = 20 + scenario_i * 10 + rng.integers(0, 5, (rows, 10))
             predecessor, full_column = MENA.index("ma_predchodcu"), MENA.index("je_plna")
             matrix[:, predecessor] = 1
-            full = (t % 64 == 0)
+            full = (t % full_every == 0)
             matrix[full, predecessor] = 0
             matrix[full, full_column] = 1
             local = np.zeros((rows, len(layout["bins"]), 4))
@@ -66,7 +75,7 @@ def create_corpus(output, *, layout=None, rows=96, window_rows=8):
             archive = save(directory / "features.npz", {
                 "matica": matrix, "perbin": local, "seq": t, "casy": times,
                 "valid": np.ones(rows, dtype=bool), "biny": [b[0] for b in layout["bins"]],
-                "chain_ids": [f"{name}-chain-{i // 64}" for i in t],
+                "chain_ids": [f"{name}-chain-{i // full_every}" for i in t],
                 "snimky": [f"synthetic-{i}" for i in t], "trvanie_s": np.zeros(rows),
                 "poznamky": [["synthetic diagnostic input"] for _ in t],
                 "quality": quality, "quality_policy": "behavioral-inputs-v1",
@@ -79,9 +88,13 @@ def create_corpus(output, *, layout=None, rows=96, window_rows=8):
                     "collector_sha256": "synthetic-no-collector", "diagnostic": True}
             session = directory / "session.json"
             write_json(session, meta)
+            verdict, _, _ = judge(load(archive), protocol, name, role)
             audit = directory / "audit.json"
             write_json(audit, {"schema": "hyptcn3/collection-audit/1", "values": {
                 "accepted": True, "diagnostic": True, "reasons": [], "role": role,
+                "snapshots": verdict["snapshots"], "windows": verdict["windows"],
+                "score_coverage": verdict["score_coverage"],
+                "quality": {"tolerated_invalid_seq": verdict["tolerated_invalid_seq"]}, "acceptance": verdict,
                 "protocol_sha256": protocol_sha, "session_sha256": digest(session),
                 "features": str(archive), "features_sha256": digest(archive),
                 "layout": layout, "extractor_sha256": {"synthetic": "no-real-extraction"}}})

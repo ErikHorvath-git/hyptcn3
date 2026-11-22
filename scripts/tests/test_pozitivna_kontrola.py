@@ -93,7 +93,7 @@ def _riadky(zle):
     return {"seq": list(range(6)), "quality": quality, "valid": [i not in zle for i in range(6)]}
 
 
-PROCESY = {"truncated_traversals": ["processes"]}
+PROCESY = {"truncated_traversals": ["processes"], "read_errors": 0, "filled_zero": 0}
 
 
 def test_tolerancia_iba_pre_neuzavrete_procesy_a_do_limitu():
@@ -105,6 +105,7 @@ def test_tolerancia_iba_pre_neuzavrete_procesy_a_do_limitu():
     assert collection.tolerated_invalid_rows(_riadky({1: {"truncated_traversals": ["sockets"]}}), p) is None
     assert collection.tolerated_invalid_rows(_riadky({1: dict(PROCESY, read_errors=1)}), p) is None
     assert collection.tolerated_invalid_rows(_riadky({1: {"truncated_traversals": []}}), p) is None
+    assert collection.tolerated_invalid_rows(_riadky({1: {"truncated_traversals": ["processes"]}}), p) is None
     bez = {k: v for k, v in p.items() if k != "invalid_rows"}
     assert collection.tolerated_invalid_rows(_riadky({1: PROCESY}), bez) is None
 

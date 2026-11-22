@@ -442,7 +442,8 @@ def test_ended_before_measurement_needs_proof_of_no_ram(tmp_path):
     assert not c.ended_before_measurement(session)  # Contradiction: keep it for review.
 
 
-def event_audit(tmp_path, name, role="test_events", group="v3-test_events-1", boot="b1", accepted=True):
+def event_audit(tmp_path, name, p, role="test_events", group="v3-test_events-1", boot="b1", accepted=True):
+    from features.acceptance import decide
     session = tmp_path / name
     session.mkdir()
     (session / "events.json").write_text('{"events": []}\n')
@@ -455,6 +456,11 @@ def event_audit(tmp_path, name, role="test_events", group="v3-test_events-1", bo
     values = {"accepted": accepted, "protocol_sha256": "p", "session_dir": str(session),
               "session_sha256": digest(session / "session.json"), "features": str(session / "f.npz"),
               "features_sha256": digest(session / "f.npz"), "logs": logs, "extractor_sha256": {}}
+    facts = {"snapshots": 2, "sequence_contiguous": True, "invalid_rows": [], "integrity_findings": 0, "windows": 1}
+    verdict = decide(p, role, facts)
+    values.update(reasons=[], role=role, snapshots=verdict["snapshots"], windows=verdict["windows"],
+                  score_coverage=verdict["score_coverage"],
+                  quality={"tolerated_invalid_seq": verdict["tolerated_invalid_seq"]}, acceptance=verdict)
     write_new(session / "audit.json", {"values": values})
     return session / "audit.json"
 
@@ -462,16 +468,17 @@ def event_audit(tmp_path, name, role="test_events", group="v3-test_events-1", bo
 def test_test_only_protocol_gets_an_event_index_not_a_corpus(tmp_path, monkeypatch):
     import features.archive
     monkeypatch.setattr(features.archive, "load", lambda path: {"casy": [10.0, 15.0]})
-    p = {"roles": {"test_events": 1}, "scenarios": {"quiet": {}, "steady": {}}}
-    reports = [event_audit(tmp_path, "s1"), event_audit(tmp_path, "s2")]
+    p = {"schema": "hyptcn3/collection-protocol/2", "quality_policy": "behavioral-inputs-v1", "cycles": 2,
+         "min_score_coverage": 0.5, "roles": {"test_events": 1}, "scenarios": {"quiet": {}, "steady": {}}}
+    reports = [event_audit(tmp_path, "s1", p), event_audit(tmp_path, "s2", p)]
     doc = c.event_index(reports, p, "p")
     assert doc["complete"] and [r["id"] for r in doc["sessions"]] == ["s1", "s2"]
     assert doc["sessions"][0]["start"] == 10.0 and doc["sessions"][0]["events_sha256"]
     assert not c.event_index(reports[:1], p, "p")["complete"]
     with pytest.raises(ValueError, match="boot/group"):
-        c.event_index([*reports, event_audit(tmp_path, "s3", boot="b2")], p, "p")
+        c.event_index([*reports, event_audit(tmp_path, "s3", p, boot="b2")], p, "p")
     with pytest.raises(ValueError, match="unaccepted"):
-        c.event_index([event_audit(tmp_path, "s4", accepted=False)], p, "p")
+        c.event_index([event_audit(tmp_path, "s4", p, accepted=False)], p, "p")
 
 
 def test_single_vm_campaign_replaces_a_rejected_session_only_under_a_protocol_rule(lab):

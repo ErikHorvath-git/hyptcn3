@@ -2,7 +2,8 @@
 
 Vykonávací dokument k [NAVRH_PROTOKOL_V5.sk.md](NAVRH_PROTOKOL_V5.sk.md). Návrh hovorí, **čo**
 má platiť a prečo; tento dokument hovorí, **ako** sa to stavia a potvrdzuje. Pri rozpore platí
-návrh; rozpor sa zapíše do denníka odchýlok.
+návrh; rozpor sa zapíše do denníka odchýlok
+([ODCHYLKY_V5.sk.md](ODCHYLKY_V5.sk.md)).
 
 ## 1. Roly
 
@@ -124,3 +125,40 @@ doložené, čo je ďalšie) a na konci každého stupňa cestou k záznamu. Zas
 `~/hyptcn3-logs/v5/STAV_PRACE.md` na zberovom PC: aktuálny balík, posledný commit, čo je
 overené, čo čaká na vlastníka, otvorené otázky. Vykonávateľ ho aktualizuje po každom kroku
 a číta na začiatku každej relácie, aby práca neprestala pri strate kontextu.
+
+## 9. Rozpočet práce
+
+Platí od 2026-11-22 z pokynu vlastníka. Dopĺňa kap. 6 a 8; kde sa od nich líši, platí táto kapitola.
+
+### 9.1 Modely
+
+- Hlavná relácia vykonávateľa beží na Opuse.
+- Fable sa volá iba ako agent, a to na **kostru balíka**: jeden krátky výstup na balík, najviac jedna
+  strana (ktoré súbory sa menia, v akom poradí, aké testy to doložia, čo zo zadania je sporné). Druhé
+  použitie je posúdenie verdiktu `refuted` alebo `unverifiable`, ak by oprava menila návrh.
+- Kód, testy, behy, overenie a hlásenia robí Opus.
+
+### 9.2 Rozpočet overenia na balík
+
+Balík je hotový, keď platí toto a nič viac:
+
+1. testy balíka pred zmenou zlyhajú a po nej prejdú (stĺpec „Hotové, keď“ v kap. 3);
+2. plná sada testov a kontrola tvrdení sú čisté;
+3. **jedno** nezávislé overenie novým agentom proti stĺpcu „Hotové, keď“ (kap. 6); nálezy `must_fix` sa
+   opravia a ten istý agent alebo druhý nový agent potvrdí opravu. Tým overenie končí.
+
+- Kazenie kódu (mutanty) najviac jedno kolo na balík a iba nad jadrom zmeny. Preživšie varianty sa
+  zapíšu do `odlozene.md` balíka s jednou vetou a neotvárajú ďalšie kolo.
+- Žiadne panely, doplnky plánu ani ďalšie kolá bez pokynu vlastníka. Sporné miesto návrhu sa zapíše do
+  hlásenia a pokračuje sa podľa najbližšieho čítania návrhu.
+- Orientačný strop: jeden balík najviac 6 hodín práce relácie. Po prekročení nasleduje krátke hlásenie,
+  čo chýba.
+
+### 9.3 Denník a kontext
+
+- `STAV_PRACE.md` (kap. 8) má najviac 120 riadkov: kde sme, čo je rozpracované, čo čaká na vlastníka,
+  ďalší krok.
+- Podrobnosti patria do `dennik/<balík>.md` v tom istom adresári; tie sa nečítajú celé, iba cez `grep`
+  alebo po úsekoch. Rovnako sa číta starý denník `dennik/DENNIK_do_2026-11-22T12Z.md`.
+- Výstupy príkazov a agentov idú do súborov; do kontextu iba posledné riadky a počty.
+- Po každom uzavretom balíku sa začína nová relácia a pokračuje sa zo `STAV_PRACE.md`.

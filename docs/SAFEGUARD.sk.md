@@ -158,8 +158,11 @@ python3 -m safeguard inspect --bundle data/models/server-v2
 bežný tréning odmietne. Audit, ktorého `extractor_sha256` sa líši od súčasného
 kódu `features/` a `guestparse/`, tréning tiež odmietne (`stale extractor
 implementation`); surové dáta treba znovu auditovať
-([KONTROLA_ZBERU.sk.md](KONTROLA_ZBERU.sk.md)). `--diagnostic` je výslovný
-režim skúšania mechaniky; nenahrádza splnenie podmienok finálneho korpusu.
+([KONTROLA_ZBERU.sk.md](KONTROLA_ZBERU.sk.md)). Tréning odmietne aj audit bez uloženého
+verdiktu prijatia (`values.acceptance`) a audit, ktorého verdikt sa líši od rozhodnutia
+`features/acceptance.py` nad uloženými faktami alebo session neprijíma; roly `train`,
+`dev` a `calibration` pred fitovaním rozhodne znova aj z archívu príznakov. `--diagnostic`
+je výslovný režim skúšania mechaniky; nenahrádza splnenie podmienok finálneho korpusu.
 
 **Konečné prehratie uložených dát:**
 
@@ -199,10 +202,12 @@ audit ten riadok uviedol ani či balík vznikol z korpusu tejto session. Tolerov
 riadok zruší okno aj hlasy pravidla k z n; alarm modelu, ktorý trval cez taký riadok,
 sa po novom naplnení okna a hlasov počíta ako ďalšia alarmová udalosť. Schéma
 `status.json` sa nezmenila a stav zapísaný starším kódom pole `tolerated_invalid_rows`
-nemá. To isté pravidlo (`features/quality.py`) používa audit session, stavba korpusu,
-tréning aj základné metódy `tcn/porovnanie.py` vrátane ich prehratia
-(`python3 -m tcn.porovnanie replay` rozhoduje o `ok` rovnako, chybu čítania archívu
-a chybné pravidlo však nezachytáva a končí výnimkou). Prehratie surových snímok
+nemá. To isté pravidlo (`features/quality.py`) uplatňuje rozhodnutie o prijatí session
+(`features/acceptance.py`), ktoré používa audit session, stavba korpusu, index udalostí
+kampane, tréning aj základné metódy `tcn/porovnanie.py`; pilotu a session s rolou, ktorú
+protokol nepriraďuje, netoleruje žiadny neplatný riadok. Základné metódy pravidlo uplatňujú
+aj pri svojom prehratí (`python3 -m tcn.porovnanie replay` rozhoduje o `ok` rovnako, chybu
+čítania archívu a chybné pravidlo však nezachytáva a končí výnimkou). Prehratie surových snímok
 (`--snapshots`), `watch` ani `run` pravidlo neuplatňujú: každá chyba vstupu tam
 znamená `ok=false`.
 

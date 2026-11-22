@@ -75,7 +75,8 @@ import torch
 from torch import nn
 
 from features.archive import load as load_archive
-from features.quality import accepted_invalid_rows, invalid_rows_rule, tolerated_input_errors
+from features.acceptance import require_accepted
+from features.quality import invalid_rows_rule, tolerated_input_errors
 from safeguard.bundle import digest
 from safeguard.features import (GLOBAL_NAMES, LOCAL_NAMES, FeatureNormalizer, WindowBuffer,
                                 arrays, check_frame, feature_contract, frames_from_archive)
@@ -126,13 +127,14 @@ def nacitaj_role(korpus, *, diagnostic=False):
     for zaznam in zaznamy:
         if zaznam["role"] == "test_benign":
             continue
-        snimky = list(frames_from_archive(load_archive(zaznam["features"]), zaznam["id"]))
+        archiv = load_archive(zaznam["features"])
+        snimky = list(frames_from_archive(archiv, zaznam["id"]))
         if not snimky or snimky[0].timestamp != zaznam["start"] or snimky[-1].timestamp != zaznam["end"]:
             raise ValueError("casy archivu sa lisia od indexu korpusu")
         audit = json.loads(Path(zaznam["audit"]).read_text())["values"]
-        # Neplatne riadky iba tak, ako ich prijal audit (pravidlo invalid_rows) - ta ista kontrola ako train_bundle.
-        accepted_invalid_rows([s.seq for s in snimky], [s.valid for s in snimky],
-                              [s.quality for s in snimky], audit, protokol)
+        # Relacia vstupuje iba tak, ako ju prijal audit: prijatie sa rozhodne znova z archivu a musi sa zhodovat
+        # so zaznamom (features/acceptance.py) - ta ista kontrola ako train_bundle.
+        require_accepted(archiv, protokol, zaznam["id"], zaznam["role"], audit)
         if kontrakt is None:
             kontrakt = feature_contract(snimky[0], window_rows, max_gap)
         if snimky[0].layout != audit["layout"]:

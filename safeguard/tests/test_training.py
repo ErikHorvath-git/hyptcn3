@@ -8,6 +8,7 @@ import pytest
 import torch
 
 from features.archive import load, save
+from features.acceptance import judge
 from safeguard.bundle import digest, load_bundle
 from safeguard.features import GLOBAL_NAMES, MENA, arrays, frames_from_archive
 
@@ -24,9 +25,12 @@ def write_json(path, value):
 def make_corpus(directory, session_schema="hyptcn3/collection-session/1"):
     """All four explicit roles with checkable, labeled synthetic provenance."""
     directory.mkdir(parents=True, exist_ok=True)
+    rows = 48
+    # One chain per session, full snapshot only at seq 0: ideal 40 of 48 windows.
     protocol = {"schema": "hyptcn3/collection-protocol/2", "window_rows": 8,
                 "quality_policy": "behavioral-inputs-v1",
                 "max_gap_s": 1.5, "interval_s": 1,
+                "cycles": rows, "full_every": rows, "stride": 1, "min_score_coverage": 0.8,
                 "roles": {role: 1 for role in ("train", "dev", "calibration", "test_benign")},
                 "scenarios": {"quiet": {}, "busy": {}}}
     protocol_path = directory / "protocol.json"
@@ -41,7 +45,6 @@ def make_corpus(directory, session_schema="hyptcn3/collection-session/1"):
             location = directory / name
             location.mkdir()
             rng = np.random.default_rng(10 * role_index + scenario_index)
-            rows = 48
             matrix = rng.normal(1 + scenario_index, 0.1, size=(rows, len(MENA)))
             matrix[:, G:] = 0
             matrix[1:, -2] = 1
@@ -69,7 +72,11 @@ def make_corpus(directory, session_schema="hyptcn3/collection-session/1"):
                         "protocol_sha256": protocol_hash, "collector_sha256": "synthetic-collector"}
             meta_path, audit_path = location / "session.json", location / "audit.json"
             write_json(meta_path, metadata)
+            verdict, _, _ = judge(load(feature_path), protocol, name, role)
             values = {"accepted": True, "reasons": [], "role": role,
+                      "snapshots": verdict["snapshots"], "windows": verdict["windows"],
+                      "score_coverage": verdict["score_coverage"],
+                      "quality": {"tolerated_invalid_seq": verdict["tolerated_invalid_seq"]}, "acceptance": verdict,
                       "protocol_sha256": protocol_hash, "session_sha256": digest(meta_path),
                       "features": str(feature_path), "features_sha256": digest(feature_path),
                       "layout": layout, "extractor_sha256": {"fixture": "synthetic"}, "diagnostic": True}

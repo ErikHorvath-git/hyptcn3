@@ -9,9 +9,10 @@ import torch
 from features.archive import load
 from safeguard.bundle import load_bundle
 from safeguard.cli import main
-from safeguard.demo import smoke
+from safeguard.demo import create_corpus, smoke
 from safeguard.features import frames_from_archive
 from safeguard.runtime import Detector, replay_archive
+from safeguard.training import validate_index
 
 
 @pytest.fixture(scope="module")
@@ -98,3 +99,14 @@ def test_status_exposes_failed_collector_even_if_detector_drained(tmp_path, caps
                                                     "stop_reason": "disk_reserve_reached"}))
     assert main(["status", "--out", str(tmp_path)]) == 2
     assert json.loads(capsys.readouterr().out)["stop_reason"] == "disk_reserve_reached"
+
+
+def test_demo_corpus_gate_stays_at_or_below_what_its_sessions_reach(tmp_path):
+    # Default sizes: 80 windows of 96 rows, the gate rounded down to tenths.
+    index = create_corpus(tmp_path / "default")
+    assert json.loads(index.read_text())["protocol_config"]["min_score_coverage"] == 8 / 10
+    validate_index(index, diagnostic=True)
+    # Eleven rows give one window of ten; rounding alone would make the gate zero, which no protocol may state.
+    index = create_corpus(tmp_path / "short", rows=11, window_rows=10)
+    assert json.loads(index.read_text())["protocol_config"]["min_score_coverage"] == 1 / 11
+    validate_index(index, diagnostic=True)

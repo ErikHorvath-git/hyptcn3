@@ -28,11 +28,32 @@ def protocol_policy(protocol):
         if "quality_policy" in protocol:
             raise ValueError("quality policy changes require protocol version 2")
         return LEGACY_POLICY
-    # Version 3 only adds a load-time check of the acceptance rule (scripts/collection.py).
+    # Version 3 must state min_score_coverage (coverage_gate) and may only carry an invalid_rows rule whose
+    # worst case still reaches that gate (features/acceptance.py, protocol_reachability).
     if (schema in ("hyptcn3/collection-protocol/2", "hyptcn3/collection-protocol/3")
             and protocol.get("quality_policy") == BEHAVIOR_POLICY):
         return BEHAVIOR_POLICY
     raise ValueError("unsupported collection protocol/quality policy")
+
+
+def coverage_gate(protocol):
+    """The protocol's minimum score coverage; every comparison of a coverage with the gate reads it here.
+
+    Protocol versions 1 and 2 may omit the key and then mean .85; version 3 must state it. A boolean, a NaN and
+    a value outside (0, 1] are refused, also when the protocol reaches this reader without the loader. The one
+    exception is the campaign report (scripts/campaign_report.py), which never imports the extractor: it reads
+    the key itself and falls back to its own .85.
+    """
+    if type(protocol) is not dict:
+        raise ValueError("invalid minimum score coverage")
+    if "min_score_coverage" not in protocol:
+        if protocol.get("schema") == "hyptcn3/collection-protocol/3":
+            raise ValueError("protocol schema 3 requires min_score_coverage")
+        return .85
+    gate = protocol["min_score_coverage"]
+    if type(gate) not in (int, float) or not 0 < gate <= 1:
+        raise ValueError("invalid minimum score coverage")
+    return gate
 
 
 def require_log_audit(metadata, values):
@@ -75,49 +96,48 @@ def invalid_rows_rule(protocol):
     return r
 
 
+# Resolved rule of a session whose role gets no tolerance at all (the pilot, a role the protocol does not assign).
+NO_TOLERANCE = False
+
+
+def row_rule_failure(bad, rule):
+    """Why the invalid rows are outside the rule: "no_tolerance", "no_rule", "over_max" or "cause"; None when covered.
+
+    `bad` holds one (seq, quality) pair per invalid row. `rule` is the session's resolved rule: the object
+    invalid_rows_rule() returned, None for a protocol without a rule, NO_TOLERANCE for a role that gets none.
+    A row is covered only when its quality names nothing but tolerated open traversals and states zero read
+    errors and zero filled bytes as integers; a missing or differently typed field is not a tolerable row.
+    """
+    if not bad:
+        return None
+    if rule is NO_TOLERANCE:
+        return "no_tolerance"
+    if rule is None:
+        return "no_rule"
+    if len(bad) > rule["max"]:
+        return "over_max"
+    allowed = set(rule["traversals"])
+    for _, q in bad:
+        names = q.get("truncated_traversals") if type(q) is dict else None
+        if (type(names) is not list or not names or not set(map(str, names)) <= allowed
+                or type(q.get("read_errors")) is not int or q["read_errors"]
+                or type(q.get("filled_zero")) is not int or q["filled_zero"]):
+            return "cause"
+    return None
+
+
+def tolerated_rows(bad, rule):
+    """Seq of the invalid rows when the rule covers all of them ([] when there are none), else None."""
+    return None if row_rule_failure(bad, rule) else [seq for seq, _ in bad]
+
+
 def tolerated_invalid_rows(result, p):
     """Seq of invalid rows the protocol tolerates, [] when all are valid, None when not tolerated."""
     rule = invalid_rows_rule(p)
     if not len(result["seq"]) == len(result["quality"]) == len(result["valid"]):
         raise ValueError("rows, validity and quality differ in length")
-    bad = [(seq, q) for seq, q, good in zip(result["seq"], result["quality"], result["valid"]) if not good]
-    if not bad:
-        return []
-    if rule is None or len(bad) > rule["max"]:
-        return None
-    allowed = set(rule["traversals"])
-    for _, q in bad:
-        names = q.get("truncated_traversals") if type(q) is dict else None
-        if (type(names) is not list or not names or not set(map(str, names)) <= allowed
-                or q.get("read_errors") or q.get("filled_zero")):
-            return None
-    return [seq for seq, _ in bad]
-
-
-def accepted_invalid_rows(seq, valid, quality, audit_values, protocol):
-    """Seq of the invalid rows in the archive of an accepted session; ValueError when the rule does not cover them.
-
-    Corpus building, training and the comparison methods read accepted archives
-    through this one check, so each of them admits what the audit admitted under
-    the protocol's invalid_rows rule and nothing else: the audit must list every
-    invalid row, their number must fit the rule and each must have a cause the
-    rule names. A malformed rule is refused even when no row is invalid.
-    """
-    rule = invalid_rows_rule(protocol)
-    if not len(seq) == len(valid) == len(quality):
-        raise ValueError("rows, validity and quality differ in length")
-    invalid = [int(s) for s, good in zip(seq, valid) if not good]
-    if not invalid:
-        return []
-    report = audit_values.get("quality") if type(audit_values) is dict else None
-    listed = report.get("tolerated_invalid_seq") if type(report) is dict else None
-    if type(listed) is not list or any(type(s) is not int for s in listed) or set(invalid) - set(listed):
-        raise ValueError("incomplete features in accepted audit")
-    if rule is None or len(invalid) > rule["max"]:
-        raise ValueError("more invalid rows than the protocol tolerates")
-    if tolerated_invalid_rows({"seq": seq, "valid": valid, "quality": quality}, protocol) is None:
-        raise ValueError("invalid rows have a cause the protocol does not tolerate")
-    return invalid
+    return tolerated_rows([(seq, q) for seq, q, good in zip(result["seq"], result["quality"], result["valid"])
+                           if not good], rule)
 
 
 def tolerated_input_errors(rows, protocol):

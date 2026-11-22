@@ -86,9 +86,13 @@ def test_pilot_gate_distinguishes_input_loss_from_integrity_gap(primary_complete
               "chain_ids": [str(i // p["full_every"]) for i in range(len(matrix))],
               "layout": {"bin_bytes": 16777216, "page_size": 4096, "bins": [[0, 1]],
                          "regions": [{"gpa": 0, "bytes": 4096}], "memsize": 4096, "vcpus": 2}}
-    _, windows, coverage, reasons, report = analyze_windows(result, p, "synthetic-pilot")
-    assert not reasons if primary_complete and not integrity_finding else reasons
-    assert (coverage >= p["min_score_coverage"]) is primary_complete
+    _, windows, verdict, report = analyze_windows(result, p, "synthetic-pilot", "pilot")
+    assert verdict["accepted"] is (primary_complete and not integrity_finding)
+    assert not verdict["reasons"] if primary_complete and not integrity_finding else verdict["reasons"]
+    assert verdict["codes"] == (["invalid_rows:no_tolerance"] * (not primary_complete)
+                                + ["integrity"] * integrity_finding + ["coverage"] * (not primary_complete))
+    assert verdict["score_coverage"] == len(windows) / p["pilot_cycles"]
+    assert (verdict["score_coverage"] >= p["min_score_coverage"]) is primary_complete
     assert report["integrity_inconclusive_rows"]["process_cross_view"] == 2
     assert report["legacy_valid_rows"] == len(matrix) - 2
     assert report["integrity_finding_rows"] == int(integrity_finding)

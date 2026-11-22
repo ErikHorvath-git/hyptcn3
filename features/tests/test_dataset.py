@@ -1,18 +1,60 @@
 import json
+from pathlib import Path
 
+import numpy as np
 import pytest
 
 from features import archive, dataset
-from features.tests.test_collection_contract import archive_result
+from features.acceptance import judge
+from features.snapshot import MENA
+
+LAYOUT = {"bin_bytes": 16777216, "page_size": 4096, "bins": [[0, 4096]],
+          "regions": [{"gpa": 0, "bytes": 16777216}], "memsize": 16777216, "vcpus": 1}
+GOOD = {"model_valid": True, "behavior_valid": True, "traversals_complete": True, "truncated_traversals": [],
+        "inconclusive": ["text_integrity"], "findings": [], "read_errors": 0, "filled_zero": 0}
+ROW = dict.fromkeys(MENA, 0.) | {
+    "mem_changed_ratio": .1, "mem_bins_active": 1, "mem_changed_max": .1, "mem_changed_p95": .1,
+    "mem_entropy_mean": 4, "mem_entropy_max": 4, "mem_zero_ratio": .2, "proc_total": 20, "proc_user": 15,
+    "proc_kernel": 5, "mod_total": 10, "sock_total": 4, "sock_listen": 1, "sock_estab": 3, "ma_predchodcu": 1}
+INVALID = 1  # seq of the row the tampering tests make invalid
+
+
+def extraction(number, invalid=None):
+    """Extraction result of one session: a full snapshot at seq 0, then one chain of deltas every interval_s.
+
+    invalid: {seq: cause} of rows with incomplete behavioral inputs; like features.snapshot, the row after
+    such a row has no predecessor and no differences.
+    """
+    invalid, p = invalid or {}, protocol()
+    rows = p["cycles"]
+    matrix = np.tile([ROW[name] for name in MENA], (rows, 1))
+    matrix[0, MENA.index("je_plna")] = 1
+    for seq in {0} | {s + 1 for s in invalid}:
+        matrix[seq, [MENA.index(n) for n in ("proc_new", "proc_gone", "mod_delta", "ma_predchodcu")]] = 0
+    quality = [dict(GOOD, model_valid=False, behavior_valid=False, traversals_complete=False, **invalid[i])
+               if i in invalid else dict(GOOD) for i in range(rows)]
+    perbin = np.zeros((rows, len(LAYOUT["bins"]), 4))
+    perbin[:] = [ROW["mem_changed_ratio"], ROW["mem_zero_ratio"], ROW["mem_entropy_mean"], 1]
+    t0 = 1700000000. + number * 1000
+    return {"matica": matrix, "seq": list(range(rows)), "casy": [t0 + p["interval_s"] * i for i in range(rows)],
+            "valid": [q["behavior_valid"] for q in quality], "perbin": perbin, "biny": [b for b, _ in LAYOUT["bins"]],
+            "chain_ids": [f"chain-{number}"] * rows, "snimky": [f"{i}.vmicd" for i in range(rows)],
+            "trvanie_s": [0.] * rows, "poznamky": [[] for _ in range(rows)], "quality": quality,
+            "quality_policy": "behavioral-inputs-v1", "layout": LAYOUT, "max_medzera_s": p["max_gap_s"]}
+
+
+def audited(feature_path, session, p, role):
+    """Values the collection audit writes from its verdict on the archive (scripts/collection.py audit_session)."""
+    verdict, _, _ = judge(archive.load(feature_path), p, session, role)
+    return {"features_sha256": dataset.sha(feature_path), "snapshots": verdict["snapshots"],
+            "windows": verdict["windows"], "score_coverage": verdict["score_coverage"],
+            "quality": {"tolerated_invalid_seq": verdict["tolerated_invalid_seq"]}, "acceptance": verdict}
 
 
 def record(tmp_path, role, number, boot=None):
     directory = tmp_path / f"{role}-{number}"
     directory.mkdir()
-    result = archive_result()
-    result["quality_policy"] = "behavioral-inputs-v1"
-    result["casy"] = [t + number * 100 for t in result["casy"]]
-    feature_path = archive.save(directory / "features.npz", result)
+    feature_path = archive.save(directory / "features.npz", extraction(number))
     meta = {"session_id": directory.name, "role": role, "group": f"{role}-1",
             "scenario": "steady", "seed": number, "typ": "benign",
             "collector_sha256": "test-collector",
@@ -21,16 +63,50 @@ def record(tmp_path, role, number, boot=None):
     path.write_text(json.dumps(meta))
     audit = directory / "audit.json"
     audit.write_text(json.dumps({"values": {
-        "accepted": True, "protocol_sha256": "protocol-test", "session_dir": str(directory),
-        "session_sha256": dataset.sha(path), "features": str(feature_path),
-        "features_sha256": dataset.sha(feature_path), "layout": {"size": 1},
-        "extractor_sha256": {"test": "test"}}}))
+        "accepted": True, "reasons": [], "role": role, "protocol_sha256": "protocol-test",
+        "session_dir": str(directory), "session_sha256": dataset.sha(path), "features": str(feature_path),
+        "layout": LAYOUT, "extractor_sha256": {"test": "test"},
+        **audited(feature_path, directory.name, protocol(), role)}}))
     return audit
 
 
 def protocol():
     return {"schema": "hyptcn3/collection-protocol/2", "quality_policy": "behavioral-inputs-v1",
-            "roles": dict.fromkeys(dataset.ROLES, 1), "scenarios": {"steady": {}}}
+            "roles": dict.fromkeys(dataset.ROLES, 1), "scenarios": {"steady": {}},
+            "cycles": 30, "full_every": 30, "window_rows": 3, "stride": 1, "interval_s": 5, "max_gap_s": 7.5,
+            "min_score_coverage": .8}
+
+
+def invalidate(audit, cause):
+    """Swap the audited archive for one whose row INVALID is invalid for cause; the record stays as it was.
+
+    Only the archive hash in the record follows the swap: verdict, facts and the list of tolerated rows are
+    still those of the archive the audit saw.
+    """
+    report = json.loads(audit.read_text())
+    values = report["values"]
+    meta = json.loads((audit.parent / "session.json").read_text())
+    Path(values["features"]).unlink()
+    archive.save(values["features"], extraction(meta["seed"], {INVALID: cause}))
+    values["features_sha256"] = dataset.sha(values["features"])
+    audit.write_text(json.dumps(report))
+    return report
+
+
+def audit_again(audit, p):
+    """Rewrite the record as the honest audit of the archive now in place, under protocol p."""
+    report = json.loads(audit.read_text())
+    meta = json.loads((audit.parent / "session.json").read_text())
+    report["values"].update(audited(report["values"]["features"], meta["session_id"], p, meta["role"]))
+    audit.write_text(json.dumps(report))
+    return report
+
+
+def list_invalid(audit, report):
+    """The forger also names row INVALID, in the record's list and in its stored verdict."""
+    report["values"]["quality"] = {"tolerated_invalid_seq": [INVALID]}
+    report["values"]["acceptance"]["tolerated_invalid_seq"] = [INVALID]
+    audit.write_text(json.dumps(report))
 
 
 def test_complete_corpus_keeps_prescribed_roles(tmp_path):
@@ -145,26 +221,17 @@ def test_group_names_follow_protocol_prefix(tmp_path):
 
 
 def test_tolerated_invalid_rows_enter_the_corpus_only_within_the_rule(tmp_path):
-    import numpy as np
     audits = [record(tmp_path, role, i) for i, role in enumerate(dataset.ROLES)]
     path = audits[0]
-    report = json.loads(path.read_text())
-    data = dict(np.load(report["values"]["features"], allow_pickle=False))
-    quality = json.loads(str(data["quality_json"]))
-    quality[1]["behavior_valid"] = False
-    quality[1]["truncated_traversals"] = ["processes"]
-    data["quality_json"] = np.array(json.dumps(quality))
-    data["valid"] = np.array([i != 1 for i in range(len(data["valid"]))])
-    np.savez(report["values"]["features"], **data)
-    report["values"]["features_sha256"] = dataset.sha(report["values"]["features"])
-    path.write_text(json.dumps(report))
-    with pytest.raises(ValueError, match="incomplete features"):
+    report = invalidate(path, {"truncated_traversals": ["processes"]})
+    with pytest.raises(ValueError, match="incomplete features in accepted audit"):
         dataset.build(audits, protocol(), "protocol-test")
-    report["values"]["quality"] = {"tolerated_invalid_seq": [int(data["seq"][1])]}
-    path.write_text(json.dumps(report))
-    with pytest.raises(ValueError, match="more invalid rows"):
+    list_invalid(path, report)
+    with pytest.raises(ValueError, match="more invalid rows than the protocol tolerates"):
         dataset.build(audits, protocol(), "protocol-test")
+    # The record carries the verdict of the protocol the corpus is built under: audited again under that one.
     tolerant = dict(protocol(), invalid_rows={"max": 3, "traversals": ["processes"]})
+    assert audit_again(path, tolerant)["values"]["quality"] == {"tolerated_invalid_seq": [INVALID]}
     assert dataset.build(audits, tolerant, "protocol-test")["complete"]
 
 
@@ -177,19 +244,13 @@ def test_tolerated_invalid_rows_enter_the_corpus_only_within_the_rule(tmp_path):
 ], ids=["other_traversal", "two_traversals", "read_error", "filled_zero", "no_traversal"])
 def test_listed_invalid_row_with_a_cause_outside_the_rule_stays_out_of_the_corpus(tmp_path, cause):
     """The audit's list alone admits nothing: corpus building checks the cause of each invalid row itself."""
-    import numpy as np
     audits = [record(tmp_path, role, i) for i, role in enumerate(dataset.ROLES)]
     path = audits[0]
-    report = json.loads(path.read_text())
-    data = dict(np.load(report["values"]["features"], allow_pickle=False))
-    quality = json.loads(str(data["quality_json"]))
-    quality[1].update(cause, behavior_valid=False)
-    data["quality_json"] = np.array(json.dumps(quality))
-    data["valid"] = np.array([i != 1 for i in range(len(data["valid"]))])
-    np.savez(report["values"]["features"], **data)
-    report["values"]["features_sha256"] = dataset.sha(report["values"]["features"])
-    report["values"]["quality"] = {"tolerated_invalid_seq": [int(data["seq"][1])]}
-    path.write_text(json.dumps(report))
     tolerant = dict(protocol(), invalid_rows={"max": 3, "traversals": ["processes"]})
+    # The honest record of a tolerated row; then the archive is swapped for one whose row has another cause.
+    invalidate(path, {"truncated_traversals": ["processes"]})
+    audit_again(path, tolerant)
+    assert dataset.build(audits, tolerant, "protocol-test")["complete"]
+    invalidate(path, cause)
     with pytest.raises(ValueError, match="cause the protocol does not tolerate"):
         dataset.build(audits, tolerant, "protocol-test")

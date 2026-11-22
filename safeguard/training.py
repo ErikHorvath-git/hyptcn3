@@ -20,7 +20,8 @@ import torch
 from torch import nn
 
 from features.archive import load as load_archive
-from features.quality import BEHAVIOR_POLICY, accepted_invalid_rows, protocol_policy
+from features.acceptance import require_accepted, require_recorded
+from features.quality import BEHAVIOR_POLICY, protocol_policy
 from .bundle import SCHEMA, digest
 from .features import (FeatureNormalizer, WindowBuffer, arrays, check_frame,
                        feature_contract, frames_from_archive)
@@ -131,6 +132,9 @@ def validate_index(path, diagnostic=False):
                 or values.get("features_sha256") != record["features_sha256"]
                 or _resolve(Path(record["audit"]).parent, values["features"]) != Path(record["features"])):
             raise ValueError("audit provenance mismatch or unaccepted audit")
+        # The recorded verdict must be the one the protocol gives for the recorded facts. No archive is opened
+        # here, so the final test stays sealed; train_bundle decides the fitted roles again from their archives.
+        require_recorded(protocol, role, values)
         layouts.add(json.dumps(values["layout"], sort_keys=True))
         extractors.add(json.dumps(values["extractor_sha256"], sort_keys=True))
         profiles.add(json.dumps(meta.get("profile_sha256", {}), sort_keys=True))
@@ -282,13 +286,14 @@ def train_bundle(corpus_path, output_dir, *, window_rows=32, max_gap_s=7.5,
     for record in records:
         if record["role"] == "test_benign":
             continue  # No array/statistic from final test enters fitting.
-        frames = list(frames_from_archive(load_archive(record["features"]), record["id"]))
+        archive = load_archive(record["features"])
+        frames = list(frames_from_archive(archive, record["id"]))
         if not frames or frames[0].timestamp != record["start"] or frames[-1].timestamp != record["end"]:
             raise ValueError("feature times differ from frozen session index")
         audit = _json(record["audit"])["values"]
-        # Invalid rows only as the audit admitted them (protocol invalid_rows); they are never fitted or scored.
-        accepted_invalid_rows([frame.seq for frame in frames], [frame.valid for frame in frames],
-                              [frame.quality for frame in frames], audit, protocol)
+        # A session is fitted only as the audit accepted it: the acceptance is decided again from the archive and
+        # must equal the record (features/acceptance.py). Invalid rows it tolerates are never fitted or scored.
+        require_accepted(archive, protocol, record["id"], record["role"], audit)
         if contract is None:
             contract = feature_contract(frames[0], window_rows, max_gap_s)
         if frames[0].layout != audit["layout"]:

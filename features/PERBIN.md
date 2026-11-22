@@ -3,8 +3,8 @@
 Tento súbor popisuje `features/perbin.py`, `features/crosscheck.py` a podpríkazy
 `perbin` a `crosscheck` (`python3 -m features`). Ostatné moduly balíka
 (`snapshot.py`, `windows.py`, `dataset.py`, `archive.py`, `coverage.py`,
-`quality.py`, `contract.py`, `normalize.py`, `manifest.py`, `stream.py`)
-a podpríkaz `session` majú dokumentáciu vo svojich docstringoch;
+`quality.py`, `acceptance.py`, `contract.py`, `normalize.py`, `manifest.py`,
+`stream.py`) a podpríkaz `session` majú dokumentáciu vo svojich docstringoch;
 `normalize.py`, `manifest.py` a `stream.py` slúžia staršej diagnostickej ceste
 (`tcn/train.py`, `tcn/score.py`, `scripts/detektor.py`), ktorá v repozitári
 zostáva do konca experimentov.

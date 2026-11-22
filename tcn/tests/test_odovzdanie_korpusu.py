@@ -164,8 +164,8 @@ def _kampan(koren, predpona="v5-", riadok_b=RIADOK):
         vysledok = _vysledok(**relacie[sid], neplatne={riadok: NEUZAVRETY} if s_neplatnym else None)
         if s_neplatnym:
             s_riadkom.add(sid)
-        riadky, okna_relacie, pokrytie, dovody, kvalita = collection.analyze_windows(vysledok, p, sid, p["cycles"])
-        assert dovody == [], (sid, dovody)  # audit by relaciu prijal
+        riadky, okna_relacie, verdikt, kvalita = collection.analyze_windows(vysledok, p, sid, s["role"])
+        assert verdikt["reasons"] == [], (sid, verdikt["reasons"])  # audit by relaciu prijal
         okna[s["role"]] += len(okna_relacie)
         adresar = koren / "sessions" / sid
         adresar.mkdir(parents=True)
@@ -183,9 +183,11 @@ def _kampan(koren, predpona="v5-", riadok_b=RIADOK):
             for u in s["events"]], "note": "synteticky zaznam testu"})
         archiv = save(adresar / "audit_test.npz", vysledok)
         relacia_sha = _sha(adresar / "session.json")
+        # Polia verdiktu pise tak ako collection.audit_session: snimky, okna a pokrytie opakuju verdikt.
         collection.write_json(adresar / "audit_test.json", {"schema": "hyptcn3/collection-audit/1", "n": len(riadky), "values": {
             "accepted": True, "reasons": [], "role": s["role"], "protocol_sha256": protokol_sha,
-            "snapshots": len(riadky), "windows": len(okna_relacie), "score_coverage": pokrytie,
+            "snapshots": verdikt["snapshots"], "windows": verdikt["windows"],
+            "score_coverage": verdikt["score_coverage"], "acceptance": verdikt,
             "coverage": kvalita.pop("coverage", None),
             "logs": {"schema": "hyptcn3/collection-logs-audit/1", "accepted": True, "problems": [],
                      "sections": {"metadata": {"session_sha256": relacia_sha}}},
@@ -204,18 +206,32 @@ def _kampan(koren, predpona="v5-", riadok_b=RIADOK):
 
 
 def _podvrh(kampan, rola, ktora, neplatne, uvedene):
-    """Index, v ktorom archiv jednej relacie roly a zoznam v jej audite vymenil niekto mimo stavby korpusu.
+    """Index, v ktorom archiv jednej relacie roly a zaznam v jej audite vymenil niekto mimo stavby korpusu.
 
     ktora: poradie medzi relaciami roly s tolerovanym riadkom v indexe (0 prva, -1 posledna).
+    Zaznam je najsilnejsi podvrh svojho pribehu. Ked uvedene menuje kazdy neplatny riadok archivu, nesie fakty,
+    snimky, okna a pokrytie vymeneneho archivu a jeho verdikt je prepnuty na prijatie: odmietne ho uz kontrola
+    samotneho zaznamu. Inak je to poctivy zaznam archivu, ktory ma iba uvedene riadky, s hashom vymeneneho
+    archivu: zaznam sam sedi a riadok, ktory neuvadza, najde az kontrola nad archivom.
     """
     doc = json.loads(kampan["index"].read_text())
     zaznam = [z for z in doc["sessions"] if z["role"] == rola and z["id"] in kampan["s_riadkom"]][ktora]
     archiv, audit_cesta = Path(zaznam["features"]), Path(zaznam["audit"])
+    relacia, p = kampan["relacie"][zaznam["id"]], collection.protocol(doc["protocol"])
     archiv.unlink()
-    save(archiv, _vysledok(**kampan["relacie"][zaznam["id"]], neplatne=neplatne))
+    save(archiv, _vysledok(**relacia, neplatne=neplatne))
+    uvedene_vsetky = set(neplatne) <= set(uvedene)
+    _, _, verdikt, kvalita = collection.analyze_windows(
+        _vysledok(**relacia, neplatne=neplatne if uvedene_vsetky else {seq: neplatne[seq] for seq in uvedene}),
+        p, zaznam["id"], rola)
+    if uvedene_vsetky:
+        assert not verdikt["accepted"], verdikt  # inak by podvrh nebol mimo pravidla
+        verdikt.update(accepted=True, reasons=[], codes=[], tolerated_invalid_seq=uvedene)
+    kvalita["tolerated_invalid_seq"] = verdikt["tolerated_invalid_seq"]
     audit = json.loads(audit_cesta.read_text())
-    audit["values"]["features_sha256"] = _sha(archiv)
-    audit["values"]["quality"]["tolerated_invalid_seq"] = uvedene
+    audit["values"].update(snapshots=verdikt["snapshots"], windows=verdikt["windows"],
+                           score_coverage=verdikt["score_coverage"], acceptance=verdikt,
+                           coverage=kvalita.pop("coverage", None), quality=kvalita, features_sha256=_sha(archiv))
     audit_cesta.write_text(json.dumps(audit))
     zaznam["features_sha256"], zaznam["audit_sha256"] = _sha(archiv), _sha(audit_cesta)
     kampan["index"].write_text(json.dumps(doc))
@@ -766,11 +782,20 @@ def test_trening_a_metody_odmietnu_riadok_mimo_pravidla(tmp_path, neplatne, uved
     s riadkom ho ma na tom istom seq a vo svojom audite ho uvadza: zoznam z ineho auditu riadok nezachrani.
     """
     index = _podvrh(_kampan(tmp_path / "kampan"), rola, ktora, neplatne, uvedene)
-    validate_index(index)
+    if hlaska == "incomplete features in accepted audit":  # zaznam sam sedi, riadok neuvedeny najde az archiv
+        validate_index(index)
+    else:  # zaznam, ktory riadky poctivo uvadza, odmietne uz ostra kontrola indexu tou istou spravou
+        with pytest.raises(ValueError, match=hlaska):
+            validate_index(index)
     with pytest.raises(ValueError, match=hlaska):
         train_bundle(index, tmp_path / "balik", window_rows=OKNO, max_gap_s=7.5, epochs=1, batch_size=64, fpr=FPR)
     with pytest.raises(ValueError, match=hlaska):
         po.nacitaj_role(index)
+    # Stavba korpusu zaznam indexu necita: posudi archiv a odmietne ho z toho isteho dovodu.
+    doc = json.loads(index.read_text())
+    with pytest.raises(ValueError, match=hlaska):
+        dataset.build([Path(z["audit"]) for z in doc["sessions"]], collection.protocol(doc["protocol"]),
+                      _sha(doc["protocol"]))
 
 
 def test_trening_a_metody_posudia_relaciu_jej_auditom(tmp_path):

@@ -29,12 +29,13 @@ sys.path.insert(0, str(ROOT))
 from features.contract import validate_sidecar
 from features.archive import load, save
 from features.snapshot import retazec, MENA
-from features.windows import okna, snimky_z_matice
+from features.windows import snimky_z_matice
 from features.perbin import FeatureError
 from features.windows import WindowError
-from features.quality import (protocol_policy, valid_for, BEHAVIOR_POLICY,
-                              invalid_rows_rule, tolerated_invalid_rows)
+from features.quality import protocol_policy, coverage_gate, invalid_rows_rule, tolerated_invalid_rows
+# ideal_windows is kept for a tracked record script under data/results, which reads it from this module.
 from features.coverage import ideal_windows, scorable_windows
+from features.acceptance import assignment, judge, protocol_reachability
 from scripts.collection_logs import audit_logs
 from lab.udalosti import CONTROLS as CONTROL_TYPES, TYPES as EVENT_TYPES
 
@@ -124,9 +125,7 @@ def write_json(path, doc):
 def protocol(path):
     p = json.loads(Path(path).read_text())
     protocol_policy(p)
-    gate = p.get("min_score_coverage", .85)
-    if type(gate) not in (int, float) or not 0 < gate <= 1:
-        raise ValueError("invalid minimum score coverage")
+    coverage_gate(p)
     for key in ("interval_s", "window_rows", "full_every", "cycles", "pilot_cycles", "bin_bytes"):
         if type(p[key]) is not int or p[key] < 1:
             raise ValueError("invalid " + key)
@@ -136,9 +135,10 @@ def protocol(path):
         raise ValueError("gap must distinguish a missed sampling slot")
     if p["full_every"] <= p["window_rows"] or p["pilot_cycles"] <= p["full_every"] + p["window_rows"]:
         raise ValueError("pilot must cover two full snapshots and score after both")
-    for key in ("pilot_cycles", "cycles"):
-        if ideal_windows(p[key], p["window_rows"], p["full_every"]) / p[key] < gate:
-            raise ValueError("score coverage gate is unreachable for " + key)
+    # A faultless session of each assigned length must be acceptable, decided as the audit decides it.
+    for case in protocol_reachability(p):
+        if case["case"] == "clean" and not case["accepted"]:
+            raise ValueError("score coverage gate is unreachable for " + case["key"])
     if p["bin_bytes"] != 16777216:
         raise ValueError("capture runner currently supports 16 MiB bins")
     if "events" in p:
@@ -155,22 +155,24 @@ def protocol(path):
 def check_invalid_rows(p):
     """Pre-registered tolerance of a few rows whose traversal did not close (owner, 2026-11-17).
 
-    Without the key every invalid row rejects the session. With it a session is
-    admitted when at most `max` rows are invalid, each only because one of the
-    named traversals did not close (no RAM read error or zero fill), and the
-    score coverage gate still holds. Invalid rows are never scored (their windows
-    are not scorable) and the audit lists them.
+    Without the key every invalid row rejects the session. With it a session of a role
+    the protocol plans, or a diagnostic session, is admitted when at most `max` rows are
+    invalid, each only because one of the named traversals did not close (no RAM read
+    error or zero fill), and the score coverage gate still holds; a pilot, and a session
+    whose role the protocol does not assign, gets no tolerance (features/acceptance.py,
+    assignment). Invalid rows are never scored (their windows are not scorable) and the
+    audit lists them.
 
     One invalid row away from the others costs window_rows + 1 windows: the row itself
     and the window_rows rows that refill the buffer. Protocol version 3 therefore
-    requires that `max` such rows still pass the coverage gate in a full session;
+    requires that a full session with `max` such rows, placed where they cost the most,
+    is still accepted (features/acceptance.py decides it as it decides a real session);
     under version 2 the two rules could contradict each other (v4: 3 rows allowed,
     1 passed the gate).
     """
-    r = invalid_rows_rule(p)  # The shape check is shared with every reader of the rule (features/quality.py).
+    invalid_rows_rule(p)  # The shape check is shared with every reader of the rule (features/quality.py).
     if p["schema"] == "hyptcn3/collection-protocol/3":
-        left = ideal_windows(p["cycles"], p["window_rows"], p["full_every"]) - r["max"] * (p["window_rows"] + 1)
-        if left / p["cycles"] < p.get("min_score_coverage", .85):
+        if any(case["case"] == "worst" and not case["accepted"] for case in protocol_reachability(p)):
             raise ValueError("invalid_rows.max is unreachable under the score coverage gate")
 
 
@@ -792,13 +794,9 @@ def run_session(a, p):
             events = planned[0].get("events", [])
             if not a.pilot_report:
                 raise ValueError("corpus capture requires --pilot-report from an accepted pilot audit")
-            report = json.loads(Path(a.pilot_report).read_text())
-            if (not report["values"]["accepted"] or report["values"].get("role") != "pilot"
-                    or report["values"]["protocol_sha256"] != digest(a.protocol)):
-                raise ValueError("pilot report is not accepted for this protocol")
+            # The gate alone decides whether the report is an accepted pilot of this protocol.
             from scripts.campaign import pilot_gate
-            pilot_gate(a.pilot_report, a.protocol, p)
-            needed = report["values"]["raw_bytes"] * p["cycles"] / p["pilot_cycles"] * 1.5
+            _, needed = pilot_gate(a.pilot_report, a.protocol, p)
         else:
             needed = 0
         if shutil.disk_usage(base).free < needed + p["min_free_gib"] * 2**30:
@@ -1140,30 +1138,17 @@ def positive_controls(result, events_path, p):
     return {"problems": problems, "controls": out, "rows_with_patterns_outside": outside}
 
 
-def analyze_windows(result, p, session, expected_rows=None):
-    """Audit the frozen input policy while retaining independent integrity gaps."""
+def analyze_windows(result, p, session, role, recorded_rows=None):
+    """Audit the frozen input policy while retaining independent integrity gaps.
+
+    Returns rows, windows, the acceptance verdict and the quality summary. The verdict is the one decision
+    of features/acceptance.py: `role` selects the assigned length and the tolerance of invalid rows, a
+    diagnostic session also passes the length it recorded for itself (`recorded_rows`).
+    """
+    verdict, windows, detail = judge(result, p, session, role, recorded_rows)
     policy = protocol_policy(p)
-    if result["quality_policy"] != policy:
-        raise ValueError("extraction quality policy differs from protocol")
-    if result["valid"] != [valid_for(q, policy) for q in result["quality"]]:
-        raise ValueError("valid mask differs from structured quality")
     rows = snimky_z_matice(session, result["matica"], MENA, result["casy"],
                           result["seq"], result["valid"])
-    detail = None
-    if policy == BEHAVIOR_POLICY:
-        windows, detail = scorable_windows(result, p, session, expected_rows)
-    else:
-        windows = okna(rows, dlzka=p["window_rows"], max_medzera_s=p["max_gap_s"])
-    coverage = len(windows) / (expected_rows if expected_rows is not None else len(rows))
-    reasons = []
-    tolerated = tolerated_invalid_rows(result, p)
-    if not all(result["valid"]) and tolerated is None:
-        reasons.append("incomplete model inputs under " + policy)
-    if any(q["findings"] for q in result["quality"]):
-        reasons.append("integrity findings require review before benign admission")
-    gate = p.get("min_score_coverage", .85)
-    if coverage < gate:
-        reasons.append(f"score coverage below design gate {gate:g}")
     checks = {"syscall_table", "process_cross_view", "modules", "text_integrity"}
     checks.update(name for q in result["quality"] for name in q["inconclusive"])
     quality = {
@@ -1171,8 +1156,9 @@ def analyze_windows(result, p, session, expected_rows=None):
         "behavior_valid_rows": sum(q["behavior_valid"] for q in result["quality"]),
         "legacy_valid_rows": sum(q["model_valid"] for q in result["quality"]),
         "invalid_input_seq": [seq for seq, good in zip(result["seq"], result["valid"]) if not good],
-        # Invalid rows admitted under the protocol's pre-registered invalid_rows rule.
-        "tolerated_invalid_seq": tolerated or [],
+        # Invalid rows admitted under the rule the session's role gets: the protocol's pre-registered
+        # invalid_rows rule, none for a pilot or a role the protocol does not assign.
+        "tolerated_invalid_seq": verdict["tolerated_invalid_seq"] or [],
         "integrity_inconclusive_rows": {
             name: sum(name in q["inconclusive"] for q in result["quality"]) for name in sorted(checks)},
         "integrity_finding_rows": sum(bool(q["findings"]) for q in result["quality"]),
@@ -1195,7 +1181,7 @@ def analyze_windows(result, p, session, expected_rows=None):
     }
     if detail is not None:
         quality["coverage"] = detail
-    return rows, windows, coverage, reasons, quality
+    return rows, windows, verdict, quality
 
 
 def audit_session(directory, p, protocol_path, output=None):
@@ -1239,10 +1225,10 @@ def audit_session(directory, p, protocol_path, output=None):
         raise ValueError("no collector sidecars")
     if len(list(raw.glob("*.vmicd"))) != len(sidecars):
         reasons.append("image/sidecar count mismatch")
-    # Diagnostic runs are shorter by design; their recorded length is the target.
-    expected = (p["pilot_cycles"] if metadata.get("role") == "pilot" else
-                metadata.get("cycles") if metadata.get("role") == "diagnostic" else p["cycles"])
-    if len(sidecars) != expected:
+    # The role decides the assigned length (features/acceptance.py); diagnostic runs are shorter by design and
+    # their recorded length is the target. A role the protocol does not assign is rejected by the verdict below.
+    assigned, _, assigned_role = assignment(p, metadata.get("role"), metadata.get("cycles"))
+    if assigned_role and len(sidecars) != assigned:
         reasons.append("snapshot count differs from assigned protocol")
     if [d["seq"] for _, d in sidecars] != list(range(len(sidecars))):
         reasons.append("sequence must start at zero and be contiguous")
@@ -1270,8 +1256,9 @@ def audit_session(directory, p, protocol_path, output=None):
             reasons.append("collector waited for queue memory: " + image.name)
     result = retazec(str(raw), str(directory / "profile" if native else ROOT / p["profile"]),
                     p["max_gap_s"], quality_policy=protocol_policy(p))
-    rows, windows, coverage, quality_reasons, quality = analyze_windows(result, p, directory.name, expected)
-    reasons.extend(quality_reasons)
+    rows, windows, verdict, quality = analyze_windows(result, p, directory.name, metadata.get("role"),
+                                                      metadata.get("cycles"))
+    reasons.extend(verdict["reasons"])
     controls = None
     if native and metadata.get("role") == "pilot" and p.get("events", {}).get("pilot_controls"):
         controls = positive_controls(result, directory / "events.json", p)
@@ -1304,7 +1291,9 @@ def audit_session(directory, p, protocol_path, output=None):
     save(feature_path, result)
     values = {"accepted": not reasons, "reasons": sorted(set(reasons)),
               "role": metadata.get("role"), "protocol_sha256": digest(protocol_path),
-              "snapshots": len(rows), "windows": len(windows), "score_coverage": coverage,
+              # The verdict of the one acceptance decision; the three fields before it repeat it for older readers.
+              "snapshots": verdict["snapshots"], "windows": verdict["windows"],
+              "score_coverage": verdict["score_coverage"], "acceptance": verdict,
               "coverage": quality.pop("coverage", None), "logs": logs, "publication": publication,
               **({"positive_controls": controls} if controls is not None else {}),
               "auditor_sha256": {str(f.relative_to(ROOT)): digest(f) for f in
@@ -1376,8 +1365,8 @@ def main(argv=None):
         data = load(a.archive)
         _, report = scorable_windows(data, p, a.archive.stem, a.expected_snapshots)
         report.update(archive=str(a.archive.resolve()), archive_sha256=digest(a.archive),
-                      protocol_sha256=digest(a.protocol), minimum=p["min_score_coverage"],
-                      gate_passed=report["score_coverage"] >= p["min_score_coverage"],
+                      protocol_sha256=digest(a.protocol), minimum=coverage_gate(p),
+                      gate_passed=not report["score_coverage"] < coverage_gate(p),
                       date=datetime.now(timezone.utc).isoformat(),
                       source_sha256={str(f.relative_to(ROOT)): digest(f) for f in
                                      (ROOT / "features/coverage.py", ROOT / "safeguard/features.py")})

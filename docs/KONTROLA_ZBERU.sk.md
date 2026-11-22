@@ -41,8 +41,12 @@ zamietnutý verdikt. Kontrola pokrytia zo zachovaného NPZ obnovu RAM nepotrebuj
 .venv/bin/python scripts/collection.py audit data/collections/SESSION
 ```
 
-Obsahuje kontrolu logov v `values.logs`, rozpis pokrytia v `values.coverage`
-a verdikt v `values.accepted`. Existujúce audity sa nemenia. Audit zaznamená
+Obsahuje kontrolu logov v `values.logs`, rozpis pokrytia v `values.coverage`,
+verdikt spoločnej funkcie prijatia (`features/acceptance.py`: rola, počet a súvislosť
+riadkov, neplatné riadky, nálezy integrity, pokrytie skóre) aj s faktami, z ktorých
+vznikol, v `values.acceptance` a celkový verdikt v `values.accepted`. Existujúce audity
+sa nemenia; audit bez `values.acceptance` neprijme stavba korpusu, tréning, porovnanie
+metód, index udalostí kampane ani `pilot_gate`. Audit zaznamená
 hashe extraktora (`values.extractor_sha256`); `pilot_gate` v `scripts/campaign.py`
 aj `safeguard train` bez `--diagnostic` prijmú iba audit so súčasným kódom
 `features/` a `guestparse/`. Po zmene tohto kódu treba session znovu auditovať
@@ -78,6 +82,12 @@ detektora. Latencia extrakcie, inferencie a alarmu vyžaduje samostatné meranie
 Príčiny výpadkov sa neprekrývajú v súčte `unscored_rows_by_cause`; následný
 chýbajúci predchodca ostáva pripísaný chybe vstupu. Pri viacerých blízkych
 chybách nemožno každej bez dvojitého počítania pripísať celé nové okno.
+
+Pridelený počet snímok určuje rola session (`features/acceptance.py`). Keď poradové
+čísla session tento počet presahujú alebo jej rola žiadny počet nemá, rozpis sa počíta
+voči pozorovanému rozsahu snímok (`expected_snapshots`) a audit session zamietne pre
+počet snímok, sekvenciu alebo rolu; bez prideleného počtu je `values.score_coverage`
+`null`.
 
 Z parametrov protokolu vyplýva: pri 400 cykloch, okne 32 a rotácii 360
 vznikne najviac 336 okien, teda 84 %. Taký krátky diagnostický beh nemôže

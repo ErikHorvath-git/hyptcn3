@@ -184,36 +184,62 @@ def guest_environment(identity):
 
 
 def pilot_gate(path, protocol_path, p):
-    report = read_json(path)
-    v = report["values"]
-    if (report.get("schema") != "hyptcn3/collection-audit/1" or v.get("accepted") is not True
-            or v.get("role") != "pilot" or v["protocol_sha256"] != digest(protocol_path)
-            or v["snapshots"] != p["pilot_cycles"]
-            or v["score_coverage"] < p["min_score_coverage"]
-            or v["quality"]["policy"] != p["quality_policy"]
-            or v["quality"]["behavior_valid_rows"] != p["pilot_cycles"]
-            or v["quality"]["integrity_findings"] != 0
-            or v["extractor_sha256"] != extractor_hashes()):
-        raise ValueError("accepted pilot with current extractor and frozen protocol required")
-    session = Path(v["session_dir"]) / "session.json"
-    if digest(session) != v["session_sha256"] or digest(v["features"]) != v["features_sha256"]:
-        raise ValueError("pilot metadata or features changed since audit")
-    meta = read_json(session)
+    """An accepted pilot of this protocol made by the current code: (session metadata, bytes one session needs).
+
+    What ties the report to this protocol, this code and these files is checked first, each tie with its own
+    message, and nothing in the report is trusted before that. A field the gate reads that is missing or of a
+    wrong type is refused by the tie that reads it, and so is a feature file the archive reader cannot read.
+    Whether the pilot is accepted is then decided again from its feature archive by the one acceptance decision
+    (features/acceptance.py, role "pilot": the pilot length in an unbroken sequence, no tolerated invalid row, no
+    integrity finding, the coverage gate), and the report must state that very verdict.
+    """
+    from features.acceptance import require_accepted
+    from features.archive import load
     from features.quality import require_log_audit
+    report = read_json(path)
+    v = report.get("values") if type(report) is dict else None
+    if type(v) is not dict or report.get("schema") != "hyptcn3/collection-audit/1" \
+            or type(v.get("session_dir")) is not str or type(v.get("features")) is not str \
+            or type(v.get("raw_bytes")) is not int or v["raw_bytes"] <= 0:
+        raise ValueError("pilot report is not a session audit")
+    if v.get("protocol_sha256") != digest(protocol_path):
+        raise ValueError("pilot was audited under another protocol")
+    if type(v.get("quality")) is not dict or v["quality"].get("policy") != p["quality_policy"]:
+        raise ValueError("pilot was audited under another input policy")
+    if v.get("extractor_sha256") != extractor_hashes():
+        raise ValueError("pilot was audited by another extractor (audit the pilot again)")
+    session = Path(v["session_dir"]) / "session.json"
+    if digest(session) != v.get("session_sha256"):
+        raise ValueError("pilot metadata changed since audit")
+    if digest(v["features"]) != v.get("features_sha256"):
+        raise ValueError("pilot features changed since audit")
+    meta = read_json(session)
+    if type(meta) is not dict:
+        raise ValueError("pilot metadata is not a session record")
     require_log_audit(meta, v)
-    if (tree_hashes(ROOT / p["profile"]) != meta["profile_sha256"]
-            or digest(ROOT / "vmicollect/build/vmicollect") != meta["collector_sha256"]):
-        raise ValueError("pilot collector or profile differs from current environment")
+    if tree_hashes(ROOT / p["profile"]) != meta.get("profile_sha256"):
+        raise ValueError("pilot profile differs from the current profile")
+    if digest(ROOT / "vmicollect/build/vmicollect") != meta.get("collector_sha256"):
+        raise ValueError("pilot collector differs from the current collector")
     changed = measurement_changes(meta)
     if changed:
         raise ValueError("measurement code changed since the pilot (new pilot required): " + ", ".join(changed[:12]))
+    try:
+        archive = load(v["features"])
+    except Exception as error:  # noqa: BLE001 - whatever the reader raises, the file is not a feature archive
+        reason = f"{type(error).__name__}: {error}"
+        raise ValueError("pilot features are not a readable feature archive: " + reason) from None
+    try:
+        require_accepted(archive, p, Path(v["session_dir"]).name, "pilot", v)
+    except ValueError as error:
+        raise ValueError("pilot is not accepted for this protocol: " + str(error)) from None
     return meta, v["raw_bytes"] * p["cycles"] / p["pilot_cycles"] * 1.5
 
 
 def measurement_changes(meta):
     """Capture/audit/archive code that differs from the pilot's; reports and docs may change."""
     recorded = meta.get("measurement_sha256")
-    if recorded is None:
+    if type(recorded) is not dict:
         return ["<pilot predates measurement provenance>"]
     current = collection.measurement_sources()
     return sorted(name for name in set(recorded) | set(current) if recorded.get(name) != current.get(name))
@@ -1174,12 +1200,13 @@ def event_index(reports, p, protocol_sha):
     No training roles, so no corpus index: these sessions are only scored by an
     existing bundle (python3 -m tcn.eval udalosti).
     """
+    from features.acceptance import require_recorded
     from features.archive import load
     from features.quality import require_log_audit
     records, boots, groups = [], {}, {}
     for path in reports:
         v = read_json(path)["values"]
-        if not v["accepted"] or v["protocol_sha256"] != protocol_sha:
+        if v.get("accepted") is not True or v["protocol_sha256"] != protocol_sha:
             raise ValueError("unaccepted audit or protocol mismatch: " + str(path))
         session = Path(v["session_dir"])
         meta = read_json(session / "session.json")
@@ -1190,6 +1217,12 @@ def event_index(reports, p, protocol_sha):
         if meta["role"] not in p["roles"] or boots.setdefault(boot, meta["group"]) != meta["group"] \
                 or groups.setdefault(meta["group"], boot) != boot:
             raise ValueError("role or boot/group mapping outside the plan: " + str(path))
+        try:
+            # The recorded verdict must be the one this protocol gives for the recorded facts of this role. The
+            # recorded length goes in as at the audit; it decides only a session of the role "diagnostic".
+            require_recorded(p, meta["role"], v, meta.get("cycles"))
+        except ValueError as error:
+            raise ValueError(f"{error}: {path}") from None
         casy = load(v["features"])["casy"]
         events = session / "events.json"
         records.append({"id": meta["session_id"], "role": meta["role"], "group": meta["group"], "boot_id": boot,

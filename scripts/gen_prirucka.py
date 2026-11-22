@@ -227,8 +227,8 @@ ADRESARE = [
     ("guestparse/", "rekonštrukcia procesov, modulov a soketov zo snímky; kontroly "
      "integrity",
      "guestparse/view.py", None),
-    ("features/", "per-bin referencia k C, vektor snímky, okná, kvalita riadkov, archív "
-     "sedenia a index korpusu; staršia normalizácia pre `tcn/`",
+    ("features/", "per-bin referencia k C, vektor snímky, okná, kvalita riadkov, rozhodnutie "
+     "o prijatí sedenia, archív sedenia a index korpusu; staršia normalizácia pre `tcn/`",
      "features/perbin.py", None),
     ("tcn/", "TCN bloky pre `safeguard/model.py`, baseliny a metriky; staršia "
      "diagnostická cesta tréningu a skórovania (`tcn/train.py`, `tcn/score.py`)",

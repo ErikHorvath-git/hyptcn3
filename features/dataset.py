@@ -8,8 +8,9 @@ import hashlib
 import json
 from pathlib import Path
 
+from .acceptance import require_accepted
 from .archive import load
-from .quality import accepted_invalid_rows, require_log_audit
+from .quality import require_log_audit
 
 
 ROLES = ("train", "dev", "calibration", "test_benign")
@@ -26,7 +27,7 @@ def build(audits, protocol, protocol_sha):
     for path in audits:
         report = json.loads(Path(path).read_text())
         v = report["values"]
-        if not v["accepted"] or v["protocol_sha256"] != protocol_sha:
+        if v.get("accepted") is not True or v["protocol_sha256"] != protocol_sha:
             raise ValueError("unaccepted audit or protocol mismatch: " + str(path))
         directory = Path(v["session_dir"])
         meta_path = directory / "session.json"
@@ -64,7 +65,8 @@ def build(audits, protocol, protocol_sha):
         from .quality import protocol_policy
         if str(data["quality_policy"]) != protocol_policy(protocol):
             raise ValueError("feature quality policy differs from corpus protocol")
-        accepted_invalid_rows(data["seq"], data["valid"], json.loads(str(data["quality_json"])), v, protocol)
+        # The acceptance is decided again from the archive and must equal the audit record (features/acceptance.py).
+        require_accepted(data, protocol, directory.name, m["role"], v)
         layouts.add(json.dumps(v["layout"], sort_keys=True))
         extractors.add(json.dumps(v["extractor_sha256"], sort_keys=True))
         records.append({"id": identity, "role": m["role"], "group": m["group"], "vm": m.get("vm"),

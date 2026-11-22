@@ -54,7 +54,7 @@ COLLECTOR_END = re.compile(r"koniec: (\d+) snimok, (\d+) chyb, (\d+) zmeskanych 
 SCHEMA1_SIGNAL = re.compile(r"(?:InterruptedError: )?(?:interrupted by )?signal \d+")
 SAFE_ID = re.compile(r"[a-zA-Z0-9][a-zA-Z0-9_-]{0,159}")
 CONTROL = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f]")
-GATE_DEFAULT = .85  # collection.protocol() uses this when a protocol has no min_score_coverage.
+GATE_DEFAULT = .85  # What features.quality.coverage_gate() gives a schema 1 or 2 protocol without min_score_coverage.
 PENDING_RAW = ".raw.pending-reclaim"  # collection_archive.PENDING: raw/ renamed, link not yet created
 POST_MARKER = "generator 'post' marker"
 RUNNER_END = "end.json measure_end_unix (runner; the generator wrote no 'post' marker)"
@@ -1394,7 +1394,8 @@ def set_gate(s, protocol):
     gate = number((protocol or {}).get("min_score_coverage"))
     s.row["score_gate"] = gate if gate is not None else GATE_DEFAULT
     if gate is None:
-        s.notes.append("score_gate: collection.py default 0.85 (no protocol min_score_coverage)")
+        s.notes.append("score_gate: 0.85, the default of features.quality.coverage_gate for protocol schemas 1 "
+                       "and 2 (no protocol min_score_coverage)")
 
 
 def protocol_ideal(s, label):

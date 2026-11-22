@@ -7,6 +7,7 @@ from collections import Counter
 
 import numpy as np
 
+from .quality import coverage_gate
 from .snapshot import MENA
 from .windows import Okna
 
@@ -95,7 +96,7 @@ def scorable_windows(data, protocol, session, expected_rows=None):
               "score_coverage": len(windows) / expected,
               "observed_score_coverage": len(windows) / len(frames),
               "ideal_windows": ideal, "ideal_score_coverage": ideal / expected,
-              "gate_possible_at_assigned_length": ideal / expected >= protocol.get("min_score_coverage", .85),
+              "gate_possible_at_assigned_length": ideal / expected >= coverage_gate(protocol),
               "lost_windows_vs_ideal": max(0, ideal - len(windows)),
               "state_rows": dict(counts), "unscored_rows_by_cause": dict(losses),
               "first_score_seq": meta[0]["seq_do"] if meta else None,

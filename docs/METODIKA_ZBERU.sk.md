@@ -245,7 +245,9 @@ nie garantovaný FAR za hodinu. Frekvencia alarmových udalostí pravidla k z n
 sa vypíše osobitne. `test_benign` sa použije raz na záverečné FAR, nie na ladenie.
 Žiadne okno, boot ani interval kalibrácie nevstúpi do tréningu normalizátora.
 `features.dataset` odmietne zdieľaný boot/skupinu, duplicitný archív, zmenené
-hashe, zmiešané rozloženie alebo časovo premiešané roly.
+hashe, zmiešané rozloženie, časovo premiešané roly aj session, ktorej prijatie
+odvodené znova z archívu príznakov (`features/acceptance.py`) nevyjde rovnako
+ako v zázname auditu.
 
 Staršie CLI `tcn.train --data` má historický automatický split a slúži iba na
 diagnostiku; CLI `tcn.hodnotenie` bolo 2026-10-29 odstránené.
@@ -299,7 +301,8 @@ Runner vypíše cestu `data/collections/<session>`. Následne bez roota:
 .venv/bin/python scripts/collection.py audit data/collections/<session>
 ```
 
-Audit overí kontrolné súčty obrazov, konfiguráciu, počet snímok, medzery,
+Audit overí kontrolné súčty obrazov, konfiguráciu, rolu session (rolu, ktorú protokol
+nepriraďuje, zamietne) a počet snímok pridelený tejto role, medzery,
 čítacie chyby, rotáciu reťazca, stabilnú identitu VM, kvalitu príznakov
 a klientské, nginx a aplikačné logy vrátane request ID, kontrolných súčtov,
 časového pokrytia a reštartov služieb. Rozpis skórovateľných okien a samostatné
