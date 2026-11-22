@@ -523,15 +523,18 @@ def worst_witness(length, window_rows, full_every, count):
 
 
 def _worst_rows(length, window_rows, full_every, count):
-    """The rows the verdicts of the worst case read: worst_witness(), and where no placement without two equal
-    spacings costs as much, worst_invalid_rows(). That happens when the rows fill all or nearly all slots of
-    window_rows + 1 windows of the session (short test sessions; on the v5 grid above 16 rows). Both leave the
-    same windows; the verdict then says whether the protocol's periodicity bound refuses rows with equal
-    spacings."""
+    """(rows, witness): the rows the verdicts of the worst case read and the function that placed them.
+
+    worst_witness() ("worst_witness"), and where no placement without two equal spacings costs as much,
+    worst_invalid_rows() ("worst_invalid_rows"). That happens when the rows fill all or nearly all slots of
+    window_rows + 1 windows of the session (short test sessions; on the v5 grid above 16 rows), or when the
+    search gives up after WITNESS_STEPS placements. Both leave the same windows; the verdict then says whether the
+    protocol's periodicity bound refuses rows with equal spacings, and the self-check of a schema-3 file refuses
+    the fallback (lead's remarks on B4, part 1, section 1)."""
     try:
-        return worst_witness(length, window_rows, full_every, count)
+        return worst_witness(length, window_rows, full_every, count), "worst_witness"
     except _NoWitness:
-        return worst_invalid_rows(length, window_rows, full_every, count)
+        return worst_invalid_rows(length, window_rows, full_every, count), "worst_invalid_rows"
 
 
 def synthetic_windows(protocol, length, invalid=()):
@@ -558,9 +561,10 @@ def synthetic_windows(protocol, length, invalid=()):
 
 def _synthetic_case(protocol, key, case, rule, count):
     """The entry of one case of protocol_reachability(): `count` rows where they cost the most (_worst_rows()),
-    decided under the resolved `rule` as the audit decides a session of protocol[key] rows."""
+    decided under the resolved `rule` as the audit decides a session of protocol[key] rows; its witness field
+    names the function that placed the rows."""
     length = _length(protocol, key)
-    invalid = _worst_rows(length, _length(protocol, "window_rows"), _length(protocol, "full_every"), count)
+    invalid, witness = _worst_rows(length, _length(protocol, "window_rows"), _length(protocol, "full_every"), count)
     windows = synthetic_windows(protocol, length, invalid)  # It refuses an interval_s that is no grid.
     interval = protocol["interval_s"]
     facts = {"snapshots": length, "sequence_contiguous": True, "integrity_findings": 0,
@@ -572,7 +576,7 @@ def _synthetic_case(protocol, key, case, rule, count):
     verdict = _verdict(protocol, None, length, rule, True, facts)
     return {"key": key, "case": case, "rows": length, "invalid_seq": invalid, "windows": verdict["windows"],
             "score_coverage": verdict["score_coverage"], "gate": verdict["gate"],
-            "accepted": verdict["accepted"], "codes": verdict["codes"]}
+            "accepted": verdict["accepted"], "codes": verdict["codes"], "witness": witness}
 
 
 def protocol_reachability(protocol):
@@ -582,7 +586,8 @@ def protocol_reachability(protocol):
     invalid_rows rule also the session of `cycles` rows with `max` tolerable rows where they cost the most, with
     no two equal spacings where such a placement exists ("worst", worst_witness()). Every case is sampled exactly
     on the grid (each gap one interval, the span (rows - 1) intervals) and has no row closed by a parser rule.
-    Each entry holds key, case, rows, invalid_seq, windows, score_coverage, gate, accepted and codes.
+    Each entry holds key, case, rows, invalid_seq, windows, score_coverage, gate, accepted, codes and witness
+    ("worst_witness", or "worst_invalid_rows" where the rows fell back to it: _worst_rows()).
     """
     rule = invalid_rows_rule(protocol)
     cases = [("pilot_cycles", "clean", NO_TOLERANCE, 0), ("cycles", "clean", rule, 0)]
@@ -610,7 +615,7 @@ def gate_interval(protocol):
     rule = _max_rule(protocol)
     length = _length(protocol, "cycles")
     window_rows, full_every = _length(protocol, "window_rows"), _length(protocol, "full_every")
-    high, low = (synthetic_windows(protocol, length, _worst_rows(length, window_rows, full_every, count)) / length
+    high, low = (synthetic_windows(protocol, length, _worst_rows(length, window_rows, full_every, count)[0]) / length
                  for count in (rule["max"], rule["max"] + 1))
     return low, high
 
@@ -623,7 +628,8 @@ def max_witness_cases(protocol):
     with max + 1, since the rule's own count refuses max + 1 rows anyway: what refuses it there is the coverage
     gate or the periodicity bound, and the self-check wants the gate alone (refused, and no "periodicity" among
     its codes). Where no placement without two equal spacings costs the worst case, the entry holds the rows of
-    worst_invalid_rows() (_worst_rows()). ValueError for a protocol without an invalid_rows rule.
+    worst_invalid_rows() and its witness field says so (_worst_rows()). ValueError for a protocol without an
+    invalid_rows rule.
     """
     rule = _max_rule(protocol)
     return [_synthetic_case(protocol, "cycles", "worst", rule, rule["max"]),

@@ -1,7 +1,10 @@
+from collections import namedtuple
+import copy
 from datetime import datetime, timezone
 import gzip
 import hashlib
 import json
+import math
 from pathlib import Path
 import subprocess
 import sys
@@ -180,6 +183,298 @@ def seal(directory):
     sha = write_logs_manifest(directory)
     end = logs.read_json(directory / "end.json")
     write(directory / "end.json", dict(end, logs_manifest_sha256=sha))
+
+
+# --- Protocol v5 (package B5b): the traffic of the open-loop profiles eshop and corp, logs of schema /2 -----------
+# v5_traffic() is the one helper that gives a built session (build above) this traffic; build_session of
+# scripts/tests/boundary_sessions.py calls it under every protocol with the profiles section. Its numbers are
+# chosen so that every realism requirement of proposal 5.7 and the offered-load check hold with a margin, and
+# its arguments break one of them at a time.
+
+LOAD_MODEL = ("open loop: user sessions arrive as a non-homogeneous Poisson process with intensity rate x "
+              "envelope(t), at most max_concurrent in progress")
+# Spacings between the arrivals of the user sessions of the measure phase, in units of the planned envelope's
+# integral: coefficient of variation sqrt(1.125) = 1.06 (population standard deviation over the mean).
+SPACINGS = (.25, .25, 2.5) * 3
+# Think times (s) before the second and later requests of those user sessions, in turn (none above 70 s).
+THINKS = (1.5, 3., 4.5, 6., 7.5, 9., 10.5, 12.)
+Step = namedtuple("Step", "step method route object status bytes intended", defaults=(None,))
+HOME, BROWSE = Step("home", "GET", "/", None, 200, 320), Step("browse", "GET", "/api/catalog", None, 200, 1800)
+SEARCH = Step("search", "GET", "/api/catalog", None, 200, 900)
+DETAIL = Step("detail", "GET", "/api/catalog/7", 7, 200, 240)  # The most requested object.
+LOGO = Step("static", "GET", "/static/logo.png", "logo.png", 200, 150000)
+CART_ADD, CART = Step("cart_add", "POST", "/api/cart", 7, 200, 160), Step("cart", "GET", "/api/cart", None, 200, 160)
+ORDER = Step("order", "POST", "/api/orders", None, 201, 90)
+UNKNOWN = Step("detail", "GET", "/api/catalog/999999", 999999, 404, 40, 404)  # The deliberate client error.
+# One user session per list, ten of them: one orders (from its cart), one makes the deliberate error.
+ESHOP = ([HOME, BROWSE, DETAIL, LOGO], [HOME, SEARCH, DETAIL, Step("detail", "GET", "/api/catalog/12", 12, 200, 250)],
+         [BROWSE, DETAIL, LOGO], [HOME, DETAIL, CART_ADD, CART, ORDER], [HOME, UNKNOWN],
+         [BROWSE, DETAIL, Step("detail", "GET", "/api/catalog/3", 3, 200, 230)],
+         [HOME, Step("static", "GET", "/static/style.css", "style.css", 200, 4000), DETAIL], [SEARCH, DETAIL],
+         [HOME, BROWSE, DETAIL], [HOME, DETAIL, LOGO])
+LOGIN = Step("login", "POST", "/api/auth/login", None, 200, 300)
+LIST = Step("doc_list", "GET", "/api/docs", None, 200, 2500)
+DOC = Step("doc_get", "GET", "/api/docs/5", 5, 200, 64000)  # The most requested object.
+REPORT = Step("report", "POST", "/api/reports", None, 202, 80)
+REPORT_ID = "20260101T000000000000Z-0123abcd"
+WRONG_PASSWORD = Step("login", "POST", "/api/auth/login", None, 401, 40, 401)  # The deliberate client error.
+# Nine logins, two report requests, ten document downloads with a largest 14 times the median one.
+CORP = ([LOGIN, LIST, DOC], [LOGIN, LIST, DOC, Step("doc_get", "GET", "/api/docs/17", 17, 200, 900000)],
+        [LOGIN, Step("doc_put", "POST", "/api/docs", None, 201, 120), DOC],
+        [LOGIN, REPORT, Step("report_status", "GET", "/api/reports/" + REPORT_ID, REPORT_ID, 200, 60)],
+        [WRONG_PASSWORD], [LOGIN, DOC, Step("doc_get", "GET", "/api/docs/8", 8, 200, 30000)], [LOGIN, LIST, DOC],
+        [LOGIN, DOC, Step("doc_get", "GET", "/api/docs/2", 2, 200, 50000)], [LOGIN, LIST], [LOGIN, DOC, REPORT])
+# The five requests of build(): r0 alone, r1 and r2 one user session, r3 alone, r4 alone (steps of the lab routes).
+LEGACY = (("token",), ("browse", "order"), ("health",), ("orders",))
+# lab/nginx.conf and lab/services.py, written out here (never taken from the code under test): the service a route
+# reaches and whether it first asks auth about the token.
+UPSTREAM = (("/api/catalog", "catalog"), ("/api/auth/", "auth"), ("/api/orders", "orders"), ("/api/cart", "orders"),
+            ("/api/docs", "docs"), ("/api/reports", "docs"), ("/healthz", "orders"))
+
+
+def _service(route):
+    return None if route == "/" else next((name for prefix, name in UPSTREAM if route.startswith(prefix)), None)
+
+
+def _asks_auth(method, route):
+    return (route in ("/api/orders", "/api/cart", "/api/docs") or route.startswith("/api/docs/")
+            or route.startswith("/api/reports/") or route == "/api/reports" and method == "POST")
+
+
+def area(t, level, a, b):
+    """The integral over [a, b] of the level linear between the points (t, level), 0 outside them; the tests'
+    oracle of the planned envelope (never scripts/traffic_log.py)."""
+    total = 0.
+    for t0, t1, l0, l1 in zip(t, t[1:], level, level[1:]):
+        lo, hi = max(a, t0), min(b, t1)
+        if hi > lo:
+            at = lambda x: l0 + (l1 - l0) * (x - t0) / (t1 - t0)  # noqa: E731
+            total += (hi - lo) * (at(lo) + at(hi)) / 2
+    return total
+
+
+def _inverse(t, level, value, lo, hi):
+    """The time in [lo, hi] at which the integral of the level from 0 reaches value (bisection)."""
+    for _ in range(200):
+        mid = (lo + hi) / 2
+        lo, hi = (mid, hi) if area(t, level, 0, mid) < value else (lo, mid)
+    return round(hi, 6)
+
+
+def _segment(d, name, suffix, change):
+    """Replace the lines of the guest log segment guest/<name>-<suffix> by change(lines), its record too."""
+    path = d / "guest" / (name + "_segment.json")
+    doc = logs.read_json(path)
+    index = next(i for i, f in enumerate(doc["files"]) if f["name"].endswith("-" + suffix))
+    entry = doc["files"][index]
+    lines = gzip.decompress((d / "guest" / entry["file"]).read_bytes()).decode().splitlines(keepends=True)
+    doc["files"][index] = pack(d, entry["name"], "".join(change(lines)))
+    write(path, doc)
+
+
+def _append_segment(d, name, suffix, lines):
+    _segment(d, name, suffix, lambda old: [*old, *lines])
+
+
+def _filter_segment(d, name, suffix, keep):
+    _segment(d, name, suffix, lambda old: [line for line in old if keep(line)])
+
+
+def v5_traffic(d, p, *, scenario=None, sessions=None, spacings=SPACINGS, thinks=THINKS, flat=False, rate_factor=1,
+               legacy=LEGACY):
+    """Give the session directory d (built by build(), its protocol.json and session.json already final, sealed or
+    not) the traffic of a v5 profile under protocol p: logs of schema /2 (design B5b 1.4) and everything that counts
+    or serves their requests (nginx and journal segments, traffic.json, the exit code in end.json, the traffic block
+    of session.json). Without the profiles section in p nothing changes (returns None); else the request log's
+    header. The caller seals d.
+
+    The five requests of build() stay as they are, each in a user session that arrived in the warmup (LEGACY).
+    The user sessions of `sessions` (default ESHOP or CORP by the scenario's profile) arrive in the measure phase
+    after build()'s event window, at the times where the integral of the planned envelope makes the spacings
+    `spacings` (one fewer than sessions); their requests follow within milliseconds, think times from `thinks`. The
+    envelope is 0 but for one triangle of level 1 (flat: level 1 throughout); the rate (when the scenario has none)
+    makes the offered load of the intervals outside every window equal the planned one, rate_factor times off.
+    scenario: another scenario of p for the session (session.json follows).
+    """
+    if "profiles" not in p:
+        return None
+    meta, end = logs.read_json(d / "session.json"), logs.read_json(d / "end.json")
+    if scenario is not None:
+        meta["scenario"] = scenario
+    s = p["scenarios"][meta["scenario"]]
+    profile = s["profile"]
+    params = p["profiles"][profile]
+    sessions = sessions if sessions is not None else ESHOP if profile == "eshop" else CORP
+    if len(spacings) != len(sessions) - 1:
+        raise ValueError("one spacing between each two user sessions of the measure phase")
+    names = ("traffic_requests.jsonl", "traffic_intervals.jsonl")
+    log_r, log_i = ([{k: v for k, v in r.items() if k not in ("schema", "n")} for r in
+                     (json.loads(line) for line in (d / name).read_text().splitlines())] for name in names)
+    # Run again on traffic it gave before: back to the requests of build(), the others leave nginx and the journal.
+    legacy_rid = f"{sample.RUN}-00-"
+    gone = {r["rid"] for r in log_r if r.get("type") == "request" and not r["rid"].startswith(legacy_rid)}
+    log_r = [r for r in log_r if r.get("type") != "arrival" and r.get("rid") not in gone]
+    if gone:
+        _filter_segment(d, "session", "nginx-access.jsonl", lambda line: json.loads(line)["rid"] not in gone)
+        _filter_segment(d, "journal", "journal.txt",
+                        lambda line: not any(f"rid={rid} " in line for rid in gone))
+    base = log_r[0]["start_unix"]
+    stop = next(r["t_mono"] for r in log_r if r.get("type") == "phase" and r["phase"] == "post")
+    end_mono = log_r[-1]["end_mono"]
+    windows = []
+    if meta.get("events") and (d / "events.json").exists():
+        windows = [(e["host_start_unix"] - 1 - base, e["host_stopped_unix"] + meta["event_grace_s"] - base)
+                   for e in logs.read_json(d / "events.json")["events"] if "host_stopped_unix" in e]
+    first = max([2.01, *(hi + .01 for _, hi in windows)])  # After the first interval and every window.
+    last = stop - .05
+    if last - first < .1:
+        raise ValueError("no room for the user sessions of the measure phase")
+    warmup = p["warmup_s"]
+    span = max(end_mono, warmup) + 1  # D: the envelope spans [0, D]; warmup_s < D.
+    # Peak-to-mean twice the bound: a triangle of width (measure length / bound); flat: level 1 everywhere.
+    width = min(last - first, (stop - 1) / p["scenario_rule"]["min_peak_to_mean"])
+    rate = s["rate"]
+    if rate is not None and not flat:
+        width = 2 * len(sessions) / rate  # Its area holds the user sessions at the protocol's rate.
+        if width > last - first:
+            raise ValueError("the protocol's rate is too low for this session's measure phase")
+    if flat:
+        t_s, level = [0, round(span, 6)], [1, 1]
+    else:
+        t_s, level = [0, first, round(first + width / 2, 6), round(first + width, 6), round(span, 6)], [0, 0, 1, 0, 0]
+    start_area = area(t_s, level, 0, first)
+    total = area(t_s, level, first, last if flat else first + width) * (.9 if flat else 1)
+    unit = total / sum(spacings)
+    cumulative = [start_area + unit * sum(spacings[:k]) for k in range(len(sessions))]
+    arrive = [round(first, 6)] + [_inverse(t_s, level, c, first, last) for c in cumulative[1:]]
+
+    # The user sessions: (arrival time, the requests in time order).
+    requests = [r for r in log_r if r.get("type") == "request"]
+    if len(requests) != sum(map(len, legacy)):
+        raise ValueError("the requests of build() differ from LEGACY")
+    users, position = [], 0
+    for index, steps in enumerate(legacy):
+        mine = requests[position:position + len(steps)]
+        position += len(steps)
+        for j, (r, step) in enumerate(zip(mine, steps)):
+            r.update(step=step, object=None, intended_status=None,
+                     think_s=None if j == 0 else round(r["t_start_mono"] - mine[j - 1]["t_end_mono"], 6))
+        users.append((round(.01 * (index + 1), 6), mine))
+
+    def phase(t):
+        return "warmup" if t < 1 else "measure" if t < stop else "post"
+    turn = 0
+    for k, (at, steps) in enumerate(zip(arrive, sessions)):
+        mine = []
+        for j, step in enumerate(steps):
+            start = round(at + .001 + .002 * j, 6)
+            r = sample.request(j, math.floor(start), phase(start), start, 1., status=step.status, method=step.method,
+                               route=step.route)
+            failed = not 200 <= step.status < 300
+            r.update(session_id=d.name, rid=f"{sample.RUN}-{k + 1:02d}-{j:08d}", worker=k + 1,
+                     outcome="http_error" if failed else "ok", error=f"HTTPError: HTTP Error {step.status}" if failed
+                     else None, t_start_utc=utc(start, base), t_end_utc=utc(r["t_end_mono"], base),
+                     response_bytes=step.bytes, step=step.step, object=step.object, intended_status=step.intended,
+                     think_s=None if j == 0 else thinks[turn % len(thinks)])
+            turn += j > 0
+            mine.append(r)
+        users.append((at, mine))
+    users.sort(key=lambda user: user[0])
+    ends = [max(r["t_end_mono"] for r in mine) for _, mine in users]
+    arrivals = []
+    for n, (at, mine) in enumerate(users):
+        uid = f"{sample.RUN}-u{n}"
+        for r in mine:
+            r["user_session"] = uid
+        active = sum(1 for m in range(n) if ends[m] > at)
+        if active >= params["max_concurrent"]:
+            raise ValueError("the user sessions of this traffic need a larger max_concurrent")
+        arrivals.append({"type": "arrival", "user_session": uid, "t_mono": at, "t_utc": utc(at, base),
+                         "phase": phase(at), "admitted": True, "active": active})
+    requests = sorted((r for _, mine in users for r in mine), key=lambda r: r["t_start_mono"])
+
+    # The rate: the offered load of the measure intervals outside every window equals the plan (rate_factor off).
+    def outside(lo, hi):
+        return not any(a <= hi and lo <= b for a, b in windows)
+    ivs = [r for r in log_i if r.get("type") == "interval"]
+    kept = [iv for iv in ivs if iv["phase"] == "measure" and outside(iv["mono_start"], iv["mono_end"])]
+    if rate is None:
+        offered = sum(1 for a in arrivals if any(iv["mono_start"] <= a["t_mono"] < iv["mono_end"] for iv in kept))
+        rate = offered / sum(area(t_s, level, iv["mono_start"], iv["mono_end"]) for iv in kept)
+    rate = rate * rate_factor
+    for iv in ivs:
+        lo, hi = iv["mono_start"], iv["mono_end"]
+        members = [r for r in requests if r["interval"] == iv["interval"]]
+        inside = [a for a in arrivals if lo <= a["t_mono"] < hi or iv is ivs[-1] and a["t_mono"] == hi]
+        peak = max(sum(1 for m, (at, _) in enumerate(users) if at <= c < ends[m])
+                   for c in [lo, *(a["t_mono"] for a in inside)])
+        iv.update({**sample.interval(iv["interval"], iv["phase"], lo, hi, members),
+                   "t_start_utc": utc(lo, base), "t_end_utc": utc(hi, base),
+                   "offered_sessions": len(inside), "admitted_sessions": len(inside), "dropped_sessions": 0,
+                   "planned_sessions": round(rate * area(t_s, level, lo, hi), 6), "active_max": peak})
+
+    seeds = {"traffic": meta["seed"], "traffic_arrivals": meta["seed"] + 1, "traffic_choices": meta["seed"] + 2,
+             "traffic_sizes": meta["seed"] + 3}
+    config = dict(log_r[0]["config"], profile=profile, seed=meta["seed"], workers=None, burst=None,
+                  catalog_share=None, write_share=None, dur=round(span, 6))
+    v5 = {"config": config, "load_model": LOAD_MODEL, "profile": profile, "scenario": meta["scenario"],
+          "intensity": s["intensity"], "rate": rate, "rate_source": "protocol" if s["rate"] is not None
+          else "command line", "seeds": seeds, "protocol_sha256": meta["protocol_sha256"],
+          "profile_parameters": copy.deepcopy(params), "warmup_s": warmup, "envelope": {"t_s": t_s, "level": level}}
+    counts = {"arrivals": len(arrivals), "admitted": len(arrivals), "dropped": 0,
+              "user_sessions_completed": len(arrivals), "user_sessions_in_progress_at_stop": 0}
+    body_r = sorted([*arrivals, *requests, *(r for r in log_r if r.get("type") == "phase")],
+                    key=lambda r: r.get("t_mono", r.get("t_start_mono")))
+    log_r = [dict(log_r[0], **v5), *body_r, log_r[-1]]
+    log_i = [dict(log_i[0], **v5), *log_i[1:]]
+    for records in (log_r, log_i):
+        records[-1] = {**records[-1], **sample.end(requests, len(records) - 1, end_mono=end_mono), **counts,
+                       "end_utc": records[-1]["end_utc"], "phase": records[-1]["phase"]}
+    sample.write(d / names[0], tl.REQUEST_SCHEMA_2, log_r)
+    sample.write(d / names[1], tl.INTERVAL_SCHEMA_2, log_i)
+
+    status = logs.read_json(d / "traffic.json")
+    ok = sum(r["outcome"] == "ok" for r in requests)
+    write(d / "traffic.json", dict(status, requests=len(requests), requests_logged=len(requests), ok=ok,
+                                   errors=len(requests) - ok))
+    # host_traffic.py's exit code rule for v5: 1 when a request did not get its expected result (a 2xx, or the
+    # status a deliberate error intends) or none succeeded.
+    unexpected = [r for r in requests if (r["outcome"] != "ok" if r.get("intended_status") is None
+                                          else r["status"] != r["intended_status"])]
+    write(d / "end.json", dict(end, traffic_rc=int(bool(unexpected) or not ok)))
+    meta["traffic"] = {"generator": "scripts/host_traffic.py", "profile": profile, "scenario": meta["scenario"],
+                       "intensity": s["intensity"], "rate": rate, "rate_source": v5["rate_source"], "seeds": seeds,
+                       "seed": meta["seed"], "target": meta["traffic"]["target"],
+                       "summary_interval_s": meta["traffic"]["summary_interval_s"], "warmup_s": warmup,
+                       "dur": config["dur"], "load_model": LOAD_MODEL}
+    write(d / "session.json", meta)
+
+    # nginx and the services for the new requests (build() wrote those of the legacy ones).
+    units = logs.read_json(d / "guest/state_before.json")["units"]
+    added = [r for r in requests if not r["rid"].startswith(f"{sample.RUN}-00-")]
+    nginx, journal = [], []
+
+    def call(r, name, method, route, status):
+        pid = units["hyptcn-lab@" + name]["ExecMainPID"]
+        if windows and name == "orders" and r["t_start_mono"] > 1.7:
+            pid = "999"  # build(): orders restarted in the event and runs as 999 since
+        journal.append(f"{utc(r['t_end_mono'], base)} guest python3[{pid}]: client request rid={r['rid']} "
+                       f"method={method} path={route} status={status}\n")
+    for r in added:
+        nginx.append(json.dumps(dict(schema="hyptcn3/nginx-access/1", rid=r["rid"], forwarded_rid=r["rid"],
+                                     method=r["method"], uri=r["route"], status=r["status"],
+                                     msec=base + r["t_end_mono"], bytes=r["response_bytes"])) + "\n")
+        name = _service(r["route"])
+        if name is None:
+            continue
+        if _asks_auth(r["method"], r["route"]):
+            call(r, "auth", "GET", "/api/auth/check", 401 if r["status"] == 401 else 200)
+        call(r, name, r["method"], r["route"], r["status"])
+        if r["route"] == "/api/orders" and r["method"] == "POST" and r["status"] == 201:
+            call(r, "catalog", "GET", "/api/catalog/prices", 200)  # One catalog call per order.
+    _append_segment(d, "session", "nginx-access.jsonl", nginx)
+    _append_segment(d, "journal", "journal.txt", journal)
+    return log_r[0]
 
 
 def test_consistent_managed_session_checks_all_evidence(session):
@@ -417,10 +712,11 @@ WARN_LINE = "2026-01-01T00:00:03.000Z WARN  planovac: cyklus 7 trval 5.200 s (pe
 ], ids=["null", "full_match", "partial_match", "schema2"])
 def test_collector_warning_is_judged_by_the_allowed_patterns(session, schema, allowed, unlisted):
     doc = {"schema": f"hyptcn3/collection-protocol/{schema}", "interval_s": 5}
-    if schema == 3:
+    if schema == 3:  # Since package B5b the audit section also holds the traffic bounds (from the v5 file).
+        traffic = json.loads((logs.ROOT / "config/collection-v5.json").read_text())["audit"]["traffic"]
         doc["audit"] = {"lateness_max_s": .5, "cycle_ms_max": {"delta": 1500, "full": 3500},
                         "periodicity": {"equal_spacings": 3, "min_spacing_rows": 2, "note": "test"},
-                        "warnings_allowed": allowed, "rule_closed_rows_max": None}
+                        "warnings_allowed": allowed, "rule_closed_rows_max": None, "traffic": traffic}
     write(session / "protocol.json", doc)
     meta = logs.read_json(session / "session.json")
     write(session / "session.json", dict(meta, protocol_sha256=logs.digest(session / "protocol.json")))

@@ -9,6 +9,14 @@ The bounds come from the session's own protocol.json (features/audit_policy.py a
 section checks its hash). Every key a check reads is mandatory: a missing one fails that check (or its section),
 it never passes on a default. Each condition the audit admits instead of rejecting counts one registered
 exception (features/audit_policy.py tolerate); result["tolerated"] holds the counts of LOG_EXCEPTIONS.
+
+Under a schema-3 protocol with the profiles section (protocol v5, package B5b) the traffic logs are those of the
+open-loop profiles (scripts/traffic_log.py schemas /2): their header is compared with the protocol and
+session.json, a request with an intended client error passes outside the event windows only with exactly that
+status (every other request still must be 2xx), the generator's exit code must be the one its request log implies,
+nginx and the services are correlated for every route of lab/nginx.conf with the internal calls of
+lab/services.py, and the section "realism" refuses a session that misses a realism requirement of proposal 5.7
+(traffic_realism:<name>) or whose offered load differs from the plan (proposal 5.3).
 """
 import argparse
 from collections import Counter, defaultdict
@@ -25,7 +33,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 from features.audit_policy import audit_bounds, tolerate
 from scripts import host_monitor, traffic_log
-from scripts.protocol_v5 import plans_events
+from scripts.protocol_v5 import SCHEMA as SCHEMA_3, plans_events
 
 SCHEMA = "hyptcn3/collection-logs-audit/1"
 REQUIRED = ("preflight_smoke.json", "host_monitor.jsonl", "host_monitor.log", "traffic.json", "traffic.log",
@@ -35,8 +43,14 @@ REQUIRED = ("preflight_smoke.json", "host_monitor.jsonl", "host_monitor.log", "t
             "guest/session_segment.json", "guest/journal_segment.json")
 SERVICE_LINE = re.compile(r"python3\[(\d+)\]: .*request rid=(\S+) method=(\S+) path=(\S+) status=(\d+)\s*$")
 REQUIRED_UNITS = ("nginx", "postgresql@15-main", "hyptcn-lab@auth", "hyptcn-lab@catalog",
-                  "hyptcn-lab@orders", "hyptcn-lab@worker", "systemd-journald")
-APPS = ("hyptcn-lab@auth", "hyptcn-lab@catalog", "hyptcn-lab@orders", "hyptcn-lab@worker")
+                  "hyptcn-lab@orders", "hyptcn-lab@docs", "hyptcn-lab@worker", "systemd-journald")
+APPS = ("hyptcn-lab@auth", "hyptcn-lab@catalog", "hyptcn-lab@orders", "hyptcn-lab@docs", "hyptcn-lab@worker")
+SERVICES = ("auth", "catalog", "orders", "docs")  # The HTTP services of lab/services.py PORTS.
+# lab/nginx.conf: the service a route reaches, None where nginx answers alone (/, /static/ and every other path).
+# The exact locations first, else the longest prefix, as nginx chooses.
+NGINX_EXACT = {"/": None, "/healthz": "orders", "/api/orders": "orders", "/api/cart": "orders"}
+NGINX_PREFIX = (("/api/catalog", "catalog"), ("/api/auth/", "auth"), ("/api/docs", "docs"), ("/api/reports", "docs"),
+                ("/static/", None), ("/", None))
 # Units a protocol-v3 event restarts by design (lab/udalosti.py); any other restart stays a problem.
 EVENT_UNITS = {"zla_konfiguracia_sluzby": ("hyptcn-lab@catalog",), "restart_sluzby": ("hyptcn-lab@orders",),
                "restart_databazy": ("postgresql@15-main", *APPS)}
@@ -56,6 +70,23 @@ LOG_EXCEPTIONS = ("collector_warnings", "event_traffic_exit", "event_unit_restar
 def digest(path):
     with Path(path).open("rb") as stream:
         return hashlib.file_digest(stream, "sha256").hexdigest()
+
+
+def upstream(route):
+    """The service of lab/services.py that nginx passes a request of this route to; None when nginx answers it."""
+    if route in NGINX_EXACT:
+        return NGINX_EXACT[route]
+    return max((item for item in NGINX_PREFIX if route.startswith(item[0])), key=lambda item: len(item[0]))[1]
+
+
+def auth_checked(method, route):
+    """Whether the service answers this request only after it asked auth about the token (lab/services.py: orders
+    for /api/orders and /api/cart, docs for every document and report route it serves)."""
+    if route in ("/api/orders", "/api/cart", "/api/docs"):
+        return method in ("GET", "POST")
+    if route.startswith("/api/docs/") or route.startswith("/api/reports/"):
+        return method == "GET"
+    return route == "/api/reports" and method == "POST"
 
 
 def unix(value):
@@ -121,8 +152,9 @@ def audit_logs(directory, *, snapshot_times=()):
     during = set()
     counts = Counter()  # Exceptions admitted, by id of features/audit_policy.py TOLERATED.
     # The session's protocol and its audit bounds (None: schema 1 or 2). Until protocol.json has been read the
-    # bounds are unknown and admit nothing.
-    protocol, limits, limits_read = {}, None, False
+    # bounds are unknown and admit nothing. v5: a schema-3 protocol with the profiles section, whose sessions run
+    # the open-loop profiles (traffic logs /2).
+    protocol, limits, limits_read, v5 = {}, None, False, False
 
     def in_window(*times):
         return any(lo <= t <= hi for t in times for lo, hi in windows)
@@ -141,8 +173,9 @@ def audit_logs(directory, *, snapshot_times=()):
             problems.add(name + ":unreadable", f"{type(exc).__name__}: {exc}")
 
     def read_bounds():
-        nonlocal protocol, limits, limits_read
+        nonlocal protocol, limits, limits_read, v5
         protocol = read_json(directory / "protocol.json")
+        v5 = protocol.get("schema") == SCHEMA_3 and "profiles" in protocol
         limits, limits_read = audit_bounds(protocol), True
         return limits
 
@@ -159,6 +192,18 @@ def audit_logs(directory, *, snapshot_times=()):
               "guest_identity_changed")
         for name in ("collector", "traffic", "monitor"):
             rc = end.get(name + "_rc", end.get(name, {}).get("rc"))
+            if name == "traffic" and v5:
+                # Under v5 host_traffic.py exits 1 when a request did not get its expected result (a 2xx, or the
+                # status a deliberate client error intends, proposal 5.3) or no request succeeded, so the code must
+                # be the one its request log implies; traffic() judges every such request (inside an event window
+                # it is admitted, elsewhere refused).
+                logged = traffic_log.read_jsonl(directory / "traffic_requests.jsonl")[0]
+                rows = [r for r in logged if r.get("type") == "request"]
+                unexpected = [r for r in rows if (r.get("outcome") != "ok" if r.get("intended_status") is None
+                                                  else r.get("status") != r.get("intended_status"))]
+                implied = 0 if rows and not unexpected and any(r.get("outcome") == "ok" for r in rows) else 1
+                check(type(rc) is int and rc == implied, "child_exit", f"{name}:{rc}")
+                continue
             # host_traffic exits 1 after any failed request; outside the event windows those still fail below.
             if name == "traffic" and type(rc) is int and rc == 1 and meta.get("events"):
                 tolerate(counts, "event_traffic_exit")
@@ -220,7 +265,7 @@ def audit_logs(directory, *, snapshot_times=()):
             check(all(k in a and k in b and a[k] == b[k] for k in
                       ("NRestarts", "InvocationID", "ExecMainPID", "ExecMainStartTimestampMonotonic")),
                   "service_restarted", unit)
-        for name in ("auth", "catalog", "orders"):
+        for name in SERVICES:
             unit = "hyptcn-lab@" + name
             known_pids.setdefault(name, set()).update(str(state["units"][unit]["ExecMainPID"]) for state in (before, after))
         return {"boot_id": after["boot_id"], "database_before": before["database"],
@@ -256,23 +301,53 @@ def audit_logs(directory, *, snapshot_times=()):
     def traffic():
         nonlocal requests
         meta, end = read_json(directory / "session.json"), read_json(directory / "end.json")
-        records, _ = traffic_log.read_jsonl(directory / "traffic_requests.jsonl", traffic_log.REQUEST_SCHEMA)
+        records, _ = traffic_log.read_jsonl(directory / "traffic_requests.jsonl")
         requests = [r for r in records if r.get("type") == "request"]
+        # The protocol decides the schema (/2 for the v5 profiles, /1 otherwise); summarize refuses the other one.
+        schema = traffic_log.REQUEST_SCHEMA_2 if v5 else traffic_log.REQUEST_SCHEMA
         summary = traffic_log.summarize(directory / "traffic_requests.jsonl", directory / "traffic_intervals.jsonl",
-                                        session_id=directory.name)
+                                        session_id=directory.name, schema=schema)
         for problem in summary["problems"]:
             problems.add("traffic", problem)
         header = records[0]
-        intervals, _ = traffic_log.read_jsonl(directory / "traffic_intervals.jsonl", traffic_log.INTERVAL_SCHEMA)
+        intervals, _ = traffic_log.read_jsonl(directory / "traffic_intervals.jsonl")
         check("config" in header and "start_unix" in header and intervals[0].get("config") == header["config"]
               and intervals[0].get("start_unix") == header["start_unix"], "traffic_headers_disagree")
         phase_fields = lambda rows: [{k: v for k, v in r.items() if k not in ("schema", "n")}
                                      for r in rows if r.get("type") == "phase"]
         check(phase_fields(records) == phase_fields(intervals), "traffic_phase_times_disagree")
-        expected = dict(meta["traffic"], seed=meta["seed"], initial_phase="warmup")
-        for key in ("target", "profile", "seed", "workers", "burst", "catalog_share", "write_share",
-                    "summary_interval_s", "initial_phase"):
-            check(key in header["config"] and header["config"][key] == expected[key], "traffic_config", key)
+        if v5:
+            # The generator's header against the protocol and session.json (design B5b 1.3 and 1.4): the scenario
+            # with its profile, intensity and rate (from the protocol, or from the command line where the protocol
+            # has none), the session's traffic seed, the protocol it read, the profile's parameters verbatim, the
+            # warmup, and the target, summary interval and initial phase of every collection run.
+            s = protocol["scenarios"].get(meta["scenario"], {})
+            config, run, seeds, rate = header["config"], meta["traffic"], header.get("seeds"), s.get("rate")
+            parameters = header.get("profile_parameters")
+            fields = {
+                "profile": header.get("profile") == s.get("profile"),
+                "scenario": header.get("scenario") == meta["scenario"],
+                "intensity": header.get("intensity") == s.get("intensity"),
+                "rate": (header.get("rate_source") == "protocol" and header.get("rate") == rate) if rate is not None
+                else (header.get("rate_source") == "command line" and type(header.get("rate")) in (int, float)
+                      and header["rate"] > 0),
+                "seeds": type(seeds) is dict and type(seeds.get("traffic")) is int
+                and seeds["traffic"] == meta["seed"],
+                "protocol_sha256": type(header.get("protocol_sha256")) is str
+                and header["protocol_sha256"] == meta.get("protocol_sha256"),
+                "profile_parameters": type(parameters) is dict
+                and parameters == protocol["profiles"].get(s.get("profile")),
+                "warmup_s": header.get("warmup_s") == protocol["warmup_s"],
+                "target": config.get("target") == run["target"],
+                "summary_interval_s": config.get("summary_interval_s") == run["summary_interval_s"],
+                "initial_phase": config.get("initial_phase") == "warmup"}
+            for key, good in fields.items():
+                check(good, "traffic_config", key)
+        else:
+            expected = dict(meta["traffic"], seed=meta["seed"], initial_phase="warmup")
+            for key in ("target", "profile", "seed", "workers", "burst", "catalog_share", "write_share",
+                        "summary_interval_s", "initial_phase"):
+                check(key in header["config"] and header["config"][key] == expected[key], "traffic_config", key)
         check([m["phase"] for m in summary["phase_markers"]] == ["measure", "post"], "traffic_phases")
         bounds = {m["phase"]: unix(m["t_utc"]) for m in summary["phase_markers"]}
         check(abs(bounds["measure"] - finite(end["measure_start_unix"])) <= 1 and
@@ -289,6 +364,11 @@ def audit_logs(directory, *, snapshot_times=()):
             if in_window(unix(row["t_start_utc"]), unix(row["t_end_utc"])):
                 tolerate(counts, "event_window_requests")  # May fail; nginx and services are not correlated.
                 during.add(row.get("rid"))
+                continue
+            if v5 and row.get("intended_status") is not None:
+                # A deliberate client error of the v5 profiles (proposal 5.3) passes only with its own status; the
+                # success rate is a realism requirement (section realism), not a rule per request.
+                check(row.get("status") == row["intended_status"], "intended_status_differs", row.get("rid"))
                 continue
             check(row["outcome"] == "ok" and type(row["status"]) is int and 200 <= row["status"] < 300,
                   "request_failed", row.get("rid"))
@@ -340,7 +420,7 @@ def audit_logs(directory, *, snapshot_times=()):
         for row in smoke["values"]["checks"]:
             check("expected" in row and row["status"] == row["expected"], "preflight_failed", row["rid"])
             check(pre[row["rid"]] == [row["status"]], "preflight_correlation", row["rid"])
-        pids = {name: known_pids[name] for name in ("auth", "catalog", "orders")}
+        pids = {name: known_pids[name] for name in SERVICES}
         service, catalog_calls = Counter(), Counter()
         journal = contents["journal:journal.txt"]
         for line in journal.splitlines():
@@ -362,18 +442,24 @@ def audit_logs(directory, *, snapshot_times=()):
             return sum(service[(rid, pid, method, route, status)] for pid in pids[name])
         for rid, req in expected.items():
             route, method, status = req["route"], req["method"], req["status"]
-            name = "auth" if route.startswith("/api/auth/") else "catalog" if route.startswith("/api/catalog") else "orders"
-            if route == "/":
+            if v5:  # Every route of lab/nginx.conf; nginx alone answers /, /static/ and the paths it does not pass.
+                name = upstream(route)
+            else:
+                name = ("auth" if route.startswith("/api/auth/") else "catalog" if route.startswith("/api/catalog")
+                        else None if route == "/" else "orders")
+            if name is None:
                 continue  # nginx serves this route without an API call.
             if rid in during:  # Counted as an exception in traffic().
                 tolerated["requests_in_events"] += 1
                 tolerated["failed_in_events"] += req["outcome"] != "ok" or not 200 <= req["status"] < 300
                 continue
             check(served(rid, name, method, route, status) == 1, "service_request_count", rid)
-            if route == "/api/orders":
-                check(served(rid, "auth", "GET", "/api/auth/check", 200) == 1, "service_auth_call", rid)
-                if method == "POST" and status == 201:
-                    check(catalog_calls[rid] == 1, "service_catalog_call", rid)
+            # orders and docs ask auth about the token first (lab/services.py); a token it refuses is answered 401.
+            if (auth_checked(method, route) if v5 else route == "/api/orders"):
+                check(served(rid, "auth", "GET", "/api/auth/check", 401 if v5 and status == 401 else 200) == 1,
+                      "service_auth_call", rid)
+            if route == "/api/orders" and method == "POST" and status == 201:
+                check(catalog_calls[rid] == 1, "service_catalog_call", rid)
             if route == "/healthz":
                 for dependency in ("auth", "catalog"):
                     check(served(rid, dependency, "GET", "/healthz", 200) == 1,
@@ -442,8 +528,14 @@ def audit_logs(directory, *, snapshot_times=()):
         meta = read_json(directory / "session.json")
         doc = read_json(directory / "events.json")
         check(doc.get("schema") == "hyptcn3/session-events/1", "events_schema")
-        planned = [{k: r[k] for k in ("type", "class", "start_s", "duration_s")} for r in doc["events"]]
-        check(planned == meta["events"], "events_differ_from_plan")
+        # Every key of each planned event in session.json (under schema 3 the items of the plan as they are: type,
+        # class, start_s, duration_s, start_phase_s, stop_phase_s; at least the first four) has the same value in
+        # its record of events.json.
+        planned = meta["events"]
+        check(type(planned) is list and len(planned) == len(doc["events"]) and all(
+            type(item) is dict and {"type", "class", "start_s", "duration_s"} <= set(item) and type(record) is dict
+            and all(key in record and record[key] == item[key] for key in item)
+            for item, record in zip(planned, doc["events"])), "events_differ_from_plan")
         for record in doc["events"]:
             check(record.get("executed") is True, "event_not_executed", record["type"])
             # The predicate of the event type fills effect (package B5): {"ok": bool, "predicate": str, ...}.
@@ -464,7 +556,7 @@ def audit_logs(directory, *, snapshot_times=()):
                   and all(type(record.get(step)) is dict and record[step].get("script_sha256") == script
                           for step in ("start", "stop")), "event_script_differs", record["type"])
             for state in (record.get("start", {}), record["stop"]):
-                for name in ("auth", "catalog", "orders"):
+                for name in SERVICES:
                     pid = state.get("units", {}).get("hyptcn-lab@" + name, {}).get("ExecMainPID")
                     if pid and pid != "0":
                         known_pids.setdefault(name, set()).add(str(pid))
@@ -495,8 +587,22 @@ def audit_logs(directory, *, snapshot_times=()):
         summary, requests = traffic()
         return summary
 
+    def realism():
+        """Protocol v5: the realism requirements of proposal 5.7 and the offered-load check of proposal 5.3
+        (scripts/traffic_log.py realism) over the measure phase, outside the event windows where they judge the
+        lab's answers."""
+        meta = read_json(directory / "session.json")
+        found = traffic_log.realism(directory / "traffic_requests.jsonl", directory / "traffic_intervals.jsonl",
+                                    protocol, meta["scenario"], windows=windows)
+        for requirement in found["requirements"]:
+            check(requirement["ok"], "traffic_realism", requirement["name"])
+        check(found["offered_load"]["ok"], "offered_load_differs_from_plan")
+        return found
+
     section("segments", read_segments)
     section("traffic", read_traffic)
+    if v5:
+        section("realism", realism)
     section("correlation", lambda: correlation(contents, requests))
     section("monitor", monitor)
     section("collector", collector)

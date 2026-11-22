@@ -20,7 +20,7 @@ from scripts import collection
 from scripts.tests import boundary_sessions as bs
 from scripts.tests import test_collection_logs as evidence
 from scripts.tests.audit_case import Case
-from scripts.tests.audit_cases_logs import LOG_CASES
+from scripts.tests.audit_cases_logs import LOG_CASES, under_v5
 
 SESSION = "audit-selftest"  # The session id of every built session; each one lives in a directory of its own.
 FRAME = 3  # The frame whose sidecar a case of a sidecar field edits (a delta snapshot under every protocol here).
@@ -297,6 +297,9 @@ ALSO_MISSING = {
     "end.json:guest_after": ["logs: guest_identity_changed"],
     "raw/capture.json:values.collector_sha256": ["logs: collector:unreadable:KeyError: 'collector_sha256'"],
 }
+# What a missing key takes away from the v5 traffic checks as well (package B5b): the generator's header names the
+# protocol hash session.json states.
+V5_ALSO_MISSING = {"session.json:protocol_sha256": ["logs: traffic_config:protocol_sha256"]}
 
 
 def _missing(name, dotted):
@@ -309,8 +312,10 @@ def _missing(name, dotted):
         _edit(path, lambda doc: _drop(doc, dotted))
         if name == "raw/capture.json":
             evidence.seal(d)
+    base = sorted([reason, *ALSO_MISSING.get(f"{file}:{dotted}", [])])
+    extra = V5_ALSO_MISSING.get(f"{file}:{dotted}")
     return Case("missing_key:" + file + ":" + dotted, "6.2 every audited key is mandatory",
-                sorted([reason, *ALSO_MISSING.get(f"{file}:{dotted}", [])]), mutate)
+                under_v5(base, extra) if extra else base, mutate)
 
 
 RAM_CASES = [
@@ -318,7 +323,9 @@ RAM_CASES = [
     Case("historical", "historical capture without provenance", sorted([
         "historical capture without protocol/session provenance; exploratory only",
         "session role is not assigned by the protocol"]), _historical),
-    Case("protocol_hash", "protocol hash mismatch", ["protocol hash mismatch"], _protocol_hash),
+    # Under v5 the generator's header still names the protocol it read (package B5b).
+    Case("protocol_hash", "protocol hash mismatch",
+         under_v5(["protocol hash mismatch"], ["logs: traffic_config:protocol_sha256"]), _protocol_hash),
     Case("incomplete_capture", "incomplete capture or changed guest identity",
          ["incomplete capture or changed guest identity", "logs: incomplete_capture"],
          _end(_set("completed", False))),

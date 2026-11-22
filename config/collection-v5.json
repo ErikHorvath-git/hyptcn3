@@ -95,6 +95,135 @@
     "basis": "rate is the peak of the arrival envelope: the share peak_share of the throughput measured at saturation in G2 for the scenario's intensity; the mean follows from the envelope",
     "note": "Peak shares 0.3 and 0.8 are the author's judgment (skeleton section 1); the peak-to-mean ratio of at least 2 is proposal 5.7 (author's proposal, judgment). The lab test on the VM after B5 checks the rule before G2 fixes rate."
   },
+  "profiles": {
+    "eshop": {
+      "arrivals": {
+        "ramp_s": 120,
+        "wave_period_s": [
+          1200,
+          2400
+        ],
+        "wave_mean": [
+          0.25,
+          0.4
+        ],
+        "wave_amplitude": [
+          0.2,
+          0.5
+        ],
+        "peak_s": [
+          120,
+          240
+        ],
+        "peak_edge_share": 0.25,
+        "peak_at": "uniform",
+        "step_s": 30,
+        "note": "The envelope of the open loop (proposal 5.3, skeleton B5 section 2; scripts/host_traffic.py draw_envelope), drawn from the session's traffic seed over [0, dur]: a linear ramp from level 0 over [0, ramp_s], inside the warmup; one slow wave mean * (1 - amplitude * cos(2 pi (t - start) / period)) with the period in wave_period_s (20 to 40 minutes, skeleton section 2), the mean in wave_mean, the amplitude in wave_amplitude and the start of a cycle in [warmup, warmup + period); one short peak of level 1 lasting peak_s (2 to 4 minutes, skeleton section 2), a trapezoid whose two flanks take peak_edge_share of it each, inside [warmup, dur]. An envelope whose peak-to-mean over [warmup, dur] is below scenario_rule.min_peak_to_mean is drawn again. The envelope is piecewise linear with knots every step_s. ramp_s 120 is warmup_s; wave_mean, wave_amplitude, peak_edge_share and step_s are the author's judgment. peak_at uniform: the peak lies anywhere in [warmup, dur] (a sale)."
+      },
+      "max_concurrent": 500,
+      "client_errors": {
+        "share": 0.02,
+        "statuses": [
+          400,
+          401,
+          404
+        ],
+        "note": "Deliberate client errors, share of all requests (proposal 5.3: 1 to 3 %; skeleton section 2: 2 %): after each request one follows with odds share / (1 - share), its status drawn from statuses: 400 a catalog page 0, 401 the cart with an invalid token, 404 the detail of a product beyond the catalog. The request log marks each with intended_status."
+      },
+      "think_s": {
+        "mean": 7,
+        "max": 70,
+        "note": "Before every request but the first of a user session: exponential with mean 7 s, cut at 70 s (proposal 5.7, TPC-W)."
+      },
+      "order_share": {
+        "low": 0.05,
+        "high": 0.2
+      },
+      "zipf_s": 1,
+      "funnel": {
+        "pages": [
+          1,
+          4
+        ],
+        "search_share": 0.3,
+        "details_per_page": [
+          0,
+          2
+        ],
+        "static_share": 0.5,
+        "cart_items": [
+          1,
+          3
+        ],
+        "page_size": 20,
+        "note": "The funnel of skeleton section 2 (home, browse and search, detail, cart, order): home, then a number of catalog pages drawn uniformly from pages, each a search with search_share (a noun of the product names of lab/seed.py) or else a browse of a page drawn Zipf over the catalog pages of page_size products, each page followed by a number of product details drawn uniformly from details_per_page, each detail drawn Zipf over the products; after home, a page or a detail a static file follows with static_share, drawn Zipf over the static files of lab/seed.py. A user session orders with order_share of its intensity (proposal 5.7): a login (customer token), a number drawn uniformly from cart_items of the products it viewed into the cart, the cart, the order. Zipf has the exponent zipf_s (skeleton section 2). pages, search_share, details_per_page, static_share, cart_items and page_size are the author's judgment."
+      },
+      "note": "Profile eshop (proposal 5.2): customers' user sessions as a funnel against the catalog, the cart, the orders and the static files of the lab (lab/services.py, lab/nginx.conf; objects of lab/seed.py). order_share is proposal 5.7, zipf_s skeleton section 2. max_concurrent 500 is the author's judgment until the lab test on the VM (RIADENIE point 4): a user session of about 9 requests lasts about a minute, so about 60 x rate are in progress at the peak."
+    },
+    "corp": {
+      "arrivals": {
+        "ramp_s": 120,
+        "wave_period_s": [
+          1200,
+          2400
+        ],
+        "wave_mean": [
+          0.25,
+          0.4
+        ],
+        "wave_amplitude": [
+          0.2,
+          0.5
+        ],
+        "peak_s": [
+          120,
+          240
+        ],
+        "peak_edge_share": 0.25,
+        "peak_at": "wave_start",
+        "step_s": 30,
+        "note": "The envelope of the open loop (proposal 5.3, skeleton B5 section 2; scripts/host_traffic.py draw_envelope), drawn from the session's traffic seed over [0, dur]: a linear ramp from level 0 over [0, ramp_s], inside the warmup; one slow wave mean * (1 - amplitude * cos(2 pi (t - start) / period)) with the period in wave_period_s (20 to 40 minutes, skeleton section 2), the mean in wave_mean, the amplitude in wave_amplitude and the start of a cycle in [warmup, warmup + period); one short peak of level 1 lasting peak_s (2 to 4 minutes, skeleton section 2), a trapezoid whose two flanks take peak_edge_share of it each, inside [warmup, dur]. An envelope whose peak-to-mean over [warmup, dur] is below scenario_rule.min_peak_to_mean is drawn again. The envelope is piecewise linear with knots every step_s. ramp_s 120 is warmup_s; wave_mean, wave_amplitude, peak_edge_share and step_s are the author's judgment. peak_at wave_start: the peak begins where a cycle of the slow wave begins (its lowest level), the login wave at the beginning of the slow wave (skeleton section 2): every corp user session begins with a login."
+      },
+      "max_concurrent": 250,
+      "client_errors": {
+        "share": 0.02,
+        "statuses": [
+          400,
+          401,
+          404
+        ],
+        "note": "Deliberate client errors as in eshop (proposal 5.3, skeleton section 2), in the forms of corp: 400 a document list page 0, 401 a login with a wrong password, 404 a document id that never exists."
+      },
+      "think_s": {
+        "mean": 10,
+        "max": 100,
+        "note": "Exponential with mean 10 s, cut at 100 s, the author's judgment: an employee reads a document longer than a customer a page (proposal 5.7 fixes the think time of eshop only)."
+      },
+      "zipf_s": 1,
+      "actions": [
+        2,
+        8
+      ],
+      "shares": {
+        "doc_list": 0.35,
+        "doc_get": 0.5,
+        "doc_put": 0.05,
+        "report": 0.1
+      },
+      "page_size": 20,
+      "document_sizes": {
+        "median_bytes": 65536,
+        "sigma": 1.0,
+        "tail_share": 0.05,
+        "tail_from_bytes": 524288,
+        "tail_alpha": 1.2,
+        "min_bytes": 1024,
+        "max_bytes": 8388608,
+        "note": "Upload sizes, lognormal with a Pareto tail (skeleton section 2): with tail_share a Pareto size from tail_from_bytes with index tail_alpha, else lognormal with the median median_bytes and sigma; cut to [min_bytes, max_bytes], max_bytes the 8 MiB cap of the docs service (lab/services.py MAX_DOCUMENT). The numbers are those of the seeded documents (lab/seed.py document_size, the B5a executor's judgment)."
+      },
+      "note": "Profile corp (proposal 5.2): an employee logs in with a password (lab/seed.py employee_password), then takes a number of document actions drawn uniformly from actions, each drawn by shares: a document list page (drawn Zipf over the pages of page_size documents), a download (drawn Zipf over the seeded documents), an upload (document_sizes) or a report request, which the worker runs as three subprocesses and whose status the employee checks once. Zipf has the exponent zipf_s. The login wave is arrivals.peak_at wave_start. actions, shares, page_size, zipf_s and max_concurrent 250 are the author's judgment (max_concurrent until the lab test on the VM)."
+    }
+  },
   "events": {
     "types": {
       "zla_konfiguracia_sluzby": "zla_konfiguracia",
@@ -164,10 +293,13 @@
       "event_deck",
       "control_deck",
       "event_times",
-      "traffic"
+      "traffic",
+      "traffic_arrivals",
+      "traffic_choices",
+      "traffic_sizes"
     ],
-    "rule": "seed = int(sha256(json.dumps([name, group, session, attempt, purpose])).hexdigest()[:16], 16) with the protocol name (the rehearsal's own name in rehearsal mode); session-level purposes (event_times, traffic) take the group name, the position and the attempt; role-level ones (event_free_position, event_deck, control_deck) the role name as group, session -1 and attempt 0; scenario_order is drawn per block of len(scenarios) groups of a role, with group <role>/<block>, session -1 and attempt 0",
-    "note": "Every purpose has its own random stream (proposal 5.5); the seeds are new, the v4 schedule was looked at during the fault analysis (proposal 7.3)."
+    "rule": "seed = int(sha256(json.dumps([name, group, session, attempt, purpose])).hexdigest()[:16], 16) with the protocol name (the rehearsal's own name in rehearsal mode); session-level purposes (event_times, traffic, traffic_arrivals, traffic_choices, traffic_sizes) take the group name, the position and the attempt; role-level ones (event_free_position, event_deck, control_deck) the role name as group, session -1 and attempt 0; scenario_order is drawn per block of len(scenarios) groups of a role, with group <role>/<block>, session -1 and attempt 0",
+    "note": "Every purpose has its own random stream (proposal 5.5); the seeds are new, the v4 schedule was looked at during the fault analysis (proposal 7.3). The traffic of a session (package B5b, skeleton B5 section 2): traffic draws the arrival envelope and is the session's seed, traffic_arrivals the arrival times, traffic_choices the choices of every user session and traffic_sizes the upload sizes (scripts/host_traffic.py)."
   },
   "audit": {
     "lateness_max_s": 0.5,
@@ -181,7 +313,27 @@
       "note": "author's judgment in G0 (proposal 10.9), not a mechanism; the spacings are those between the starts of bursts of flagged rows (lead's remarks on B3, part 2)"
     },
     "warnings_allowed": null,
-    "rule_closed_rows_max": null
+    "rule_closed_rows_max": null,
+    "traffic": {
+      "offered_load_tolerance": 0.2,
+      "arrival_cv": [
+        0.8,
+        1.2
+      ],
+      "top_objects_share": 0.1,
+      "top_objects_min_requests": 0.5,
+      "success_min": 0.88,
+      "response_size_orders": 2,
+      "think_mean_tolerance_se": 4,
+      "order_share_tolerance_se": 4,
+      "background": {
+        "logins_min": 1,
+        "reports_min": 1,
+        "document_max_to_median": 10,
+        "note": "Background activity of corp (proposal 5.7: the author's proposal without a direct source): outside every event window at least one successful login and one accepted report request, and the largest document download at least 10 times the median one (a long tail of sizes); the three numbers are the author's judgment (package B5b)."
+      },
+      "note": "The bounds of the realism requirements (scripts/traffic_log.py realism) and of the offered-load check, G0 by proposal 10.9. Proposal 5.3: the offered load outside event windows within 20 % of the plan. Proposal 5.7: arrival spacings with a coefficient of variation of 0.8 to 1.2, computed on spacings rescaled by the planned envelope (skeleton B5 section 4); the most requested tenth of the objects gets at least half of the requests; at least 88 % and less than 100 % successful answers outside events; response sizes over at least two orders of magnitude. The think-time mean and the order share may differ from the profile's design value (profiles, proposal 5.7) by at most 4 standard errors of their sample (the sample standard deviation over the square root of the count; for the order share sqrt(p (1 - p) / n) of the design share p): a two-sided test whose false refusal is about 6e-5 per session under the normal approximation, the author's judgment (package B5b). The peak-to-mean bound is scenario_rule.min_peak_to_mean."
+    }
   },
   "exceptions": {
     "invalid_rows": {
@@ -311,7 +463,8 @@
       "statistic": "D = share of detected interventions of M minus that of Z per boot",
       "compare": [
         "Z1",
-        "Z2"
+        "Z2",
+        "Z4"
       ],
       "m": null,
       "rule": "95th percentile on >= 20 structure-free seeds (G1)"

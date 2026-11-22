@@ -11,7 +11,15 @@ the session's time base or directory, so one list holds for every clean session 
 LOG_CASES covers every problem key of the log audit (also "<section>:unreadable"); a key that comes only with
 another reason says why in its case. A case whose id ends in ":missing" removes a key the check reads: before B3
 the check passed without it (mandatory keys, proposal 6.2). UNREACHABLE names the keys no buildable session
-reaches (none at present).
+reaches.
+
+Protocol v5 (package B5b): under a schema-3 protocol with the profiles section the clean session carries the
+traffic of its scenario's open-loop profile (logs of schema /2, test_collection_logs.v5_traffic). V5_CASES break
+one realism requirement, the offered load, an intended client error, a field of the generator's header, its exit
+code or the correlation of a new route at a time; a case that needs one profile moves the session to a scenario
+of it. They apply once the schema-3 layout has the profiles section (agent T of B5b, scripts/protocol_v5.py
+TOP_LEVEL): from then on every schema-3 protocol has it. Until then UNREACHABLE names their keys with that reason.
+A case of the base list whose reasons differ under v5 takes them from the protocol (expected is a callable).
 """
 import gzip
 import json
@@ -32,6 +40,17 @@ LONG_WARNING = "synthetic json warning " + "x" * 200  # The problem keeps its fi
 
 def logs(*problems):
     return ["logs: " + problem for problem in problems]
+
+
+def _v5(p):
+    """Whether the sessions of protocol p carry the traffic of the v5 profiles (logs /2; package B5b)."""
+    return p.get("schema") == "hyptcn3/collection-protocol/3" and "profiles" in p
+
+
+def under_v5(base, extra):
+    """expected: the reasons `base`, and under a protocol with the profiles section (package B5b) also `extra`,
+    which v5 adds because the case breaks what the v5 traffic checks read too."""
+    return lambda p: sorted([*base, *(extra if _v5(p) else [])])
 
 
 def _read(d, name):
@@ -171,6 +190,14 @@ def _change_request(d, rid, **fields):
     status = _read(d, "traffic.json")
     _write(d, "traffic.json", dict(status, ok=sum(r["outcome"] == "ok" for r in requests),
                                    errors=sum(r["outcome"] != "ok" for r in requests)))
+    if logs_["traffic_requests.jsonl"][0].get("schema") == traffic_log.REQUEST_SCHEMA_2:
+        # Under v5 the generator's exit code counts the request too: 1 when a result is not the expected one (a 2xx,
+        # or the status a deliberate error intends) or none succeeded.
+        unexpected = [r for r in requests if (r["outcome"] != "ok" if r.get("intended_status") is None
+                                              else r["status"] != r["intended_status"])]
+        end = _read(d, "end.json")
+        ok = any(r["outcome"] == "ok" for r in requests)
+        _write(d, "end.json", dict(end, traffic_rc=int(bool(unexpected) or not ok)))
 
     def nginx(rows):
         _row(rows, rid).update(method=request["method"], status=request["status"])
@@ -297,8 +324,10 @@ def _json_line(level, message):
 
 _CASES = [
     # (id, mutate, expected reasons); the check is the id up to its first ":", or the whole id of an unreadable section
+    # Under v5 the realism section needs the same bounds.
     ("audit_bounds:unreadable", edit("protocol.json", _protocol_without_bounds),
-     logs("audit_bounds:unreadable:ValueError: protocol schema 3 requires the audit section", "protocol_hash")),
+     under_v5(logs("audit_bounds:unreadable:ValueError: protocol schema 3 requires the audit section", "protocol_hash"),
+              logs("realism:unreadable:ValueError: protocol schema 3 requires the audit section"))),
     ("metadata:unreadable", edit("end.json", lambda end: end.update(monitor=[]), seal=False),
      logs("metadata:unreadable:AttributeError: 'list' object has no attribute 'get'")),
     ("manifest:unreadable", edit_manifest(lambda doc: doc.pop("files")), logs("manifest:unreadable:KeyError: 'files'")),
@@ -389,14 +418,16 @@ _CASES = [
      logs("traffic:requests:worker_errors")),
     ("traffic_headers_disagree", edit_lines("traffic_intervals.jsonl", lambda rows: rows[0].update(
         start_unix=rows[0]["start_unix"] + 1)), logs("traffic_headers_disagree")),
+    # Under v5 the realism section needs the generator's start to place the intervals.
     ("traffic_headers_disagree:missing", steps(*(edit_lines(name, lambda rows: rows[0].pop("start_unix"))
                                                  for name in ("traffic_requests.jsonl", "traffic_intervals.jsonl"))),
-     logs("traffic_headers_disagree")),
+     under_v5(logs("traffic_headers_disagree"), logs("realism:unreadable:KeyError: 'start_unix'"))),
     ("traffic_phase_times_disagree", edit_lines("traffic_intervals.jsonl", lambda rows: next(
         r for r in rows if r.get("type") == "phase").update(t_mono=-1.0)), logs("traffic_phase_times_disagree")),
-    ("traffic_config", steps(*(edit_lines(name, lambda rows: rows[0]["config"].update(workers=99))
+    # The target: both kinds of traffic compare it with session.json (package B5b: v5 has no workers).
+    ("traffic_config", steps(*(edit_lines(name, lambda rows: rows[0]["config"].update(target="http://another-lab"))
                                for name in ("traffic_requests.jsonl", "traffic_intervals.jsonl"))),
-     logs("traffic_config:workers")),
+     logs("traffic_config:target")),
     # Without the post marker the traffic phases also lack the end of the measurement they bound.
     ("traffic_phases", _without_post_marker, logs("traffic_phases", "traffic:unreadable:KeyError: 'post'")),
     ("traffic_measure_bounds", edit("end.json", _shift_measure_end(1.5), seal=False), logs("traffic_measure_bounds")),
@@ -408,10 +439,12 @@ _CASES = [
     ("request_id_missing", edit_lines("traffic_requests.jsonl", lambda rows: _row(
         [r for r in rows if r.get("type") == "request"], R0).update(rid="")),
      logs("request_id_missing", "nginx_unknown_request:" + R0, "nginx_request_count::0", "service_request_count:")),
-    # Both monotonic times before the generator's start: also outside the request's interval.
+    # Both monotonic times before the generator's start: also outside the request's interval (under v5 also
+    # before its user session arrived).
     ("request_timing", edit_lines("traffic_requests.jsonl", lambda rows: _row(
         [r for r in rows if r.get("type") == "request"], R0).update(t_start_mono=-.1, t_end_mono=-.097)),
-     logs("request_timing:" + R0, "traffic:request_outside_interval:" + R0)),
+     under_v5(logs("request_timing:" + R0, "traffic:request_outside_interval:" + R0),
+              logs("traffic:request_before_arrival:" + R0))),
     ("request_wall_clock", edit_lines("traffic_requests.jsonl", lambda rows: (lambda r: r.update(
         t_end_utc=evidence.datetime.fromtimestamp(evidence.logs.unix(r["t_start_utc"]) - .05,
                                                   evidence.timezone.utc).isoformat()))(
@@ -520,5 +553,220 @@ _CASES = [
      logs("event_without_effect:" + EVENT)),
 ]
 
-LOG_CASES = [Case("logs:" + name, name.split(":")[0] if not name.endswith(":unreadable") else name,
-                  sorted(expected), mutate) for name, mutate, expected in _CASES]
+_CASES.append(  # lab/services.py since B5a: the docs service is a unit of the lab like the others.
+    ("service_restarted:docs", edit("guest/state_after.json", _unit("hyptcn-lab@docs", InvocationID="new")),
+     logs("service_restarted:hyptcn-lab@docs")))
+
+
+# Protocol v5 (package B5b): the cases of the traffic of the open-loop profiles.
+
+def _scenario_of(p, d, profile):
+    """The session's scenario when it is one of `profile`, else the first scenario of p that is."""
+    own = _read(d, "session.json")["scenario"]
+    if p["scenarios"][own]["profile"] == profile:
+        return own
+    return next(name for name in sorted(p["scenarios"]) if p["scenarios"][name]["profile"] == profile)
+
+
+def traffic(profile, **variant):
+    """mutate: the traffic of the v5 profile `profile` again (test_collection_logs.v5_traffic with `variant`), the
+    session moved to a scenario of that profile where its own is of the other one; then reseal."""
+    def mutate(d, p, result):
+        evidence.v5_traffic(d, p, scenario=_scenario_of(p, d, profile), **variant)
+        evidence.seal(d)
+    return mutate
+
+
+def headers(change):
+    """mutate: change(header) of the headers of both traffic logs, then reseal."""
+    return steps(*(edit_lines(name, lambda rows: change(rows[0]))
+                   for name in ("traffic_requests.jsonl", "traffic_intervals.jsonl")))
+
+
+def _rid(sessions, step):
+    """The request id v5_traffic gives the first request `step` of the user sessions `sessions`."""
+    k, j = next((k, row.index(step)) for k, row in enumerate(sessions) if step in row)
+    return f"{sample.RUN}-{k + 1:02d}-{j:08d}"
+
+
+def _distinct(sessions):
+    """The user sessions with another object in every request that names one, but the deliberate error."""
+    out, n = [], 0
+    for steps_ in sessions:
+        row = []
+        for s in steps_:
+            if s.object is not None and s.intended is None:
+                n += 1
+                if s.route.startswith("/static/"):
+                    s = s._replace(route=f"/static/f{n}.png", object=f"f{n}.png")
+                elif s.route.startswith("/api/catalog/"):
+                    s = s._replace(route=f"/api/catalog/{100 + n}", object=100 + n)
+                else:
+                    s = s._replace(object=100 + n)
+            row.append(s)
+        out.append(row)
+    return tuple(out)
+
+
+def traffic_rows(change):
+    """mutate: change(request records, interval records) of both traffic logs, renumbered, then reseal."""
+    def mutate(d, p, result):
+        rows = {name: _records(d, name) for name in ("traffic_requests.jsonl", "traffic_intervals.jsonl")}
+        change(*rows.values())
+        for name, records in rows.items():
+            evidence.jsonl(d / name, [dict(r, n=n) for n, r in enumerate(records)])
+        evidence.seal(d)
+    return mutate
+
+
+def both_headers(change):
+    return traffic_rows(lambda r, i: [change(rows[0]) for rows in (r, i)])
+
+
+def _arrivals(rows):
+    return [r for r in rows if r.get("type") == "arrival"]
+
+
+def _request(rows, rid):
+    return _row([r for r in rows if r.get("type") == "request"], rid)
+
+
+def _first_iv(rows):
+    """The interval of the first user session of the measure phase (u4): interval 2 in every layout of v5_traffic,
+    which places it 2.01 s after the start, alone in its interval."""
+    return next(r for r in rows if r.get("type") == "interval" and r["interval"] == 2)
+
+
+def _duplicate_last(r, i):
+    last = _arrivals(r)[-1]
+    r.insert(r.index(last) + 1, dict(last))
+    r[-1]["records"] += 1  # Written by the generator: the end record counts it.
+
+
+E = evidence
+RID_UNKNOWN, RID_CART = _rid(E.ESHOP, E.UNKNOWN), _rid(E.ESHOP, E.CART)  # The deliberate 404, a cart of eshop.
+RID_DOC = _rid(E.CORP, E.DOC)  # A document download of corp.
+RID_LAST = f"{sample.RUN}-01-{len(E.ESHOP[0]) - 1:08d}"  # The last request of eshop's first user session.
+ARRIVALS = len(E.LEGACY) + len(E.ESHOP)  # Admitted user sessions of the clean session (as many in corp).
+U4, U_LAST = f"{sample.RUN}-u{len(E.LEGACY)}", f"{sample.RUN}-u{ARRIVALS - 1}"  # The first and last of the measure
+FIRST, EXTRA = f"{sample.RUN}-01-00000000", f"{sample.RUN}-01-00000001"  # phase; the first two requests of u4.
+_V5_CASES = [
+    # One realism requirement of proposal 5.7 broken at a time (scripts/traffic_log.py realism).
+    ("traffic_realism:arrival_cv", traffic("eshop", spacings=(1.,) * (len(E.ESHOP) - 1)),
+     logs("traffic_realism:arrival_cv")),  # Evenly spaced arrivals: CV 0.
+    ("traffic_realism:think_time", traffic("eshop", thinks=(75.,)), logs("traffic_realism:think_time")),
+    ("traffic_realism:order_share", traffic("eshop", sessions=tuple(
+        s if E.ORDER in s else [*s, E.CART_ADD, E.ORDER] for s in E.ESHOP)), logs("traffic_realism:order_share")),
+    ("traffic_realism:object_concentration", traffic("eshop", sessions=_distinct(E.ESHOP)),
+     logs("traffic_realism:object_concentration")),
+    ("traffic_realism:success_rate", traffic("eshop", sessions=tuple(  # No deliberate error: 100 %.
+        [E.DETAIL if s == E.UNKNOWN else s for s in steps_] for steps_ in E.ESHOP)),
+     logs("traffic_realism:success_rate")),
+    ("traffic_realism:response_sizes", traffic("eshop", sessions=tuple(
+        [s._replace(bytes=200) for s in steps_] for steps_ in E.ESHOP)), logs("traffic_realism:response_sizes")),
+    ("traffic_realism:peak_to_mean", traffic("eshop", flat=True), logs("traffic_realism:peak_to_mean")),
+    ("traffic_realism:background", traffic("corp", sessions=tuple(  # No report requested.
+        [s for s in steps_ if s != E.REPORT] for steps_ in E.CORP)), logs("traffic_realism:background")),
+    # Proposal 5.3: the plan names twice the user sessions that were offered.
+    ("offered_load_differs_from_plan", traffic("eshop", rate_factor=2), logs("offered_load_differs_from_plan")),
+    ("intended_status_differs", steps(traffic("eshop"), change_request(RID_UNKNOWN, status=400)),
+     logs("intended_status_differs:" + RID_UNKNOWN)),
+    # A planned envelope without the level 1: summarize says so, realism cannot judge.
+    ("realism:unreadable", headers(lambda h: h["envelope"].update(level=[.5] * len(h["envelope"]["level"]))),
+     logs("realism:unreadable:ValueError: invalid envelope: levels", "traffic:envelope_invalid:levels")),
+    # The generator's header against the protocol and session.json (design B5b 1.3, 1.4).
+    ("traffic_config:profile", headers(lambda h: h.update(profile="corp" if h["profile"] == "eshop" else "eshop")),
+     logs("traffic_config:profile")),
+    ("traffic_config:scenario", headers(lambda h: h.update(scenario="another-scenario")),
+     logs("traffic_config:scenario")),
+    ("traffic_config:intensity", headers(lambda h: h.update(intensity="high" if h["intensity"] == "low" else "low")),
+     logs("traffic_config:intensity")),
+    ("traffic_config:rate", headers(lambda h: h.update(
+        rate_source="protocol" if h["rate_source"] == "command line" else "command line")),
+     logs("traffic_config:rate")),
+    ("traffic_config:seeds", headers(lambda h: h["seeds"].update(traffic=h["seeds"]["traffic"] + 1)),
+     logs("traffic_config:seeds")),
+    ("traffic_config:protocol_sha256", headers(lambda h: h.update(protocol_sha256="0" * 64)),
+     logs("traffic_config:protocol_sha256")),
+    ("traffic_config:profile_parameters", headers(lambda h: h["profile_parameters"].update(
+        max_concurrent=h["profile_parameters"]["max_concurrent"] + 1)), logs("traffic_config:profile_parameters")),
+    ("traffic_config:warmup_s", headers(lambda h: h.update(warmup_s=h["warmup_s"] - 1)),
+     logs("traffic_config:warmup_s")),
+    # The exit code must be the one the request log implies (0 or 1 by host_traffic.py's rule); 2 never is.
+    ("child_exit:traffic", edit("end.json", lambda e: e.update(traffic_rc=2), seal=False),
+     logs("child_exit:traffic:2")),
+    # The routes of B5a: the docs service, and the token check of the orders service for the cart.
+    ("service_request_count:docs", steps(traffic("corp"), drop_service_line(RID_DOC, "hyptcn-lab@docs", "/api/docs/5")),
+     logs("service_request_count:" + RID_DOC)),
+    ("service_auth_call:cart", steps(traffic("eshop"), drop_service_line(RID_CART, "hyptcn-lab@auth",
+                                                                         "/api/auth/check")),
+     logs("service_auth_call:" + RID_CART)),
+    # The cross-checks of the /2 logs (scripts/traffic_log.py summarize), two of them.
+    ("traffic:arrivals", edit_lines("traffic_requests.jsonl", lambda rows: rows[-1].update(
+        arrivals=rows[-1]["arrivals"] + 1)), logs(f"traffic:requests:end_arrivals_mismatch:arrivals:{ARRIVALS + 1}!="
+                                                f"{ARRIVALS}")),
+    ("traffic:user_session", steps(traffic("eshop"), edit_lines("traffic_requests.jsonl", lambda rows: _row(
+        [r for r in rows if r.get("type") == "request"], RID_LAST).update(user_session="unknown-user-session"))),
+     logs("traffic:request_user_session_unknown:" + RID_LAST)),
+    # The other cross-checks of summarize whose problem does not depend on the session's timeline (the rest:
+    # scripts/tests/test_traffic_realism.py); where the header field is also compared, its traffic_config too.
+    ("traffic:v5_header_missing", traffic_rows(lambda r, i: r[0].pop("load_model")),
+     logs("traffic:v5_header_missing:load_model")),
+    ("traffic:v5_header_mismatch", traffic_rows(lambda r, i: i[0].update(warmup_s=i[0]["warmup_s"] + 1)),
+     logs("traffic:v5_header_mismatch:warmup_s")),
+    ("traffic:rate_invalid", both_headers(lambda h: h.update(rate=0)),
+     logs("traffic:rate_invalid", "traffic_config:rate")),
+    ("traffic:rate_source_invalid", both_headers(lambda h: h.update(rate_source="guess")),
+     logs("traffic:rate_source_invalid", "traffic_config:rate")),
+    ("traffic:seeds_invalid", both_headers(lambda h: h["seeds"].pop("traffic_sizes")), logs("traffic:seeds_invalid")),
+    ("traffic:warmup_invalid", both_headers(lambda h: h.update(warmup_s=h["envelope"]["t_s"][-1])),  # Not before D.
+     logs("traffic:warmup_invalid", "traffic_config:warmup_s")),
+    ("traffic:profile_unknown", both_headers(lambda h: h.update(profile="lab")),
+     logs("traffic:profile_unknown:lab", "traffic_config:profile")),
+    ("traffic:profile_parameters_invalid", both_headers(lambda h: h["profile_parameters"].pop("max_concurrent")),
+     logs("traffic:profile_parameters_invalid:max_concurrent", "traffic_config:profile_parameters")),
+    ("traffic:arrival_cap", traffic_rows(lambda r, i: _arrivals(r)[4].update(  # Admitted at the cap.
+        active=r[0]["profile_parameters"]["max_concurrent"])), logs("traffic:arrival_cap:" + U4)),
+    ("traffic:user_session_id", traffic_rows(lambda r, i: [x.update(user_session="u4") for x in r
+                                                           if x.get("user_session") == U4]),
+     logs("traffic:user_session_id:u4")),
+    ("traffic:duplicate_user_session", traffic_rows(_duplicate_last),
+     logs("traffic:duplicate_user_session:" + U_LAST, "traffic:arrivals_outside_intervals:1",
+          f"traffic:requests:end_arrivals_mismatch:arrivals:{ARRIVALS}!={ARRIVALS + 1}",
+          f"traffic:requests:end_arrivals_mismatch:admitted:{ARRIVALS}!={ARRIVALS + 1}")),
+    ("traffic:request_v5_malformed", traffic_rows(lambda r, i: _request(r, EXTRA).pop("step")),
+     logs("traffic:request_v5_malformed:" + EXTRA)),
+    ("traffic:request_before_arrival", traffic_rows(lambda r, i: _arrivals(r)[4].update(  # After its first request.
+        t_mono=_arrivals(r)[4]["t_mono"] + .0015)), logs("traffic:request_before_arrival:" + FIRST)),
+    ("traffic:think_s_first", traffic_rows(lambda r, i: _request(r, FIRST).update(think_s=1.)),
+     logs("traffic:think_s_first:" + FIRST)),
+    ("traffic:think_s_missing", traffic_rows(lambda r, i: _request(r, EXTRA).update(think_s=None)),
+     logs("traffic:think_s_missing:" + EXTRA)),
+    # An intended status outside the profile's client errors; answered 200, it also differs from its own.
+    ("traffic:intended_status_unknown", traffic_rows(lambda r, i: _request(r, EXTRA).update(intended_status=500)),
+     logs("traffic:intended_status_unknown:" + EXTRA, "intended_status_differs:" + EXTRA)),
+    ("traffic:end_v5_invalid", traffic_rows(lambda r, i: r[-1].pop("dropped")),
+     logs("traffic:requests:end_v5_invalid:dropped")),
+    ("traffic:end_user_sessions_mismatch", traffic_rows(lambda r, i: r[-1].update(
+        user_sessions_completed=r[-1]["user_sessions_completed"] - 1)),
+     logs("traffic:requests:end_user_sessions_mismatch")),
+    ("traffic:interval_sessions", traffic_rows(lambda r, i: _first_iv(i).update(admitted_sessions=0,
+                                                                                 dropped_sessions=1)),
+     logs("traffic:interval_sessions:2:admitted_sessions:0!=1", "traffic:interval_sessions:2:dropped_sessions:1!=0")),
+    ("traffic:planned_sessions", traffic_rows(lambda r, i: _first_iv(i).update(
+        planned_sessions=_first_iv(i)["planned_sessions"] + .01)), logs("traffic:planned_sessions:2")),
+    ("traffic:active_max", traffic_rows(lambda r, i: _first_iv(i).update(
+        active_max=r[0]["profile_parameters"]["max_concurrent"] + 1)), logs("traffic:active_max:2")),
+    # Without the planned count the offered load cannot be judged either.
+    ("traffic:interval_v5_malformed", traffic_rows(lambda r, i: _first_iv(i).pop("planned_sessions")),
+     logs("traffic:interval_v5_malformed:2", "realism:unreadable:KeyError: 'planned_sessions'")),
+]
+
+
+def _cases(rows):
+    return [Case("logs:" + name, name.split(":")[0] if not name.endswith(":unreadable") else name,
+                 expected if callable(expected) else sorted(expected), mutate) for name, mutate, expected in rows]
+
+
+V5_CASES = _cases(_V5_CASES)
+LOG_CASES = _cases(_CASES) + V5_CASES

@@ -42,6 +42,13 @@ GROW_ROOT = ('src=$(findmnt -no SOURCE /); disk=/dev/$(lsblk -no PKNAME "$src");
 VM_NAME = r"[a-z0-9]{1,16}"
 PROC = Path("/proc")
 CGROUPS = Path("/sys/fs/cgroup")
+# The old closed-loop generator's user unit (traffic-start) restarts after RestartSec=5, the collection period: at
+# most 5 starts in 60 s, then it stays failed, the start limit of the guest units (lab/hyptcn-lab@.service, KOSTRA
+# B5 section 1; registered in scripts/host_periods.json). It never starts under a protocol of schema 3.
+TRAFFIC_UNIT_PROPERTIES = ("Restart=on-failure", "RestartSec=5", "StartLimitBurst=5", "StartLimitIntervalSec=60")
+SCHEMA_3 = "hyptcn3/collection-protocol/3"
+OLD_GENERATOR_UNDER_V5 = ("the old traffic generator unit (closed loop, restarted every 5 s) does not run under a "
+                          "protocol of schema 3: the session runs the v5 generator (scripts/collection.py run)")
 # Read-back of memory.swap.max after the scope job: 20 tries 0.25 s apart (executor's judgment, B5a).
 SWAP_TRIES, SWAP_PAUSE_S = 20, .25
 # Way 1 of the QEMU swap ban (KOSTRA B5, addendum 20:50Z; dokazy/B5/skuska_swapu.md): the session daemon of libvirt
@@ -633,6 +640,9 @@ class Lab:
         return target
 
     def traffic(self):
+        """The old closed-loop generator as a user unit (protocols of schemas 1 and 2, `make lab-up`), with the start
+        limit of TRAFFIC_UNIT_PROPERTIES; main() refuses it under a protocol of schema 3, and scripts/collection.py
+        stops it before every session."""
         target = self.health()
         running = subprocess.run(["systemctl", "--user", "is-active", "--quiet", self.unit]).returncode == 0
         if running:
@@ -641,7 +651,7 @@ class Lab:
         out = self.traffic_status
         out.parent.mkdir(parents=True, exist_ok=True)
         run(["systemd-run", "--user", f"--unit={self.unit}", "--collect",
-             "--property=Restart=on-failure", "--property=RestartSec=5",
+             *(f"--property={value}" for value in TRAFFIC_UNIT_PROPERTIES),
              f"--working-directory={REPO}", sys.executable, REPO / "scripts/host_traffic.py",
              "--profile", "lab", "--target", target, "--dur", "0", "--vlakien", "4",
              "--out", out])
@@ -664,6 +674,9 @@ def main(argv=None):
     parser.add_argument("--event", nargs=2, metavar=("ACTION", "TYPE"), help="event: start|stop and event type")
     parser.add_argument("--since", type=float, help="journal: start, Unix seconds")
     parser.add_argument("--until", type=float, help="journal: end, Unix seconds")
+    parser.add_argument("--protocol", type=Path,
+                        help="up/traffic-start: the protocol the lab serves; under schema 3 the old traffic unit is "
+                             "refused before any step")
     args = parser.parse_args(argv)
     if args.domain == args.source:
         parser.error("Lab domain must be different from the experiment source")
@@ -671,6 +684,13 @@ def main(argv=None):
         parser.error("--vm and --port belong together")
     if args.command == "clone" and args.vm is None:
         parser.error("clone creates a further VM and requires --vm and --port")
+    if args.command in ("up", "traffic-start") and args.protocol is not None:
+        try:
+            protocol = json.loads(args.protocol.read_text())
+        except (OSError, ValueError) as error:
+            parser.error(f"cannot read --protocol: {error}")
+        if type(protocol) is dict and protocol.get("schema") == SCHEMA_3:
+            raise RuntimeError(OLD_GENERATOR_UNDER_V5)
     try:
         lab = Lab(args.uri, args.domain, args.vm, PORT if args.port is None else args.port)
     except ValueError as error:

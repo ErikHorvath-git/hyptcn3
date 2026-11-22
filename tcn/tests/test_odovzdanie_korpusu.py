@@ -279,6 +279,8 @@ def _relacia_cez_audit(koren, monkeypatch, riadok):
     dokazy.write(adresar / "session.json", meta)
     koniec = json.loads((adresar / "end.json").read_text())
     dokazy.write(adresar / "end.json", dict(koniec, guest_after=meta["guest_before"]))
+    # Protokol s oddielom profiles (balik B5b): prevadzka profilu v5 s logmi schemy /2; inak sa nic nemeni.
+    dokazy.v5_traffic(adresar, p)
     zber = json.loads((adresar / "raw/capture.json").read_text())
     zber["values"].update(interval_s=p["interval_s"], full_every=p["full_every"], mlock=True)
     dokazy.write(adresar / "raw/capture.json", zber)

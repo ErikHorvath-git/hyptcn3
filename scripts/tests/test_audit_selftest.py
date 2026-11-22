@@ -38,10 +38,13 @@ def sha256(path):
 
 
 def small_doc(profile):
+    """The small protocol with four scenarios, which take the four v5 entries of the file (eshop and corp, low and
+    high): the cases of the v5 traffic need a scenario of each profile (package B5b)."""
     from scripts.tests import boundary_sessions as bs
     doc = bs.protocol_doc(profile, schema="hyptcn3/collection-protocol/3", cycles=96, pilot_cycles=80,
                           window_rows=8, full_every=64, gate=bs.worst_gate(96, 8, 64, bs.RULE["max"]),
-                          group_prefix="st-", name="audit-selftest-small")
+                          group_prefix="st-", name="audit-selftest-small",
+                          scenarios={name: {} for name in ("steady", "bursty", "office", "office_busy")})
     return dict(doc, **bs.audit_sections(1))
 
 
@@ -346,6 +349,41 @@ def test_every_tolerated_condition_of_the_audit_is_registered(tmp_path):
     assert {name for _, _, name in audit_policy.sites(sources)} == set(audit_policy.TOLERATED)
 
 
+# Package B5b (lead's answer to Q2): per id the record says whether the observed count is over the expected one;
+# false wherever expected is null, and never a reason.
+
+def test_the_record_of_exceptions_marks_a_count_over_the_expected_one():
+    from collections import Counter
+    from features import audit_policy
+    from scripts import collection
+    p = copy.deepcopy(collection.protocol(SELFTEST_PROTOCOL))
+    p["exceptions"]["invalid_rows"]["expected"] = 2
+    p["exceptions"]["rule_closed_rows"]["expected"] = 0
+    counts = Counter(invalid_rows=3, rule_closed_rows=0, collector_warnings=5)
+    record = audit_policy.exceptions_record(p, counts)
+    assert list(record) == list(audit_policy.TOLERATED)
+    assert record["invalid_rows"] == {"observed": 3, "expected": 2, "over": True}
+    assert record["rule_closed_rows"] == {"observed": 0, "expected": 0, "over": False}
+    assert record["collector_warnings"] == {"observed": 5, "expected": None, "over": False}  # null: never over
+    assert audit_policy.exceptions_record(p, Counter(invalid_rows=2))["invalid_rows"]["over"] is False  # equal
+    assert audit_policy.exceptions_record({"schema": "hyptcn3/collection-protocol/2"}, counts)["invalid_rows"] == {
+        "observed": 3, "expected": None, "over": False}  # no register
+
+
+def test_a_count_over_the_expected_one_is_printed_and_the_session_still_accepted(small, tmp_path):
+    from scripts import collection
+    from scripts.tests import audit_cases, boundary_sessions as bs
+    p, _, root = small
+    doc = copy.deepcopy(p)
+    doc["exceptions"]["inconclusive_integrity"]["expected"] = 0  # text_integrity is inconclusive in every row
+    path = bs.write_protocol(tmp_path / "protocol.json", doc)
+    audit = audit_cases.run_case(tmp_path / "clean", collection.protocol(path), path)
+    v = audit.values
+    assert (audit.code, v["accepted"], v["reasons"]) == (0, True, [])
+    assert v["exceptions"]["inconclusive_integrity"] == {"observed": p["cycles"], "expected": 0, "over": True}
+    assert all(e["over"] is False for name, e in v["exceptions"].items() if name != "inconclusive_integrity")
+
+
 # Since package B4 the loader names a missing section of the v5 layout first; the section's reader keeps its message.
 @pytest.mark.parametrize("change, message, reader", [
     (lambda doc: doc.pop("audit"), "missing protocol key: audit", "protocol schema 3 requires the audit section"),
@@ -376,11 +414,19 @@ def test_selftest_protocol_carries_the_bounds_of_g0_and_the_whole_register():
     p = collection.protocol(SELFTEST_PROTOCOL)
     assert (p["schema"], p["interval_s"], p["max_gap_s"], p["window_rows"], p["full_every"], p["cycles"]) == (
         "hyptcn3/collection-protocol/3", 5, 7.5, 32, 360, 720)
-    assert {k: v for k, v in p["audit"].items() if k != "periodicity"} == {
+    assert {k: v for k, v in p["audit"].items() if k not in ("periodicity", "traffic")} == {
         "lateness_max_s": .5, "cycle_ms_max": {"delta": 1500, "full": 3500}, "warnings_allowed": None,
         "rule_closed_rows_max": None}
     assert (p["audit"]["periodicity"]["equal_spacings"], p["audit"]["periodicity"]["min_spacing_rows"]) == (3, 2)
     assert "judgment" in p["audit"]["periodicity"]["note"]
+    # Package B5b: the bounds of proposals 5.3 and 5.7 and the tolerances of the author's judgment, named so.
+    traffic = p["audit"]["traffic"]
+    assert {k: v for k, v in traffic.items() if k not in ("background", "note")} == {
+        "offered_load_tolerance": .2, "arrival_cv": [.8, 1.2], "top_objects_share": .1, "top_objects_min_requests": .5,
+        "success_min": .88, "response_size_orders": 2, "think_mean_tolerance_se": 4, "order_share_tolerance_se": 4}
+    assert {k: v for k, v in traffic["background"].items() if k != "note"} == {
+        "logins_min": 1, "reports_min": 1, "document_max_to_median": 10}
+    assert all("judgment" in note for note in (traffic["note"], traffic["background"]["note"]))
     assert list(p["exceptions"]) == list(audit_policy.TOLERATED)
     assert all(e["cause"].strip() and e["decision"].strip() and e["expected"] is None
                for e in p["exceptions"].values())

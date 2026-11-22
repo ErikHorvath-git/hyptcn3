@@ -14,6 +14,7 @@ import functools
 import gzip
 import hashlib
 import json
+import math
 import os
 from pathlib import Path
 import platform
@@ -828,12 +829,263 @@ def nginx_lines(path):
             yield json.loads(line)
 
 
+# The load model of the generator's v5 profiles, as its log headers state it (design B5b 1.4).
+V5_LOAD_MODEL = ("open loop: user sessions arrive as a non-homogeneous Poisson process with intensity rate x "
+                 "envelope(t), at most max_concurrent in progress")
+V5_NO_PILOT = "protocol schema 3 has no pilot"
+DIAGNOSTIC_EVENT_KEYS = ("type", "start_s", "duration_s")  # One event of --events (design B5b section 4).
+
+
+def traffic_purposes():
+    """The purposes of the plan's random streams that drive the traffic generator (protocol_v5.PURPOSES): traffic,
+    the envelope draw and the session's seed, and the session-level purposes traffic_<name> (design B5b 1.2:
+    arrivals, choices in a user session and sizes each have their own stream)."""
+    return tuple(name for name, unit in protocol_v5.PURPOSES.items()
+                 if unit == "session" and (name == "traffic" or name.startswith("traffic_")))
+
+
+def diagnostic_seeds(p, a):
+    """The traffic streams of a diagnostic run, which has no planned session: --seed is its traffic seed (a planned
+    session's seed is its traffic stream as well), and every further traffic purpose is drawn by the plan's rule
+    (protocol_v5.seed) from the protocol name, the group "diagnostic/<--group>", the session --seed and attempt 1,
+    so that no stream of the plan has it (the executor's rule, judgment; design B5b section 4 leaves it open)."""
+    return {purpose: a.seed if purpose == "traffic" else
+            protocol_v5.seed(p["name"], purpose, "diagnostic/" + str(a.group), a.seed, 1)
+            for purpose in traffic_purposes()}
+
+
+def diagnostic_events(p, text, cycles):
+    """The events of a diagnostic run under schema 3: --events, a JSON list of {type, start_s, duration_s} in time
+    order, or none when `text` is None.
+
+    Each event is checked against the protocol's events section as the plan draws its own: a type of events.types,
+    a count of per_session, a duration within duration_s, a start at first_s or later and min_gap_s after the end
+    of the event before it, no start inside the guard of a full snapshot (full_snapshot_guard), and tail_s after
+    the last end within the session of `cycles` rows. Times are taken on the plan's grid of 1 ms. Returns the events
+    as the plan states them (type, class, start_s, duration_s, start_phase_s, stop_phase_s); ValueError
+    "invalid --events: <the rule>" otherwise.
+    """
+    if text is None:
+        return []
+
+    def bad(rule):
+        raise ValueError("invalid --events: " + rule)
+    try:
+        items = json.loads(text)
+    except ValueError:
+        bad("not JSON")
+    if type(items) is not list or any(type(x) is not dict or set(x) != set(DIAGNOSTIC_EVENT_KEYS) for x in items):
+        bad("not a JSON list of {type, start_s, duration_s}")
+    e, ms = p["events"], protocol_v5._ms
+    if len(items) not in e["per_session"]:
+        bad(f"{len(items)} events, the protocol allows {json.dumps(e['per_session'])}")
+    guards = protocol_v5.guards(dict(p, cycles=cycles))
+    events, end = [], None
+    for item in items:
+        kind, start, duration = item["type"], item["start_s"], item["duration_s"]
+        if type(kind) is not str or kind not in e["types"]:
+            bad(f"unknown event type {kind}")
+        if not all(type(v) in (int, float) and math.isfinite(v) for v in (start, duration)):
+            bad(f"{kind}: start_s and duration_s are seconds")
+        if not e["duration_s"][0] <= duration <= e["duration_s"][1]:
+            bad(f"{kind} lasts {duration:g} s, outside duration_s {json.dumps(e['duration_s'])}")
+        if start < e["first_s"]:
+            bad(f"{kind} starts at {start:g} s, before first_s {e['first_s']:g} s")
+        if end is not None and ms(start) < end + ms(e["min_gap_s"]):
+            bad(f"{kind} starts less than min_gap_s {e['min_gap_s']:g} s after the event before it ends")
+        guard = next((t for t, low, high in guards if low <= ms(start) < high), None)
+        if guard is not None:
+            bad(f"{kind} starts at {start:g} s inside the guard of the full snapshot at {guard / 1000:g} s")
+        end = ms(start) + ms(duration)
+        events.append({"type": kind, "class": e["types"][kind], **protocol_v5._timing(p, ms(start), ms(duration))})
+    if end is not None and end + ms(e["tail_s"]) > ms(cycles * p["interval_s"]):
+        bad(f"the last event ends less than tail_s {e['tail_s']:g} s before the end of the session "
+            f"({cycles * p['interval_s']:g} s)")
+    return events
+
+
+def v5_run(a, p):
+    """What a session of a schema-3 protocol runs (design B5b section 4): v5_arguments(), then for a session of a
+    planned role v5_planned().
+
+    v5 has no pilot, so --role pilot ends with a named reason: a trial session runs as --role diagnostic. A scenario
+    of schema 3 is {profile, intensity, rate}. A session of a planned role runs at the protocol's rate (refused while
+    it is null, until G2) with the seeds and events of its planned session, found by role, group, scenario, seed,
+    cycles and VM (attempt 1; a replacement attempt is package B9's); the readiness records of G0 to G4 must be valid
+    instead of an accepted pilot (gates.require of G5), and --rate, --events, --cycles and --pilot-report are
+    refused. A diagnostic run takes the protocol's rate or, where it is null, --rate (exactly one of them), its
+    events from --events (diagnostic_events) or none, its length from --cycles or pilot_cycles as before and its
+    seeds from --seed (diagnostic_seeds); it is written under data/diagnostics and never becomes corpus.
+
+    Returns {"cycles", "events", "traffic"}: the session's length, its events as session.json records them, and the
+    traffic block of session.json, from which traffic_command() makes the generator's command line (design B5b
+    1.3); dur_s, the span of the generator's envelope, is the planned run: warmup_s and cycles intervals.
+    """
+    run = v5_arguments(a, p)
+    return run if a.role == "diagnostic" else v5_planned(a, p)
+
+
+def _v5_traffic(a, p, rate, source, seeds, cycles):
+    """The traffic block of session.json under schema 3 (v5_run)."""
+    s = p["scenarios"][a.scenario]
+    return {"generator": "scripts/host_traffic.py", "load_model": V5_LOAD_MODEL, "profile": s["profile"],
+            "scenario": a.scenario, "intensity": s["intensity"], "rate": rate, "rate_source": source, "seeds": seeds,
+            "target": p["target"], "dur_s": p["warmup_s"] + cycles * p["interval_s"], "warmup_s": p["warmup_s"],
+            "summary_interval_s": 5, "initial_phase": "warmup"}
+
+
+def v5_arguments(a, p):
+    """The part of v5_run that the command line and the protocol decide alone; run_session asks it right after the
+    self-test and root, before it touches anything. The whole of v5_run for a diagnostic run, None for a session of
+    a planned role (v5_planned follows after the guest checks, where the plan was always read)."""
+    if a.role == "pilot":
+        raise ValueError(V5_NO_PILOT + ": a trial session runs as --role diagnostic")
+    if a.scenario not in p["scenarios"]:
+        raise ValueError("unknown benign scenario")
+    if getattr(a, "pilot_report", None):
+        raise ValueError(V5_NO_PILOT + ": --pilot-report is not read")
+    rate, given = p["scenarios"][a.scenario]["rate"], getattr(a, "rate", None)
+    if a.role != "diagnostic":
+        for value, flag in ((given, "--rate"), (getattr(a, "events", None), "--events"),
+                            (getattr(a, "cycles", None), "--cycles")):
+            if value is not None:
+                raise ValueError(flag + " is only allowed for diagnostic runs")
+        return None
+    if rate is None and given is None:
+        raise ValueError(f"scenario {a.scenario} has no rate (null until G2): a diagnostic run passes --rate")
+    if rate is not None and given is not None:
+        raise ValueError(f"scenario {a.scenario} has the rate {rate:g} in the protocol: --rate is refused")
+    if given is not None and not (type(given) in (int, float) and math.isfinite(given) and given > 0):
+        raise ValueError("invalid --rate: user sessions per second at envelope level 1, a finite number above 0")
+    cycles = getattr(a, "cycles", None) or p["pilot_cycles"]
+    if type(cycles) is not int or cycles < 1:
+        raise ValueError("invalid --cycles: a positive number of snapshots")
+    events = diagnostic_events(p, getattr(a, "events", None), cycles)
+    traffic = _v5_traffic(a, p, given if rate is None else rate, "command line" if rate is None else "protocol",
+                          diagnostic_seeds(p, a), cycles)
+    return {"cycles": cycles, "events": events, "traffic": traffic}
+
+
+def v5_planned(a, p):
+    """The part of v5_run for a session of a planned role: the protocol's rate, the planned session's seeds and
+    events, and the readiness records up to G4."""
+    rate = p["scenarios"][a.scenario]["rate"]
+    if rate is None:
+        raise ValueError(f"scenario {a.scenario} has no rate (null until G2): a session of a planned role runs at the "
+                         "protocol's rate")
+    cycles = p["cycles"]
+    assignment = {"role": a.role, "group": a.group, "scenario": a.scenario, "seed": a.seed, "cycles": cycles,
+                  **({"vm": p["vm"]} if p.get("vm") else {})}
+    planned = [x for x in plan(p)["sessions"] if {k: x.get(k) for k in assignment} == assignment]
+    if not planned:
+        raise ValueError("assignment/seed not present in frozen collection plan")
+    missing = [purpose for purpose in traffic_purposes() if purpose not in planned[0]["seeds"]]
+    if missing:
+        raise ValueError("planned session has no seed for " + ", ".join(missing))
+    seeds = {purpose: planned[0]["seeds"][purpose] for purpose in traffic_purposes()}
+    from scripts import gates  # Inside the function: gates imports this module.
+    try:
+        gates.require(gates.ROOT / "data/results", a.protocol, "G5")
+    except ValueError as error:
+        raise ValueError("a session of a planned role needs valid readiness records up to G4: " + str(error)) from None
+    # A session of test_controls plans controls instead of events (package B8).
+    return {"cycles": cycles, "events": planned[0].get("events", []),
+            "traffic": _v5_traffic(a, p, rate, "protocol", seeds, cycles)}
+
+
+def traffic_command(p, metadata, out):
+    """The generator's command line of the session in `out`. Under schema 3 the v5 profile of the traffic block that
+    run_session recorded (design B5b 1.3): the session's copy of the protocol, the scenario, the seeds, --rate only
+    when the rate comes from the command line, --dur and --warmup-s. Under schemas 1 and 2 the closed-loop lab
+    profile with the scenario's workers and shares, as before."""
+    generator = [sys.executable, ROOT / "scripts/host_traffic.py"]
+    logs = ["--session-id", out.name, "--requests-log", out / "traffic_requests.jsonl",
+            "--intervals-log", out / "traffic_intervals.jsonl"]
+    if p.get("schema") != protocol_v5.SCHEMA:
+        s = p["scenarios"][metadata["scenario"]]
+        return [*generator, "--profile", "lab", "--target", p["target"], "--dur", "0", "--seed", str(metadata["seed"]),
+                "--vlakien", str(s["workers"]), "--burst", str(s["burst"]), "--catalog-share", str(s["catalog_share"]),
+                "--write-share", str(s["write_share"]), *logs, "--summary-interval-s", "5", "--initial-phase",
+                "warmup", "--out", out / "traffic.json"]
+    t = metadata["traffic"]
+    return [*generator, "--profile", t["profile"], "--protocol", out / "protocol.json", "--scenario", t["scenario"],
+            "--seeds", json.dumps(t["seeds"], sort_keys=True),
+            *(["--rate", str(t["rate"])] if t["rate_source"] == "command line" else []),
+            "--target", t["target"], "--dur", str(t["dur_s"]), "--warmup-s", str(t["warmup_s"]), *logs,
+            "--summary-interval-s", str(t["summary_interval_s"]), "--initial-phase", t["initial_phase"],
+            "--out", out / "traffic.json"]
+
+
+def warmup_failures(out):
+    """What went wrong in the warmup under a v5 profile, read from the request log the generator is still writing
+    (complete lines only; design B5b 1.4): a request with an intended_status, a deliberate client error, that got
+    another status; any other request that did not succeed; a request record without intended_status. The error
+    count of the status file includes the deliberate client errors (skeleton section 2), so the warmup of a
+    schema-3 session is judged from this log instead."""
+    problems = []
+    for line in (out / "traffic_requests.jsonl").read_bytes().split(b"\n")[:-1]:
+        try:
+            record = json.loads(line)
+        except ValueError:
+            problems.append("unreadable request log line")
+            continue
+        if type(record) is not dict or record.get("type") != "request":
+            continue
+        rid = record.get("rid")
+        if "intended_status" not in record:
+            problems.append(f"{rid}: no intended_status")
+        elif record["intended_status"] is None:
+            if record.get("outcome") != "ok":
+                problems.append(f"{rid}: {record.get('outcome')} {record.get('status')}")
+        elif record.get("status") != record["intended_status"]:
+            problems.append(f"{rid}: status {record.get('status')}, intended {record['intended_status']}")
+    return problems
+
+
+def check_warmup(p, out):
+    """The generator's status after the warmup (traffic.json in `out`), when the warmup was clean: a successful
+    request and no logging error; under schemas 1 and 2 no failed request either, under schema 3 none but the
+    deliberate client errors (warmup_failures). ValueError "warmup traffic failed[; <failure>...]" otherwise, with
+    the first five failures (the executor's judgment)."""
+    metrics = json.loads((out / "traffic.json").read_text())
+    schema3 = p.get("schema") == protocol_v5.SCHEMA
+    failures = warmup_failures(out) if schema3 else []
+    if not metrics["ok"] or not schema3 and metrics["errors"] or metrics.get("logging_error") or failures:
+        raise ValueError("warmup traffic failed" + "".join("; " + failure for failure in failures[:5]))
+    return metrics
+
+
+def host_timers():
+    """systemctl list-timers --all of the system manager and of the VM owner's user manager, as text lines: the
+    host's periodic jobs outside the repository, which scripts/host_periods.json cannot register from source (lead's
+    answer to Q4). Recorded at the start of a schema-3 session, never a reason: a command that fails is recorded
+    with its exit code or its error. The timeout of 30 s and the 300 characters kept of an error are the executor's
+    judgment."""
+    out = {}
+    for scope, command in (("system", ["systemctl", "list-timers", "--all", "--no-pager"]),
+                           ("user", user_command(["systemctl", "--user", "list-timers", "--all", "--no-pager"]))):
+        try:
+            done = subprocess.run(command, capture_output=True, text=True, timeout=30)
+        except (OSError, subprocess.SubprocessError) as error:
+            out[scope] = {"command": command, "error": f"{type(error).__name__}: {error}"[:300]}
+            continue
+        out[scope] = {"command": command, "rc": done.returncode, "lines": done.stdout.splitlines(),
+                      "stderr": done.stderr.strip()[-300:]}
+    return out
+
+
 def run_session(a, p):
     # No capture without a passed self-test of the audit checks for this code and this protocol file.
     from scripts.audit_selftest import require_selftest
     require_selftest(a.protocol)
     if os.geteuid() != 0:
         raise ValueError("host eBPF capture needs sudo; plan and audit do not")
+    # Protocol v5 (schema 3): what the command line and the protocol decide, before anything is touched; a planned
+    # role's rate, plan and readiness records follow where the plan is read (v5_run).
+    schema3 = p.get("schema") == protocol_v5.SCHEMA
+    v5 = v5_arguments(a, p) if schema3 else None
+    if not schema3 and (getattr(a, "rate", None) is not None or getattr(a, "events", None) is not None):
+        raise ValueError("--rate and --events are only allowed for diagnostic runs under protocol schema 3")
     if a.scenario not in p["scenarios"]:
         raise ValueError("unknown benign scenario")
     vm = p.get("vm")
@@ -878,7 +1130,12 @@ def run_session(a, p):
             raise ValueError("QEMU memory was swapped before start: qemu_swap_kb is " + repr(memory["qemu_swap_kb"]))
         attempt = getattr(a, "group_attempt", 1) or 1
         events = pilot_events(p) if a.role == "pilot" and "events" in p else []
-        if a.role not in ("pilot", "diagnostic"):
+        if schema3:
+            # The planned events as the plan states them, or those of --events (v5_run); no pilot, no estimate
+            # from one (the campaign checks its disk budget, package B9): the reserve min_free_gib stays.
+            v5 = v5 if diagnostic else v5_planned(a, p)
+            events, needed = v5["events"], 0
+        elif a.role not in ("pilot", "diagnostic"):
             assignment = {"role": a.role, "group": a.group, "scenario": a.scenario,
                           "seed": a.seed, "cycles": p["cycles"], **({"vm": vm} if vm else {})}
             planned = [s for s in plan(p)["sessions"] if {k: s[k] for k in assignment} == assignment]
@@ -910,7 +1167,10 @@ def run_session(a, p):
         session_id = getattr(a, "session_id", None) or f"{stamp}_{a.role}_{a.scenario}"
         if not re.fullmatch(r"[a-zA-Z0-9][a-zA-Z0-9_-]{0,159}", session_id):
             raise ValueError("invalid session ID")
-        cycles = a.cycles if diagnostic and a.cycles else p["pilot_cycles"] if a.role in ("pilot", "diagnostic") else p["cycles"]
+        if schema3:
+            cycles = v5["cycles"]
+        else:
+            cycles = a.cycles if diagnostic and a.cycles else p["pilot_cycles"] if a.role in ("pilot", "diagnostic") else p["cycles"]
         out = base / session_id
         out.mkdir()
         shutil.copyfile(a.protocol, out / "protocol.json")
@@ -936,16 +1196,18 @@ def run_session(a, p):
                                            "writer_thread": True, "mlock": COLLECTOR_MLOCK,
                                            "interval_s": p["interval_s"], "full_every": p["full_every"],
                                            "bin_bytes": p["bin_bytes"]},
-                    "traffic": {"generator": "scripts/host_traffic.py", "profile": "lab", "target": p["target"],
-                                "seed": a.seed, "workers": s["workers"], "burst": s["burst"],
-                                "catalog_share": s["catalog_share"], "write_share": s["write_share"],
-                                "summary_interval_s": 5, "load_model": "closed loop, not a fixed request rate"},
+                    "traffic": v5["traffic"] if schema3 else {
+                        "generator": "scripts/host_traffic.py", "profile": "lab", "target": p["target"],
+                        "seed": a.seed, "workers": s["workers"], "burst": s["burst"],
+                        "catalog_share": s["catalog_share"], "write_share": s["write_share"],
+                        "summary_interval_s": 5, "load_model": "closed loop, not a fixed request rate"},
                     "metadata_not_model_inputs": ["scenario", "seed", "traffic", "boot_id", "group", "session_id", "events",
                                                   "vm", "domain"],
                     "working_storage": storage_identity(base),
                     "host_context": {"host_boot": Path("/proc/sys/kernel/random/boot_id").read_text().strip(),
                                      "qemu": qemu, "memory": memory, "python": sys.executable,
-                                     **({"other_vms": other_vms(p)} if vm else {})},
+                                     **({"other_vms": other_vms(p)} if vm else {}),
+                                     **({"timers": host_timers()} if schema3 else {})},
                     "commit": subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip(),
                     "commit_dirty": bool(subprocess.check_output(["git", "status", "--porcelain"], cwd=ROOT)),
                     "measurement_dirty": measurement_dirty(),
@@ -1073,20 +1335,12 @@ def capture_session(p, out, metadata, cycles):
             status["collector_memory"] = collector_memory(metadata["host_context"]["qemu"]["pid"])
             if not status["collector_memory"]["ok"]:
                 raise ValueError("not enough free memory for the collector's locked queue; see end.json")
-        s = p["scenarios"][metadata["scenario"]]
         children["monitor"] = start_child(
             [sys.executable, ROOT / "scripts/host_monitor.py", "run", "--out", out / "host_monitor.jsonl",
              "--interval-s", "1", "--session-id", out.name, "--path", str(out), "--path", "/",
              *(arg for match in monitor_matches(p) for arg in ("--match", match))],
             out / "host_monitor.log")
-        children["traffic"] = start_child(
-            [sys.executable, ROOT / "scripts/host_traffic.py", "--profile", "lab", "--target", p["target"],
-             "--dur", "0", "--seed", str(metadata["seed"]), "--vlakien", str(s["workers"]),
-             "--burst", str(s["burst"]), "--catalog-share", str(s["catalog_share"]),
-             "--write-share", str(s["write_share"]), "--session-id", out.name,
-             "--requests-log", out / "traffic_requests.jsonl", "--intervals-log", out / "traffic_intervals.jsonl",
-             "--summary-interval-s", "5", "--initial-phase", "warmup", "--out", out / "traffic.json"],
-            out / "traffic.log")
+        children["traffic"] = start_child(traffic_command(p, metadata, out), out / "traffic.log")
         step("warmup", seconds=p["warmup_s"])
         deadline = time.monotonic() + p["warmup_s"]
         while time.monotonic() < deadline:
@@ -1094,9 +1348,7 @@ def capture_session(p, out, metadata, cycles):
                 if children[name].poll() is not None:
                     raise ValueError(f"{name} exited during warmup")
             time.sleep(min(1, max(0, deadline - time.monotonic())))
-        metrics = json.loads((out / "traffic.json").read_text())
-        if not metrics["ok"] or metrics["errors"] or metrics.get("logging_error"):
-            raise ValueError("warmup traffic failed")
+        metrics = check_warmup(p, out)
         write_json(out / "traffic_before.json", metrics)
         if foreign_traffic(p, {children["traffic"].pid}):
             raise ValueError("another host_traffic.py appeared during warmup")
@@ -1567,6 +1819,11 @@ def main(argv=None):
     run.add_argument("--group-attempt", type=int, default=1, help="Campaign group generation after a recorded restart")
     run.add_argument("--collections-dir", type=Path, help="Diagnostic session base under data/diagnostics")
     run.add_argument("--cycles", type=int, help="Diagnostic runs only: number of snapshots")
+    run.add_argument("--rate", type=float,
+                     help="Diagnostic runs under schema 3 only: user sessions per second at envelope level 1, required "
+                          "when the scenario's rate is null and refused when it is a number")
+    run.add_argument("--events", help="Diagnostic runs under schema 3 only: JSON list of {type, start_s, duration_s}, "
+                                      "checked against the protocol's events (none without it)")
     audit = sub.add_parser("audit")
     audit.add_argument("directory", type=Path)
     audit.add_argument("--out", type=Path)

@@ -28,14 +28,22 @@ def protocol(tmp_path_factory):
 
 def test_clean_session_passes_and_counts_every_exception_of_the_log_audit(protocol, tmp_path):
     """The clean session's event admits each condition of an event once, the failed order and the two requests
-    inside its window included; no collector warning."""
+    inside its window included; no collector warning. Under a protocol with the profiles section (package B5b)
+    the generator's exit code 1 is the one its request log implies (the deliberate client errors), not an
+    exception of the event, and the section realism holds every requirement."""
     p, path = protocol
+    v5 = "profiles" in p
     audit = _run(tmp_path, p, path)
     assert (audit.code, audit.values["reasons"]) == (0, [])
     assert audit.values["logs"]["tolerated"] == {
-        "collector_warnings": 0, "event_traffic_exit": 1, "event_unit_restarts": 1, "event_window_requests": 2,
-        "event_window_health_checks": 1, "event_window_journal": 1, "event_window_nginx_errors": 1}
+        "collector_warnings": 0, "event_traffic_exit": int(not v5), "event_unit_restarts": 1,
+        "event_window_requests": 2, "event_window_health_checks": 1, "event_window_journal": 1,
+        "event_window_nginx_errors": 1}
     assert audit.values["logs"]["sections"]["audit_bounds"] == p["audit"]
+    realism = audit.values["logs"]["sections"].get("realism")
+    assert (realism is not None) == v5
+    if v5:
+        assert all(r["ok"] for r in realism["requirements"]) and realism["offered_load"]["ok"], realism
 
 
 def test_cases_cover_every_problem_key_of_the_log_audit():

@@ -1,9 +1,10 @@
 """The self-check of protocol v5 (package B4): the real file passes, every deliberate error fails its check.
 
 scripts/collection.py --protocol P selfcheck (scripts/protocol_v5.py) runs on config/collection-v5.json: every
-check passes except lab_register, which stays pending until packages B5 and B8 register their names in lab/, so
-the command exits 2 until B8. Each row of the lead's skeleton (dokazy/B4/kostra/KOSTRA.md, section 5) is one
-deliberate error: the file with one change, the plan with one change or a replacement that changes the assignment.
+check passes except lab_register, which stays pending until package B8 registers its four control kinds in lab/ (B5
+registered the event types and the traffic profiles, skeleton B5 section 5 item 7), so the command exits 2 until B8.
+Each row of the lead's skeleton (dokazy/B4/kostra/KOSTRA.md, section 5) is one deliberate error: the file with one
+change, the plan with one change or a replacement that changes the assignment.
 Its check fails with exactly the reasons written here and every other check gives what it gives for the real file,
 except the ones a case lists. Only what the plan draws (a group, a scenario, an event type) is read from the plan.
 Names package B4 adds are imported inside the tests, so this file collects on the code before B4.
@@ -18,8 +19,8 @@ ROOT = Path(__file__).resolve().parents[2]
 V5 = ROOT / "config/collection-v5.json"
 CHECKS = ("keys", "loader", "reachability", "role_sizes", "scenario_balance", "events", "controls",
           "full_snapshot_guard", "phases", "streams", "role_order", "analysis", "rehearsal", "lab_register")
-PENDING = ("registered by B5 and B8: corp, eshop, kontrola_davka_procesov, kontrola_modul_jadra, "
-           "kontrola_pocuvajuci_soket, kontrola_zapisovac_pamate")
+PENDING = ("registered by B8: kontrola_davka_procesov, kontrola_modul_jadra, kontrola_pocuvajuci_soket, "
+           "kontrola_zapisovac_pamate")
 TYPES = ("naprazdno", "restart_databazy", "udrzba_zaloha", "zamok_tabulky", "zataz_pamate", "zla_konfiguracia_sluzby")
 UNREACHABLE = "protocol(): invalid_rows.max is unreachable under the score coverage gate"
 OUTSIDE = "score coverage gate outside the interval bound to invalid_rows.max"
@@ -94,6 +95,12 @@ def method_without_grid(doc):
             "analysis": ["missing analysis key: analysis.methods.Z1.grid"]}
 
 
+def k2a_without_z4(doc):
+    """The lead's must_fix 4 on B4: K2a is decided against Z1, Z2 and Z4 (proposal 4.1)."""
+    doc["analysis"]["k2a"]["compare"].remove("Z4")
+    return {"analysis": ['analysis.k2a.compare is ["Z1", "Z2"], proposal 4.1 names ["Z1", "Z2", "Z4"]']}
+
+
 def null_outside(doc):
     doc["determined_at"]["G3a"].remove("analysis.column_mask")
     return {"analysis": ["null outside determined_at: analysis.column_mask"]}
@@ -112,6 +119,16 @@ def rehearsal_prefix(doc):
 def unknown_to_lab(doc):
     doc["events"]["types"]["zamok_databazy"] = doc["events"]["types"].pop("zamok_tabulky")
     return {"lab_register": ["unknown to lab/: zamok_databazy"]}
+
+
+def unknown_profile(doc):
+    doc["scenarios"]["corp_low"]["profile"] = "batch"  # No profile of the profiles section, none of the generator.
+    return {"loader": ["protocol(): invalid profiles"], "lab_register": ["unknown to lab/: batch"]}
+
+
+def think_below_mean(doc):
+    doc["profiles"]["eshop"]["think_s"]["max"] = 5  # Below the mean of 7 s.
+    return {"loader": ["protocol(): invalid profiles"]}
 
 
 # Changes of the plan of the real file: (doc, plan) -> the failures.
@@ -248,7 +265,8 @@ def replaced_streams(doc, plan, monkeypatch):
                        events=json.loads(json.dumps(session["events"])))
         return out
     monkeypatch.setattr(protocol_v5, "replacement", same_streams)
-    return {"streams": ["two event_times streams share a seed", "two traffic streams share a seed"]}
+    return {"streams": [f"two {purpose} streams share a seed" for purpose in
+                        ("event_times", "traffic", "traffic_arrivals", "traffic_choices", "traffic_sizes")]}
 
 
 def replaced_in_guard(doc, plan, monkeypatch):
@@ -268,8 +286,8 @@ def replaced_in_guard(doc, plan, monkeypatch):
 
 FILE_CASES = {f.__name__: f for f in (unknown_key, missing_key, gate_085, max_7, six_groups, below_min_per_type,
                                       no_min_per_type, not_interleaved, replacement_without_covers,
-                                      method_without_grid, null_outside, rehearsal_name, rehearsal_prefix,
-                                      unknown_to_lab)}
+                                      method_without_grid, k2a_without_z4, null_outside, rehearsal_name,
+                                      rehearsal_prefix, unknown_to_lab, unknown_profile, think_below_mean)}
 PLAN_CASES = {f.__name__: f for f in (no_group_on_vm, equal_scenarios, twice_at_position, two_events, start_in_guard,
                                       locked_to_grid, common_seed, control_relabelled, control_slot_emptied,
                                       event_free_first, group_of_two, seed_field)}
@@ -323,3 +341,45 @@ def test_the_skeletons_form_of_the_command_checks_the_same_file(tmp_path):
     assert collection.main(["selfcheck", "--protocol", str(V5), "--out", str(after)]) == 2
     assert collection.main(["--protocol", str(V5), "selfcheck", "--out", str(before)]) == 2
     assert json.loads(after.read_text()) == json.loads(before.read_text())
+
+
+# Package B5b (lead's remarks on B4, part 1, section 1): the loader binds determined_at as scripts/gates.py does, and
+# the row reachability fails when a witness had to fall back to worst_invalid_rows. Every other check gives what it
+# gives for the real file.
+
+def expected_checks(**failures):
+    expected = {name: ("passed", []) for name in CHECKS}
+    expected["lab_register"] = ("pending", [PENDING])
+    expected.update({name: ("failed", reasons) for name, reasons in failures.items()})
+    return expected
+
+
+@pytest.mark.parametrize("stage, path, reason", [
+    ("G2", "analysis.k1", "determined_at path analysis.k1 (G2) would delete analysis.k1.m (G1)"),
+    ("G3a", "determined_at.G1",
+     "determined_at path must start with a protocol key other than determined_at: determined_at.G1"),
+], ids=["deletes_an_earlier_path", "names_determined_at"])
+def test_the_loader_refuses_a_determined_at_that_a_stage_record_could_not_bind(tmp_path, stage, path, reason):
+    from scripts import gates
+    doc = json.loads(V5.read_text())
+    doc["determined_at"][stage].append(path)
+    with pytest.raises(ValueError) as refused:
+        gates.later_paths(doc["determined_at"], "G0")
+    assert str(refused.value) == reason
+    code, report = selfcheck(tmp_path, doc)
+    assert code == 2
+    assert {c["check"]: (c["result"], c["reasons"]) for c in report["checks"]} == expected_checks(
+        loader=["protocol(): invalid determined_at: " + reason])
+
+
+def test_reachability_fails_when_a_witness_falls_back_to_worst_invalid_rows(tmp_path, monkeypatch):
+    """With too few placements allowed the witnesses of 3 and 4 rows are those of worst_invalid_rows: 33 rows apart,
+    so the one of 4 rows is periodic as well."""
+    from features import acceptance
+    monkeypatch.setattr(acceptance, "WITNESS_STEPS", 10)  # The v5 grid needs 33 placements per row.
+    code, report = selfcheck(tmp_path, json.loads(V5.read_text()))
+    assert code == 2
+    assert {c["check"]: (c["result"], c["reasons"]) for c in report["checks"]} == expected_checks(reachability=[
+        "witness with invalid_rows.max + 1 rows is not refused by the gate alone",
+        "witness with invalid_rows.max rows fell back to worst_invalid_rows",
+        "witness with invalid_rows.max + 1 rows fell back to worst_invalid_rows"])

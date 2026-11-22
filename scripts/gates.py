@@ -13,6 +13,10 @@ A stage has passed when its newest record
     bytes (stage_binding),
   - lists exactly the criteria of the stage (CRITERIA below), each passed with evidence,
   - carries an independent verification in which every criterion is confirmed.
+record runs the self-check of a schema-3 protocol for the stage first (scripts/protocol_v5.py selfcheck: no value
+of a stage up to it is null, and every other check) and writes nothing unless every check passed; it is no
+criterion, it enforces the rule of the file that each record binds by its hash (lead's remarks on B4, part 1,
+section 2). Records of schemas 1 and 2 are written as before.
 The tool keeps the chain honest. What a criterion means is written in
 docs/NAVRH_PROTOKOL_V5.sk.md (chapter 10) and docs/HARNESS_V5.sk.md; the evidence is produced
 by the commands named there, never typed in by hand.
@@ -28,7 +32,7 @@ import sys
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
-from scripts import collection  # noqa: E402
+from scripts import collection, protocol_v5  # noqa: E402
 
 SCHEMA = "hyptcn3/gate-record/1"
 STAGES = ("G0", "G1", "G2", "G3a", "G3b", "G4", "G5", "G6")
@@ -198,11 +202,30 @@ def require(results, protocol, stage):
             raise ValueError(f"stage {row['stage']} is not valid: " + "; ".join(row["problems"]))
 
 
+def selfcheck_problems(protocol, stage):
+    """Why the self-check of a schema-3 protocol file does not admit a record of `stage`: one line per check of
+    protocol_v5.selfcheck(protocol, stage=stage) that did not pass, as "<check> <result>: <reasons>"; [] when every
+    check passed, and for a file of schema 1 or 2 or one that is no JSON object (recorded as before)."""
+    try:
+        doc = json.loads(Path(protocol).read_bytes())
+    except ValueError:
+        return []
+    if type(doc) is not dict or doc.get("schema") != protocol_v5.SCHEMA:
+        return []
+    report = protocol_v5.selfcheck(protocol, stage=stage)
+    return [f"{c['check']} {c['result']}" + (": " + "; ".join(c["reasons"]) if c["reasons"] else "")
+            for c in report["checks"] if c["result"] != "passed"]
+
+
 def write_record(results, protocol, stage, criteria, verification, command, now=None):
-    """Write a stage record. Refuses a stage whose predecessors are not valid, and refuses to overwrite."""
+    """Write a stage record. Refuses a stage whose predecessors are not valid, a schema-3 protocol whose self-check
+    for the stage does not pass (selfcheck_problems), and to overwrite; a refusal writes nothing."""
     require(results, protocol, stage)
-    now = now or datetime.now(timezone.utc)
     protocol_sha, rule = stage_binding(protocol, stage)
+    refused = selfcheck_problems(protocol, stage)
+    if refused:
+        raise ValueError(f"protocol self-check for stage {stage} did not pass, nothing recorded: " + " | ".join(refused))
+    now = now or datetime.now(timezone.utc)
     values = {"stage": stage, "protocol": str(protocol), "protocol_sha256": protocol_sha, "protocol_hash_rule": rule,
               "measurement_sha256": measurement_sha256(), "harness_sha256": sha256(__file__),
               "criteria": criteria, "verification": verification}

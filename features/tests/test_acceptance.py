@@ -86,9 +86,10 @@ def sections():
     construction here meets their bounds: rows lie on the 1 s grid, none is closed by a parser rule, and the
     flagged rows are adjacent or STEP apart, below the smallest spacing the periodicity rule counts."""
     from features import audit_policy
+    from scripts.tests.boundary_sessions import traffic_bounds  # Package B5b: the traffic bounds of the v5 file.
     return {"audit": {"lateness_max_s": .1, "cycle_ms_max": {"delta": 300, "full": 700},
                       "periodicity": {"equal_spacings": 3, "min_spacing_rows": STEP + 1, "note": "test bounds"},
-                      "warnings_allowed": None, "rule_closed_rows_max": None},
+                      "warnings_allowed": None, "rule_closed_rows_max": None, "traffic": traffic_bounds()},
             "exceptions": {name: {"cause": "synthetic", "decision": "synthetic", "expected": None}
                            for name in audit_policy.TOLERATED}}
 
@@ -1038,13 +1039,14 @@ def v5_grid(max_rows, gate):
     """A schema-3 protocol on the v5 grid (5 s, 720 rows, windows of 32, a full snapshot every 360) with the
     strictest periodicity bound its audit section admits (two equal spacings of two rows or more in a row), so a
     witness it accepts is periodic under no bound."""
+    from scripts.tests.boundary_sessions import traffic_bounds  # Package B5b: the traffic bounds of the v5 file.
     return {"schema": "hyptcn3/collection-protocol/3", "quality_policy": BEHAVIOR, "interval_s": 5,
             "max_gap_s": 7.5, "stride": 1, "bin_bytes": BIN_BYTES, "window_rows": 32, "full_every": 360,
             "cycles": 720, "pilot_cycles": 600, "min_score_coverage": gate,
             "invalid_rows": {"max": max_rows, "traversals": ["processes"]},
             "audit": {"lateness_max_s": .5, "cycle_ms_max": {"delta": 1500, "full": 3500},
                       "periodicity": {"equal_spacings": 2, "min_spacing_rows": 2, "note": "strictest test bound"},
-                      "warnings_allowed": None, "rule_closed_rows_max": None}}
+                      "warnings_allowed": None, "rule_closed_rows_max": None, "traffic": traffic_bounds()}}
 
 
 @pytest.mark.parametrize("count", range(1, 8))
@@ -1092,3 +1094,25 @@ def test_gate_interval_and_witness_cases_need_an_invalid_rows_rule(function):
     del p["invalid_rows"]
     with pytest.raises(ValueError, match="^protocol has no invalid_rows rule$"):
         getattr(acceptance, function)(p)
+
+
+# Package B5b (lead's remarks on B4, part 1, section 1): every entry names the function that placed its rows, so the
+# protocol self-check can refuse a witness that fell back to worst_invalid_rows.
+@pytest.mark.parametrize("case", ["found", "search_gave_up", "no_placement"])
+def test_the_witness_cases_name_the_function_that_placed_their_rows(case, monkeypatch):
+    if case == "no_placement":  # S3: 7 rows have a witness, the 8 costliest rows have none (see above).
+        p, shape, count = protocol(invalid_rows={"max": 7, "traversals": ["processes"]}), (N, W, F), 7
+    else:
+        p, shape, count = v5_grid(3, 557 / 720), V5_SHAPE, 3
+    if case == "search_gave_up":
+        monkeypatch.setattr(acceptance, "WITNESS_STEPS", 10)  # v5 needs 33 placements per row
+    worst, beyond = acceptance.max_witness_cases(p)
+    expected = {"found": ("worst_witness", "worst_witness"), "search_gave_up": ("worst_invalid_rows",) * 2,
+                "no_placement": ("worst_witness", "worst_invalid_rows")}[case]
+    assert (worst["witness"], beyond["witness"]) == expected
+    for entry, rows in ((worst, count), (beyond, count + 1)):
+        if entry["witness"] == "worst_invalid_rows":
+            assert entry["invalid_seq"] == acceptance.worst_invalid_rows(*shape, rows)
+        else:
+            assert len(entry["invalid_seq"]) == rows and len(set(spacings(entry["invalid_seq"]))) == rows - 1
+    assert [c for c in acceptance.protocol_reachability(p) if c["case"] == "worst"] == [worst]

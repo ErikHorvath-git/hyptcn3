@@ -8,6 +8,9 @@ name package B2 adds, so the same module runs on the code before and after B2. S
 reads is written with a clean value: the VM identity, lateness, cycle and publication fields of each sidecar,
 and in session.json the host context, the collector settings and the lab/ files with the guest's manifest. Since
 B4 a schema-3 protocol is a v5 document: it takes the v5 sections from config/collection-v5.json (v5_sections).
+Since B5b its audit section holds the traffic bounds of that file (traffic_bounds), and under a protocol with the
+profiles section a built session carries the traffic of its scenario's v5 profile with logs of schema /2
+(test_collection_logs.v5_traffic, the one helper of every such session).
 """
 from collections import namedtuple
 import contextlib
@@ -255,25 +258,32 @@ def audit_sections(interval_s, min_spacing_rows=2):
     The bounds of proposal 6.2 for an interval of 5 s scaled to `interval_s`: the cycle starts at most a tenth of
     the interval late, a delta cycle takes at most 30 % of it and a full one 70 %. Periodicity: 3 equal spacings in
     a row between the starts of bursts, each of at least `min_spacing_rows` rows (the author's judgment in G0). No
-    collector warning is allowed and the cap of rule-closed rows is not set, as until G2 and G3b. Every TOLERATED
-    id is registered (REGISTER), with no expected count.
+    collector warning is allowed and the cap of rule-closed rows is not set, as until G2 and G3b. The bounds of the
+    traffic's realism (package B5b) are those of config/collection-v5.json (traffic_bounds). Every TOLERATED id is
+    registered (REGISTER), with no expected count.
     """
     from features import audit_policy  # A module of package B3: imported here, so this file collects before it.
     return {"audit": {"lateness_max_s": interval_s / 10,
                       "cycle_ms_max": {"delta": round(300 * interval_s, 6), "full": round(700 * interval_s, 6)},
                       "periodicity": {"equal_spacings": 3, "min_spacing_rows": min_spacing_rows,
                                       "note": "author's judgment in G0 (proposal 10.9), not a mechanism"},
-                      "warnings_allowed": None, "rule_closed_rows_max": None},
+                      "warnings_allowed": None, "rule_closed_rows_max": None, "traffic": traffic_bounds()},
             "exceptions": {name: {"cause": REGISTER[name][0], "decision": REGISTER[name][1], "expected": None}
                            for name in audit_policy.TOLERATED}}
+
+
+def traffic_bounds():
+    """audit.traffic of config/collection-v5.json (package B5b), a copy: the bounds of the realism requirements of
+    proposal 5.7 and of the offered-load check of proposal 5.3; they do not depend on the grid."""
+    return copy.deepcopy(_v5_file()["audit"]["traffic"])
 
 
 V5 = collection.ROOT / "config/collection-v5.json"
 # The keys v5_sections() gives a schema-3 test protocol; the document states the others itself (its grid, gate,
 # rule, name, profile, VM and group prefix) and the audit sections scaled to its interval (audit_sections).
 V5_SECTIONS = ("status", "warmup_s", "min_free_gib", "replacement", "group_sessions", "roles", "interleave",
-               "scenarios", "scenario_rule", "events", "full_snapshot_guard", "controls", "streams", "analysis",
-               "rehearsal", "determined_at")
+               "scenarios", "scenario_rule", "profiles", "events", "full_snapshot_guard", "controls", "streams",
+               "analysis", "rehearsal", "determined_at")
 
 
 @functools.lru_cache(maxsize=None)
@@ -283,11 +293,12 @@ def _v5_file():
 
 
 def v5_sections(scenarios, roles, *, group_sessions, window_rows, max_per_campaign=0):
-    """The sections of config/collection-v5.json (package B4) a schema-3 test protocol takes over.
+    """The sections of config/collection-v5.json (package B4; profiles since B5b) a schema-3 test protocol takes over.
 
     Schema 3 is the v5 layout, so every schema-3 test document has every key of it. Taken from the file (read
     here, so this module collects before B4) with: the scenario names given, each with a v5 entry {profile,
-    intensity, rate} in the file's order; the roles given plus test_controls with no group; group_sessions given
+    intensity, rate} in the file's order (the profiles section as the file has it, so each names one of its
+    profiles); the roles given plus test_controls with no group; group_sessions given
     (the families give len(scenarios), so every group holds every scenario); no interleaving; events whose
     per_session [0] plans no event; the analysis on the document's window; replacement.max_per_campaign as the
     document had (0: a document without a rule replaced nothing); status test_only.
@@ -436,6 +447,9 @@ def build_session(root, p, protocol_path, place, *, session_id, base, rows=None,
                                          seed=place.get("seed", 0) if seed is None else seed,
                                          max_gap_s=p["max_gap_s"], domain=meta_doc.get("domain"))
     write_frames(d / "raw", sidecars)
+    # Under a protocol with the profiles section (protocol v5, package B5b) the traffic of the scenario's profile
+    # with logs of schema /2 (test_collection_logs.v5_traffic); otherwise nothing changes.
+    evidence.v5_traffic(d, p)
     evidence.seal(d)  # Last: protocol.json, profile/, guest state and raw/capture.json are in the logs manifest.
     return Session(d, Path(protocol_path), result)
 

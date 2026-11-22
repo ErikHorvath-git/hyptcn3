@@ -1,12 +1,14 @@
 """Protocol v5: the layout of schema 3, its schedule and the self-check of a protocol file (package B4).
 
 Schema hyptcn3/collection-protocol/3 is the v5 layout (docs/NAVRH_PROTOKOL_V5.sk.md, chapters 5.5, 6.4, 7.2-7.5,
-8.3, 8.4, 10.1, 10.4, 10.9). This module holds all v5 logic; scripts/collection.py calls it from protocol(),
-plan() and its subcommand selfcheck:
+8.3, 8.4, 10.1, 10.4, 10.9; the traffic profiles of package B5b, chapters 5.2, 5.3 and 5.7). This module holds all
+v5 logic; scripts/collection.py calls it from protocol(), plan() and its subcommand selfcheck, and
+scripts/host_traffic.py reads the profiles section through profiles_problems():
 
     check_layout(p)                the loader's part: unknown and missing keys, malformed values of the v5 sections
+    profiles_problems(p)           every malformed value of the profiles section, as named reasons
     plan(p, mode)                  the schedule of a campaign or of its rehearsal (a mode of the same file)
-    replacement(p, session, n)     attempt n of a planned session: the same assignment, new times and traffic seed
+    replacement(p, session, n)     attempt n of a planned session: the same assignment, new times and traffic seeds
     plans_events(p)                whether its sessions list events and keep events.json (log audit, corpus build)
     analysis_plan(p)               the analysis plan the training and the evaluation read (B6, B7)
     selfcheck(path, mode, stage)   every check of the self-check on the file and on its plan
@@ -35,25 +37,29 @@ CONTROL_ROLE = "test_controls"  # Its sessions hold controls on the VM and no ev
 # Proposal 7.3: train, dev and calibration in this order, then the two test roles interleaved in time.
 TIME_RANK = {"train": 0, "dev": 1, "calibration": 2, "test_benign": 3, "test_controls": 3}
 INTERLEAVED = ("test_benign", "test_controls")
-# The random streams of the plan and the unit each one is drawn for (proposal 5.5; the streams section).
+# The random streams of the plan and the unit each one is drawn for (proposal 5.5; the streams section). Package
+# B5b adds the traffic streams (skeleton B5 section 2): the arrival times, the choices in a user session and the
+# sizes each have their own; traffic draws the arrival envelope and stays the session's seed.
 PURPOSES = {"scenario_order": "block", "event_free_position": "role", "event_deck": "role",
-            "control_deck": "role", "event_times": "session", "traffic": "session"}
+            "control_deck": "role", "event_times": "session", "traffic": "session", "traffic_arrivals": "session",
+            "traffic_choices": "session", "traffic_sizes": "session"}
+SESSION_PURPOSES = tuple(purpose for purpose, unit in PURPOSES.items() if unit == "session")
 METHODS = ("Z0", "Z1", "Z2", "Z3", "Z4", "Z5", "M")
 MAX_INVALID_ROWS = 6  # Proposal 10.9 and D4: six event boundaries of a session with three events.
 MAX_DRAWS = 1000  # Redraws of a schedule that meets a full-snapshot guard, or of unbalanced scenario blocks.
-# Names the protocol uses that are registered only from package B5b (the profiles of the generator) and B8 (the
-# four new control kinds); the check lab_register stays pending while one of them is unknown. B5a registered the
-# empty event naprazdno in lab/udalosti.py.
-PENDING_IN_LAB = ("eshop", "corp", "kontrola_modul_jadra", "kontrola_pocuvajuci_soket",
-                  "kontrola_zapisovac_pamate", "kontrola_davka_procesov")
+# Names the protocol uses that are registered only from package B8 (the four new control kinds); the check
+# lab_register stays pending while one of them is unknown. B5a registered the empty event naprazdno in
+# lab/udalosti.py, B5b the traffic profiles in scripts/host_traffic.py (PROFILES).
+PENDING_IN_LAB = ("kontrola_modul_jadra", "kontrola_pocuvajuci_soket", "kontrola_zapisovac_pamate",
+                  "kontrola_davka_procesov")
 
 # Every top-level key of a schema-3 protocol; vms or the pair domain/target as in schema 2, two optional notes.
 # A section another package adds (B5b: profiles) is added here and to config/collection-v5.json together.
 TOP_LEVEL = ("schema", "name", "status", "profile", "interval_s", "max_gap_s", "bin_bytes", "window_rows",
              "stride", "full_every", "cycles", "pilot_cycles", "warmup_s", "min_free_gib", "quality_policy",
              "min_score_coverage", "invalid_rows", "replacement", "group_prefix", "group_sessions", "roles",
-             "interleave", "scenarios", "scenario_rule", "events", "full_snapshot_guard", "controls", "streams",
-             "audit", "exceptions", "analysis", "rehearsal", "determined_at")
+             "interleave", "scenarios", "scenario_rule", "profiles", "events", "full_snapshot_guard", "controls",
+             "streams", "audit", "exceptions", "analysis", "rehearsal", "determined_at")
 OPTIONAL = ("vms_note", "note")
 
 
@@ -95,12 +101,32 @@ ANALYSIS = _fixed(
     k1=_TEST, k2a=_TEST, k2b=_TEST,
     interventions=_fixed("boots", "validity", C=_INTERVENTION, D=_INTERVENTION),
     evaluable=_fixed("first_s", "scored_share"))
+# The traffic profiles of the generator (package B5b, design B5b 1.1; scripts/host_traffic.py PROFILES implements
+# exactly these): the keys every profile has, and those of each profile. arrivals is the envelope family of the
+# open loop, think_s the think time before every request but the first, client_errors the deliberate client errors.
+_PROFILE = dict(arrivals=_fixed("ramp_s", "wave_period_s", "wave_mean", "wave_amplitude", "peak_s",
+                                "peak_edge_share", "peak_at", "step_s", "note"),
+                client_errors=_fixed("share", "statuses", "note"), think_s=_fixed("mean", "max", "note"))
+PROFILE_KEYS = {
+    "eshop": _fixed("max_concurrent", "zipf_s", "note", order_share=_fixed("low", "high"),
+                    funnel=_fixed("pages", "search_share", "details_per_page", "static_share", "cart_items",
+                                  "page_size", "note"), **_PROFILE),
+    "corp": _fixed("max_concurrent", "zipf_s", "actions", "page_size", "note",
+                   shares=_fixed("doc_list", "doc_get", "doc_put", "report"),
+                   document_sizes=_fixed("median_bytes", "sigma", "tail_share", "tail_from_bytes", "tail_alpha",
+                                         "min_bytes", "max_bytes", "note"), **_PROFILE),
+}
+PEAK_AT = ("uniform", "wave_start")  # Where the envelope's peak lies: anywhere, or where a cycle of the wave starts.
+CLIENT_STATUSES = (400, 401, 404)  # Proposal 5.3: the deliberate client errors the generator makes.
+CLIENT_ERROR_SHARE = (.01, .03)  # Proposal 5.3: 1 to 3 % client errors.
+MAX_PAGE_SIZE = 100  # lab/services.py MAX_PAGE_SIZE: the largest page the catalog and the docs service serve.
 # The fixed inner sets of the v5 sections (design B4 1.1). invalid_rows, replacement, audit and exceptions keep
 # their own readers (features/quality.py, collection.check_replacement, features/audit_policy.py).
 INNER = {
     "roles": _fixed(*ROLES),
     "scenarios": Each(_fixed("profile", "intensity", "rate")),
     "scenario_rule": _fixed("min_peak_to_mean", "basis", "note", peak_share=_fixed("low", "high")),
+    "profiles": PROFILE_KEYS,
     "events": _fixed("types", "per_session", "duration_s", "first_s", "min_gap_s", "tail_s", "grace_s",
                      "min_per_type", "note"),
     "full_snapshot_guard": _fixed("before_s", "note"),
@@ -222,6 +248,118 @@ def _ok_scenario_rule(p):
             and r["min_peak_to_mean"] >= 1 and _text(r["basis"]) and type(r["note"]) is str)
 
 
+def _between(value, low, high):
+    return _number(value) and low <= value <= high
+
+
+def _bounds(value, low, *, integer=False, below=None):
+    """[min, max] with low <= min <= max (ints when integer), and max < below when below is given."""
+    kind = (lambda v: type(v) is int) if integer else _number
+    return (type(value) is list and len(value) == 2 and all(map(kind, value)) and low <= value[0] <= value[1]
+            and (below is None or value[1] < below))
+
+
+def _arrivals_problems(a, warmup):
+    """The envelope family of a profile (scripts/host_traffic.py draw_envelope)."""
+    out = []
+    if not _number(a["ramp_s"]) or a["ramp_s"] < 0:
+        out.append(("arrivals.ramp_s", "not a number >= 0"))
+    elif _number(warmup) and a["ramp_s"] > warmup:
+        out.append(("arrivals.ramp_s", "longer than warmup_s: the ramp lies in the warmup"))
+    for key in ("wave_period_s", "peak_s", "wave_mean"):
+        if not _bounds(a[key], 0) or a[key][0] <= 0:
+            out.append((f"arrivals.{key}", "not [min, max] with 0 < min <= max"))
+    if not _bounds(a["wave_amplitude"], 0, below=1):  # Below 1: the wave stays above level 0.
+        out.append(("arrivals.wave_amplitude", "not [min, max] with 0 <= min <= max < 1"))
+    elif _bounds(a["wave_mean"], 0) and a["wave_mean"][1] * (1 + a["wave_amplitude"][1]) >= 1:
+        out.append(("arrivals.wave_mean", "the slow wave reaches level 1, which only the peak has"))
+    if not _number(a["peak_edge_share"]) or not 0 < a["peak_edge_share"] < .5:  # Two flanks inside the peak.
+        out.append(("arrivals.peak_edge_share", "not a number in (0, 0.5)"))
+    if a["peak_at"] not in PEAK_AT:
+        out.append(("arrivals.peak_at", "not one of " + ", ".join(PEAK_AT)))
+    if not _number(a["step_s"]) or a["step_s"] <= 0:
+        out.append(("arrivals.step_s", "not a number > 0"))
+    return out
+
+
+def _profile_problems(name, q, warmup):
+    """(path, what) of every malformed value of one profile."""
+    from lab import seed  # DOCUMENT_MAX: the upload cap of lab/services.py (413 above it).
+    out = _arrivals_problems(q["arrivals"], warmup)
+    if type(q["max_concurrent"]) is not int or q["max_concurrent"] < 1:
+        out.append(("max_concurrent", "not an integer >= 1"))
+    e = q["client_errors"]
+    if not _between(e["share"], *CLIENT_ERROR_SHARE):
+        out.append(("client_errors.share", "outside 1 to 3 % (proposal 5.3)"))
+    if (type(e["statuses"]) is not list or not e["statuses"] or len(set(map(str, e["statuses"]))) != len(e["statuses"])
+            or not all(type(s) is int and s in CLIENT_STATUSES for s in e["statuses"])):
+        out.append(("client_errors.statuses", "not distinct statuses of " + ", ".join(map(str, CLIENT_STATUSES))))
+    t = q["think_s"]
+    if not (_number(t["mean"]) and t["mean"] > 0 and _number(t["max"]) and t["max"] >= t["mean"]):
+        out.append(("think_s", "not mean > 0 and max >= mean"))
+    if not _number(q["zipf_s"]) or q["zipf_s"] <= 0:
+        out.append(("zipf_s", "not a number > 0"))
+    if name == "eshop":
+        f = q["funnel"]
+        if not all(_number(q["order_share"][k]) and 0 < q["order_share"][k] < 1 for k in ("low", "high")):
+            out.append(("order_share", "not shares in (0, 1)"))
+        for key, low in (("pages", 1), ("details_per_page", 0), ("cart_items", 1)):
+            if not _bounds(f[key], low, integer=True):
+                out.append((f"funnel.{key}", f"not integers [min, max] with {low} <= min <= max"))
+        for key in ("search_share", "static_share"):
+            if not _between(f[key], 0, 1):
+                out.append((f"funnel.{key}", "not a share in [0, 1]"))
+        sizes = [("funnel.page_size", f["page_size"])]
+    else:
+        s, d = q["shares"], q["document_sizes"]
+        if not _bounds(q["actions"], 1, integer=True):
+            out.append(("actions", "not integers [min, max] with 1 <= min <= max"))
+        if not all(_between(v, 0, 1) for v in s.values()) or abs(sum(s.values()) - 1) > 1e-9:
+            out.append(("shares", "not shares in [0, 1] that sum to 1"))
+        if not (_number(d["median_bytes"]) and d["median_bytes"] > 0 and _number(d["sigma"]) and d["sigma"] >= 0
+                and _between(d["tail_share"], 0, 1) and _number(d["tail_from_bytes"]) and d["tail_from_bytes"] > 0
+                and _number(d["tail_alpha"]) and d["tail_alpha"] > 0):
+            out.append(("document_sizes", "not a lognormal body (median_bytes, sigma) with a Pareto tail "
+                                          "(tail_share, tail_from_bytes, tail_alpha)"))
+        if not _bounds([d["min_bytes"], d["max_bytes"]], 1, integer=True) or d["max_bytes"] > seed.DOCUMENT_MAX:
+            out.append(("document_sizes", f"not integers 1 <= min_bytes <= max_bytes <= {seed.DOCUMENT_MAX} "
+                                          "(the upload cap of lab/services.py)"))
+        sizes = [("page_size", q["page_size"])]
+    out += [(key, f"not an integer in 1..{MAX_PAGE_SIZE}") for key, value in sizes
+            if type(value) is not int or not 1 <= value <= MAX_PAGE_SIZE]
+    notes = [q, q["arrivals"], e, t, *([q["funnel"]] if name == "eshop" else [q["document_sizes"]])]
+    if not all(type(x["note"]) is str for x in notes):
+        out.append(("note", "every note is a string"))
+    return out
+
+
+def profiles_problems(p):
+    """The problems of the profiles section as named reasons, [] when it is well formed: its unknown and missing
+    keys (the layout's reasons) or else every malformed value (the generator prints the first one; the loader says
+    `invalid profiles`, after layout_problems named any key). Every scenario names one of the profiles."""
+    profiles = p.get("profiles") if type(p) is dict else None
+    if type(profiles) is not dict:
+        return ["profiles: not an object"]
+    out = []
+    _walk(profiles, PROFILE_KEYS, "profiles", out)
+    if out:
+        return out
+    scenarios = p.get("scenarios") if type(p.get("scenarios")) is dict else {}
+    out += [f"scenarios.{name}.profile: {s.get('profile')!r} is not a profile of the profiles section"
+            for name, s in sorted(scenarios.items()) if type(s) is dict and s.get("profile") not in profiles]
+    for name in sorted(set(profiles) & set(PROFILE_KEYS)):  # An unknown profile is the layout's (unknown key).
+        try:
+            out += [f"profiles.{name}.{path}: {what}"
+                    for path, what in _profile_problems(name, profiles[name], p.get("warmup_s"))]
+        except (KeyError, TypeError, AttributeError, IndexError) as error:
+            out.append(f"profiles.{name}: malformed ({type(error).__name__}: {error})")
+    return out
+
+
+def _ok_profiles(p):
+    return not profiles_problems(p)
+
+
 def _ok_events(p):
     e = p["events"]
     types, per = e["types"], e["per_session"]
@@ -330,6 +468,11 @@ def expand(doc, pattern):
 
 
 def _ok_determined(p):
+    """Every path names an existing key and belongs to one stage only, and scripts/gates.py can bind the file with
+    it: gates.later_paths() refuses a determined_at under which a stage record would stop binding a value of its own
+    or an earlier stage, so a file that loads is never refused when a stage is recorded (lead's remarks on B4,
+    part 1, section 1). Its refusal is raised as `invalid determined_at: <its reason>`."""
+    from scripts import gates  # Inside the function: gates imports scripts.collection, which imports this module.
     seen = set()
     for paths in p["determined_at"].values():
         if type(paths) is not list or not all(map(_text, paths)):
@@ -339,22 +482,27 @@ def _ok_determined(p):
             if not found or seen & set(found):
                 return False  # A path names at least one existing key and belongs to one stage only.
             seen.update(found)
+    try:
+        gates.later_paths(p["determined_at"], "G0")
+    except ValueError as error:
+        raise ValueError("invalid determined_at: " + str(error)) from None
     return True
 
 
 VALUE_CHECKS = (
     ("name", lambda p: _text(p["name"])), ("group_prefix", lambda p: type(p["group_prefix"]) is str),
     ("group_sessions", lambda p: _count(p["group_sessions"], 1)), ("roles", _ok_roles),
-    ("interleave", _ok_interleave), ("scenarios", _ok_scenarios), ("scenario_rule", _ok_scenario_rule),
-    ("events", _ok_events), ("full_snapshot_guard", _ok_guard), ("controls", _ok_controls),
-    ("streams", _ok_streams), ("analysis", _ok_analysis), ("rehearsal", _ok_rehearsal),
+    ("interleave", _ok_interleave), ("scenarios", _ok_scenarios), ("profiles", _ok_profiles),
+    ("scenario_rule", _ok_scenario_rule), ("events", _ok_events), ("full_snapshot_guard", _ok_guard),
+    ("controls", _ok_controls), ("streams", _ok_streams), ("analysis", _ok_analysis), ("rehearsal", _ok_rehearsal),
     ("determined_at", _ok_determined))
 
 
 def check_layout(p):
     """The loader's v5 checks: the first unknown or missing key, then the first malformed v5 section.
 
-    ValueError `unknown protocol key: <path>`, `missing protocol key: <path>` or `invalid <section>`.
+    ValueError `unknown protocol key: <path>`, `missing protocol key: <path>` or `invalid <section>`; a determined_at
+    that scripts/gates.py could not bind gives `invalid determined_at: <the reason of gates.later_paths>`.
     """
     problems = layout_problems(p)
     if problems:
@@ -402,6 +550,11 @@ def analysis_plan(p):
 def seed(name, purpose, group, session, attempt):
     """The seed of one random stream: sha256 of the protocol name, group, session, attempt and purpose."""
     return int(hashlib.sha256(json.dumps([name, group, session, attempt, purpose]).encode()).hexdigest()[:16], 16)
+
+
+def _session_seeds(name, group, position, attempt):
+    """The seeds of the session-level purposes of one attempt of a planned session (event_times and the traffic)."""
+    return {purpose: seed(name, purpose, group, position, attempt) for purpose in SESSION_PURPOSES}
 
 
 def _shape(p, mode):
@@ -588,8 +741,7 @@ def plan(p, mode="campaign"):
         for purpose in (("control_deck",) if role == CONTROL_ROLE else ("event_free_position", "event_deck")):
             shared[purpose] = seed(name, purpose, role, -1, 0)
         for i in range(g):
-            seeds = dict(shared, event_times=seed(name, "event_times", group["group"], i, 1),
-                         traffic=seed(name, "traffic", group["group"], i, 1))
+            seeds = dict(shared, **_session_seeds(name, group["group"], i, 1))
             session = {"role": role, "group": group["group"], "position": i, "scenario": group["scenarios"][i],
                        "attempt": 1, "seeds": seeds, "seed": seeds["traffic"], "cycles": p["cycles"]}
             if group["vm"] is not None:
@@ -607,13 +759,12 @@ def plan(p, mode="campaign"):
 
 def replacement(p, session, attempt, *, mode="campaign"):
     """Attempt `attempt` (2 or later) of a planned session: the same VM, role, group, position, scenario and event
-    types or control kinds in order; new times and a new traffic seed from the streams of this attempt."""
+    types or control kinds in order; new times and new traffic seeds from the streams of this attempt."""
     if type(attempt) is not int or attempt < 2:
         raise ValueError("a replacement is attempt 2 or later")
     name = _shape(p, mode)[0]
     group, position = session["group"], session["position"]
-    seeds = dict(session["seeds"], event_times=seed(name, "event_times", group, position, attempt),
-                 traffic=seed(name, "traffic", group, position, attempt))
+    seeds = dict(session["seeds"], **_session_seeds(name, group, position, attempt))
     out = dict(copy.deepcopy(session), attempt=attempt, seeds=seeds, seed=seeds["traffic"])
     rng = random.Random(seeds["event_times"])
     if "controls" in session:
@@ -661,7 +812,10 @@ def check_loader(path):
 
 def check_reachability(doc, schedule=None):
     """The gate admits exactly invalid_rows.max isolated rows (POKYNY 2026-11-22 section 4), max at most 6, and
-    the witness of the worst case is decided as the audit decides it (features/acceptance.py)."""
+    the witness of the worst case is decided as the audit decides it (features/acceptance.py). Both witnesses are
+    placements without two equal spacings: one that fell back to worst_invalid_rows fails the check (lead's
+    remarks on B4, part 1, section 1), so the property holds for every file that passes, not only for today's
+    numbers."""
     from features.acceptance import gate_interval, max_witness_cases  # The witness of the worst case.
     reasons = []
     if doc["invalid_rows"]["max"] > MAX_INVALID_ROWS:
@@ -674,6 +828,9 @@ def check_reachability(doc, schedule=None):
         reasons.append("witness with invalid_rows.max rows is refused")
     if above["accepted"] or "periodicity" in above["codes"]:
         reasons.append("witness with invalid_rows.max + 1 rows is not refused by the gate alone")
+    reasons += [f"witness with {rows} rows fell back to worst_invalid_rows"
+                for case, rows in ((at_max, "invalid_rows.max"), (above, "invalid_rows.max + 1"))
+                if case["witness"] != "worst_witness"]
     return reasons
 
 
@@ -895,15 +1052,26 @@ def _nulls(value, path=""):
             yield from _nulls(item, f"{path}.{i}")
 
 
+# Proposal 4.1: K1 against Z3 and Z5, K2a against the threshold methods Z1, Z2 and Z4, K2b against Z3 and Z5. A
+# result "better" must beat every method of its list, so a method left out would lighten the claim (the lead's
+# must_fix 4 on B4).
+CONFIRMATORY = {"k1": ["Z3", "Z5"], "k2a": ["Z1", "Z2", "Z4"], "k2b": ["Z3", "Z5"]}
+
+
 def check_analysis(doc, schedule=None, *, stage="G0"):
-    """The analysis plan is complete; null only at a path of determined_at; with stage Gk every path of a stage up
-    to Gk holds a value."""
+    """The analysis plan is complete and compares K1, K2a and K2b with the methods of proposal 4.1; null only at a
+    path of determined_at; with stage Gk every path of a stage up to Gk holds a value."""
     if stage not in STAGES:
         raise ValueError("unknown stage: " + str(stage))
     reasons = []
     analysis = doc.get("analysis")
     _walk(analysis if type(analysis) is dict else {}, ANALYSIS, "analysis", reasons, missing_only=True)
     reasons = [r.replace("missing protocol key: ", "missing analysis key: ") for r in reasons]
+    for name, methods in CONFIRMATORY.items():
+        compare = ((analysis if type(analysis) is dict else {}).get(name) or {}).get("compare")
+        if type(compare) is list and sorted(map(str, compare)) != methods:
+            reasons.append(f"analysis.{name}.compare is {json.dumps(compare)}, "
+                           f"proposal 4.1 names {json.dumps(methods)}")
     determined = doc.get("determined_at") if type(doc.get("determined_at")) is dict else {}
     patterns = [x for paths in determined.values() if type(paths) is list for x in paths if type(x) is str]
     reasons += [f"null outside determined_at: {path}" for path in _nulls(doc)
@@ -945,14 +1113,16 @@ def check_rehearsal(doc, schedule):
 
 
 def lab_names():
-    """What lab/ registers: event types and control kinds (lab/udalosti.py); profiles from package B5 on."""
+    """What the lab registers: event types and control kinds (lab/udalosti.py), and the traffic profiles the
+    generator implements (scripts/host_traffic.py PROFILES, package B5b)."""
     from lab import udalosti
-    return {"event type": set(udalosti.TYPES), "profile": set(getattr(udalosti, "PROFILES", ())),
+    from scripts import host_traffic
+    return {"event type": set(udalosti.TYPES), "profile": set(host_traffic.PROFILES),
             "control kind": set(udalosti.CONTROLS)}
 
 
 def check_lab_register(doc, schedule=None):
-    """(result, reasons): failed on a name lab/ does not know, pending on a name B5 or B8 will add."""
+    """(result, reasons): failed on a name the lab does not know, pending on a name B8 will add."""
     known = lab_names()
     wanted = (("event type", sorted(doc["events"]["types"])),
               ("profile", sorted({s["profile"] for s in doc["scenarios"].values()})),
@@ -965,7 +1135,7 @@ def check_lab_register(doc, schedule=None):
     if unknown:
         return "failed", [f"unknown to lab/: {name}" for name in unknown]
     if pending:
-        return "pending", ["registered by B5 and B8: " + ", ".join(pending)]
+        return "pending", ["registered by B8: " + ", ".join(pending)]
     return "passed", []
 
 

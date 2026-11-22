@@ -42,9 +42,13 @@ def world(tmp_path, monkeypatch):
     protocol.write_text('{"name": "p"}\n')
     results = tmp_path / "results"
     results.mkdir()
-    state = {"measurement": "m1"}
+    # Since package B5b a record of a schema-3 protocol runs its self-check first (selfcheck_problems). The tests of
+    # the stage chain and of the hash binding record small schema-3-like documents, which no self-check admits, so
+    # it is stubbed here; the tests of the self-check before a record put the real one back (state["selfcheck"]).
+    state = {"measurement": "m1", "selfcheck": getattr(gates, "selfcheck_problems", None)}
     monkeypatch.setattr(gates, "measurement_sha256", lambda: state["measurement"])
     monkeypatch.setattr(gates, "commit", lambda: "c" * 40)
+    monkeypatch.setattr(gates, "selfcheck_problems", lambda protocol, stage: [], raising=False)
     return protocol, results, state
 
 
@@ -211,3 +215,56 @@ def test_gate_records_carry_the_header_the_claims_check_requires(world):
     record = json.loads(write(world, "G0")[0].read_text())
     assert {"schema", "date", "commit", "host", "guest", "command", "n", "values"} <= set(record)
     assert record["values"]["harness_sha256"] == gates.sha256(gates.__file__)
+
+
+# Package B5b: `gates.py record Gk` runs the self-check of a schema-3 protocol for Gk first and writes nothing unless
+# every check passed (lead's remarks on B4, part 1, section 2); CRITERIA stay as they are.
+
+V5 = gates.ROOT / "config/collection-v5.json"
+
+
+def v5_copy(protocol):
+    """config/collection-v5.json written to the world's protocol file, the bounds m of G1 null (as today, stated)."""
+    doc = json.loads(V5.read_text())
+    for name in ("k1", "k2a", "k2b"):
+        doc["analysis"][name]["m"] = None
+    protocol.write_text(text(doc))
+    return doc
+
+
+def test_a_record_of_a_schema_3_protocol_writes_nothing_unless_its_self_check_passes_for_the_stage(world,
+                                                                                                  monkeypatch):
+    from scripts import protocol_v5
+    protocol, results, state = world
+    monkeypatch.setattr(gates, "selfcheck_problems", state["selfcheck"])
+    doc = v5_copy(protocol)
+    known = {"event type": set(doc["events"]["types"]), "profile": {s["profile"] for s in doc["scenarios"].values()},
+             "control kind": set(doc["controls"]["kinds"])}
+    # One event type unknown to lab/: the check lab_register fails, and no record is written.
+    monkeypatch.setattr(protocol_v5, "lab_names", lambda: dict(known, **{"event type": known["event type"] - {
+        "naprazdno"}}))
+    with pytest.raises(ValueError) as refused:
+        write(world, "G0")
+    assert str(refused.value) == ("protocol self-check for stage G0 did not pass, nothing recorded: lab_register "
+                                  "failed: unknown to lab/: naprazdno")
+    assert list(results.iterdir()) == []
+    # Every name known: G0 passes and is recorded; G1 is refused while its bounds m are null.
+    monkeypatch.setattr(protocol_v5, "lab_names", lambda: known)
+    path, why = write(world, "G0")
+    assert why == [] and json.loads(path.read_text())["values"]["criteria"] == passed("G0")
+    with pytest.raises(ValueError) as refused:
+        write(world, "G1", 1)
+    assert str(refused.value) == ("protocol self-check for stage G1 did not pass, nothing recorded: analysis failed: "
+                                  + "; ".join(f"null at analysis.{name}.m determined at G1 (stage G1)"
+                                              for name in ("k1", "k2a", "k2b")))
+    assert list(results.iterdir()) == [path]
+
+
+def test_the_self_check_before_a_record_reads_schema_3_only(world, tmp_path):
+    """Schemas 1 and 2, and a file that is no JSON object, are recorded as before: no self-check applies."""
+    protocol, _, state = world
+    other = tmp_path / "other.json"
+    for content in ('{"name": "p"}\n', '{"schema": "hyptcn3/collection-protocol/2", "name": "p"}\n', "not json\n",
+                    "[1, 2]\n"):
+        other.write_text(content)
+        assert state["selfcheck"](other, "G0") == []
