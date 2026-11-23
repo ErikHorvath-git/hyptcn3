@@ -63,7 +63,7 @@ from torch import nn
 
 from features.archive import load as load_archive
 from safeguard.bundle import digest, load_bundle
-from safeguard.features import WindowBuffer, arrays, check_frame, frames_from_archive
+from safeguard.features import WindowBuffer, check_frame, frames_from_archive
 from safeguard.model import Classifier
 from safeguard.training import validate_index
 from tcn.eval import (DOZVUK_S, REPO, SCHEMA_INDEX_UDALOSTI, _alfa, _git_stav,
@@ -182,10 +182,13 @@ class Okna:
         """znacky: index triedy alebo None pre kazdy riadok; udalost: poradie udalosti alebo None."""
         if len(znacky) != len(frames):
             raise ValueError("pocet znaciek sa lisi od poctu riadkov")
-        g, loc = self.normalizer.transform(*arrays(frames))
+        # Balik B6b: vstupy pravidla normalizacie balika (differenced stlpec proti meranej snimke pred nim) a okno,
+        # ktore pri differenced vstupe potrebuje aj tu snimku pred sebou.
+        g, loc = self.normalizer.inputs(frames)
         r = len(self.relacie)
         self.relacie.append((meno, g, loc))
-        buffer = WindowBuffer(self.kontrakt["window_rows"], self.kontrakt["max_gap_s"])
+        buffer = WindowBuffer(self.kontrakt["window_rows"], self.kontrakt["max_gap_s"],
+                              anchored=self.normalizer.rule.anchored)
         for pozicia, (frame, (znacka, udalost)) in enumerate(zip(frames, znacky)):
             check_frame(frame, self.kontrakt)
             if buffer.push(frame) is not None and znacka is not None:

@@ -1217,10 +1217,14 @@ def _classes(**classes):
     (_at("column_mask", None), "unknown protocol key: analysis.column_mask"),
     (lambda a: a.update(columns={k: v for k, v in _classes().items() if k != "proc_memfd"}), "invalid analysis"),
     (lambda a: a.update(columns=_classes(mod_total="rule channel")), "invalid analysis"),
+    # Package B6b: the class rule_differenced of question Q8 (its proposal, provisional), for a level column only.
+    (lambda a: a.update(columns=_classes(sock_listen="rule_differenced")), None),
+    (lambda a: a.update(columns=_classes(mem_changed_ratio="rule_differenced")), "invalid analysis"),
 ], ids=["columns_of_g3a", "no_kernel", "channels", "kernel", "blocks", "dropout", "weight_norm", "learning_rate",
         "gradient_clip", "classifier_gradient_clip", "batch_size", "unknown_key", "near_constant_share",
         "duplicate_tolerance", "level_not_a_column", "level_twice", "no_floor", "per_bin", "min_bin_pages",
-        "floor_not_positive", "local_floor_of_the_mask", "old_name", "columns_missing_one", "unknown_class"])
+        "floor_not_positive", "local_floor_of_the_mask", "old_name", "columns_missing_one", "unknown_class",
+        "rule_differenced_of_a_level", "rule_differenced_outside_levels"])
 def test_the_loader_knows_every_key_and_value_of_the_analysis_plan_of_b6a(change, reason):
     """Design B6a 1.1: analysis.qualification and analysis.scale (G0), analysis.columns (null until G3a, then exactly
     the 20 columns of features.archive.BEHAVIOR_NAMES, each neural, rule, differenced or dropped) and

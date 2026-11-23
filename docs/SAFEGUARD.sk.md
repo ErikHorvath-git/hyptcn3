@@ -86,20 +86,40 @@ a kontrola je `inconclusive` (pozri [kontroly.md](kontroly.md)); alarm
 skrytého objektu preto príde o jednu periódu neskôr. Staršie archívy alebo manifesty sa
 odmietnu; vyžadujú novú extrakciu a tréning, nie ručné prepísanie verzie.
 
-Normalizátor vidí iba vhodné riadky role `train`, každý práve raz. Parametre
-lokálnych príznakov sú spoločné pre biny; entropia sa fituje iba tam, kde
-`has_changed=1`. Pri transformácii má nemeraná entropia hodnotu nula a maska
-sa nemení. Nulová numerická variabilita má bezpečnú mierku. Tieto parametre
-sa pri prehrávaní ani živom skórovaní znovu nefitujú.
+Normalizátor vidí iba vhodné riadky role `train`, každý práve raz, a riadi sa
+pravidlom normalizácie z protokolu (balík B6b, `safeguard.features.NormalizationRule`):
+pod schémou 3 triedami stĺpcov z `analysis.columns` a pravidlom mierky
+z `analysis.scale`, pod schémou 1 a 2 pomenovaným pravidlom `legacy_schema_2`
+(všetky stĺpce, jedna spoločná mierka binov, mierka na úrovni strojového epsilonu
+je 1, každý bin). Kým je `analysis.columns` `null` (pred G3a), ostrý tréning sa
+odmietne a diagnostický berie pravidlo `all_neural_diagnostic` (všetky stĺpce
+neurónové). Vstupom TCN sú stĺpce triedy `neural` (hodnota) a `differenced`
+(prvá diferencia proti poslednému meranému riadku tej istej session, aj cez
+vylúčený riadok, ako ju berie kvalifikácia); stĺpce `rule` a `rule_differenced`
+idú do pravidlového kanála (pri `rule_differenced` sa posudzuje zmena od prvého
+meraného riadka session, otázka Q8) a `dropped` nikam. Mierka stĺpca je aspoň jeho dolná
+hranica (pri počtoch jedna jednotka). Bin s menej ako `min_bin_pages` stránkami sa
+nefituje ani neskóruje; každý ďalší bin má pri `per_bin` vlastnú mierku. Entropia
+sa fituje iba tam, kde `has_changed=1`; pri transformácii má nemeraná entropia
+hodnotu nula a maska sa nemení. Pravidlo ide s parametrami do manifestu a pri
+prehrávaní ani živom skórovaní sa nič znovu nefituje. Okno s diferencovaným
+vstupom potrebuje aj meraný riadok pred sebou, takže na začiatku session
+`window_rows + 1` meraných riadkov (po bariére vnútri session stačí znova
+`window_rows`).
 
 Prediktor používa všetky kroky okna okrem posledného a predpovedá posledný
 krok. Maska merania sa nepredikuje. Chyba entropie sa započíta iba pri
 pozorovanej entropii cieľového binu. Aktuálna verzia má skóre určené vzorcom:
 
 ```text
-0.5 × priemerná štvorcová chyba globálnych príznakov
-  + 0.5 × maximum maskovanej priemernej štvorcovej chyby jednotlivých binov
+0.5 × priemerná štvorcová chyba vstupných stĺpcov TCN
+  + 0.5 × maximum maskovanej priemernej štvorcovej chyby skórovaných binov
 ```
+
+Skóre nesie `attribution`: chybu každého vstupného stĺpca (ich súčet je globálna
+časť), každého skórovaného binu s počtom stránok, najhorší bin (jeho chyba je
+binová časť skóre) a priemer troch najhorších binov (citlivostná analýza). Balík
+so vzorcom spred balíka B6b sa odmietne.
 
 Klasifikátor používa globálne príznaky spolu s priemerom a maximom lokálnych
 príznakov cez biny. Jeho triedami sú zaznamenané profily záťaže. Výstup
@@ -112,16 +132,26 @@ a klasifikátora, `calibration` nastaví prah. Pole príznakov `test_benign`
 sa počas tréningu nenačíta. Boot/skupina nesmie patriť viacerým rolám.
 
 `--fpr` určuje kvantil benígnych skóre, nie garantovaný počet alarmov za
-hodinu. Nadprahové skóre znamená `score > threshold`. Alarm modelu vyžaduje
-aspoň `k` prekročení v posledných `n` skóre, až keď je celá história dostupná.
+hodinu. Nadprahové skóre znamená `score > threshold`. Alarm modelu (neurónový
+kanál, zdroj `model_anomaly`) vyžaduje aspoň `k` prekročení v posledných `n`
+skóre, až keď je celá história dostupná. Pravidlový kanál posúdi každý meraný
+riadok: hodnota stĺpca triedy `rule` alebo zmena stĺpca triedy `rule_differenced`
+od prvého meraného riadka session mimo rozsahu z `train` a `calibration` je
+prekročenie (iná stála úroveň v novom boote teda nie je prekročenie, trvalý krok
+áno) a alarm
+je to isté pravidlo `k` z `n` s vlastnou históriou a tými istými resetmi (zdroj
+`rule_anomaly`); nikdy sa neuvádza ako neurónová detekcia. Každý riadok nesie
+`channel`: kanály (`rule`, `neural`, `kernel_integrity`), ktorých alarm je na ňom
+zapnutý.
 Kalibrácia eviduje aj udalosti pravidla k z n; nezávislé FAR sa meria až na
 odloženom teste. FAR za hodinu z udalostí safeguardu počíta `python3 -m tcn.eval far`
 (časť Príkazy); čas do detekcie zatiaľ nepočíta žiadny kód. Po vyhodnotení testu sa
 prah neladí podľa jeho výsledku.
 
 Nový adresár modelu obsahuje `manifest.json`, `predictor.pt` a `classifier.pt`.
-Manifest ukladá poradie príznakov, biny, geometriu, okno, normalizáciu,
-architektúru, triedy, vzorce skórovania, kalibráciu, hashe váh a provenienciu.
+Manifest ukladá poradie príznakov, biny, geometriu, okno, normalizáciu s jej
+pravidlom, architektúru, triedy, vzorce skórovania, kalibráciu, rozsahy
+pravidlového kanála, hashe váh a provenienciu.
 Načítanie overí kompatibilitu a kontrolné súčty. Hashe chránia pred zmenou
 súborov oproti manifestu; neoverujú pôvod balíka od neznámeho autora.
 

@@ -7,6 +7,9 @@ mostly that permutation. Instead every view here is permutation invariant:
   score       each model's score / own threshold on the same session (1 = threshold)
   baseline    what each model treats as normal: its normalizer means, shifted
               against the first model and expressed in the first model's std units
+              (package B6b: the inputs of the normalization rule; a bin value as the
+              mean over the scored bins, so the models compared need the same inputs
+              and scored bins)
   layers      linear CKA (Kornblith et al., 2019) between each TCN block's
               activations and the same block of the first model, on the same
               windows of the session (1 = same representation up to rotation)
@@ -19,8 +22,8 @@ import numpy as np
 import torch
 
 import analyza
-from safeguard.bundle import load_bundle
-from safeguard.features import GLOBAL_NAMES, LOCAL_NAMES, WindowBuffer, arrays, frames_from_archive
+from safeguard.bundle import load_bundle, window_inputs
+from safeguard.features import LOCAL_NAMES, frames_from_archive
 
 MAX_WINDOWS = 400
 
@@ -34,8 +37,10 @@ def linear_cka(x, y):
     return float(cross / norm) if norm > 0 else float("nan")
 
 
-def _windows(frames, window_rows, max_gap_s):
-    buffer, out = WindowBuffer(window_rows, max_gap_s), {}
+def _windows(frames, bundle):
+    """The windows the bundle scores (its window_buffer: with the measured row before them when anchored), by the
+    seq of their last row."""
+    buffer, out = bundle.window_buffer(), {}
     for frame in frames:
         try:
             window = buffer.push(frame)
@@ -48,7 +53,7 @@ def _windows(frames, window_rows, max_gap_s):
 
 def _activations(bundle, windows):
     """Last-step output of every TCN block, per layer, for the given windows."""
-    g, local = zip(*(bundle.normalizer.transform(*arrays(w)) for w in windows))
+    g, local = zip(*(window_inputs(w, bundle.contract, bundle.normalizer) for w in windows))
     gt = torch.as_tensor(np.stack(g), dtype=torch.float32)
     lt = torch.as_tensor(np.stack(local), dtype=torch.float32)
     captured, hooks = {}, []
@@ -85,12 +90,17 @@ def compare(bundle_paths, input_path, *, allow_diagnostic=False):
 
     models, reference = [], bundles[0][1]
     for path, bundle in bundles:
+        if (bundle.normalizer.input_names, bundle.normalizer.bins) != (reference.normalizer.input_names,
+                                                                         reference.normalizer.bins):
+            raise ValueError("modely s inými vstupmi normalizácie alebo skórovanými binmi sa neporovnávajú: "
+                             f"{path.name} proti {bundles[0][0].name}")
         report = analyza.analyze(path, source, bundle=bundle)
         info = report["model"]
         norm = bundle.normalizer
         ref = reference.normalizer
-        shift = list((norm.global_mean - ref.global_mean) / ref.global_scale) + \
-            list((norm.local_mean[:3] - ref.local_mean[:3]) / ref.local_scale[:3])
+        shift = list((norm.global_mean - ref.global_mean) / ref.global_scale) + list(
+            (norm.local_mean[:, :3].mean(axis=0) - ref.local_mean[:, :3].mean(axis=0))
+            / ref.local_scale[:, :3].mean(axis=0))
         models.append({
             "name": path.name, "path": str(path), "created_utc": info["created_utc"],
             "threshold": report["threshold"], "k": report["k"], "n": report["n"],
@@ -103,7 +113,7 @@ def compare(bundle_paths, input_path, *, allow_diagnostic=False):
         })
 
     # Layer similarity on windows that every model can score.
-    per_model = [_windows(frames, b.contract["window_rows"], b.contract["max_gap_s"]) for _, b in bundles]
+    per_model = [_windows(frames, b) for _, b in bundles]
     common = sorted(set.intersection(*(set(w) for w in per_model)))
     if len(common) > MAX_WINDOWS:
         common = [common[i] for i in np.linspace(0, len(common) - 1, MAX_WINDOWS).astype(int)]
@@ -132,7 +142,7 @@ def compare(bundle_paths, input_path, *, allow_diagnostic=False):
         "input": {"path": str(source), "session": session_dir.name,
                   "context": analyza._session_context(session_dir)},
         "reference": models[0]["name"], "models": models,
-        "baseline_names": list(GLOBAL_NAMES) + [f"bin {n}" for n in LOCAL_NAMES[:3]],
+        "baseline_names": list(reference.normalizer.input_names) + [f"bin {n}" for n in LOCAL_NAMES[:3]],
         "layers": {"names": layer_names, "cka": cka, "windows": len(common), "note": note},
     }
 

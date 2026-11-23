@@ -128,13 +128,14 @@ def test_frame_rejects_missing_or_malformed_contract(corruption):
 
 
 def test_normalization_pools_only_observed_entropy_and_preserves_masks():
+    from safeguard.features import NormalizationRule  # Package B6b: the rule legacy_schema_2 pools the bins.
     first = sample(1)
     second = sample(2, perbin=[[.5, .5, 6., 1.], [1., 0., 0., 1.]])
-    normalizer = FeatureNormalizer.fit([first, second])
+    normalizer = FeatureNormalizer.fit([first, second], NormalizationRule.legacy())
     assert normalizer.fit_rows == 2
     assert normalizer.entropy_observations == 3
-    assert normalizer.local_mean[2] == pytest.approx(8. / 3.)
-    assert normalizer.local_scale[2] == pytest.approx(np.std([2., 6., 0.]))
+    assert normalizer.local_mean[:, 2] == pytest.approx([8. / 3.] * 2)
+    assert normalizer.local_scale[:, 2] == pytest.approx([np.std([2., 6., 0.])] * 2)
     global_values, local_values = arrays([first, second])
     norm_global, norm_local = normalizer.transform(global_values, local_values)
     np.testing.assert_array_equal(norm_local[..., 3], local_values[..., 3])
@@ -148,10 +149,11 @@ def test_normalization_pools_only_observed_entropy_and_preserves_masks():
 
 
 def test_constant_or_entirely_unobserved_training_channels_are_finite():
+    from safeguard.features import NormalizationRule  # Package B6b: the rule legacy_schema_2 pools the bins.
     frame = sample(1, perbin=[[0., 1., 0., 0.], [0., 1., 0., 0.]])
-    normalizer = FeatureNormalizer.fit([frame])
+    normalizer = FeatureNormalizer.fit([frame], NormalizationRule.legacy())
     assert normalizer.entropy_observations == 0
-    assert normalizer.local_mean[2] == 0 and normalizer.local_scale[2] == 1
+    assert (normalizer.local_mean[:, 2] == 0).all() and (normalizer.local_scale[:, 2] == 1).all()
     global_values, local_values = arrays([frame])
     a, b = normalizer.transform(global_values[None], local_values[None])
     assert a.shape == (1, 1, G) and b.shape == (1, 1, 2, 4)
@@ -159,13 +161,15 @@ def test_constant_or_entirely_unobserved_training_channels_are_finite():
 
 
 def test_normalizer_cannot_fit_repeated_windows_or_ineligible_rows():
+    from safeguard.features import NormalizationRule  # Package B6b: the rule legacy_schema_2 pools the bins.
+    legacy = NormalizationRule.legacy()
     with pytest.raises(ValueError, match="duplicate"):
-        FeatureNormalizer.fit([sample(1), sample(1)])
+        FeatureNormalizer.fit([sample(1), sample(1)], legacy)
     for frame in (sample(1, full=True), sample(1, valid=False), sample(1, predecessor=False)):
         with pytest.raises(ValueError, match="eligible"):
-            FeatureNormalizer.fit([frame])
-    manifest = FeatureNormalizer.fit([sample(1)]).to_dict()
-    manifest["local_scale"][3] = 2
+            FeatureNormalizer.fit([frame], legacy)
+    manifest = FeatureNormalizer.fit([sample(1)], legacy).to_dict()
+    manifest["local_scale"][0][3] = 2
     with pytest.raises(ValueError, match="mask"):
         FeatureNormalizer.from_dict(manifest)
 

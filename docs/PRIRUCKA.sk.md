@@ -118,14 +118,15 @@ adresa delená veľkosťou binu, takže ten istý bin je v každej snímke ten i
 bin bez memslotu nevzniká. To isté počíta C aj Python a `features crosscheck` ich porovná.
 
 **5. Okná a normalizácia** — `safeguard/features.py` skladá okná z príznakov správania celej
-snímky (`features/snapshot.py`) a z per-bin bloku `čas × bin × príznak`. Normalizácia sa fituje
-iba na riadkoch role `train` a pri prehrávaní ani živom skórovaní sa znova nefituje
-(`docs/SAFEGUARD.sk.md`). Príznaky a ich kontrakt opisuje `features/PERBIN.md`.
+snímky (`features/snapshot.py`) a z per-bin bloku `čas × bin × príznak`. Normalizácia sa fituje iba
+na role `train` podľa `analysis.columns` a `analysis.scale`; pri prehrávaní ani živom skórovaní sa
+znova nefituje (`docs/SAFEGUARD.sk.md`). Príznaky a ich kontrakt opisuje `features/PERBIN.md`.
 
 **6. Model a skóre** — `safeguard/model.py`: globálna a zdieľaná per-bin TCN z blokov `tcn/model.py`
 (kauzálne dilatované konvolúcie, reziduálne bloky) predpovedajú posledný krok okna a chyba predikcie
 je skóre; samostatný klasifikátor určí profil záťaže. Kalibrovaný prah s pravidlom k z n robí zo
-skóre alarm, nález integrity ho vyvolá sám (`safeguard/runtime.py`). Staršia diagnostická cesta
+skóre alarm, nález integrity ho vyvolá sám (`safeguard/runtime.py`). Pravidlový kanál (`rule`,
+`rule_differenced`) alarmuje zvlášť, nikdy ako neurónová detekcia. Staršia diagnostická cesta
 (`tcn/train.py`, `tcn/score.py`, `scripts/detektor.py`) zostáva do konca experimentov; jej prediktor
 sa trénoval iba na krátkych benígnych sedeniach, nie na korpuse `benign-v6-20261026`.
 

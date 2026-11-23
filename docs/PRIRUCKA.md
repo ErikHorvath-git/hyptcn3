@@ -30,7 +30,7 @@ make -C vmicollect test   # plná snímka, tri delty, obnova reťazca, kontroln�
 python3 -m pytest -q      # parser, príznaky, tcn, safeguard a skripty zberu
 ```
 
-`make test` prejde celú cestu zberu nad syntetickým obrazom veľkosti 16 MiB, ktorý si sám vyrobí. Testov je 4334 prešlých a 41 preskočených v `pytest` (spolu 4375 zozbieraných; preskočený test nie je prešiel) a 4 v C (`alarm_test`, `hole_test`, `perbin_test`, `retention_test`).
+`make test` prejde celú cestu zberu nad syntetickým obrazom veľkosti 16 MiB, ktorý si sám vyrobí. Testov je 4393 prešlých a 41 preskočených v `pytest` (spolu 4434 zozbieraných; preskočený test nie je prešiel) a 4 v C (`alarm_test`, `hole_test`, `perbin_test`, `retention_test`).
 
 ## 4. Ako vznikne snímka
 
@@ -69,11 +69,11 @@ nič nezapisuje“ v kapitole 6 platí o binárke; skript okolo nej `data/result
 |---|---|---|---|
 | `vmicollect/` | zberač snímok pamäte VM: C a eBPF nad QEMU/KVM | `vmicollect/src/collector.c` | 37 / 12 152 |
 | `guestparse/` | rekonštrukcia procesov, modulov a soketov zo snímky; kontroly integrity | `guestparse/view.py` | 35 / 8 248 |
-| `features/` | per-bin referencia k C, vektor snímky, okná, kvalita riadkov, rozhodnutie o prijatí sedenia, archív sedenia a index korpusu; staršia normalizácia pre `tcn/` | `features/perbin.py` | 34 / 9 711 |
-| `tcn/` | TCN bloky pre `safeguard/model.py`, baseliny a metriky; staršia diagnostická cesta tréningu a skórovania (`tcn/train.py`, `tcn/score.py`) | `tcn/model.py` | 22 / 7 922 |
-| `safeguard/` | integrovaná detekčná cesta: okná a normalizácia, modely, kalibrácia, balík a hostiteľský detektor | `safeguard/cli.py` | 16 / 3 477 |
+| `features/` | per-bin referencia k C, vektor snímky, okná, kvalita riadkov, rozhodnutie o prijatí sedenia, archív sedenia a index korpusu; staršia normalizácia pre `tcn/` | `features/perbin.py` | 34 / 9 782 |
+| `tcn/` | TCN bloky pre `safeguard/model.py`, baseliny a metriky; staršia diagnostická cesta tréningu a skórovania (`tcn/train.py`, `tcn/score.py`) | `tcn/model.py` | 22 / 8 085 |
+| `safeguard/` | integrovaná detekčná cesta: okná a normalizácia, modely, kalibrácia, balík a hostiteľský detektor | `safeguard/cli.py` | 17 / 5 241 |
 | `profiles/` | profil jadra hosťa: symboly a offsety polí štruktúr | `profiles/debian12-6.1.0-42-cloud-amd64/README.md` | jeden adresár na verziu jadra hosťa; nový boot rieši preukotvenie (L17) |
-| `scripts/` | zber a audit sedenia, kampaň (`scripts/campaign.py`), laboratórium a premávka, root behy, PoC techniky na validáciu citlivosti (`scripts/poc/`), kontroly tvrdení; staršie diagnostické sedenia a detektor (`scripts/session.sh`, `scripts/detektor.py`) | `scripts/collection.py` | 79 / 38 397 |
+| `scripts/` | zber a audit sedenia, kampaň (`scripts/campaign.py`), laboratórium a premávka, root behy, PoC techniky na validáciu citlivosti (`scripts/poc/`), kontroly tvrdení; staršie diagnostické sedenia a detektor (`scripts/session.sh`, `scripts/detektor.py`) | `scripts/collection.py` | 79 / 38 418 |
 | `lab/` | trvalé benígne API služby, PostgreSQL a nginx vo VM `hyptcn-lab` | `lab/services.py` | 23 / 4 638 |
 | `harness/` | zlatý obraz hosťa, šablóna domény `hyptcn-guest`, izolovaná sieť bez NAT a manifesty starších sedení | `harness/README.md` | 15 / 264 |
 | `config/` | zmrazené protokoly zberu korpusu: doména, perióda, okná, roly a scenáre | `config/collection-v2.json` | 9 / 0 |
@@ -122,14 +122,15 @@ adresa delená veľkosťou binu, takže ten istý bin je v každej snímke ten i
 bin bez memslotu nevzniká. To isté počíta C aj Python a `features crosscheck` ich porovná.
 
 **5. Okná a normalizácia** — `safeguard/features.py` skladá okná z príznakov správania celej
-snímky (`features/snapshot.py`) a z per-bin bloku `čas × bin × príznak`. Normalizácia sa fituje
-iba na riadkoch role `train` a pri prehrávaní ani živom skórovaní sa znova nefituje
-(`docs/SAFEGUARD.sk.md`). Príznaky a ich kontrakt opisuje `features/PERBIN.md`.
+snímky (`features/snapshot.py`) a z per-bin bloku `čas × bin × príznak`. Normalizácia sa fituje iba
+na role `train` podľa `analysis.columns` a `analysis.scale`; pri prehrávaní ani živom skórovaní sa
+znova nefituje (`docs/SAFEGUARD.sk.md`). Príznaky a ich kontrakt opisuje `features/PERBIN.md`.
 
 **6. Model a skóre** — `safeguard/model.py`: globálna a zdieľaná per-bin TCN z blokov `tcn/model.py`
 (kauzálne dilatované konvolúcie, reziduálne bloky) predpovedajú posledný krok okna a chyba predikcie
 je skóre; samostatný klasifikátor určí profil záťaže. Kalibrovaný prah s pravidlom k z n robí zo
-skóre alarm, nález integrity ho vyvolá sám (`safeguard/runtime.py`). Staršia diagnostická cesta
+skóre alarm, nález integrity ho vyvolá sám (`safeguard/runtime.py`). Pravidlový kanál (`rule`,
+`rule_differenced`) alarmuje zvlášť, nikdy ako neurónová detekcia. Staršia diagnostická cesta
 (`tcn/train.py`, `tcn/score.py`, `scripts/detektor.py`) zostáva do konca experimentov; jej prediktor
 sa trénoval iba na krátkych benígnych sedeniach, nie na korpuse `benign-v6-20261026`.
 
@@ -255,7 +256,7 @@ znamenalo držať dve znenia toho istého. Nadpisy sú preto dosadené z neho, s
 | `docs/KONTROLA_ZBERU.sk.md` | pokrytie okien, kontrola logov a úložisko uloženého zberu | 232 |
 | `docs/AUTOMATICKY_ZBER.sk.md` | kampaň: spustenie, uložené dáta, zastavenie, archív, report | 389 |
 | `docs/PRIPRAVENOST_KAMPANE.sk.md` | pripravenosť kampane a zvyškové riziká (PASS/FAIL/UNVERIFIED) | 140 |
-| `docs/SAFEGUARD.sk.md` | tréning modelového balíka, replay a spustenie detektora | 537 |
+| `docs/SAFEGUARD.sk.md` | tréning modelového balíka, replay a spustenie detektora | 567 |
 | `vmicollect/README.md` | zberač zvnútra: vrstvy, hooky, formáty | 642 |
 | `guestparse/README.md` | parser zvnútra: preklad adries, prechod zoznamami | 180 |
 | `features/PERBIN.md` | definícia príznakov a ich kontrakt | 194 |

@@ -18,13 +18,18 @@ def parser():
     train = sub.add_parser("train", help="fit train, select dev, threshold calibration; test remains held out")
     train.add_argument("--corpus", required=True, type=Path)
     train.add_argument("--out", required=True, type=Path)
-    train.add_argument("--epochs", type=int, default=10)
-    train.add_argument("--batch-size", type=int, default=32)
-    train.add_argument("--seed", type=int, default=0)
-    train.add_argument("--fpr", type=float, default=0.01)
-    train.add_argument("--k", type=int, default=3)
-    train.add_argument("--n", type=int, default=5)
-    train.add_argument("--diagnostic", action="store_true", help="mark bundle diagnostic; never silently deploy it")
+    # The analysis parameters (package B6b, safeguard/training.py OPTIONS) are not given by default. Under protocol
+    # schema 3 the analysis plan of the protocol states them and a given one is refused unless --diagnostic (a
+    # planned seed of analysis.seeds is a choice); schemas 1 and 2 keep legacy_schema_2 (today's values).
+    for option, kind in (("--epochs", int), ("--batch-size", int), ("--seed", int), ("--fpr", float), ("--k", int),
+                         ("--n", int)):
+        train.add_argument(option, type=kind, default=None,
+                           help="analysis parameter, not given by default: protocol schema 3 takes it from its "
+                                "analysis plan and refuses it outside --diagnostic; schemas 1 and 2 keep today's "
+                                "value (legacy_schema_2, safeguard/training.py LEGACY_VALUES)")
+    train.add_argument("--diagnostic", action="store_true",
+                       help="mark bundle diagnostic; never silently deploy it; under protocol schema 3 the only way "
+                            "to override an analysis parameter (the manifest lists each override)")
     for name in ("inspect", "replay", "watch", "run"):
         command = sub.add_parser(name)
         command.add_argument("--bundle", required=True, type=Path)
@@ -70,6 +75,7 @@ def execute(a):
         from .training import train_bundle
         index = json.loads(a.corpus.read_text())
         protocol = index["protocol_config"]
+        # None (not given) passes through: train_bundle decides by the protocol of the corpus.
         return train_bundle(a.corpus, a.out, window_rows=protocol["window_rows"],
                             max_gap_s=protocol["max_gap_s"], epochs=a.epochs,
                             batch_size=a.batch_size, seed=a.seed, fpr=a.fpr,

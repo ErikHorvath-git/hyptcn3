@@ -30,8 +30,12 @@ The classes are decided in this order (skeleton section 3, design B6a 1.4):
                   AUC = P(a > b) + P(a = b) / 2 over the rows of the two sides; of two levels only the first is
                   compared (the second gives 1 - AUC). The column fails when max(AUC, 1 - AUC) of some comparison
                   exceeds identity_auc; the table names the worst comparison. A failing column of level_columns is
-                  judged again by its first difference: differenced when that passes, dropped when it fails; any
-                  other failing column is dropped.
+                  judged again by its first difference, by the whole qualification (question Q8 to the lead, its
+                  proposal, provisional until the lead answers; package B6b): rule_differenced when the first
+                  difference is constant or near-constant (the rule channel, which judges the column's change since
+                  the session's first measured row by the lead's revised proposal; never an input of the TCN and
+                  never a duplicate), else differenced when the first difference passes the identity test and
+                  dropped when it fails; any other failing column is dropped.
   3. duplicate    greedy in the order of BEHAVIOR_NAMES over the columns that passed (a differenced one by its first
                   difference): standardized over every measured row but the first of each session (where a first
                   difference exists), a column whose smallest singular value beside the columns kept before it is at
@@ -83,7 +87,10 @@ from .windows import BIN_PRIZNAKY
 ROOT = Path(__file__).resolve().parents[1]
 SCHEMA = "hyptcn3/feature-qualification/1"
 RECORD_SCHEMA = "hyptcn3/feature-qualification-record/1"
-CLASSES = ("neural", "rule", "differenced", "dropped")  # The values of analysis.columns (skeleton section 2).
+# The values of analysis.columns: the four of skeleton section 2 and rule_differenced, a level column whose first
+# difference is constant or near-constant, which the rule channel judges by its change since the session's first
+# measured row (question Q8 to the lead, its revised proposal, provisional until the lead answers; package B6b).
+CLASSES = ("neural", "rule", "differenced", "dropped", "rule_differenced")
 ROLES = ("train", "dev")  # Proposal 8.1: the qualification reads the rows of these roles only.
 # Proposal 8.1: one row must not tell the group, the VM or the session order (the first against the second half).
 KINDS = ("group", "vm", "order")
@@ -106,6 +113,11 @@ RULES = {
     "first_difference": "between consecutive measured rows of one session; across an excluded row (a full "
                         "snapshot, an invalid row) it spans that row's interval too; every session has two measured "
                         "rows at least",
+    "judged_again": "a level column that fails the identity test is qualified again by its first difference (question "
+                    "Q8, its proposal, provisional): constant or near-constant by the same near_constant_share over "
+                    "the pooled first differences gives rule_differenced (the rule channel, by the column's change "
+                    "since the session's first measured row); otherwise the identity test of the first difference "
+                    "gives differenced or dropped",
     "strata": "(profile, position): the profile of the session's scenario (protocol scenarios.<scenario>.profile) "
               "and the session's position in its group",
     "comparisons": "in every stratum each group against the other groups (kind group) and each VM against the other "
@@ -418,7 +430,8 @@ def qualify(rows, sessions, protocol, *, load=None, response=None, acknowledge_i
         mode, off = _mode(x)
         row = {"column": name, "class": None, "reason": None, "rows": len(x),
                "variance": 0.0 if _constant(x) else float(x.var()), "mode": mode, "off_mode_share": off / len(x),
-               "identity": None, "identity_of_difference": None, "strata_compared": None, "rank_test": None}
+               "identity": None, "difference": None, "identity_of_difference": None, "strata_compared": None,
+               "rank_test": None}
         if _constant(x):
             cls, reason = "rule", "constant: zero variance"
         elif off / len(x) < q["near_constant_share"]:
@@ -433,14 +446,7 @@ def qualify(rows, sessions, protocol, *, load=None, response=None, acknowledge_i
             elif name not in q["level_columns"]:
                 cls, reason = "dropped", failed
             else:
-                again = row["identity_of_difference"] = _identity({k: differences[k][:, j] for k in order},
-                                                                   comparisons)
-                if again["score"] <= bound:
-                    cls, reason = "differenced", (failed + f"; its first difference scores {again['score']:.4f}, "
-                                                  f"at most {bound:g}")
-                else:
-                    cls, reason = "dropped", (failed + f"; its first difference scores {again['score']:.4f} above "
-                                              f"{bound:g} ({_where(again)})")
+                cls, reason = _judged_again(row, j, differences, order, comparisons, q, failed)
         classes[name] = cls
         table[name] = dict(row, **{"class": cls, "reason": reason})
     rank_rows = _rank_test(table, classes, values, differences, order, q["duplicate_tolerance"])
@@ -466,6 +472,30 @@ def qualify(rows, sessions, protocol, *, load=None, response=None, acknowledge_i
                        "strata_compared": strata_compared, "comparisons": len(comparisons),
                        "rank_test_rows": rank_rows, "parameters": dict(q), "load": load_record,
                        "response": response_record, "rules": RULES}}
+
+
+def _judged_again(row, j, differences, order, comparisons, q, failed):
+    """(class, reason) of the level column `j` that failed the identity test (`failed`), qualified again by its first
+    difference in the order of the classes (module docstring; question Q8, its proposal, provisional): the variance
+    rule over the pooled first differences of every session first (rule_differenced, the rule channel by the change
+    since the session's first measured row, which never reaches the rank test and so is never a duplicate), then the
+    identity test (differenced, which the rank test still judges, or dropped). The table row gets the difference's
+    numbers."""
+    d = np.concatenate([differences[k][:, j] for k in order])
+    mode, off = _mode(d)
+    row["difference"] = {"rows": len(d), "variance": 0.0 if _constant(d) else float(d.var()), "mode": mode,
+                         "off_mode_share": off / len(d)}
+    if _constant(d):
+        return "rule_differenced", failed + "; its first difference is constant: zero variance"
+    if off / len(d) < q["near_constant_share"]:
+        return "rule_differenced", (failed + f"; its first difference is near-constant: {off} of {len(d)} differences "
+                                    f"off the mode {mode:g}, fewer than near_constant_share "
+                                    f"{q['near_constant_share']:g}")
+    again = row["identity_of_difference"] = _identity({k: differences[k][:, j] for k in order}, comparisons)
+    bound = q["identity_auc"]
+    if again["score"] <= bound:
+        return "differenced", failed + f"; its first difference scores {again['score']:.4f}, at most {bound:g}"
+    return "dropped", failed + f"; its first difference scores {again['score']:.4f} above {bound:g} ({_where(again)})"
 
 
 def _rank_test(table, classes, values, differences, order, tolerance):

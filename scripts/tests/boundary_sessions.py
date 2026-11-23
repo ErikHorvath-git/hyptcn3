@@ -315,6 +315,21 @@ def v5_sections(scenarios, roles, *, group_sessions, window_rows, max_per_campai
     return out
 
 
+def fit_analysis(analysis, *, fpr, max_epochs, batch_size):
+    """A copy of the analysis section of a schema-3 test protocol whose production training the test runs (package
+    B6b, design NAVRH_B6b 1.6). Under schema 3 training takes its parameters from the analysis plan and refuses them
+    on the command line outside --diagnostic, so the values such a test gave there before move here: fpr, the epoch
+    cap stopping.max_epochs and architecture.batch_size. analysis.columns gets every column neural: it is null until
+    G3a in the file, and production training refuses it while it is null."""
+    from features.archive import BEHAVIOR_NAMES
+    out = copy.deepcopy(analysis)
+    out["fpr"] = fpr
+    out["stopping"]["max_epochs"] = max_epochs
+    out["architecture"]["batch_size"] = batch_size
+    out["columns"] = dict.fromkeys(BEHAVIOR_NAMES, "neural")
+    return out
+
+
 def protocol_doc(profile, *, schema, cycles, pilot_cycles, window_rows, full_every, gate, rule=RULE, roles_each=3,
                  scenarios=SCENARIOS, group_prefix="bt-", name="boundary"):
     """Protocol of plan section 3: interval 1 s, gap 1.5 s, one unnamed VM, no events; rule None omits invalid_rows.

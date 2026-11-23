@@ -45,6 +45,9 @@ RODINY = ("S3", "S2G", "V4")
 ROLY = ("train", "dev", "calibration", "test_benign")
 NACITANE = ("train", "dev", "calibration")  # roly, ktorych archivy otvara train_bundle a nacitaj_role
 MIEST_NA_ROLU = {"S3": 6, "S2G": 6, "V4": 4}  # sekcia 6: collection.plan, 3 (V4: 2) skupiny x 2 scenare
+SCHEMA_3 = "hyptcn3/collection-protocol/3"
+# Trening testu (jedna epocha, davka 64, fpr 0.05): pod schemou 3 v plane analyzy protokolu, pod schemou 2 argumenty.
+TRENING = {"fpr": 0.05, "max_epochs": 1, "batch_size": 64}
 
 # Sekcia 4: bunka -> (rozmiestnenie neplatnych riadkov, ich pocet).
 BUNKY = {"k0": ("ziadne", 0), "k1": ("osamotene", 1), "k2i": ("osamotene", 2), "k2c": ("zhluknute", 2),
@@ -185,7 +188,10 @@ def _korpus(rodina, koren, raz):
     """Prijaty korpus rodiny (sekcia 6) a session navyse na mieste podvrhu kazdej roly; `raz(stavba)` postavi
     index najviac raz (fixtura korpusy)."""
     profil = bs.profile_dir(koren / "profil")
-    cesta = bs.write_protocol(koren / "protokol.json", bs.family(rodina, profil))
+    doc = bs.family(rodina, profil)
+    if doc["schema"] == SCHEMA_3:  # od balika B6b berie trening pod schemou 3 parametre z planu analyzy (TRENING)
+        doc["analysis"] = bs.fit_analysis(doc["analysis"], **TRENING)
+    cesta = bs.write_protocol(koren / "protokol.json", doc)
     p = collection.protocol(cesta)
     n, w, f = p["cycles"], p["window_rows"], p["full_every"]
     prijate = [b for b in BUNKY if ROZHODNUTIA[rodina][b][0] in PRIJATE]
@@ -218,8 +224,12 @@ def _korpus(rodina, koren, raz):
 
 
 def _trenuj(k, index, vystup):
-    return train_bundle(index, vystup, window_rows=k.w, max_gap_s=k.p["max_gap_s"], epochs=1, batch_size=64,
-                        fpr=0.05)
+    """train_bundle s parametrami TRENING: pod schemou 3 su v plane analyzy protokolu (balik B6b; zadane by trening
+    mimo diagnostiky odmietol), pod schemou 2 (pravidlo legacy_schema_2) su argumentmi ako predtym."""
+    if k.p["schema"] == SCHEMA_3:
+        return train_bundle(index, vystup, window_rows=k.w, max_gap_s=k.p["max_gap_s"])
+    return train_bundle(index, vystup, window_rows=k.w, max_gap_s=k.p["max_gap_s"], epochs=TRENING["max_epochs"],
+                        batch_size=TRENING["batch_size"], fpr=TRENING["fpr"])
 
 
 @contextlib.contextmanager

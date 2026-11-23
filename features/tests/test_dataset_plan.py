@@ -45,8 +45,10 @@ def protocol_doc(profile, scenarios=SCENARIOS):
     """A schema-3 protocol of the v5 shape (the v5 sections of scripts/tests/boundary_sessions.py v5_sections): groups
     of 3 sessions, two groups in every role, two VMs, the test roles interleaved. A session lasts 8 minutes: no event
     is planned and a session of test_controls holds one control of 30 to 60 s; the rehearsal has one group per role."""
-    from scripts.tests.boundary_sessions import audit_sections, v5_sections
+    from scripts.tests.boundary_sessions import audit_sections, fit_analysis, v5_sections
     v5 = v5_sections(scenarios, GROUPS, group_sessions=3, window_rows=WINDOW)
+    # The one production training of this file takes its parameters from the analysis plan (package B6b).
+    v5["analysis"] = fit_analysis(v5["analysis"], fpr=FPR, max_epochs=1, batch_size=64)
     return {**v5, **audit_sections(INTERVAL), "schema": "hyptcn3/collection-protocol/3", "name": NAME,
             "quality_policy": "behavioral-inputs-v1", "profile": str(profile), "interval_s": INTERVAL,
             "max_gap_s": GAP, "bin_bytes": 16777216, "window_rows": WINDOW, "stride": 1, "full_every": FULL_EVERY,
@@ -349,8 +351,7 @@ def test_test_controls_are_indexed_and_never_loaded(campaign_corpus, tmp_path, m
     monkeypatch.setattr(module, "load_archive", lambda path: opened.append(str(path)) or original(path))
     index = write_index(c, doc, tmp_path / "corpus.json")
     if loader == "train_bundle":
-        result = training.train_bundle(index, tmp_path / "bundle", window_rows=WINDOW, max_gap_s=GAP, epochs=1,
-                                       batch_size=64, fpr=FPR)
+        result = training.train_bundle(index, tmp_path / "bundle", window_rows=WINDOW, max_gap_s=GAP)
         assert result["training"]["windows"] == {role: 6 * WINDOWS for role in FIT}
     else:
         assert {role: len(data.indices) for role, data in porovnanie.nacitaj_role(index)["data"].items()} == {

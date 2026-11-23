@@ -37,14 +37,18 @@ a navratovym kodom 0 (pole tolerated_invalid_rows v status.json).
 
 CO BASELINY VIDIA
 -----------------
-18 globalnych behavioralnych stlpcov a per-bin tenzor ZHRNUTY cez biny
+Globalne vstupy normalizera (balik B6b: stlpce triedy neural a differenced
+pravidla normalizacie, safeguard.features.NormalizationRule; pod schemou 1 a 2
+vsetkych 20 stlpcov) a per-bin tenzor skorovanych binov ZHRNUTY cez biny
 (baselines.zluc_biny: priemer a maximum 4 per-bin kanalov, ako
-safeguard.model.Classifier) - 26 stlpcov na krok. GRU/LSTM predpovedaju z
-krokov 1..L-1 krok L: 18 globalnych a 6 zhrnutych hodnotovych kanalov (masky
+safeguard.model.Classifier) - G + 8 stlpcov na krok. GRU/LSTM predpovedaju z
+krokov 1..L-1 krok L: G globalnych a 6 zhrnutych hodnotovych kanalov (masky
 has_changed sa nepredpovedaju, rovnako ako v TCN); skore = 0.5 * mean(chyba
 globalnych) + 0.5 * mean(chyba zhrnutych binov). TCN vidi biny jednotlivo a
 berie maximum chyby cez biny; baseliny tuto lokalizaciu nemaju - to je
-vlastnost porovnania, nie chyba.
+vlastnost porovnania, nie chyba. Pravidlovy kanal (stlpce triedy rule a
+rule_differenced) baseliny nemaju: ich balik nesie prazdny pravidlovy kanal
+a ich alarmy su iba alarmy neuronoveho kanala (model_anomaly).
 
 OBMEDZENIA
 ----------
@@ -77,9 +81,9 @@ from torch import nn
 from features.archive import load as load_archive
 from features.acceptance import require_accepted
 from features.quality import invalid_rows_rule, tolerated_input_errors
-from safeguard.bundle import digest
-from safeguard.features import (GLOBAL_NAMES, LOCAL_NAMES, FeatureNormalizer, WindowBuffer,
-                                arrays, check_frame, feature_contract, frames_from_archive)
+from safeguard.bundle import digest, window_inputs
+from safeguard.features import (GLOBAL_NAMES, LOCAL_NAMES, FeatureNormalizer, NormalizationRule, WindowBuffer,
+                                check_frame, feature_contract, frames_from_archive)
 from safeguard.model import Predictor, anomaly_score, architecture, prediction_errors
 from safeguard.runtime import replay_archive
 from safeguard.training import FIT_ROLES, Windows, calibrate, validate_index
@@ -97,18 +101,31 @@ PAMAT = tuple(GLOBAL_NAMES[:8])
 if not all(meno.startswith("mem_") for meno in PAMAT) or any(
         meno.startswith("mem_") for meno in GLOBAL_NAMES[8:]):
     raise ImportError("poradie GLOBAL_NAMES sa zmenilo; pamatove stlpce nie su prvych 8")
-ZLUCENE = (tuple(GLOBAL_NAMES) + tuple("bin_mean_" + m for m in LOCAL_NAMES)
-           + tuple("bin_max_" + m for m in LOCAL_NAMES))
-# Ciel GRU/LSTM: globalne + zhrnute hodnotove kanaly; maska has_changed nie je ciel.
+
+
+def zlucene(vstupy):
+    """Mena zlucenych stlpcov kroku: globalne vstupy normalizera, priemery a maxima 4 per-bin kanalov."""
+    return (tuple(vstupy) + tuple("bin_mean_" + m for m in LOCAL_NAMES)
+            + tuple("bin_max_" + m for m in LOCAL_NAMES))
+
+
+def ciel(g):
+    """Ciel GRU/LSTM pri g globalnych vstupoch: globalne + zhrnute hodnotove kanaly; maska has_changed nie je ciel."""
+    return tuple(range(g)) + tuple(g + i for i in range(3)) + tuple(g + 4 + i for i in range(3))
+
+
+# Tvar pri vsetkych 20 stlpcoch (pravidlo legacy_schema_2); model si ho pocita zo vstupov svojho normalizera.
+ZLUCENE = zlucene(GLOBAL_NAMES)
 G = len(GLOBAL_NAMES)
-CIEL = tuple(range(G)) + tuple(G + i for i in range(3)) + tuple(G + 4 + i for i in range(3))
+CIEL = ciel(G)
 
 VZORCE = {
-    "zscore": "mean_f(((mean_t x_f) - mu_f) / sd_f)^2 nad 26 zlucenymi stlpcami; mu, sd z train okien",
-    "iforest": "-score_samples(rozvinute okno L x 26); IsolationForest(200 stromov) fit na train oknach",
-    "gru": "0.5 * mean(chyba^2 18 globalnych) + 0.5 * mean(chyba^2 6 zhrnutych per-bin kanalov)",
-    "lstm": "0.5 * mean(chyba^2 18 globalnych) + 0.5 * mean(chyba^2 6 zhrnutych per-bin kanalov)",
-    "tcn_pamat": "0.5 * mean(global_squared_error nad 8 mem_*) + 0.5 * max(bin_masked_mse)",
+    "zscore": "mean_f(((mean_t x_f) - mu_f) / sd_f)^2 nad G + 8 zlucenymi stlpcami (G globalnych vstupov "
+              "normalizera); mu, sd z train okien",
+    "iforest": "-score_samples(rozvinute okno L x (G + 8)); IsolationForest(200 stromov) fit na train oknach",
+    "gru": "0.5 * mean(chyba^2 G globalnych vstupov) + 0.5 * mean(chyba^2 6 zhrnutych per-bin kanalov)",
+    "lstm": "0.5 * mean(chyba^2 G globalnych vstupov) + 0.5 * mean(chyba^2 6 zhrnutych per-bin kanalov)",
+    "tcn_pamat": "0.5 * mean(squared_error nad vstupmi mem_*) + 0.5 * max(masked_mse skorovanych binov)",
 }
 
 
@@ -144,7 +161,8 @@ def nacitaj_role(korpus, *, diagnostic=False):
         relacie[zaznam["role"]].append((zaznam, snimky))
     fit_riadky = [s for _, snimky in relacie["train"] for s in snimky
                   if s.valid and s.has_predecessor and not s.full]
-    normalizer = FeatureNormalizer.fit(fit_riadky)
+    # Balik B6b: to iste pravidlo normalizacie ako train_bundle (triedy stlpcov a mierka z protokolu).
+    normalizer = FeatureNormalizer.fit(fit_riadky, NormalizationRule.from_protocol(protokol, diagnostic=diagnostic))
     triedy = sorted({z["scenario"] for z, _ in relacie["train"]})
     data = {rola: Windows(r, normalizer, kontrakt, triedy) for rola, r in relacie.items()}
     return {"index": index, "protokol": protokol, "zaznamy": zaznamy, "kontrakt": kontrakt,
@@ -160,54 +178,64 @@ def _davky(okna, velkost, poradie=None):
 
 
 class PrediktorPamat(Predictor):
-    """safeguard.model.Predictor s globalnou vetvou iba nad 8 pamatovymi stlpcami.
+    """safeguard.model.Predictor s globalnou vetvou iba nad pamatovymi vstupmi (mem_*).
 
     forward a per-bin vetva su zdedene bez zmeny; meni sa iba vstupny rozmer
-    globalneho TCNPrediktora (8 namiesto 18). Konfiguracia je architecture().
+    globalneho TCNPrediktora (pocet pamatovych vstupov normalizera, 8 pri vsetkych
+    stlpcoch). Konfiguracia je architecture().
     """
 
-    def __init__(self, config):
+    def __init__(self, config, sirka=len(PAMAT)):
         super().__init__(config)
-        self.global_tcn = TCNPrediktor(len(PAMAT), kanaly=config["channels"], k=config["kernel"],
+        self.global_features = sirka
+        self.global_tcn = TCNPrediktor(sirka, kanaly=config["channels"], k=config["kernel"],
                                        blokov=config["blocks"], dropout=config["dropout"],
                                        dlzka_okna=config["window_rows"])
 
     def forward(self, global_context, local_context):
-        if global_context.shape[-1] != len(PAMAT):
-            raise ValueError("PrediktorPamat ocakava presne %d globalnych stlpcov" % len(PAMAT))
+        if global_context.shape[-1] != self.global_features:
+            raise ValueError("PrediktorPamat ocakava presne %d globalnych stlpcov" % self.global_features)
         return super().forward(global_context, local_context)
 
 
-def _chyba_zlucena(predikcia, ciel):
+def _chyba_zlucena(predikcia, ciel, g=G):
     e = (predikcia - ciel).square()
-    return 0.5 * e[:, :G].mean(dim=-1) + 0.5 * e[:, G:].mean(dim=-1)
+    return 0.5 * e[:, :g].mean(dim=-1) + 0.5 * e[:, g:].mean(dim=-1)
 
 
 class _Siet:
-    """Spolocny trening sieti: Adam 1e-3, orezanie gradientu 5, vyber na dev."""
+    """Spolocny trening sieti: Adam 1e-3, orezanie gradientu 5, vyber na dev.
 
-    def __init__(self, meno, window_rows, siet=None, skryte=None):
+    vstupy: mena globalnych vstupov normalizera (normalizer.input_names; balik B6b)."""
+
+    def __init__(self, meno, window_rows, siet=None, skryte=None, vstupy=GLOBAL_NAMES):
         self.meno = meno
         self.window_rows = window_rows
-        self.cielovy_pocet = pocet_parametrov(Predictor(architecture(window_rows)))
+        self.vstupy = tuple(vstupy)
+        self.g = len(self.vstupy)
+        self.pamat = [i for i, m in enumerate(self.vstupy) if m.startswith("mem_")]
+        self.cielovy_pocet = pocet_parametrov(Predictor(architecture(window_rows, global_features=self.g)))
         if meno == "tcn_pamat":
-            self.config = architecture(window_rows)
-            self.siet = siet or PrediktorPamat(self.config)
+            if not self.pamat:
+                raise ValueError("pamatova ablacia: pravidlo normalizacie nema ziadny pamatovy vstup (mem_*)")
+            self.config = architecture(window_rows, global_features=self.g)
+            self.siet = siet or PrediktorPamat(self.config, len(self.pamat))
             self.skryte = None
         else:
             trieda = GRUPrediktor if meno == "gru" else LSTMPrediktor
             if skryte is None:
-                skryte, _ = skryte_pre_prediktor(trieda, len(ZLUCENE), len(CIEL), self.cielovy_pocet)
+                skryte, _ = skryte_pre_prediktor(trieda, len(zlucene(self.vstupy)), len(ciel(self.g)),
+                                                 self.cielovy_pocet)
             self.skryte = skryte
-            self.siet = siet or trieda(len(ZLUCENE), skryte, len(CIEL))
+            self.siet = siet or trieda(len(zlucene(self.vstupy)), skryte, len(ciel(self.g)))
 
     def _chyby(self, g, lokalne):
         if self.meno == "tcn_pamat":
-            gp = g[..., :len(PAMAT)]
+            gp = g[..., self.pamat]
             pred = self.siet(gp[:, :-1], lokalne[:, :-1])
             return prediction_errors(pred, gp[:, -1], lokalne[:, -1])
         x = zluc_biny(g, lokalne)
-        return (_chyba_zlucena(self.siet(x[:, :-1]), x[:, -1, list(CIEL)]),)
+        return (_chyba_zlucena(self.siet(x[:, :-1]), x[:, -1, list(ciel(self.g))], self.g),)
 
     def _strata(self, g, lokalne):
         chyby = self._chyby(g, lokalne)
@@ -265,7 +293,8 @@ class _Siet:
         return {"parametrov": pocet_parametrov(self.siet), "parametrov_tcn_prediktor": self.cielovy_pocet,
                 "skryte": self.skryte,
                 "architektura": self.config if self.meno == "tcn_pamat" else None,
-                "globalne_stlpce": list(PAMAT) if self.meno == "tcn_pamat" else list(GLOBAL_NAMES)}
+                "globalne_stlpce": ([self.vstupy[i] for i in self.pamat] if self.meno == "tcn_pamat"
+                                    else list(self.vstupy))}
 
     def uloz(self, adresar):
         subor = adresar / "model.pt"
@@ -275,7 +304,8 @@ class _Siet:
     @classmethod
     def nacitaj(cls, adresar, manifest):
         p = manifest["parametre"]
-        model = cls(manifest["model"], manifest["feature_contract"]["window_rows"], skryte=p["skryte"])
+        model = cls(manifest["model"], manifest["feature_contract"]["window_rows"], skryte=p["skryte"],
+                    vstupy=manifest["normalizer"]["input_names"])
         model.siet.load_state_dict(torch.load(adresar / "model.pt", map_location="cpu", weights_only=True),
                                    strict=True)
         model.siet.eval()
@@ -287,8 +317,9 @@ class _Siet:
 class _ZScore:
     meno = "zscore"
 
-    def __init__(self, m=None):
-        self.m = m or ZScoreAnomalia(ZLUCENE, indikatory=())
+    def __init__(self, m=None, vstupy=GLOBAL_NAMES):
+        self.stlpce = zlucene(vstupy)
+        self.m = m or ZScoreAnomalia(self.stlpce, indikatory=())
 
     @staticmethod
     def _priemery(g, lokalne):
@@ -303,26 +334,28 @@ class _ZScore:
         return self.m.skore(self._priemery(g, lokalne))
 
     def parametre(self):
-        return {"mu": self.m.mu.tolist(), "sd": self.m.sd.tolist(), "stlpce": list(ZLUCENE)}
+        return {"mu": self.m.mu.tolist(), "sd": self.m.sd.tolist(), "stlpce": list(self.stlpce)}
 
     def uloz(self, adresar):
         return None
 
     @classmethod
     def nacitaj(cls, adresar, manifest):
-        m = ZScoreAnomalia(ZLUCENE, indikatory=())
+        vstupy = manifest["normalizer"]["input_names"]
+        m = ZScoreAnomalia(zlucene(vstupy), indikatory=())
         p = manifest["parametre"]
-        if p["stlpce"] != list(ZLUCENE):
+        if p["stlpce"] != list(zlucene(vstupy)):
             raise ValueError("zscore: ine stlpce nez tento kod")
         m.mu, m.sd = np.asarray(p["mu"], dtype=np.float64), np.asarray(p["sd"], dtype=np.float64)
-        return cls(m)
+        return cls(m, vstupy)
 
 
 class _IForest:
     meno = "iforest"
 
-    def __init__(self, m=None, seed=0):
+    def __init__(self, m=None, seed=0, vstupy=GLOBAL_NAMES):
         self.m = m or IsolationForestAnomalia(seed=seed)
+        self.stlpce = zlucene(vstupy)
 
     @staticmethod
     def _okna(g, lokalne):
@@ -337,7 +370,7 @@ class _IForest:
         return self.m.skore_nezaporne(self._okna(g, lokalne))
 
     def parametre(self):
-        return {"n_estimators": self.m.m.n_estimators, "stlpce": list(ZLUCENE)}
+        return {"n_estimators": self.m.m.n_estimators, "stlpce": list(self.stlpce)}
 
     def uloz(self, adresar):
         subor = adresar / "iforest.pkl"
@@ -348,7 +381,7 @@ class _IForest:
     def nacitaj(cls, adresar, manifest):
         m = IsolationForestAnomalia()
         m.m = pickle.loads((adresar / "iforest.pkl").read_bytes())  # sha256 overene vopred
-        return cls(m)
+        return cls(m, vstupy=manifest["normalizer"]["input_names"])
 
 
 def _trieda(meno):
@@ -357,9 +390,9 @@ def _trieda(meno):
     return {"zscore": _ZScore, "iforest": _IForest}.get(meno, _Siet)
 
 
-def _novy_model(meno, window_rows):
+def _novy_model(meno, window_rows, vstupy):
     trieda = _trieda(meno)
-    return trieda(meno, window_rows) if trieda is _Siet else trieda()
+    return trieda(meno, window_rows, vstupy=vstupy) if trieda is _Siet else trieda(vstupy=vstupy)
 
 
 # ------------------------------------------------------------------ balik
@@ -387,18 +420,22 @@ class Balik:
     def n(self):
         return self.manifest["calibration"]["n"]
 
+    @property
+    def anchored(self):
+        """Ako safeguard.bundle.Bundle: okno potrebuje meranu snimku pred sebou (differenced vstup; balik B6b)."""
+        return self.normalizer.rule.anchored
+
+    @property
+    def rule_channel(self):
+        """Baseliny nemaju pravidlovy kanal (balik B6b): prazdny, s pravidlom k z n neuronoveho kanala."""
+        return {"columns": [], "quantity": {}, "ranges": {}, "k": self.k, "n": self.n}
+
+    def window_buffer(self):
+        return WindowBuffer(self.contract["window_rows"], self.contract["max_gap_s"], anchored=self.anchored)
+
     def score(self, window):
-        # Ta ista kontrola okna ako safeguard.bundle.Bundle.score.
-        if len(window) != self.contract["window_rows"]:
-            raise ValueError("dlzka okna sa lisi od modelu")
-        buffer = WindowBuffer(self.contract["window_rows"], self.contract["max_gap_s"])
-        prijate = None
-        for snimka in window:
-            check_frame(snimka, self.contract)
-            prijate = buffer.push(snimka)
-        if prijate is None:
-            raise ValueError("neplatne alebo prerusene okno: " + str(buffer.reason))
-        g, lokalne = self.normalizer.transform(*arrays(window))
+        # Ta ista kontrola okna a tie iste vstupy ako safeguard.bundle.Bundle.score.
+        g, lokalne = window_inputs(window, self.contract, self.normalizer)
         s = float(self.model.skore(g[None], lokalne[None])[0])
         if not math.isfinite(s):
             raise ValueError("nekonecne skore modelu")
@@ -457,7 +494,7 @@ def fit(korpus, meno, out, *, seed=0, epochy=10, davka=32, fpr=0.01, k=3, n=5,
     stare = torch.get_num_threads()
     torch.set_num_threads(min(stare, 4))
     try:
-        model = _novy_model(meno, protokol["window_rows"])
+        model = _novy_model(meno, protokol["window_rows"], d["normalizer"].input_names)
         trening = model.fit(data, seed=seed, epochy=epochy, davka=davka)
         skore_kal = _skore_roly(model, data["calibration"])
         kalibracia = calibrate(skore_kal, data["calibration"], fpr=fpr, k=k, n=n,
@@ -475,10 +512,10 @@ def fit(korpus, meno, out, *, seed=0, epochy=10, davka=32, fpr=0.01, k=3, n=5,
         "schema": SCHEMA_MODEL, "model": meno, "diagnostic": bool(diagnostic),
         "created_utc": datetime.now(timezone.utc).isoformat(),
         "feature_contract": d["kontrakt"], "normalizer": d["normalizer"].to_dict(),
-        "vstup": {"globalne": list(PAMAT) if meno == "tcn_pamat" else list(GLOBAL_NAMES),
+        "vstup": {"globalne": model.parametre().get("globalne_stlpce", list(d["normalizer"].input_names)),
                   "per_bin": ("kazdy bin zvlast (zdielany TCN)" if meno == "tcn_pamat"
                               else "zhrnute cez biny: priemer a maximum 4 kanalov (zluc_biny)"),
-                  "stlpce_na_krok": None if meno == "tcn_pamat" else list(ZLUCENE)},
+                  "stlpce_na_krok": None if meno == "tcn_pamat" else list(zlucene(d["normalizer"].input_names))},
         "score_formula": VZORCE[meno], "parametre": model.parametre(), "classes": [],
         "environment": {"kernel": meta["guest_before"]["kernel"],
                         "stack_sha256": meta["guest_before"]["stack_sha256"],
@@ -508,8 +545,9 @@ def fit(korpus, meno, out, *, seed=0, epochy=10, davka=32, fpr=0.01, k=3, n=5,
             manifest["weights"]["model"] = vahy
         (docasny / "manifest.json").write_text(json.dumps(manifest, indent=2, allow_nan=False) + "\n")
         balik = nacitaj(docasny, allow_diagnostic=diagnostic)
-        s, koniec = data["calibration"].indices[0]
-        okno = data["calibration"].sessions[s][1][koniec + 1 - protokol["window_rows"]:koniec + 1]
+        s, _ = data["calibration"].indices[0]
+        buffer = balik.window_buffer()  # Prve okno tej session je indices[0] (balik B6b: aj s kotvou).
+        okno = next(w for w in map(buffer.push, data["calibration"].sessions[s][1]) if w is not None)
         if not math.isclose(balik.score(okno)["score"], float(skore_kal[0]), rel_tol=1e-5, abs_tol=1e-6):
             raise ValueError("skore nacitaneho modelu sa lisi od kalibracneho")
         os.rename(docasny, out)

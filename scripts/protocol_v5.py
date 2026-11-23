@@ -542,7 +542,9 @@ def _floors(value, names):
 
 def _ok_qualification(a):
     """Design B6a 1.1: the bounds of the qualification (G0), the scale rule (G0) and the classes of the columns
-    (null until G3a; a differenced column is a level column)."""
+    (null until G3a; a differenced column is a level column, and so is a rule_differenced one, which the rule channel
+    judges by its change since the session's first measured row: question Q8 to the lead, its revised proposal,
+    provisional until the lead answers, package B6b)."""
     from features.archive import BEHAVIOR_NAMES  # Here: the generator imports this module and needs no feature code.
     from features.qualification import CLASSES, LOCAL_SCALED
     q, s, columns = a["qualification"], a["scale"], a["columns"]
@@ -557,7 +559,7 @@ def _ok_qualification(a):
             and _floors(s["local_floor"], LOCAL_SCALED) and type(s["note"]) is str):
         return False
     return columns is None or (type(columns) is dict and set(columns) == set(BEHAVIOR_NAMES) and all(
-        type(cls) is str and cls in CLASSES and (cls != "differenced" or name in levels)
+        type(cls) is str and cls in CLASSES and (cls not in ("differenced", "rule_differenced") or name in levels)
         for name, cls in columns.items()))
 
 

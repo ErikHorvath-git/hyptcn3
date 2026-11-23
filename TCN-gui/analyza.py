@@ -6,9 +6,11 @@ would produce. The only additions are read-only decompositions of the score:
 
   score = 0.5 * mean_i(global_error_i) + 0.5 * max_b(bin_error_b)
 
-so the GUI shows how much each global feature and the worst memory bin
-contributed. An anomaly is a deviation from the benign training data, not a
-malware verdict (HONESTY P4).
+so the GUI shows how much each global input and the worst memory bin
+contributed (the score's own attribution, safeguard/bundle.py Bundle.score; package B6b: the inputs of the bundle's
+normalization rule and its scored bins). Alarms of the rule channel (columns of class rule and rule_differenced
+outside their range over train and calibration) are counted apart and never as model alarms. An anomaly is a
+deviation from the benign training data, not a malware verdict (HONESTY P4).
 """
 from datetime import datetime, timezone
 import json
@@ -24,10 +26,8 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-import torch  # noqa: E402
-
 from safeguard.bundle import load_bundle  # noqa: E402
-from safeguard.features import GLOBAL_NAMES, LOCAL_NAMES, SCHEMA as ARCHIVE_SCHEMA, arrays, frames_from_archive  # noqa: E402
+from safeguard.features import LOCAL_NAMES, SCHEMA as ARCHIVE_SCHEMA, frames_from_archive  # noqa: E402
 from safeguard.runtime import Detector, run_directory  # noqa: E402
 
 DEFAULT_PROFILE = ROOT / "profiles" / "debian12-6.1.0-42-cloud-amd64"
@@ -46,12 +46,9 @@ class _Recorder:
 
     def score(self, window):
         result = self._bundle.score(window)
-        g, local = self._bundle.normalizer.transform(*arrays(window))
-        gt = torch.as_tensor(g, dtype=torch.float32).unsqueeze(0)
-        lt = torch.as_tensor(local, dtype=torch.float32).unsqueeze(0)
-        with torch.inference_mode():
-            global_prediction, _ = self._bundle.predictor(gt[:, :-1], lt[:, :-1])
-            per_feature = (global_prediction - gt[:, -1]).square()[0].tolist()
+        # The squared error of each input: the score's attribution times the number of inputs (package B6b).
+        columns = result["attribution"]["columns"]
+        per_feature = [columns[name] * len(columns) for name in self._bundle.normalizer.input_names]
         last = window[-1]
         self.windows[(last.session, int(last.seq))] = per_feature
         for frame in window:
@@ -147,17 +144,23 @@ def model_summary(bundle):
     }
 
 
-def _verdict(rows, integrity_rows, alarm_events, scored, fatal):
+def _verdict(rows, integrity_rows, alarm_events, scored, fatal, rule_events=0):
     if fatal:
         return {"level": "error", "label": "CHYBA VSTUPU",
                 "detail": "Prehratie sa zastavilo: " + str(fatal)}
     if integrity_rows:
         return {"level": "alarm", "label": "NÁLEZ INTEGRITY JADRA",
                 "detail": f"{integrity_rows} snímok s nálezom kontroly integrity jadra hosťa."}
+    rules = (f" Pravidlový kanál: {rule_events} alarm(ov) (hodnota mimo rozsahu train a calibration, pravidlo k z n)."
+             if rule_events else "")
     if alarm_events:
         return {"level": "alarm", "label": "ANOMÁLIA",
                 "detail": f"{alarm_events} alarm(ov) modelu (pravidlo k z n). Správanie sa odchýlilo "
-                          "od benígnej prevádzky z tréningu; nie je to verdikt o malvéri."}
+                          "od benígnej prevádzky z tréningu; nie je to verdikt o malvéri." + rules}
+    if rule_events:
+        return {"level": "alarm", "label": "PRAVIDLOVÝ KANÁL",
+                "detail": f"{rule_events} alarm(ov) pravidlového kanála: hodnota stĺpca mimo rozsahu z train a "
+                          "calibration (pravidlo k z n). Nie je to alarm modelu ani verdikt o malvéri."}
     if not rows or scored < 0.5 * len(rows):
         return {"level": "unknown", "label": "NEDOSTATOČNÉ POKRYTIE",
                 "detail": f"Skórovaných je iba {scored} z {len(rows)} snímok; o session sa nedá rozhodnúť."}
@@ -196,11 +199,11 @@ def analyze(bundle_path, input_path, *, profile=None, allow_diagnostic=False, bu
 
 def _report(bundle, rows, frames, windows, kind, source, session_dir):
     contract = bundle.contract
-    bins = list(contract["biny"])
+    bins = [b for b, _ in bundle.normalizer.bins]  # The scored bins, in the order of bin_errors (package B6b).
     bin_bytes = int(contract["layout"]["bin_bytes"])
     times, score, global_part, bin_part, top_bin, state = [], [], [], [], [], []
     bin_err, feature_err, model_alarm, alarm_event, integrity = [], [], [], [], []
-    model_events = 0
+    model_events = rule_events = 0
     activity = {c: [] for c in bundle.manifest["classes"]}
     fatal = None
     for row in rows:
@@ -230,6 +233,7 @@ def _report(bundle, rows, frames, windows, kind, source, session_dir):
         model_alarm.append(bool(row.get("model_alarm")))
         alarm_event.append(bool(row.get("alarm_event")))
         model_events += "model_anomaly" in (row.get("alarm_sources") or [])
+        rule_events += "rule_anomaly" in (row.get("alarm_sources") or [])
         findings = (row.get("integrity") or {}).get("findings") or []
         integrity.append([str(f) for f in findings])
         if row.get("fatal"):
@@ -256,11 +260,12 @@ def _report(bundle, rows, frames, windows, kind, source, session_dir):
                   "context": _session_context(session_dir)},
         "model": model_summary(bundle),
         "threshold": threshold, "k": bundle.k, "n": bundle.n,
-        "verdict": _verdict(times, integrity_rows, alarm_events, len(scored), fatal),
+        "verdict": _verdict(times, integrity_rows, alarm_events, len(scored), fatal, rule_events),
         "summary": {
             "rows": len(rows), "scored": len(scored), "warmup_or_invalid": len(times) - len(scored),
             "above_threshold": sum(s > threshold for s in scored),
             "model_alarm_rows": sum(model_alarm), "model_alarm_events": alarm_events,
+            "rule_alarm_events": rule_events,
             "integrity_rows": integrity_rows,
             "score_max": max(scored) if scored else None,
             "score_median": float(np.median(scored)) if scored else None,
@@ -271,6 +276,6 @@ def _report(bundle, rows, frames, windows, kind, source, session_dir):
                    "alarm_event": alarm_event, "integrity": integrity, "activity": activity},
         "bins": {"ids": bins, "gpa_mib": [int(b) * bin_bytes / 2**20 for b in bins],
                  "errors": bin_err, "mean_error": mean_bin, "top_counts": counts, "top_by_mean": top},
-        "features": {"names": list(GLOBAL_NAMES), "errors": feature_err},
+        "features": {"names": list(bundle.normalizer.input_names), "errors": feature_err},
         "input_heat": {"t": input_times, "name": LOCAL_NAMES[0], "values": changed},
     }

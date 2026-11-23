@@ -81,9 +81,12 @@ def _sha(cesta):
 def _protokol(profil):
     # Schema 3 nesie od balika B3 hranice kontrol auditu a register vynimiek a od balika B4 oddiely rozlozenia v5
     # (scripts/tests/boundary_sessions.py v5_sections); udalost planuje protokol v kazdej relacii jednu.
-    from scripts.tests.boundary_sessions import audit_sections, v5_sections
+    # Od balika B6b berie trening parametre z planu analyzy: FPR, jedna epocha a davka 64, ktore test predtym
+    # zadaval prikazom, su v analysis (fit_analysis), spolu so stlpcami, ktore su vsetky neuronove.
+    from scripts.tests.boundary_sessions import audit_sections, fit_analysis, v5_sections
     v5 = v5_sections(("steady", "bursty"), {"train": 2, "dev": 2, "calibration": 2, "test_benign": 2},
                      group_sessions=2, window_rows=OKNO)
+    v5["analysis"] = fit_analysis(v5["analysis"], fpr=FPR, max_epochs=1, batch_size=64)
     return {
         **v5, **audit_sections(5),
         "schema": "hyptcn3/collection-protocol/3", "name": "odovzdanie-korpusu-test",
@@ -346,10 +349,9 @@ def kampan(tmp_path_factory):
 
 @pytest.fixture(scope="module")
 def balik(kampan, tmp_path_factory):
-    """Hlavny balik: python3 -m safeguard train nad indexom kampane."""
+    """Hlavny balik: python3 -m safeguard train nad indexom kampane; parametre su z planu analyzy protokolu."""
     out = tmp_path_factory.mktemp("balik") / "balik"
-    _prejde(cli.main, "--threads", 2, "train", "--corpus", kampan["index"], "--out", out,
-            "--epochs", 1, "--batch-size", 64, "--fpr", FPR)
+    _prejde(cli.main, "--threads", 2, "train", "--corpus", kampan["index"], "--out", out)
     return out
 
 
@@ -479,6 +481,45 @@ def test_trening_prijme_tolerovany_riadok(kampan, balik):
     # Okna pocita audit tym istym postupom ako trening: dve relacie bez neplatneho riadku a dve s nim.
     assert manifest["training"]["windows"] == {rola: kampan["okna"][rola] for rola in FIT_ROLES}
     assert set(kampan["okna"].values()) == {2 * 80 + 2 * 71}
+
+
+def test_trening_berie_parametre_z_planu_analyzy(balik):
+    """Balik B6b (navrh 1.4, 1.6): pri protokole schemy 3 su parametre treningu z planu analyzy protokolu (FPR, strop
+    jednej epochy a davka 64 z fit_analysis), nie z prikazu, ktory ich nezadal; seed je analysis.deploy_seed. Pri
+    strope jednej epochy je vybrata epocha kazdeho modelu posledna, preto trening raz pokracoval po dvojnasobny strop
+    a manifest to zapisal (kap. 8.3, kostra B6 test 8)."""
+    manifest = json.loads((balik / "manifest.json").read_text())
+    parametre = manifest["parameters"]
+    assert (parametre["rule"], parametre["given"], parametre["overrides"]) == ("analysis", {}, {})
+    assert (parametre["fpr"], parametre["batch_size"], parametre["stopping"]["max_epochs"], parametre["seed"],
+            parametre["deploy_seed"]) == (FPR, 64, 1, 0, 0)
+    assert (manifest["calibration"]["fpr_design"], manifest["training"]["batch_size"], manifest["training"]["seed"],
+            manifest["training"]["epochs"]) == (FPR, 64, 0, 1)
+    # Po zluceni s agentom N (balik B6b): normalizer pravidla analysis.columns a mierka podla analysis.scale.
+    assert (manifest["normalization"]["rule"], manifest["normalization"]["scale"]["rule"],
+            manifest["normalizer"]["rule"]["name"]) == ("analysis.columns", "analysis.scale", "analysis.columns")
+    for model, krivka in (("predictor", "history"), ("classifier", "classifier_history")):
+        zastavenie = manifest["training"]["stopping"][model]
+        assert (zastavenie["max_epochs"], zastavenie["repeated"], zastavenie["max_epochs_after_repeat"],
+                zastavenie["epochs_run"]) == (1, True, 2, 2), model
+        assert [h["epoch"] for h in manifest["training"][krivka]] == [1, 2], model
+
+
+def test_parameter_analyzy_z_prikazoveho_riadka_iba_s_diagnostikou(kampan, tmp_path):
+    """Kostra B6 test 7: prepinac --fpr pri protokole schemy 3 skonci chybou s menovanym dovodom a balik nevznikne;
+    s --diagnostic prejde, balik je diagnosticky a manifest uvadza prepisanie aj s hodnotou planu."""
+    out = tmp_path / "balik"
+    kod, chyby = _prikaz(cli.main, "--threads", 2, "train", "--corpus", kampan["index"], "--out", out, "--fpr", 0.1)
+    assert (kod, chyby.strip()) == (2, "safeguard: analysis parameter fpr is given (0.1) under protocol schema 3, whose "
+                                       "analysis plan fixes analysis.fpr = 0.05; a given analysis parameter is "
+                                       "applied only to a diagnostic bundle (--diagnostic)")
+    assert not out.exists()
+    _prejde(cli.main, "--threads", 2, "train", "--corpus", kampan["index"], "--out", out, "--fpr", 0.1,
+            "--diagnostic")
+    manifest = json.loads((out / "manifest.json").read_text())
+    assert manifest["diagnostic"] is True and manifest["calibration"]["diagnostic"] is True
+    assert manifest["parameters"]["overrides"] == {"fpr": {"path": "analysis.fpr", "planned": FPR, "applied": 0.1}}
+    assert manifest["calibration"]["fpr_design"] == 0.1
 
 
 def test_kazda_metoda_prijme_tolerovany_riadok(metody):
@@ -803,7 +844,7 @@ def test_trening_a_metody_odmietnu_riadok_mimo_pravidla(tmp_path, neplatne, uved
         with pytest.raises(ValueError, match=hlaska):
             validate_index(index)
     with pytest.raises(ValueError, match=hlaska):
-        train_bundle(index, tmp_path / "balik", window_rows=OKNO, max_gap_s=7.5, epochs=1, batch_size=64, fpr=FPR)
+        train_bundle(index, tmp_path / "balik", window_rows=OKNO, max_gap_s=7.5)  # parametre z planu analyzy
     with pytest.raises(ValueError, match=hlaska):
         po.nacitaj_role(index)
     # Stavba korpusu zaznam indexu necita: posudi archiv a odmietne ho z toho isteho dovodu.
@@ -828,8 +869,7 @@ def test_trening_a_metody_posudia_relaciu_jej_auditom(tmp_path):
     assert {rola: kampan["okna"][rola] for rola in okna} == okna
     validate_index(kampan["index"])
     assert {rola: len(data.indices) for rola, data in po.nacitaj_role(kampan["index"])["data"].items()} == okna
-    vysledok = train_bundle(kampan["index"], tmp_path / "balik", window_rows=OKNO, max_gap_s=7.5, epochs=1,
-                            batch_size=64, fpr=FPR)
+    vysledok = train_bundle(kampan["index"], tmp_path / "balik", window_rows=OKNO, max_gap_s=7.5)
     assert vysledok["training"]["windows"] == okna
 
 

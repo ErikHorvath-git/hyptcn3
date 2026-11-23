@@ -1,12 +1,18 @@
 """
 seedy.py - rozptyl TCN cez seedy inicializacie (E4/VO6, doplnok k finalnemu modelu).
 
-Finalny model je seed 0 (safeguard train --seed 0) a ten sa tu NEtrenuje
-znova. Seedy 1..4 sa trenuju tym istym safeguard.training.train_bundle na tom
-istom korpuse a sluzia iba na rozptyl: metriky na dev (vyber checkpointu,
-kalibracia) a vysledky na datasetoch 2/3 (tcn.eval udalosti, buduci malver).
-test_benign je zaverecny test jedineho finalneho modelu - suhrn vysledky roly
-test_benign odmietne.
+Seedy (balik B6b, navrh NAVRH_B6b 1.6). Pri protokole schemy 3 su seedy
+z planu analyzy (analysis.seeds, 0 az 4; balik na nasadenie je
+analysis.deploy_seed = 0, D14): bez --seeds sa trenuju vsetky, seed 0
+vratane; seed mimo planu prejde iba s --diagnostic (manifest ho uvedie ako
+prepisanie). Pri schemach 1 a 2 ostava dnesne pravidlo legacy_schema_2:
+bez --seeds seedy 1..4 (SEEDY). Kazdy seed trenuje ten isty
+safeguard.training.train_bundle na tom istom korpuse; ostatne parametre
+analyzy (--epochs, --batch-size, --fpr, --k, --n) su predvolene nezadane
+a train_bundle ich pri scheme 3 mimo --diagnostic odmietne. Rozptyl:
+metriky na dev (vyber checkpointu, kalibracia) a vysledky na datasetoch 2/3
+(tcn.eval udalosti, buduci malver); suhrn vysledky roly test_benign
+odmietne (zaverecny test patri baliku B7).
 
 Modul je tenky: `train` iba vola train_bundle pre kazdy seed do
 <out-root>/seed-<s>; `suhrn` je cista funkcia nad manifestmi a JSON
@@ -26,34 +32,62 @@ import sys
 import numpy as np
 
 SCHEMA_SUHRN = "hyptcn3/seed-spread/1"
-SEEDY = (1, 2, 3, 4)
+SEEDY = (1, 2, 3, 4)  # legacy_schema_2: seedy bez --seeds pri protokole schemy 1 a 2 (dnesne)
 FINALNY_SEED = 0
 
 
 def _over_seedy(seedy):
+    """Tvar zoznamu seedov: neprazdny, nezaporne cele cisla, kazdy raz. Seed 0 je dovoleny (D14: balik na
+    nasadenie ma seed 0; SULAD: vsetkych pat seedov v jednom finalnom behu)."""
     seedy = list(seedy)
     if not seedy or any(type(s) is not int or s < 0 for s in seedy):
         raise ValueError("seedy musia byt nezaporne cele cisla")
     if len(set(seedy)) != len(seedy):
         raise ValueError("seed je zadany viackrat")
-    if FINALNY_SEED in seedy:
-        raise ValueError("seed 0 je finalny model; znova sa netrenuje (pouzi existujuci balik)")
     return seedy
 
 
-def trenuj_seedy(korpus, out_root, seedy=SEEDY, **kwargs):
-    """train_bundle pre kazdy seed; existujuci vystup sa nikdy neprepise."""
+def seedy_planu(protokol, seedy=None, *, diagnostic=False):
+    """Seedy treningu pri protokole: schema 3 berie analysis.seeds (scripts/protocol_v5.py analysis_plan); zadany
+    seed mimo nich odmietne s menovanym dovodom, okrem diagnostiky. Schemy 1 a 2 (legacy_schema_2): bez zadanych
+    SEEDY, inak zadane."""
+    from scripts.protocol_v5 import SCHEMA, analysis_plan
+    if seedy is not None:
+        seedy = _over_seedy(seedy)
+    if protokol.get("schema") != SCHEMA:
+        return list(SEEDY) if seedy is None else seedy
+    planovane = list(analysis_plan(protokol)["seeds"])
+    if seedy is None:
+        return planovane
+    mimo = [s for s in seedy if s not in planovane]
+    if mimo and not diagnostic:
+        raise ValueError(f"seed {mimo[0]} nie je v analysis.seeds {planovane} protokolu schemy 3; seed mimo planu "
+                         "analyzy sa trenuje iba pre diagnosticky balik (--diagnostic)")
+    return seedy
+
+
+def trenuj_seedy(korpus, out_root, seedy=None, **kwargs):
+    """train_bundle pre kazdy seed (seedy_planu nad protokolom korpusu); existujuci vystup sa nikdy neprepise.
+    Zadane seedy sa skontroluju este pred citanim korpusu, vsetky pred prvym treningom."""
     from safeguard.training import train_bundle
-    seedy = _over_seedy(seedy)
+    if seedy is not None:
+        seedy = _over_seedy(seedy)
     if "seed" in kwargs:
         raise ValueError("seed sa zadava cez zoznam seedov")
     out_root = Path(out_root)
-    ciele = {s: out_root / f"seed-{s}" for s in seedy}
-    existuju = [str(c) for c in ciele.values() if c.exists()]
-    if existuju:
-        raise FileExistsError("vystup existuje: " + ", ".join(existuju))
+
+    def ciele(zoznam):
+        mapa = {s: out_root / f"seed-{s}" for s in zoznam}
+        existuju = [str(c) for c in mapa.values() if c.exists()]
+        if existuju:
+            raise FileExistsError("vystup existuje: " + ", ".join(existuju))
+        return mapa
+    if seedy is not None:
+        ciele(seedy)
+    protokol = json.loads(Path(korpus).read_text())["protocol_config"]
+    mapa = ciele(seedy_planu(protokol, seedy, diagnostic=kwargs.get("diagnostic", False)))
     vysledky = {}
-    for s, ciel in ciele.items():
+    for s, ciel in mapa.items():
         vysledky[s] = train_bundle(korpus, ciel, seed=s, **kwargs)
     return vysledky
 
@@ -67,10 +101,13 @@ def _manifest_sha(manifest):
 
 
 def metriky_balika(manifest):
-    """Dev a kalibracne metriky jedneho balika (vybraty checkpoint)."""
+    """Dev a kalibracne metriky jedneho balika (vybraty checkpoint). Prediktor a klasifikator sa od balika B6b
+    ucia oddelene: krivka prediktora je training.history, klasifikatora training.classifier_history."""
     tr, kal = manifest["training"], manifest["calibration"]
-    historia = {h["epoch"]: h for h in tr["history"]}
-    pred, klas = historia[tr["selected_predictor_epoch"]], historia[tr["selected_classifier_epoch"]]
+    if "classifier_history" not in tr:
+        raise ValueError("manifest nema training.classifier_history (balik spred balika B6b)")
+    pred = {h["epoch"]: h for h in tr["history"]}[tr["selected_predictor_epoch"]]
+    klas = {h["epoch"]: h for h in tr["classifier_history"]}[tr["selected_classifier_epoch"]]
     return {"dev_prediction_loss": pred["dev_prediction_loss"],
             "dev_classification_loss": klas["dev_classification_loss"],
             "selected_predictor_epoch": tr["selected_predictor_epoch"],
@@ -174,17 +211,18 @@ def _digest(cesta):
 
 def _hlavny(argv=None):
     argv = list(sys.argv[1:] if argv is None else argv)
-    p = argparse.ArgumentParser(prog="python3 -m tcn.seedy", description="Rozptyl TCN cez seedy 1..4")
+    p = argparse.ArgumentParser(prog="python3 -m tcn.seedy", description="Rozptyl TCN cez seedy planu analyzy")
     sub = p.add_subparsers(dest="prikaz", required=True)
-    t = sub.add_parser("train", help="safeguard train pre seedy (nie 0) do <out-root>/seed-<s>")
+    t = sub.add_parser("train", help="safeguard train pre seedy planu do <out-root>/seed-<s>")
     t.add_argument("--corpus", required=True, type=Path)
     t.add_argument("--out-root", required=True, type=Path)
-    t.add_argument("--seeds", type=int, nargs="+", default=list(SEEDY))
-    t.add_argument("--epochs", type=int, default=10)
-    t.add_argument("--batch-size", type=int, default=32)
-    t.add_argument("--fpr", type=float, default=0.01)
-    t.add_argument("--k", type=int, default=3)
-    t.add_argument("--n", type=int, default=5)
+    # Predvolene nezadane (balik B6b): schema 3 berie seedy aj ostatne parametre z planu analyzy protokolu,
+    # schemy 1 a 2 dnesne hodnoty (legacy_schema_2; seedy SEEDY).
+    t.add_argument("--seeds", type=int, nargs="+", default=None,
+                   help="seedy; schema 3: z analysis.seeds, mimo nich iba s --diagnostic; schemy 1 a 2: SEEDY")
+    for volba, typ in (("--epochs", int), ("--batch-size", int), ("--fpr", float), ("--k", int), ("--n", int)):
+        t.add_argument(volba, type=typ, default=None,
+                       help="parameter analyzy; schema 3 ho berie z planu a mimo --diagnostic odmietne")
     t.add_argument("--threads", type=int, default=4)
     t.add_argument("--diagnostic", action="store_true")
     s = sub.add_parser("suhrn", help="mean/sd/min/max dev metrik a vysledkov tcn.eval cez seedy")

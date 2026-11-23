@@ -30,6 +30,11 @@ class FakeBundle:
     """A score oracle isolates state transitions from optimization randomness."""
     threshold, k, n = 1.0, 1, 1
     manifest = {"calibration": {"diagnostic": True}}
+    anchored = False  # Package B6b: no differenced input, a window is window_rows frames.
+
+    @property
+    def rule_channel(self):  # Package B6b: a rule channel without a column.
+        return {"columns": [], "quantity": {}, "ranges": {}, "k": self.k, "n": self.n}
 
     def __init__(self, *, window=3, k=1, n=1, scores=None):
         self.contract = feature_contract(frame(0), window, 7.5)
@@ -127,6 +132,29 @@ def test_barriers_reset_voting_history(barrier):
     assert not middle["alarm"]
     following = detector.process(frame(seq + 1))
     assert following["alarm"] == (barrier == "gap")
+
+
+@pytest.mark.parametrize("extra, fatal", [({}, False), ({"threshold": 0.0}, True)], ids=["own_keys", "row_key"])
+def test_a_model_output_never_overwrites_a_field_of_the_row(extra, fatal):
+    """Package B6b (design B6b 1.2; code map B6 section 4, "Trap"): the score's keys join the row, and a key the row
+    already has (here threshold) would overwrite it silently; the detector stops with the key named instead."""
+    class Shadowing(FakeBundle):
+        def score(self, window):
+            return dict(super().score(window), **extra)
+    row = runtime.Detector(Shadowing(window=1), preserve=False).process(frame(1))
+    assert (row["fatal"], row["threshold"] if not fatal else row["reason"]) == (
+        (True, "model_error: model output would overwrite row fields: threshold") if fatal else (False, 1.0))
+
+
+def test_every_row_names_the_channels_whose_alarm_is_up():
+    """Package B6b (design B6b 1.3): `channel` lists the channels whose alarm is up on the row, in the order rule,
+    neural, kernel_integrity (empty without an alarm), while alarm_sources keeps the rising edges only."""
+    detector = runtime.Detector(FakeBundle(window=1, scores={1: 0.0}), preserve=False)
+    finding = [{"check": "syscall_hook", "index": 7}]
+    rows = [detector.process(frame(1)), detector.process(frame(2, findings=finding)), detector.process(frame(3))]
+    assert [(row["channel"], row["alarm_sources"]) for row in rows] == [
+        ([], []), (["neural", "kernel_integrity"], ["model_anomaly", "kernel_integrity"]), (["neural"], [])]
+    assert all(row["rule"]["state"] == "no_columns" and not row["rule_alarm"] for row in rows)
 
 
 def test_timestamp_error_resets_then_can_recover():

@@ -13,8 +13,10 @@ import numpy as np
 import torch
 from features.quality import BEHAVIOR_POLICY, protocol_policy
 
-from .features import CONTRACT_SCHEMA, MENA, FeatureNormalizer, WindowBuffer, Frame, arrays, check_frame
-from .model import Classifier, Predictor, SCORE_FORMULA, LOSS_FORMULA, anomaly_score, prediction_errors
+from .features import (CONTRACT_SCHEMA, MENA, RULE_RANGE_ROLES, FeatureNormalizer, WindowBuffer, Frame, check_frame,
+                       rule_quantity)
+from .model import (Classifier, Predictor, SCORE_FORMULA, LOSS_FORMULA, OLD_SCORE_FORMULA, OLD_LOSS_FORMULA,
+                    anomaly_score, column_errors, prediction_errors, top_bin_mean)
 
 SCHEMA = "hyptcn3/safeguard-bundle/1"
 
@@ -22,6 +24,63 @@ SCHEMA = "hyptcn3/safeguard-bundle/1"
 def digest(path):
     with Path(path).open("rb") as stream:
         return hashlib.file_digest(stream, "sha256").hexdigest()
+
+
+def window_inputs(window, contract, normalizer):
+    """The normalized inputs (window_rows, len(input_names)) and (window_rows, len(bins), 4) of one scoring window,
+    checked as every scorer checks it (design B6b 1.1): every frame matches the contract, the window is window_rows
+    continuous measured rows (WindowBuffer), and under a rule with a differenced input it is [anchor, *rows], the
+    anchor the last measured row of the same session before rows[0] (DIFFERENCE_POLICY of safeguard/features.py)."""
+    window = list(window)
+    rows, anchored = contract["window_rows"], int(normalizer.rule.anchored)
+    if len(window) != rows + anchored:
+        raise ValueError(f"window length differs from bundle: {len(window)} frames, the bundle takes {rows + anchored}"
+                         + (f" (the measured row before the window and window_rows {rows}, rule "
+                            f"{normalizer.rule.name})" if anchored else ""))
+    buffer = WindowBuffer(rows, contract["max_gap_s"])
+    accepted = None
+    for frame in window:
+        check_frame(frame, contract)
+    for frame in window[anchored:]:
+        accepted = buffer.push(frame)
+    if accepted is None:
+        raise ValueError("invalid or discontinuous scoring window: " + str(buffer.reason))
+    if anchored and not (window[0].measured and window[0].session == window[1].session
+                         and window[0].seq < window[1].seq and window[0].timestamp < window[1].timestamp):
+        raise ValueError("the first frame of the window must be a measured row of its session before the window (the "
+                         "anchor of its first differences)")
+    global_values, local_values = normalizer.inputs(window)
+    return global_values[anchored:], local_values[anchored:]
+
+
+def _range(value, quantity):
+    """A range of the rule channel: {quantity, min, max, ...}, min <= max finite (safeguard/features.py
+    rule_channel)."""
+    return (type(value) is dict and value.get("quantity") == quantity
+            and all(not isinstance(value.get(key), bool) and isinstance(value.get(key), (int, float))
+                    and math.isfinite(value[key]) for key in ("min", "max"))
+            and value["min"] <= value["max"])
+
+
+def check_rule_channel(manifest, normalizer):
+    """The manifest's rule_channel (design B6b 1.3) against the normalization rule and the neural alarm rule."""
+    spec, rule = manifest.get("rule_channel"), normalizer.rule
+    if type(spec) is not dict:
+        raise ValueError("bundle has no rule_channel (package B6b): the ranges of the rule channel over "
+                         + " and ".join(RULE_RANGE_ROLES))
+    if spec.get("columns") != list(rule.rule_names):
+        raise ValueError(f"rule_channel columns differ from the columns of class rule or rule_differenced of rule "
+                         f"{rule.name}")
+    ranges = spec.get("ranges")
+    if (type(ranges) is not dict or set(ranges) != set(rule.rule_names)
+            or not all(_range(ranges[name], rule_quantity(rule, name)) for name in rule.rule_names)):
+        raise ValueError("rule_channel ranges: for each of its columns {quantity, min, max}, the quantity of its "
+                         "class (value or since_session_start) and finite min <= max")
+    calibration = manifest["calibration"]
+    if (spec.get("k"), spec.get("n")) != (calibration.get("k"), calibration.get("n")):
+        raise ValueError("rule_channel alarm rule differs from the neural channel's k of n (calibration)")
+    if spec.get("roles") != list(RULE_RANGE_ROLES):
+        raise ValueError("rule_channel ranges come from the roles " + " and ".join(RULE_RANGE_ROLES))
 
 
 @dataclass
@@ -47,31 +106,56 @@ class Bundle:
     def n(self):
         return self.manifest["calibration"]["n"]
 
+    @property
+    def anchored(self):
+        """True when a window needs the measured row before it (a differenced input of the TCN)."""
+        return self.normalizer.rule.anchored
+
+    @property
+    def required_rows(self):
+        """The frames score() takes: window_rows, and the measured row before them when anchored."""
+        return self.contract["window_rows"] + int(self.anchored)
+
+    @property
+    def rule_channel(self):
+        """The rule channel for the runtime (safeguard/runtime.py RuleChannel): columns, the quantity each is judged
+        by, ranges, k and n."""
+        spec = self.manifest["rule_channel"]
+        return {"columns": list(spec["columns"]),
+                "quantity": {name: spec["ranges"][name]["quantity"] for name in spec["columns"]},
+                "ranges": {name: [spec["ranges"][name]["min"], spec["ranges"][name]["max"]] for name in spec["columns"]},
+                "k": spec["k"], "n": spec["n"]}
+
+    def window_buffer(self):
+        """The WindowBuffer whose windows score() takes."""
+        return WindowBuffer(self.contract["window_rows"], self.contract["max_gap_s"], anchored=self.anchored)
+
     def score(self, window):
-        if len(window) != self.contract["window_rows"]:
-            raise ValueError("window length differs from bundle")
-        buffer = WindowBuffer(self.contract["window_rows"], self.contract["max_gap_s"])
-        accepted = None
-        for frame in window:
-            check_frame(frame, self.contract)
-            accepted = buffer.push(frame)
-        if accepted is None:
-            raise ValueError("invalid or discontinuous scoring window: " + str(buffer.reason))
-        global_values, local_values = self.normalizer.transform(*arrays(window))
+        """The score of the last row of `window` (required_rows frames, as window_buffer() returns them), with its
+        attribution (design B6b 1.2): the error of each input column (they sum to global_error), of each scored bin,
+        the worst bin (its error is the bin part of the score) and the mean of the three worst bins."""
+        global_values, local_values = window_inputs(window, self.contract, self.normalizer)
         global_tensor = torch.as_tensor(global_values, dtype=torch.float32).unsqueeze(0)
         local_tensor = torch.as_tensor(local_values, dtype=torch.float32).unsqueeze(0)
         with torch.inference_mode():
             prediction = self.predictor(global_tensor[:, :-1], local_tensor[:, :-1])
             global_error, bin_errors = prediction_errors(prediction, global_tensor[:, -1], local_tensor[:, -1])
+            columns = column_errors(prediction[0], global_tensor[:, -1])[0].tolist()
             score = anomaly_score(global_error, bin_errors)
+            top = float(top_bin_mean(bin_errors)[0])
             probabilities = self.classifier(global_tensor, local_tensor).softmax(dim=-1)[0]
-        values = [float(score[0]), float(global_error[0]), *bin_errors[0].tolist(), *probabilities.tolist()]
+        bins = bin_errors[0].tolist()
+        values = [float(score[0]), float(global_error[0]), top, *bins, *columns, *probabilities.tolist()]
         if not all(math.isfinite(v) for v in values):
             raise ValueError("non-finite model output")
         classes = self.manifest["classes"]
-        return {"score": values[0], "global_error": values[1], "bin_errors": bin_errors[0].tolist(),
+        per_bin = [{"bin": b, "pages": pages, "error": error} for (b, pages), error in zip(self.normalizer.bins, bins)]
+        worst = max(range(len(bins)), key=bins.__getitem__)  # The first of equal errors.
+        return {"score": values[0], "global_error": values[1], "bin_errors": bins,
                 "activity": classes[int(probabilities.argmax())],
-                "activity_probabilities": dict(zip(classes, probabilities.tolist()))}
+                "activity_probabilities": dict(zip(classes, probabilities.tolist())),
+                "attribution": {"columns": dict(zip(self.normalizer.input_names, columns)), "bins": per_bin,
+                                "worst_bin": dict(per_bin[worst]), "top3_bin_mean": top}}
 
 
 def load_bundle(path, allow_diagnostic=False):
@@ -83,6 +167,9 @@ def load_bundle(path, allow_diagnostic=False):
         raise ValueError("missing bundle diagnostic status")
     if manifest["diagnostic"] and not allow_diagnostic:
         raise ValueError("diagnostic bundle is not enabled for deployment")
+    if manifest.get("score_formula") == OLD_SCORE_FORMULA or manifest.get("loss_formula") == OLD_LOSS_FORMULA:
+        raise ValueError(f"bundle of the score formula before package B6b ({OLD_SCORE_FORMULA!r}: every column and every "
+                         "bin, no normalization rule) is refused; retrain it")
     if manifest.get("score_formula") != SCORE_FORMULA or manifest.get("loss_formula") != LOSS_FORMULA:
         raise ValueError("unsupported scoring contract")
     classes = manifest.get("classes")
@@ -140,6 +227,10 @@ def load_bundle(path, allow_diagnostic=False):
                    "inconclusive": [], "findings": [], "read_errors": 0, "filled_zero": 0},
                   "contract-validation", contract["layout"])
     check_frame(dummy, contract)
+    normalizer.check_contract(contract)
+    if architecture.get("global_features") != len(normalizer.input_names):
+        raise ValueError(f"model inputs differ from the inputs of normalization rule {normalizer.rule.name}")
+    check_rule_channel(manifest, normalizer)
     predictor, classifier = Predictor(architecture), Classifier(architecture, len(classes))
     for name, model in (("predictor", predictor), ("classifier", classifier)):
         expected = name + ".pt"

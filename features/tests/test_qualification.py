@@ -133,6 +133,46 @@ def test_a_column_that_tells_the_group_is_differenced_only_as_a_level_whose_diff
         assert row["reason"] == failed + "; its first difference scores " + difference
 
 
+@pytest.mark.parametrize("column, shape, difference", [
+    ("proc_memfd", "constant", {"rows": 1428, "variance": 0.0, "mode": 0.0, "off_mode_share": 0.0}),
+    ("sock_estab", "near_constant", {"rows": 1428, "variance": pytest.approx(4 / 1428), "mode": 0.0,
+                                     "off_mode_share": 4 / 1428}),
+], ids=["constant_difference", "near_constant_difference"])
+def test_a_level_column_whose_first_difference_is_constant_or_near_constant_is_rule_differenced(column, shape,
+                                                                                                 difference):
+    """Question Q8 to the lead, its proposal (provisional until the lead answers; package B6b): a level column that
+    tells the group is qualified again by its first difference by the whole qualification, the variance rule first.
+    proc_memfd is 5 + group index in every row of a session: its first difference is 0 everywhere, which the rank
+    test dropped as a constant "duplicate" before. sock_estab is 10 + 10 x group index, one lower in rows 50 and 51
+    of the first two sessions: 4 of the 12 x 119 first differences are off the mode 0, a near-constant first
+    difference that was a TCN input (differenced) before. Both go to the rule channel over their first difference
+    and never reach the rank test; sock_total, whose first difference is noise, stays differenced, and the proposal
+    is a valid analysis.columns of the protocol."""
+    from features.qualification import qualify
+    from scripts import protocol_v5
+    rows, sessions = corpus()
+    j = BEHAVIOR_NAMES.index(column)
+    for i, (name, x) in enumerate(rows.items()):
+        g = GROUPS.index(name.split("#")[0])
+        x[:, j] = 5 + g if shape == "constant" else 10 + 10 * g
+        if shape == "near_constant" and i < 2:
+            x[50:52, j] -= 1
+    result = qualify(rows, sessions, json.loads(V5.read_text()))
+    table = {row["column"]: row for row in result["table"]}
+    row = table[column]
+    assert (row["class"], row["identity"]["score"], row["identity_of_difference"], row["rank_test"]) == (
+        "rule_differenced", 1.0, None, None)
+    assert row["difference"] == difference
+    because = ("constant: zero variance" if shape == "constant" else
+               "near-constant: 4 of 1428 differences off the mode 0, fewer than near_constant_share 0.01")
+    assert re.fullmatch(re.escape("identity: max(AUC, 1 - AUC) 1.0000 above identity_auc 0.75 (") + r".*"
+                        + re.escape("); its first difference is " + because), row["reason"])
+    assert table["sock_total"]["class"] == "differenced" and table["sock_total"]["difference"]["off_mode_share"] > .5
+    doc = json.loads(V5.read_text())
+    doc["analysis"]["columns"] = result["proposed_columns"]
+    protocol_v5.check_layout(doc)
+
+
 def comparison_corpus():
     """Every session of profile eshop: each position is a stratum of the four groups, by start v5-train-1 (VM a),
     v5-train-2 (b), v5-dev-1 (a), v5-dev-2 (b). Noise in every column but three: mem_changed_ratio tells the group

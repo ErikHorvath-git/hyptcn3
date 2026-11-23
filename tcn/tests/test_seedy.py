@@ -1,9 +1,12 @@
 """
 Testy rozptylu cez seedy (tcn/seedy.py). Offline: ziadny trening, iba
-poistky (seed 0, test_benign) a vypocet suhrnu nad syntetickymi manifestmi.
+poistky (zle seedy, seedy mimo planu analyzy, test_benign) a vypocet suhrnu
+nad syntetickymi manifestmi.
 """
 
 import json
+from pathlib import Path
+import re
 
 import numpy as np
 import pytest
@@ -13,9 +16,12 @@ from tcn.eval import _manifest_sha
 
 
 def manifest(seed, strata, korpus="k"):
+    # Od balika B6b ma klasifikator vlastnu krivku ucenia (training.classifier_history).
     return {"training": {"seed": seed, "selected_predictor_epoch": 2, "selected_classifier_epoch": 1,
-                         "history": [{"epoch": 1, "dev_prediction_loss": 9.0, "dev_classification_loss": 0.5 + seed},
-                                     {"epoch": 2, "dev_prediction_loss": strata, "dev_classification_loss": 7.0}]},
+                         "history": [{"epoch": 1, "dev_prediction_loss": 9.0},
+                                     {"epoch": 2, "dev_prediction_loss": strata}],
+                         "classifier_history": [{"epoch": 1, "dev_classification_loss": 0.5 + seed},
+                                                {"epoch": 2, "dev_classification_loss": 7.0}]},
             "calibration": {"threshold": 1.0 + seed, "calibration_alarm_events_per_hour": 0.1,
                             "window_exceedance_fraction": 0.01},
             "provenance": {"corpus_index_sha256": korpus}}
@@ -28,10 +34,38 @@ def far_dev(m, udalosti_h, rola="dev", final=False):
             "klasifikacia_aktivit": {"okna": {"presnost": 0.9, "f1_macro": 0.8}, "relacie": {"presnost": 1.0}}}
 
 
-@pytest.mark.parametrize("zle", [[0, 1], [1, 1], [], [-1], [1.0]])
-def test_seed_0_ani_zle_seedy_sa_netrenuju(zle, tmp_path):
+@pytest.mark.parametrize("zle", [[1, 1], [], [-1], [1.0]])
+def test_zle_seedy_sa_netrenuju(zle, tmp_path):
+    # Seed 0 je od balika B6b dovoleny (D14: balik na nasadenie ma seed 0); pozri test_seedy_z_planu_analyzy.
     with pytest.raises(ValueError):
         seedy.trenuj_seedy(tmp_path / "k.json", tmp_path / "out", zle)
+
+
+V5 = Path(__file__).resolve().parents[2] / "config/collection-v5.json"
+
+
+@pytest.mark.parametrize("schema, zadane, ocakavane", [
+    (3, None, [0, 1, 2, 3, 4]),
+    (3, [0], [0]),
+    (3, [7], "seed 7 nie je v analysis.seeds [0, 1, 2, 3, 4] protokolu schemy 3; seed mimo planu analyzy sa trenuje "
+             "iba pre diagnosticky balik (--diagnostic)"),
+    (2, None, [1, 2, 3, 4]),
+], ids=["plan", "seed_0", "mimo_planu", "legacy_schema_2"])
+def test_seedy_z_planu_analyzy(schema, zadane, ocakavane, tmp_path, monkeypatch):
+    """Balik B6b (navrh 1.6): pri scheme 3 su seedy z analysis.seeds (0 az 4, seed 0 vratane), seed mimo planu sa
+    odmietne este pred prvym treningom; schemy 1 a 2 ostavaju pri SEEDY (legacy_schema_2)."""
+    from safeguard import training
+    protokol = json.loads(V5.read_text()) if schema == 3 else {"schema": "hyptcn3/collection-protocol/2"}
+    korpus = tmp_path / "k.json"
+    korpus.write_text(json.dumps({"protocol_config": protokol}))
+    trenovane = []
+    monkeypatch.setattr(training, "train_bundle", lambda k, ciel, *, seed, **kw: trenovane.append(seed) or {})
+    if isinstance(ocakavane, str):
+        with pytest.raises(ValueError, match="^" + re.escape(ocakavane) + "$"):
+            seedy.trenuj_seedy(korpus, tmp_path / "out", zadane)
+        assert trenovane == []
+        return
+    assert list(seedy.trenuj_seedy(korpus, tmp_path / "out", zadane)) == ocakavane == trenovane
 
 
 def test_existujuci_vystup_sa_neprepise_pred_treningom(tmp_path):
