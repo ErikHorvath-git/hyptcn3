@@ -428,3 +428,75 @@ UNREACHABLE = {
 
 
 CASES = RAM_CASES + LOG_CASES
+
+
+# Package B6a (design B6a 1.5): the audit records the summary of every column (values.columns) and never makes it a
+# reason. The case: the clean session with a known matrix, accepted, recording the summary written here. In the
+# measured rows (valid, no full snapshot, with a predecessor: every row of the clean session but those at a multiple
+# of full_every) column k of BEHAVIOR_NAMES follows pattern k % 4 by the measured row's index i of n; every other
+# row holds SENTINEL, which no summary may show.
+SUMMARY_ID = "column_summary"
+SENTINEL = 10 ** 6
+PATTERNS = ("constant 7", "5 at i = 3, else 0", "i", "1 for i < n // 2, else 3")
+
+
+def _value(pattern, i, n):
+    return (7, 5 if i == 3 else 0, i, 1 if i < n // 2 else 3)[pattern]
+
+
+def known_matrix(result):
+    """A copy of the clean session's extraction result with the known values in its columns of BEHAVIOR_NAMES."""
+    from features.archive import BEHAVIOR_NAMES
+    flags = [bs.MENA.index("je_plna"), bs.MENA.index("ma_predchodcu")]
+    rows = [r for r, (good, row) in enumerate(zip(result["valid"], result["matica"]))
+            if good and [row[k] for k in flags] == [0, 1]]
+    out = copy.deepcopy(result)
+    for row in out["matica"]:
+        row[:len(BEHAVIOR_NAMES)] = [SENTINEL] * len(BEHAVIOR_NAMES)
+    for i, r in enumerate(rows):
+        out["matica"][r][:len(BEHAVIOR_NAMES)] = [_value(k % 4, i, len(rows)) for k in range(len(BEHAVIOR_NAMES))]
+    return out
+
+
+def expected_summary(p):
+    """values.columns of the known matrix under the grid of `p`, by the formulas of each pattern (std with ddof 0,
+    the mode the smallest of the most frequent values, diff_std over the n - 1 first differences)."""
+    from features.archive import BEHAVIOR_NAMES
+    n = p["cycles"] - len(range(0, p["cycles"], p["full_every"]))
+    h = n // 2
+    mean = (h + 3 * (n - h)) / n
+    one = h >= n - h  # Pattern 3: the mode is 1 unless the 3s are more.
+    step = 2 / (n - 1)  # Pattern 3: one first difference of 2 among n - 1.
+    patterns = (
+        {"min": 7.0, "max": 7.0, "mean": 7.0, "std": 0.0, "mode": 7.0, "off_mode_share": 0.0, "diff_std": 0.0},
+        {"min": 0.0, "max": 5.0, "mean": 5 / n, "std": 5 * math.sqrt(n - 1) / n, "mode": 0.0, "off_mode_share": 1 / n,
+         "diff_std": math.sqrt(50 / (n - 1))},
+        {"min": 0.0, "max": n - 1.0, "mean": (n - 1) / 2, "std": math.sqrt((n * n - 1) / 12), "mode": 0.0,
+         "off_mode_share": (n - 1) / n, "diff_std": 0.0},
+        {"min": 1.0, "max": 3.0, "mean": mean,
+         "std": math.sqrt((h * (1 - mean) ** 2 + (n - h) * (3 - mean) ** 2) / n), "mode": 1.0 if one else 3.0,
+         "off_mode_share": (n - h) / n if one else h / n, "diff_std": math.sqrt(2 * step - step * step)})
+    return {name: {"rows": n, **patterns[k % 4]} for k, name in enumerate(BEHAVIOR_NAMES)}
+
+
+def _same(recorded, expected):
+    """Equal keys, the counts equal, the other values within 1e-12 (relative and absolute: float sums)."""
+    return type(recorded) is dict and set(recorded) == set(expected) and all(
+        type(recorded[c]) is dict and set(recorded[c]) == set(expected[c])
+        and recorded[c]["rows"] == expected[c]["rows"]
+        and all(math.isclose(recorded[c][k], v, rel_tol=1e-12, abs_tol=1e-12) for k, v in expected[c].items()
+                if k != "rows")
+        for c in expected)
+
+
+def summary_case(root, p, protocol_path):
+    """The self-test's check of values.columns: {id, check, code, reasons, expected, recorded, passed}; passed when
+    the session with the known matrix is accepted with no reason and records exactly the expected summary."""
+    session = clean_session(Path(root) / SUMMARY_ID, p, protocol_path, SESSION)
+    audit = bs.audit(session, p, result=known_matrix(session.result))
+    expected = expected_summary(p)
+    recorded = audit.values.get("columns")
+    return {"id": SUMMARY_ID, "check": "B6a 1.5 summary of every column over the measured rows, recorded only",
+            "patterns": list(PATTERNS), "code": audit.code, "reasons": audit.values["reasons"], "expected": expected,
+            "recorded": recorded,
+            "passed": audit.code == 0 and audit.values["reasons"] == [] and _same(recorded, expected)}

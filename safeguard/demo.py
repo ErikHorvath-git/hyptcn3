@@ -11,6 +11,7 @@ import numpy as np
 from features.acceptance import judge
 from features.archive import load, save
 from features.coverage import ideal_windows
+from features.dataset import EVERY_SCENARIO_EVERY_GROUP
 from features.snapshot import MENA
 from .bundle import digest, load_bundle
 from .runtime import replay_archive
@@ -106,7 +107,9 @@ def create_corpus(output, *, layout=None, rows=96, window_rows=8):
                             "features_sha256": digest(archive), "start": float(times[0]),
                             "end": float(times[-1])})
     index = output / "index.json"
+    # A protocol of schema 2: its allocation rule, no plan mode (features/dataset.py, package B6a).
     write_json(index, {"schema": "hyptcn3/corpus-index/1", "complete": False,
+                       "allocation_rule": EVERY_SCENARIO_EVERY_GROUP, "plan_mode": None,
                        "diagnostic": True, "protocol": str(protocol_path),
                        "protocol_sha256": protocol_sha, "protocol_config": protocol,
                        "sessions": records})

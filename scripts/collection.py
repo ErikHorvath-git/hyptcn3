@@ -41,6 +41,7 @@ from features.quality import protocol_policy, coverage_gate, invalid_rows_rule, 
 from features.coverage import ideal_windows, scorable_windows
 from features.acceptance import assignment, flagged_seq, judge, periodic_run, protocol_reachability, spacing_mode
 from features.audit_policy import audit_bounds, exceptions_record, register, tolerate
+from features.qualification import column_summary
 from scripts.collection_logs import audit_logs
 from scripts import protocol_v5
 from lab.udalosti import CONTROLS as CONTROL_TYPES, TYPES as EVENT_TYPES
@@ -1662,6 +1663,15 @@ def analyze_windows(result, p, session, role, recorded_rows=None, counts=None):
     return rows, windows, verdict, quality
 
 
+# What values.columns records (design B6a 1.5; the lead's skeleton dokazy/B6/kostra/KOSTRA.md sections 2 and 7).
+COLUMNS_NOTE = ("Every column of features.archive.BEHAVIOR_NAMES over the session's measured rows (valid under the "
+                "protocol's quality policy, no full snapshot, with a predecessor; features/qualification.py "
+                "column_summary): rows, min, max, mean, std (ddof 0), mode (the smallest of the most frequent values), "
+                "the share of the rows off the mode and the std of the first difference of consecutive measured rows; "
+                "null where there are too few rows. A record only: never a reason of the audit and never in the "
+                "register of exceptions. For a session of a sealed role it is a statistic of the features, not a "
+                "score, and during a campaign it is read only as a quality check (proposal 10.7).")
+
 MISSING = object()  # A key the audit reads is absent; required() records the reason instead of using a default.
 
 
@@ -1879,8 +1889,10 @@ def audit_session(directory, p, protocol_path, output=None):
                                   (Path(__file__), ROOT / "scripts/collection_logs.py",
                                    ROOT / "scripts/traffic_log.py", ROOT / "scripts/host_monitor.py",
                                    ROOT / "safeguard/features.py", ROOT / "features/audit_policy.py",
-                                   ROOT / "scripts/protocol_v5.py")},
+                                   ROOT / "scripts/protocol_v5.py", ROOT / "features/qualification.py")},
               "quality": quality,
+              # Design B6a 1.5: the summary of every column, recorded only (COLUMNS_NOTE).
+              "columns": column_summary(result), "columns_note": COLUMNS_NOTE,
               "raw_bytes": total_bytes, "source_sha256": source_hashes,
               "session_sha256": digest(directory / "session.json") if native else None,
               "extractor_sha256": {str(f.relative_to(ROOT)): digest(f)

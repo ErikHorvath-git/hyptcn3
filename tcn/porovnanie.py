@@ -82,7 +82,7 @@ from safeguard.features import (GLOBAL_NAMES, LOCAL_NAMES, FeatureNormalizer, Wi
                                 arrays, check_frame, feature_contract, frames_from_archive)
 from safeguard.model import Predictor, anomaly_score, architecture, prediction_errors
 from safeguard.runtime import replay_archive
-from safeguard.training import ROLES, Windows, calibrate, validate_index
+from safeguard.training import FIT_ROLES, Windows, calibrate, validate_index
 from tcn.baselines import (GRUPrediktor, IsolationForestAnomalia, LSTMPrediktor,
                            ZScoreAnomalia, skryte_pre_prediktor, zluc_biny)
 from tcn.model import TCNPrediktor, pocet_parametrov
@@ -116,16 +116,16 @@ VZORCE = {
 
 
 def nacitaj_role(korpus, *, diagnostic=False):
-    """Roly train/dev/calibration ako Windows - tym istym postupom ako train_bundle.
+    """Roly train/dev/calibration (FIT_ROLES) ako Windows - tym istym postupom ako train_bundle.
 
-    test_benign sa nenacita (iba metadata a hashe overi validate_index).
+    Testovacie roly test_benign a test_controls sa nenacitaju (iba metadata a hashe overi validate_index).
     """
     index, protokol, zaznamy = validate_index(korpus, diagnostic)
     window_rows, max_gap = protokol["window_rows"], protokol["max_gap_s"]
-    relacie = {rola: [] for rola in ROLES[:-1]}
+    relacie = {rola: [] for rola in FIT_ROLES}
     kontrakt = None
     for zaznam in zaznamy:
-        if zaznam["role"] == "test_benign":
+        if zaznam["role"] not in FIT_ROLES:
             continue
         archiv = load_archive(zaznam["features"])
         snimky = list(frames_from_archive(archiv, zaznam["id"]))

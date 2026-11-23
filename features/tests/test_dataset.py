@@ -17,6 +17,9 @@ ROW = dict.fromkeys(MENA, 0.) | {
     "mem_entropy_mean": 4, "mem_entropy_max": 4, "mem_zero_ratio": .2, "proc_total": 20, "proc_user": 15,
     "proc_kernel": 5, "mod_total": 10, "sock_total": 4, "sock_listen": 1, "sock_estab": 3, "ma_predchodcu": 1}
 INVALID = 1  # seq of the row the tampering tests make invalid
+# The roles of the schema-2 protocol below; since package B6a dataset.ROLES also holds test_controls, a role of
+# schema 3 only.
+ROLES = ("train", "dev", "calibration", "test_benign")
 
 
 def extraction(number, invalid=None):
@@ -72,7 +75,7 @@ def record(tmp_path, role, number, boot=None):
 
 def protocol():
     return {"schema": "hyptcn3/collection-protocol/2", "quality_policy": "behavioral-inputs-v1",
-            "roles": dict.fromkeys(dataset.ROLES, 1), "scenarios": {"steady": {}},
+            "roles": dict.fromkeys(ROLES, 1), "scenarios": {"steady": {}},
             "cycles": 30, "full_every": 30, "window_rows": 3, "stride": 1, "interval_s": 5, "max_gap_s": 7.5,
             "min_score_coverage": .8}
 
@@ -110,10 +113,10 @@ def list_invalid(audit, report):
 
 
 def test_complete_corpus_keeps_prescribed_roles(tmp_path):
-    audits = [record(tmp_path, role, i) for i, role in enumerate(dataset.ROLES)]
+    audits = [record(tmp_path, role, i) for i, role in enumerate(ROLES)]
     result = dataset.build(audits, protocol(), "protocol-test")
     assert result["complete"]
-    assert [r["role"] for r in result["sessions"]] == list(dataset.ROLES)
+    assert [r["role"] for r in result["sessions"]] == list(ROLES)
 
 
 def test_boot_leak_between_train_and_calibration_is_rejected(tmp_path):
@@ -171,8 +174,8 @@ def test_index_builder_and_trainer_accept_same_collection_provenance(tmp_path):
     protocol_path = tmp_path / "protocol.json"
     protocol_path.write_text(json.dumps(config))
     protocol_sha = dataset.sha(protocol_path)
-    audits = [record(tmp_path, role, i) for i, role in enumerate(dataset.ROLES)]
-    for role, audit in zip(dataset.ROLES, audits):
+    audits = [record(tmp_path, role, i) for i, role in enumerate(ROLES)]
+    for role, audit in zip(ROLES, audits):
         metadata_path = audit.parent / "session.json"
         metadata = json.loads(metadata_path.read_text())
         metadata.update(schema="hyptcn3/collection-session/1", protocol_sha256=protocol_sha)
@@ -190,18 +193,18 @@ def test_index_builder_and_trainer_accept_same_collection_provenance(tmp_path):
     loaded, frozen_protocol, records = validate_index(index_path, diagnostic=True)
     assert loaded["complete"]
     assert frozen_protocol == config
-    assert [row["role"] for row in records] == list(dataset.ROLES)
+    assert [row["role"] for row in records] == list(ROLES)
     assert all(row["protocol_sha256"] == protocol_sha for row in records)
 
 
 def test_protocol_with_events_carries_each_sessions_events(tmp_path):
     """Protokol v4 (krok B): udalosti vo vsetkych rolach, zaznam ide do korpusu pre E2'."""
-    audits = [record(tmp_path, role, i) for i, role in enumerate(dataset.ROLES)]
+    audits = [record(tmp_path, role, i) for i, role in enumerate(ROLES)]
     config = dict(protocol(), events={"classes": {"zamok_tabulky": "chyba_aplikacie"}})
     with pytest.raises(ValueError, match="no events.json"):
         dataset.build(audits, config, "protocol-test")
-    for role in dataset.ROLES:
-        (tmp_path / f"{role}-{dataset.ROLES.index(role)}" / "events.json").write_text('{"events": []}')
+    for role in ROLES:
+        (tmp_path / f"{role}-{ROLES.index(role)}" / "events.json").write_text('{"events": []}')
     result = dataset.build(audits, config, "protocol-test")
     assert all(r["events_sha256"] == dataset.sha(r["events"]) for r in result["sessions"])
     assert "events" not in dataset.build(audits, protocol(), "protocol-test")["sessions"][0]
@@ -221,7 +224,7 @@ def test_group_names_follow_protocol_prefix(tmp_path):
 
 
 def test_tolerated_invalid_rows_enter_the_corpus_only_within_the_rule(tmp_path):
-    audits = [record(tmp_path, role, i) for i, role in enumerate(dataset.ROLES)]
+    audits = [record(tmp_path, role, i) for i, role in enumerate(ROLES)]
     path = audits[0]
     report = invalidate(path, {"truncated_traversals": ["processes"]})
     with pytest.raises(ValueError, match="incomplete features in accepted audit"):
@@ -244,7 +247,7 @@ def test_tolerated_invalid_rows_enter_the_corpus_only_within_the_rule(tmp_path):
 ], ids=["other_traversal", "two_traversals", "read_error", "filled_zero", "no_traversal"])
 def test_listed_invalid_row_with_a_cause_outside_the_rule_stays_out_of_the_corpus(tmp_path, cause):
     """The audit's list alone admits nothing: corpus building checks the cause of each invalid row itself."""
-    audits = [record(tmp_path, role, i) for i, role in enumerate(dataset.ROLES)]
+    audits = [record(tmp_path, role, i) for i, role in enumerate(ROLES)]
     path = audits[0]
     tolerant = dict(protocol(), invalid_rows={"max": 3, "traversals": ["processes"]})
     # The honest record of a tolerated row; then the archive is swapped for one whose row has another cause.

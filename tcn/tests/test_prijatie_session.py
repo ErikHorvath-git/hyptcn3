@@ -9,8 +9,9 @@ Matica sa sklada z tabuliek na zaciatku suboru: rodina protokolu (sekcia 3) -> b
 rozhodnutie, okna a dovody; rola; miesto; falosny zaznam (sekcia 8) -> sprava (sekcia 14). Kazda kombinacia je
 jedno id testu. Miesta sa volaju iba cez vstupy, ktorych podpis B2 nemeni (collection.protocol,
 collection.audit_session cez bs.audit, dataset.build, validate_index, nacitaj_role, train_bundle), takze subor
-bezi aj nad kodom pred B2 a tam zlyha tvrdenim o rozhodnuti alebo sprave. Testy samotnej funkcie (noha L10)
-dostanu features.acceptance az v tele testu cez pytest.importorskip.
+bezi aj nad kodom pred B2 a tam zlyha tvrdenim o rozhodnuti alebo sprave. Od balika B6a dostane stavba korpusu
+pod schemou 3 rezim planu (_stavba) a zaznam indexu nesie miesto svojho riadku planu (_zaznam_indexu). Testy
+samotnej funkcie (noha L10) dostanu features.acceptance az v tele testu cez pytest.importorskip.
 
 Session stavia a audituje pomocnik K0 (scripts/tests/boundary_sessions.py): realny audit_session, nahradena je
 iba extrakcia z RAM. Ocakavana strana nikdy nepochadza z produktu: okna dava orakulum bs.window_count, rozhodnutia
@@ -166,9 +167,16 @@ class _Korpus(SimpleNamespace):
         return self.stavba()[1]
 
 
+def _stavba(k, audity=None):
+    """dataset.build tak, ako ho volaju volajuci (scripts/campaign.py finish_corpus): pod schemou 3 uplnost podla
+    planu rezimu campaign, pod schemou 1 a 2 bez rezimu (balik B6a)."""
+    rezim = "campaign" if k.p["schema"] == "hyptcn3/collection-protocol/3" else None
+    return dataset.build(k.audity if audity is None else audity, k.p, k.sha, mode=rezim)
+
+
 def _index_korpusu(k):
     """Index prijateho korpusu tak, ako ho pisu volajuci: dataset.build a cesta k protokolu."""
-    doc = dataset.build(k.audity, k.p, k.sha)
+    doc = _stavba(k)
     doc["protocol"] = str(k.cesta)  # ako volajuci (scripts/campaign.py finish_corpus, dataset.main)
     return doc, _zapis(k.koren / "index.json", doc)
 
@@ -325,8 +333,9 @@ def _f1c(archiv):
 FALSIFIKATY = {"F1": lambda rel: _f1, "F1b": lambda rel: _f1b, "F1c": lambda rel: _f1c(rel.a.archive)}
 
 
-def _zaznam_indexu(cesta_auditu, sha):
-    """Zaznam indexu pre audit, s tymi poliami, ako ich features/dataset.py build odvodi zo session a archivu."""
+def _zaznam_indexu(cesta_auditu, sha, p):
+    """Zaznam indexu pre audit, s tymi poliami, ako ich features/dataset.py build odvodi zo session, archivu a planu
+    protokolu p (od balika B6a miesto riadku planu pod schemou 3, inak null)."""
     v = json.loads(Path(cesta_auditu).read_text())["values"]
     meta = Path(v["session_dir"]) / "session.json"
     m = json.loads(meta.read_text())
@@ -338,7 +347,10 @@ def _zaznam_indexu(cesta_auditu, sha):
             "seed": m["seed"], "start": float(casy[0]), "end": float(casy[-1]),
             "audit": str(Path(cesta_auditu).resolve()), "audit_sha256": _sha(cesta_auditu),
             "features": str(Path(v["features"]).resolve()), "features_sha256": _sha(v["features"]),
-            "log_audit": "repeated"}  # kazda session testu ma svoje logy, stavba audit logov zopakuje (B3)
+            "log_audit": "repeated",  # kazda session testu ma svoje logy, stavba audit logov zopakuje (B3)
+            "position": next((s["position"] for s in bs.places(p) if (s["role"], s["group"], s["scenario"], s.get("vm"))
+                              == (m["role"], m["group"], m["scenario"], m.get("vm"))), None)
+            if p["schema"] == "hyptcn3/collection-protocol/3" else None}
 
 
 def _index_s(k, nahrady, ciel):
@@ -347,7 +359,7 @@ def _index_s(k, nahrady, ciel):
     zaznamy = {r["id"]: r for r in doc["sessions"]}
     for rola, cesta in nahrady.items():
         del zaznamy[k.cisty[rola].s.directory.name]
-        novy = _zaznam_indexu(cesta, k.sha)
+        novy = _zaznam_indexu(cesta, k.sha, k.p)
         zaznamy[novy["id"]] = novy
     doc["sessions"] = sorted(zaznamy.values(), key=lambda r: r["start"])
     return _zapis(ciel, doc)
@@ -361,7 +373,7 @@ def _audity_s(k, nahrady):
 def _na_mieste(k, miesto, nahrady, tmp_path):
     """Zavola miesto nad prijatym korpusom, v ktorom miesta podvrhu roli z `nahrady` nesu dane zaznamy."""
     if miesto == "build":
-        return dataset.build(_audity_s(k, nahrady), k.p, k.sha)
+        return _stavba(k, _audity_s(k, nahrady))
     index = _index_s(k, nahrady, tmp_path / "index.json")
     if miesto == "validate_index":
         return validate_index(index)
@@ -548,7 +560,7 @@ def test_rola_mimo_protokolu_u_spotrebitelov(korpusy, miesto, tmp_path):
     if miesto == "build":
         rel = _relacia_mimo(tmp_path, k.p, k.cesta, "holdout")
         zaznam = _sfalsuj(rel, tmp_path / "audit.json", _f1b)
-        _odmietne(MIMO_KORPUSU, lambda: dataset.build(_audity_s(k, {"train": zaznam}), k.p, k.sha))
+        _odmietne(MIMO_KORPUSU, lambda: _stavba(k, _audity_s(k, {"train": zaznam})))
         return
     doc = json.loads(k.index.read_text())
     zmenene = [z for z in doc["sessions"] if z["id"] == k.cisty["train"].s.directory.name]
@@ -584,7 +596,7 @@ def test_l2b_stavba_neodmietne_prijaty_korpus(korpusy, rodina):
     zaznam nesie rolu svojej session."""
     k = korpusy(rodina)
     try:
-        doc = dataset.build(k.audity, k.p, k.sha)
+        doc = _stavba(k)
     except ValueError as chyba:
         pytest.fail("stavba odmietla korpus prijatych session: " + str(chyba))
     assert (doc["complete"], doc["allocation_mismatches"]) == (True, [])
@@ -676,7 +688,7 @@ def test_l7_f2_dvojca(korpusy, rodina, rola, miesto, tmp_path):
     if miesto == "build":
         assert vysledok["complete"] is True
         assert [z for z in vysledok["sessions"] if z["audit"] == str(nahrady[rola].resolve())] == \
-               [_zaznam_indexu(nahrady[rola], k.sha)]
+               [_zaznam_indexu(nahrady[rola], k.sha, k.p)]
     elif miesto == "validate_index":
         assert str(nahrady[rola].resolve()) in [z["audit"] for z in vysledok[2]]
     else:
@@ -759,7 +771,7 @@ def test_l9_kladna_kontrola(korpusy, rodina, rola, miesto, tmp_path):
     sid = rel.s.directory.name
     if miesto == "build":
         assert vysledok["complete"] is True
-        assert [z for z in vysledok["sessions"] if z["id"] == sid] == [_zaznam_indexu(rel.a.path, k.sha)]
+        assert [z for z in vysledok["sessions"] if z["id"] == sid] == [_zaznam_indexu(rel.a.path, k.sha, k.p)]
     elif miesto == "validate_index":
         ids = [z["id"] for z in vysledok[2]]
         assert sid in ids and k.cisty[rola].s.directory.name not in ids
@@ -798,7 +810,7 @@ def test_dvojca_f1b_prijateho_zaznamu(korpusy, rodina, miesto, tmp_path):
         assert vysledok["complete"] is True
         for rola in ROLY:
             sid = k.navyse[("k1", rola)].s.directory.name
-            assert [z for z in vysledok["sessions"] if z["id"] == sid] == [_zaznam_indexu(nahrady[rola], k.sha)]
+            assert [z for z in vysledok["sessions"] if z["id"] == sid] == [_zaznam_indexu(nahrady[rola], k.sha, k.p)]
     elif miesto == "validate_index":
         ids = [z["id"] for z in vysledok[2]]
         for rola in ROLY:
@@ -863,7 +875,7 @@ def test_l10a_strazca(korpusy, miesto, monkeypatch, tmp_path):
         assert (a.code, a.values["accepted"]) == (0, True)
         assert rel.s.directory.name in archivy
     elif miesto == "build":
-        assert dataset.build(k.audity, k.p, k.sha)["complete"] is True
+        assert _stavba(k)["complete"] is True
         mena = {Path(a).parent.name for a in k.audity}  # adresar session = jej id (pomocnik K0)
         assert len(mena) == len(k.audity) and set(archivy) >= mena
     elif miesto == "validate_index":

@@ -1275,11 +1275,17 @@ def finish_corpus(directory, manifest, p, reports):
     from features.dataset import build
     update_state(directory, vm=vm, status="running", stage="index", accepted_archived=len(reports))
     index = directory / "corpus.json"
-    doc = build(reports, p, manifest["protocol_sha256"])
+    # The completeness of the plan the campaign ran (package B6a): collection.plan, under schema 3 the plan of mode
+    # campaign (load_campaign holds the manifest to it); schemas 1 and 2 keep their rule and have no mode.
+    mode = "campaign" if p.get("schema") == collection.protocol_v5.SCHEMA else None
+    doc = build(reports, p, manifest["protocol_sha256"], mode=mode)
     doc["protocol"] = str(directory / "protocol.json")
     doc.update(continuation_note(manifest))
     if not doc["complete"]:
-        raise ValueError("campaign ended without a complete corpus allocation")
+        mismatches = doc["allocation_mismatches"]  # Each with its reason (features/dataset.py build).
+        raise ValueError("campaign ended without a complete corpus allocation: "
+                         + "; ".join(json.dumps(x, sort_keys=True) for x in mismatches[:3])
+                         + (f"; and {len(mismatches) - 3} more" if len(mismatches) > 3 else ""))
     if index.exists():
         if read_json(index) != doc:
             raise ValueError("existing corpus index differs")

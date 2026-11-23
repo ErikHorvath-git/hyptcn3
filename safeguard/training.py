@@ -21,14 +21,14 @@ from torch import nn
 
 from features.archive import load as load_archive
 from features.acceptance import require_accepted, require_recorded
+# One list of the roles for the index builder and training (package B6a); FIT_ROLES are the roles training loads.
+from features.dataset import FIT_ROLES, ROLES, allocation, chronology, named, row_key
 from features.quality import BEHAVIOR_POLICY, protocol_policy
 from .bundle import SCHEMA, digest
 from .features import (FeatureNormalizer, WindowBuffer, arrays, check_frame,
                        feature_contract, frames_from_archive)
 from .model import (Classifier, Predictor, SCORE_FORMULA, LOSS_FORMULA,
                     anomaly_score, architecture, prediction_errors)
-
-ROLES = ("train", "dev", "calibration", "test_benign")
 
 
 def _json(path):
@@ -77,6 +77,15 @@ def validate_index(path, diagnostic=False):
         raise ValueError("corpus protocol checksum/configuration mismatch")
     if protocol_policy(protocol) != BEHAVIOR_POLICY:
         raise ValueError("safeguard training requires the behavioral input protocol")
+    # The rule the index was built under (design B6a 1.3): the plan of its mode under schema 3, every scenario in
+    # every group under schemas 1 and 2. An index that states another rule, or none, is refused.
+    try:
+        rule, roles, rows = allocation(protocol, doc.get("plan_mode"))
+    except ValueError as error:
+        raise ValueError("corpus index allocation: " + str(error)) from None
+    if doc.get("allocation_rule") != rule:
+        raise ValueError(f"corpus index states allocation rule {doc.get('allocation_rule')!r}; its protocol and plan "
+                         f"mode give {rule}")
     records = copy.deepcopy(doc["sessions"])
     if not records:
         raise ValueError("empty corpus")
@@ -85,7 +94,7 @@ def validate_index(path, diagnostic=False):
     layouts, extractors, environments, profiles = set(), set(), set(), set()
     for record in records:
         role, group, boot = record["role"], record["group"], record["boot_id"]
-        if role not in ROLES or record.get("typ") != "benign":
+        if role not in roles or record.get("typ") != "benign":
             raise ValueError("only explicit benign corpus roles are accepted")
         if not all(isinstance(value, str) and value for value in (record["id"], group, boot, record["scenario"])):
             raise ValueError("missing session identity")
@@ -121,6 +130,8 @@ def validate_index(path, diagnostic=False):
                 raise ValueError("index/session mismatch: " + key)
         if meta.get("session_id") != record["id"] or meta["guest_before"]["boot_id"] != boot:
             raise ValueError("index/session identity mismatch")
+        if meta.get("vm") != record.get("vm"):  # The VM names the planned row as well (design B6a 1.2).
+            raise ValueError("index/session mismatch: vm")
         if not diagnostic and (meta.get("diagnostic") or audit["values"].get("diagnostic")):
             raise ValueError("diagnostic artifacts cannot be used in production training")
         values = audit["values"]
@@ -151,21 +162,46 @@ def validate_index(path, diagnostic=False):
     if not diagnostic:
         _validate_current_semantics(json.loads(next(iter(extractors))),
                                     json.loads(next(iter(profiles))), protocol)
-    for role in ROLES:
-        selected = [r for r in records if r["role"] == role]
-        if not selected:
+    # Every role the plan gives sessions (schemas 1 and 2: each of their four roles) is present.
+    for role in roles if rows is None else [role for role in roles if any(row["role"] == role for row in rows)]:
+        if not any(r["role"] == role for r in records):
             raise ValueError("missing corpus role: " + role)
-        if not diagnostic:
-            # Same group names as scripts/collection.py plan and features/dataset.py build.
-            prefix = protocol.get("group_prefix", "")
+    if rows is not None:
+        _check_plan(records, rows, rule, diagnostic)
+    elif not diagnostic:
+        # Same group names as scripts/collection.py plan and features/dataset.py build.
+        prefix = protocol.get("group_prefix", "")
+        for role in roles:
             expected = {f"{prefix}{role}-{i + 1}" for i in range(protocol["roles"][role])}
             for scenario in protocol["scenarios"]:
-                if {r["group"] for r in selected if r["scenario"] == scenario} != expected:
-                    raise ValueError("incomplete planned allocation")
-    for left, right in zip(ROLES, ROLES[1:]):
-        if max(r["end"] for r in records if r["role"] == left) >= min(r["start"] for r in records if r["role"] == right):
-            raise ValueError("corpus roles must be chronologically separated")
+                if {r["group"] for r in records if r["role"] == role and r["scenario"] == scenario} != expected:
+                    raise ValueError(f"incomplete planned allocation: groups of role {role} with scenario {scenario} "
+                                     f"differ from {rule}")
+    late = chronology(records)
+    if late is not None:
+        raise ValueError(f"corpus roles must be chronologically separated: {late[0]['role']} session {late[0]['id']} "
+                         f"ends after {late[1]['role']} session {late[1]['id']} starts")
     return doc, protocol, records
+
+
+def _check_plan(records, rows, rule, diagnostic):
+    """The sessions of a schema-3 index against the planned rows of its mode (design B6a 1.3): every session holds
+    one row, matched by (role, group, scenario, vm), and carries its position; production training also needs a
+    session for every row. A row with two sessions is a duplicate group/scenario assignment of validate_index."""
+    planned = {row_key(row): row for row in rows}
+    held = set()
+    for record in records:
+        row = planned.get(row_key(record))
+        if row is None:
+            raise ValueError(f"incomplete planned allocation: session {named(record)} holds no row of {rule}")
+        if record.get("position") != row["position"]:
+            raise ValueError(f"index/plan mismatch: position of session {record['id']} is {record.get('position')!r}, "
+                             f"its row {row['label']} has {row['position']}")
+        held.add(row["label"])
+    missing = [row for row in rows if row["label"] not in held]
+    if missing and not diagnostic:
+        raise ValueError(f"incomplete planned allocation: planned session {named(missing[0])} of {rule} has no "
+                         "session")
 
 
 class Windows:
@@ -281,11 +317,11 @@ def train_bundle(corpus_path, output_dir, *, window_rows=32, max_gap_s=7.5,
     index, protocol, records = validate_index(corpus_path, diagnostic)
     if window_rows != protocol["window_rows"] or max_gap_s != protocol["max_gap_s"]:
         raise ValueError("training temporal settings differ from frozen protocol")
-    sessions = {role: [] for role in ROLES[:-1]}
+    sessions = {role: [] for role in FIT_ROLES}
     contract = None
     for record in records:
-        if record["role"] == "test_benign":
-            continue  # No array/statistic from final test enters fitting.
+        if record["role"] not in FIT_ROLES:
+            continue  # No array/statistic of a test role (test_benign, test_controls) enters fitting.
         archive = load_archive(record["features"])
         frames = list(frames_from_archive(archive, record["id"]))
         if not frames or frames[0].timestamp != record["start"] or frames[-1].timestamp != record["end"]:

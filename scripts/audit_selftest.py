@@ -8,8 +8,9 @@ scripts/tests/audit_cases.py (CASES) and audits each with the real scripts/colle
 collection.retazec, the feature extraction from guest RAM, is replaced by the synthetic extraction result of the
 session; the record says so. The record (data/results/audit_selftest_<UTC stamp>.json unless --out names
 another file; never overwritten) binds the protocol file, the measurement code (as scripts/gates.py) and the case
-files by SHA-256. Exit 0 when the clean session is accepted and every case is refused (code 2) with exactly its
-expected reasons, else 2.
+files by SHA-256. Exit 0 when the clean session is accepted, every case is refused (code 2) with exactly its
+expected reasons and the clean session with a known matrix is accepted and records the summary of every column that
+audit_cases.py writes (summary, package B6a), else 2.
 
 require_selftest() is what scripts/collection.py run asks before every capture: no session is collected without
 a passed record for the current code and protocol.
@@ -87,9 +88,13 @@ def run(protocol_path, work):
             entry.update(reasons=None, code=None, passed=False, error=f"{type(error).__name__}: {error}"[:500])
         shutil.rmtree(Path(work) / case.id.replace("/", "_"), ignore_errors=True)  # The work directory may be a tmpfs.
         out.append(entry)
+    # Package B6a (design B6a 1.5): the summary of every column of a known matrix, recorded and never a reason.
+    summary = audit_cases.summary_case(work, p, protocol_path)
+    shutil.rmtree(Path(work) / audit_cases.SUMMARY_ID, ignore_errors=True)
     clean_entry = {"code": clean.code, "reasons": clean.values["reasons"]}
-    return {"clean": clean_entry, "cases": out, "unreachable": dict(audit_cases.UNREACHABLE),
-            "passed": clean.code == 0 and clean.values["reasons"] == [] and all(c["passed"] for c in out)}
+    return {"clean": clean_entry, "cases": out, "summary": summary, "unreachable": dict(audit_cases.UNREACHABLE),
+            "passed": clean.code == 0 and clean.values["reasons"] == [] and all(c["passed"] for c in out)
+            and summary["passed"]}
 
 
 # The provenance every record of data/results carries (scripts/check_claims.sh, check E: commit, date, host,

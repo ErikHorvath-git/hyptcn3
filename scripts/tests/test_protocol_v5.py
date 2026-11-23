@@ -202,8 +202,39 @@ def k2a_without_z4(doc):
 
 
 def null_outside(doc):
-    doc["determined_at"]["G3a"].remove("analysis.column_mask")
-    return {"analysis": ["null outside determined_at: analysis.column_mask"]}
+    """Package B6a renamed analysis.column_mask to analysis.columns (design B6a 1.1); it stays null until G3a."""
+    doc["determined_at"]["G3a"].remove("analysis.columns")
+    return {"analysis": ["null outside determined_at: analysis.columns"]}
+
+
+# Package B6a (design B6a 1.1): one deliberate error in each key it adds to the analysis plan; the loader refuses the
+# section, every other check gives what it gives for the real file.
+INVALID_ANALYSIS = {"loader": ["protocol(): invalid analysis"]}
+
+
+def identity_auc_half(doc):
+    """max(AUC, 1 - AUC) is at least 0.5: a bound of 0.5 fails every column (it must lie in (0.5, 1))."""
+    doc["analysis"]["qualification"]["identity_auc"] = .5
+    return INVALID_ANALYSIS
+
+
+def differenced_outside_levels(doc):
+    """The classes of G3a: only a level column may be replaced by its first difference."""
+    from features.archive import BEHAVIOR_NAMES
+    doc["analysis"]["columns"] = dict(dict.fromkeys(BEHAVIOR_NAMES, "neural"), mem_changed_ratio="differenced")
+    return INVALID_ANALYSIS
+
+
+def floor_without_a_column(doc):
+    """The scale floor names each of the 20 columns."""
+    del doc["analysis"]["scale"]["floor"]["proc_total"]
+    return INVALID_ANALYSIS
+
+
+def receptive_field_short(doc):
+    """Three blocks of kernel 3 see 1 + 2 x 2 x 7 = 29 rows, fewer than the window of 32 (tcn/model.py)."""
+    doc["analysis"]["architecture"]["blocks"] = 3
+    return INVALID_ANALYSIS
 
 
 def rehearsal_name(doc):
@@ -852,7 +883,10 @@ FILE_CASES = {f.__name__: f for f in (unknown_key, missing_key, gate_085, max_7,
                                       # Package B4b, F1 of its verification.
                                       two_events_per_session, no_event_free_session,
                                       # Package B8: the controls section and the lab's register of its kinds.
-                                      module_without_candidates, dose_unknown_to_lab, per_dose_short)}
+                                      module_without_candidates, dose_unknown_to_lab, per_dose_short,
+                                      # Package B6a: the keys of the analysis plan it adds.
+                                      identity_auc_half, differenced_outside_levels, floor_without_a_column,
+                                      receptive_field_short)}
 PLAN_CASES = {f.__name__: f for f in (no_group_on_vm, equal_scenarios, twice_at_position, two_events, start_in_guard,
                                       locked_to_grid, common_seed, control_relabelled, control_slot_emptied,
                                       event_free_first, group_of_two, seed_field,
@@ -1135,3 +1169,68 @@ def test_a_rehearsal_deals_a_card_a_prefix_of_its_kinds_doses():
     y["dose"] = x["dose"]
     assert protocol_v5.check_controls(doc, plan) == [
         f"rehearsal plan: control {kind}/{polarity}: dose counts differ by more than 1"]
+
+
+# Package B6a: the keys of the analysis plan of design B6a 1.1. The layout knows every key, and the value check every
+# rule of each: one bad input per rule, and the good input of a filled analysis.columns (G3a).
+
+def _at(path, value=KeyError):
+    """A change of the analysis section: the value at the dotted `path` below it, or the key removed (KeyError)."""
+    def change(a):
+        *parents, key = path.split(".")
+        for name in parents:
+            a = a[name]
+        if value is KeyError:
+            del a[key]
+        else:
+            a[key] = value
+    return change
+
+
+def _classes(**classes):
+    from features.archive import BEHAVIOR_NAMES
+    return dict(dict.fromkeys(BEHAVIOR_NAMES, "neural"), **classes)
+
+
+@pytest.mark.parametrize("change, reason", [
+    (lambda a: a.update(columns=_classes(mod_total="rule", sock_total="differenced", proc_kernel="dropped")), None),
+    (_at("architecture.kernel"), "missing protocol key: analysis.architecture.kernel"),
+    (_at("architecture.channels", 1025), "invalid analysis"),
+    (_at("architecture.kernel", 16), "invalid analysis"),
+    (_at("architecture.blocks", 13), "invalid analysis"),
+    (_at("architecture.dropout", 1), "invalid analysis"),
+    (_at("architecture.weight_norm", 0), "invalid analysis"),
+    (_at("architecture.learning_rate", 0), "invalid analysis"),
+    (_at("architecture.gradient_clip", -5), "invalid analysis"),
+    (_at("architecture.classifier_gradient_clip", 0), "invalid analysis"),
+    (_at("architecture.batch_size", 32.0), "invalid analysis"),
+    (_at("qualification.strata", ["profile", "position"]), "unknown protocol key: analysis.qualification.strata"),
+    (_at("qualification.near_constant_share", 1), "invalid analysis"),
+    (_at("qualification.duplicate_tolerance", 0), "invalid analysis"),
+    (_at("qualification.level_columns", ["proc_total", "ma_predchodcu"]), "invalid analysis"),
+    (_at("qualification.level_columns", ["proc_total", "proc_total"]), "invalid analysis"),
+    (_at("scale.floor"), "missing protocol key: analysis.scale.floor"),
+    (_at("scale.per_bin", "yes"), "invalid analysis"),
+    (_at("scale.min_bin_pages", 0), "invalid analysis"),
+    (_at("scale.floor.mem_changed_ratio", 0), "invalid analysis"),
+    (_at("scale.local_floor.has_changed", 1), "invalid analysis"),
+    (_at("column_mask", None), "unknown protocol key: analysis.column_mask"),
+    (lambda a: a.update(columns={k: v for k, v in _classes().items() if k != "proc_memfd"}), "invalid analysis"),
+    (lambda a: a.update(columns=_classes(mod_total="rule channel")), "invalid analysis"),
+], ids=["columns_of_g3a", "no_kernel", "channels", "kernel", "blocks", "dropout", "weight_norm", "learning_rate",
+        "gradient_clip", "classifier_gradient_clip", "batch_size", "unknown_key", "near_constant_share",
+        "duplicate_tolerance", "level_not_a_column", "level_twice", "no_floor", "per_bin", "min_bin_pages",
+        "floor_not_positive", "local_floor_of_the_mask", "old_name", "columns_missing_one", "unknown_class"])
+def test_the_loader_knows_every_key_and_value_of_the_analysis_plan_of_b6a(change, reason):
+    """Design B6a 1.1: analysis.qualification and analysis.scale (G0), analysis.columns (null until G3a, then exactly
+    the 20 columns of features.archive.BEHAVIOR_NAMES, each neural, rule, differenced or dropped) and
+    analysis.architecture with the TCN of the thesis and its optimizer, bounded as safeguard/model.py builds it."""
+    from scripts import protocol_v5
+    doc = json.loads(V5.read_text())
+    change(doc["analysis"])
+    if reason is None:
+        protocol_v5.check_layout(doc)
+    else:
+        with pytest.raises(ValueError) as refused:
+            protocol_v5.check_layout(doc)
+        assert str(refused.value) == reason

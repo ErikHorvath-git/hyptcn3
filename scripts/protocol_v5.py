@@ -10,6 +10,8 @@ scripts/host_traffic.py reads the profiles section through profiles_problems():
     plan(p, mode)                  the schedule of a campaign or of its rehearsal (a mode of the same file)
     replacement(p, session, n)     attempt n of a planned session: the same assignment and tenths of its phases, new
                                    times and traffic seeds
+    planned_rows(p, mode)          one row per planned session, the rows the corpus index and training match accepted
+                                   sessions to (package B6a)
     plans_events(p)                whether its sessions list events and keep events.json (log audit, corpus build)
     analysis_plan(p)               the analysis plan the training and the evaluation read (B6, B7)
     selfcheck(path, mode, stage)   every check of the self-check on the file and on its plan, and summary(p, plan):
@@ -26,6 +28,12 @@ states its class, its doses and the occurrences per dose (class B), the feature 
 expected shift of each, and the module kind its candidates; controls.baseline is the tolerance of the level part of
 the return predicate (null until G2). The plan deals every control of class B a dose: each dose has its count among
 the kind's controls and the same among its negatives, and within 1 on every VM.
+
+Package B6a (the lead's skeleton dokazy/B6/kostra/KOSTRA.md section 2, design B6a 1.1): analysis.qualification holds
+the bounds of the qualification of the feature columns (features/qualification.py, proposal 8.1), analysis.columns
+the class of each of the 20 columns of features.archive.BEHAVIOR_NAMES (null until G3a; it replaces
+analysis.column_mask), analysis.scale the scale rule of the normalizer and analysis.architecture the TCN of the
+thesis with its optimizer; the training of package B6b reads them.
 """
 from collections import Counter
 import copy
@@ -127,10 +135,16 @@ def _fixed(*keys, **inner):
 
 _TEST = _fixed("statistic", "compare", "m", "rule")
 _INTERVENTION = _fixed("lengths", "per_boot")
+# Package B6a (design B6a 1.1): the bounds of the qualification of the feature columns (G0), the class of each of
+# the 20 columns (analysis.columns, null until G3a, which replaces analysis.column_mask), the scale rule of the
+# normalizer (G0) and, in architecture, the TCN of the thesis with its optimizer (G0).
 ANALYSIS = _fixed(
-    "seeds", "deploy_seed", "fpr", "selection", "column_mask", "horizon_s", "reverberation_s", "min_occurrences",
+    "seeds", "deploy_seed", "fpr", "selection", "columns", "horizon_s", "reverberation_s", "min_occurrences",
     "note",
-    architecture=_fixed("model", "window_rows", "note"),
+    architecture=_fixed("model", "window_rows", "kernel", "blocks", "channels", "dropout", "weight_norm",
+                        "learning_rate", "gradient_clip", "classifier_gradient_clip", "batch_size", "note"),
+    qualification=_fixed("near_constant_share", "identity_auc", "duplicate_tolerance", "level_columns", "note"),
+    scale=_fixed("per_bin", "min_bin_pages", "floor", "local_floor", "note"),
     stopping=_fixed("rule", "patience_epochs", "max_epochs", "repeat_if_last_epoch", "note"),
     alarm_rule=_fixed("k", "n"),
     methods={name: _fixed("what", "grid") for name in METHODS},
@@ -500,12 +514,58 @@ def _ok_streams(p):
             and set(purposes) == set(PURPOSES) and _text(s["rule"]) and type(s["note"]) is str)
 
 
+def _receptive_field(kernel, blocks):
+    """The receptive field of the TCN in rows (tcn/model.py recepcne_pole): two convolutions per block, dilations 1,
+    2, ..., 2^(blocks - 1)."""
+    return 1 + 2 * (kernel - 1) * (2 ** blocks - 1)
+
+
+def _ok_architecture(p, arch):
+    """The TCN of analysis.architecture can be built on the collection window: the bounds of
+    safeguard/model.py validate_architecture (channels, kernel and blocks integers in [1, 1024], kernel at most 15,
+    blocks at most 12, dropout in [0, 1), a receptive field of at least window_rows), weight normalization on or
+    off, and positive learning rate, clipping norms and batch size."""
+    if not all(type(arch[key]) is int and 1 <= arch[key] <= 1024 for key in ("kernel", "blocks", "channels")):
+        return False
+    return (_text(arch["model"]) and _count(arch["window_rows"], 1) and arch["window_rows"] == p["window_rows"]
+            and arch["kernel"] <= 15 and arch["blocks"] <= 12
+            and _receptive_field(arch["kernel"], arch["blocks"]) >= arch["window_rows"]
+            and _number(arch["dropout"]) and 0 <= arch["dropout"] < 1 and type(arch["weight_norm"]) is bool
+            and all(_positive(arch[key]) for key in ("learning_rate", "gradient_clip", "classifier_gradient_clip"))
+            and _positive_int(arch["batch_size"]) and type(arch["note"]) is str)
+
+
+def _floors(value, names):
+    """An object with exactly `names` as keys, each a positive number."""
+    return type(value) is dict and set(value) == set(names) and all(map(_positive, value.values()))
+
+
+def _ok_qualification(a):
+    """Design B6a 1.1: the bounds of the qualification (G0), the scale rule (G0) and the classes of the columns
+    (null until G3a; a differenced column is a level column)."""
+    from features.archive import BEHAVIOR_NAMES  # Here: the generator imports this module and needs no feature code.
+    from features.qualification import CLASSES, LOCAL_SCALED
+    q, s, columns = a["qualification"], a["scale"], a["columns"]
+    levels = q["level_columns"]
+    if not (_number(q["near_constant_share"]) and 0 < q["near_constant_share"] < 1
+            and _number(q["identity_auc"]) and .5 < q["identity_auc"] < 1
+            and _number(q["duplicate_tolerance"]) and 0 < q["duplicate_tolerance"] < 1
+            and type(levels) is list and all(name in BEHAVIOR_NAMES for name in levels)
+            and len(set(levels)) == len(levels) and type(q["note"]) is str):
+        return False
+    if not (type(s["per_bin"]) is bool and _positive_int(s["min_bin_pages"]) and _floors(s["floor"], BEHAVIOR_NAMES)
+            and _floors(s["local_floor"], LOCAL_SCALED) and type(s["note"]) is str):
+        return False
+    return columns is None or (type(columns) is dict and set(columns) == set(BEHAVIOR_NAMES) and all(
+        type(cls) is str and cls in CLASSES and (cls != "differenced" or name in levels)
+        for name, cls in columns.items()))
+
+
 def _ok_analysis(p):
     a = p["analysis"]
     arch, stop, rule = a["architecture"], a["stopping"], a["alarm_rule"]
     seeds = a["seeds"]
-    if not (_text(arch["model"]) and _count(arch["window_rows"], 1) and arch["window_rows"] == p["window_rows"]
-            and type(arch["note"]) is str):
+    if not _ok_architecture(p, arch):
         return False
     if not (_text(stop["rule"]) and _count(stop["patience_epochs"], 1) and _count(stop["max_epochs"], 1)
             and _text(stop["repeat_if_last_epoch"]) and type(stop["note"]) is str):
@@ -519,8 +579,7 @@ def _ok_analysis(p):
     if not all(type(m) is dict and _text(m["what"]) and (m["grid"] is None or type(m["grid"]) is dict)
                for m in a["methods"].values()):
         return False
-    mask = a["column_mask"]
-    if not (_text(a["selection"]) and (mask is None or type(mask) is list and all(map(_text, mask)))):
+    if not (_text(a["selection"]) and _ok_qualification(a)):
         return False
     for name in ("k1", "k2a", "k2b"):
         t = a[name]
@@ -1138,6 +1197,26 @@ def replacement(p, session, attempt, *, mode="campaign"):
         tenths = [item_tenths(p, x) for x in session["events"]]
         out["events"] = _items(p, session["role"], [x["type"] for x in session["events"]], tenths, rng)
     return out
+
+
+def planned_rows(p, mode):
+    """One row per planned session of a schema-3 protocol in this mode, in the plan's order (design B6a 1.2):
+    {label, role, group, position, scenario, vm}, read from plan(p, mode); vm is None for a protocol of one unnamed
+    VM. The mode has no default: "campaign" or "rehearsal" (whose groups take rehearsal.group_prefix). A replacement
+    keeps role, group, position, scenario and vm (replacement()), and no group repeats a scenario, so the corpus
+    index (features/dataset.py) and training (safeguard/training.py) match an accepted session to its row by
+    (role, group, scenario, vm). ValueError for another schema, an unknown mode, or a plan in which that key repeats."""
+    if type(p) is not dict or p.get("schema") != SCHEMA:
+        raise ValueError("planned rows require protocol schema 3")
+    if mode not in MODES:
+        raise ValueError("unknown plan mode: " + str(mode))
+    rows = [{"label": _label(s), "role": s["role"], "group": s["group"], "position": s["position"],
+             "scenario": s["scenario"], "vm": s.get("vm")} for s in plan(p, mode)["sessions"]]
+    seen = Counter((r["role"], r["group"], r["scenario"], r["vm"]) for r in rows)
+    repeated = [f"{group} repeats scenario {scenario}" for (_, group, scenario, _), n in seen.items() if n > 1]
+    if repeated:
+        raise ValueError("planned rows cannot be matched: group " + repeated[0])
+    return rows
 
 
 # ------------------------------------------------------------------ the self-check

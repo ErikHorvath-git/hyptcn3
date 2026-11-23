@@ -528,7 +528,16 @@
     "architecture": {
       "model": "safeguard/model.py TCN",
       "window_rows": 32,
-      "note": "The TCN of the current code (proposal 10.1 point 3) on the collection window."
+      "kernel": 3,
+      "blocks": 4,
+      "channels": 16,
+      "dropout": 0.1,
+      "weight_norm": false,
+      "learning_rate": 0.001,
+      "gradient_clip": 5,
+      "classifier_gradient_clip": 5,
+      "batch_size": 32,
+      "note": "The TCN of the thesis on the collection window (proposal 10.1 point 3): kernel 3, four blocks of 16 channels, dropout 0.1, no weight normalization (SULAD_S_TEXTOM_PRACE table 1, row TCN; safeguard/model.py architecture() at 32 rows), a receptive field of 61 rows (tcn/model.py). learning_rate 0.001, gradient_clip 5 (the norm of one clip_grad_norm_ of the predictor) and batch_size 32 are today's constants of safeguard/training.py, and classifier_gradient_clip 5 is the classifier head's own clipping norm (proposal 8.2: the head is separated from the predictor's training), the same number (judgment). The training of package B6b reads every key."
     },
     "stopping": {
       "rule": "best dev loss, patience",
@@ -581,7 +590,57 @@
       }
     },
     "selection": "One procedure on dev for every method with free parameters: the grid point with the best value of the method's own criterion on dev (prediction loss for Z3, Z5 and M; alarms per observed hour at the matched threshold for Z1, Z2 and Z4), ties to the first grid point; never on a test role (author's judgment, proposal 8.3).",
-    "column_mask": null,
+    "qualification": {
+      "near_constant_share": 0.01,
+      "identity_auc": 0.75,
+      "duplicate_tolerance": 1e-09,
+      "level_columns": [
+        "mem_zero_ratio",
+        "proc_total",
+        "proc_user",
+        "proc_kernel",
+        "mod_total",
+        "sock_total",
+        "sock_listen",
+        "sock_estab",
+        "proc_wx",
+        "proc_memfd"
+      ],
+      "note": "Proposal 8.1 and the lead's skeleton dokazy/B6/kostra/KOSTRA.md section 3; features/qualification.py applies them to the rows of train and dev and proposes analysis.columns. near_constant_share 0.01 (a column with fewer than 1 % of its rows off the mode is near-constant, the rule channel) and identity_auc 0.75 (a column fails when max(AUC, 1 - AUC) of its value alone exceeds it when one group is told from the other groups, one VM from the other or the first half of the session order from the second, within a stratum of profile and position) are the lead's judgment (skeleton section 3, proposal 10.9). duplicate_tolerance 1e-9 is the smallest singular value over the largest at or below which the rank test of the standardized columns takes a column for an exact linear combination of those kept before it (judgment: the float64 round-off of that test is of order rows x 2.2e-16, 2.2e-11 at 1e5 rows, while a column one unit off an exact combination in one row of 1e6 leaves about 1e-3, so 1e-9 lies orders of magnitude from both). level_columns are the columns that state the level of a state rather than the change in one interval, replaced by their first difference when they fail the identity test (judgment from their definitions in features/snapshot.py): the counts of processes, modules, sockets and processes with W+X or memfd pages, and mem_zero_ratio, the share of zero pages of the whole memory (the collector counts them over every page it reads, vmicollect/src/perbin.c and writer_delta.c; proposal 2.2 calls it a level column); proc_new, proc_gone, mod_delta and the other memory columns are changes within the interval."
+    },
+    "columns": null,
+    "scale": {
+      "per_bin": true,
+      "min_bin_pages": 1024,
+      "floor": {
+        "mem_changed_ratio": 1.9071121935032316e-06,
+        "mem_bins_active": 0.007692307692307693,
+        "mem_changed_max": 0.000244140625,
+        "mem_changed_p95": 0.000244140625,
+        "mem_changed_spread": 1e-06,
+        "mem_entropy_mean": 1e-06,
+        "mem_entropy_max": 1e-06,
+        "mem_zero_ratio": 1.9071121935032316e-06,
+        "proc_total": 1,
+        "proc_user": 1,
+        "proc_kernel": 1,
+        "proc_new": 1,
+        "proc_gone": 1,
+        "mod_total": 1,
+        "mod_delta": 1,
+        "sock_total": 1,
+        "sock_listen": 1,
+        "sock_estab": 1,
+        "proc_wx": 1,
+        "proc_memfd": 1
+      },
+      "local_floor": {
+        "changed_ratio": 0.000244140625,
+        "zero_ratio": 0.000244140625,
+        "entropy_mean": 1e-06
+      },
+      "note": "Proposal 8.2 and the lead's skeleton dokazy/B6/kostra/KOSTRA.md section 2: per_bin (every bin that enters the score has a scale of its own) and min_bin_pages 1024 (a bin of fewer pages never enters the score) are the lead's judgment (proposal 10.9). floor is the lower bound of each column's scale in the neural channel, the smallest change the quantity can show, so that a column just above near-constant gets no huge weight (proposal 8.2): 1 for every count (skeleton section 2), and for the other columns the step of the quantity by its definition (judgment, skeleton section 7): mem_changed_ratio and mem_zero_ratio one page of the 524353 pages of the hyptcn-lab layout (128 bins of 4096 pages, one of 1 and one of 64; data/results/collection_pilot_7_20261026_audit.json values.layout), mem_bins_active one of its 130 bins, mem_changed_max and mem_changed_p95 one page of a full bin (bin_bytes of 4 KiB pages, 4096), mem_entropy_mean and mem_entropy_max the collector's print resolution of a bin's entropy_mean (6 decimals, vmicollect/src/meta.c), and mem_changed_spread, a normalized entropy of integer page counts with no step of its own, the same 1e-6. local_floor is the same rule for the scaled values of a bin (has_changed is a mask): changed_ratio and zero_ratio one page of a full bin, entropy_mean 1e-6. The floors of the memory columns assume that layout on both VMs; a corpus holds one layout (features/dataset.py), G3a records it."
+    },
     "k1": {
       "statistic": "I = 1 - loss(M)/loss(Z) per boot",
       "compare": [
@@ -639,7 +698,7 @@
       "scored_share": 0.5
     },
     "min_occurrences": 8,
-    "note": "The analysis plan of proposal 10.1 point 3 (chapters 6.4, 7.4, 8.3, 8.4): the model enters K1 and K2 by its median over the five seeds, the deployed bundle is seed 0 (D14); fpr 0.01 and the rule 3 of 5 are kept (chapter 12); K1 against the prediction methods, K2a against the threshold methods, K2b against the methods with time and no learning; an occurrence is evaluable when at least half of its first 60 s is scored; a type or class with fewer than 8 evaluable occurrences is not evaluated. The bounds m are set in G1, the grids and the column mask in G3a. The numbers of the G0 rows are the author's judgment by proposal 10.9."
+    "note": "The analysis plan of proposal 10.1 point 3 (chapters 6.4, 7.4, 8.3, 8.4): the model enters K1 and K2 by its median over the five seeds, the deployed bundle is seed 0 (D14); fpr 0.01 and the rule 3 of 5 are kept (chapter 12); K1 against the prediction methods, K2a against the threshold methods, K2b against the methods with time and no learning; an occurrence is evaluable when at least half of its first 60 s is scored; a type or class with fewer than 8 evaluable occurrences is not evaluated. The bounds m are set in G1, the grids and the classes of the columns (analysis.columns) in G3a. The numbers of the G0 rows are the author's judgment by proposal 10.9."
   },
   "rehearsal": {
     "name_suffix": "-generalka",
@@ -662,7 +721,7 @@
     ],
     "G3a": [
       "analysis.methods.*.grid",
-      "analysis.column_mask",
+      "analysis.columns",
       "exceptions.*.expected"
     ],
     "G3b": [

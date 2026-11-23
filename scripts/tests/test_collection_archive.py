@@ -219,14 +219,14 @@ def test_modified_ram_after_audit_cannot_be_reclaimed(session):
 
 def test_archive_preserves_dataset_and_training_paths(tmp_path):
     from features import dataset
-    from features.tests.test_dataset import record, protocol
+    from features.tests.test_dataset import ROLES, record, protocol  # The roles of its schema-2 protocol.
     from safeguard.training import validate_index
     config = {**protocol(), "window_rows": 3, "max_gap_s": 7.5, "interval_s": 5}
     protocol_path = tmp_path / "protocol.json"
     arc.write_new(protocol_path, config)
     protocol_sha = arc.digest(protocol_path)
-    audits = [record(tmp_path, role, i) for i, role in enumerate(dataset.ROLES)]
-    for role, audit in zip(dataset.ROLES, audits):
+    audits = [record(tmp_path, role, i) for i, role in enumerate(ROLES)]
+    for role, audit in zip(ROLES, audits):
         src = audit.parent
         meta = arc.read_json(src / "session.json")
         meta.update(schema="hyptcn3/collection-session/1", campaign_id="test", protocol_sha256=protocol_sha)

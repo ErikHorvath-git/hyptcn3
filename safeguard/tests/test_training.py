@@ -92,7 +92,9 @@ def make_corpus(directory, session_schema="hyptcn3/collection-session/1"):
                             "features": str(feature_path), "features_sha256": digest(feature_path),
                             "protocol_sha256": protocol_hash, "start": float(times[0]), "end": float(times[-1])})
     path = directory / "index.json"
+    # A protocol of schema 2: its allocation rule, no plan mode (features/dataset.py, package B6a).
     write_json(path, {"schema": "hyptcn3/corpus-index/1", "protocol": str(protocol_path),
+                      "allocation_rule": "every_scenario_every_group", "plan_mode": None,
                       "protocol_sha256": protocol_hash, "protocol_config": protocol,
                       "complete": False, "diagnostic": True, "sessions": records})
     return path

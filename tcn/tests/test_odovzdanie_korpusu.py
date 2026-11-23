@@ -50,7 +50,7 @@ from features import dataset, quality  # quality.INVALID_ROW_TRAVERSALS az pri b
 from features.archive import save
 from features.snapshot import MENA, SCHEMA
 from safeguard import cli
-from safeguard.training import ROLES, train_bundle, validate_index
+from safeguard.training import FIT_ROLES, train_bundle, validate_index
 from scripts import campaign, collection
 from tcn import eval as ev
 from tcn import porovnanie as po
@@ -70,6 +70,8 @@ NEUZAVRETY = dict(DOBRY, model_valid=False, behavior_valid=False, traversals_com
 INY_PRECHOD = dict(NEUZAVRETY, truncated_traversals=["modules"])
 # Od tolerovaneho riadku sa lisi iba chybou citania RAM: pravidlo ho odmietne pre nu, nie pre chybajuci prechod.
 CHYBA_CITANIA = dict(NEUZAVRETY, read_errors=1)
+# Roly korpusu testu: test_controls (od balika B6a v safeguard.training.ROLES) v jeho protokole skupinu nema.
+ROLY = ("train", "dev", "calibration", "test_benign")
 
 
 def _sha(cesta):
@@ -201,8 +203,8 @@ def _kampan(koren, predpona="v5-", riadok_b=RIADOK):
             "features": str(archiv), "features_sha256": _sha(archiv), "layout": vysledok["layout"],
             "session_dir": str(adresar)}})
         audity.append(adresar / "audit_test.json")
-    # Index ako scripts/campaign.py finish_corpus.
-    doc = dataset.build(audity, p, protokol_sha)
+    # Index ako scripts/campaign.py finish_corpus: uplnost podla planu rezimu campaign (balik B6a).
+    doc = dataset.build(audity, p, protokol_sha, mode="campaign")
     doc["protocol"] = str(protokol_cesta)
     assert doc["complete"], doc["allocation_mismatches"]
     index = koren / "corpus.json"
@@ -268,6 +270,8 @@ def _relacia_cez_audit(koren, monkeypatch, riadok):
     # Dokazy pomocky maju desat snimok v dvoch sekundach; brana pokrytia je preto nizsie nez v kampani.
     p = dict(_protokol(adresar / "profile"), interval_s=.1, max_gap_s=.15, window_rows=3, cycles=10,
              min_score_coverage=.25, **bs.audit_sections(.1))
+    # Udalosti planu sa zmestia do jednosekundovej relacie: stavba korpusu od balika B6a cita plan protokolu.
+    p["events"] = dict(p["events"], duration_s=[.2, .3], first_s=.1, min_gap_s=.2, tail_s=.1, grace_s=.05)
     protokol_cesta = adresar / "protocol.json"
     dokazy.write(protokol_cesta, p)
     meta = json.loads((adresar / "session.json").read_text())
@@ -387,9 +391,9 @@ def test_korpus_ma_tvar_kampane(kampan):
                   for z in relacie}
     assert {i for i, seq in tolerovane.items() if seq} == kampan["s_riadkom"]
     assert all(tolerovane[i] == [RIADOK] for i in kampan["s_riadkom"])
-    assert sorted(z["role"] for z in relacie if z["id"] in kampan["s_riadkom"]) == sorted(ROLES * 2)
+    assert sorted(z["role"] for z in relacie if z["id"] in kampan["s_riadkom"]) == sorted(ROLY * 2)
     assert {(z["role"], z["vm"]) for z in relacie if z["id"] in kampan["s_riadkom"]} == {
-        (rola, vm) for rola in ROLES for vm in "ab"}
+        (rola, vm) for rola in ROLY for vm in "ab"}
 
 
 def test_ostra_kontrola_indexu_prijme_predponu_skupin(kampan):
@@ -449,7 +453,7 @@ def test_ostra_kontrola_indexu_bez_predpony_v_protokole(tmp_path):
     index = _kampan(tmp_path / "kampan", predpona=None)["index"]
     _, protokol, zaznamy = validate_index(index)
     assert protokol["group_prefix"] == ""  # od balika B4 schema 3 uvadza kazdy kluc
-    assert {z["group"] for z in zaznamy} == {f"{rola}-{i}" for rola in ROLES for i in (1, 2)}
+    assert {z["group"] for z in zaznamy} == {f"{rola}-{i}" for rola in ROLY for i in (1, 2)}
     with pytest.raises(ValueError, match="incomplete planned allocation"):
         validate_index(_premenuj_skupinu(index, "train-1", "v5-train-1"))
 
@@ -473,7 +477,7 @@ def test_trening_prijme_tolerovany_riadok(kampan, balik):
     assert manifest["diagnostic"] is False
     assert manifest["training"]["test_feature_arrays_loaded"] is False
     # Okna pocita audit tym istym postupom ako trening: dve relacie bez neplatneho riadku a dve s nim.
-    assert manifest["training"]["windows"] == {rola: kampan["okna"][rola] for rola in ROLES[:-1]}
+    assert manifest["training"]["windows"] == {rola: kampan["okna"][rola] for rola in FIT_ROLES}
     assert set(kampan["okna"].values()) == {2 * 80 + 2 * 71}
 
 
@@ -777,7 +781,7 @@ def test_vyhodnotenie_odmietne_stav_ktory_nesedi_s_riadkami(kampan, prehratia, t
             ev.vyhodnot_udalosti(kampan["index"], adresare[meno], rola="dev")
 
 
-@pytest.mark.parametrize("rola", ROLES[:-1])
+@pytest.mark.parametrize("rola", FIT_ROLES)
 @pytest.mark.parametrize("ktora", [0, -1], ids=["prva", "posledna"])
 @pytest.mark.parametrize("neplatne, uvedene, hlaska", [
     ({RIADOK: NEUZAVRETY}, [], "incomplete features in accepted audit"),
@@ -806,7 +810,7 @@ def test_trening_a_metody_odmietnu_riadok_mimo_pravidla(tmp_path, neplatne, uved
     doc = json.loads(index.read_text())
     with pytest.raises(ValueError, match=hlaska):
         dataset.build([Path(z["audit"]) for z in doc["sessions"]], collection.protocol(doc["protocol"]),
-                      _sha(doc["protocol"]))
+                      _sha(doc["protocol"]), mode="campaign")
 
 
 def test_trening_a_metody_posudia_relaciu_jej_auditom(tmp_path):
@@ -816,11 +820,11 @@ def test_trening_a_metody_posudia_relaciu_jej_auditom(tmp_path):
     """
     kampan = _kampan(tmp_path / "kampan", riadok_b=INDE)
     relacie = json.loads(kampan["index"].read_text())["sessions"]
-    for rola in ROLES:
+    for rola in ROLY:
         uvedene = {z["vm"]: json.loads(Path(z["audit"]).read_text())["values"]["quality"]["tolerated_invalid_seq"]
                    for z in relacie if z["role"] == rola and z["id"] in kampan["s_riadkom"]}
         assert uvedene == {"a": [RIADOK], "b": [INDE]}, rola
-    okna = {rola: 2 * 80 + 2 * 71 for rola in ROLES[:-1]}  # riadok na inom mieste stoji tiez window_rows + 1 okien
+    okna = {rola: 2 * 80 + 2 * 71 for rola in FIT_ROLES}  # riadok na inom mieste stoji tiez window_rows + 1 okien
     assert {rola: kampan["okna"][rola] for rola in okna} == okna
     validate_index(kampan["index"])
     assert {rola: len(data.indices) for rola, data in po.nacitaj_role(kampan["index"])["data"].items()} == okna
@@ -836,7 +840,7 @@ def test_zaznam_celeho_auditu_prijme_stavba_korpusu(kampan, tmp_path, monkeypatc
     assert kod == 0 and ostry["values"]["accepted"] is True, ostry["values"]["reasons"]
     assert ostry["values"]["quality"]["tolerated_invalid_seq"] == [4]
     assert ostry["values"]["windows"] == 3  # okna koncia v riadkoch 3, 8 a 9; neplatny riadok stoji window_rows + 1 okien
-    doc = dataset.build([audit_cesta], p, _sha(protokol_cesta))
+    doc = dataset.build([audit_cesta], p, _sha(protokol_cesta), mode="campaign")
     assert [z["group"] for z in doc["sessions"]] == ["v5-train-1"] and "events" in doc["sessions"][0]
     assert doc["complete"] is False  # jedna relacia planu; uplny korpus drzia testy vyssie
     index = json.loads(kampan["index"].read_text())

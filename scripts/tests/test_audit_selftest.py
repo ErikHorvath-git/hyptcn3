@@ -523,3 +523,25 @@ def test_spacing_mode_is_recorded_and_never_a_reason(small):
     assert audit.values["timing"]["spacing_mode"] == {"spacing": 5, "count": 4, "spacings": 6}
     assert audit.values["timing"]["periodic_run"]["equal_spacings"] == 2
     assert audit.values["exceptions"]["rule_closed_rows"]["observed"] == len(RESONANCE)
+
+
+def test_the_audit_records_the_summary_of_every_column_and_never_a_reason(small, recorded):
+    """Design B6a 1.5 and its test 3: the clean session with the known matrix of audit_cases.py is accepted with no
+    reason and the exceptions of the clean session, and values.columns holds the summary audit_cases.py writes for
+    the grid (96 cycles, full snapshots at seq 0 and 64: 94 measured rows); column proc_user (pattern 1: 5 in the
+    fourth measured row, else 0) by hand. The record of the self-test holds the case, passed."""
+    import math
+    from scripts.tests import audit_cases, boundary_sessions as bs
+    p, path, root = small
+    session = audit_cases.clean_session(root / "summary", p, path, audit_cases.SESSION)
+    audit = bs.audit(session, p, result=audit_cases.known_matrix(session.result))
+    v = audit.values
+    assert (audit.code, v["accepted"], v["reasons"]) == (0, True, [])
+    assert v["exceptions"] == audit_cases.run_case(root / "summary-clean", p, path).values["exceptions"]
+    assert audit_cases._same(v["columns"], audit_cases.expected_summary(p))
+    assert v["columns"]["proc_user"] == pytest.approx({
+        "rows": 94, "min": 0, "max": 5, "mean": 5 / 94, "std": 5 * math.sqrt(93) / 94, "mode": 0,
+        "off_mode_share": 1 / 94, "diff_std": math.sqrt(50 / 93)}, rel=1e-12)
+    assert "never a reason" in v["columns_note"]
+    summary = recorded.doc["summary"]
+    assert (recorded.code, summary["id"], summary["code"], summary["passed"]) == (0, "column_summary", 0, True)

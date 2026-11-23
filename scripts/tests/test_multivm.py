@@ -692,8 +692,8 @@ def test_replacement_rule_and_records_are_bound_to_the_frozen_plan(multi):
 def test_replaced_session_passes_the_corpus_builder(tmp_path):
     """features/dataset.py as it is: one accepted session per group/scenario, one boot per group."""
     from features import dataset
-    from features.tests.test_dataset import protocol, record
-    audits = [record(tmp_path, role, i) for i, role in enumerate(dataset.ROLES)]
+    from features.tests.test_dataset import ROLES, protocol, record  # The roles of its schema-2 protocol.
+    audits = [record(tmp_path, role, i) for i, role in enumerate(ROLES)]
     # Same group, scenario and boot under another session ID, captured right after the rejected one
     # (before the next role starts, as the runner does it).
     other = record(tmp_path, "train", .5, boot="train-0")
