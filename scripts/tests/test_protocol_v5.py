@@ -13,7 +13,9 @@ every scenario and on every VM of a role, the tenths of the phases within 1), so
 not about: a case changes what breaks nothing else, and where that is impossible it lists the other reasons and says
 why. Times are moved by whole intervals of 5 s where the phases must stay, and the rules they meet (first_s,
 min_gap_s, tail_s, the duration span, the guards) are all multiples of the interval in the real file.
-Names package B4 adds are imported inside the tests, so this file collects on the code before B4.
+Names package B4 adds are imported inside the tests, so this file collects on the code before B4. Packages B6a and
+B7a add one deliberate error for each key of the analysis plan they add or change (B7a: also the streams of the
+analysis, which the plan never draws).
 """
 from collections import Counter
 import json
@@ -235,6 +237,61 @@ def receptive_field_short(doc):
     """Three blocks of kernel 3 see 1 + 2 x 2 x 7 = 29 rows, fewer than the window of 32 (tcn/model.py)."""
     doc["analysis"]["architecture"]["blocks"] = 3
     return INVALID_ANALYSIS
+
+
+# Package B7a (design B7a 1.6): one deliberate error in each key it adds or changes; the loader refuses the section
+# (analysis, or streams for its purposes), every other check gives what it gives for the real file.
+
+def grid_of_a_method_without_parameters(doc):
+    """Z2 has no free parameter (skeleton B7 section 2): its grid is {} from G0 on, never a grid of values."""
+    doc["analysis"]["methods"]["Z2"]["grid"] = {"tolerance": [0, 1]}
+    return INVALID_ANALYSIS
+
+
+def grid_of_z3_outside_determined_at(doc):
+    """Only the grids of Z1, Z3 and Z5 wait for G3a, each by its own path: without its path the null grid of Z3 lies
+    outside determined_at."""
+    doc["determined_at"]["G3a"].remove("analysis.methods.Z3.grid")
+    return {"analysis": ["null outside determined_at: analysis.methods.Z3.grid"]}
+
+
+def selection_without_z1(doc):
+    """The selection states the rule of every method: a text that leaves Z1 out (selected by the interventions
+    detected in dev, skeleton B7 section 2) is refused."""
+    doc["analysis"]["selection"] = ("Z3 and Z5 by their prediction loss on dev, M by the rule of analysis.stopping; "
+                                    "Z0, Z2 and Z4 have no free parameter.")
+    return INVALID_ANALYSIS
+
+
+def gru_on_four_seeds(doc):
+    """GRU and LSTM run on every seed of analysis.seeds (skeleton B7, addendum 2 point 1)."""
+    doc["analysis"]["descriptive_methods"]["gru"]["seeds"] = [0, 1, 2, 3]
+    return INVALID_ANALYSIS
+
+
+def wording_without_a_blank(doc):
+    """The wording of "better" holds the two blanks of chapter 8.4 (the methods and the difference)."""
+    doc["analysis"]["wording"]["k1"]["better"] = ("neurónový kanál využíva naučenú štruktúru; rozdiel oproti … "
+                                                  "je výrazný")
+    return INVALID_ANALYSIS
+
+
+def z0_without_repetitions(doc):
+    """The random variant of Z0 takes at least one repetition (the file: 200)."""
+    doc["analysis"]["matched_rate"]["z0_repetitions"] = 0
+    return INVALID_ANALYSIS
+
+
+def level_of_95(doc):
+    """The level of the interval is a share in (0, 1): 0.95, chapter 8.4."""
+    doc["analysis"]["statistics"]["level"] = 95
+    return INVALID_ANALYSIS
+
+
+def streams_without_bootstrap(doc):
+    """streams.purposes names every purpose of PURPOSES, the two streams of the analysis included."""
+    doc["streams"]["purposes"].remove("bootstrap")
+    return {"loader": ["protocol(): invalid streams"]}
 
 
 def rehearsal_name(doc):
@@ -775,6 +832,15 @@ def seed_field(doc, plan):
     return {"streams": [f"session {_label(s)}: seed differs from seeds.traffic"]}
 
 
+def session_draws_an_analysis_stream(doc, plan):
+    """Package B7a: the streams of the analysis are no streams of the plan. A session that draws bootstrap fails, and
+    so does its replacement, which keeps the session's seeds and draws its own session-level ones."""
+    s = plan["sessions"][0]
+    s["seeds"]["bootstrap"] = 1
+    return {"streams": [f"session {_label(s)} draws the analysis stream bootstrap",
+                        f"replacement of {_label(s)} draws the analysis stream bootstrap"]}
+
+
 def replaced_type(doc, plan, monkeypatch):
     from scripts import protocol_v5
     real, target = protocol_v5.replacement, next(s for s in plan["sessions"] if s.get("events"))
@@ -876,6 +942,19 @@ def replaced_dose(doc, plan, monkeypatch):
     return {"streams": [f"replacement of {_label(target)} changes doses"]}
 
 
+def analysis_seed_of_the_plan(doc, plan, monkeypatch):
+    """Package B7a: the seed of the analysis stream bootstrap of the comparison k1/Z3 under the campaign's name equals
+    the traffic seed of the first session of the plan (a monkeypatch, as the replacements above): the streams check
+    sees two purposes on one seed; the rehearsal's plan has its own name and stays apart."""
+    from scripts import protocol_v5
+    real, traffic = protocol_v5._analysis_seed, plan["sessions"][0]["seeds"]["traffic"]
+
+    def shared(name, purpose, unit):
+        return traffic if (name, purpose, unit) == (doc["name"], "bootstrap", "k1/Z3") else real(name, purpose, unit)
+    monkeypatch.setattr(protocol_v5, "_analysis_seed", shared)
+    return {"streams": ["purposes bootstrap and traffic share a seed"]}
+
+
 FILE_CASES = {f.__name__: f for f in (unknown_key, missing_key, gate_085, max_7, six_groups, below_min_per_type,
                                       no_min_per_type, not_interleaved, replacement_without_covers,
                                       method_without_grid, k2a_without_z4, null_outside, rehearsal_name,
@@ -886,7 +965,11 @@ FILE_CASES = {f.__name__: f for f in (unknown_key, missing_key, gate_085, max_7,
                                       module_without_candidates, dose_unknown_to_lab, per_dose_short,
                                       # Package B6a: the keys of the analysis plan it adds.
                                       identity_auc_half, differenced_outside_levels, floor_without_a_column,
-                                      receptive_field_short)}
+                                      receptive_field_short,
+                                      # Package B7a: the keys of the analysis plan it adds or changes, the streams.
+                                      grid_of_a_method_without_parameters, grid_of_z3_outside_determined_at,
+                                      selection_without_z1, gru_on_four_seeds, wording_without_a_blank,
+                                      z0_without_repetitions, level_of_95, streams_without_bootstrap)}
 PLAN_CASES = {f.__name__: f for f in (no_group_on_vm, equal_scenarios, twice_at_position, two_events, start_in_guard,
                                       locked_to_grid, common_seed, control_relabelled, control_slot_emptied,
                                       event_free_first, group_of_two, seed_field,
@@ -898,9 +981,13 @@ PLAN_CASES = {f.__name__: f for f in (no_group_on_vm, equal_scenarios, twice_at_
                                       # F1 and F2 of the verification of B4b.
                                       group_twice, type_vm, stops_at_tenth_edges,
                                       # Package B8: the doses of the controls (design B8 1.2).
-                                      dose_of_class_a, dose_unknown, dose_counts, dose_vm)}
+                                      dose_of_class_a, dose_unknown, dose_counts, dose_vm,
+                                      # Package B7a: the streams of the analysis are no streams of the plan.
+                                      session_draws_an_analysis_stream)}
 REPLACEMENT_CASES = {f.__name__: f for f in (replaced_type, replaced_streams, replaced_in_guard,
-                                             replaced_before_first_s, replaced_tenths, replaced_dose)}
+                                             replaced_before_first_s, replaced_tenths, replaced_dose,
+                                             # Package B7a: a monkeypatched seed of the analysis.
+                                             analysis_seed_of_the_plan)}
 CASES = ["real_file", *FILE_CASES, *PLAN_CASES, *REPLACEMENT_CASES, "null_at_g1"]
 
 
@@ -1106,16 +1193,20 @@ def test_the_loader_knows_every_key_and_value_of_the_controls_section(change, re
         assert str(refused.value) == reason
 
 
-def test_the_doses_of_class_a_are_null_by_design_and_only_they():
-    """A null dose means "none" only for a kind of class A; elsewhere a null outside determined_at fails as before."""
+def test_the_nulls_by_design_are_the_doses_of_class_a_and_the_seeds_of_a_method_that_draws_nothing():
+    """A null dose means "none" only for a kind of class A, and null seeds only for a descriptive method that draws
+    nothing (UNSEEDED, merge of B7a); elsewhere a null outside determined_at fails as before."""
     from scripts import protocol_v5
     doc = json.loads(V5.read_text())
     assert protocol_v5.not_applicable(doc) == {f"controls.kinds.{kind}.{key}" for key in ("doses", "per_dose") for kind
                                                in ("kontrola_wx_memfd", "kontrola_modul_jadra",
-                                                   "kontrola_pocuvajuci_soket")}
+                                                   "kontrola_pocuvajuci_soket")} | {
+        "analysis.descriptive_methods.zscore.seeds"}
     assert protocol_v5.check_analysis(doc) == []
     doc["controls"]["kinds"]["kontrola_davka_procesov"]["doses"] = None
+    doc["analysis"]["descriptive_methods"]["iforest"]["seeds"] = None
     assert protocol_v5.check_analysis(doc) == [
+        "null outside determined_at: analysis.descriptive_methods.iforest.seeds",
         "null outside determined_at: controls.kinds.kontrola_davka_procesov.doses"]
 
 
@@ -1238,3 +1329,111 @@ def test_the_loader_knows_every_key_and_value_of_the_analysis_plan_of_b6a(change
         with pytest.raises(ValueError) as refused:
             protocol_v5.check_layout(doc)
         assert str(refused.value) == reason
+
+
+# Package B7a: the keys of the analysis plan of design B7a 1.6. The layout knows every key, and the value check every
+# rule of each: one bad input per rule, and a good one (a descriptive method that draws on one seed of analysis.seeds).
+
+@pytest.mark.parametrize("change, reason", [
+    (_at("descriptive_methods.iforest.seeds", [0]), None),
+    (_at("methods.Z0.grid", None), "invalid analysis"),
+    (_at("methods.Z1.grid", {}), "invalid analysis"),
+    (_at("methods.Z5.grid", {"ridge_alpha": [1, 1]}), "invalid analysis"),
+    # Merge of B7a: a filled grid holds exactly the parameters of protocol_v5.GRID_PARAMETERS (read by tcn/metody.py).
+    (_at("methods.Z3.grid", {"ewma_coefficient": [.1, .3]}), "invalid analysis"),
+    (_at("selection", "the grid point with the best value of the method's own criterion on dev"), "invalid analysis"),
+    (_at("descriptive_methods.pca", {"what": "principal components", "seeds": [], "note": ""}),
+     "unknown protocol key: analysis.descriptive_methods.pca"),
+    (_at("descriptive_methods.lstm.seeds"), "missing protocol key: analysis.descriptive_methods.lstm.seeds"),
+    (_at("descriptive_methods.iforest.seeds", [5]), "invalid analysis"),
+    # Merge of B7a: a method that draws nothing (UNSEEDED) has the seeds null, every other one a non-empty list.
+    (_at("descriptive_methods.zscore.seeds", []), "invalid analysis"),
+    (_at("descriptive_methods.iforest.seeds", None), "invalid analysis"),
+    (_at("descriptive_methods.iforest.seeds", []), "invalid analysis"),
+    (_at("descriptive_methods.iforest.seeds", [0, 0]), "invalid analysis"),
+    (_at("descriptive_methods.lstm.seeds", [0, 1, 2, 3]), "invalid analysis"),
+    (_at("descriptive_methods.gru.what", " "), "invalid analysis"),
+    (_at("wording.k2b.undecided"), "missing protocol key: analysis.wording.k2b.undecided"),
+    (_at("wording.k2a.not_better", "na týchto dátach je neurónový kanál rovnocenný"), "invalid analysis"),
+    (_at("wording.k1.undecided", 1), "invalid analysis"),
+    (_at("matched_rate.budget", ""), "invalid analysis"),
+    (_at("matched_rate.z0_repetitions", 200.0), "invalid analysis"),
+    (_at("statistics.bootstrap", 0), "invalid analysis"),
+    (_at("statistics.exact_up_to_boots", 21), "invalid analysis"),
+    (_at("statistics.level", 1), "invalid analysis"),
+    (_at("statistics.note", None), "invalid analysis"),
+], ids=["one_seed_of_the_plan", "grid_null_without_parameters", "grid_empty_with_parameters", "grid_repeats_a_value",
+        "grid_unknown_parameter", "selection_names_no_method", "descriptive_unknown", "descriptive_no_seeds",
+        "seed_outside_the_plan", "unseeded_empty_list", "seeded_null", "seeded_empty_list", "seed_twice",
+        "lstm_on_four_seeds", "no_what", "wording_no_outcome", "wording_no_blank", "wording_no_text",
+        "no_budget", "repetitions_not_an_integer", "no_resample", "enumeration_above_20", "level_one", "no_note"])
+def test_the_loader_knows_every_key_and_value_of_the_analysis_plan_of_b7a(change, reason):
+    """Design B7a 1.6: analysis.methods (grid {} for Z0, Z2, Z4 and M; for Z1, Z3 and Z5 null until G3a, then a
+    non-empty grid of distinct values for exactly the parameters of GRID_PARAMETERS), analysis.selection (a rule for
+    each method, each named), analysis.descriptive_methods (null for a method that draws nothing, else distinct seeds
+    of analysis.seeds, every one for GRU and LSTM), analysis.wording (each
+    claim and outcome a text with the blanks of chapter 8.4), analysis.matched_rate and analysis.statistics."""
+    from scripts import protocol_v5
+    doc = json.loads(V5.read_text())
+    change(doc["analysis"])
+    if reason is None:
+        protocol_v5.check_layout(doc)
+    else:
+        with pytest.raises(ValueError) as refused:
+            protocol_v5.check_layout(doc)
+        assert str(refused.value) == reason
+
+
+def test_only_the_grids_of_z1_z3_and_z5_wait_for_g3a():
+    """Design B7a 1.6: Z0, Z2, Z4 and M have no free parameter (grid {} from G0 on), so at stage G3a exactly the grids
+    of Z1, Z3 and Z5 must hold a value (determined_at names their paths instead of analysis.methods.*.grid); filled
+    with the parameters of GRID_PARAMETERS (merge of B7a), they load and nothing of analysis.methods is missing at
+    G3a."""
+    from scripts import protocol_v5
+    doc = json.loads(V5.read_text())
+    assert [r for r in protocol_v5.check_analysis(doc, stage="G3a") if ".methods." in r] == [
+        f"null at analysis.methods.{name}.grid determined at G3a (stage G3a)" for name in ("Z1", "Z3", "Z5")]
+    grids = {"Z1": {"moving_average_rows": [6, 12], "cusum_shift": [.5, 1]}, "Z3": {"ewma_alpha": [.1, .3]},
+             "Z5": {"ridge_alpha": [.1, 1, 10]}}
+    assert {name: tuple(grid) for name, grid in grids.items()} == protocol_v5.GRID_PARAMETERS
+    for name, grid in grids.items():
+        doc["analysis"]["methods"][name]["grid"] = grid
+    protocol_v5.check_layout(doc)
+    assert [r for r in protocol_v5.check_analysis(doc, stage="G3a") if ".methods." in r] == []
+
+
+def test_the_plan_draws_no_stream_of_the_analysis_and_their_seeds_follow_the_rule():
+    """Design B7a 1.6: streams.purposes gains z0_alarms and bootstrap, which no session and no replacement of the plan
+    draws (campaign and rehearsal); their seeds are seed(name, purpose, unit, -1, 0) under the plan's name of the mode,
+    z0_alarms per role and bootstrap per comparison of a confirmatory claim."""
+    from scripts import protocol_v5
+    doc = json.loads(V5.read_text())
+    units = {"z0_alarms": list(ROLES),
+             "bootstrap": ["k1/Z3", "k1/Z5", "k2a/Z1", "k2a/Z2", "k2a/Z4", "k2b/Z3", "k2b/Z5"]}
+    assert protocol_v5.analysis_units(doc) == units
+    assert set(doc["streams"]["purposes"]) == set(protocol_v5.PURPOSES) and {"z0_alarms", "bootstrap"} <= set(
+        protocol_v5.PURPOSES)
+    for mode, name in (("campaign", "server-normal-v5"), ("rehearsal", "server-normal-v5-generalka")):
+        plan = protocol_v5.plan(doc, mode)
+        drawn = {purpose for s in plan["sessions"] for x in (s, protocol_v5.replacement(doc, s, 2, mode=mode))
+                 for purpose in x["seeds"]}
+        assert drawn == set(protocol_v5.PURPOSES) - {"z0_alarms", "bootstrap"}, mode
+        assert {(purpose, unit): protocol_v5.analysis_seed(doc, purpose, unit, mode=mode)
+                for purpose, mine in units.items() for unit in mine} == {
+            (purpose, unit): protocol_v5.seed(name, purpose, unit, -1, 0) for purpose, mine in units.items()
+            for unit in mine}
+
+
+@pytest.mark.parametrize("purpose, unit, mode, reason", [
+    ("traffic", "test_benign", "campaign", "'traffic' is no stream of the analysis (z0_alarms, bootstrap)"),
+    ("z0_alarms", "test", "campaign", "'test' is no unit of the analysis stream z0_alarms (train, dev, calibration, "
+                                      "test_benign, test_controls)"),
+    ("bootstrap", "k1/Z1", "campaign", "'k1/Z1' is no unit of the analysis stream bootstrap (k1/Z3, k1/Z5, k2a/Z1, "
+                                       "k2a/Z2, k2a/Z4, k2b/Z3, k2b/Z5)"),
+    ("bootstrap", "k1/Z3", "final", "unknown plan mode: final"),
+], ids=["purpose_of_the_plan", "unknown_role", "method_k1_does_not_compare", "unknown_mode"])
+def test_a_seed_of_the_analysis_is_refused_for_an_unknown_purpose_unit_or_mode(purpose, unit, mode, reason):
+    from scripts import protocol_v5
+    with pytest.raises(ValueError) as refused:
+        protocol_v5.analysis_seed(json.loads(V5.read_text()), purpose, unit, mode=mode)
+    assert str(refused.value) == reason

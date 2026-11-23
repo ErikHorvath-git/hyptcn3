@@ -424,14 +424,16 @@
       "event_deck",
       "control_deck",
       "phase_deck",
+      "z0_alarms",
+      "bootstrap",
       "event_times",
       "traffic",
       "traffic_arrivals",
       "traffic_choices",
       "traffic_sizes"
     ],
-    "rule": "seed = int(sha256(json.dumps([name, group, session, attempt, purpose])).hexdigest()[:16], 16) with the protocol name (the rehearsal's own name in rehearsal mode); session-level purposes (event_times, traffic, traffic_arrivals, traffic_choices, traffic_sizes) take the group name, the position and the attempt; role-level ones (event_free_position, event_deck, control_deck, phase_deck) the role name as group, session -1 and attempt 0; scenario_order is drawn per block of len(scenarios) groups of a role, with group <role>/<block>, session -1 and attempt 0",
-    "note": "Every purpose has its own random stream (proposal 5.5); the seeds are new, the v4 schedule was looked at during the fault analysis (proposal 7.3). The traffic of a session (package B5b, skeleton B5 section 2): traffic draws the arrival envelope and is the session's seed, traffic_arrivals the arrival times, traffic_choices the choices of every user session and traffic_sizes the upload sizes (scripts/host_traffic.py)."
+    "rule": "seed = int(sha256(json.dumps([name, group, session, attempt, purpose])).hexdigest()[:16], 16) with the protocol name (the rehearsal's own name in rehearsal mode); session-level purposes (event_times, traffic, traffic_arrivals, traffic_choices, traffic_sizes) take the group name, the position and the attempt; role-level ones (event_free_position, event_deck, control_deck, phase_deck) the role name as group, session -1 and attempt 0; scenario_order is drawn per block of len(scenarios) groups of a role, with group <role>/<block>, session -1 and attempt 0; the purposes of the analysis (package B7a), which the plan does not draw, take session -1 and attempt 0 as well and as group: z0_alarms the role on whose windows the random variant of Z0 places its alarms, bootstrap the comparison <claim>/<method> of a confirmatory claim with one method it compares (for example k1/Z3); the analysis draws from numpy.random.default_rng(seed), z0_alarms the repetitions of the random variant of Z0 in order, each one number of [0, 1) for every window of the role in the order of its window set (tcn/metody.py Z0_RANDOM_RULE), bootstrap the resamples of the interval first and then, above analysis.statistics.exact_up_to_boots boots, the sign vectors of the test (scripts/protocol_v5.py analysis_seed)",
+    "note": "Every purpose has its own random stream (proposal 5.5); the seeds are new, the v4 schedule was looked at during the fault analysis (proposal 7.3). The traffic of a session (package B5b, skeleton B5 section 2): traffic draws the arrival envelope and is the session's seed, traffic_arrivals the arrival times, traffic_choices the choices of every user session and traffic_sizes the upload sizes (scripts/host_traffic.py). Package B7a adds the streams of the analysis z0_alarms and bootstrap (design B7a 1.6); the plan draws neither, and every purpose has its own seed, so no seed of the plan changed."
   },
   "audit": {
     "lateness_max_s": 0.5,
@@ -562,7 +564,7 @@
     "methods": {
       "Z0": {
         "what": "never alarms; random alarms at the matched alarm rate",
-        "grid": null
+        "grid": {}
       },
       "Z1": {
         "what": "a threshold per column on its value, first difference, rolling mean and CUSUM; also a threshold on mem_changed_max",
@@ -570,15 +572,15 @@
       },
       "Z2": {
         "what": "some count differs from its mode",
-        "grid": null
+        "grid": {}
       },
       "Z3": {
-        "what": "prediction by the last value, the window mean and EWMA, nothing learned",
+        "what": "prediction by the last value, the window mean and EWMA, with the EWMA coefficient as its free parameter (skeleton B7 section 2)",
         "grid": null
       },
       "Z4": {
         "what": "a threshold on the offered load; regression of the features on the load",
-        "grid": null
+        "grid": {}
       },
       "Z5": {
         "what": "linear autoregression (ridge) on the same window",
@@ -586,10 +588,55 @@
       },
       "M": {
         "what": "the TCN of architecture, seeds 0 to 4",
-        "grid": null
+        "grid": {}
       }
     },
-    "selection": "One procedure on dev for every method with free parameters: the grid point with the best value of the method's own criterion on dev (prediction loss for Z3, Z5 and M; alarms per observed hour at the matched threshold for Z1, Z2 and Z4), ties to the first grid point; never on a test role (author's judgment, proposal 8.3).",
+    "selection": "One procedure on dev for every method with free parameters, never on a test role (the lead's skeleton dokazy/B7/kostra/KOSTRA.md section 2): Z1 by the share of the interventions inserted into dev that it detects at the matched alarm rate (package B7b), Z3 and Z5 by their prediction loss on dev, M by the rule of analysis.stopping (the epoch of the best dev loss, package B6); Z0, Z2 and Z4 have no free parameter (grid {}). Ties go to the first grid point (author's judgment, proposal 8.3).",
+    "descriptive_methods": {
+      "zscore": {
+        "what": "z-score: the mean over the inputs of the squared z-score of the window mean, its mean and deviation fitted on train (tcn/baselines.py ZScoreAnomalia)",
+        "seeds": null,
+        "note": "It draws nothing: seeds null, and it runs once with seed None (scripts/protocol_v5.py UNSEEDED; an empty list would mean that it never runs; the executor's convention of the merge of B7a)."
+      },
+      "iforest": {
+        "what": "isolation forest over the flattened window, fitted on train (tcn/baselines.py IsolationForestAnomalia)",
+        "seeds": [
+          0,
+          1,
+          2,
+          3,
+          4
+        ],
+        "note": "Its subsamples and splits are random: it runs on every seed of analysis.seeds and every seed is reported, as for M (judgment)."
+      },
+      "gru": {
+        "what": "GRU predictor of the window's last row from the rows before it, with the loss of the TCN and a parameter count close to the TCN of analysis.architecture (tcn/baselines.py GRUPrediktor, skryte_pre_prediktor)",
+        "seeds": [
+          0,
+          1,
+          2,
+          3,
+          4
+        ],
+        "note": "Seeds 0 to 4 and a parameter count close to the TCN: the lead's addendum 2 point 1 of skeleton B7."
+      },
+      "lstm": {
+        "what": "LSTM predictor of the window's last row from the rows before it, with the loss of the TCN and a parameter count close to the TCN of analysis.architecture (tcn/baselines.py LSTMPrediktor, skryte_pre_prediktor)",
+        "seeds": [
+          0,
+          1,
+          2,
+          3,
+          4
+        ],
+        "note": "Seeds 0 to 4 and a parameter count close to the TCN: the lead's addendum 2 point 1 of skeleton B7."
+      }
+    },
+    "matched_rate": {
+      "budget": "median over the seeds of M's alarms on the clean traffic of calibration, rounded up",
+      "z0_repetitions": 200,
+      "note": "Proposal 8.3 and the lead's skeleton B7 section 3: every method gets the same windows, M's normalizer and the rule k of n (analysis.alarm_rule), and an alarm is a rising edge of that rule. The budget is the count of M's alarms on the clean traffic of role calibration (its scored windows outside the event windows, outside the reverberation reverberation_s and outside the full-snapshot band), the median over analysis.seeds rounded up. The threshold of a method walks its observed scores from the top down and takes the last one before the first at which its alarm count exceeds the budget (the count is not monotonic in the threshold); with a budget of 0 that is the most sensitive threshold without an alarm (the lead's judgment). The actual rate on test_benign is reported for every method. Z0 never alarms; its random variant alarms at the matched rate, z0_repetitions repetitions from the stream z0_alarms, and the mean is reported (200, the lead's number)."
+    },
     "qualification": {
       "near_constant_share": 0.01,
       "identity_auc": 0.75,
@@ -669,6 +716,29 @@
       "m": null,
       "rule": "95th percentile on >= 20 structure-free seeds (G1)"
     },
+    "statistics": {
+      "bootstrap": 10000,
+      "exact_up_to_boots": 16,
+      "level": 0.95,
+      "note": "Proposal 8.4 and 9.1, the lead's skeleton B7 section 4: per claim and compared method the values per boot (K1: I, K2: D). The interval is the percentile bootstrap over the boots at level 0.95 (chapter 8.4: the interval is 95 % of the values per boot): bootstrap resamples of the boots with replacement, the statistic of each its mean over the boots (judgment), the bounds the quantiles (1 - level)/2 and (1 + level)/2 of those means (numpy, linear). The test is the two-sided sign-flip permutation test of the values minus m over the boots (two-sided as chapter 9.2 counts it: 4 boots cannot give p below 0.125, 8 boots 0.008), its statistic the sum of those differences, computed exactly: by full enumeration of the 2^n sign vectors up to exact_up_to_boots boots, else of bootstrap random sign vectors with p = (1 + count) / (1 + bootstrap) (judgment). Both come from the stream bootstrap of the comparison (streams.rule). The interval decides the outcome, the p-value is reported; fewer than 2 boots are refused (judgment: one boot has no spread). bootstrap 10000 and exact_up_to_boots 16 are the lead's judgment."
+    },
+    "wording": {
+      "k1": {
+        "better": "neur\u00f3nov\u00fd kan\u00e1l vyu\u017e\u00edva nau\u010den\u00fa \u0161trukt\u00faru; rozdiel oproti \u2026 je \u2026",
+        "not_better": "na t\u00fdchto d\u00e1tach je neur\u00f3nov\u00fd kan\u00e1l rovnocenn\u00fd s met\u00f3dou \u2026",
+        "undecided": "d\u00e1ta nesta\u010dia na rozhodnutie; interval je \u2026"
+      },
+      "k2a": {
+        "better": "neur\u00f3nov\u00fd kan\u00e1l vyu\u017e\u00edva nau\u010den\u00fa \u0161trukt\u00faru; rozdiel oproti \u2026 je \u2026",
+        "not_better": "na t\u00fdchto d\u00e1tach je neur\u00f3nov\u00fd kan\u00e1l rovnocenn\u00fd s met\u00f3dou \u2026",
+        "undecided": "d\u00e1ta nesta\u010dia na rozhodnutie; interval je \u2026"
+      },
+      "k2b": {
+        "better": "neur\u00f3nov\u00fd kan\u00e1l vyu\u017e\u00edva nau\u010den\u00fa \u0161trukt\u00faru; rozdiel oproti \u2026 je \u2026",
+        "not_better": "na t\u00fdchto d\u00e1tach je neur\u00f3nov\u00fd kan\u00e1l rovnocenn\u00fd s met\u00f3dou \u2026",
+        "undecided": "d\u00e1ta nesta\u010dia na rozhodnutie; interval je \u2026"
+      }
+    },
     "interventions": {
       "C": {
         "lengths": [
@@ -698,7 +768,7 @@
       "scored_share": 0.5
     },
     "min_occurrences": 8,
-    "note": "The analysis plan of proposal 10.1 point 3 (chapters 6.4, 7.4, 8.3, 8.4): the model enters K1 and K2 by its median over the five seeds, the deployed bundle is seed 0 (D14); fpr 0.01 and the rule 3 of 5 are kept (chapter 12); K1 against the prediction methods, K2a against the threshold methods, K2b against the methods with time and no learning; an occurrence is evaluable when at least half of its first 60 s is scored; a type or class with fewer than 8 evaluable occurrences is not evaluated. The bounds m are set in G1, the grids and the classes of the columns (analysis.columns) in G3a. The numbers of the G0 rows are the author's judgment by proposal 10.9."
+    "note": "The analysis plan of proposal 10.1 point 3 (chapters 6.4, 7.4, 8.3, 8.4): the model enters K1 and K2 by its median over the five seeds, the deployed bundle is seed 0 (D14); fpr 0.01 and the rule 3 of 5 are kept (chapter 12); K1 against the prediction methods, K2a against the threshold methods, K2b against the methods with time and no learning; an occurrence is evaluable when at least half of its first 60 s is scored; a type or class with fewer than 8 evaluable occurrences is not evaluated. The bounds m are set in G1, the grids and the classes of the columns (analysis.columns) in G3a. The numbers of the G0 rows are the author's judgment by proposal 10.9. Package B7a (the lead's skeleton dokazy/B7/kostra/KOSTRA.md sections 2 to 4 and its addendum 2 point 1): Z0, Z2, Z4 and M have no free parameter (grid {}), only the grids of Z1, Z3 and Z5 wait for G3a; descriptive_methods are the z-score, the isolation forest and the GRU and LSTM predictors in the same wrapper as Z0 to Z5 (M's windows and normalizer, the behaviour inputs with the bin summary of tcn/baselines.py zluc_biny, a threshold at the matched alarm rate), reported beside M and Z (the loss of the predictors, the share of interventions detected, the alarms per hour) and deciding neither K1 nor K2; wording holds the conclusions of chapter 8.4 word for word (the text inside its quotation marks, the blanks where the table has them); matched_rate and statistics hold the rules of the matched alarm rate and of the interval and the test of K1 and K2."
   },
   "rehearsal": {
     "name_suffix": "-generalka",
@@ -720,7 +790,9 @@
       "controls.baseline"
     ],
     "G3a": [
-      "analysis.methods.*.grid",
+      "analysis.methods.Z1.grid",
+      "analysis.methods.Z3.grid",
+      "analysis.methods.Z5.grid",
       "analysis.columns",
       "exceptions.*.expected"
     ],

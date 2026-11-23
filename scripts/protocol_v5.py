@@ -14,6 +14,9 @@ scripts/host_traffic.py reads the profiles section through profiles_problems():
                                    sessions to (package B6a)
     plans_events(p)                whether its sessions list events and keep events.json (log audit, corpus build)
     analysis_plan(p)               the analysis plan the training and the evaluation read (B6, B7)
+    analysis_seed(p, purpose, unit, mode=...)
+                                   the seed of a stream of the analysis (B7a): z0_alarms per role, bootstrap per
+                                   comparison of a confirmatory claim; the plan draws neither
     selfcheck(path, mode, stage)   every check of the self-check on the file and on its plan, and summary(p, plan):
                                    the tables of the plan the report records
 
@@ -21,7 +24,8 @@ The loader does not judge balance, role sizes, the place of null values or the b
 gate to invalid_rows.max; the self-check does. Its check functions take (doc, plan) so that a test can pass a
 mutated plan. A value a later stage determines (proposal 10.9) is null or preliminary at its one place in the
 file; determined_at names the stage of each such path, and `*` stands for every key of an object at that level.
-The doses of a control kind of class A are null by design (it has none), not determined later (not_applicable).
+The doses of a control kind of class A are null by design (it has none), not determined later (not_applicable), and
+so are the seeds of a descriptive method that draws nothing (UNSEEDED, merge of B7a).
 
 Package B8 (the lead's skeleton dokazy/B8/kostra/KOSTRA.md, design B8 sections 1.1 and 1.2): every control kind
 states its class, its doses and the occurrences per dose (class B), the feature columns it should move with the
@@ -34,6 +38,15 @@ the bounds of the qualification of the feature columns (features/qualification.p
 the class of each of the 20 columns of features.archive.BEHAVIOR_NAMES (null until G3a; it replaces
 analysis.column_mask), analysis.scale the scale rule of the normalizer and analysis.architecture the TCN of the
 thesis with its optimizer; the training of package B6b reads them.
+
+Package B7a (the lead's skeleton dokazy/B7/kostra/KOSTRA.md sections 2 to 4 and its addendum 2 point 1, design B7a
+1.6): the methods Z0, Z2, Z4 and M have no free parameter (grid {} from G0 on), so only the grids of Z1, Z3 and Z5
+wait for G3a; analysis.selection follows the skeleton; analysis.descriptive_methods lists the four descriptive
+methods of the core (z-score, isolation forest, GRU and LSTM) apart from analysis.methods; analysis.wording holds the
+conclusions of chapter 8.4 word for word for K1, K2a and K2b and each outcome; analysis.matched_rate the budget of
+the matched alarm rate and the repetitions of Z0; analysis.statistics the interval and the test of the claims. The
+streams gain z0_alarms and bootstrap, which the analysis draws and the plan does not (analysis_seed), so no draw of
+the plan changes.
 """
 from collections import Counter
 import copy
@@ -65,11 +78,40 @@ INTERLEAVED = ("test_benign", "test_controls")
 # B5b adds the traffic streams (skeleton B5 section 2): the arrival times, the choices in a user session and the
 # sizes each have their own; traffic draws the arrival envelope and stays the session's seed. Package B4b adds
 # phase_deck: the tenths of the interval in which the starts and the stops of a role lie.
+# Package B7a (design B7a 1.6) adds the two streams of the analysis, which the plan never draws: z0_alarms per role
+# (the random alarms of Z0 at the matched alarm rate on that role's windows) and bootstrap per comparison of a
+# confirmatory claim with one method (the resamples of its interval, then the sign vectors of its test); they take no
+# unit of the plan, so SESSION_PURPOSES and every draw of the plan stay as they were (analysis_seed).
+ANALYSIS_PURPOSES = {"z0_alarms": "role", "bootstrap": "comparison"}
 PURPOSES = {"scenario_order": "block", "event_free_position": "role", "event_deck": "role",
-            "control_deck": "role", "phase_deck": "role", "event_times": "session", "traffic": "session",
-            "traffic_arrivals": "session", "traffic_choices": "session", "traffic_sizes": "session"}
+            "control_deck": "role", "phase_deck": "role", **ANALYSIS_PURPOSES, "event_times": "session",
+            "traffic": "session", "traffic_arrivals": "session", "traffic_choices": "session",
+            "traffic_sizes": "session"}
 SESSION_PURPOSES = tuple(purpose for purpose, unit in PURPOSES.items() if unit == "session")
 METHODS = ("Z0", "Z1", "Z2", "Z3", "Z4", "Z5", "M")
+# Package B7a (skeleton B7 section 2, design B7a 1.4 and 1.6): the methods with free parameters, whose grid
+# analysis.methods.<m>.grid is null until G3a, and the names of their parameters, which a filled grid has exactly (one
+# constant for the protocol and tcn/metody.py, which reads them; merge of B7a); Z0, Z2, Z4 and M have none (grid {};
+# M's epoch is analysis.stopping's).
+GRID_PARAMETERS = {"Z1": ("moving_average_rows", "cusum_shift"), "Z3": ("ewma_alpha",), "Z5": ("ridge_alpha",)}
+GRIDDED = tuple(GRID_PARAMETERS)
+# The descriptive methods of the core (skeleton B7, addendum 2 point 1; proposal 8.3), listed apart from METHODS so
+# that analysis.methods stays Z0 to Z5 and M; the networks run on every seed of analysis.seeds (design B7a 1.6). A
+# method of UNSEEDED draws nothing: its seeds are null and it runs once, with seed None; every other one has a
+# non-empty list (an empty list would mean that it never runs; the executor's convention of the merge of B7a).
+DESCRIPTIVE = ("zscore", "iforest", "gru", "lstm")
+EVERY_SEED = ("gru", "lstm")
+UNSEEDED = ("zscore",)
+# The confirmatory claims (proposal 4.1) and their three outcomes (proposal 8.4: lepší, nie lepší, nerozhodnuté), the
+# keys of analysis.wording; the wording of each outcome holds as many blanks "…" (U+2026) as the table of chapter 8.4,
+# the places the claim's values fill (tcn/tvrdenia.py).
+CLAIMS = ("k1", "k2a", "k2b")
+OUTCOMES = ("better", "not_better", "undecided")
+BLANK = "\u2026"
+BLANKS = {"better": 2, "not_better": 1, "undecided": 1}
+# The most boots whose 2^n sign vectors the test enumerates in full (analysis.statistics.exact_up_to_boots): 2^20 is
+# about a million sums (judgment: enumeration stays below a few seconds; the skeleton's 16 lies within).
+MAX_EXACT_BOOTS = 20
 MAX_INVALID_ROWS = 6  # Proposal 10.9 and D4: six event boundaries of a session with three events.
 # Redraws of a schedule that meets a full-snapshot guard, of unbalanced scenario blocks, of event-free sessions
 # whose positions are unbalanced, and of the cycle of control cells (judgment, accepted by the lead for B4).
@@ -137,7 +179,9 @@ _TEST = _fixed("statistic", "compare", "m", "rule")
 _INTERVENTION = _fixed("lengths", "per_boot")
 # Package B6a (design B6a 1.1): the bounds of the qualification of the feature columns (G0), the class of each of
 # the 20 columns (analysis.columns, null until G3a, which replaces analysis.column_mask), the scale rule of the
-# normalizer (G0) and, in architecture, the TCN of the thesis with its optimizer (G0).
+# normalizer (G0) and, in architecture, the TCN of the thesis with its optimizer (G0). Package B7a (design B7a 1.6):
+# the descriptive methods apart from methods, the wordings of the conclusions per claim and outcome, the matched
+# alarm rate and the statistics of the claims (all G0).
 ANALYSIS = _fixed(
     "seeds", "deploy_seed", "fpr", "selection", "columns", "horizon_s", "reverberation_s", "min_occurrences",
     "note",
@@ -148,7 +192,11 @@ ANALYSIS = _fixed(
     stopping=_fixed("rule", "patience_epochs", "max_epochs", "repeat_if_last_epoch", "note"),
     alarm_rule=_fixed("k", "n"),
     methods={name: _fixed("what", "grid") for name in METHODS},
+    descriptive_methods={name: _fixed("what", "seeds", "note") for name in DESCRIPTIVE},
+    matched_rate=_fixed("budget", "z0_repetitions", "note"),
     k1=_TEST, k2a=_TEST, k2b=_TEST,
+    statistics=_fixed("bootstrap", "exact_up_to_boots", "level", "note"),
+    wording={claim: _fixed(*OUTCOMES) for claim in CLAIMS},
     interventions=_fixed("boots", "validity", C=_INTERVENTION, D=_INTERVENTION),
     evaluable=_fixed("first_s", "scored_share"))
 # The traffic profiles of the generator (package B5b, design B5b 1.1; scripts/host_traffic.py PROFILES implements
@@ -563,6 +611,65 @@ def _ok_qualification(a):
         for name, cls in columns.items()))
 
 
+def _grid(value):
+    """A grid of a method with free parameters (G3a): a non-empty object of parameter names, each with a non-empty
+    list of distinct values (numbers or names)."""
+    return type(value) is dict and bool(value) and all(
+        _text(name) and _distinct(values, lambda x: _number(x) or _text(x)) for name, values in value.items())
+
+
+def _ok_methods(a):
+    """Skeleton B7 section 2 (design B7a 1.4 and 1.6): every method of METHODS states what it is; a method of GRIDDED
+    has a grid of its free parameters, null until G3a (determined_at), and filled it holds exactly the parameters of
+    GRID_PARAMETERS; every other one has none: {} from G0 on."""
+    return all(type(m) is dict and _text(m["what"]) and (
+        (m["grid"] is None or (_grid(m["grid"]) and set(m["grid"]) == set(GRID_PARAMETERS[name]))) if name in GRIDDED
+        else (type(m["grid"]) is dict and not m["grid"])) for name, m in a["methods"].items())
+
+
+def _names_every_method(text):
+    """analysis.selection states the rule of every method: a text that names each of METHODS as a word (skeleton B7
+    section 2: Z1 by the interventions detected in dev, Z3 and Z5 by the loss on dev, M as B6, Z0, Z2 and Z4 without
+    a free parameter)."""
+    return _text(text) and all(re.search(rf"\b{name}\b", text) for name in METHODS)
+
+
+def _ok_descriptive(a):
+    """Design B7a 1.6 (skeleton B7, addendum 2 point 1): each descriptive method states what it is, its seeds and a
+    note. A method of UNSEEDED draws nothing and has the seeds null; every other one has a non-empty list of distinct
+    seeds of analysis.seeds (an empty list is refused: it would never run); GRU and LSTM run on every seed of
+    analysis.seeds."""
+    seeds = a["seeds"]
+    for name, d in a["descriptive_methods"].items():
+        if not (type(d) is dict and _text(d["what"]) and type(d["note"]) is str):
+            return False
+        mine = d["seeds"]
+        if name in UNSEEDED:
+            if mine is not None:
+                return False
+            continue
+        if not (type(mine) is list and mine and all(type(s) is int and s in seeds for s in mine)
+                and len(set(mine)) == len(mine)):
+            return False
+        if name in EVERY_SEED and sorted(mine) != sorted(seeds):
+            return False
+    return True
+
+
+def _ok_claims_b7a(a):
+    """Design B7a 1.6: the wording of every claim and outcome is a text with the blanks of chapter 8.4 (BLANKS); the
+    matched alarm rate states its budget and the repetitions of Z0; the statistics state the bootstrap resamples, the
+    most boots of the full enumeration of the test (at most MAX_EXACT_BOOTS) and the level of the interval."""
+    if not all(type(w) is dict and all(_text(w[outcome]) and w[outcome].count(BLANK) == BLANKS[outcome]
+                                       for outcome in OUTCOMES) for w in a["wording"].values()):
+        return False
+    rate, s = a["matched_rate"], a["statistics"]
+    return (_text(rate["budget"]) and _count(rate["z0_repetitions"], 1) and type(rate["note"]) is str
+            and _count(s["bootstrap"], 1) and _count(s["exact_up_to_boots"], 1)
+            and s["exact_up_to_boots"] <= MAX_EXACT_BOOTS and _number(s["level"]) and 0 < s["level"] < 1
+            and type(s["note"]) is str)
+
+
 def _ok_analysis(p):
     a = p["analysis"]
     arch, stop, rule = a["architecture"], a["stopping"], a["alarm_rule"]
@@ -578,10 +685,9 @@ def _ok_analysis(p):
     if not (_number(a["fpr"]) and 0 < a["fpr"] < 1 and _count(rule["k"], 1) and _count(rule["n"], 1)
             and rule["k"] <= rule["n"]):
         return False
-    if not all(type(m) is dict and _text(m["what"]) and (m["grid"] is None or type(m["grid"]) is dict)
-               for m in a["methods"].values()):
+    if not (_ok_methods(a) and _ok_descriptive(a) and _ok_claims_b7a(a)):
         return False
-    if not (_text(a["selection"]) and _ok_qualification(a)):
+    if not (_names_every_method(a["selection"]) and _ok_qualification(a)):
         return False
     for name in ("k1", "k2a", "k2b"):
         t = a[name]
@@ -698,6 +804,38 @@ def analysis_plan(p):
     if not good:
         raise ValueError("invalid analysis")
     return p["analysis"]
+
+
+def _analysis_seed(name, purpose, unit):
+    """The seed of the analysis stream `purpose` for `unit` under the plan name `name` (streams.rule)."""
+    return seed(name, purpose, unit, -1, 0)
+
+
+def analysis_units(p):
+    """{purpose: [its units]} of the streams of the analysis (design B7a 1.6): z0_alarms per role of the protocol,
+    bootstrap per comparison "<claim>/<method>" of a confirmatory claim with each method it compares (CLAIMS and
+    analysis.<claim>.compare of the checked analysis plan, for example "k1/Z3")."""
+    a = analysis_plan(p)
+    return {"z0_alarms": list(ROLES), "bootstrap": [f"{claim}/{method}" for claim in CLAIMS
+                                                    for method in a[claim]["compare"]]}
+
+
+def analysis_seed(p, purpose, unit, *, mode):
+    """The seed of a stream of the analysis (package B7a, design B7a 1.6; streams.rule): seed(name, purpose, unit, -1,
+    0) with the plan's name in this mode (the rehearsal's own name in rehearsal mode, as the plan), from which the
+    analysis draws with numpy.random.default_rng. z0_alarms is drawn per role (unit: a role of ROLES), the random alarms
+    of Z0 at the matched alarm rate on that role's windows; bootstrap per comparison of a confirmatory claim (unit
+    "<claim>/<method>", analysis_units), the resamples of its interval and then, above
+    analysis.statistics.exact_up_to_boots boots, the sign vectors of its test. The plan draws neither (check_streams).
+    The mode has no default. ValueError for another schema, an unknown mode, purpose or unit."""
+    if purpose not in ANALYSIS_PURPOSES:
+        raise ValueError(f"{purpose!r} is no stream of the analysis ({', '.join(ANALYSIS_PURPOSES)})")
+    units = analysis_units(p)[purpose]
+    if mode not in MODES:
+        raise ValueError("unknown plan mode: " + str(mode))
+    if unit not in units:
+        raise ValueError(f"{unit!r} is no unit of the analysis stream {purpose} ({', '.join(units)})")
+    return _analysis_seed(_shape(p, mode)[0], purpose, unit)
 
 
 # ------------------------------------------------------------------ the schedule
@@ -1566,7 +1704,11 @@ def check_streams(doc, schedule):
     """No two streams share a seed, the streams of every replacement (attempt 2) included; each session's seed is
     its traffic seed (scripts/campaign.py passes `seed` to the runner); a replacement keeps its session's
     assignment (the doses of its controls included, package B8) and the tenths of the interval of its starts and
-    stops (design B4b)."""
+    stops (design B4b).
+
+    Package B7a: the streams of the analysis (ANALYSIS_PURPOSES) are no streams of the plan, so no session and no
+    replacement draws one, and their seeds under the plan's name (z0_alarms per role, bootstrap per comparison of
+    CONFIRMATORY, which the analysis check binds to the file) share none with each other or with the plan."""
     k = len(doc["scenarios"])
     groups = _groups(schedule)
     blocks = {}
@@ -1577,11 +1719,20 @@ def check_streams(doc, schedule):
     owners, reasons = {}, []
     for s in schedule["sessions"] + replacements:
         for purpose, value in s["seeds"].items():
-            owners.setdefault(value, {})[_stream(s, purpose, blocks)] = purpose
+            if purpose not in ANALYSIS_PURPOSES:  # A seed of the analysis in the plan is a reason of its own (below).
+                owners.setdefault(value, {})[_stream(s, purpose, blocks)] = purpose
+    units = {"z0_alarms": ROLES, "bootstrap": [f"{claim}/{method}" for claim, methods in CONFIRMATORY.items()
+                                               for method in methods]}
+    for purpose, names in units.items():
+        for unit in names:
+            owners.setdefault(_analysis_seed(schedule["name"], purpose, unit), {})[purpose, unit] = purpose
     for value, streams in owners.items():
         if len(streams) > 1:
             a, b = sorted(streams.values())[:2]
             reasons.append(f"two {a} streams share a seed" if a == b else f"purposes {a} and {b} share a seed")
+    for s, what in [(s, "session") for s in schedule["sessions"]] + [(r, "replacement of") for r in replacements]:
+        reasons += [f"{what} {_label(s)} draws the analysis stream {purpose}" for purpose in s["seeds"]
+                    if purpose in ANALYSIS_PURPOSES]
     reasons += [f"session {_label(s)}: seed differs from seeds.traffic" for s in schedule["sessions"]
                 if s.get("seed") != s["seeds"].get("traffic")]
     for s, r in zip(schedule["sessions"], replacements):
@@ -1644,12 +1795,16 @@ CONFIRMATORY = {"k1": ["Z3", "Z5"], "k2a": ["Z1", "Z2", "Z4"], "k2b": ["Z3", "Z5
 
 
 def not_applicable(doc):
-    """The paths whose null means "none", not a value a later stage determines (package B8): the doses and the
-    counts per dose of a control kind of class A."""
+    """The paths whose null means "none", not a value a later stage determines: the doses and the counts per dose of
+    a control kind of class A (package B8), and the seeds of a descriptive method that draws nothing (UNSEEDED, merge
+    of B7a)."""
     controls = doc.get("controls") if type(doc.get("controls")) is dict else {}
     kinds = controls.get("kinds") if type(controls.get("kinds")) is dict else {}
-    return {f"controls.kinds.{kind}.{key}" for kind, k in sorted(kinds.items())
-            if type(k) is dict and k.get("class") == "A" for key in ("doses", "per_dose")}
+    analysis = doc.get("analysis") if type(doc.get("analysis")) is dict else {}
+    described = analysis.get("descriptive_methods") if type(analysis.get("descriptive_methods")) is dict else {}
+    return ({f"controls.kinds.{kind}.{key}" for kind, k in sorted(kinds.items())
+             if type(k) is dict and k.get("class") == "A" for key in ("doses", "per_dose")}
+            | {f"analysis.descriptive_methods.{name}.seeds" for name in UNSEEDED if name in described})
 
 
 def check_analysis(doc, schedule=None, *, stage="G0"):
