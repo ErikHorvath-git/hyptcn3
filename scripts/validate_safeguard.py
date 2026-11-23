@@ -3,6 +3,11 @@
 
 Uses real saved RAM as replay input and a freshly trained SYNTHETIC diagnostic
 bundle matching its geometry. This cannot measure detection performance.
+
+The seal (package B7c, tcn/pecat.py SNAPSHOT_RULE) comes before anything is
+extracted or written: the saved RAM of a session that the ledger seals for a
+campaign (by the session_id of the session.json of --raw or of its parent) is
+refused by name (tcn.pecat.Zapecatene) outside the final run that consumed it.
 """
 import argparse
 from datetime import datetime, timezone
@@ -23,15 +28,17 @@ from safeguard.demo import smoke, write_json
 from safeguard.runtime import replay_archive, run_directory
 
 
-def main():
+def main(argv=None):
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--raw", required=True, type=Path)
     p.add_argument("--profile", required=True, type=Path)
     p.add_argument("--out", required=True, type=Path)
     p.add_argument("--result", required=True, type=Path)
-    a = p.parse_args()
+    a = p.parse_args(argv)
     if a.result.exists():
         p.error("result already exists; choose a new immutable filename")
+    from tcn import pecat
+    pecat.kontrola_snimok(a.raw, purpose="scripts/validate_safeguard.py")
     a.out.mkdir(parents=True, exist_ok=False)
     torch.set_num_threads(4)
     print("Extracting saved real RAM; no live collector is started.", flush=True)

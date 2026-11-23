@@ -357,12 +357,26 @@ def balik(kampan, tmp_path_factory):
 
 @pytest.fixture(scope="module")
 def metody(kampan, balik, tmp_path_factory):
-    """Kazda metoda porovnania: python3 -m tcn.porovnanie fit nad tym istym indexom, s odkazom na hlavny balik."""
+    """Kazda metoda porovnania: python3 -m tcn.porovnanie fit nad tym istym indexom, s odkazom na hlavny balik.
+    Od balika B7c beru aj metody parametre z planu analyzy protokolu (FPR, jedna epocha, davka 64): pod schemou 3 by
+    ich prikaz mimo --diagnostic odmietol (test_porovnanie_berie_parametre_z_planu_analyzy)."""
     koren = tmp_path_factory.mktemp("metody")
     for meno in po.MODELY:
         _prejde(po._hlavny, "--threads", 2, "fit", "--corpus", kampan["index"], "--model", meno,
-                "--out", koren / meno, "--epochs", 1, "--batch-size", 64, "--fpr", FPR, "--reference", balik)
+                "--out", koren / meno, "--reference", balik)
     return {meno: koren / meno for meno in po.MODELY}
+
+
+def test_porovnanie_berie_parametre_z_planu_analyzy(metody):
+    """Balik B7c (navrh NAVRH_B7c 1.4): pod schemou 3 da parametre fitu plan analyzy, tak ako safeguard train; manifest
+    uvedie pravidlo a nezadane parametre (ziadny nie je prepisany)."""
+    for meno, model in metody.items():
+        manifest = json.loads((model / "manifest.json").read_text())
+        parametre, trening = manifest["parameters"], manifest["training"]
+        assert (parametre["rule"], parametre["given"], parametre["overrides"]) == ("analysis", {}, {}), meno
+        assert (trening["epochs"], trening["batch_size"], trening["seed"]) == (1, 64, 0), meno
+        assert (manifest["calibration"]["fpr_design"], manifest["calibration"]["k"],
+                manifest["calibration"]["n"]) == (FPR, 3, 5), meno
 
 
 @pytest.fixture(scope="module")

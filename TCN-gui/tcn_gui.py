@@ -526,6 +526,8 @@ def main(argv=None):
     if args.compare:
         if not args.input or not args.png:
             parser.error("--compare potrebuje --input a --png")
+        # The seal (package B7c, tcn/pecat.py) before anything is loaded or drawn: a sealed session is refused by name.
+        analyza.resolve_input(args.input, purpose=porovnanie.PURPOSE)
         import matplotlib
         matplotlib.use("Agg")
         from matplotlib.figure import Figure
@@ -536,6 +538,7 @@ def main(argv=None):
     if args.png:
         if not (args.bundle and args.input):
             parser.error("--png potrebuje --bundle aj --input")
+        analyza.resolve_input(args.input)  # The seal first (package B7c), as above.
         import matplotlib
         matplotlib.use("Agg")
         from matplotlib.figure import Figure

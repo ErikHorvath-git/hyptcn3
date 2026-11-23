@@ -80,6 +80,16 @@ def execute(a):
                             max_gap_s=protocol["max_gap_s"], epochs=a.epochs,
                             batch_size=a.batch_size, seed=a.seed, fpr=a.fpr,
                             k=a.k, n=a.n, diagnostic=a.diagnostic)
+    if a.command == "replay" and a.archive:
+        # The seal (package B7c, tcn/pecat.py) before the bundle is loaded or anything is written: a sealed archive of
+        # a campaign is refused by name outside the final run that consumed its seal (exit 2, no output directory).
+        from tcn import pecat
+        pecat.kontrola(a.archive, purpose="safeguard replay --archive")
+    elif a.command in ("replay", "watch"):
+        # The raw snapshots of a session likewise, by the session its session.json names (tcn/pecat.py SNAPSHOT_RULE);
+        # run_directory checks them again before it writes.
+        from tcn import pecat
+        pecat.kontrola_snimok(a.snapshots, purpose=f"safeguard {a.command} --snapshots")
     bundle = load_bundle(a.bundle, allow_diagnostic=getattr(a, "allow_diagnostic", False))
     if a.command == "inspect":
         return bundle.manifest
@@ -87,49 +97,64 @@ def execute(a):
         from .supervisor import supervise
         return supervise(bundle, a.protocol, a.profile, a.domain, a.out, cycles=a.cycles)
     if a.command == "replay" and a.archive:
-        from .demo import write_json
-        # The verdict below applies the invalid_rows rule of the bundle's protocol; a malformed rule ends the
-        # replay before it writes anything.
-        protocol = bundle.manifest.get("provenance", {}).get("protocol") or {}
-        invalid_rows_rule(protocol)
-        a.out.mkdir(parents=True, exist_ok=False)
-        (a.out / "evidence").mkdir()
-        write_json(a.out / "configuration.json", {"schema": "hyptcn3/safeguard-configuration/1",
-                   "bundle_manifest": bundle.manifest, "archive": str(a.archive.resolve()),
-                   "preserve": False, "follow": False})
-        try:
-            rows = replay_archive(bundle, a.archive)
-        except (OSError, ValueError, KeyError, TypeError, RuntimeError) as exc:
-            write_json(a.out / "status.json", {"schema": "hyptcn3/safeguard-run/1",
-                       "running": False, "state": "input_error", "ok": False,
-                       "diagnostic": bundle.manifest["diagnostic"], "error": str(exc)})
-            raise
-        with (a.out / "events.jsonl").open("x") as stream:
-            event_number = 0
-            for row in rows:
-                stream.write(json.dumps(row, ensure_ascii=False, allow_nan=False) + "\n")
-                if row["alarm_event"]:
-                    event_number += 1
-                    write_json(a.out / "evidence" / f"event-{event_number:06d}.json", row)
-        result = {"schema": "hyptcn3/safeguard-run/1", "diagnostic": bundle.manifest["diagnostic"],
-                  "running": False, "processed": len(rows),
-                  "scored": sum(r["score"] is not None for r in rows),
-                  "input_errors": sum(r["model_state"] == "input_error" for r in rows),
-                  "alarm_events": sum(r["alarm_event"] for r in rows),
-                  "fatal": any(r["fatal"] for r in rows), "stop_reason": "replay_complete",
-                  "state": rows[-1]["state"] if rows else "input_error", "last": rows[-1] if rows else None}
-        # An input error that is only a row the bundle protocol's invalid_rows rule tolerates does not fail the replay.
-        tolerated = tolerated_input_errors(rows, protocol)
-        result["tolerated_invalid_rows"] = len(tolerated or [])
-        result["ok"] = bool(rows) and tolerated is not None
-        write_json(a.out / "status.json", result)
-        return result
+        return replay_directory(bundle, a.archive, a.out)
     from .supervisor import _termination_handlers
     with _termination_handlers():
         return run_directory(bundle, a.snapshots, a.profile, a.out,
                              follow=a.command == "watch", preserve=a.command == "watch",
                              idle_timeout=getattr(a, "idle_timeout", None),
                              hold_binary=str(ROOT / "vmicollect/build/vmicollect"))
+
+
+def replay_directory(bundle, archive, out):
+    """`safeguard replay --archive` of a loaded bundle into the new directory `out`: configuration.json (with the
+    archive's sha256 and the seal's decision, tcn/pecat.py kontrola: a rehearsal's archive carries the rehearsal
+    mark), events.jsonl, evidence/ and status.json (with the unscored stretches, safeguard.runtime.unscored: each
+    nevyhodnotené); returns the status. The seal is checked first, before anything is written (package B7c): the final
+    command (python -m tcn.finalne) replays the sealed archives of its run through this function in its process."""
+    from tcn import pecat
+    from .demo import write_json
+    from .runtime import unscored
+    archive, out = Path(archive), Path(out)
+    seal = pecat.kontrola(archive, purpose="safeguard replay --archive")
+    # The verdict below applies the invalid_rows rule of the bundle's protocol; a malformed rule ends the
+    # replay before it writes anything.
+    protocol = bundle.manifest.get("provenance", {}).get("protocol") or {}
+    invalid_rows_rule(protocol)
+    out.mkdir(parents=True, exist_ok=False)
+    (out / "evidence").mkdir()
+    write_json(out / "configuration.json", {"schema": "hyptcn3/safeguard-configuration/1",
+               "bundle_manifest": bundle.manifest, "archive": str(archive.resolve()),
+               "archive_sha256": seal["sha256"], "seal": seal, "preserve": False, "follow": False})
+    try:
+        rows = replay_archive(bundle, archive)
+    except (OSError, ValueError, KeyError, TypeError, RuntimeError) as exc:
+        write_json(out / "status.json", {"schema": "hyptcn3/safeguard-run/1",
+                   "running": False, "state": "input_error", "ok": False,
+                   "diagnostic": bundle.manifest["diagnostic"], "error": str(exc)})
+        raise
+    with (out / "events.jsonl").open("x") as stream:
+        event_number = 0
+        for row in rows:
+            stream.write(json.dumps(row, ensure_ascii=False, allow_nan=False) + "\n")
+            if row["alarm_event"]:
+                event_number += 1
+                write_json(out / "evidence" / f"event-{event_number:06d}.json", row)
+    result = {"schema": "hyptcn3/safeguard-run/1", "diagnostic": bundle.manifest["diagnostic"],
+              "running": False, "processed": len(rows),
+              "scored": sum(r["score"] is not None for r in rows),
+              "input_errors": sum(r["model_state"] == "input_error" for r in rows),
+              "alarm_events": sum(r["alarm_event"] for r in rows),
+              "fatal": any(r["fatal"] for r in rows), "stop_reason": "replay_complete",
+              "state": rows[-1]["state"] if rows else "input_error", "last": rows[-1] if rows else None}
+    # An input error that is only a row the bundle protocol's invalid_rows rule tolerates does not fail the replay.
+    tolerated = tolerated_input_errors(rows, protocol)
+    result["tolerated_invalid_rows"] = len(tolerated or [])
+    result["ok"] = bool(rows) and tolerated is not None
+    result["unscored"] = unscored(rows, protocol.get("interval_s"))
+    result["seal"] = {key: seal[key] for key in ("allowed", "stage", "rehearsal", "mark", "identity")}
+    write_json(out / "status.json", result)
+    return result
 
 
 def main(argv=None):

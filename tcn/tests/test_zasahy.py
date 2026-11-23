@@ -1139,3 +1139,27 @@ def test_the_diagnostics_take_the_detection_of_the_interventions():
         assert (method["detection"]["label"], method["detection"]["share"]) == ("Z1:value", 0)
     assert [(row["k"], row["n"]) for row in rules["rules"]] == [(2, 3), (3, 5), (4, 7)]
     json.dumps({"rules": rules, "thresholds": thresholds}, allow_nan=False)
+
+
+def test_the_copy_of_a_session_that_names_its_archive_names_it_too():
+    """Package B7c: a session of a carrier role built from its index record names its feature archive (tcn.metody
+    ARCHIVE_KEY, which tcn/pecat.py looks up in the ledger before a method scores a window set); the copy of every
+    intervention names the archive of its session, so the copies of a sealed session stay sealed."""
+    import hashlib
+    from tcn.metody import Okna
+    from tcn.zasahy import Carriers
+    roles = generated()
+    for role in ("test_benign", "test_controls"):
+        w = roles[role].windows
+        sessions = [dict(w.session_arrays(s), features_sha256=hashlib.sha256(w.session_ids[s].encode()).hexdigest())
+                    for s in range(len(w.session_ids))]
+        okna = Okna(sessions, [tuple(int(x) for x in row[:2]) + (None,) for row in w.index], role=role,
+                    normalizer=w.normalizer, window_rows=WINDOW, max_gap_s=GAP, interval_s=INTERVAL)
+        roles[role] = Carriers(okna, roles[role].placeable, roles[role].meta)
+    for plan in plans(roles).values():
+        items = placed(plan)
+        assert items and plan.copies is not None
+        for item in items:
+            c = plan.copies.session_ids.index(item["id"])
+            assert plan.copies.archives[c] == hashlib.sha256(item["session"].encode()).hexdigest()
+

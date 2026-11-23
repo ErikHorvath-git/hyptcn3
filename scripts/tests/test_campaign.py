@@ -469,8 +469,15 @@ def event_audit(tmp_path, name, p, role="test_events", group="v3-test_events-1",
 
 
 def test_test_only_protocol_gets_an_event_index_not_a_corpus(tmp_path, monkeypatch):
+    import features.acceptance
     import features.archive
     monkeypatch.setattr(features.archive, "load", lambda path: {"casy": [10.0, 15.0]})
+    # Package B7c: event_index decides from the archive (require_accepted); the archive here is a stand-in, so the
+    # decision stays the one from the record this test builds (require_recorded, which require_accepted also ends
+    # with). scripts/tests/test_event_index.py decides real archives.
+    monkeypatch.setattr(features.acceptance, "require_accepted",
+                        lambda data, p, session, role, values, recorded_rows=None:
+                        features.acceptance.require_recorded(p, role, values, recorded_rows))
     p = {"schema": "hyptcn3/collection-protocol/2", "quality_policy": "behavioral-inputs-v1", "cycles": 2,
          "min_score_coverage": 0.5, "roles": {"test_events": 1}, "scenarios": {"quiet": {}, "steady": {}},
          "interval_s": 5, "max_gap_s": 7.5}

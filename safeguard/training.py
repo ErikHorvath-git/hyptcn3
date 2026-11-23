@@ -145,6 +145,14 @@ def validate_index(path, diagnostic=False):
             record[field] = str(file)
             if digest(file) != record[field + "_sha256"]:
                 raise ValueError(field + " checksum mismatch")
+        if role == "test_controls":  # Package B7c: the index hashes controls.json of this role (features/dataset.py).
+            if type(record.get("controls")) is not str or type(record.get("controls_sha256")) is not str:
+                raise ValueError("index record of role test_controls names no controls.json and its sha256: an "
+                                 "index built before package B7c")
+            controls = _resolve(path.parent, record["controls"])
+            record["controls"] = str(controls)
+            if digest(controls) != record["controls_sha256"]:
+                raise ValueError("controls checksum mismatch")
         if record["features"] in files or record["features_sha256"] in hashes:
             raise ValueError("duplicate feature archive")
         files.add(record["features"])

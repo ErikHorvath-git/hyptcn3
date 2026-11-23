@@ -845,7 +845,56 @@
       "scored_share": 0.5
     },
     "min_occurrences": 8,
-    "note": "The analysis plan of proposal 10.1 point 3 (chapters 6.4, 7.4, 8.3, 8.4): the model enters K1 and K2 by its median over the five seeds, the deployed bundle is seed 0 (D14); fpr 0.01 and the rule 3 of 5 are kept (chapter 12); K1 against the prediction methods, K2a against the threshold methods, K2b against the methods with time and no learning; an occurrence is evaluable when at least half of its first 60 s is scored; a type or class with fewer than 8 evaluable occurrences is not evaluated. The bounds m are set in G1, the grids and the classes of the columns (analysis.columns) in G3a. The numbers of the G0 rows are the author's judgment by proposal 10.9. Package B7a (the lead's skeleton dokazy/B7/kostra/KOSTRA.md sections 2 to 4 and its addendum 2 point 1): Z0, Z2, Z4 and M have no free parameter (grid {}), only the grids of Z1, Z3 and Z5 wait for G3a; descriptive_methods are the z-score, the isolation forest and the GRU and LSTM predictors in the same wrapper as Z0 to Z5 (M's windows and normalizer, the behaviour inputs with the bin summary of tcn/baselines.py zluc_biny, a threshold at the matched alarm rate), reported beside M and Z (the loss of the predictors, the share of interventions detected, the alarms per hour) and deciding neither K1 nor K2; wording holds the conclusions of chapter 8.4 word for word (the text inside its quotation marks, the blanks where the table has them); matched_rate and statistics hold the rules of the matched alarm rate and of the interval and the test of K1 and K2. Package B7b (the lead's skeleton B7 sections 5, 6 and 9, design B7b 1.4): interventions holds the orders of C, the groups of D, the validity predicate, the evaluable minimum and the volume class, and diagnostics the bounds of the diagnostics of proposal 8.5. K2 pools the classes C and D (skeleton section 9): a class with fewer than 8 evaluable interventions is reported nevyhodnoten\u00e9 by class and stays in the pooled shares, and K2 is nevyhodnoten\u00e9 only when no class is evaluated (interventions.note). K2a compares the two variants of Z4 as two comparisons, Z4:load and Z4:residual, each with its own stream bootstrap, and 'better' needs M to beat both: question Q13 to the lead, provisional by the executor's proposal and waiting for the lead's answer (if he answers otherwise, only k2a.compare and scripts/protocol_v5.py CONFIRMATORY change). Clean traffic, for the budget, the thresholds, the rates and K1, is the time outside the events and their reverberation (proposal 4.2; question Q12 to the lead, provisional by the executor's proposal): the full-snapshot band bounds only where the interventions are placed, and the rate is per observed hour of clean traffic."
+    "metrics": {
+      "alarm_rate_interval": {
+        "method": "garwood",
+        "level": 0.95,
+        "source": "The thesis (the lead's skeleton dokazy/B7/kostra/KOSTRA.md, addendum 2 point 2: false alarms per hour of evaluated time with the exact two-sided Poisson interval of Garwood). The level 0.95 is the one tcn/eval.py has given the thesis' interval since iteration 1 (alfa 0.05, alfa/2 on each side) and the 95 % of proposal 8.4 and 9.2."
+      },
+      "dispersion": {
+        "method": "pearson_x2",
+        "unit": "session",
+        "source": "The thesis (skeleton B7, addendum 2 point 2: a test whether the alarm counts differ between sessions more than chance gives): Pearson's X2 of the counts of the sessions against their expectation in proportion to the time of each, with sessions - 1 degrees of freedom, as tcn/eval.py has computed it since iteration 1 (judgment: the time is the observed time, the main denominator of proposal 4.2, where iteration 1 took the scored time). It has no number of its own: its p-value is reported."
+      },
+      "event_vs_clean": {
+        "method": "conditional_binomial",
+        "alternative": "greater",
+        "alpha": 0.05,
+        "source": "The thesis (skeleton B7, addendum 2 point 2: the alarm rate during events against clean traffic on test_benign, a one-sided exact test of two Poisson rates at alpha 0.05, in total and per event type): the exact conditional test, the alarms during events among all the alarms of both against the binomial law of the share of the observed time the events hold, as tcn/eval.py porovnanie_mier has computed it since protocol v3 (NAVRH_PROTOKOL_V3 kap. 5). alpha 0.05 is the thesis'."
+      },
+      "o2_bound": {
+        "method": "poisson_upper",
+        "level": 0.95,
+        "source": "Proposal 4.2 row O2 (alarms per observed hour of clean traffic with an exact one-sided bound, per channel and in total) and 9.2, whose table is this bound: the one-sided upper bound of the Poisson mean, chi2.ppf(level, 2k + 2) / 2, over the clean observed hours (0 alarms in 16.8 hours give 0.18 per hour, 1 alarm 0.28). The level 0.95 is proposal 9.2's."
+      },
+      "o3_bound": {
+        "method": "clopper_pearson_upper",
+        "level": 0.95,
+        "source": "Proposal 4.2 row O3 (the share of evaluable occurrences with an alarm per event type, with a bound) and 9.2 (12 evaluable occurrences without an alarm give 0.22 as the upper bound of the probability of an alarm): the one-sided exact upper bound of Clopper and Pearson, beta.ppf(level, k + 1, n - k), 1 when every occurrence has an alarm. The level 0.95 is proposal 9.2's."
+      },
+      "classifier": {
+        "windows": [
+          "accuracy",
+          "macro_f1"
+        ],
+        "majority": [
+          "session",
+          "occurrence"
+        ],
+        "source": "The thesis (skeleton B7, addendum 2 point 2: accuracy and macro-F1 over windows and the majority class per session and per occurrence) and proposal 4.2 row O6 (the majority vote per occurrence beside the most frequent class and chance)."
+      },
+      "note": "Package B7c (design dokazy/B7/navrh/NAVRH_B7c.md 1.2 and 1.3): the metrics as the thesis defines them (the lead's skeleton B7, addendum 2 point 2), which tcn/eval.py computes beside the proposal's from the replays, per channel of the detector (rule, neural, kernel_integrity) and for their union; descriptive, they decide neither K1 nor K2. alarm_rate_interval is the interval of the alarms per observed hour of every evaluated row of a role (on test_benign every alarm is false: the events are part of normal, D10), dispersion the test of their counts over its sessions, event_vs_clean the test of the rate during the events against the rate in clean traffic, o2_bound the bound of O2 and o3_bound the bound of O3 (proposal 4.2 and 9.2), classifier the measures of the activity classifier (a bundle without classes, a baseline of tcn/porovnanie.py, has none). Each metric names its source; method is the one tcn/eval.py implements (scripts/protocol_v5.py METRIC_METHODS)."
+    },
+    "linkage": {
+      "VO1": "O8 a O1 (E1)",
+      "VO2": "O2, O3 a test z bodu 2 (E2)",
+      "VO3": "\u010das\u0165 vlastn\u00edka so vzorkami, mimo protokolu (E3, D16)",
+      "VO4": "K1, K2 a bod 1 (E4)",
+      "VO5": "O7 (E5)",
+      "VO6": "O6 a bod 2 (E2)",
+      "note": "The table of the lead's skeleton dokazy/B7/kostra/KOSTRA.md, addendum 2 point 4 (2026-11-22T20:55Z), word for word: each research question of chapter 3 of the thesis (VO1 to VO6) with the outputs of this protocol that answer it and, in parentheses, the experiment of the thesis (E1 to E5). 'bod 1' is point 1 of that addendum (the comparison models of the thesis in the core, analysis.descriptive_methods), 'bod 2' its point 2 (the metrics as the thesis defines them, analysis.metrics) and 'test z bodu 2' the one-sided exact test of the alarm rate during events against clean traffic of that point (analysis.metrics.event_vs_clean); VO3 is the owner's part with malware samples, outside this protocol (decision D16: tcn.eval malver). The record of the final command and the pre-registration document carry the table (design B7c 1.2 and 1.4); scripts/protocol_v5.py LINKAGE holds the same table and the self-check compares them."
+    },
+    "note": "The analysis plan of proposal 10.1 point 3 (chapters 6.4, 7.4, 8.3, 8.4): the model enters K1 and K2 by its median over the five seeds, the deployed bundle is seed 0 (D14); fpr 0.01 and the rule 3 of 5 are kept (chapter 12); K1 against the prediction methods, K2a against the threshold methods, K2b against the methods with time and no learning; an occurrence is evaluable when at least half of its first 60 s is scored; a type or class with fewer than 8 evaluable occurrences is not evaluated. The bounds m are set in G1, the grids and the classes of the columns (analysis.columns) in G3a. The numbers of the G0 rows are the author's judgment by proposal 10.9. Package B7a (the lead's skeleton dokazy/B7/kostra/KOSTRA.md sections 2 to 4 and its addendum 2 point 1): Z0, Z2, Z4 and M have no free parameter (grid {}), only the grids of Z1, Z3 and Z5 wait for G3a; descriptive_methods are the z-score, the isolation forest and the GRU and LSTM predictors in the same wrapper as Z0 to Z5 (M's windows and normalizer, the behaviour inputs with the bin summary of tcn/baselines.py zluc_biny, a threshold at the matched alarm rate), reported beside M and Z (the loss of the predictors, the share of interventions detected, the alarms per hour) and deciding neither K1 nor K2; wording holds the conclusions of chapter 8.4 word for word (the text inside its quotation marks, the blanks where the table has them); matched_rate and statistics hold the rules of the matched alarm rate and of the interval and the test of K1 and K2. Package B7b (the lead's skeleton B7 sections 5, 6 and 9, design B7b 1.4): interventions holds the orders of C, the groups of D, the validity predicate, the evaluable minimum and the volume class, and diagnostics the bounds of the diagnostics of proposal 8.5. K2 pools the classes C and D (skeleton section 9): a class with fewer than 8 evaluable interventions is reported nevyhodnoten\u00e9 by class and stays in the pooled shares, and K2 is nevyhodnoten\u00e9 only when no class is evaluated (interventions.note). K2a compares the two variants of Z4 as two comparisons, Z4:load and Z4:residual, each with its own stream bootstrap, and 'better' needs M to beat both: question Q13 to the lead, provisional by the executor's proposal and waiting for the lead's answer (if he answers otherwise, only k2a.compare and scripts/protocol_v5.py CONFIRMATORY change). Clean traffic, for the budget, the thresholds, the rates and K1, is the time outside the events and their reverberation (proposal 4.2; question Q12 to the lead, provisional by the executor's proposal): the full-snapshot band bounds only where the interventions are placed, and the rate is per observed hour of clean traffic. Package B7c (the lead's skeleton B7, addendum 2 points 2 and 4, design B7c 1.2): metrics holds the metrics as the thesis defines them and the bounds of O2 and O3 (proposal 4.2 and 9.2), each with its numbers and its source, and linkage the table of the thesis' research questions and the outputs that answer them, word for word; both are G0 and descriptive."
   },
   "rehearsal": {
     "name_suffix": "-generalka",

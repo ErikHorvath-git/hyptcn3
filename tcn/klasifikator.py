@@ -213,6 +213,11 @@ class Okna:
 
 
 def _frames(zaznam, otvorene=None):
+    """Snimky archivu relacie indexu; kazdy archiv nacitava trenuj aj vyhodnot iba tu. Pecat je prva (balik B7c,
+    tcn/pecat.py GUARD_RULE): zapecateny archiv kampane mimo finalneho behu odmietne kontrola menom skor, nez sa
+    archiv otvori."""
+    from tcn import pecat
+    pecat.kontrola(zaznam["features"], purpose="tcn.klasifikator")
     if digest(zaznam["features"]) != zaznam["features_sha256"]:
         raise ValueError("archiv %s sa zmenil od indexu" % zaznam["id"])
     frames = frames_from_archive(load_archive(zaznam["features"]), zaznam["id"])

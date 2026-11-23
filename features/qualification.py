@@ -582,16 +582,20 @@ def control_outcomes(records, protocol, stage):
     mine = [r for r in records if r["role"] == "test_controls"]
     if not mine:
         return "the index holds no session of role test_controls"
+    from features.dataset import controls_of
     from scripts import controls
     out, skipped = [], []
     for r in mine:
         data = _archive(r)
-        doc = json.loads((Path(r["session"]).parent / "controls.json").read_text())
+        doc = controls_of(r)  # Its sha256 checked against the index (package B7c).
         for item in doc["controls"]:
             if item.get("kind") is None:
                 continue  # A slot of the plan without a control.
             try:
-                out.append(controls.outcomes(item, data, protocol, role="test_controls", stage=stage))
+                # The seal decides by the session's archive in the ledger (package B7c, tcn/pecat.py), not by the
+                # stage: a rehearsal's archive carries its mark, a sealed archive of a campaign is refused.
+                out.append(controls.outcomes(item, data, protocol, role="test_controls", archive=r["features"],
+                                             stage=stage))
             except ValueError as error:
                 skipped.append({"session": r["id"], "kind": item["kind"], "why": str(error)})
     return out, skipped

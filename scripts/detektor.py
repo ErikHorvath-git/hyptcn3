@@ -16,6 +16,9 @@ POUZITIE
       [--cakaj <s>] [--out <jsonl>]
 
 Vystup: riadky JSON {ts, seq, skore, alarm, hold_rc, latencia_ms}.
+
+Pecat (balik B7c, tcn/pecat.py SNAPSHOT_RULE): adresar --snapshots skontroluje kontrola_snimok skor, nez sa nacita
+model alebo snimka; snimky relacie, ktoru kniha pecati zapecatila pre kampan, odmietne menom (navrat 2).
 """
 
 import argparse
@@ -58,6 +61,12 @@ def main(argv=None):
     if (not math.isfinite(a.prah) or a.prah < 0 or not 1 <= a.k <= a.n
             or not math.isfinite(a.cakaj) or a.cakaj < 0):
         ap.error("potrebny konecny prah >= 0, 1 <= k <= n a cakaj >= 0")
+    from tcn import pecat
+    try:
+        pecat.kontrola_snimok(a.snapshots, purpose="scripts/detektor.py")
+    except ValueError as error:  # Zapecatene, or a session.json that names no session.
+        print(f"scripts/detektor.py: {error}", file=sys.stderr)
+        return 2
     model, norm, checkpoint = nacitaj_prediktor(a.model)
     dlzka = int(checkpoint["dlzka_okna"])
     out = open(a.out, "a", encoding="utf-8") if a.out else sys.stdout

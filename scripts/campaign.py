@@ -1194,15 +1194,45 @@ def execute(directory, *, stop_after=None, vm=None):
 EVENT_INDEX = "hyptcn3/event-index/1"
 
 
-def event_index(reports, p, protocol_sha):
+def test_only(p, mode=None):
+    """Whether a campaign of `p` ends with an event index instead of a corpus index: a protocol of schema 1 or 2
+    without the role train (the test-only protocol of v3, step A), and under schema 3 a plan of `mode` without a
+    session of a fitting role (features/dataset.py FIT_ROLES: schema 3 names all five roles, some with no group, so the
+    key alone says nothing; package B7c)."""
+    if p.get("schema") != collection.protocol_v5.SCHEMA:
+        return "train" not in p["roles"]
+    from features.dataset import FIT_ROLES
+    return not any(row["role"] in FIT_ROLES for row in collection.protocol_v5.planned_rows(p, mode))
+
+
+def event_index(reports, p, protocol_sha, *, mode=None):
     """Test-only protocol (v3, step A): accepted sessions with their event intervals.
 
     No training roles, so no corpus index: these sessions are only scored by an
     existing bundle (python3 -m tcn.eval udalosti).
+
+    Package B7c. Every session is admitted by features.acceptance.require_accepted from its archive, which the
+    index opens anyway (deferred point 8 of B2: an archive exchanged after the audit is refused; the decision is the
+    one features/dataset.py build makes). The planned sessions: under protocol schema 3 the rows of the plan of `mode`
+    (scripts/protocol_v5.py planned_rows, as features/dataset.py build; the mode has no default, campaign or
+    rehearsal, and the index records it as plan_mode): a session must hold a planned row, matched by role, group,
+    scenario and VM, and the index is complete when every row holds exactly one session. Schemas 1 and 2 keep their
+    rule (every scenario in every group of their roles: the product) and refuse a mode.
     """
-    from features.acceptance import require_recorded
+    from features.acceptance import require_accepted
     from features.archive import load
+    from features.dataset import named, row_key
     from features.quality import require_log_audit
+    if p.get("schema") == collection.protocol_v5.SCHEMA:
+        if mode is None:
+            raise ValueError("an event index of protocol schema 3 needs its plan mode (campaign or rehearsal)")
+        rows = collection.protocol_v5.planned_rows(p, mode)
+    elif mode is not None:
+        raise ValueError(f"plan mode {mode} applies only to protocol schema 3; schemas 1 and 2 keep every scenario "
+                         "in every group")
+    else:
+        rows = None
+    planned_keys = None if rows is None else {row_key(row) for row in rows}
     records, boots, groups = [], {}, {}
     for path in reports:
         v = read_json(path)["values"]
@@ -1217,13 +1247,17 @@ def event_index(reports, p, protocol_sha):
         if meta["role"] not in p["roles"] or boots.setdefault(boot, meta["group"]) != meta["group"] \
                 or groups.setdefault(meta["group"], boot) != boot:
             raise ValueError("role or boot/group mapping outside the plan: " + str(path))
+        if planned_keys is not None and row_key(meta) not in planned_keys:
+            raise ValueError(f"assignment is outside the planned allocation: session "
+                             f"{named(dict(meta, id=meta['session_id']))} holds no row of plan:{mode}: {path}")
+        data = load(v["features"])
         try:
-            # The recorded verdict must be the one this protocol gives for the recorded facts of this role. The
+            # The verdict derived from the archive must accept and equal the record (features/acceptance.py). The
             # recorded length goes in as at the audit; it decides only a session of the role "diagnostic".
-            require_recorded(p, meta["role"], v, meta.get("cycles"))
+            require_accepted(data, p, session.name, meta["role"], v, meta.get("cycles"))
         except ValueError as error:
             raise ValueError(f"{error}: {path}") from None
-        casy = load(v["features"])["casy"]
+        casy = data["casy"]
         events = session / "events.json"
         records.append({"id": meta["session_id"], "role": meta["role"], "group": meta["group"], "boot_id": boot,
                         **({"vm": meta["vm"]} if meta.get("vm") else {}),
@@ -1235,10 +1269,16 @@ def event_index(reports, p, protocol_sha):
                         "events": str(events), "events_sha256": digest(events),
                         "guest": meta["guest_before"], "collector_sha256": meta["collector_sha256"],
                         "extractor_sha256": v["extractor_sha256"]})
-    planned = sum(p["roles"].values()) * len(p["scenarios"])
-    return {"schema": EVENT_INDEX, "complete": len(records) == planned, "planned_sessions": planned,
+    if rows is None:
+        planned = sum(p["roles"].values()) * len(p["scenarios"])
+        complete = len(records) == planned
+    else:  # Every planned row holds exactly one session (a second session of a row leaves the index incomplete).
+        planned = len(rows)
+        complete = len(records) == planned and {row_key(r) for r in records} == planned_keys
+    return {"schema": EVENT_INDEX, "complete": complete, "planned_sessions": planned,
             "protocol_sha256": protocol_sha, "protocol_config": p, "sessions": records,
-            "note": "Benign operational events; test-only sessions, never training data."}
+            "note": "Benign operational events; test-only sessions, never training data.",
+            **({} if rows is None else {"plan_mode": mode})}
 
 
 def continuation_note(manifest):
@@ -1255,10 +1295,13 @@ def continuation_note(manifest):
 
 def finish_corpus(directory, manifest, p, reports):
     vm = manifest.get("vm")  # Multi-VM: the status file of the runner that builds the index.
-    if "train" not in p["roles"]:
+    # The completeness of the plan the campaign ran (package B6a): collection.plan, under schema 3 the plan of mode
+    # campaign (load_campaign holds the manifest to it); schemas 1 and 2 keep their rule and have no mode.
+    mode = "campaign" if p.get("schema") == collection.protocol_v5.SCHEMA else None
+    if test_only(p, mode):  # Package B7c: under schema 3 a plan without a fitting role reaches the event index too.
         update_state(directory, vm=vm, status="running", stage="index", accepted_archived=len(reports))
         index = directory / "events_index.json"
-        doc = event_index(reports, p, manifest["protocol_sha256"])
+        doc = event_index(reports, p, manifest["protocol_sha256"], mode=mode)
         doc["protocol"] = str(directory / "protocol.json")
         doc.update(continuation_note(manifest))
         if not doc["complete"]:
@@ -1275,9 +1318,6 @@ def finish_corpus(directory, manifest, p, reports):
     from features.dataset import build
     update_state(directory, vm=vm, status="running", stage="index", accepted_archived=len(reports))
     index = directory / "corpus.json"
-    # The completeness of the plan the campaign ran (package B6a): collection.plan, under schema 3 the plan of mode
-    # campaign (load_campaign holds the manifest to it); schemas 1 and 2 keep their rule and have no mode.
-    mode = "campaign" if p.get("schema") == collection.protocol_v5.SCHEMA else None
     doc = build(reports, p, manifest["protocol_sha256"], mode=mode)
     doc["protocol"] = str(directory / "protocol.json")
     doc.update(continuation_note(manifest))

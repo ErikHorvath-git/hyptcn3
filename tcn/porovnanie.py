@@ -50,11 +50,18 @@ vlastnost porovnania, nie chyba. Pravidlovy kanal (stlpce triedy rule a
 rule_differenced) baseliny nemaju: ich balik nesie prazdny pravidlovy kanal
 a ich alarmy su iba alarmy neuronoveho kanala (model_anomaly).
 
+PARAMETRE
+---------
+Seed, epochy, davka, fpr, k a n su parametre analyzy (balik B7c, parametre_fitu): pri protokole schemy 3 ich da
+plan analyzy protokolu korpusu a zadany parameter mimo --diagnostic fit odmietne menom, tak ako safeguard train
+(safeguard.training.training_parameters, balik B6b); seed z analysis.seeds je volba, nie prepisanie. Schemy 1 a 2
+drzia dnesne hodnoty (legacy_schema_2). Manifest ich uvedie v parameters.
+
 OBMEDZENIA
 ----------
-Riadky nemaju klasifikaciu aktivity (activity = None, classes = []), preto
-tcn.eval.vyhodnot_far (ktory pocita aj klasifikaciu aktivit) na tieto
-prehratia nepouzivat; FAR na cistej prevadzke a pri udalostiach dava
+Riadky nemaju klasifikaciu aktivity (activity = None, classes = []):
+tcn.eval.vyhodnot_far ich prehratia vyhodnoti bez tabuliek klasifikatora
+(BEZ_TRIED, balik B7c), FAR na cistej prevadzke a pri udalostiach dava aj
 vyhodnot_udalosti. iforest sa uklada pickle-om; nacitanie overi sha256 z
 manifestu (ochrana proti poskodeniu, nie autentifikacia).
 """
@@ -464,18 +471,36 @@ def _referencia(cesta, korpus_sha):
     return manifest, _manifest_sha(manifest)
 
 
-def fit(korpus, meno, out, *, seed=0, epochy=10, davka=32, fpr=0.01, k=3, n=5,
+def parametre_fitu(protokol, dane, *, diagnostic):
+    """Parametre fitu (balik B7c, navrh NAVRH_B7c 1.4): safeguard.training.training_parameters nad protokolom korpusu,
+    tak ako ich berie safeguard train (balik B6b). dane: {epochy, davka, seed, fpr, k, n}, None ked parameter nie je
+    zadany. Pri scheme 3 ich da plan analyzy (epochy = analysis.stopping.max_epochs, davka =
+    analysis.architecture.batch_size, seed = analysis.deploy_seed alebo zadany seed z analysis.seeds, fpr, k, n) a
+    zadany parameter mimo diagnostiky odmietne menom; diagnosticky fit ho pouzije a zapise do overrides. Schemy 1 a 2
+    drzia pravidlo legacy_schema_2 (LEGACY_VALUES: predvolby tohto modulu pred balikom B7c). Vrati zaznam
+    training_parameters (manifest ho ulozi ako parameters)."""
+    from safeguard.training import training_parameters
+    return training_parameters(protokol, {"epochs": dane["epochy"], "batch_size": dane["davka"], "seed": dane["seed"],
+                                          "fpr": dane["fpr"], "k": dane["k"], "n": dane["n"]},
+                               window_rows=protokol["window_rows"], diagnostic=diagnostic)
+
+
+def fit(korpus, meno, out, *, seed=None, epochy=None, davka=None, fpr=None, k=None, n=None,
         diagnostic=False, referencia=None, argv=None):
-    """Fit na train, vyber na dev, prah na calibration; vysledok je adresar modelu."""
-    if (type(seed) is not int or type(epochy) is not int or epochy < 1 or type(davka) is not int
-            or davka < 1 or type(k) is not int or type(n) is not int or not 1 <= k <= n
-            or not math.isfinite(fpr) or not 0 < fpr < 1):
-        raise ValueError("neplatne parametre fitu")
+    """Fit na train, vyber na dev, prah na calibration; vysledok je adresar modelu. seed, epochy, davka, fpr, k a n
+    su parametre analyzy (parametre_fitu): None znamena nezadany."""
     trieda = _trieda(meno)
+    korpus = Path(korpus).resolve()
+    protokol = json.loads(korpus.read_text()).get("protocol_config")
+    if type(protokol) is not dict:
+        raise ValueError("korpus nie je index s protocol_config (features/dataset.py build)")
+    parametre = parametre_fitu(protokol, {"epochy": epochy, "davka": davka, "seed": seed, "fpr": fpr, "k": k, "n": n},
+                               diagnostic=diagnostic)
+    seed, epochy, davka = parametre["seed"], parametre["stopping"]["max_epochs"], parametre["batch_size"]
+    fpr, k, n = parametre["fpr"], parametre["k"], parametre["n"]
     out = Path(out).resolve()
     if out.exists():
         raise FileExistsError("vystup existuje; zvol novu cestu")
-    korpus = Path(korpus).resolve()
     korpus_sha = digest(korpus)
     ref = None
     if referencia is not None:
@@ -522,7 +547,7 @@ def fit(korpus, meno, out, *, seed=0, epochy=10, davka=32, fpr=0.01, k=3, n=5,
                         "collector_sha256": meta["collector_sha256"],
                         "profile_sha256": meta.get("profile_sha256", {}),
                         "extractor_sha256": audit["values"]["extractor_sha256"]},
-        "calibration": kalibracia, "weights": {}, "referencny_tcn": ref,
+        "calibration": kalibracia, "weights": {}, "referencny_tcn": ref, "parameters": parametre,
         "training": {"seed": seed, "epochs": epochy, "batch_size": davka,
                      "normalization_fit_role": "train", **trening,
                      "windows": {rola: len(okna.indices) for rola, okna in data.items()},
@@ -535,7 +560,8 @@ def fit(korpus, meno, out, *, seed=0, epochy=10, davka=32, fpr=0.01, k=3, n=5,
                        "source_sha256": zdroje, "sessions": d["zaznamy"]},
         "zaznam": _hlavicka(argv),
         "limitations": ["Anomalne skore nie je verdikt o malveri; alarm urcuje az kalibracny prah.",
-                        "Riadky nemaju klasifikaciu aktivity; tcn.eval.vyhodnot_far na ne nepouzivat.",
+                        "Riadky nemaju klasifikaciu aktivity; tcn.eval.vyhodnot_far ich vyhodnoti bez tabuliek "
+                        "klasifikatora (BEZ_TRIED).",
                         "dev vybera checkpoint sieti, preto metriky na dev nie su drzane bokom."]}
     out.parent.mkdir(parents=True, exist_ok=True)
     docasny = Path(tempfile.mkdtemp(prefix="." + out.name + ".", dir=out.parent))
@@ -597,7 +623,15 @@ def _zapis(cesta, hodnota):
 
 
 def replay(model, archiv, out, *, allow_diagnostic=False, argv=None):
-    """Prehratie archivu tym istym Detectorom ako `safeguard replay --archive`; ten isty vystup."""
+    """Prehratie archivu tym istym Detectorom ako `safeguard replay --archive`; ten isty vystup.
+
+    Pecat (balik B7c, tcn/pecat.py GUARD_RULE) ide prva, pred nacitanim modelu a pred zapisom: zapecateny archiv
+    kampane mimo finalneho behu, ktory jeho pecat spotreboval, sa odmietne menom (tcn.pecat.Zapecatene, ValueError).
+    Rozhodnutie pecate je v configuration.json (archiv generalky nesie jej oznacenie), neskorovane useky v status.json
+    (safeguard.runtime.unscored: kazdy nevyhodnotené)."""
+    from tcn import pecat
+    from safeguard.runtime import unscored
+    pecat_rozhodnutie = pecat.kontrola(archiv, purpose="tcn.porovnanie replay")
     balik = nacitaj(model, allow_diagnostic=allow_diagnostic)
     out, archiv = Path(out), Path(archiv)
     # Verdikt nizsie uplatnuje pravidlo invalid_rows protokolu balika; chybne pravidlo ukonci prehratie pred zapisom.
@@ -608,7 +642,7 @@ def replay(model, archiv, out, *, allow_diagnostic=False, argv=None):
     _zapis(out / "configuration.json", {
         "schema": SCHEMA_KONFIGURACIA, "bundle_manifest": balik.manifest, "archive": str(archiv.resolve()),
         "archive_sha256": digest(archiv), "porovnanie_model": str(Path(model).resolve()),
-        "preserve": False, "follow": False, "zaznam": _hlavicka(argv)})
+        "preserve": False, "follow": False, "zaznam": _hlavicka(argv), "seal": pecat_rozhodnutie})
     try:
         riadky = replay_archive(balik, archiv)
     except (OSError, ValueError, KeyError, TypeError, RuntimeError) as exc:
@@ -632,6 +666,8 @@ def replay(model, archiv, out, *, allow_diagnostic=False, argv=None):
     tolerovane = tolerated_input_errors(riadky, protokol)
     stav["tolerated_invalid_rows"] = len(tolerovane or [])
     stav["ok"] = bool(riadky) and tolerovane is not None
+    stav["unscored"] = unscored(riadky, protokol.get("interval_s"))
+    stav["seal"] = {kluc: pecat_rozhodnutie[kluc] for kluc in ("allowed", "stage", "rehearsal", "mark", "identity")}
     _zapis(out / "status.json", stav)
     return stav
 
@@ -648,16 +684,20 @@ def _hlavny(argv=None):
     f = sub.add_parser("fit", help="fit train, vyber dev, prah calibration; test_benign sa nenacita")
     f.add_argument("--corpus", required=True, type=Path)
     f.add_argument("--model", required=True, choices=MODELY)
-    f.add_argument("--seed", type=int, default=0)
     f.add_argument("--out", required=True, type=Path, help="novy adresar; existujuci sa neprepise")
-    f.add_argument("--epochs", type=int, default=10)
-    f.add_argument("--batch-size", type=int, default=32)
-    f.add_argument("--fpr", type=float, default=0.01)
-    f.add_argument("--k", type=int, default=3)
-    f.add_argument("--n", type=int, default=5)
+    # Parametre analyzy (balik B7c, ako safeguard train od balika B6b) predvolene nezadane: schema 3 ich berie z planu
+    # analyzy protokolu a mimo --diagnostic odmietne (seed z analysis.seeds je volba); schemy 1 a 2 drzia dnesne
+    # hodnoty (legacy_schema_2, safeguard/training.py LEGACY_VALUES).
+    for volba, typ in (("--seed", int), ("--epochs", int), ("--batch-size", int), ("--fpr", float), ("--k", int),
+                       ("--n", int)):
+        f.add_argument(volba, type=typ, default=None,
+                       help="parameter analyzy, predvolene nezadany: schema 3 ho berie z planu analyzy a mimo "
+                            "--diagnostic odmietne; schemy 1 a 2 dnesnu hodnotu (legacy_schema_2)")
     f.add_argument("--reference", type=Path,
                    help="balik TCN (safeguard train): over rovnaky korpus a rovnake fpr/k/n")
-    f.add_argument("--diagnostic", action="store_true")
+    f.add_argument("--diagnostic", action="store_true",
+                   help="diagnosticky model; pri scheme 3 jediny sposob, ako prepisat parameter analyzy (manifest "
+                        "ho uvedie v parameters.overrides)")
     r = sub.add_parser("replay", help="prehratie archivu; vystup ako safeguard replay --archive")
     r.add_argument("--model", required=True, type=Path)
     r.add_argument("--archive", required=True, type=Path)

@@ -118,3 +118,56 @@ def test_suhrn_udalosti_datasetu_2():
     assert out["metriky"]["d2.po_udalosti_far_h"]["chyba"] == 2
     assert out["metriky"]["d2.trieda_udrzba_far_h"]["max"] == 3.0
     assert out["metriky"]["d2.udalosti_s_alarmom_podiel"]["priemer"] == 0.25
+
+
+@pytest.mark.parametrize("schemy, ocakavane", [
+    ((3, 3), "analysis"),
+    ((2, 2), "legacy_schema_2"),
+    ((3, 2), "baliky protokolu schemy 3 aj inej schemy: rozptyl seedov je nad balikmi jedneho protokolu"),
+], ids=["schema_3", "legacy_schema_2", "zmiesane"])
+def test_pravidlo_testovacej_roly_podla_schemy_balikov(schemy, ocakavane):
+    """Balik B7c (navrh NAVRH_B7c 1.4, mapa kodu B7 par. 9 bod 7): pri balikoch protokolu schemy 3 suhrn uz nehovori,
+    ze test_benign sa vyhodnocuje iba pre seed 0: testovaciu rolu vyhodnoti raz finalny prikaz tcn.finalne so vsetkymi
+    seedmi analysis.seeds (SULAD, D14). Schemy 1 a 2 drzia legacy_schema_2; baliky oboch druhov naraz su chyba."""
+    manifesty = []
+    for seed, schema in zip((0, 1), schemy):
+        m = manifest(seed, 1.0 + seed)
+        m["provenance"]["protocol"] = (json.loads(V5.read_text()) if schema == 3
+                                       else {"schema": "hyptcn3/collection-protocol/2"})
+        manifesty.append(m)
+    if ocakavane not in seedy.PRAVIDLO_TESTU:
+        with pytest.raises(ValueError, match="^" + re.escape(ocakavane) + "$"):
+            seedy.suhrn(manifesty, {})
+        return
+    out = seedy.suhrn(manifesty, {})
+    assert out["pravidlo_testu"] == ocakavane and out["poznamka"].endswith(seedy.PRAVIDLO_TESTU[ocakavane])
+    if ocakavane == "analysis":
+        assert "tcn.finalne" in out["poznamka"] and "seed 0" not in out["poznamka"]
+        assert out["deploy_seed"] == 0 and "finalny_seed" not in out
+    else:
+        assert out["finalny_seed"] == 0 and "iba pre finalny seed 0" in out["poznamka"]
+
+
+def test_suhrn_odmietne_vysledok_roly_test_controls():
+    """Balik B7c: aj druha zapecatena rola (test_controls) do rozptylu seedov nepatri."""
+    m = [manifest(1, 1.0), manifest(2, 2.0)]
+    with pytest.raises(ValueError, match="^rola test_controls je zapecateny zaverecny test; do rozptylu seedov "
+                                         "nepatri"):
+        seedy.suhrn(m, {"t": [far_dev(m[0], 0.1, rola="test_controls")]})
+
+
+@pytest.mark.parametrize("rola", ["test_benign", "test_controls"])
+def test_suhrn_odmietne_vysledok_udalosti_zapecatenej_roly(rola):
+    """Nalez F11 overenia B7c: vysledok tcn.eval udalosti zapecatenej roly (korpus_rola) do rozptylu seedov nepatri,
+    rovnako ako vysledok far; vysledok udalosti indexu bez roly (dataset 2) prejde (test_suhrn_udalosti_datasetu_2)."""
+    m = [manifest(1, 1.0), manifest(2, 2.0)]
+    blok = {"far_h": {"skorovany": {"udalosti_h": 1.0}}}
+    vysledok = {"schema": "hyptcn3/safeguard-event-far/1", "korpus_rola": rola,
+                "balik": {"manifest_sha256": _manifest_sha(m[0])},
+                "merane": {"prevadzka": blok, "po_udalosti": None, "vsetky_udalosti": blok, "triedy": {}},
+                "udalosti": {"s_alarmom_modelu": 1, "vykonanych": 4}}
+    with pytest.raises(ValueError, match="^" + re.escape(
+            f"rola {rola} je zapecateny zaverecny test; do rozptylu seedov nepatri ani vysledok tcn.eval udalosti "
+            "(PRAVIDLO_TESTU: pri scheme 3 ju vyhodnoti raz tcn.finalne so vsetkymi seedmi analysis.seeds, pri "
+            "schemach 1 a 2 tcn.eval udalosti --final)") + "$"):
+        seedy.suhrn(m, {"t": [vysledok]})

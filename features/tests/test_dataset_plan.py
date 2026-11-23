@@ -110,6 +110,9 @@ def session(root, c, place, sid, t0):
     # A schema-3 session lists its events (none are planned here) and keeps events.json, which build indexes.
     collection.write_json(directory / "events.json", {"schema": "hyptcn3/session-events/1", "events": [],
                                                       "note": "synthetic record of the test"})
+    if place["role"] == "test_controls":  # Package B7c: build hashes it (its log audit refuses a session without it).
+        collection.write_json(directory / "controls.json", {"schema": protocol_v5.CONTROLS_SCHEMA, "controls": [],
+                                                            "note": "synthetic record of the test"})
     result = extraction(sid, t0, SCENARIOS.index(place["scenario"]), place["seed"])
     rows, _, verdict, quality = collection.analyze_windows(result, c.p, sid, place["role"])
     assert verdict["reasons"] == [] and verdict["windows"] == WINDOWS, (sid, verdict["reasons"])
@@ -487,3 +490,38 @@ def test_planned_rows_refuse(campaign_corpus, case):
         scenario = next(s for s in held if held.count(s) > 1)
         with refused(f"planned rows cannot be matched: group {sessions[0]['group']} repeats scenario {scenario}"):
             planned_rows(p, "campaign")
+
+
+@pytest.mark.parametrize("case", ["indexed", "missing", "changed"])
+def test_the_index_hashes_the_controls_of_test_controls(campaign_corpus, tmp_path, case):
+    """Package B7c (the executor's points for B7): every session of role test_controls is indexed with its
+    controls.json and the file's sha256, no session of another role has one; build refuses a session of the role
+    without the file, and the production check of training (validate_index) and the reader controls_of refuse a file
+    whose sha256 differs from the index."""
+    from features import dataset
+    from safeguard.training import validate_index
+    c = campaign_corpus
+    if case == "missing":
+        place = next(s for s in c.plan if s["role"] == "test_controls")
+        audit = session(tmp_path / "sessions", c, place, "no-controls", c.times[c.sids[label(place)]][0])
+        (tmp_path / "sessions" / "no-controls" / "controls.json").unlink()
+        with refused(f"session of role test_controls has no controls.json: {tmp_path / 'sessions' / 'no-controls'}"):
+            build(c, [audit if key == label(place) else a for key, a in c.audits.items()])
+        return
+    doc = build(c)
+    controls = [r for r in doc["sessions"] if r["role"] == "test_controls"]
+    assert len(controls) == 6 and not any("controls" in r for r in doc["sessions"] if r["role"] != "test_controls")
+    for r in controls:
+        assert r["controls"] == str(Path(r["session"]).parent / "controls.json")
+        assert r["controls_sha256"] == collection.digest(r["controls"])
+        assert dataset.controls_of(r) == json.loads(Path(r["controls"]).read_text())
+    if case == "indexed":
+        validate_index(write_index(c, doc, tmp_path / "corpus.json"))
+        return
+    first = controls[0]
+    first["controls_sha256"] = "0" * 64
+    with refused("controls checksum mismatch"):
+        validate_index(write_index(c, doc, tmp_path / "corpus.json"))
+    with refused(f"controls.json of session {first['id']} changed since the index: {first['controls']}"):
+        dataset.controls_of(first)
+

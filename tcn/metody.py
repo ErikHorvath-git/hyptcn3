@@ -286,6 +286,11 @@ def fingerprint(normalizer):
 
 
 SESSION_KEYS = ("id", "global", "local", "seq", "timestamp", "full_times", "load")
+# The optional key of a session (package B7c): the sha256 of the feature archive its rows come from (features_sha256 of
+# its index record, Okna.from_sessions), which tcn/pecat.py looks up in the ledger before a method scores the set;
+# absent for a session built from arrays (synthetic data, the tests: tcn.pecat NO_ARCHIVE_RULE). Okna.session_arrays
+# returns it, so a window set built from the sessions of another (tcn/diagnostiky.py, tcn/zasahy.py) keeps it.
+ARCHIVE_KEY = "features_sha256"
 
 
 class Okna:
@@ -322,14 +327,21 @@ class Okna:
         self.length = window_rows + int(self.anchored)
         width, bins = len(self.input_names), len(self.bins)
         self.session_ids, self._global, self._local, self._load, self.full_times = [], [], [], [], []
+        archives = []  # ARCHIVE_KEY of every session, None when it names none.
         self._seq, self._times = [], []
         loads = set()
         for session in sessions:
-            if type(session) is not dict or set(session) != set(SESSION_KEYS):
-                raise ValueError("a session of a window set has exactly the keys " + ", ".join(SESSION_KEYS))
+            if type(session) is not dict or not set(SESSION_KEYS) <= set(session) <= {*SESSION_KEYS, ARCHIVE_KEY}:
+                raise ValueError("a session of a window set has exactly the keys " + ", ".join(SESSION_KEYS)
+                                 + f" (and optionally {ARCHIVE_KEY})")
             ident = session["id"]
             if type(ident) is not str or not ident or ident in self.session_ids:
                 raise ValueError("every session of a window set has its own non-empty id")
+            archive = session.get(ARCHIVE_KEY)
+            if archive is not None and not (type(archive) is str and len(archive) == 64
+                                            and set(archive) <= set("0123456789abcdef")):
+                raise ValueError(f"session {ident}: {ARCHIVE_KEY} is the sha256 of its feature archive (64 lowercase "
+                                 "hex digits) or absent")
             g = np.asarray(session["global"], dtype=np.float64)
             local = np.asarray(session["local"], dtype=np.float64)
             seq = np.asarray(session["seq"])
@@ -356,6 +368,7 @@ class Okna:
                     raise ValueError(f"session {ident}: load is the offered load of each of its {rows} rows, finite "
                                      "and at least 0")
             self.session_ids.append(ident)
+            archives.append(archive)
             self._global.append(g)
             self._local.append(local)
             self._load.append(load)
@@ -365,6 +378,9 @@ class Okna:
         if len(loads) > 1:
             raise ValueError("the offered load is given for some sessions only: give it for every session or none")
         self.has_load = loads == {False}
+        # The sha256 of the feature archive of every session (ARCHIVE_KEY), None for a session that names none; the
+        # methods give it to tcn/pecat.py before they score the set (package B7c).
+        self.archives = tuple(archives)
         index, seqs, ends, starts = [], [], [], []
         previous = None
         for item in windows:
@@ -413,11 +429,17 @@ class Okna:
         normalizer and feature contract (window_rows, max_gap_s; the WindowBuffer anchored when the rule has a
         differenced column), interval_s the protocol's; a record that names a role must name `role`. load: None (Z4
         then refuses) or {session id: the offered load of each of its frames} for every session
-        (features/qualification.py offered_load over its traffic_intervals.jsonl)."""
+        (features/qualification.py offered_load over its traffic_intervals.jsonl). Every session keeps the sha256 of
+        its feature archive (features_sha256 of its record, ARCHIVE_KEY), which a record of a sealed role must name
+        (tcn/pecat.py SEALED_ROLES: the methods look it up in the ledger before they score the set, package B7c)."""
         from safeguard.training import Windows
+        from tcn.pecat import SEALED_ROLES
         sessions = list(sessions)
         if any(record.get("role", role) != role for record, _ in sessions):
             raise ValueError(f"the sessions of a window set of role {role} are of that role")
+        if role in SEALED_ROLES and any(record.get(ARCHIVE_KEY) is None for record, _ in sessions):
+            raise ValueError(f"a session of the sealed role {role} names the sha256 of its feature archive "
+                             f"({ARCHIVE_KEY} of its index record): tcn/pecat.py decides by it whether it is sealed")
         classes = sorted({record["scenario"] for record, _ in sessions})
         built = Windows(sessions, normalizer, contract, classes)
         if load is not None and (type(load) is not dict or set(load) != {frames[0].session for _, frames in sessions}):
@@ -430,7 +452,8 @@ class Okna:
             rows.append({"id": ident, "global": g, "local": local, "seq": np.array([f.seq for f in frames]),
                          "timestamp": np.array([f.timestamp for f in frames]),
                          "full_times": [f.timestamp for f in frames if f.full],
-                         "load": None if load is None else load[ident]})
+                         "load": None if load is None else load[ident],
+                         **({} if record.get(ARCHIVE_KEY) is None else {ARCHIVE_KEY: record[ARCHIVE_KEY]})})
         windows = [(s, end, anchor) for (s, end), anchor in zip(built.indices, built.anchors)]
         return cls(rows, windows, role=role, normalizer=normalizer, window_rows=contract["window_rows"],
                    max_gap_s=contract["max_gap_s"], interval_s=interval_s)
@@ -496,10 +519,11 @@ class Okna:
     def session_arrays(self, s):
         """The session at index s of the set as the constructor takes it (SESSION_KEYS): its id, its normalized inputs
         global (T, G) and local (T, B, 4), seq, timestamp, the times of its full snapshots and its offered load (None
-        when the set has none), the arrays read-only views of the set's own (a caller that changes a session works on a
-        copy; a window set built from them shares them). The one public accessor of the session state for code
-        outside this module (tcn/zasahy.py, tcn/diagnostiky.py; merge of B7b); index, resets, positions, seq and
-        timestamp of the windows are public attributes."""
+        when the set has none), with ARCHIVE_KEY when the session names its feature archive (package B7c), the arrays
+        read-only views of the set's own (a caller that changes a session works on a copy; a window set built from
+        them shares them). The one public accessor of the session state for code outside this module (tcn/zasahy.py,
+        tcn/diagnostiky.py; merge of B7b); index, resets, positions, seq and timestamp of the windows are public
+        attributes."""
         if type(s) is not int or not 0 <= s < len(self.session_ids):
             raise ValueError(f"the set holds the sessions 0 to {len(self.session_ids) - 1}, not {s!r}")
 
@@ -511,7 +535,8 @@ class Okna:
             return out
         return {"id": self.session_ids[s], "global": view(self._global[s]), "local": view(self._local[s]),
                 "seq": view(self._seq[s]), "timestamp": view(self._times[s]), "full_times": list(self.full_times[s]),
-                "load": view(self._load[s])}
+                "load": view(self._load[s]),
+                **({} if self.archives[s] is None else {ARCHIVE_KEY: self.archives[s]})}
 
     def sessions(self):
         """session_arrays of every session of the set, in order."""
@@ -527,6 +552,15 @@ class Okna:
 def _okna(windows, what):
     if not isinstance(windows, Okna):
         raise ValueError(f"{what} must be a window set (tcn.metody.Okna)")
+    return windows
+
+
+def _sealed(windows, label):
+    """The seal before a method scores a window set (package B7c, tcn/pecat.py GUARD_RULE): the archives its sessions
+    name (ARCHIVE_KEY) are looked up in the ledger; a sealed archive of a campaign outside the final run that consumed
+    its seal is refused by name (tcn.pecat.Zapecatene). A set that names no archive holds none (NO_ARCHIVE_RULE)."""
+    from tcn import pecat
+    pecat.kontrola_okien(windows, f"{label} scores a window set of role {windows.role}")
     return windows
 
 
@@ -932,7 +966,7 @@ class Metoda:
                 or (windows.window_rows, windows.max_gap_s, windows.interval_s) != self._windows):
             raise ValueError(f"{self.label} was fitted on windows of another normalizer or window; every method sees "
                              "the windows of its bundle M")
-        return windows
+        return _sealed(windows, self.label)
 
 
 # ------------------------------------------------------------------ Z0
@@ -1451,7 +1485,7 @@ class MetodaM(Metoda):
         if (windows.normalizer_sha256 != self._normalizer_sha256
                 or (windows.window_rows, windows.max_gap_s) != self._contract):
             raise ValueError("the window set is not of the bundle M's normalizer and window")
-        return windows
+        return _sealed(windows, self.label)
 
     def fit(self, train, dev, *, protocol, seed):
         self._check(train)

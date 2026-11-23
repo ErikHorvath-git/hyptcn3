@@ -11,8 +11,14 @@ safeguard.training.train_bundle na tom istom korpuse; ostatne parametre
 analyzy (--epochs, --batch-size, --fpr, --k, --n) su predvolene nezadane
 a train_bundle ich pri scheme 3 mimo --diagnostic odmietne. Rozptyl:
 metriky na dev (vyber checkpointu, kalibracia) a vysledky na datasetoch 2/3
-(tcn.eval udalosti, buduci malver); suhrn vysledky roly test_benign
-odmietne (zaverecny test patri baliku B7).
+(tcn.eval udalosti, buduci malver); suhrn vysledky zapecatenych roli
+test_benign a test_controls odmietne, vysledok far (rola) aj udalosti
+(korpus_rola). Pravidlo testovacej roly (balik B7c,
+PRAVIDLO_TESTU): pri baliku protokolu schemy 3 ju vyhodnoti raz finalny
+prikaz tcn.finalne so vsetkymi seedmi analysis.seeds (SULAD, D14: rozhoduje
+median piatich seedov, seed na nasadenie je analysis.deploy_seed); pri
+schemach 1 a 2 ostava legacy_schema_2, zaverecny test iba pre seed 0
+(tcn.eval far --final).
 
 Modul je tenky: `train` iba vola train_bundle pre kazdy seed do
 <out-root>/seed-<s>; `suhrn` je cista funkcia nad manifestmi a JSON
@@ -34,6 +40,14 @@ import numpy as np
 SCHEMA_SUHRN = "hyptcn3/seed-spread/1"
 SEEDY = (1, 2, 3, 4)  # legacy_schema_2: seedy bez --seeds pri protokole schemy 1 a 2 (dnesne)
 FINALNY_SEED = 0
+ZAPECATENE = ("test_benign", "test_controls")  # Zapecatene roly (balik B7c): do rozptylu seedov nepatria.
+# Pravidlo testovacej roly pri suhrne (balik B7c, navrh NAVRH_B7c 1.4; mapa kodu B7 par. 9 bod 7).
+PRAVIDLO_TESTU = {
+    "analysis": ("test_benign a test_controls vyhodnoti raz finalny prikaz tcn.finalne so vsetkymi seedmi "
+                 "analysis.seeds na tych istych prehratiach (SULAD: vsetkych pat seedov na testovacej role v jednom "
+                 "finalnom behu; D14: tvrdenia rozhoduje median seedov, balik na nasadenie je analysis.deploy_seed)"),
+    "legacy_schema_2": "test_benign sa vyhodnocuje iba pre finalny seed 0 (tcn.eval far --final)",
+}
 
 
 def _over_seedy(seedy):
@@ -127,8 +141,10 @@ def metriky_vysledku(values):
     """Ciselne metriky z `values` vysledku tcn.eval (far alebo udalosti)."""
     schema = values.get("schema")
     if schema == "hyptcn3/safeguard-far/2":
-        if values.get("rola") == "test_benign" or values.get("final"):
-            raise ValueError("test_benign je zaverecny test finalneho modelu; do rozptylu seedov nepatri")
+        if values.get("rola") in ZAPECATENE or values.get("final"):
+            raise ValueError(f"rola {values.get('rola')} je zapecateny zaverecny test; do rozptylu seedov nepatri "
+                             "(PRAVIDLO_TESTU: pri scheme 3 ju vyhodnoti raz tcn.finalne so vsetkymi seedmi "
+                             "analysis.seeds, pri schemach 1 a 2 tcn.eval far --final)")
         klas = values["klasifikacia_aktivit"]
         return {"far_h": _far_h(values["merane"]["spolu"]),
                 "udalosti_model": values["merane"]["spolu"]["spolu"]["udalosti_model"],
@@ -136,6 +152,11 @@ def metriky_vysledku(values):
                 "aktivity_okna_f1_macro": klas["okna"]["f1_macro"],
                 "aktivity_relacie_presnost": klas["relacie"]["presnost"]}
     if schema == "hyptcn3/safeguard-event-far/1":
+        if values.get("korpus_rola") in ZAPECATENE:
+            raise ValueError(f"rola {values.get('korpus_rola')} je zapecateny zaverecny test; do rozptylu seedov "
+                             "nepatri ani vysledok tcn.eval udalosti (PRAVIDLO_TESTU: pri scheme 3 ju vyhodnoti raz "
+                             "tcn.finalne so vsetkymi seedmi analysis.seeds, pri schemach 1 a 2 tcn.eval udalosti "
+                             "--final)")
         m, u = values["merane"], values["udalosti"]
         out = {"prevadzka_far_h": _far_h(m["prevadzka"]), "po_udalosti_far_h": _far_h(m["po_udalosti"]),
                "udalosti_far_h": _far_h(m["vsetky_udalosti"]),
@@ -159,12 +180,26 @@ def rozptyl(hodnoty):
             "seedy": {str(s): v for s, v in sorted(hodnoty.items())}}
 
 
+def pravidlo_testu(manifesty):
+    """(nazov, znenie) pravidla testovacej roly pre suhrn (PRAVIDLO_TESTU): "analysis", ked je kazdy balik natrenovany
+    pod protokolom schemy 3 (manifest provenance.protocol.schema), "legacy_schema_2", ked ziadny; baliky oboch druhov
+    naraz su chyba s menovanym dovodom."""
+    from scripts.protocol_v5 import SCHEMA
+    schemy = [((m.get("provenance") or {}).get("protocol") or {}).get("schema") == SCHEMA for m in manifesty]
+    if any(schemy) and not all(schemy):
+        raise ValueError("baliky protokolu schemy 3 aj inej schemy: rozptyl seedov je nad balikmi jedneho protokolu")
+    nazov = "analysis" if all(schemy) else "legacy_schema_2"
+    return nazov, PRAVIDLO_TESTU[nazov]
+
+
 def suhrn(manifesty, vysledky):
     """Rozptyl cez seedy.
 
     manifesty: zoznam manifestov balikov (kazdy seed raz, vratane 0, ak ho chces v rozptyle);
     vysledky:  {stitok: [values, ...]} - values z JSON tcn.eval; balik sa
                priradi podla values.balik.manifest_sha256.
+    Pravidlo testovacej roly (pravidlo_testu) urci poznamku: pri baliku schemy 3 finalny prikaz so vsetkymi seedmi
+    a seed na nasadenie analysis.deploy_seed, pri schemach 1 a 2 finalny seed 0.
     """
     podla_sha, seedy, korpusy = {}, set(), set()
     for m in manifesty:
@@ -194,11 +229,14 @@ def suhrn(manifesty, vysledky):
             videne.add(s)
             for meno, v in metriky_vysledku(values).items():
                 tabulka.setdefault("%s.%s" % (stitok, meno), {})[s] = v
-    return {"schema": SCHEMA_SUHRN, "seedy": sorted(seedy), "finalny_seed": FINALNY_SEED,
+    nazov, znenie = pravidlo_testu(manifesty)
+    seed_testu = ({"deploy_seed": manifesty[0]["provenance"]["protocol"]["analysis"]["deploy_seed"]}
+                  if nazov == "analysis" else {"finalny_seed": FINALNY_SEED})
+    return {"schema": SCHEMA_SUHRN, "seedy": sorted(seedy), **seed_testu, "pravidlo_testu": nazov,
             "korpus_sha256": korpusy.pop(),
             "metriky": {k: rozptyl(v) for k, v in sorted(tabulka.items())},
             "poznamka": ("rozptyl cez seedy inicializacie na tom istom korpuse; dev vyberal checkpointy, "
-                         "preto nie je drzany bokom; test_benign sa vyhodnocuje iba pre finalny seed 0")}
+                         "preto nie je drzany bokom; " + znenie)}
 
 
 # ------------------------------------------------------------------ CLI

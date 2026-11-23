@@ -18,7 +18,8 @@ B7a add one deliberate error for each key of the analysis plan they add or chang
 analysis, which the plan never draws). Package B7b (agent F) adds one for each key of design B7b 1.4: the orders of
 C, the groups of D, the validity predicate, the evaluable minimum and the volume class, the diagnostics, the stream
 injections, the two variants of Z4 in K2a (question Q13, provisional) and the domains of the grids (F3 of the
-verification of B7a).
+verification of B7a). Package B7c (agent M) adds one for each key of design B7c 1.2: the metrics of the thesis with the
+bounds of O2 and O3, and the linkage table, which the self-check compares word for word.
 """
 from collections import Counter
 import json
@@ -359,6 +360,43 @@ def context_of_the_whole_window(doc):
     context of 32 rows is refused by the protocol as tcn/diagnostiky.py refuses it."""
     doc["analysis"]["diagnostics"]["contexts"] = [1, 2, 4, 8, 16, 32]
     return INVALID_ANALYSIS
+
+
+# Package B7c (design B7c 1.2): one deliberate error in each key it adds; the loader refuses the section, and the
+# self-check names a reworded row of the linkage table (as it names the methods of the claims).
+
+def garwood_level_of_95(doc):
+    """The level of the thesis' interval is a share in (0, 1): 0.95."""
+    doc["analysis"]["metrics"]["alarm_rate_interval"]["level"] = 95
+    return INVALID_ANALYSIS
+
+
+def event_test_two_sided(doc):
+    """The thesis' test of the events against clean traffic is one-sided (more alarms during events)."""
+    doc["analysis"]["metrics"]["event_vs_clean"]["alternative"] = "two-sided"
+    return INVALID_ANALYSIS
+
+
+def o2_bound_by_garwood(doc):
+    """O2 needs the one-sided bound (proposal 4.2 and 9.2), not the two-sided interval of the thesis."""
+    doc["analysis"]["metrics"]["o2_bound"]["method"] = "garwood"
+    return INVALID_ANALYSIS
+
+
+def linkage_reworded(doc):
+    """The linkage table is the lead's word for word (skeleton B7, addendum 2 point 4): VO2 without the test of point 2
+    is named by the self-check."""
+    doc["analysis"]["linkage"]["VO2"] = "O2 a O3 (E2)"
+    return {"analysis": ['analysis.linkage.VO2 is "O2 a O3 (E2)", the lead\'s table (skeleton B7, addendum 2 point 4) '
+                         'says "O2, O3 a test z bodu 2 (E2)"']}
+
+
+def linkage_not_a_text(doc):
+    """Each row of the linkage table is a text."""
+    doc["analysis"]["linkage"]["VO5"] = ["O7"]
+    return {"loader": ["protocol(): invalid analysis"],
+            "analysis": ['analysis.linkage.VO5 is ["O7"], the lead\'s table (skeleton B7, addendum 2 point 4) says '
+                         '"O7 (E5)"']}
 
 
 def streams_without_injections(doc):
@@ -1076,7 +1114,10 @@ FILE_CASES = {f.__name__: f for f in (unknown_key, missing_key, gate_085, max_7,
                                       min_evaluable_apart_from_min_occurrences, contexts_not_increasing,
                                       k2a_with_z4_unsplit, grid_longer_than_the_window, streams_without_injections,
                                       # F2 of the verification of B7b: the two keys bound to window_rows.
-                                      validity_average_longer_than_the_window, context_of_the_whole_window)}
+                                      validity_average_longer_than_the_window, context_of_the_whole_window,
+                                      # Package B7c: the metrics of the thesis and the linkage table.
+                                      garwood_level_of_95, event_test_two_sided, o2_bound_by_garwood,
+                                      linkage_reworded, linkage_not_a_text)}
 PLAN_CASES = {f.__name__: f for f in (no_group_on_vm, equal_scenarios, twice_at_position, two_events, start_in_guard,
                                       locked_to_grid, common_seed, control_relabelled, control_slot_emptied,
                                       event_free_first, group_of_two, seed_field,
@@ -1675,3 +1716,87 @@ def test_the_keys_of_b7b_are_those_the_skeleton_names():
     assert a["k2a"]["compare"] == protocol_v5.CONFIRMATORY["k2a"] == ["Z1", "Z2", "Z4:load", "Z4:residual"]
     assert protocol_v5.VARIANTS == {"Z4": ("load", "residual")} and protocol_v5.COMPARISONS == (
         "Z0", "Z1", "Z2", "Z3", "Z4:load", "Z4:residual", "Z5")
+
+
+# Package B7c: the keys of the analysis plan of design B7c 1.2. The layout knows every key, and the value check every
+# rule of each: one bad input per rule, and good inputs (another level of a bound, another alpha); metrics_problem
+# names each rule exactly, for tcn/eval.py, which raises its text.
+
+@pytest.mark.parametrize("change, reason", [
+    (_at("metrics.o3_bound.level", .99), None),
+    (_at("metrics.event_vs_clean.alpha", .01), None),
+    (_at("metrics.o3_bound"), "missing protocol key: analysis.metrics.o3_bound"),
+    (_at("metrics.o2_bound.sides", 1), "unknown protocol key: analysis.metrics.o2_bound.sides"),
+    (_at("metrics.alarm_rate_interval.method", "exact"), "invalid analysis"),
+    (_at("metrics.dispersion.source", " "), "invalid analysis"),
+    (_at("metrics.o2_bound.level", 1), "invalid analysis"),
+    (_at("metrics.o3_bound.level", True), "invalid analysis"),
+    (_at("metrics.event_vs_clean.alpha", 0), "invalid analysis"),
+    (_at("metrics.dispersion.unit", "window"), "invalid analysis"),
+    (_at("metrics.event_vs_clean.alternative", "less"), "invalid analysis"),
+    (_at("metrics.classifier.windows", ["accuracy"]), "invalid analysis"),
+    (_at("metrics.classifier.majority", ["occurrence", "session"]), "invalid analysis"),
+    (_at("metrics.note", None), "invalid analysis"),
+    (_at("linkage.VO6", 1), "invalid analysis"),
+    (_at("linkage.VO7", "O9 (E6)"), "unknown protocol key: analysis.linkage.VO7"),
+    (_at("linkage.note"), "missing protocol key: analysis.linkage.note"),
+], ids=["o3_level_0_99", "alpha_0_01", "no_o3_bound", "bound_unknown_key", "interval_not_garwood", "no_source",
+        "level_one", "level_a_bool", "alpha_zero", "dispersion_over_windows", "test_towards_fewer",
+        "classifier_without_macro_f1", "majorities_reordered", "metrics_no_note", "linkage_not_a_text",
+        "linkage_unknown_question", "linkage_no_note"])
+def test_the_loader_knows_every_key_and_value_of_the_analysis_plan_of_b7c(change, reason):
+    """Design B7c 1.2: analysis.metrics (each metric its one method of METRIC_METHODS and a source; the levels of the
+    interval and of the bounds and the alpha of the test shares in (0, 1); the dispersion over sessions; the test
+    one-sided towards more alarms during events; the classifier's measures and majorities exactly) and
+    analysis.linkage (a text for each research question, a note)."""
+    from scripts import protocol_v5
+    doc = json.loads(V5.read_text())
+    change(doc["analysis"])
+    if reason is None:
+        protocol_v5.check_layout(doc)
+    else:
+        with pytest.raises(ValueError) as refused:
+            protocol_v5.check_layout(doc)
+        assert str(refused.value) == reason
+
+
+@pytest.mark.parametrize("change, reason", [
+    (_at("o3_bound"), "analysis.metrics must be an object of exactly the keys alarm_rate_interval, classifier, "
+                      "dispersion, event_vs_clean, note, o2_bound, o3_bound"),
+    (_at("o2_bound.method", "garwood"), "analysis.metrics.o2_bound.method must be poisson_upper, the method "
+                                        "tcn/eval.py implements"),
+    (_at("alarm_rate_interval.level", 95), "analysis.metrics.alarm_rate_interval.level must be a number in (0, 1)"),
+    (_at("event_vs_clean.alternative", "two-sided"),
+     "analysis.metrics.event_vs_clean.alternative must be greater: the thesis' test is one-sided, more alarms during "
+     "events than in clean traffic"),
+    (_at("classifier.majority", ["session"]), 'analysis.metrics.classifier.majority must be ["session", '
+                                              '"occurrence"]'),
+], ids=["no_o3_bound", "o2_by_garwood", "level_95", "two_sided_test", "majority_per_session_only"])
+def test_metrics_problem_names_each_rule(change, reason):
+    """tcn/eval.py raises the text of metrics_problem (one check for the protocol and the evaluation)."""
+    from scripts import protocol_v5
+    metrics = json.loads(V5.read_text())["analysis"]["metrics"]
+    assert protocol_v5.metrics_problem(metrics) is None
+    change(metrics)
+    assert protocol_v5.metrics_problem(metrics) == reason
+
+
+def test_the_keys_of_b7c_are_those_the_skeleton_and_the_design_name():
+    """The values of design B7c 1.2 in the real file: the Garwood interval at 0.95, the dispersion over sessions, the
+    one-sided exact test at alpha 0.05, the one-sided bounds of O2 and O3 at 0.95 (proposal 9.2), the classifier's
+    accuracy and macro-F1 over windows and its majorities per session and per occurrence, each with its source; and
+    the linkage table of the lead's skeleton B7, addendum 2 point 4, word for word."""
+    from scripts import protocol_v5
+    a = json.loads(V5.read_text())["analysis"]
+    m = a["metrics"]
+    assert {name: m[name]["method"] for name in protocol_v5.METRIC_METHODS} == protocol_v5.METRIC_METHODS
+    assert (m["alarm_rate_interval"]["level"], m["o2_bound"]["level"], m["o3_bound"]["level"],
+            m["event_vs_clean"]["alpha"], m["event_vs_clean"]["alternative"], m["dispersion"]["unit"]) == (
+        .95, .95, .95, .05, "greater", "session")
+    assert (m["classifier"]["windows"], m["classifier"]["majority"]) == (["accuracy", "macro_f1"],
+                                                                         ["session", "occurrence"])
+    assert {key: value for key, value in a["linkage"].items() if key != "note"} == protocol_v5.LINKAGE == {
+        "VO1": "O8 a O1 (E1)", "VO2": "O2, O3 a test z bodu 2 (E2)",
+        "VO3": "časť vlastníka so vzorkami, mimo protokolu (E3, D16)", "VO4": "K1, K2 a bod 1 (E4)",
+        "VO5": "O7 (E5)", "VO6": "O6 a bod 2 (E2)"}
+    assert protocol_v5.analysis_plan(json.loads(V5.read_text()))["linkage"] == a["linkage"]

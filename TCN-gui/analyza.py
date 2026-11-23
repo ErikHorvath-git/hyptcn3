@@ -11,6 +11,13 @@ contributed (the score's own attribution, safeguard/bundle.py Bundle.score; pack
 normalization rule and its scored bins). Alarms of the rule channel (columns of class rule and rule_differenced
 outside their range over train and calibration) are counted apart and never as model alarms. An anomaly is a
 deviation from the benign training data, not a malware verdict (HONESTY P4).
+
+The seal of the test roles (package B7c, tcn/pecat.py GUARD_RULE) comes before an input is opened: resolve_input
+checks a feature archive by its bytes (tcn.pecat.kontrola) and a snapshot directory by the session its session.json
+names (tcn.pecat.kontrola_snimok) before it reads them, so analyze, tcn_gui.py (its button Skontrolovať všetky and
+--png) and porovnanie.py compare refuse a sealed session of a campaign by name (tcn.pecat.Zapecatene, a ValueError)
+outside the final run that consumed it; a report carries the decision (seal: the rehearsal mark of a rehearsal's
+session).
 """
 from datetime import datetime, timezone
 import json
@@ -31,6 +38,7 @@ from safeguard.features import LOCAL_NAMES, SCHEMA as ARCHIVE_SCHEMA, frames_fro
 from safeguard.runtime import Detector, run_directory  # noqa: E402
 
 DEFAULT_PROFILE = ROOT / "profiles" / "debian12-6.1.0-42-cloud-amd64"
+PURPOSE = "TCN-gui analyze"  # The entry point a refusal of the seal names (tcn/pecat.py GUARD_RULE).
 
 
 class _Recorder:
@@ -71,20 +79,38 @@ def _is_archive(path):
         return False
 
 
-def resolve_input(path):
-    """Return (kind, path, session_dir). kind: archive | snapshots."""
+def seal(kind, path, purpose=PURPOSE):
+    """The decision of the seal (package B7c, tcn/pecat.py) for an input of `kind`: an archive by its bytes, a snapshot
+    directory by the session its session.json (or its parent's) names; tcn.pecat.Zapecatene for a sealed session of a
+    campaign outside the final run that consumed it."""
+    from tcn import pecat
+    if kind == "archive":
+        return pecat.kontrola(path, purpose=purpose)
+    return pecat.kontrola_snimok(path, purpose=purpose)
+
+
+def resolve_input(path, *, purpose=PURPOSE):
+    """Return (kind, path, session_dir). kind: archive | snapshots. The seal is checked before an archive is opened
+    (also for its schema) and before a snapshot directory is returned (seal); purpose names the caller in a refusal."""
     path = Path(path).expanduser().resolve()
     if path.is_file():
-        if path.suffix == ".npz" and _is_archive(path):
-            return "archive", path, path.parent
+        if path.suffix == ".npz":
+            seal("archive", path, purpose)
+            if _is_archive(path):
+                return "archive", path, path.parent
         raise ValueError("vstup nie je archív príznakov (.npz so schémou " + ARCHIVE_SCHEMA + ")")
     if not path.is_dir():
         raise ValueError("vstup neexistuje: " + str(path))
     if any(path.glob("*.vmicd")):
+        seal("snapshots", path, purpose)
         return "snapshots", path, path.parent
     if (path / "raw").is_dir() and any((path / "raw").glob("*.vmicd")):
+        seal("snapshots", path / "raw", purpose)
         return "snapshots", path / "raw", path
-    archives = sorted((p for p in path.glob("*.npz") if _is_archive(p)), key=lambda p: p.stat().st_mtime)
+    candidates = sorted(path.glob("*.npz"))
+    for candidate in candidates:
+        seal("archive", candidate, purpose)
+    archives = sorted((p for p in candidates if _is_archive(p)), key=lambda p: p.stat().st_mtime)
     if archives:
         return "archive", archives[-1], path
     raise ValueError("v adresári nie sú snímky .vmicd ani archív príznakov .npz: " + str(path))
@@ -170,11 +196,14 @@ def _verdict(rows, integrity_rows, alarm_events, scored, fatal, rule_events=0):
 
 
 def analyze(bundle_path, input_path, *, profile=None, allow_diagnostic=False, bundle=None):
-    """Score one session; pass an already loaded `bundle` to skip reloading the weights."""
+    """Score one session; pass an already loaded `bundle` to skip reloading the weights. The input is resolved, and its
+    seal checked (resolve_input), before the bundle is loaded or the input opened; the report carries the seal's
+    decision."""
+    kind, source, session_dir = resolve_input(input_path)
+    decision = seal(kind, source)
     if bundle is None:
         bundle = load_bundle(bundle_path, allow_diagnostic=allow_diagnostic)
     recorder = _Recorder(bundle)
-    kind, source, session_dir = resolve_input(input_path)
     if kind == "archive":
         detector = Detector(recorder, preserve=False)
         with np.load(source, allow_pickle=False) as data:
@@ -192,6 +221,7 @@ def analyze(bundle_path, input_path, *, profile=None, allow_diagnostic=False, bu
             rows = [json.loads(line) for line in (out / "events.jsonl").read_text().splitlines()]
         all_frames = recorder.frames
     report = _report(bundle, rows, all_frames, recorder.windows, kind, source, session_dir)
+    report["seal"] = decision
     report["model"]["name"] = Path(bundle_path).resolve().name
     report["model"]["path"] = str(Path(bundle_path).resolve())
     return report

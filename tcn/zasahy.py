@@ -40,7 +40,7 @@ from numpy.lib.stride_tricks import sliding_window_view
 
 from features.windows import BIN_PRIZNAKY
 from scripts import protocol_v5
-from tcn.metody import Okna, Traffic
+from tcn.metody import ARCHIVE_KEY, Okna, Traffic
 
 SCHEMA = "hyptcn3/interventions/1"
 CLASSES = protocol_v5.INTERVENTION_CLASSES  # ("C", "D")
@@ -634,6 +634,8 @@ def _apply(carriers, s, start, last, length, order, group, donor, ranges, horizo
     session = {"id": ident, "global": copy_g, "local": copy_local, "seq": seq[take].copy(),
                "timestamp": times[take].copy(), "full_times": list(windows.full_times[s]),
                "load": None if load is None else load[take].copy()}
+    if ARCHIVE_KEY in arrays:  # The copy of a sealed session stays sealed (package B7c, tcn/pecat.py GUARD_RULE).
+        session[ARCHIVE_KEY] = arrays[ARCHIVE_KEY]
     return {"session": session, "windows": mine, "horizon": in_horizon, "record": record}
 
 

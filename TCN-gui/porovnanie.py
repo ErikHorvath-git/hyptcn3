@@ -26,6 +26,7 @@ from safeguard.bundle import load_bundle, window_inputs
 from safeguard.features import LOCAL_NAMES, frames_from_archive
 
 MAX_WINDOWS = 400
+PURPOSE = "TCN-gui porovnanie.compare"  # The entry point a refusal of the seal names (tcn/pecat.py GUARD_RULE).
 
 
 def linear_cka(x, y):
@@ -78,13 +79,16 @@ def _activations(bundle, windows):
 
 
 def compare(bundle_paths, input_path, *, allow_diagnostic=False):
+    """The models of `bundle_paths` on one session archive. The seal (package B7c, tcn/pecat.py GUARD_RULE) is checked
+    first (analyza.resolve_input), before a model is loaded or the archive opened: a sealed session of a campaign is
+    refused by name outside the final run that consumed it."""
     if len(bundle_paths) < 2:
         raise ValueError("na porovnanie treba aspoň dva modely")
-    bundles = [(Path(p).resolve(), load_bundle(p, allow_diagnostic=allow_diagnostic)) for p in bundle_paths]
-    bundles.sort(key=lambda item: item[1].manifest.get("created_utc", ""))
-    kind, source, session_dir = analyza.resolve_input(input_path)
+    kind, source, session_dir = analyza.resolve_input(input_path, purpose=PURPOSE)
     if kind != "archive":
         raise ValueError("porovnanie modelov potrebuje archív príznakov session (.npz)")
+    bundles = [(Path(p).resolve(), load_bundle(p, allow_diagnostic=allow_diagnostic)) for p in bundle_paths]
+    bundles.sort(key=lambda item: item[1].manifest.get("created_utc", ""))
     with np.load(source, allow_pickle=False) as data:
         frames = frames_from_archive(data, session_dir.name)
 

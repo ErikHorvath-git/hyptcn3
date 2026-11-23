@@ -9,6 +9,8 @@ citatelny evaluatorom tcn.eval a 8 globalnych stlpcov pamatovej ablacie.
 
 import json
 from collections import deque
+from pathlib import Path
+import re
 
 import numpy as np
 import pytest
@@ -160,3 +162,28 @@ def test_iforest_skore_je_nezaporne_a_kalibrovatelne(korpus, tmp_path):
     with pytest.raises(ValueError, match="sucet"):
         po.nacitaj(tmp_path / "if", allow_diagnostic=True)
     assert balik.manifest["training"]["checkpoint_selection_role"] is None
+
+
+V5 = Path(__file__).resolve().parents[2] / "config/collection-v5.json"
+
+
+@pytest.mark.parametrize("volba, hodnota, meno, cesta, plan", [
+    ("--epochs", 1, "epochs", "analysis.stopping.max_epochs", 100),
+    ("--batch-size", 64, "batch_size", "analysis.architecture.batch_size", 32),
+    ("--seed", 7, "seed", "analysis.seeds", [0, 1, 2, 3, 4]),
+    ("--fpr", 0.05, "fpr", "analysis.fpr", 0.01),
+    ("--k", 2, "k", "analysis.alarm_rule.k", 3),
+    ("--n", 7, "n", "analysis.alarm_rule.n", 5),
+], ids=["epochs", "batch_size", "seed", "fpr", "k", "n"])
+def test_fit_pod_schemou_3_odmietne_parameter_analyzy(volba, hodnota, meno, cesta, plan, tmp_path):
+    """Balik B7c (navrh NAVRH_B7c 1.4): pod protokolom schemy 3 fit odmietne zadany parameter analyzy mimo
+    --diagnostic menom, tak ako safeguard train (balik B6b), skor nez otvori korpus; bez neho berie plan analyzy
+    (test_odovzdanie_korpusu.py test_porovnanie_berie_parametre_z_planu_analyzy)."""
+    index = tmp_path / "corpus.json"
+    index.write_text(json.dumps({"schema": "hyptcn3/corpus-index/1", "protocol_config": json.loads(V5.read_text())}))
+    sprava = (f"analysis parameter {meno} is given ({hodnota!r}) under protocol schema 3, whose analysis plan fixes "
+              f"{cesta} = {plan!r}; a given analysis parameter is applied only to a diagnostic bundle (--diagnostic)")
+    with pytest.raises(ValueError, match="^" + re.escape(sprava) + "$"):
+        po._hlavny(["--threads", "2", "fit", "--corpus", str(index), "--model", "zscore", "--out",
+                    str(tmp_path / "model"), volba, str(hodnota)])
+    assert not (tmp_path / "model").exists()

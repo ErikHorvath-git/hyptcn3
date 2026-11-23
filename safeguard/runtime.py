@@ -332,7 +332,12 @@ class Detector:
 
 
 def replay_archive(bundle, archive_path, session_id=None):
-    """Feature replay never modifies raw evidence or performs a reaction."""
+    """Feature replay never modifies raw evidence or performs a reaction.
+
+    The seal comes first (package B7c, tcn/pecat.py GUARD_RULE): a sealed archive of a campaign is refused by name
+    (tcn.pecat.Zapecatene, a ValueError) outside the final run that consumed its seal, before it is opened."""
+    from tcn import pecat
+    pecat.kontrola(archive_path, purpose="safeguard.runtime.replay_archive")
     detector = Detector(bundle, preserve=False)
     with np.load(archive_path, allow_pickle=False) as data:
         frames = frames_from_archive(data, session_id or Path(archive_path).stem)
@@ -343,6 +348,48 @@ def replay_archive(bundle, archive_path, session_id=None):
         if row.get("fatal"):
             break
     return rows
+
+
+# Proposal 6.4 and 10.2 (G1, "vložené neskórované úseky"): an unscored stretch is in the output as unevaluated, never
+# as silence (package B7c; the same word as tcn/metody.py UNEVALUATED).
+UNEVALUATED = "nevyhodnotené"
+UNSCORED_RULE = (
+    "a row is unscored when the detector gave it no score (score null: warming up at the session start or after a "
+    "full snapshot, a row without a predecessor, an invalid row, a discontinuity, an input error); a stretch is a run "
+    "of unscored rows of one session in replay order with consecutive seq; every stretch is reported nevyhodnotené "
+    "with the reasons of its rows (proposal 6.4: the unscored time of every session is reported; proposal 10.2: an "
+    "unscored stretch is in the output as nevyhodnotené, not as silence); its time is one interval_s per row (as "
+    "tcn/metody.py OBSERVED_RULE counts the observed time); interval_s is the bundle protocol's, and without one the "
+    "seconds are null")
+
+
+def unscored(rows, interval_s):
+    """The unscored stretches of the rows of a replay (UNSCORED_RULE): {rule, status, rows, seconds, share,
+    stretches: [{session, first_seq, last_seq, rows, seconds, first_unix, last_unix, reasons {reason: rows},
+    status}]}. interval_s: the bundle protocol's interval, or None (seconds null)."""
+    if interval_s is not None and (isinstance(interval_s, bool) or not isinstance(interval_s, (int, float))
+                                   or not math.isfinite(interval_s) or interval_s <= 0):
+        raise ValueError("interval_s is a positive number or None")
+    stretches, current = [], None
+    for row in rows:
+        if row.get("score") is not None:
+            current = None
+            continue
+        session, seq = row.get("session"), row.get("seq")
+        if current is None or current["session"] != session or seq != current["last_seq"] + 1:
+            current = {"session": session, "first_seq": seq, "last_seq": seq, "rows": 0,
+                       "first_unix": row.get("timestamp"), "last_unix": row.get("timestamp"), "reasons": {},
+                       "status": UNEVALUATED}
+            stretches.append(current)
+        reason = str(row.get("reason") or row.get("model_state"))
+        current["reasons"][reason] = current["reasons"].get(reason, 0) + 1
+        current.update(last_seq=seq, last_unix=row.get("timestamp"), rows=current["rows"] + 1)
+    for stretch in stretches:
+        stretch["seconds"] = None if interval_s is None else stretch["rows"] * float(interval_s)
+    total = sum(s["rows"] for s in stretches)
+    return {"rule": UNSCORED_RULE, "status": UNEVALUATED, "rows": total,
+            "seconds": None if interval_s is None else total * float(interval_s),
+            "share": total / len(rows) if rows else None, "stretches": stretches}
 
 
 def _candidate_files(directory):
@@ -368,12 +415,19 @@ def run_directory(bundle, snapshots, profile, output_dir, *, follow=False,
     period. A finite replay reports them immediately. Duplicate sequences are
     input errors; they are never silently scored twice. ``follow=True`` without
     idle_timeout follows indefinitely until stop_event is set.
+
+    The seal comes first (package B7c, tcn/pecat.py SNAPSHOT_RULE): the snapshots of a session that the ledger seals
+    for a campaign (by the session_id of the session.json of the directory or of its parent) are refused by name
+    (tcn.pecat.Zapecatene, a ValueError) outside the final run that consumed its archive, before anything is written;
+    the decision is in configuration.json and status.json (a rehearsal's session carries the rehearsal mark).
     """
     if idle_timeout is not None and (not math.isfinite(idle_timeout) or idle_timeout <= 0):
         raise ValueError("idle_timeout must be finite and positive")
     directory = Path(snapshots)
     if not directory.is_dir():
         raise ValueError("snapshot directory does not exist: " + str(directory))
+    from tcn import pecat
+    seal = pecat.kontrola_snimok(directory, purpose="safeguard.runtime.run_directory")
     output = Path(output_dir)
     output.mkdir(parents=True, exist_ok=False)
     (output / "evidence").mkdir()
@@ -382,7 +436,7 @@ def run_directory(bundle, snapshots, profile, output_dir, *, follow=False,
             "created_at": datetime.now(timezone.utc).isoformat(),
             "bundle_manifest": bundle.manifest, "snapshots": str(directory.resolve()),
             "profile": str(Path(profile).resolve()), "preserve": bool(preserve),
-            "hold_binary": str(hold_binary), "follow": bool(follow), "idle_timeout": idle_timeout,
+            "hold_binary": str(hold_binary), "follow": bool(follow), "idle_timeout": idle_timeout, "seal": seal,
         }) + "\n")
     detector = Detector(bundle, directory, hold_binary, preserve)
     seen_paths, seen_seq, pending = set(), set(), {}
@@ -394,7 +448,8 @@ def run_directory(bundle, snapshots, profile, output_dir, *, follow=False,
                "evidence_errors": 0, "pending": 0, "backlog": 0,
                "snapshots": str(directory.resolve()), "output": str(output.resolve()),
                "stop_reason": None, "fatal": False, "last": None,
-               "diagnostic": bool(bundle.manifest.get("calibration", {}).get("diagnostic", False))}
+               "diagnostic": bool(bundle.manifest.get("calibration", {}).get("diagnostic", False)),
+               "seal": {key: seal[key] for key in ("allowed", "session", "stage", "rehearsal", "mark", "identity")}}
 
     def emit(row, stream):
         stream.write(_json(row) + "\n")

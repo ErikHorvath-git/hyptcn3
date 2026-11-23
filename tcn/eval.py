@@ -45,6 +45,36 @@ cas do detekcie z toho odvodit nemozno. Ten isty prikaz vyhodnoti aj
 klasifikator profilu zataze (trieda okna = scenar relacie), aby jedno
 zaverecne spustenie na test_benign dalo oboje.
 
+PROTOKOL V5 (balik B7c, agent M)
+--------------------------------
+Navrh dokazy/B7/navrh/NAVRH_B7c.md 1.2 a 1.3, kostra dokazy/B7/kostra/KOSTRA.md bod 7 a doplnok 2 body 2 a 4.
+Pri korpuse protokolu schemy 3 `far` aj `udalosti` pocitaju okrem dnesnych tabuliek blok `v5` (metriky_v5):
+po kanaloch detektora (rule, neural, kernel_integrity) a za ich zjednotenie (union) z riadkov prehratia
+(channel_edges: nabezne hrany zdrojov z alarm_sources, zjednotenie z prechodov pola alarm):
+  o2          falosne alarmy v cistej prevadzke za pozorovanu hodinu s jednostrannou hranicou (navrh 4.2, 9.2)
+  thesis      metriky textu prace: alarmy za hodinu vyhodnoteneho casu s Garwoodovym intervalom, pocet bootovych
+              skupin, test rozptylu medzi session, miera pocas udalosti proti cistej prevadzke (jednostranny
+              exaktny test), spolu a po typoch udalosti
+  o3          podiel hodnotitelnych vyskytov udalosti s alarmom po typoch, s hranicou (navrh 4.2, 6.4)
+  o4          kontroly na VM (channel_reacted nad oknom scripts/controls.py outcomes), zachytene z planovanych,
+              "nezachytené, senzor neskóroval" zvlast
+  classifier  presnost a makro-F1 nad oknami, vacsinova trieda na session a na vyskyt (balik bez tried ho nema)
+  unscored    neskorovany cas po session, kontextoch, typoch a kontrolach ako "nevyhodnotené", nikdy ako ticho
+Cista prevadzka je pravidlo tcn/metody.py (otazka Q12, docasne podla navrhu vykonavatela; CONTEXT_RULE),
+dozvuk je analysis.reverberation_s, horizont analysis.horizon_s, hodnotitelny vyskyt analysis.evaluable a cisla
+metrik analysis.metrics (scripts/protocol_v5.py metrics_problem). Roly su dev, calibration, test_benign a
+test_controls; zapecatenu rolu (test_benign, test_controls) vyhodnoti iba finalny prikaz (final_evaluation=True)
+alebo index generalky (plan_mode rehearsal, kazdy vystup nesie jej znacku, tcn.pecat REHEARSAL_MARK); --final a jeho
+znacka vedla indexu ostavaju schemam 1 a 2. Kazde prehratie korpusu schemy 3 pred citanim riadkov skontroluje pecat
+podla archive_sha256 jeho configuration.json (SEAL_RULE, navrh B7c 5.5): prehratie zapecateneho archivu kampane sa
+cita iba vnutri finalneho behu, ktory jeho pecat spotreboval. Neskorovane useky su useky safeguard.runtime.unscored
+(jedno pravidlo, navrh B7c 5.6). Zaznam far a udalosti nesie stupen (navrh 11.1) podla tcn.pecat STAGE_RULE z rezimu
+planu a knihy procesu; O4 dava v kazdej skupine prirastok neuronoveho kanala nad pravidlovym (INCREMENT_RULE) a miera
+textu prace aj Garwoodov interval za skorovanu hodinu. Pri kazdom treningu (otazka Q11, docasne podla navrhu
+vykonavatela) training_summary dava stratu modelu voci Z3 a Z5 a suhrn skore po kontexte a scenari a training_record
+zaznam, ktory menuje balik.
+`malver` sa nemeni (D16).
+
 DETEKCIA MALVERU (dataset 3)
 ----------------------------
 `python3 -m tcn.eval malver --index I --config config/malver-v1.json --replay ...`
@@ -72,6 +102,14 @@ import sys
 import numpy as np
 from sklearn.metrics import (confusion_matrix, precision_recall_fscore_support,
                              roc_auc_score)
+
+# Package B7c: the constants it shares (the channels and sources of a replay row, the roles a training reads, the
+# protocol schema 3 with its plan modes and the role of the controls, the one rehearsal mark of design B7c 5.1);
+# none of these modules imports torch.
+from features.dataset import FIT_ROLES
+from safeguard.runtime import CHANNELS, SOURCES
+from scripts.protocol_v5 import CONTROL_ROLE, MODES, SCHEMA as SCHEMA_PROTOKOLU_V5
+from tcn.pecat import REHEARSAL_MARK
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
@@ -369,6 +407,30 @@ def _nacitaj_prehratie(adresar):
     return konf, stav, riadky, {n: _digest(c) for n, c in subory.items()}
 
 
+def _pecat_prehratia(adresar, rola, prikaz):
+    """SEAL_RULE for one replay directory of a corpus of protocol schema 3, before its rows are read: (the decision of
+    tcn.pecat kontrola, the archive_sha256 the replay names)."""
+    from tcn import pecat
+    konf = json.loads(open(os.path.join(adresar, "configuration.json"), encoding="utf-8").read())
+    sha = konf.get("archive_sha256") if type(konf) is dict else None
+    if not _hex64(sha):
+        raise ValueError(f"{adresar}: the replay of a session of role {rola} names no archive_sha256 in its "
+                         "configuration.json (safeguard replay --archive and tcn.porovnanie replay write it since "
+                         "package B7c): under protocol schema 3 the seal decides by it whether the replay may be read "
+                         "(tcn.eval SEAL_RULE)")
+    return pecat.kontrola(sha256=sha, purpose=f"tcn.eval {prikaz}", what=f"the archive of the replay {adresar}"), sha
+
+
+def _archiv_prehratia(adresar, konf, archiv_sha):
+    """The sha256 of the archive a replay names; under protocol schema 3 (archiv_sha the archive_sha256 the seal was
+    checked by) it must be that archive_sha256 (SEAL_RULE)."""
+    digest = _digest(konf["archive"])
+    if archiv_sha is not None and digest != archiv_sha:
+        raise ValueError(f"{adresar}: the archive {konf['archive']} has sha256 {digest}, the replay names "
+                         f"archive_sha256 {archiv_sha}: the replay is not of this archive (tcn.eval SEAL_RULE)")
+    return digest
+
+
 def _manifest_sha(manifest):
     return hashlib.sha256(json.dumps(manifest, sort_keys=True).encode()).hexdigest()
 
@@ -389,27 +451,37 @@ def _over_chyby_vstupu(adresar, stav, riadky, suhrn, protokol):
         raise ValueError("%s: chyba vstupu, ktoru pravidlo invalid_rows protokolu netoleruje" % adresar)
 
 
-def vyhodnot_far(korpus, rola, prehratia, alfa=0.05, final=False, kampan=None):
-    """FAR jednej roly korpusu z prehrati; kazda relacia roly prave raz."""
-    alfa = _alfa(alfa)
-    if rola not in ROLY_FAR:
-        raise ValueError("FAR sa pocita iba pre role %s" % ", ".join(ROLY_FAR))
-    if (rola == "test_benign") != bool(final):
-        raise ValueError("test_benign je zaverecny test (METODIKA kap. 5) a pusti sa iba s --final; "
-                         "--final plati iba pre test_benign")
+def _nacitaj_rolu(korpus, rola, prehratia, *, final, final_evaluation):
+    """Prehratia jednej roly korpusu, skontrolovane; kazda relacia roly prave raz (vyhodnot_far, nacitaj_v5).
+
+    Schemy 1 a 2: roly ROLY_FAR a znacka --final ako doteraz. Schema 3 (balik B7c): roly ROLY_V5 a pecat
+    (_rola_v5), pecat kazdeho prehratia pred citanim jeho riadkov (SEAL_RULE, _pecat_prehratia); ku kazdej relacii
+    jej events.json a pri test_controls jej controls.json (hashe indexu)."""
     index = json.loads(open(korpus, encoding="utf-8").read())
     if index.get("schema") != SCHEMA_KORPUS or index.get("complete") is not True:
         raise ValueError("korpus nie je uplny index %s" % SCHEMA_KORPUS)
     protokol = index["protocol_config"]
+    rezim = None
+    if _je_v5(protokol):
+        rezim = _rola_v5(index, rola, final=final, final_evaluation=final_evaluation, prikaz="far")
+    else:
+        if final_evaluation is not False:
+            raise ValueError("final_evaluation patri finalnemu prikazu protokolu schemy 3 (balik B7c)")
+        if rola not in ROLY_FAR:
+            raise ValueError("FAR sa pocita iba pre role %s" % ", ".join(ROLY_FAR))
+        if (rola == "test_benign") != bool(final):
+            raise ValueError("test_benign je zaverecny test (METODIKA kap. 5) a pusti sa iba s --final; "
+                             "--final plati iba pre test_benign")
     perioda, max_medzera = protokol["interval_s"], protokol["max_gap_s"]
     zaznamy = {z["features_sha256"]: z for z in index["sessions"] if z["role"] == rola}
     if not zaznamy:
         raise ValueError("korpus nema relacie roly %s" % rola)
     korpus_sha = _digest(korpus)
-    balik, balik_sha, relacie = None, None, {}
+    balik, balik_sha, relacie, v5, rozhodnutia = None, None, {}, [], {}
     for adresar in prehratia:
+        rozhodnutie, archiv_sha = _pecat_prehratia(adresar, rola, "far") if rezim is not None else (None, None)
         konf, stav, riadky, hashe = _nacitaj_prehratie(adresar)
-        zaznam = zaznamy.get(_digest(konf["archive"]))
+        zaznam = zaznamy.get(_archiv_prehratia(adresar, konf, archiv_sha))
         if zaznam is None:
             raise ValueError("%s: archiv nie je relaciou roly %s v tomto korpuse" % (adresar, rola))
         if zaznam["id"] in relacie:
@@ -435,9 +507,37 @@ def vyhodnot_far(korpus, rola, prehratia, alfa=0.05, final=False, kampan=None):
                                      features_sha256=zaznam["features_sha256"],
                                      archiv=os.path.realpath(konf["archive"]),
                                      prehratie=os.path.realpath(adresar), subory_sha256=hashe)
+        if rezim is not None:
+            udalosti, kontroly = _subory_v5(zaznam, rola)
+            v5.append({"zaznam": zaznam, "riadky": riadky, "udalosti": udalosti, "kontroly": kontroly})
+            rozhodnutia[zaznam["id"]] = rozhodnutie["allowed"]
     chybaju = sorted(z["id"] for z in zaznamy.values() if z["id"] not in relacie)
     if chybaju:
         raise ValueError("chybaju prehratia relacii: %s" % ", ".join(chybaju))
+    if type(balik.get("classes")) is not list:
+        raise ValueError("manifest balika nema zoznam tried (classes)")
+    return {"index": index, "protokol": protokol, "korpus_sha": korpus_sha, "relacie": relacie, "balik": balik,
+            "balik_sha": balik_sha, "rezim": rezim, "v5": v5 if rezim is not None else None,
+            "pecat": {"decisions": dict(sorted(rozhodnutia.items())), "definition": SEAL_RULE} if rezim is not None
+            else None}
+
+
+def vyhodnot_far(korpus, rola, prehratia, alfa=0.05, final=False, kampan=None, *, final_evaluation=False,
+                 vysledky_kontrol=None):
+    """FAR jednej roly korpusu z prehrati; kazda relacia roly prave raz.
+
+    Schema 3 (balik B7c): roly ROLY_V5, zapecatenu rolu iba s final_evaluation=True (finalny prikaz) alebo pri indexe
+    generalky, kazde prehratie az po pecati (SEAL_RULE: prehratie zapecateneho archivu kampane iba vnutri finalneho
+    behu); values navyse nesu blok v5 (metriky_v5; vysledky_kontrol pre O4 roly test_controls), rezim planu, znacku
+    generalky a rozhodnutia pecate (pecat). Balik bez tried (zakladna metoda tcn/porovnanie.py) nema tabulky
+    klasifikatora."""
+    alfa = _alfa(alfa)
+    d = _nacitaj_rolu(korpus, rola, prehratia, final=final, final_evaluation=final_evaluation)
+    if d["rezim"] is None and vysledky_kontrol is not None:
+        raise ValueError("vysledky kontrol (O4) patria role test_controls korpusu protokolu schemy 3")
+    protokol, relacie, balik, balik_sha, korpus_sha = (d[k] for k in ("protokol", "relacie", "balik", "balik_sha",
+                                                                      "korpus_sha"))
+    perioda, max_medzera = protokol["interval_s"], protokol["max_gap_s"]
     zoznam = list(relacie.values())
     podla = lambda kluc: {h: far([s for s in zoznam if s[kluc] == h], alfa)
                           for h in sorted({s[kluc] for s in zoznam})}
@@ -461,8 +561,12 @@ def vyhodnot_far(korpus, rola, prehratia, alfa=0.05, final=False, kampan=None):
     if rola == "dev":
         poznamka += (" Rola dev vyberala checkpointy prediktora aj klasifikatora (checkpoint_selection_role), "
                      "toto FAR ani presnost klasifikacie preto nie su drzane bokom; zaverecne su iba na "
-                     "test_benign (--final).")
-    return {
+                     + ("test_benign (--final)." if d["rezim"] is None else
+                        "zapecatenych rolach (finalny prikaz, protokol schemy 3)."))
+    if rola == "calibration":
+        poznamka += (" Z roly calibration je prah balika (threshold_fit_role), toto FAR preto nie je drzane bokom.")
+    triedy = balik["classes"]
+    values = {
         "schema": SCHEMA_FAR, "rola": rola, "final": bool(final), "alfa": alfa,
         "korpus": os.path.realpath(korpus), "korpus_sha256": korpus_sha, "kampan": kampan_v,
         "balik": {"manifest_sha256": balik_sha, "created_utc": balik["created_utc"],
@@ -485,9 +589,15 @@ def vyhodnot_far(korpus, rola, prehratia, alfa=0.05, final=False, kampan=None):
                          "detektor neskoruje, prehratie ho uvadza ako chybu vstupu (neplatnych_riadkov) a okna "
                          "s nim su v podiele bez skore; vypadky senzora a integritu bez vyberu meria safeguard run"),
         },
-        "klasifikacia_aktivit": klasifikacia_aktivit(relacie, balik["classes"], alfa),
+        "klasifikacia_aktivit": klasifikacia_aktivit(relacie, triedy, alfa) if triedy else None,
         "relacie": relacie, "zdroje_udalosti": zdroje, "predpoklady": PREDPOKLADY, "poznamka": poznamka,
-    }, balik
+    }
+    if not triedy:
+        values["klasifikacia_aktivit_dovod"] = BEZ_TRIED
+    if d["rezim"] is not None:
+        values.update(_znacka_v5(d["rezim"], final_evaluation), pecat=d["pecat"],
+                      v5=metriky_v5(protokol, d["v5"], triedy=triedy, rola=rola, vysledky_kontrol=vysledky_kontrol))
+    return values, balik
 
 
 SCHEMA_INDEX_UDALOSTI = "hyptcn3/event-index/1"
@@ -503,16 +613,27 @@ PREDPOKLADY_UDALOSTI = [
     "porovnanie s cistou prevadzkou je podmieneny exaktny binomicky test dvoch Poissonovych mier "
     "(jednostranne: viac alarmov pri udalosti); relacie a boot nie su v teste zohladnene",
 ]
+# Schema 3 (balik B7c): kategorie riadkov su CONTEXT_RULE s dozvukom analysis.reverberation_s, nie pravidlo vyssie.
+PREDPOKLADY_UDALOSTI_V5 = [
+    "kategoria riadku podla CONTEXT_RULE (tcn/metody.py CLEAN_RULE, otazka Q12 docasne podla navrhu vykonavatela): "
+    "rozpatie riadku od riadku o required_rows - 1 skor po riadok; udalost, ked rozpatie zasahuje [host start, host "
+    "stop hotovy], dozvuk analysis.reverberation_s po nej, kontrola s dozvukom ako udalost (kategoria kontrola), "
+    "inak cista prevadzka",
+    PREDPOKLADY_UDALOSTI[2], PREDPOKLADY_UDALOSTI[3],
+]
 
 
-def kategorie_udalosti(riadky, udalosti, perioda_s, okno):
-    """Kategoria kazdeho riadku: typ udalosti, 'po_udalosti', 'prevadzka' alebo None (vylucene)."""
+def kategorie_udalosti(riadky, udalosti, perioda_s, okno, dozvuk_s=DOZVUK_S):
+    """Kategoria kazdeho riadku: typ udalosti, 'po_udalosti', 'prevadzka' alebo None (vylucene).
+
+    Pravidlo protokolov v3 a v4 (schemy 1 a 2) s dozvukom dozvuk_s; pod schemou 3 plati CONTEXT_RULE
+    (_kategorie_v5)."""
     sirka = (okno - 1) * perioda_s
     vysledok = []
     for r in riadky:
         t = float(r["timestamp"])
         prekryv = [u for u in udalosti if u["host_start_unix"] <= t and t - sirka <= u["host_stopped_unix"]]
-        dozvuk = [u for u in udalosti if u["host_stopped_unix"] < t - sirka <= u["host_stopped_unix"] + DOZVUK_S]
+        dozvuk = [u for u in udalosti if u["host_stopped_unix"] < t - sirka <= u["host_stopped_unix"] + dozvuk_s]
         if prekryv or dozvuk:
             vykonane = all(u["executed"] for u in prekryv + dozvuk)
             vysledok.append(None if not vykonane else prekryv[0]["type"] if prekryv else "po_udalosti")
@@ -540,12 +661,12 @@ def _expozicia(riadky, kategorie, perioda_s):
     return out
 
 
-def priebeh_udalosti(riadky, udalost, perioda_s, okno):
-    """Oneskorenie prveho alarmu modelu od zaciatku udalosti a ci alarm odznie po dozvuku."""
+def priebeh_udalosti(riadky, udalost, perioda_s, okno, dozvuk_s=DOZVUK_S):
+    """Oneskorenie prveho alarmu modelu od zaciatku udalosti a ci alarm odznie po dozvuku (dozvuk_s)."""
     sirka = (okno - 1) * perioda_s
     koniec = udalost["host_stopped_unix"] + sirka
     pocas = [r for r in riadky if udalost["host_start_unix"] <= float(r["timestamp"]) <= koniec]
-    dozvuk = [r for r in riadky if koniec < float(r["timestamp"]) <= koniec + DOZVUK_S]
+    dozvuk = [r for r in riadky if koniec < float(r["timestamp"]) <= koniec + dozvuk_s]
     prvy = next((float(r["timestamp"]) for r in pocas if r["alarm_event"] and "model_anomaly" in r["alarm_sources"]),
                 None)
     return {"type": udalost["type"], "class": udalost["class"], "executed": udalost["executed"],
@@ -620,8 +741,9 @@ def udalosti_z_korpusu(korpus, rola):
     """
     if korpus.get("complete") is not True:
         raise ValueError("korpus nie je uplny index %s" % SCHEMA_KORPUS)
-    if rola not in ROLY_FAR:
-        raise ValueError("FAR pocas udalosti z korpusu sa pocita iba pre role %s" % ", ".join(ROLY_FAR))
+    roly = ROLY_V5 if _je_v5(korpus.get("protocol_config")) else ROLY_FAR
+    if rola not in roly:
+        raise ValueError("FAR pocas udalosti z korpusu sa pocita iba pre role %s" % ", ".join(roly))
     if "events" not in korpus["protocol_config"]:
         raise ValueError("protokol korpusu nema udalosti")
     relacie = [z for z in korpus["sessions"] if z["role"] == rola]
@@ -638,34 +760,50 @@ def udalosti_z_korpusu(korpus, rola):
             "sessions": relacie}
 
 
-def vyhodnot_udalosti(index_cesta, prehratia, alfa=0.05, rola=None):
+def vyhodnot_udalosti(index_cesta, prehratia, alfa=0.05, rola=None, *, final_evaluation=False):
     """FAR balika pocas prevadzkovych udalosti, po typoch a triedach.
 
     Krok A: index udalosti testovacej kampane v3 (rola None). Krok B (E2'):
     korpus protokolu v4 a jeho rola; balik musi byt natrenovany na tomto korpuse.
+    Schema 3 (balik B7c): iba korpus a rola z ROLY_V5 s pecatou ako vyhodnot_far (_rola_v5, pecat kazdeho
+    prehratia SEAL_RULE), dozvuk analysis.reverberation_s, kategorie riadkov podla CONTEXT_RULE (kontrola je
+    kategoria 'kontrola') a blok v5 (metriky_v5, bez vysledkov kontrol: O4 dava far).
     """
     alfa = _alfa(alfa)
     index = json.loads(open(index_cesta, encoding="utf-8").read())
-    korpus_sha = None
+    korpus_sha, rezim = None, None
     if index.get("schema") == SCHEMA_KORPUS:
         if rola is None:
             raise ValueError("pri korpuse treba urcit rolu")
+        if _je_v5(index.get("protocol_config")):
+            rezim = _rola_v5(index, rola, final=False, final_evaluation=final_evaluation, prikaz="udalosti")
+        elif final_evaluation is not False:
+            raise ValueError("final_evaluation patri finalnemu prikazu protokolu schemy 3 (balik B7c)")
         index, korpus_sha = udalosti_z_korpusu(index, rola), _digest(index_cesta)
     elif rola is not None:
         raise ValueError("rola plati iba pre korpus %s" % SCHEMA_KORPUS)
+    elif final_evaluation is not False:
+        raise ValueError("final_evaluation patri finalnemu prikazu protokolu schemy 3 (balik B7c)")
+    elif _je_v5(index.get("protocol_config")):
+        raise ValueError("pri protokole schemy 3 cita udalosti korpus a rolu (pecat roly, balik B7c), nie index "
+                         "udalosti")
     if index.get("schema") != SCHEMA_INDEX_UDALOSTI:
         raise ValueError("nie je index %s" % SCHEMA_INDEX_UDALOSTI)
     alokacia = alokacia_indexu_udalosti(index)
     protokol = index["protocol_config"]
     perioda, max_medzera, okno = protokol["interval_s"], protokol["max_gap_s"], protokol["window_rows"]
+    dozvuk = dozvuk_s(protokol)
+    v5 = []
     # Schema 3 (protocol v5, scripts/protocol_v5.py) names the map of event types to classes events.types.
     triedy = protokol["events"]["types" if protokol.get("schema") == "hyptcn3/collection-protocol/3" else "classes"]
     zaznamy = {z["features_sha256"]: z for z in index["sessions"]}
-    balik, balik_sha, relacie, priebehy = None, None, {}, []
+    balik, balik_sha, relacie, priebehy, rozhodnutia = None, None, {}, [], {}
     po_kategoriach = collections.defaultdict(list)
     for adresar in prehratia:
+        rozhodnutie, archiv_sha = (_pecat_prehratia(adresar, rola, "udalosti") if rezim is not None
+                                   else (None, None))
         konf, stav, riadky, hashe = _nacitaj_prehratie(adresar)
-        zaznam = zaznamy.get(_digest(konf["archive"]))
+        zaznam = zaznamy.get(_archiv_prehratia(adresar, konf, archiv_sha))
         if zaznam is None:
             raise ValueError("%s: archiv nie je relaciou tohto indexu" % adresar)
         if zaznam["id"] in relacie:
@@ -689,11 +827,17 @@ def vyhodnot_udalosti(index_cesta, prehratia, alfa=0.05, rola=None):
         udalosti = json.loads(open(zaznam["events"], encoding="utf-8").read())["events"]
         suhrn = suhrn_relacie(riadky, perioda, max_medzera)
         _over_chyby_vstupu(adresar, stav, riadky, suhrn, protokol)
-        kategorie = kategorie_udalosti(riadky, udalosti, perioda, okno)
+        if rezim is None:
+            kategorie = kategorie_udalosti(riadky, udalosti, perioda, okno)
+        else:
+            udalosti, kontroly = _subory_v5(zaznam, rola)
+            kategorie = _kategorie_v5(riadky, udalosti, kontroly, protokol, zaznam["id"])
+            v5.append({"zaznam": zaznam, "riadky": riadky, "udalosti": udalosti, "kontroly": kontroly})
+            rozhodnutia[zaznam["id"]] = rozhodnutie["allowed"]
         for kategoria, e in _expozicia(riadky, kategorie, perioda).items():
             po_kategoriach[kategoria].append(dict(e, relacia=zaznam["id"], skupina=zaznam["group"]))
-        priebehy += [dict(priebeh_udalosti(riadky, u, perioda, okno), relacia=zaznam["id"], skupina=zaznam["group"])
-                     for u in udalosti]
+        priebehy += [dict(priebeh_udalosti(riadky, u, perioda, okno, dozvuk), relacia=zaznam["id"],
+                          skupina=zaznam["group"]) for u in udalosti]
         relacie[zaznam["id"]] = dict(suhrn, scenario=zaznam["scenario"], skupina=zaznam["group"],
                                      features_sha256=zaznam["features_sha256"], archiv=os.path.realpath(konf["archive"]),
                                      prehratie=os.path.realpath(adresar), subory_sha256=hashe,
@@ -726,8 +870,8 @@ def vyhodnot_udalosti(index_cesta, prehratia, alfa=0.05, rola=None):
     prostredie = {k: "zhodne" if v == {env[k] if k != "extractor_sha256" else json.dumps(env[k], sort_keys=True)}
                   else "ine" for k, v in relacie_env.items()}
     vykonane = [p for p in priebehy if p["executed"]]
-    return {
-        "schema": SCHEMA_FAR_UDALOSTI, "alfa": alfa, "dozvuk_s": DOZVUK_S,
+    values = {
+        "schema": SCHEMA_FAR_UDALOSTI, "alfa": alfa, "dozvuk_s": dozvuk,
         "index": os.path.realpath(index_cesta), "index_sha256": _digest(index_cesta),
         "protokol": protokol["name"], "protocol_sha256": index["protocol_sha256"], "alokacia": alokacia,
         "korpus_rola": rola,
@@ -759,10 +903,1039 @@ def vyhodnot_udalosti(index_cesta, prehratia, alfa=0.05, rola=None):
                          "a jej dozvuk), ktory nie je v case ziadnej kategorie a relacia ho ma vo vylucenych_riadkov; "
                          "prehratie s inou chybou vstupu sa nevyhodnoti"),
         },
-        "relacie": relacie, "predpoklady": [*PREDPOKLADY, *PREDPOKLADY_UDALOSTI],
+        "relacie": relacie,
+        "predpoklady": [*PREDPOKLADY, *(PREDPOKLADY_UDALOSTI if rezim is None else PREDPOKLADY_UDALOSTI_V5)],
         "poznamka": ("Prevadzkove udalosti su benigne; kazdy alarm je falosny. Vysledok plati iba pre tieto typy "
                      "udalosti v labe a nehovori nic o detekcii utokov ani malveru (HONESTY P4)."),
-    }, balik
+    }
+    if rezim is not None:
+        if type(balik.get("classes")) is not list:
+            raise ValueError("manifest balika nema zoznam tried (classes)")
+        values.update(_znacka_v5(rezim, final_evaluation),
+                      pecat={"decisions": dict(sorted(rozhodnutia.items())), "definition": SEAL_RULE},
+                      v5=metriky_v5(protokol, v5, triedy=balik["classes"], rola=rola))
+    return values, balik
+
+
+# Pod schemou 3 sa kategorie CONTEXT_RULE pomenuju ako kategorie protokolov v3 a v4 (prevadzka, po_udalosti, typ
+# udalosti, None); riadok pri kontrole ma kategoriu 'kontrola' (nie je cistou prevadzkou ani vylucenym usekom).
+KATEGORIE_V5 = {"clean": "prevadzka", "reverberation": "po_udalosti", "control": "kontrola"}
+
+
+def _kategorie_v5(riadky, udalosti, kontroly, protokol, ident):
+    return [None if c is None else t if c == "event" else KATEGORIE_V5[c]
+            for c, t in row_contexts(riadky, udalosti, kontroly, protokol, ident=ident)]
+
+
+# ------------------------------------------------------------- protokol v5 (balik B7c, agent M)
+#
+# The metrics of design B7c 1.3 on the replays of one role of a corpus of protocol schema 3 and one model (a bundle
+# of M at one seed, or a baseline of tcn/porovnanie.py), per channel of the detector and for their union. The final
+# command (tcn/finalne.py, agent E) calls them for every sealed role and model: vyhodnot_far (or nacitaj_v5 and
+# metriky_v5 on what it loaded), channel_reacted for every control occurrence (scripts/controls.py outcomes inside the
+# final command), training_summary and training_record per training. No function here opens a feature archive: the
+# replays are read, the archives only hashed (as since iteration 1).
+
+SCHEMA_V5 = "hyptcn3/v5-metrics/1"  # values["v5"] of far and udalosti under schema 3 (metriky_v5)
+SCHEMA_REAKCIE = "hyptcn3/channel-reacted/1"  # channel_reacted
+SCHEMA_TRENING = "hyptcn3/training-evaluation/1"  # training_record
+SCHEMA_SUHRN_TRENINGU = "hyptcn3/training-summary/1"  # training_summary
+# The source of each channel (safeguard.runtime CHANNELS and SOURCES name them in different orders) and the union.
+CHANNEL_SOURCES = {"rule": "rule_anomaly", "neural": "model_anomaly", "kernel_integrity": "kernel_integrity"}
+assert tuple(CHANNEL_SOURCES) == CHANNELS and set(CHANNEL_SOURCES.values()) == set(SOURCES)
+SOURCE_CHANNELS = {source: channel for channel, source in CHANNEL_SOURCES.items()}
+UNION = "union"
+OUTPUTS = (*CHANNELS, UNION)  # Every metric of the block v5 is given for each channel and for the union.
+ROLY_V5 = ("dev", "calibration", "test_benign", "test_controls")  # The roles far and udalosti take under schema 3.
+SEALED_ROLES = ("test_benign", "test_controls")  # Design B7c 1.1: the roles of the seal.
+CONTEXTS = ("clean", "event", "reverberation", "control")
+# Question Q11 (provisional): the summary of a training reads a held-out fit role (features/dataset.py FIT_ROLES but
+# train, which the predictor is fitted on; judgment); never a sealed role.
+TRAINING_ROLES = tuple(role for role in FIT_ROLES if role != "train")
+# Proposal 6.4: what is not evaluated (tcn/metody.py UNEVALUATED, one string; a test pins it), and the three results
+# of a control's channel (O4): detected, not detected, and its own result when the sensor scored no row.
+UNEVALUATED = "nevyhodnotené"
+EVALUATED = "evaluated"
+DETECTED, MISSED, NOT_SCORED = "zachytené", "nezachytené", "nezachytené, senzor neskóroval"
+
+EDGE_RULE = (
+    "the edges of a replay (safeguard.runtime Detector: one row per frame of the archive, one session): a channel "
+    "(rule, neural, kernel_integrity) rises at a row whose alarm_sources holds its source (rule_anomaly, "
+    "model_anomaly, kernel_integrity), where its alarm is up and was not up before by the detector's own state; the "
+    "union rises at a row whose alarm (the union of the channels up) is true while it was false at the row before it, "
+    "or at the first row when true there (the detector starts with every alarm down), so an alarm of two channels at "
+    "once is one alarm of the union (design B7c 1.3, finding F2 of the verification of B6b); a channel judges a row "
+    "when the row has its input (neural: a score; rule: rule.state judged; kernel_integrity: integrity.conclusive), "
+    "the union when one of them does, and a rate of a channel that judged no row of its set is nevyhodnotené")
+CONTEXT_RULE = (
+    "the context of a replay row (question Q12 to the lead, provisional by the executor's proposal: tcn/metody.py "
+    "CLEAN_RULE and OBSERVED_RULE applied to the rows of the replay): the span of a row runs from the row L - 1 rows "
+    "before it (the replay's first row when fewer; L the required_rows of the replay, window_rows and the anchor "
+    "when anchored) to the row; the row is excluded when its span meets the closed interval [host_start_unix, "
+    "host_stopped_unix + analysis.reverberation_s] of an event that did not run (executed false: such an event and its "
+    "windows enter no metric, NAVRH_PROTOKOL_V3 kap. 5); else it is in the event whose [host_start_unix, "
+    "host_stopped_unix] its span meets (context event, with the event's type); else in a control when its span meets "
+    "the closed interval [host_start_unix, host_stopped_unix + reverberation_s] of a control (controls.json, either "
+    "polarity, as tcn/metody.py CLEAN_RULE); else in the reverberation of an event when it meets [host_start_unix, "
+    "host_stopped_unix + reverberation_s]; else it is clean traffic (proposal 4.2: the time outside the events and "
+    "their reverberation); the observed time is one interval_s per row, the scored time one per row with a score "
+    "(tcn/metody.py OBSERVED_RULE); a window of a window set takes the span of its frames (training_summary)")
+O2_RULE = (
+    "O2 (proposal 4.2): the alarms of each channel and of the union that begin at a clean row (an edge, EDGE_RULE, at "
+    "a row of context clean, CONTEXT_RULE) per observed hour of clean traffic, with the exact one-sided upper bound "
+    "of analysis.metrics.o2_bound, chi2.ppf(level, 2k + 2) / 2 alarms over those hours; beside them the scored clean "
+    "hours, the alarms per scored clean hour, the scored share and the unscored clean time, nevyhodnotené (proposal "
+    "6.4, G1: an unscored stretch is reported, never silence) and the same bound per scored clean hour; tables by "
+    "boot (its group: one boot of the VM), by VM, by profile and by scenario; the edges are those of the replay, at "
+    "the threshold of the replayed bundle")
+THESIS_RATE_RULE = (
+    "the false alarms per hour of evaluated time (the thesis; the lead's skeleton B7, addendum 2 point 2): on a benign "
+    "role every alarm is false (the events are part of normal, D10), so the alarms of each channel and of the union "
+    "that begin at any row that is not excluded (CONTEXT_RULE) per observed hour of those rows, with the exact "
+    "two-sided interval of Garwood at analysis.metrics.alarm_rate_interval.level (chi2.ppf((1 - level) / 2, 2k) / 2, "
+    "0 at k = 0, and chi2.ppf((1 + level) / 2, 2k + 2) / 2); beside them the rate per scored hour with the same "
+    "Garwood interval per scored hour (judgment: the evaluated time of the thesis is read as the observed time, as O2 "
+    "reads it; iteration 1 and the documents that quote its FAR give the scored hour, so it stands beside it with its "
+    "interval), the number of boot groups and the tables by boot, VM, profile and scenario")
+DISPERSION_RULE = (
+    "the dispersion of the alarm counts over the sessions (analysis.metrics.dispersion): Pearson's X2, the sum over "
+    "the sessions of (k_s - e_s)^2 / e_s with e_s = k times the observed time of session s over that of all "
+    "(judgment: the main denominator of proposal 4.2; iteration 1 took the scored time), over the sessions with "
+    "observed time, their number - 1 degrees of freedom, p the chi-square survival function at X2; not computed, "
+    "with the reason, without an alarm or with one session")
+EVENT_TEST_RULE = (
+    "the alarm rate during events against clean traffic (analysis.metrics.event_vs_clean): k1 alarms that begin at "
+    "event rows in e1 observed seconds against k0 at clean rows in e0 seconds, the exact conditional test, p = "
+    "P(X >= k1) for X binomial(k1 + k0, e1 / (e1 + e0)) (scipy binomtest, alternative greater); the rate is higher "
+    "during events when p < alpha; in total and per event type; p 1 without an alarm, none without exposure and "
+    "nevyhodnotené for a channel that judged no row of the events or of clean traffic (the reason given)")
+OCCURRENCE_RULE = (
+    "an occurrence (an event of events.json, a control of controls.json) is judged on the rows of its horizon, those "
+    "with host_start_unix < t <= host_start_unix + h (a row at t covers (t - interval_s, t]: scripts/controls.py's "
+    "rule; h = analysis.horizon_s for an event, controls.horizon_s through the outcome's window for a control); it is "
+    "evaluable (proposal 6.4) when its scored rows with host_start_unix < t <= host_start_unix + "
+    "analysis.evaluable.first_s, times interval_s, reach analysis.evaluable.scored_share of first_s, else it is "
+    "nevyhodnotené; a channel or the union reacts to it when it rises (EDGE_RULE) at a row of its horizon: an alarm up "
+    "before it is no reaction (whether it was up at the last row at or before the start is recorded); the unscored "
+    "time of its horizon is reported")
+O3_RULE = (
+    "O3 (proposal 4.2 and 6.4): per event type and over every type (judgment: the total takes the minimum of a type), "
+    "the share of the evaluable occurrences a channel or the union reacts to (OCCURRENCE_RULE), with the exact "
+    "one-sided upper bound of analysis.metrics.o3_bound, beta.ppf(level, k + 1, n - k) and 1 at k = n; an occurrence "
+    "that is not evaluable leaves the denominator and is listed apart (nevyhodnotené); a type with fewer than "
+    "analysis.min_occurrences evaluable occurrences is nevyhodnotené (its counts are given, its share and bound are "
+    "none), and so is a channel that judged no row of the horizons of its evaluable occurrences (EDGE_RULE); beside the"
+    " share (descriptive, judgment: the horizon misses an alarm late in a long event) the evaluable occurrences with an"
+    " alarm that begins during the event, at a row whose span meets [host_start_unix, host_stopped_unix], and in its "
+    "reverberation, reported apart (proposal 12: the reverberation is reported separately); an event that did not run "
+    "is listed apart; tables by boot, VM, profile and scenario over every type")
+O4_RULE = (
+    "O4 (proposal 4.2 and 6.4): per polarity, class and kind of control, a channel or the union detects an "
+    "occurrence when it rises at a row of the occurrence's horizon (channel_reacted, OCCURRENCE_RULE); the denominator "
+    "is the planned occurrences (every planned control of an accepted session ran: the log audit refuses "
+    "control_not_executed); an occurrence without a scored row in its horizon is nezachytené, senzor neskóroval, its "
+    "own result and no success, counted apart (tables by boot, VM, profile and scenario beside those by class and "
+    "kind); a channel that judged no row of the horizon (EDGE_RULE: a rule "
+    "channel without columns) is nevyhodnotené there, no miss; a class or kind with fewer than "
+    "analysis.min_occurrences evaluable occurrences is nevyhodnotené (its counts are given, its share is none), and so "
+    "is the share of a channel nevyhodnotené at every occurrence of its group; for a negative a detection is a false "
+    "alarm; every group gives the increment of the neural channel over the rule channel (INCREMENT_RULE)")
+INCREMENT_RULE = (
+    "the sensitivity increment of the neural channel over the rule channel (proposal 8.2; question Q6, provisional by "
+    "its proposal): in every group of O4 the planned occurrences the neural channel detects (zachytené) and the rule "
+    "channel does not, over the planned occurrences, which is share(rule or neural) - share(rule), with the counts "
+    "(planned, rule, rule_or_neural, neural_not_rule); a channel that judged no row of an occurrence detects nothing "
+    "there (nevyhodnotené is no detection); nevyhodnotené when the group is or when the neural channel judged no row "
+    "of its occurrences; for a negative control a detection is a false alarm")
+CLASSIFIER_RULE = (
+    "the activity classifier (analysis.metrics.classifier, proposal 4.2 row O6): the class of a scored row is the "
+    "activity the bundle predicts there; the scored rows of clean traffic carry the scenario of their session (the "
+    "bundle's classes are the train scenarios: judgment, the profile of O6 is the scenario's) and give the accuracy "
+    "and the macro-F1 over the classes present, beside the most frequent class (the accuracy of always naming it) and "
+    "chance (one over the classes); the rows of the reverberation are left out (O6); an occurrence (an event or a "
+    "control) is judged by its majority class, the most frequent predicted class of the scored rows whose span meets "
+    "[host_start_unix, host_stopped_unix] (ties to the first class by name, as since iteration 1), right when it is "
+    "the scenario of its session (judgment: the bundle cannot name an event type, so the question is whether it keeps "
+    "the session's activity during the occurrence); the majority class of a session is that of its clean rows; a "
+    "bundle without classes (a baseline of tcn/porovnanie.py) has no classifier, and its tables are skipped with the "
+    "reason")
+UNSCORED_RULE = (
+    "the unscored time (proposal 6.4: per session, per event type and per control; G1: an unscored stretch is "
+    "nevyhodnotené in the output, never silence): the stretches of a replay are those of safeguard.runtime.unscored, "
+    "the one rule of the unscored stretches (its UNSCORED_RULE: a run of rows without a score, the warmup, a full "
+    "snapshot, an invalid row and the windows after them, of one session in replay order with consecutive seq, with "
+    "its first and last seq and time, its rows, its seconds (rows times interval_s), the reasons of its rows and the "
+    "status nevyhodnotené; design B7c 5.6); the unscored seconds are also given per context, per occurrence (in its "
+    "horizon) and per event type and kind of control")
+SEAL_RULE = (
+    "the seal of a replay (design B7c 5.5, question Q17): under protocol schema 3 every replay directory is checked by "
+    "tcn.pecat kontrola before its rows are read, by the archive_sha256 of its configuration.json (safeguard replay "
+    "--archive, tcn.porovnanie replay and so the final command write it since package B7c), which must be the sha256 "
+    "of the archive it names; the replay of a sealed archive of a campaign is read only inside the final run that "
+    "consumed its seal (tcn/pecat.py GUARD_RULE), so the replays a final run wrote are refused after it as its "
+    "archives are; a replay without archive_sha256 is refused by name")
+O4_NOT_GIVEN = ("not computed: no outcome of a control was given (scripts/controls.py outcomes, computed inside the "
+                "final command for role test_controls; vysledky_kontrol)")
+
+
+def _je_v5(protokol):
+    return type(protokol) is dict and protokol.get("schema") == SCHEMA_PROTOKOLU_V5
+
+
+def _cislo_v5(x):
+    return isinstance(x, (int, float)) and not isinstance(x, bool) and math.isfinite(x)
+
+
+def hodnota_v5(protokol, cesta):
+    """The value at the dotted `cesta` of a protocol of schema 3; a missing key is refused by name."""
+    value = protokol
+    for part in cesta.split("."):
+        if type(value) is not dict or part not in value:
+            raise ValueError(f"protocol key {cesta} is missing (protocol v5, design B7c 1.3)")
+        value = value[part]
+    return value
+
+
+def dozvuk_s(protokol):
+    """The reverberation in seconds: analysis.reverberation_s of a protocol of schema 3 (design B7c 1.3), the 300 s of
+    protocols v3 and v4 (DOZVUK_S, NAVRH_PROTOKOL_V3 kap. 5) for schemas 1 and 2."""
+    if not _je_v5(protokol):
+        return DOZVUK_S
+    value = hodnota_v5(protokol, "analysis.reverberation_s")
+    if not (_cislo_v5(value) and value >= 0):
+        raise ValueError("analysis.reverberation_s must be a number of at least 0")
+    return float(value)
+
+
+def metriky_protokolu(protokol):
+    """analysis.metrics of a protocol of schema 3, checked by scripts/protocol_v5.py metrics_problem (one check for the
+    protocol and this module)."""
+    from scripts.protocol_v5 import metrics_problem
+    value = hodnota_v5(protokol, "analysis.metrics")
+    problem = metrics_problem(value)
+    if problem is not None:
+        raise ValueError(problem)
+    return value
+
+
+def vyskyt_protokolu(protokol):
+    """{horizon_s, reverberation_s, first_s, scored_share, min_occurrences, interval_s} of a protocol of schema 3
+    (OCCURRENCE_RULE)."""
+    out = {"horizon_s": hodnota_v5(protokol, "analysis.horizon_s"),
+           "reverberation_s": dozvuk_s(protokol),
+           "first_s": hodnota_v5(protokol, "analysis.evaluable.first_s"),
+           "scored_share": hodnota_v5(protokol, "analysis.evaluable.scored_share"),
+           "min_occurrences": hodnota_v5(protokol, "analysis.min_occurrences"),
+           "interval_s": hodnota_v5(protokol, "interval_s")}
+    if not all(_cislo_v5(out[k]) and out[k] > 0 for k in ("horizon_s", "first_s", "interval_s")):
+        raise ValueError("analysis.horizon_s, analysis.evaluable.first_s and interval_s must be positive numbers")
+    if not (_cislo_v5(out["scored_share"]) and 0 < out["scored_share"] <= 1):
+        raise ValueError("analysis.evaluable.scored_share must be a number in (0, 1]")
+    if type(out["min_occurrences"]) is not int or out["min_occurrences"] < 1:
+        raise ValueError("analysis.min_occurrences must be an integer of at least 1")
+    return {k: (v if k == "min_occurrences" else float(v)) for k, v in out.items()}
+
+
+# ------------------------------------------------- the edges, the contexts and the unscored time of one replay
+
+
+def _riadok_v5(r, i):
+    """The fields of a replay row of safeguard.runtime the block v5 reads, checked: what the detector writes into
+    every row (Detector._finish and input_error)."""
+    where = f"replay row {i} (seq {r.get('seq')})"
+    alarm, event, sources, channel = r.get("alarm"), r.get("alarm_event"), r.get("alarm_sources"), r.get("channel")
+    if type(alarm) is not bool or type(event) is not bool:
+        raise ValueError(f"{where}: alarm and alarm_event are true or false (safeguard.runtime)")
+    if (type(channel) is not list or len(set(channel)) != len(channel) or any(c not in CHANNELS for c in channel)
+            or channel != [c for c in CHANNELS if c in channel]):
+        raise ValueError(f"{where}: channel lists channels of {', '.join(CHANNELS)} in that order")
+    if type(sources) is not list or len(set(sources)) != len(sources) or any(s not in SOURCE_CHANNELS
+                                                                            for s in sources):
+        raise ValueError(f"{where}: alarm_sources lists sources of {', '.join(SOURCES)}")
+    if alarm != bool(channel) or event != bool(sources) or any(SOURCE_CHANNELS[s] not in channel for s in sources):
+        raise ValueError(f"{where}: alarm, alarm_event, alarm_sources and channel disagree (safeguard.runtime: "
+                         "alarm is the union of the channels up, a source rises only where its channel is up)")
+    if not _cislo_v5(r.get("timestamp")) or type(r.get("seq")) is not int:
+        raise ValueError(f"{where}: a replay row has its seq and a finite timestamp")
+    if type(r.get("rule")) is not dict or type(r.get("integrity")) is not dict:
+        raise ValueError(f"{where}: a replay row has its rule and integrity (safeguard.runtime, package B6b)")
+
+
+def _posudzuje(r):
+    """{output: whether it judged the row} (EDGE_RULE)."""
+    out = {"neural": r.get("score") is not None, "rule": r["rule"].get("state") == "judged",
+           "kernel_integrity": r["integrity"].get("conclusive") is True}
+    out[UNION] = any(out.values())
+    return out
+
+
+def channel_edges(rows):
+    """{output: [index of each row where it rises]} of one replay, for each channel and the union (EDGE_RULE). Every
+    row is checked (_riadok_v5); the seq and the times increase."""
+    out = {o: [] for o in OUTPUTS}
+    previous = False
+    for i, r in enumerate(rows):
+        _riadok_v5(r, i)
+        if i and (r["seq"] <= rows[i - 1]["seq"] or r["timestamp"] <= rows[i - 1]["timestamp"]):
+            raise ValueError(f"replay row {i}: the seq and the times of a replay increase")
+        for channel in CHANNELS:
+            if CHANNEL_SOURCES[channel] in r["alarm_sources"]:
+                out[channel].append(i)
+        if r["alarm"] and not previous:
+            out[UNION].append(i)
+        previous = r["alarm"]
+    return out
+
+
+def _vyskyty(zaznamy, ident, co):
+    """[(record, start, stop)] of the event or control records of one session (host_start_unix <= host_stopped_unix)."""
+    if type(zaznamy) not in (list, tuple):
+        raise ValueError(f"the {co} of session {ident} are a list of records")
+    out = []
+    for z in zaznamy:
+        a, b = (z.get(k) if type(z) is dict else None for k in ("host_start_unix", "host_stopped_unix"))
+        if not (_cislo_v5(a) and _cislo_v5(b) and a <= b):
+            raise ValueError(f"a record of the {co} of session {ident} needs host_start_unix <= host_stopped_unix")
+        if co == "events" and (type(z.get("type")) is not str or type(z.get("executed")) is not bool):
+            raise ValueError(f"an event of session {ident} needs its type and executed true or false")
+        out.append((z, float(a), float(b)))
+    return out
+
+
+def _kontext(first, last, udalosti, kontroly, dozvuk):
+    """(context, event type or None) of a span [first, last] (CONTEXT_RULE); context None: excluded."""
+    def meets(a, b):
+        return last >= a and first <= b
+    if any(not z["executed"] and meets(a, b + dozvuk) for z, a, b in udalosti):
+        return None, None
+    hit = next((z for z, a, b in udalosti if meets(a, b)), None)
+    if hit is not None:
+        return "event", hit["type"]
+    if any(meets(a, b + dozvuk) for _, a, b in kontroly):
+        return "control", None
+    if any(meets(a, b + dozvuk) for _, a, b in udalosti):
+        return "reverberation", None
+    return "clean", None
+
+
+def required_rows(rows):
+    """L of CONTEXT_RULE: the required_rows of a replay (window_rows and the anchor when anchored), one value for every
+    row that states it (an input error row states none)."""
+    found = {r["required_rows"] for r in rows if "required_rows" in r}
+    if len(found) != 1 or type(next(iter(found))) is not int or next(iter(found)) < 1:
+        raise ValueError("the rows of a replay state one required_rows (safeguard.runtime), not %s" % sorted(found))
+    return found.pop()
+
+
+def row_contexts(rows, events, controls, protocol, *, ident="?"):
+    """[(context, event type or None)] of every row of one replay (CONTEXT_RULE): context clean, event,
+    reverberation, control, or None for an excluded row. events and controls: the records of the session's events.json
+    and of its controls (controls.json, the slots with a kind; [] for a session without one)."""
+    dozvuk = dozvuk_s(protocol)
+    udalosti, kontroly = _vyskyty(events, ident, "events"), _vyskyty(controls, ident, "controls")
+    frames = required_rows(rows)
+    times = [float(r["timestamp"]) for r in rows]
+    return [_kontext(times[max(i - (frames - 1), 0)], t, udalosti, kontroly, dozvuk) for i, t in enumerate(times)]
+
+
+def unscored_stretches(rows, interval_s):
+    """The unscored stretches of the rows of one replay (UNSCORED_RULE): those of safeguard.runtime.unscored, the one
+    rule (design B7c 5.6), [{session, first_seq, last_seq, rows, seconds, first_unix, last_unix, reasons, status
+    nevyhodnotené}]."""
+    from safeguard.runtime import unscored
+    return unscored(rows, interval_s)["stretches"]
+
+
+def _relacia_v5(zaznam, riadky, udalosti, kontroly, protokol):
+    """The state of one session the block v5 reads: its record's identity, its rows, edges, contexts and spans."""
+    ident = zaznam["id"]
+    edges = channel_edges(riadky)
+    contexts = row_contexts(riadky, udalosti, kontroly, protokol, ident=ident)
+    frames = required_rows(riadky)
+    times = [float(r["timestamp"]) for r in riadky]
+    scenarios = hodnota_v5(protokol, "scenarios")
+    if zaznam["scenario"] not in scenarios:
+        raise ValueError(f"session {ident}: scenario {zaznam['scenario']!r} is no scenario of the protocol")
+    return {"id": ident, "group": zaznam["group"], "vm": zaznam.get("vm"), "scenario": zaznam["scenario"],
+            "profile": scenarios[zaznam["scenario"]].get("profile"), "rows": riadky, "edges": edges,
+            "contexts": contexts, "times": times,
+            "first": [times[max(i - (frames - 1), 0)] for i in range(len(times))],
+            "events": _vyskyty(udalosti, ident, "events"), "controls": _vyskyty(kontroly, ident, "controls"),
+            "judged": [_posudzuje(r) for r in riadky]}
+
+
+# ------------------------------------------------- the rates (O2, the thesis' rate, dispersion, event against clean)
+
+TABLES = {"by_boot": "group", "by_vm": "vm", "by_profile": "profile", "by_scenario": "scenario"}
+
+
+def poissonov_horna(k, uroven):
+    """The exact one-sided upper bound of a Poisson mean at k events and level `uroven` (O2_RULE)."""
+    from scipy.stats import chi2
+    return float(chi2.ppf(uroven, 2 * k + 2) / 2)
+
+
+def garwood(k, uroven):
+    """The exact two-sided interval of Garwood of a Poisson mean at k events and level `uroven` (THESIS_RATE_RULE):
+    poissonov_interval with alfa = 1 - uroven."""
+    return poissonov_interval(k, 1 - uroven)
+
+
+def clopper_pearson_horna(k, n, uroven):
+    """The exact one-sided upper bound of Clopper and Pearson of a share k of n at level `uroven` (O3_RULE)."""
+    from scipy.stats import beta
+    if n == 0:
+        return None
+    return 1.0 if k == n else float(beta.ppf(uroven, k + 1, n - k))
+
+
+def _expozicia_v5(s, keep):
+    """The rows of session s whose (context, type) passes keep: their count, the scored ones, the judged ones of each
+    output and the alarms of each output that begin there."""
+    mine = [i for i, c in enumerate(s["contexts"]) if keep(c)]
+    selected = set(mine)
+    return {"session": s["id"], "group": s["group"], "vm": s["vm"], "profile": s["profile"],
+            "scenario": s["scenario"], "rows": len(mine),
+            "scored_rows": sum(s["rows"][i].get("score") is not None for i in mine),
+            "judged_rows": {o: sum(s["judged"][i][o] for i in mine) for o in OUTPUTS},
+            "alarms": {o: sum(i in selected for i in s["edges"][o]) for o in OUTPUTS}}
+
+
+def _miera(expozicie, interval_s, interval):
+    """The rate block of a set of exposures: per output the alarms, the rate per observed and per scored hour and the
+    interval or bound interval(k) in alarms over each of them (bounds_per_hour, bounds_per_scored_hour); a channel
+    that judged no row is nevyhodnotené."""
+    rows = sum(e["rows"] for e in expozicie)
+    scored = sum(e["scored_rows"] for e in expozicie)
+    hours, scored_hours = rows * interval_s / 3600, scored * interval_s / 3600
+    out = {"sessions": len(expozicie), "rows": rows, "scored_rows": scored, "observed_hours": hours,
+           "scored_hours": scored_hours, "scored_share": scored / rows if rows else None,
+           "unscored_seconds": (rows - scored) * interval_s,
+           "unscored_status": UNEVALUATED if rows > scored else None}
+    for o in OUTPUTS:
+        k = sum(e["alarms"][o] for e in expozicie)
+        judged = sum(e["judged_rows"][o] for e in expozicie)
+        bounds = interval(k)
+        if not judged or not hours:
+            out[o] = {"alarms": k, "judged_rows": judged, "status": UNEVALUATED, "per_hour": None,
+                      "bounds_per_hour": None, "per_scored_hour": None, "bounds_per_scored_hour": None,
+                      "why": "the channel judged no row of this set" if not judged else "no observed time"}
+            continue
+        out[o] = {"alarms": k, "judged_rows": judged, "status": EVALUATED, "per_hour": k / hours,
+                  "bounds_per_hour": [b / hours for b in bounds],
+                  "per_scored_hour": k / scored_hours if scored_hours else None,
+                  "bounds_per_scored_hour": [b / scored_hours for b in bounds] if scored_hours else None}
+    return out
+
+
+def _tabulky(expozicie, interval_s, interval):
+    return {name: {str(value): _miera([e for e in expozicie if e[key] == value], interval_s, interval)
+                   for value in sorted({e[key] for e in expozicie}, key=str)} for name, key in TABLES.items()}
+
+
+def _disperzia(expozicie):
+    """DISPERSION_RULE per output over the sessions of the exposures."""
+    from scipy.stats import chi2
+    out = {}
+    observed = [e for e in expozicie if e["rows"] > 0]  # A session without a row of the set has no expectation.
+    total = sum(e["rows"] for e in observed)
+    for o in OUTPUTS:
+        k = sum(e["alarms"][o] for e in observed)
+        if k == 0 or len(observed) < 2:
+            out[o] = {"x2": None, "df": None, "p": None, "sessions": len(observed),
+                      "why": "no alarm" if k == 0 else "one session with observed time"}
+            continue
+        x2 = sum((e["alarms"][o] - k * e["rows"] / total) ** 2 / (k * e["rows"] / total) for e in observed)
+        out[o] = {"x2": float(x2), "df": len(observed) - 1, "p": float(chi2.sf(x2, len(observed) - 1)),
+                  "sessions": len(observed), "why": None}
+    return out
+
+
+def porovnanie_v5(k1, e1, k0, e0, alfa):
+    """EVENT_TEST_RULE for one output: k1 alarms in e1 seconds of events against k0 in e0 seconds of clean traffic."""
+    out = {"event_alarms": k1, "event_seconds": e1, "clean_alarms": k0, "clean_seconds": e0, "alpha": alfa}
+    if e1 <= 0 or e0 <= 0:
+        return dict(out, p=None, rate_ratio=None, higher=None, why="no exposure of the events or of clean traffic")
+    if k1 + k0 == 0:
+        return dict(out, p=1.0, rate_ratio=None, higher=False, why="no alarm")
+    from scipy.stats import binomtest
+    p = float(binomtest(k1, k1 + k0, e1 / (e1 + e0), alternative="greater").pvalue)
+    return dict(out, p=p, rate_ratio=(k1 / e1) / (k0 / e0) if k0 else None, higher=p < alfa, why=None)
+
+
+def _udalosti_proti_cistej(relacie, interval_s, alfa):
+    """EVENT_TEST_RULE in total and per event type, per output."""
+    def test(keep):
+        events = [_expozicia_v5(s, keep) for s in relacie]
+        clean = [_expozicia_v5(s, lambda c: c[0] == "clean") for s in relacie]
+        out = {}
+        for o in OUTPUTS:
+            k1, k0 = (sum(e["alarms"][o] for e in x) for x in (events, clean))
+            e1, e0 = (sum(e["rows"] for e in x) * interval_s for x in (events, clean))
+            if not all(sum(e["judged_rows"][o] for e in x) for x in (events, clean)) and e1 > 0 and e0 > 0:
+                out[o] = dict(porovnanie_v5(k1, e1, k0, e0, alfa), p=None, higher=None, status=UNEVALUATED,
+                              why="the channel judged no row of the events or of clean traffic")
+                continue
+            out[o] = porovnanie_v5(k1, e1, k0, e0, alfa)
+        return out
+    types = sorted({z["type"] for s in relacie for z, _, _ in s["events"] if z["executed"]})
+    return {"total": test(lambda c: c[0] == "event"),
+            "by_type": {t: test(lambda c, t=t: c == ("event", t)) for t in types},
+            "definition": EVENT_TEST_RULE}
+
+
+# ------------------------------------------------- the occurrences (O3, O4)
+
+
+def _vyskyt(s, start, horizon_s, first_s, scored_share, interval_s, horizon=None, stop=None, dozvuk=None):
+    """OCCURRENCE_RULE for one occurrence at `start` of session s: the rows of its horizon (by time, or the indices
+    `horizon` given), its scored share of the first first_s seconds and what each output does; for an event (its stop
+    and the reverberation given) also whether each output rises during the event (a row whose span meets [start,
+    stop]) and in its reverberation (one whose span meets it only with the reverberation), beside the horizon."""
+    times, rows = s["times"], s["rows"]
+    if horizon is None:
+        horizon = [i for i, t in enumerate(times) if start < t <= start + horizon_s]
+    first = [i for i, t in enumerate(times) if start < t <= start + first_s]
+    share = sum(rows[i].get("score") is not None for i in first) * interval_s / first_s
+    before = [i for i, t in enumerate(times) if t <= start]
+    last = rows[before[-1]] if before else None
+    scored = [i for i in horizon if rows[i].get("score") is not None]
+    inside = set(horizon)
+    judged = [_posudzuje(rows[i]) for i in horizon]
+    outputs = {}
+    for o in OUTPUTS:
+        edges = [i for i in s["edges"][o] if i in inside]
+        up = None if last is None else (last["alarm"] if o == UNION else o in last["channel"])
+        outputs[o] = {"reacted": bool(edges), "edges": len(edges), "judged": any(j[o] for j in judged),
+                      "first_edge_s": times[edges[0]] - start if edges else None, "up_at_start": up}
+        if stop is not None:
+            meets = [i for i in s["edges"][o] if times[i] >= start and s["first"][i] <= stop + dozvuk]
+            outputs[o].update(during_event=any(s["first"][i] <= stop for i in meets),
+                              in_reverberation=any(s["first"][i] > stop for i in meets))
+    return {"start_unix": start, "horizon_rows": len(horizon), "scored_horizon_rows": len(scored),
+            "unscored_horizon_s": (len(horizon) - len(scored)) * interval_s, "first_s_scored_share": share,
+            "evaluable": share >= scored_share, "status": EVALUATED if share >= scored_share else UNEVALUATED,
+            "outputs": outputs}
+
+
+def _udalosti_vyskyty(relacie, pravidla):
+    out = []
+    for s in relacie:
+        for z, a, b in s["events"]:
+            base = {"session": s["id"], "group": s["group"], "vm": s["vm"], "profile": s["profile"],
+                    "scenario": s["scenario"], "type": z["type"], "start_unix": a, "stopped_unix": b,
+                    "executed": z["executed"]}
+            if not z["executed"]:
+                out.append(dict(base, status="not run"))
+                continue
+            out.append(dict(_vyskyt(s, a, pravidla["horizon_s"], pravidla["first_s"], pravidla["scored_share"],
+                                    pravidla["interval_s"], stop=b, dozvuk=pravidla["reverberation_s"]), **base))
+    return out
+
+
+def _podiel(vyskyty, minimum, uroven):
+    """The share of the evaluable occurrences of a group that each output reacts to (O3_RULE), with the bound and the
+    status by the minimum of evaluable ones; beside it the evaluable occurrences with an alarm during the event and in
+    its reverberation (descriptive); its unscored horizon time."""
+    evaluable = [v for v in vyskyty if v["evaluable"]]
+    status = EVALUATED if len(evaluable) >= minimum else UNEVALUATED
+    out = {"occurrences": len(vyskyty), "evaluable": len(evaluable), "not_evaluable": len(vyskyty) - len(evaluable),
+           "status": status, "unscored_horizon_s": sum(v["unscored_horizon_s"] for v in vyskyty)}
+    for o in OUTPUTS:
+        k = sum(v["outputs"][o]["reacted"] for v in evaluable)
+        beside = {key: sum(v["outputs"][o][key] for v in evaluable) for key in ("during_event", "in_reverberation")}
+        if status == EVALUATED and not any(v["outputs"][o]["judged"] for v in evaluable):
+            out[o] = {"reacted": k, "share": None, "upper": None, "status": UNEVALUATED, **beside,
+                      "why": "the channel judged no row of these horizons"}
+            continue
+        out[o] = {"reacted": k, "share": k / len(evaluable) if status == EVALUATED else None,
+                  "upper": clopper_pearson_horna(k, len(evaluable), uroven) if status == EVALUATED else None,
+                  "status": status, **beside}
+    return out
+
+
+def _o3(relacie, protokol, metriky):
+    pravidla = vyskyt_protokolu(protokol)
+    vyskyty = _udalosti_vyskyty(relacie, pravidla)
+    ran = [v for v in vyskyty if v["executed"]]
+    level, minimum = metriky["o3_bound"]["level"], pravidla["min_occurrences"]
+
+    def share(items):
+        return _podiel(items, minimum, level)
+    return {"total": share(ran), "by_type": {t: share([v for v in ran if v["type"] == t])
+                                             for t in sorted({v["type"] for v in ran})},
+            **{name: {str(value): share([v for v in ran if v[key] == value])
+                      for value in sorted({v[key] for v in ran}, key=str)} for name, key in TABLES.items()},
+            "not_evaluable": [{k: v[k] for k in ("session", "type", "start_unix", "first_s_scored_share", "status")}
+                              for v in ran if not v["evaluable"]],
+            "not_run": [{k: v[k] for k in ("session", "type", "start_unix")} for v in vyskyty if not v["executed"]],
+            "occurrences": vyskyty, "level": level, "min_occurrences": minimum, "horizon_s": pravidla["horizon_s"],
+            "evaluable_rule": {"first_s": pravidla["first_s"], "scored_share": pravidla["scored_share"]},
+            "definition": O3_RULE}
+
+
+def _vysledok_kontroly(outcome):
+    """The fields of an outcome of scripts/controls.py outcomes() that channel_reacted reads, checked."""
+    from scripts.controls import SCHEMA
+    window = outcome.get("window") if type(outcome) is dict else None
+    if type(outcome) is not dict or outcome.get("schema") != SCHEMA or type(window) is not dict:
+        raise ValueError(f"an outcome of a control is a record of scripts/controls.py outcomes (schema {SCHEMA})")
+    if not (_cislo_v5(window.get("start_unix")) and all(
+            type(window.get(k)) is list and all(type(x) is int for x in window[k]) for k in ("horizon", "scored"))):
+        raise ValueError("the window of an outcome of a control has its start_unix and the seq of its horizon and of "
+                         "its scored rows")
+    if outcome.get("polarity") not in ("control", "negative") or type(outcome.get("kind")) is not str:
+        raise ValueError("an outcome of a control names its kind and its polarity control or negative")
+    return window
+
+
+def channel_reacted(outcome, rows, protocol):
+    """The reaction of each channel and of the union to one control occurrence (O4_RULE, OCCURRENCE_RULE; the
+    docstring of scripts/controls.py: B7 judges channel_reacted on the rows of the outcome's horizon).
+
+    outcome: the occurrence's record of scripts/controls.py outcomes() (computed inside the final command for role
+    test_controls); rows: the replay rows of its session (events.jsonl of the replay of that archive); protocol: the
+    protocol of schema 3 (analysis.evaluable). The horizon is the outcome's window.horizon (the rows with
+    host_start_unix < t <= host_start_unix + controls.horizon_s), matched by seq; every one of them must be a row of
+    the replay, and a row the replay scored must be one the outcome's coverage scores (window.scored: the
+    non-anchored coverage scores every row the detector does, map section 9 point 8), else the two describe different
+    data. Without a scored row in the horizon every output is nezachytené, senzor neskóroval (NOT_SCORED), its own
+    result and no success; else an output that judged no row of the horizon (a rule channel without columns) is
+    nevyhodnotené, and every other one zachytené when it rises at a row of the horizon, nezachytené otherwise.
+
+    Returns {schema, kind, class, polarity, dose, sensor_scored, coverage_scored_rows, start_unix, horizon_rows,
+    scored_horizon_rows, unscored_horizon_s, first_s_scored_share, evaluable, status, outputs {rule, neural,
+    kernel_integrity, union: {result, reacted, edges, judged, first_edge_s, up_at_start}}, definition}.
+
+    The rule texts of the block v5 are under the key definition: the channel of the rule is named rule."""
+    window = _vysledok_kontroly(outcome)
+    s = {"rows": rows, "times": [float(r["timestamp"]) for r in rows], "edges": channel_edges(rows)}
+    at = {r["seq"]: i for i, r in enumerate(rows)}
+    missing = [seq for seq in window["horizon"] if seq not in at]
+    if missing:
+        raise ValueError(f"the replay has no row of seq {missing[0]} of the horizon of the control {outcome['kind']}")
+    horizon = [at[seq] for seq in window["horizon"]]
+    scored = {rows[i]["seq"] for i in horizon if rows[i].get("score") is not None}
+    beyond = sorted(scored - set(window["scored"]))
+    if beyond:
+        raise ValueError(f"the replay scored the row of seq {beyond[0]} in the horizon of the control "
+                         f"{outcome['kind']}, which the outcome's coverage does not score: they describe other data")
+    pravidla = vyskyt_protokolu(protocol)
+    record = _vyskyt(s, float(window["start_unix"]), None, pravidla["first_s"], pravidla["scored_share"],
+                     pravidla["interval_s"], horizon=horizon)
+    sensor = bool(scored)
+    for o in OUTPUTS:
+        mine = record["outputs"][o]
+        # The channel judged no row of the horizon (a rule channel without columns): no miss, nevyhodnotené.
+        mine["result"] = (NOT_SCORED if not sensor else UNEVALUATED if not mine["judged"]
+                          else DETECTED if mine["reacted"] else MISSED)
+    return {"schema": SCHEMA_REAKCIE, "kind": outcome["kind"], "class": outcome.get("class"),
+            "polarity": outcome["polarity"], "dose": outcome.get("dose"), "sensor_scored": sensor,
+            "coverage_scored_rows": len(window["scored"]), **record, "definition": OCCURRENCE_RULE}
+
+
+def _o4(reakcie, protokol):
+    """O4_RULE over the reactions of every control occurrence of the role (channel_reacted)."""
+    minimum = vyskyt_protokolu(protokol)["min_occurrences"]
+
+    def group(items):
+        evaluable = sum(r["evaluable"] for r in items)
+        status = EVALUATED if evaluable >= minimum else UNEVALUATED
+        out = {"planned": len(items), "evaluable": evaluable, "status": status,
+               "sensor_did_not_score": sum(not r["sensor_scored"] for r in items),
+               "unscored_horizon_s": sum(r["unscored_horizon_s"] for r in items)}
+        for o in OUTPUTS:
+            counts = collections.Counter(r["outputs"][o]["result"] for r in items)
+            judged = items and counts[UNEVALUATED] < len(items)
+            out[o] = {DETECTED: counts[DETECTED], MISSED: counts[MISSED], NOT_SCORED: counts[NOT_SCORED],
+                      UNEVALUATED: counts[UNEVALUATED],
+                      "share": counts[DETECTED] / len(items) if status == EVALUATED and judged else None}
+        out["neural_over_rule"] = _prirastok(items, status)
+        return out
+    out = {}
+    for polarity in ("control", "negative"):
+        mine = [r for r in reakcie if r["polarity"] == polarity]
+        out[polarity] = {"total": group(mine),
+                         "by_class": {str(c): group([r for r in mine if r["class"] == c])
+                                      for c in sorted({r["class"] for r in mine}, key=str)},
+                         "by_kind": {k: group([r for r in mine if r["kind"] == k])
+                                     for k in sorted({r["kind"] for r in mine})},
+                         **{name: {str(value): group([r for r in mine if r.get(key) == value])
+                                   for value in sorted({r.get(key) for r in mine}, key=str)}
+                            for name, key in TABLES.items()}}
+    return dict(out, occurrences=reakcie, min_occurrences=minimum, definition=O4_RULE,
+                increment_definition=INCREMENT_RULE)
+
+
+def _prirastok(items, status):
+    """INCREMENT_RULE for the reactions of one group of O4 of status `status`."""
+    rule = [r["outputs"]["rule"]["result"] == DETECTED for r in items]
+    neural = [r["outputs"]["neural"]["result"] == DETECTED for r in items]
+    only = sum(n and not r for r, n in zip(rule, neural))
+    evaluated = status == EVALUATED and any(r["outputs"]["neural"]["result"] != UNEVALUATED for r in items)
+    return {"planned": len(items), "rule": sum(rule), "rule_or_neural": sum(r or n for r, n in zip(rule, neural)),
+            "neural_not_rule": only, "share": only / len(items) if evaluated else None,
+            "status": EVALUATED if evaluated else UNEVALUATED}
+
+
+# ------------------------------------------------- the classifier and the unscored time
+
+
+def _vacsina(pocty):
+    return max(sorted(pocty), key=lambda t: pocty[t]) if pocty else None
+
+
+def _klasifikator_v5(relacie, triedy):
+    """CLASSIFIER_RULE; a bundle without classes skips it with the reason."""
+    if not triedy:
+        return {"skipped": "the bundle has no classes (a baseline of tcn/porovnanie.py): no activity classifier",
+                "definition": CLASSIFIER_RULE}
+    ind = {t: i for i, t in enumerate(triedy)}
+    y_true, y_pred, sessions, occurrences = [], [], {}, []
+    for s in relacie:
+        if s["scenario"] not in ind:
+            raise ValueError(f"session {s['id']}: scenario {s['scenario']} is no class of the bundle")
+        clean = collections.Counter()
+        for i, r in enumerate(s["rows"]):
+            if r.get("score") is None or s["contexts"][i][0] != "clean":
+                continue
+            if r.get("activity") not in ind:
+                raise ValueError(f"session {s['id']}: row of seq {r['seq']} predicts {r.get('activity')!r}, no class "
+                                 "of the bundle")
+            clean[r["activity"]] += 1
+            y_true.append(ind[s["scenario"]])
+            y_pred.append(ind[r["activity"]])
+        majority = _vacsina(clean)
+        sessions[s["id"]] = {"scenario": s["scenario"], "majority": majority, "clean_windows": sum(clean.values()),
+                             "right": None if majority is None else majority == s["scenario"]}
+        for what, items in (("event", s["events"]), ("control", s["controls"])):
+            for z, a, b in items:
+                if what == "event" and not z["executed"]:
+                    continue
+                counts = collections.Counter(
+                    r["activity"] for i, r in enumerate(s["rows"])
+                    if r.get("score") is not None and s["times"][i] >= a and s["first"][i] <= b)
+                if any(c not in ind for c in counts):
+                    raise ValueError(f"session {s['id']}: a prediction is no class of the bundle")
+                m = _vacsina(counts)
+                occurrences.append({"session": s["id"], "what": what, "type": z.get("type", z.get("kind")),
+                                    "start_unix": a, "scenario": s["scenario"], "windows": sum(counts.values()),
+                                    "majority": m, "right": None if m is None else m == s["scenario"]})
+    if not y_true:
+        return {"skipped": "no scored window of clean traffic", "definition": CLASSIFIER_RULE}
+    labels = list(range(len(triedy)))
+    present = sorted(set(y_true))
+    _, _, f1, _ = precision_recall_fscore_support(y_true, y_pred, labels=labels, zero_division=0)
+    frequent = collections.Counter(y_true).most_common(1)[0]
+    judged = [o for o in occurrences if o["right"] is not None]
+    voted = [v for v in sessions.values() if v["right"] is not None]
+
+    def beside(items):
+        """The most frequent class among the true classes of `items` and its share, and chance (proposal 4.2 O6)."""
+        if not items:
+            return {"most_frequent_class": None, "chance": 1 / len(triedy)}
+        name, count = collections.Counter(x["scenario"] for x in items).most_common(1)[0]
+        return {"most_frequent_class": {"class": name, "accuracy": count / len(items)}, "chance": 1 / len(triedy)}
+    by_type = {}
+    for t in sorted({o["type"] for o in judged}, key=str):
+        mine = [o for o in judged if o["type"] == t]
+        by_type[str(t)] = {"occurrences": len(mine), "right": sum(o["right"] for o in mine)}
+    return {"classes": list(triedy),
+            "windows": {"n": len(y_true), "accuracy": float(np.mean(np.array(y_true) == np.array(y_pred))),
+                        "macro_f1": float(np.mean([f1[i] for i in present])),
+                        "macro_f1_over": [triedy[i] for i in present],
+                        "most_frequent_class": {"class": triedy[frequent[0]], "accuracy": frequent[1] / len(y_true)},
+                        "chance": 1 / len(triedy),
+                        "confusion": confusion_matrix(y_true, y_pred, labels=labels).tolist()},
+            "sessions": {"right": sum(v["right"] for v in voted), "of": len(voted),
+                         "without_clean_window": len(sessions) - len(voted), **beside(voted),
+                         "per_session": sessions},
+            "occurrences": {"right": sum(o["right"] for o in judged), "of": len(judged),
+                            "without_scored_window": sum(o["right"] is None for o in occurrences), **beside(judged),
+                            "by_type": by_type, "per_occurrence": occurrences},
+            "definition": CLASSIFIER_RULE}
+
+
+def _neskorovane_v5(relacie, interval_s):
+    """UNSCORED_RULE per session and per context."""
+    out = {}
+    for s in relacie:
+        rows = s["rows"]
+        unscored = sum(r.get("score") is None for r in rows)
+        by_context = {}
+        for c in (*CONTEXTS, None):
+            mine = [r for r, k in zip(rows, s["contexts"]) if k[0] == c]
+            if mine:
+                by_context[str(c) if c else "excluded"] = {
+                    "rows": len(mine), "unscored_seconds": sum(r.get("score") is None for r in mine) * interval_s}
+        out[s["id"]] = {"rows": len(rows), "unscored_rows": unscored, "unscored_seconds": unscored * interval_s,
+                        "unscored_share": unscored / len(rows), "by_context": by_context,
+                        "stretches": unscored_stretches(rows, interval_s)}
+    return {"sessions": out, "unscored_seconds": sum(v["unscored_seconds"] for v in out.values()),
+            "status": UNEVALUATED, "definition": UNSCORED_RULE}
+
+
+# ------------------------------------------------- the block v5 of one role and one model
+
+
+def metriky_v5(protokol, relacie, *, triedy, rola, vysledky_kontrol=None):
+    """The block v5 of one role and one model (module docstring; design B7c 1.3).
+
+    protokol: the protocol of schema 3 of the corpus; relacie: per session of the role {zaznam (the index record),
+    riadky (the replay rows), udalosti (the records of its events.json), kontroly (the records of its controls.json
+    with a kind; [] outside test_controls)}; triedy: the classes of the bundle ([] for a baseline); rola: the role;
+    vysledky_kontrol: for test_controls {session id: [outcome of scripts/controls.py outcomes() of each control
+    occurrence]} (O4), None elsewhere or when not given (O4 then states O4_NOT_GIVEN)."""
+    if not _je_v5(protokol):
+        raise ValueError("the block v5 is computed for a corpus of protocol schema 3")
+    if rola not in ROLY_V5:
+        raise ValueError(f"the block v5 is computed for the roles {', '.join(ROLY_V5)}, not {rola!r}")
+    metriky = metriky_protokolu(protokol)
+    interval_s = float(hodnota_v5(protokol, "interval_s"))
+    if type(relacie) not in (list, tuple) or not relacie:
+        raise ValueError("the block v5 takes the sessions of the role, at least one")
+    stav = [_relacia_v5(r["zaznam"], r["riadky"], r["udalosti"], r["kontroly"], protokol) for r in relacie]
+    if len({s["id"] for s in stav}) != len(stav):
+        raise ValueError("a session is given twice")
+    if vysledky_kontrol is not None and rola != CONTROL_ROLE:
+        raise ValueError(f"outcomes of controls are given for role {CONTROL_ROLE} only")
+    o2_level = metriky["o2_bound"]["level"]
+    thesis_level = metriky["alarm_rate_interval"]["level"]
+
+    def upper(k):
+        return [0.0, poissonov_horna(k, o2_level)]
+
+    def two_sided(k):
+        return list(garwood(k, thesis_level))
+    clean = [_expozicia_v5(s, lambda c: c[0] == "clean") for s in stav]
+    evaluated = [_expozicia_v5(s, lambda c: c[0] is not None) for s in stav]
+    if vysledky_kontrol is None:
+        o4 = {"computed": False, "why": O4_NOT_GIVEN} if rola == CONTROL_ROLE else None
+    else:
+        if type(vysledky_kontrol) is not dict or set(vysledky_kontrol) - {s["id"] for s in stav}:
+            raise ValueError("vysledky_kontrol maps sessions of the role to the outcomes of their controls")
+        reakcie = []
+        for s in stav:
+            for outcome in vysledky_kontrol.get(s["id"], []):
+                reakcie.append(dict(channel_reacted(outcome, s["rows"], protokol), session=s["id"], group=s["group"],
+                                    vm=s["vm"], profile=s["profile"], scenario=s["scenario"]))
+        planned = sum(len(s["controls"]) for s in stav)
+        if len(reakcie) != planned:
+            raise ValueError(f"{len(reakcie)} outcomes of controls given for the {planned} planned controls of the "
+                             "role's sessions: O4 counts every planned occurrence")
+        o4 = dict(_o4(reakcie, protokol), computed=True)
+    return {
+        "schema": SCHEMA_V5, "role": rola, "outputs": list(OUTPUTS), "sessions": len(stav),
+        "o2": {"total": _miera(clean, interval_s, upper), **_tabulky(clean, interval_s, upper), "level": o2_level,
+               "bound": "one-sided upper, [0, upper] in alarms per hour", "definition": O2_RULE},
+        "thesis": {"rate": {"total": _miera(evaluated, interval_s, two_sided),
+                            **_tabulky(evaluated, interval_s, two_sided), "level": thesis_level,
+                            "definition": THESIS_RATE_RULE},
+                   "boot_groups": len({s["group"] for s in stav}),
+                   "dispersion": dict(_disperzia(evaluated), definition=DISPERSION_RULE),
+                   "event_vs_clean": _udalosti_proti_cistej(stav, interval_s, metriky["event_vs_clean"]["alpha"])},
+        "o3": _o3(stav, protokol, metriky), "o4": o4,
+        "classifier": _klasifikator_v5(stav, list(triedy)),
+        "unscored": _neskorovane_v5(stav, interval_s),
+        "definitions": {"edges": EDGE_RULE, "contexts": CONTEXT_RULE}, "reverberation_s": dozvuk_s(protokol),
+    }
+
+
+# ------------------------------------------------- loading the replays of one role (schema 3)
+
+
+FINAL_V5 = ("--final and its mark next to the index serve protocol schemas 1 and 2; under schema 3 a test role is "
+            "evaluated once, by the final command (python -m tcn.finalne), which consumes the seal of the ledger "
+            "(tcn/pecat.py, design B7c 1.1)")
+BEZ_TRIED = ("balik nema triedy (zakladna metoda tcn/porovnanie.py): riadky nemaju klasifikaciu aktivity, "
+             "tabulky klasifikatora sa vynechavaju (navrh B7c 1.3)")
+
+
+def _znacka_v5(rezim, final_evaluation):
+    """The plan mode of the index, the rehearsal mark every output of a rehearsal carries (design B7c 1.1) and the
+    stage of the record (proposal 11.1, _stupen_v5)."""
+    from tcn import pecat
+    return {"plan_mode": rezim, "rehearsal": rezim == "rehearsal",
+            "rehearsal_mark": REHEARSAL_MARK if rezim == "rehearsal" else None, "final_evaluation": final_evaluation,
+            "stage": _stupen_v5(rezim), "stage_rule": pecat.STAGE_RULE}
+
+
+def _stupen_v5(rezim):
+    """The stage of a record of protocol schema 3 (proposal 11.1; the fix of F4 of B7c): tcn.pecat's own STAGE_RULE for
+    the plan mode of the index and the ledger of this process (tcn.pecat.KNIHA: the ledger of record gives final or
+    generalka, any other ledger, a G1 dry run in tcn.pecat vlastna_kniha or a test, gives suchy); the function is
+    pecat's (tcn.pecat stage), so the rule is not copied here."""
+    from tcn import pecat
+    return pecat.stage(rezim)
+
+
+def _rola_v5(index, rola, *, final, final_evaluation, prikaz):
+    """The role and the seal of an index of schema 3 (design B7c 1.1 and 1.3): the plan mode of the index; ValueError
+    for another role, for --final (schemas 1 and 2 only) and for a sealed role of a campaign index outside the final
+    command."""
+    if rola not in ROLY_V5:
+        raise ValueError(f"under protocol schema 3 {prikaz} evaluates the roles {', '.join(ROLY_V5)}, not {rola!r}")
+    if final:
+        raise ValueError(FINAL_V5)
+    if type(final_evaluation) is not bool:
+        raise ValueError("final_evaluation is true (only the final command) or false")
+    mode = index.get("plan_mode")
+    if mode not in MODES:
+        raise ValueError(f"the index of protocol schema 3 names no plan mode of {', '.join(MODES)} (plan_mode "
+                         f"{mode!r}; features/dataset.py build)")
+    if rola in SEALED_ROLES and mode == "campaign" and not final_evaluation:
+        raise ValueError(f"sealed role {rola} (design B7c 1.1): only the final command evaluates it "
+                         "(final_evaluation=True, python -m tcn.finalne); an index of plan mode rehearsal is "
+                         "evaluated freely and every output carries the rehearsal mark")
+    return mode
+
+
+def _subory_v5(zaznam, rola):
+    """(events, controls) of the session of an index record of schema 3: its events.json (hash of the index) and, for
+    role test_controls, the slots of its controls.json that hold a control (features.dataset.controls_of, which checks
+    the hash of the index: the keys controls and controls_sha256 of package B7c, agent S)."""
+    if "events" not in zaznam or "events_sha256" not in zaznam:
+        raise ValueError(f"session {zaznam['id']}: the index of schema 3 records its events.json (events, "
+                         "events_sha256; features/dataset.py)")
+    if _digest(zaznam["events"]) != zaznam["events_sha256"]:
+        raise ValueError(f"session {zaznam['id']}: events.json changed since the index")
+    udalosti = json.loads(open(zaznam["events"], encoding="utf-8").read())["events"]
+    if rola != CONTROL_ROLE:
+        return udalosti, []
+    if "controls" not in zaznam or "controls_sha256" not in zaznam:
+        raise ValueError(f"session {zaznam['id']} of role {CONTROL_ROLE}: the index does not hash its controls.json "
+                         "(controls, controls_sha256; features/dataset.py, package B7c)")
+    from features.dataset import controls_of  # The one reader of the controls of a corpus (design B7c 5.6).
+    return udalosti, control_records(controls_of(zaznam))
+
+
+def control_records(doc):
+    """The records of the controls of a session's controls.json (schema hyptcn3/session-controls/1): the slots that
+    hold a control (an empty slot of the plan has no kind and never runs)."""
+    from scripts.protocol_v5 import CONTROLS_SCHEMA
+    if type(doc) is not dict or doc.get("schema") != CONTROLS_SCHEMA or type(doc.get("controls")) is not list:
+        raise ValueError(f"controls.json is a document of schema {CONTROLS_SCHEMA} with its controls")
+    return [z for z in doc["controls"] if type(z) is dict and z.get("kind") is not None]
+
+
+def nacitaj_v5(korpus, rola, prehratia, *, final_evaluation=False):
+    """The replays of every session of one role of a corpus of schema 3 for one model, checked as vyhodnot_far checks
+    them (_nacitaj_rolu: every session of the role exactly once, one bundle trained on this index, the whole session,
+    only tolerated input errors, the hashes of events.json and controls.json): (index, protocol, sessions for
+    metriky_v5, the bundle manifest, its sha256). The final command calls it with final_evaluation=True, or
+    vyhodnot_far, which loads the same way."""
+    d = _nacitaj_rolu(korpus, rola, prehratia, final=False, final_evaluation=final_evaluation)
+    if d["v5"] is None:
+        raise ValueError("nacitaj_v5 reads a corpus of protocol schema 3")
+    return d["index"], d["protokol"], d["v5"], d["balik"], d["balik_sha"]
+
+
+# ------------------------------------------------- per training (question Q11, provisional)
+
+
+TRAINING_RULE = (
+    "per training (proposal 8.6; question Q11 to the lead, provisional by the executor's proposal: package B7): on the "
+    "window set of one fit role (dev or calibration; never a sealed role, which only the final command reads) the "
+    "loss of the bundle M (LOSS_FORMULA of tcn/metody.py MetodaM) against the methods of analysis.k1.compare (Z3, Z5, "
+    "fitted on train and dev), the mean per context of CONTEXT_RULE (a window by the span of its frames) and over "
+    "every window, with I = 1 - loss(M) / loss(Z) of the means (descriptive: K1 is decided per boot on test_benign); "
+    "the score of M (SCORE_FORMULA) summarized by context and by scenario: the windows, the mean, the median, the "
+    "quantiles 0.95 and 0.99 (numpy, linear; judgment: the tail the threshold at fpr 0.01 lies in), the maximum and "
+    "the share above the bundle's threshold")
+
+
+def _suhrn_skore(x, prah):
+    x = np.asarray(x, dtype=np.float64)
+    if not len(x):
+        return {"windows": 0}
+    return {"windows": int(len(x)), "mean": float(x.mean()), "median": float(np.median(x)),
+            "q95": float(np.quantile(x, .95)), "q99": float(np.quantile(x, .99)), "max": float(x.max()),
+            "above_threshold": float((x > prah).mean())}
+
+
+def window_contexts(windows, events, protocol, *, controls=None):
+    """[(context, event type or None)] of every window of a window set (tcn.metody.Okna) by the span of its frames,
+    from its first frame (the anchor of an anchored window) to its last row (CONTEXT_RULE, tcn/metody.py CLEAN_RULE).
+    events and controls map the id of every session of the set to its records (controls None: no controls, refused
+    for role test_controls)."""
+    dozvuk = dozvuk_s(protocol)
+    ids = list(windows.session_ids)
+    if type(events) is not dict or set(events) != set(ids):
+        raise ValueError("events maps the id of every session of the window set to its event records")
+    if controls is None:
+        if windows.role == CONTROL_ROLE:
+            raise ValueError(f"the sessions of role {CONTROL_ROLE} hold controls: give their records")
+        controls = {ident: [] for ident in ids}
+    elif type(controls) is not dict or set(controls) != set(ids):
+        raise ValueError("controls maps the id of every session of the window set to its control records")
+    spans = {ident: (_vyskyty(events[ident], ident, "events"), _vyskyty(controls[ident], ident, "controls"))
+             for ident in ids}
+    return [_kontext(float(a), float(b), *spans[ids[s]], dozvuk)
+            for s, a, b in zip(windows.window_session, windows.start, windows.timestamp)]
+
+
+def training_summary(windows, events, protocol, *, model, methods, scenarios, controls=None):
+    """TRAINING_RULE on the window set `windows` (tcn.metody.Okna of a fit role, M's normalizer): model is M of one
+    seed (tcn.metody.MetodaM: scores, losses, threshold, label), methods {name: fitted method} for exactly the methods
+    of analysis.k1.compare (Z3 and Z5 of tcn/metody.py, fitted on train and dev), scenarios {session id: scenario}
+    for every session of the set. The record of the training is training_record."""
+    if getattr(windows, "role", None) not in TRAINING_ROLES:
+        raise ValueError(f"the summary of a training reads a window set of role {' or '.join(TRAINING_ROLES)}, not "
+                         f"{getattr(windows, 'role', None)!r}: a sealed role is the final command's")
+    compare = hodnota_v5(protocol, "analysis.k1.compare")
+    if type(methods) is not dict or set(methods) != set(compare):
+        raise ValueError(f"the loss is compared with the methods of analysis.k1.compare {compare}, given "
+                         f"{sorted(methods) if type(methods) is dict else methods!r}")
+    if type(scenarios) is not dict or set(scenarios) != set(windows.session_ids):
+        raise ValueError("scenarios maps the id of every session of the window set to its scenario")
+    contexts = window_contexts(windows, events, protocol, controls=controls)
+    scores = np.asarray(model.scores(windows), dtype=np.float64)
+    losses = {"M": np.asarray(model.losses(windows), dtype=np.float64)}
+    for name in compare:
+        mine = methods[name].losses(windows)
+        if mine is None:
+            raise ValueError(f"{name} gives no loss: the loss is compared with predictors")
+        losses[name] = np.asarray(mine, dtype=np.float64)
+    if any(v.shape != (len(windows),) or not np.isfinite(v).all() for v in (scores, *losses.values())):
+        raise ValueError("the scores and the losses are finite numbers, one per window")
+    kind = np.array(["excluded" if c[0] is None else c[0] for c in contexts])
+    loss = {}
+    for c in ("all", *CONTEXTS, "excluded"):
+        mask = np.ones(len(kind), dtype=bool) if c == "all" else kind == c
+        if not mask.any():
+            continue
+        means = {name: float(v[mask].mean()) for name, v in losses.items()}
+        loss[c] = {
+            "windows": int(mask.sum()), "mean": means,
+            "improvement": {name: (1 - means["M"] / means[name] if means[name] > 0 else None) for name in compare}}
+    prah = float(model.threshold)
+    session_scenario = np.array([scenarios[ident] for ident in windows.session_ids], dtype=object)[
+        windows.window_session]
+    return {"schema": SCHEMA_SUHRN_TRENINGU, "role": windows.role, "model": getattr(model, "label", None),
+            "threshold": prah, "windows": len(windows), "compare": list(compare), "loss": loss,
+            "score": {"by_context": {c: _suhrn_skore(scores[kind == c], prah)
+                                     for c in (*CONTEXTS, "excluded") if (kind == c).any()},
+                      "by_scenario": {sc: _suhrn_skore(scores[session_scenario == sc], prah)
+                                      for sc in sorted(set(scenarios.values()))}},
+            "definition": TRAINING_RULE, "contexts": CONTEXT_RULE}
+
+
+def training_record(summary, manifest, command):
+    """The evaluation record of one training that names its bundle (question Q11): the provenance header of every
+    record of this module (_zaznam: commit, date, host, guest, command, n; command the full command line of the caller,
+    a list) and values {schema, bundle {manifest_sha256, seed, created_utc, corpus_index_sha256}, summary}."""
+    if type(summary) is not dict or summary.get("schema") != SCHEMA_SUHRN_TRENINGU:
+        raise ValueError("training_record takes a summary of training_summary")
+    values = {"schema": SCHEMA_TRENING,
+              "bundle": {"manifest_sha256": _manifest_sha(manifest), "seed": manifest["training"]["seed"],
+                         "created_utc": manifest["created_utc"],
+                         "corpus_index_sha256": manifest["provenance"]["corpus_index_sha256"]},
+              "summary": summary}
+    if type(command) not in (list, tuple) or not command or not all(type(x) is str for x in command):
+        raise ValueError("the command of a record is the caller's command line, a list of strings")
+    doc = _zaznam(values, manifest, None, n=summary["windows"], prikaz=list(command))
+    doc.pop("_zmeny")
+    return doc
 
 
 # ------------------------------------------------------------- malver (dataset 3)
@@ -1232,7 +2405,8 @@ def _hlavny(argv=None):
     sub = p.add_subparsers(dest="prikaz", required=True)
     f = sub.add_parser("far", help="FAR jednej roly korpusu z prehrati safeguard replay --archive")
     f.add_argument("--corpus", required=True, help="index korpusu (corpus.json)")
-    f.add_argument("--role", required=True, choices=ROLY_FAR)
+    f.add_argument("--role", required=True, choices=ROLY_V5,
+                   help="schemy 1 a 2: dev, test_benign; schema 3: aj calibration a test_controls")
     f.add_argument("--replay", required=True, nargs="+", help="vystupne adresare safeguard replay --archive")
     f.add_argument("--out", required=True, help="novy JSON; existujuci sa neprepise")
     f.add_argument("--campaign", help="zaznam kampane v data/results (planovane, prijate a zamietnute behy)")
@@ -1242,7 +2416,7 @@ def _hlavny(argv=None):
     u = sub.add_parser("udalosti", help="FAR balika pocas prevadzkovych udalosti (krok A: index v3; "
                                         "krok B, E2': korpus v4 a rola)")
     u.add_argument("--index", required=True, help="events_index.json kampane v3 alebo corpus.json protokolu v4")
-    u.add_argument("--role", choices=ROLY_FAR, help="iba pri korpuse: rola, z ktorej sa FAR pocita")
+    u.add_argument("--role", choices=ROLY_V5, help="iba pri korpuse: rola, z ktorej sa FAR pocita")
     u.add_argument("--final", action="store_true",
                    help="povinne pre test_benign: zaverecne E2', raz na korpus, nad commitnutym kodom")
     u.add_argument("--replay", required=True, nargs="+", help="vystupne adresare safeguard replay --archive")
@@ -1282,15 +2456,20 @@ def _hlavny(argv=None):
         fh.write(text)
     spolu = values["merane"]["spolu"]
     klas = values["klasifikacia_aktivit"]
-    print(json.dumps({"rola": a.role, "relacii": doc["n"], "udalosti_model": spolu["spolu"]["udalosti_model"],
-                      "far_model_skorovany_h": spolu["far_h"]["skorovany"],
-                      "aktivity_okna_presnost": klas["okna"]["presnost"],
-                      "aktivity_relacie": [klas["relacie"]["spravnych"], klas["relacie"]["spolu"]]},
-                     ensure_ascii=False))
+    vypis = {"rola": a.role, "relacii": doc["n"], "udalosti_model": spolu["spolu"]["udalosti_model"],
+             "far_model_skorovany_h": spolu["far_h"]["skorovany"],
+             "aktivity_okna_presnost": klas and klas["okna"]["presnost"],
+             "aktivity_relacie": klas and [klas["relacie"]["spravnych"], klas["relacie"]["spolu"]]}
+    if "v5" in values:
+        vypis.update(plan_mode=values["plan_mode"], rehearsal_mark=values["rehearsal_mark"],
+                     o2_union_per_hour=values["v5"]["o2"]["total"][UNION]["per_hour"])
+    print(json.dumps(vypis, ensure_ascii=False))
     return 0
 
 
-def _zaznam(values, balik, argv):
+def _zaznam(values, balik, argv, n=None, prikaz=None):
+    """Hlavicka zaznamu v data/results (HONESTY kap. 4); n su relacie values, ak nie je dane, a prikaz je
+    `python3 -m tcn.eval` s argv, ak volajuci nedal svoj cely prikaz (training_record)."""
     commit, zmeny = _git_stav()
     doc = {"commit": commit, "commit_dirty": None if zmeny is None else bool(zmeny),
            "evaluator_sha256": _digest(os.path.abspath(__file__)),
@@ -1298,8 +2477,11 @@ def _zaznam(values, balik, argv):
            "host": platform.platform(),
            "guest": "jadro %s, stack_sha256 %s" % (balik["environment"]["kernel"],
                                                    balik["environment"]["stack_sha256"]),
-           "command": shlex.join(["python3", "-m", "tcn.eval", *argv]), "cwd": os.getcwd(),
-           "n": len(values["relacie"]), "values": values, "_zmeny": zmeny}
+           "command": shlex.join(prikaz if prikaz is not None else ["python3", "-m", "tcn.eval", *argv]),
+           "cwd": os.getcwd(),
+           "n": len(values["relacie"]) if n is None else n, "values": values, "_zmeny": zmeny}
+    if "stage" in values:  # A record of protocol schema 3 (_znacka_v5): its stage beside its provenance (11.1).
+        doc["stage"] = values["stage"]
     if zmeny is None:
         doc["commit_note"] = "git nedostupny; kod urcuje evaluator_sha256"
     elif zmeny:
@@ -1308,7 +2490,11 @@ def _zaznam(values, balik, argv):
 
 
 def _udalosti(a, argv):
-    if (a.role == "test_benign") != bool(a.final):
+    index = json.loads(open(a.index, encoding="utf-8").read())
+    if index.get("schema") == SCHEMA_KORPUS and _je_v5(index.get("protocol_config")):
+        if a.final:
+            raise SystemExit(FINAL_V5)  # Schema 3: the seal of the final command, not the mark (balik B7c).
+    elif (a.role == "test_benign") != bool(a.final):
         raise SystemExit("test_benign je zaverecny test a pusti sa iba s --final; --final plati iba pre test_benign")
     values, balik = vyhodnot_udalosti(a.index, a.replay, a.alfa, a.role)
     doc = _zaznam(values, balik, argv)

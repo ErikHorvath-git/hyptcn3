@@ -38,11 +38,17 @@ and one direction, so that shift is the negative's tolerance). ok is None when t
 `why` says why: no measured row wholly inside or none before the start, or (parser_saw only) the guest's effect
 predicate did not hold or its evidence names no process of the W+X and memfd control (nothing to match).
 
-The sealed role. Results 1 and 2 are computed from features, so in a record of stage "final" (proposal 11.1) a
-session of role test_controls is opened only by the final evaluation (final_evaluation=True), otherwise ValueError
-before any data is read (skeleton section 4; package B7's seal replaces this guard). The stages suchy, skuska and
-generalka (G1, G2, G3a and G3b) call it freely: their data never become a dataset (skeleton section 4). A role is
-one of the protocol's, pilot or diagnostic, so that a misspelt role opens nothing.
+The sealed role. Results 1 and 2 are computed from features, so a session of role test_controls is opened only as
+the seal of package B7c lets it (tcn/pecat.py; finding S4 of the verification of B8: the stage the caller states no
+longer opens it), otherwise ValueError before any data is read:
+  - final_evaluation=True is given only by the final command: a final run must be open in this process (tcn.pecat
+    otvoreny, after spotrebuj); the archive, when named, must be one of its run or not sealed;
+  - otherwise a record of stage "final" (proposal 11.1) stays refused, and at the stages suchy, skuska and generalka
+    (G1, G2, G3a and G3b) the caller names the session's feature archive (archive=): the ledger refuses a sealed
+    archive of a campaign and lets a rehearsal's through with its mark; an archive the ledger does not hold is not
+    sealed (G1 and G2 data never become a dataset, skeleton B8 section 4).
+Every result carries the decision under "seal". A role is one of the protocol's, pilot or diagnostic, so that a
+misspelt role opens nothing.
 
 Accepted inputs: the record of one occurrence in controls.json (contract 1.4 of design B8: its class and the
 plan's polarity, kind, dose, executed, baseline, effect, and the runner's host times as in events.json), the
@@ -95,15 +101,38 @@ def _positive(value):
     return _number(value) and value > 0
 
 
-def _seal(protocol, role, stage, final_evaluation):
-    """ValueError unless the caller may read the features of a session of this role at this stage."""
+# The entry point in a refusal of the seal (tcn/pecat.py kontrola).
+PURPOSE = "scripts/controls.py outcomes of a control of role test_controls"
+IN_RUN_RULE = ("final_evaluation=True inside the final run of this process (tcn/pecat.py spotrebuj): the run's seal "
+               "covers the outcomes of its sessions; the caller named no archive")
+
+
+def _seal(protocol, role, stage, final_evaluation, archive):
+    """The decision of the seal (module docstring), or ValueError unless the caller may read the features of a session
+    of this role at this stage."""
     if stage not in STAGES:
         raise ValueError(f"unknown stage of the record: {stage!r} (proposal 11.1: {', '.join(STAGES)})")
     if role not in UNPLANNED_ROLES and role not in protocol["roles"]:
         raise ValueError(f"unknown session role: {role!r}")
-    if role == CONTROL_ROLE and stage == "final" and final_evaluation is not True:
+    if role != CONTROL_ROLE:
+        return {"sealed": False, "rule": f"role {role} is no sealed role (tcn/pecat.py SEALED_ROLES)"}
+    from tcn import pecat
+    if final_evaluation is True:
+        run = pecat.otvoreny()
+        if run is None:
+            raise ValueError("sealed role test_controls: final_evaluation=True is given only by the final command "
+                             "(tcn/pecat.py spotrebuj); no final run is open in this process")
+        if archive is None:
+            return {"sealed": True, "allowed": "final_run", "identity": run.identity, **run.mark, "rule": IN_RUN_RULE}
+        return pecat.kontrola(archive, purpose=PURPOSE)
+    if stage == "final":
         raise ValueError("sealed role test_controls: only the final evaluation computes the outcomes of its "
                          "controls (final_evaluation=True)")
+    if archive is None:
+        raise ValueError(f"sealed role test_controls: at stage {stage} the outcomes name the session's feature archive "
+                         "(archive=), so that the ledger (tcn/pecat.py) decides whether it is sealed, not the stage "
+                         "the caller states")
+    return pecat.kontrola(archive, purpose=PURPOSE)
 
 
 def _spec(protocol, kind):
@@ -263,17 +292,18 @@ def _column_moved(polarity, expected, rows, reference, matrix, seq):
     return out
 
 
-def outcomes(record, result, protocol, *, role, final_evaluation=False, stage="final"):
+def outcomes(record, result, protocol, *, role, archive=None, final_evaluation=False, stage="final"):
     """The outcomes of one control occurrence (module docstring) as one JSON-ready object.
 
     record: the occurrence's record in the session's controls.json; result: the session's extraction result or
-    its loaded feature archive; protocol: the loaded protocol; role: the session's role; stage: the stage of the
-    record (proposal 11.1), final unless the caller says otherwise; final_evaluation: True only from the final
-    evaluation (G6). Raises ValueError for the sealed role outside the final evaluation, for an occurrence that did
-    not run (not executed, no return to the baseline), for a malformed record or controls section and for an
-    extraction result that does not cover the occurrence.
+    its loaded feature archive; protocol: the loaded protocol; role: the session's role; archive: the path of the
+    session's feature archive (the seal looks it up in the ledger: required for role test_controls outside the final
+    run); stage: the stage of the record (proposal 11.1), final unless the caller says otherwise; final_evaluation:
+    True only from the final command (G6), inside its run. Raises ValueError for the sealed role as the seal refuses
+    it (module docstring), for an occurrence that did not run (not executed, no return to the baseline), for a
+    malformed record or controls section and for an extraction result that does not cover the occurrence.
     """
-    _seal(protocol, role, stage, final_evaluation)
+    seal = _seal(protocol, role, stage, final_evaluation, archive)
     kind, polarity, spec, dose, expected, effect, (start, started, stop) = _occurrence(record, protocol)
     # The one rule of scored rows: the windows the live detector scores. It also checks the result's shape (schema,
     # names, quality policy, row counts, validity against quality, increasing seq and time) before it is indexed.
@@ -297,4 +327,5 @@ def outcomes(record, result, protocol, *, role, final_evaluation=False, stage="f
         "parser_saw": _parser_saw(kind, polarity, dose, effect, rows, reference, matrix, quality, layout, seq),
         "column_moved": _column_moved(polarity, expected, rows, reference, matrix, seq),
         "sensor_scored": any(seq[i] in scored for i in horizon),
+        "seal": seal,
     }

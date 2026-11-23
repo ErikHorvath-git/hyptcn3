@@ -10,6 +10,11 @@ accepted session holds exactly one row, matched by (role, group, scenario, vm). 
 their rule, every scenario in every group of their four roles, named "every_scenario_every_group" (plan_mode and
 position null). In both the roles follow each other in time by protocol_v5.TIME_RANK; the two test roles share a
 rank and interleave.
+
+Controls (package B7c, the executor's points for B7): a session of role test_controls keeps its controls in
+controls.json (design B8 1.4; its log audit refuses a session without it), and its record names the file and its
+sha256 (controls, controls_sha256), as events.json; controls_of(record) is the reader that checks the hash, and the
+production check of training (safeguard/training.py validate_index) checks it too.
 """
 import argparse
 import hashlib
@@ -28,6 +33,8 @@ FIT_ROLES = ("train", "dev", "calibration")
 # The roles of a protocol of schema 1 or 2; test_controls exists only under schema 3.
 LEGACY_ROLES = ("train", "dev", "calibration", "test_benign")
 EVERY_SCENARIO_EVERY_GROUP = "every_scenario_every_group"  # The allocation rule of schemas 1 and 2.
+CONTROL_ROLE = "test_controls"  # Its sessions keep controls.json (scripts/protocol_v5.py CONTROL_ROLE).
+CONTROLS_FILE = "controls.json"
 
 
 def sha(path):
@@ -162,6 +169,11 @@ def build(audits, protocol, protocol_sha, *, mode=None):
             if not events.is_file():
                 raise ValueError("protocol with events but session has no events.json: " + str(directory))
             records[-1].update(events=str(events.resolve()), events_sha256=sha(events))
+        if m["role"] == CONTROL_ROLE:
+            controls = directory / CONTROLS_FILE
+            if not controls.is_file():
+                raise ValueError(f"session of role {CONTROL_ROLE} has no {CONTROLS_FILE}: {directory}")
+            records[-1].update(controls=str(controls.resolve()), controls_sha256=sha(controls))
     if (len(layouts) > 1 or len(extractors) > 1 or len(environments) > 1
             or len({r["kernel"] for r in records}) > 1):
         raise ValueError("mixed memory layout, kernel or extraction implementation")
@@ -189,6 +201,21 @@ def build(audits, protocol, protocol_sha, *, mode=None):
             "sessions": sorted(records, key=lambda r: r["start"]),
             "normalization_fit_role": "train", "threshold_fit_role": "calibration",
             "test_is_read_only": True}
+
+
+def controls_of(record):
+    """The controls.json of an index record of role test_controls, after its sha256 is checked against the record's
+    controls_sha256 (the readers of the controls of a corpus: the final command, features/qualification.py); ValueError
+    by name for another role, a record without the hash (an index built before package B7c) or a changed file."""
+    if type(record) is not dict or record.get("role") != CONTROL_ROLE:
+        raise ValueError(f"only a session of role {CONTROL_ROLE} keeps {CONTROLS_FILE}")
+    path, digest = record.get("controls"), record.get("controls_sha256")
+    if type(path) is not str or type(digest) is not str:
+        raise ValueError(f"index record {record.get('id')} names no {CONTROLS_FILE} and its sha256: an index built "
+                         "before package B7c (features/dataset.py build)")
+    if sha(path) != digest:
+        raise ValueError(f"{CONTROLS_FILE} of session {record.get('id')} changed since the index: {path}")
+    return json.loads(Path(path).read_text())
 
 
 def main():

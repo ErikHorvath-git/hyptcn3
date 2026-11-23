@@ -347,6 +347,10 @@ class _Method:
         elif _identity(windows) != self.binding:
             raise ValueError(f"{self.label} was fitted on windows of another normalizer or window; every method sees "
                              "the windows of its bundle M")
+        # The seal (package B7c, tcn/pecat.py GUARD_RULE): the archives the window set names are looked up in the
+        # ledger, a sealed archive of a campaign outside the final run that consumed its seal is refused by name.
+        from tcn import pecat
+        pecat.kontrola_okien(windows, f"{self.label} scores a window set of role {getattr(windows, 'role', None)}")
         return shape
 
     def losses(self, windows):

@@ -21,6 +21,8 @@ scripts/host_traffic.py reads the profiles section through profiles_problems():
     grid_problem(method, grid, window_rows)
                                    the problem of a filled grid of Z1, Z3 or Z5 (GRID_DOMAINS), or None; the value
                                    check and tcn/metody.py both use it (B7b)
+    metrics_problem(metrics)       the problem of analysis.metrics, or None; the value check and tcn/eval.py both use
+                                   it (B7c)
     selfcheck(path, mode, stage)   every check of the self-check on the file and on its plan, and summary(p, plan):
                                    the tables of the plan the report records
 
@@ -61,6 +63,15 @@ the plan draws it no more than z0_alarms or bootstrap. Question Q13 to the lead,
 proposal: Z4 enters K2a by each of its variants (VARIANTS), each a comparison of its own. F3 of the verification of
 B7a: the value domain of every grid parameter is one constant (GRID_DOMAINS, grid_problem) for this check and
 tcn/metody.py.
+
+Package B7c (the lead's skeleton dokazy/B7/kostra/KOSTRA.md, addendum 2 of 2026-11-22T20:55Z points 2 and 4, design
+B7c 1.2): analysis.metrics holds the metrics as the thesis defines them, beside the proposal's, which tcn/eval.py
+computes: the exact two-sided interval of an alarm rate (Garwood), the dispersion test of the alarm counts between
+sessions, the one-sided exact test of the alarm rate during events against clean traffic, the one-sided bounds of O2
+and O3 (proposal 4.2 and 9.2) and the classifier's measures, each with its numbers and its source (metrics_problem,
+one check for this module and tcn/eval.py); analysis.linkage holds the table of the thesis' research questions VO1 to
+VO6 and the outputs that answer them, word for word as the skeleton writes it (LINKAGE; the self-check compares it,
+as it compares the methods of the claims with CONFIRMATORY). Both are G0.
 """
 from collections import Counter
 import copy
@@ -150,6 +161,25 @@ MIN_BLOCK_ROWS = {"C": 2, "D": 1}
 DESCRIPTIVE = ("zscore", "iforest", "gru", "lstm")
 EVERY_SEED = ("gru", "lstm")
 UNSEEDED = ("zscore",)
+# Package B7c (design B7c 1.2; the lead's skeleton B7, addendum 2 point 2): the metrics of analysis.metrics, each with
+# the one method tcn/eval.py implements for it (one constant for this check and tcn/eval.py, metrics_problem). A
+# method with a level holds the level of its interval or bound (a share in (0, 1)); the test of the events holds its
+# alpha; the dispersion compares the sessions; the classifier names its measures over windows and its majorities.
+METRIC_METHODS = {"alarm_rate_interval": "garwood", "dispersion": "pearson_x2",
+                  "event_vs_clean": "conditional_binomial", "o2_bound": "poisson_upper",
+                  "o3_bound": "clopper_pearson_upper"}
+LEVELLED = ("alarm_rate_interval", "o2_bound", "o3_bound")
+DISPERSION_UNIT = "session"
+EVENT_ALTERNATIVE = "greater"  # The thesis: more alarms during events than in clean traffic (one-sided).
+CLASSIFIER_WINDOWS = ("accuracy", "macro_f1")
+CLASSIFIER_MAJORITY = ("session", "occurrence")
+# Package B7c (design B7c 1.2): the table of the lead's skeleton B7, addendum 2 point 4, word for word: each research
+# question of the thesis (chapter 3: VO1 to VO6) with the outputs of this protocol that answer it and, in parentheses,
+# the experiment of the thesis (E1 to E5; VO3 also decision D16). "bod 1" and "bod 2" are the points 1 and 2 of that
+# addendum, "test z bodu 2" its one-sided exact test of the events against clean traffic.
+LINKAGE = {"VO1": "O8 a O1 (E1)", "VO2": "O2, O3 a test z bodu 2 (E2)",
+           "VO3": "časť vlastníka so vzorkami, mimo protokolu (E3, D16)", "VO4": "K1, K2 a bod 1 (E4)",
+           "VO5": "O7 (E5)", "VO6": "O6 a bod 2 (E2)"}
 # The confirmatory claims (proposal 4.1) and their three outcomes (proposal 8.4: lepší, nie lepší, nerozhodnuté), the
 # keys of analysis.wording; the wording of each outcome holds as many blanks "…" (U+2026) as the table of chapter 8.4,
 # the places the claim's values fill (tcn/tvrdenia.py).
@@ -231,7 +261,12 @@ _LENGTHS = ("lengths", "per_boot")
 # the descriptive methods apart from methods, the wordings of the conclusions per claim and outcome, the matched
 # alarm rate and the statistics of the claims (all G0). Package B7b (design B7b 1.4): the interventions gain the
 # orders of C, the groups of D (free names, so the template does not walk them), the validity predicate as an object,
-# the evaluable minimum and the volume class; the diagnostics of proposal 8.5 (all G0).
+# the evaluable minimum and the volume class; the diagnostics of proposal 8.5 (all G0). Package B7c (design B7c
+# 1.2): the metrics of the thesis and the bounds of O2 and O3, and the linkage table of the thesis' questions (G0).
+_METRIC = {"alarm_rate_interval": _fixed("method", "level", "source"), "dispersion": _fixed("method", "unit", "source"),
+           "event_vs_clean": _fixed("method", "alternative", "alpha", "source"),
+           "o2_bound": _fixed("method", "level", "source"), "o3_bound": _fixed("method", "level", "source"),
+           "classifier": _fixed("windows", "majority", "source")}
 ANALYSIS = _fixed(
     "seeds", "deploy_seed", "fpr", "selection", "columns", "horizon_s", "reverberation_s", "min_occurrences",
     "note",
@@ -251,7 +286,8 @@ ANALYSIS = _fixed(
                          validity=_fixed("quantiles", "moving_average_rows", "note"),
                          C=_fixed(*_LENGTHS, "orders"), D=_fixed(*_LENGTHS, "groups")),
     diagnostics=_fixed("tree_depth", "min_positive_episodes", "contexts", "alarm_rules", "note"),
-    evaluable=_fixed("first_s", "scored_share"))
+    evaluable=_fixed("first_s", "scored_share"),
+    metrics=_fixed("note", **_METRIC), linkage=_fixed(*LINKAGE, "note"))
 # The traffic profiles of the generator (package B5b, design B5b 1.1; scripts/host_traffic.py PROFILES implements
 # exactly these): the keys every profile has, and those of each profile. arrivals is the envelope family of the
 # open loop, think_s the think time before every request but the first, client_errors the deliberate client errors.
@@ -806,6 +842,47 @@ def _ok_diagnostics(p):
             and type(d["note"]) is str)
 
 
+def metrics_problem(value):
+    """The problem of analysis.metrics (design B7c 1.2) as a text, or None: exactly the keys of the layout; each metric
+    of METRIC_METHODS names its one method and a source (a text); the levels of LEVELLED and the alpha of the test of
+    the events are shares in (0, 1); the dispersion compares the sessions (DISPERSION_UNIT), the test of the events is
+    one-sided towards more alarms during events (EVENT_ALTERNATIVE), the classifier names exactly the measures over
+    windows CLASSIFIER_WINDOWS and the majorities CLASSIFIER_MAJORITY; the note is a string. The value check of the
+    analysis section and tcn/eval.py (which reads the numbers) both use it."""
+    path = "analysis.metrics"
+    if type(value) is not dict or set(value) != set(_METRIC) | {"note"}:
+        return f"{path} must be an object of exactly the keys {', '.join(sorted([*_METRIC, 'note']))}"
+    for name, inner in _METRIC.items():
+        if type(value[name]) is not dict or set(value[name]) != set(inner):
+            return f"{path}.{name} must be an object of exactly the keys {', '.join(sorted(inner))}"
+        if not _text(value[name]["source"]):
+            return f"{path}.{name}.source must name the source of the metric (a text)"
+    for name, method in METRIC_METHODS.items():
+        if value[name]["method"] != method:
+            return f"{path}.{name}.method must be {method}, the method tcn/eval.py implements"
+    for name, key in [(name, "level") for name in LEVELLED] + [("event_vs_clean", "alpha")]:
+        if not (_number(value[name][key]) and 0 < value[name][key] < 1):
+            return f"{path}.{name}.{key} must be a number in (0, 1)"
+    if value["dispersion"]["unit"] != DISPERSION_UNIT:
+        return f"{path}.dispersion.unit must be {DISPERSION_UNIT}: the thesis compares the alarm counts of sessions"
+    if value["event_vs_clean"]["alternative"] != EVENT_ALTERNATIVE:
+        return (f"{path}.event_vs_clean.alternative must be {EVENT_ALTERNATIVE}: the thesis' test is one-sided, more "
+                "alarms during events than in clean traffic")
+    for key, names in (("windows", CLASSIFIER_WINDOWS), ("majority", CLASSIFIER_MAJORITY)):
+        if value["classifier"][key] != list(names):
+            return f"{path}.classifier.{key} must be {json.dumps(list(names))}"
+    if type(value["note"]) is not str:
+        return f"{path}.note must be a string"
+    return None
+
+
+def _ok_linkage(a):
+    """Design B7c 1.2: every research question of LINKAGE maps to a text, and the note is a string (the self-check
+    compares the texts with LINKAGE word for word, check_analysis)."""
+    linkage = a["linkage"]
+    return all(_text(linkage[question]) for question in LINKAGE) and type(linkage["note"]) is str
+
+
 def _ok_analysis(p):
     a = p["analysis"]
     arch, stop, rule = a["architecture"], a["stopping"], a["alarm_rule"]
@@ -834,6 +911,8 @@ def _ok_analysis(p):
                 and (t["m"] is None or _number(t["m"])) and _text(t["rule"])):
             return False
     if not (_ok_interventions(p) and _ok_diagnostics(p)):
+        return False
+    if metrics_problem(a["metrics"]) is not None or not _ok_linkage(a):
         return False
     ev = a["evaluable"]
     # The first seconds that make an occurrence evaluable lie within the horizon (merge of B7b: tcn/zasahy.py places
@@ -1950,9 +2029,9 @@ def not_applicable(doc):
 
 
 def check_analysis(doc, schedule=None, *, stage="G0"):
-    """The analysis plan is complete and compares K1, K2a and K2b with the methods of proposal 4.1; null only at a
-    path of determined_at or where it means none (not_applicable); with stage Gk every path of a stage up to Gk holds
-    a value."""
+    """The analysis plan is complete and compares K1, K2a and K2b with the methods of proposal 4.1; its linkage table
+    is the lead's word for word (LINKAGE, package B7c); null only at a path of determined_at or where it means none
+    (not_applicable); with stage Gk every path of a stage up to Gk holds a value."""
     if stage not in STAGES:
         raise ValueError("unknown stage: " + str(stage))
     reasons = []
@@ -1964,6 +2043,14 @@ def check_analysis(doc, schedule=None, *, stage="G0"):
         if type(compare) is list and sorted(map(str, compare)) != methods:
             reasons.append(f"analysis.{name}.compare is {json.dumps(compare)}, "
                            f"proposal 4.1 names {json.dumps(methods)}")
+    # Package B7c (design B7c 1.2): the linkage table word for word as the lead's skeleton B7 writes it (addendum 2
+    # point 4); the owner's text of the thesis promises it, so a reworded row is a question to the lead.
+    linkage = (analysis if type(analysis) is dict else {}).get("linkage")
+    for question, text in LINKAGE.items():
+        if type(linkage) is dict and question in linkage and linkage[question] != text:
+            reasons.append(f"analysis.linkage.{question} is {json.dumps(linkage[question], ensure_ascii=False)}, "
+                           "the lead's table (skeleton B7, addendum 2 point 4) says "
+                           f"{json.dumps(text, ensure_ascii=False)}")
     determined = doc.get("determined_at") if type(doc.get("determined_at")) is dict else {}
     patterns = [x for paths in determined.values() if type(paths) is list for x in paths if type(x) is str]
     none = not_applicable(doc)

@@ -78,6 +78,12 @@ Posledný model a priečinok si aplikácia pamätá v `~/.config/hyptcn3-tcn-gui
 Kým na danom PC beží zber, analýza sa nespustí. Prehratie zaťažuje CPU a disk
 a narušilo by meranie (`docs/AUTOMATICKY_ZBER.sk.md`).
 
+Zapečatené testovacie roly protokolu v5 (`tcn/pecat.py`, balík B7c): skôr než
+aplikácia otvorí vstup, overí ho v knihe pečatí (`data/results/kniha_pecati.json`),
+archív podľa jeho bajtov a adresár snímok podľa session z jeho `session.json`.
+Zapečatenú session kampane odmietne menom (v zozname ako chyba `Zapecatene`) mimo
+finálneho behu, ktorý jej pečať spotreboval; session generálky nesie jej označenie.
+
 ## Ako čítať výsledok
 
 `BEZ ALARMU` znamená, že session sa správala ako benígna prevádzka, na ktorej sa
@@ -98,4 +104,6 @@ Testy natrénujú malý syntetický balík zo `safeguard.demo` a overia:
 - odmietnutie diagnostického balíka bez povolenia;
 - vykreslenie obrázka bez okna;
 - kontrolu priečinka v aplikácii (preskočí sa bez grafického displeja);
-- nezávislosť CKA od poradia kanálov a porovnanie dvoch tréningov.
+- nezávislosť CKA od poradia kanálov a porovnanie dvoch tréningov;
+- odmietnutie zapečatenej session (archív aj snímky) pri analýze, tlačidle
+  „Skontrolovať všetky“, `--png` a porovnaní, a označenie generálky.

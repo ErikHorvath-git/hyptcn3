@@ -12,6 +12,11 @@ expected to fall) and a negative without a shift as the good one, the outcomes t
 outcomes from the feature archive, the sealed role (design B8 section 4), and one refusal per check of the record, the
 controls section and the rows. Names package B8 adds are imported inside the tests, so this file collects on the code
 before B8.
+
+Package B7c: the seal of role test_controls is the ledger (tcn/pecat.py, finding S4 of B8). final_evaluation=True is
+given only inside a final run open in this process, so the cases that compute the outcomes of role test_controls open
+one (the fixture final_run: a rehearsal of one sealed session on a ledger of its own); outside it a stage other than
+final names the session's archive. The cases of the ledger itself are in tcn/tests/test_pecat.py.
 """
 import copy
 import json
@@ -78,6 +83,24 @@ def protocol():
     return doc
 
 
+@pytest.fixture
+def final_run(tmp_path):
+    """A final run open in this process (package B7c, tcn/pecat.py spotrebuj), inside which the final command gives
+    final_evaluation=True: one sealed session of role test_controls in an index of plan mode rehearsal under
+    protocol(), on a ledger of its own; the run is closed after the test."""
+    from tcn import pecat
+    archive, digest = bs.save_archive(tmp_path / "sealed" / "features.npz", session(KIND))
+    index = tmp_path / "corpus.json"
+    index.write_text(json.dumps({"schema": "hyptcn3/corpus-index/1", "protocol_config": protocol(),
+                                 "protocol_sha256": "0" * 64, "plan_mode": "rehearsal",
+                                 "sessions": [{"id": "s", "role": "test_controls", "group": "g", "scenario": "x",
+                                               "features": str(archive), "features_sha256": digest}]}))
+    run = pecat.spotrebuj(index, out=tmp_path / "final.json", command="test_controls_outcomes",
+                          ledger=tmp_path / "ledger.json")
+    yield run
+    run.close()
+
+
 def session(kind, shifted=INSIDE, columns=None, wx_only=(), invalid=(), full_every=360):
     """The extraction result of a session with one occurrence of `kind`: every column of the kind at LEVEL, the
     `columns` (default: all of them) plus SHIFT in the rows `shifted` and plus 5 SHIFT in the DECOYS, the W+X and memfd
@@ -135,7 +158,7 @@ MEASURED = [seq for seq in INSIDE if seq not in (70, 71, 80)]
     # judged on the measured rows alone.
     ("kontrola_modul_jadra", "control", {}, GAPS, MEASURED, True, True, False),
 ])
-def test_outcomes(kind, polarity, record, change, showing, saw, moved, scored):
+def test_outcomes(kind, polarity, record, change, showing, saw, moved, scored, final_run):
     from scripts.controls import outcomes
     dose = record.get("dose", DOSE.get(kind))
     out = outcomes(occurrence(kind, polarity, **record), session(kind, **change), protocol(), role="test_controls",
@@ -202,11 +225,16 @@ def test_feature_archive_gives_the_same_outcomes(tmp_path):
     ("test_controls", "G6", True, "unknown stage of the record: 'G6' (proposal 11.1: suchy, skuska, generalka, "
                                   "final)"),
 ])
-def test_sealed_role(role, stage, final_evaluation, reason):
+def test_sealed_role(role, stage, final_evaluation, reason, request, tmp_path):
+    """Package B7c: the final evaluation is the final command's run (final_run); at a stage before the final one the
+    outcomes name the session's archive, here one the ledger does not hold (not sealed)."""
     from scripts.controls import outcomes
     if reason is None:
+        if final_evaluation:
+            request.getfixturevalue("final_run")
+        archive = None if final_evaluation else bs.save_archive(tmp_path / "unsealed.npz", session(KIND))[0]
         out = outcomes(occurrence(KIND), session(KIND), protocol(), role=role, stage=stage,
-                       final_evaluation=final_evaluation)
+                       final_evaluation=final_evaluation, archive=archive)
         assert out["parser_saw"]["ok"] is True
         return
     with pytest.raises(ValueError) as error:  # Refused before the record or the features are read.

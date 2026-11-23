@@ -709,7 +709,9 @@ def pocet_testov():
     stroja nezavisi, preto sa uvadza aj on - a z dvojice je hned vidiet,
     kolko z neho naozaj bezalo.
     """
-    text = spusti([sys.executable, "-m", "pytest", "-q"], timeout=900)
+    # Od balika B7c trva cela sada pod nice -n 19 dlhsie ako 900 s (2026-11-23 900 s nestacilo).
+    # 2400 s je usudok s rezervou na baliky B9 a B10; zaseknutu sadu stale zastavi.
+    text = spusti([sys.executable, "-m", "pytest", "-q"], timeout=2400)
     zaver = [r for r in text.splitlines() if " passed" in r or " failed" in r]
     if not zaver:
         raise Chyba("z vystupu 'pytest -q' sa necita zaverecny riadok")

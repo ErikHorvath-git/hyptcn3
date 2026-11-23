@@ -129,3 +129,101 @@ def test_compare_two_trainings_on_one_session(setup, tmp_path):
     assert tcn_gui.main(["--compare", str(root / "models" / "synthetic"), str(second), "--input", str(odd),
                          "--diagnostic", "--png", str(out)]) == 0
     assert out.stat().st_size > 50_000
+
+
+# ------------------------------------------------------------------ the seal (package B7c, verification of B7c F1)
+# tcn/pecat.py GUARD_RULE: the GUI checks an input before it opens it (analyza.resolve_input): a feature archive by its
+# bytes, a snapshot directory by the session its session.json names. The ledger is one of the test's own, which
+# tcn.pecat.KNIHA points at; the expected messages are literals.
+
+ROOT = GUI.parent
+V5 = ROOT / "config" / "collection-v5.json"
+GUARD = ("a sealed archive of a campaign is replayed or scored only by the final command (python -m tcn.finalne) in "
+         "the run that consumes its seal (tcn/pecat.py GUARD_RULE)")
+
+
+def sha(path):
+    import hashlib
+    return hashlib.sha256(Path(path).read_bytes()).hexdigest()
+
+
+@pytest.fixture
+def ledger(tmp_path, monkeypatch):
+    """A ledger of the test's own, the one every guard reads (tcn.pecat.KNIHA)."""
+    from tcn import pecat
+    path = tmp_path / "ledger" / "kniha_pecati.json"
+    path.parent.mkdir()
+    monkeypatch.setattr(pecat, "KNIHA", path)
+    pecat.zaloz(command="test_analyza", ledger=path)
+    return path
+
+
+def seal_session(tmp_path, ledger, mode, archive=None):
+    """The session gui-1 of role test_benign as a capture leaves it, whose archive the ledger seals in plan mode `mode`
+    (as the campaign writes it): session.json, raw/ with one snapshot file, and features.npz (a synthetic one, or a
+    copy of `archive`); (session directory, archive, its sha256)."""
+    import shutil
+    from scripts.tests import boundary_sessions as bs
+    from tcn import pecat
+    directory = tmp_path / "sessions" / "gui-1"
+    (directory / "raw").mkdir(parents=True)
+    (directory / "raw" / "frame0.vmicd").write_bytes(b"synthetic RAM 0")
+    (directory / "session.json").write_text(json.dumps({"session_id": "gui-1", "role": "test_benign"}))
+    target = directory / "features.npz"
+    if archive is None:
+        result, _ = bs.extraction_result("gui-1", 24, 12, t0=10000., interval_s=5)
+        bs.save_archive(target, result)
+    else:
+        shutil.copyfile(archive, target)
+    record = {"id": "gui-1", "role": "test_benign", "group": "g", "vm": "a", "scenario": "eshop_low",
+              "features": str(target), "features_sha256": sha(target)}
+    pecat.zapis([record], protocol=json.loads(V5.read_text()), protocol_sha256=sha(V5), mode=mode,
+                command="the campaign", ledger=ledger)
+    return directory, target, record["features_sha256"]
+
+
+@pytest.mark.parametrize("entry", ["analyze", "analyze_snapshots", "png", "button", "compare"])
+def test_a_sealed_session_is_refused_by_the_gui(tmp_path, ledger, entry):
+    """Every way the GUI scores a session refuses a sealed one of a campaign by name before it loads a model or opens
+    the input: analyze on its archive and on its session directory (the snapshots of raw/, by the session that
+    session.json names), the figure without a window (--png, before matplotlib is imported), the button
+    Skontrolovať všetky (App.work: the refusal is the session's error in the list) and the comparison of models."""
+    from tcn import pecat
+    directory, archive, digest = seal_session(tmp_path, ledger, "campaign")
+    what = (f"the snapshot directory {(directory / 'raw').resolve()} of session gui-1" if entry == "analyze_snapshots"
+            else f"the archive {archive.resolve()}")
+    purpose = "TCN-gui porovnanie.compare" if entry == "compare" else "TCN-gui analyze"
+    expected = (f"{purpose}: refused, {what} is sealed (sha256 {digest}; session gui-1 of role test_benign, plan "
+                f"{json.loads(V5.read_text())['name']}, ledger {ledger}): {GUARD}")
+    out = tmp_path / "figure.png"
+    if entry == "button":
+        import queue
+        from types import SimpleNamespace
+        app = SimpleNamespace(queue=queue.Queue(), bundle_path=tmp_path / "no-bundle", bundle=object())
+        tcn_gui.App.work(app, [str(archive)])
+        messages = [app.queue.get() for _ in range(app.queue.qsize())]
+        assert ("error", str(archive), "Zapecatene: " + expected) in messages
+        return
+    import porovnanie
+    calls = {"analyze": lambda: analyza.analyze(tmp_path / "no-bundle", archive),
+             "analyze_snapshots": lambda: analyza.analyze(tmp_path / "no-bundle", directory),
+             "png": lambda: tcn_gui.main(["--bundle", str(tmp_path / "no-bundle"), "--input", str(archive), "--png",
+                                          str(out)]),
+             "compare": lambda: porovnanie.compare([tmp_path / "a", tmp_path / "b"], archive)}
+    with pytest.raises(pecat.Zapecatene) as error:
+        calls[entry]()
+    assert str(error.value) == expected and not out.exists()
+
+
+def test_a_rehearsal_session_is_scored_with_its_mark(setup, tmp_path, ledger, monkeypatch):
+    """The twin: the archive of a rehearsal's session (the ledger of record, so stage generalka) is scored as the
+    detector's replay scores it, and the report carries the seal's decision with the rehearsal mark."""
+    from tcn import pecat
+    monkeypatch.setattr(pecat, "ZAZNAM", ledger)
+    root, test, _ = setup
+    _, archive, digest = seal_session(tmp_path, ledger, "rehearsal", archive=test["features"])
+    report = analyza.analyze(root / "models" / "synthetic", archive, allow_diagnostic=True)
+    assert (report["seal"]["allowed"], report["seal"]["sha256"], report["seal"]["stage"], report["seal"]["mark"]) == (
+        "rehearsal", digest, "generalka", pecat.REHEARSAL_MARK)
+    reference = replay_archive(load_bundle(root / "models" / "synthetic", allow_diagnostic=True), archive, "gui-1")
+    assert report["series"]["score"] == [r["score"] for r in reference]

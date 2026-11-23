@@ -1,11 +1,16 @@
 """The index of a test-only protocol admits a session only with the verdict the protocol gives (protocol v5, B2).
 
-campaign.event_index reads the audit record and never decides from the archive: the recorded verdict must be the
-one the protocol gives for the recorded facts of the session's role, and the record's summary must repeat it.
+Since package B7c (deferred point 8 of B2) campaign.event_index decides from the archive, which it opens anyway, as
+features/dataset.py build does (features.acceptance.require_accepted): the verdict derived from the archive must
+accept, the record must name every invalid row of the archive and its stored verdict and summary must equal the
+derived one. So a record whose stored facts or verdict were edited differs from the decision, a forged claim of
+acceptance of a rejected session is refused by the archive's verdict or its unlisted invalid rows, and an archive
+exchanged after the audit (F2b) is refused (the messages of the build column of section 14 of the plan,
+tcn/tests/test_prijatie_session.py SPRAVY). Under protocol schema 3 (family S3) the planned sessions are the rows of
+the plan of mode campaign (scripts/protocol_v5.py planned_rows) and the index records the mode (plan_mode).
 Every session here is built by scripts/tests/boundary_sessions.py and audited by the real audit; forged records
 are new files whose digests are all right, so a refusal can only come from the decision. Expected values come
 from the oracle bs.window_count, the table of section 4 of the plan and literals, never from product helpers.
-Runs unchanged on the code before and after package B2 (no name B2 adds is imported).
 """
 from collections import namedtuple
 import copy
@@ -40,7 +45,10 @@ WHY = {"S2G": {"k0": None, "k1": None, "k2i": None, "k2c": None, "k3i": "coverag
                "k4c": "count"},
        "S3": {"k0": None, "k3i": None, "k4i": "both", "k4c": "count"},
        "V4": {"k0": None, "k1": None, "k2i": "coverage", "k3i": "coverage"}}
-PLANNED = {"S2G": 6, "V4": 2, "S3": 2}  # Role count times the two scenarios.
+PLANNED = {"S2G": 6, "V4": 2, "S3": 2}  # Role count times the two scenarios; S3: the two rows of its plan.
+# The plan mode of each family's index (package B7c): schema 3 names its plan's mode, schemas 1 and 2 none.
+MODE = {"S2G": None, "V4": None, "S3": "campaign"}
+KEYS = {"schema", "complete", "planned_sessions", "protocol_sha256", "protocol_config", "sessions", "note"}
 F2B = {"S2G": (16, 48), "S3": (16, 48), "V4": (64, 352)}  # Full-snapshot cadence of the F2 b archive, its windows.
 
 UNACCEPTED = "unaccepted audit or protocol mismatch: "
@@ -50,14 +58,11 @@ MAPPING = "role or boot/group mapping outside the plan: "
 NOT_CLEAN = "unaccepted audit: the record does not state a clean acceptance"
 OTHER_ROLE = "unaccepted audit: recorded for another role"
 NO_VERDICT = "audit record carries no acceptance verdict"
+UNLISTED = "incomplete features in accepted audit"  # The archive has invalid rows the record does not name.
 DIFFERS = "audit record differs from the acceptance decision"
 REJECTS = "accepted audit of a session the protocol rejects: "
 OVER = "more invalid rows than the protocol tolerates"
-CAUSE = "invalid rows have a cause the protocol does not tolerate"
-FACTS = "invalid session facts"
-INTEGRITY = "integrity findings require review before benign admission"
 ROWS = "snapshot count differs from assigned protocol"
-SEQUENCE = "sequence must start at zero and be contiguous"
 INCOMPLETE = "incomplete model inputs under behavioral-inputs-v1"
 ZERO = "0" * 64
 
@@ -172,9 +177,16 @@ def coverage(p):
     return f"score coverage below design gate {p['min_score_coverage']:g}"
 
 
+def index(w, reports, protocol_sha=None):
+    """campaign.event_index of `reports` under the family's protocol, with its plan mode under schema 3."""
+    mode = MODE.get(getattr(w, "name", None))
+    return campaign.event_index(reports, w.p, w.sha if protocol_sha is None else protocol_sha,
+                                **({} if mode is None else {"mode": mode}))
+
+
 def refused(w, reports, expected, protocol_sha=None):
     with pytest.raises(ValueError) as caught:
-        campaign.event_index(reports, w.p, w.sha if protocol_sha is None else protocol_sha)
+        index(w, reports, protocol_sha)
     assert str(caught.value) == expected
 
 
@@ -199,9 +211,9 @@ def entry(w, b, report):
 
 def admitted(w, reports):
     """event_index of `reports`, checked against the entries the inputs give."""
-    doc = campaign.event_index(reports, w.p, w.sha)
-    assert set(doc) == {"schema", "complete", "planned_sessions", "protocol_sha256", "protocol_config", "sessions",
-                        "note"}
+    doc = index(w, reports)
+    assert set(doc) == KEYS | ({"plan_mode"} if MODE[w.name] else set())
+    assert doc.get("plan_mode") == MODE[w.name]
     assert (doc["schema"], doc["planned_sessions"], doc["protocol_sha256"]) == ("hyptcn3/event-index/1",
                                                                                PLANNED[w.name], w.sha)
     assert doc["protocol_config"] == w.doc and doc["complete"] == (len(reports) == PLANNED[w.name])
@@ -251,9 +263,13 @@ def test_honest_rejecting_record_is_refused(world, family, label):
     refused(w, [*honest(w), report], UNACCEPTED + str(report))
 
 
-def decision_message(w, label):
-    """Section 14, column validate_index: what a record of this rejected cell that claims acceptance gets."""
-    return REJECTS + coverage(w.p) if WHY[w.name][cell_of(label)] == "coverage" else OVER
+def decision_message(w, label, construction="F1"):
+    """Section 14, column build (package B7c: the decision from the archive): what a record of this rejected cell
+    that claims acceptance gets. A cell rejected by its invalid rows has them unlisted in the record of F1 and F1b
+    (the audit lists none), and over the maximum when F1c lists them."""
+    if WHY[w.name][cell_of(label)] == "coverage":
+        return REJECTS + coverage(w.p)
+    return OVER if construction == "F1c" else UNLISTED
 
 
 # E2, E3: a rejected session whose record claims acceptance.
@@ -271,7 +287,7 @@ def test_f1b_f1c_are_refused(world, family, label, kind, tmp_path):
     w = world[family]
     b = w.sessions[label]
     forged = forge(tmp_path, b.audit.path, f1b if kind == "F1b" else f1c(b.invalid))
-    refused(w, replaced(w, 0, forged), f"{decision_message(w, label)}: {forged}")
+    refused(w, replaced(w, 0, forged), f"{decision_message(w, label, kind)}: {forged}")
 
 
 # E4: numbers that differ from the verdict.
@@ -315,13 +331,15 @@ def facts(**changes):
 
 
 # One case per field of the record summary and of the stored verdict, changing only that field: (edit, message).
+# Package B7c: the decision comes from the archive, so a stored fact edited makes the stored verdict differ from the
+# derived one (DIFFERS), and the summary's list of tolerated rows without one of the archive's invalid rows is UNLISTED.
 FIELDS = {
     "role": (lambda c: lambda v: v.update(role="pilot"), OTHER_ROLE),
     "snapshots": (lambda c: lambda v: v.update(snapshots=v["snapshots"] + 1), DIFFERS),
     "windows": (lambda c: lambda v: v.update(windows=v["windows"] - 1), DIFFERS),
     "score_coverage": (lambda c: lambda v: v.update(score_coverage=(v["windows"] - 1) / c.cycles), DIFFERS),
     "tolerated_invalid_seq": (lambda c: lambda v: v["quality"].update(
-        tolerated_invalid_seq=v["quality"]["tolerated_invalid_seq"][:-1]), DIFFERS),
+        tolerated_invalid_seq=v["quality"]["tolerated_invalid_seq"][:-1]), UNLISTED),
     "acceptance.schema": (lambda c: stored(lambda a: a.update(schema=a["schema"] + "-forged")), DIFFERS),
     "acceptance.accepted": (lambda c: stored(lambda a: a.update(accepted=False)), DIFFERS),
     "acceptance.reasons": (lambda c: stored(lambda a: a.update(reasons=["forged"])), DIFFERS),
@@ -335,18 +353,17 @@ FIELDS = {
     "acceptance.score_coverage": (lambda c: stored(lambda a: a.update(
         score_coverage=(a["windows"] - 1) / c.cycles)), DIFFERS),
     "acceptance.tolerated_invalid_seq": (lambda c: stored(lambda a: a.update(tolerated_invalid_seq=[])), DIFFERS),
-    # The stored facts are decided again: still accepting but another verdict, or rejecting.
+    # The stored facts are no longer decided again: the verdict derived from the archive differs from the stored one.
     "facts.windows_up": (lambda c: stored(lambda a: a["facts"].update(windows=a["facts"]["windows"] + 1)),
                          DIFFERS),
-    "facts.below_gate": (lambda c: stored(lambda a: a["facts"].update(windows=c.below)), REJECTS + "{coverage}"),
-    "facts.integrity": (facts(integrity_findings=1), REJECTS + INTEGRITY),
-    "facts.snapshots_short": (lambda c: stored(lambda a: a["facts"].update(snapshots=c.cycles - 1)),
-                              REJECTS + ROWS),
-    "facts.snapshots_long": (lambda c: stored(lambda a: a["facts"].update(snapshots=c.cycles + 1)), REJECTS + ROWS),
-    "facts.sequence": (facts(sequence_contiguous=False), REJECTS + SEQUENCE),
-    "facts.over_max": (lambda c: stored(fill_up(c)), OVER),
-    "facts.cause": (lambda c: stored(lambda a: a["facts"]["invalid_rows"][0].update(read_errors=1)), CAUSE),
-    "facts.null": (lambda c: stored(lambda a: a.update(facts=None)), FACTS),
+    "facts.below_gate": (lambda c: stored(lambda a: a["facts"].update(windows=c.below)), DIFFERS),
+    "facts.integrity": (facts(integrity_findings=1), DIFFERS),
+    "facts.snapshots_short": (lambda c: stored(lambda a: a["facts"].update(snapshots=c.cycles - 1)), DIFFERS),
+    "facts.snapshots_long": (lambda c: stored(lambda a: a["facts"].update(snapshots=c.cycles + 1)), DIFFERS),
+    "facts.sequence": (facts(sequence_contiguous=False), DIFFERS),
+    "facts.over_max": (lambda c: stored(fill_up(c)), DIFFERS),
+    "facts.cause": (lambda c: stored(lambda a: a["facts"]["invalid_rows"][0].update(read_errors=1)), DIFFERS),
+    "facts.null": (lambda c: stored(lambda a: a.update(facts=None)), DIFFERS),
 }
 
 
@@ -367,12 +384,14 @@ def test_one_recorded_field_differs(world, family, field, tmp_path):
 @pytest.mark.parametrize("family,label", [*((f, "k0") for f in FAMILIES),
                                           *((f, label) for f, label in REJECTED if WHY[f][label] == "coverage")])
 def test_record_without_verdict_is_refused(world, family, label, tmp_path):
-    """An honest accepting record, and F1 of a coverage-only cell (the missing verdict is noticed first)."""
+    """An honest accepting record, and F1 of a coverage-only cell (package B7c: the archive's verdict rejects it
+    before the missing stored verdict is compared)."""
     w = world[family]
     b = w.sessions[label]
     edits = (f1,) if WHY[family][label] else ()
     forged = forge(tmp_path, b.audit.path, *edits, lambda v: v.pop("acceptance", None))
-    refused(w, replaced(w, b.index, forged), f"{NO_VERDICT}: {forged}")
+    message = REJECTS + coverage(w.p) if WHY[family][label] else NO_VERDICT
+    refused(w, replaced(w, b.index, forged), f"{message}: {forged}")
 
 
 # Order: a case that breaks two checks expects the message of the earlier one.
@@ -399,13 +418,13 @@ def order_case(w, case, tmp_path):
         forged = forge(tmp_path, s["k0"].audit.path, lambda v: v.update(reasons=["forged"]),
                        lambda v: v.pop("acceptance", None))
         return replaced(w, 0, forged), f"{NOT_CLEAN}: {forged}"
-    if case == "decision_and_summary":
+    if case == "decision_and_summary":  # Package B7c: the stored facts are not decided; they differ.
         forged = forge(tmp_path, s["k1"].audit.path, stored(lambda a: a["facts"].update(integrity_findings=1)),
                        lambda v: v.update(windows=v["windows"] - 1))
-        return replaced(w, 1, forged), f"{REJECTS}{INTEGRITY}: {forged}"
-    if case == "count_and_summary":
+        return replaced(w, 1, forged), f"{DIFFERS}: {forged}"
+    if case == "count_and_summary":  # Package B7c: the archive's invalid rows are unlisted before any verdict.
         forged = forge(tmp_path, s["k4c"].audit.path, f1b, lambda v: v.update(windows=v["windows"] + 1))
-        return replaced(w, 0, forged), f"{OVER}: {forged}"
+        return replaced(w, 0, forged), f"{UNLISTED}: {forged}"
     raise AssertionError(case)
 
 
@@ -429,8 +448,8 @@ TYPES = {
     "verdict_list": ("k0", lambda v: v.update(acceptance=[]), NO_VERDICT),
     "verdict_string": ("k0", lambda v: v.update(acceptance="verdict"), NO_VERDICT),
     "verdict_null": ("k0", lambda v: v.update(acceptance=None), NO_VERDICT),
-    "quality_null": ("k1", lambda v: v.update(quality=None), DIFFERS),
-    "tolerated_null": ("k1", lambda v: v["quality"].update(tolerated_invalid_seq=None), DIFFERS),
+    "quality_null": ("k1", lambda v: v.update(quality=None), UNLISTED),  # Package B7c: the archive's row unlisted.
+    "tolerated_null": ("k1", lambda v: v["quality"].update(tolerated_invalid_seq=None), UNLISTED),
 }
 
 
@@ -484,10 +503,11 @@ def test_twin_is_admitted(world, family, construction, tmp_path):
     assert admitted(w, reports)["complete"]
 
 
-# E6: the depth of this place. A clean record over an archive below the gate is not seen (the archive stays closed).
+# E6: the depth of this place. A clean record over an archive below the gate: package B7c decides from the archive
+# (deferred point 8 of B2), so the exchanged archive is refused (before: not seen, the index admitted it complete).
 
 @pytest.mark.parametrize("family", FAMILIES)
-def test_f2b_is_not_seen(world, family, tmp_path):
+def test_f2b_is_refused_by_its_archive(world, family, tmp_path):
     w = world[family]
     p, b = w.p, w.sessions["k0"]
     cadence, windows = F2B[family]
@@ -498,9 +518,9 @@ def test_f2b_is_not_seen(world, family, tmp_path):
     archive, digest = bs.save_archive(tmp_path / "forged.npz", result)
     assert digest == sha(archive) != sha(b.audit.archive)
     forged = forge(tmp_path, b.audit.path, lambda v: v.update(features=str(archive), features_sha256=digest))
-    doc = campaign.event_index(replaced(w, 0, forged), p, w.sha)
-    assert doc["complete"]
-    assert doc["sessions"][0] == dict(entry(w, b, forged), features=str(archive), features_sha256=sha(archive))
+    refused(w, replaced(w, 0, forged), f"{REJECTS}{coverage(p)}: {forged}")
+    # Twin: the same record over the audited archive is admitted (the index of the honest set).
+    assert admitted(w, replaced(w, 0, forge(tmp_path, b.audit.path, name="twin")))["complete"]
 
 
 # Fixes after the review (addendum 3, part K5). New sessions come from their own fixture; nothing above changes.
@@ -549,9 +569,8 @@ def honest_pairs(w):
 
 def index_of(w, pairs, complete):
     """event_index of the reports of `pairs`, checked as a whole against the sessions the test names for them."""
-    doc = campaign.event_index([report for _, report in pairs], w.p, w.sha)
-    assert set(doc) == {"schema", "complete", "planned_sessions", "protocol_sha256", "protocol_config", "sessions",
-                        "note"}
+    doc = index(w, [report for _, report in pairs])
+    assert set(doc) == KEYS | ({"plan_mode"} if MODE[w.name] else set())
     assert (doc["schema"], doc["planned_sessions"], doc["protocol_sha256"], doc["protocol_config"]) == (
         "hyptcn3/event-index/1", PLANNED[w.name], w.sha, w.doc)
     assert doc["complete"] is complete
@@ -718,7 +737,8 @@ def test_planned_diagnostic_with_other_stored_rows_is_refused(case, tmp_path):
     # Twin: the same copy without the edit is admitted.
     assert diagnostic_index(w, [forge(tmp_path, reports[0], name="twin"), reports[1]])["complete"]
     forged = forge(tmp_path, reports[0], stored(lambda a: a["facts"].update(snapshots=snapshots)))
-    refused(w, [forged, reports[1]], f"{REJECTS}{ROWS}: {forged}")
+    # Package B7c: the archive of 80 rows recorded as 80 accepts; the edited stored facts differ from its verdict.
+    refused(w, [forged, reports[1]], f"{DIFFERS}: {forged}")
 
 
 def test_planned_diagnostic_of_another_length_is_rejected_by_the_audit(tmp_path):
@@ -759,3 +779,94 @@ def test_short_session_forged_with_its_log_audit_is_refused(case, tmp_path):
     forged = forge(tmp_path, audit.path, edit)
     refused(w, [forged, honest_reports[1]], f"{REJECTS}{ROWS}: {forged}")
     assert audit.values["windows"] == bs.window_count(n - 1, W, F)
+
+
+# Package B7c (the lead's addendum of 2026-11-22T20:30Z to the skeleton of B7): under protocol schema 3 the planned
+# sessions are the rows of the plan of the index's mode, not the product of the role counts and the scenarios.
+
+ROOT = Path(__file__).resolve().parents[2]
+
+
+@pytest.mark.parametrize("mode,planned", [("campaign", 132), ("rehearsal", 30)])
+def test_planned_sessions_of_the_v5_shape_are_the_plan(mode, planned):
+    """The real protocol file: 44 groups of 3 sessions holding 3 of the 4 scenarios, so the plan of the campaign has
+    132 sessions (the product of roles and scenarios would be 176) and its rehearsal 30 (two groups of 3 per role);
+    with no report the index is incomplete and names its mode."""
+    path = ROOT / "config/collection-v5.json"
+    p = collection.protocol(path)
+    assert (sum(p["roles"].values()), len(p["scenarios"])) == (44, 4)
+    doc = campaign.event_index([], p, sha(path), mode=mode)
+    assert (doc["planned_sessions"], doc["complete"], doc["sessions"], doc["plan_mode"]) == (planned, False, [], mode)
+
+
+@pytest.mark.parametrize("case", ["every_row", "a_row_twice"])
+def test_the_event_index_of_sessions_of_the_v5_shape_holds_each_planned_row(tmp_path, case):
+    """With sessions (verification of B7c, F10, mutant E2): the corpus of the v5 shape of
+    features/tests/test_dataset_plan.py (two VMs, the five roles of v5 with two groups each, groups of 3 sessions
+    holding 3 of the 4 scenarios: 30 planned sessions, where the product of roles and scenarios gives 40), its sessions
+    accepted by the audit's own decision. All 30 make the index complete; 30 of which one holds a row another holds
+    already and one row has none do not: completeness is every planned row held, not the planned count."""
+    from features.tests import test_dataset_plan as v5
+    c = v5.make_corpus(tmp_path / "corpus", "campaign")
+    assert (len(c.plan), sum(c.p["roles"].values()) * len(c.p["scenarios"])) == (30, 40)
+    reports = list(c.audits.values())
+    if case == "a_row_twice":
+        twice, none = c.plan[0], c.plan[1]
+        start = c.times[c.sids[v5.label(twice)]][0]
+        extra = v5.session(tmp_path / "extra", c, twice, "twice-" + c.sids[v5.label(twice)], start)
+        reports = [audit for key, audit in c.audits.items() if key != v5.label(none)] + [extra]
+    doc = campaign.event_index(reports, c.p, c.sha, mode="campaign")
+    assert (doc["planned_sessions"], len(doc["sessions"]), doc["plan_mode"]) == (30, 30, "campaign")
+    assert doc["complete"] is (case == "every_row")
+
+
+@pytest.mark.parametrize("family,mode,reason", [
+    ("S3", None, "an event index of protocol schema 3 needs its plan mode (campaign or rehearsal)"),
+    ("S3", "pilot", "unknown plan mode: pilot"),
+    ("S2G", "campaign", "plan mode campaign applies only to protocol schema 3; schemas 1 and 2 keep every scenario in "
+                        "every group"),
+])
+def test_plan_mode_is_that_of_the_schema(world, family, mode, reason):
+    """Schema 3 names its plan mode, and no other; schemas 1 and 2 have none (one bad input each, by name)."""
+    w = world[family]
+    with pytest.raises(ValueError) as caught:
+        campaign.event_index(honest(w), w.p, w.sha, **({} if mode is None else {"mode": mode}))
+    assert str(caught.value) == reason
+
+
+def test_session_outside_the_plan_is_refused(world, tmp_path):
+    """A clean session of S3 at a group its plan does not hold (test_benign has one group: s3-test_benign-2 is no
+    row of the plan of the campaign), in its own boot and audited for real: refused by name before the decision, as
+    features/dataset.py build refuses it; the honest set alone is admitted (test_index_of_the_honest_accepted_set)."""
+    w = world["S3"]
+    place = dict(w.places[0], group="s3-test_benign-2")
+    session = bs.build_session(tmp_path, w.p, w.path, place, session_id="s3-outside",
+                               base=bs.time_base(w.p, "test_benign", EXTRA_SLOT + 5))
+    audit = bs.audit(session, w.p)
+    (session.directory / "events.json").write_text('{"events": []}\n')
+    assert (audit.code, audit.values["accepted"]) == (0, True)
+    refused(w, [*honest(w), audit.path],
+            f"assignment is outside the planned allocation: session s3-outside (test_benign, s3-test_benign-2, "
+            f"{place['scenario']}, VM {place.get('vm')}) holds no row of plan:campaign: {audit.path}")
+
+
+def test_finish_corpus_of_a_test_only_plan_of_schema_3_ends_with_an_event_index(world, tmp_path, monkeypatch):
+    """Schema 3 names all five roles (S3 gives four of them no group), so the key train no longer tells a test-only
+    protocol: a plan without a session of a fitting role ends with the event index of its mode, not a corpus index
+    (the archive mount and the copy to the archive replaced, the copy recorded)."""
+    w = world["S3"]
+    directory = tmp_path / "campaign"
+    (directory / "events").mkdir(parents=True)  # The state records of the campaign (update_state).
+    (directory / "protocol.json").write_bytes(Path(w.path).read_bytes())
+    manifest = {"protocol_sha256": w.sha, "archive_root": str(tmp_path / "archive"), "archive_mount": None,
+                "archive_dir": str(tmp_path / "archive" / "campaigns" / "s3")}
+    copied = []
+    monkeypatch.setattr(campaign, "guard_mount", lambda archive_root, mount: None)
+    monkeypatch.setattr(campaign, "copy_exclusive", lambda source, destination: copied.append((source, destination)))
+    campaign.finish_corpus(directory, manifest, w.p, honest(w))
+    doc = json.loads((directory / "events_index.json").read_text())
+    assert (doc["complete"], doc["plan_mode"], doc["planned_sessions"], len(doc["sessions"])) == (
+        True, "campaign", 2, 2)
+    assert not (directory / "corpus.json").exists()
+    assert copied == [(directory / "events_index.json", Path(manifest["archive_dir"]) / "events_index.json")]
+

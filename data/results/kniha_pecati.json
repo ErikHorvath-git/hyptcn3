@@ -1,0 +1,37 @@
+{
+ "command": "python -m tcn.pecat zaloz",
+ "commit": "062178d3db2aa9f2061d8247c57a21a5a9a86a32",
+ "commit_dirty": true,
+ "date": "2026-11-23T21:32:15+00:00",
+ "guest": null,
+ "host": "debian",
+ "n": 0,
+ "note": "Kniha pečatí testovacích rolí protokolu v5 (balík B7c); nie je to meranie. guest je null: kniha neopisuje hosťa, iba archívy príznakov a finálne behy.",
+ "schema": "hyptcn3/seal-ledger/1",
+ "values": {
+  "archives": {},
+  "created": {
+   "command": "python -m tcn.pecat zaloz",
+   "commit": "062178d3db2aa9f2061d8247c57a21a5a9a86a32",
+   "commit_dirty": true,
+   "date": "2026-11-23T21:32:15+00:00"
+  },
+  "roles": [
+   "test_benign",
+   "test_controls"
+  ],
+  "rules": {
+   "commit_dirty": "commit_dirty of the ledger's header and of its created block: whether the working tree differs from the commit (git status --porcelain: a changed, staged or untracked path), the ledger itself and its temporary files aside, since their change is the one the write records (as the records of data/results of tcn/eval.py and scripts/validate_safeguard.py record commit_dirty); null when git is unavailable (verification of B7c, F5)",
+   "guard": "a sealed archive of a campaign (plan mode campaign) is replayed or scored only inside the final run that consumed its seal (spotrebuj in the process of the final command, python -m tcn.finalne); outside it every guarded entry point refuses it by name before anything is read or written: safeguard replay --archive, tcn.porovnanie replay, safeguard.runtime.replay_archive, the methods of tcn/metody.py and tcn/opisne.py given a window set that holds it, scripts/controls.py outcomes of its controls, the TCN-gui (TCN-gui/analyza.py resolve_input before it opens an input, so analyze, tcn_gui.py with its button Skontrolovať všetky and --png, and TCN-gui/porovnanie.py compare) and the legacy activity classifier tcn/klasifikator.py before it loads each archive of an index; the raw snapshots of its session likewise (SNAPSHOT_RULE): safeguard replay --snapshots and watch, safeguard.runtime.run_directory (also as the TCN-gui uses it), scripts/validate_safeguard.py and the legacy standalone detector scripts/detektor.py over --snapshots; after the final run it stays refused (the test role is used once)",
+   "identity": "the identity of a seal is the sha256 of the ASCII lines of the sorted sha256 hex digests of the feature archives (the bytes of the file, features_sha256 of the index) of the sessions of the sealed roles test_benign and test_controls, each line ending in a newline (what sort | sha256sum gives for them); it is no path and no index, so a copy of the corpus under another path has the same seal (skeleton B7 section 7)",
+   "rehearsal": "an archive of a rehearsal (plan mode rehearsal, proposal 10.4 and 10.5) is kept in the ledger and not enforced: every guard lets it through and its decision carries the rehearsal mark, a rehearsal may run the final command more than once (each run recorded with its number), and every output of such a run carries the rehearsal mark (stage generalka on the ledger of record, STAGE_RULE)",
+   "run": "spotrebuj consumes the seal of a corpus once: in plan mode campaign every sealed archive of the corpus must be in the ledger before (written by the campaign), of that plan, role and session, and none may be in an earlier run; a second final run is refused, also through a copy of the corpus under another path or an index of part of it (the identity is the archives', not the path's), and so is a corpus any of whose sessions, by plan and session id, was in an earlier run of plan mode campaign with another archive (the seal binds the sessions; verification of B7c, F8); the run is recorded in the ledger before any replay, with its archives and its sessions, so a run that fails still consumed the seal (closed with its outcome); one run is open in a process at a time",
+   "seal_in_git": "at stage final the ledger at HEAD must hold every sealed archive of the corpus before the run begins (seal_in_git true: the commit that holds the seal is the one pushed for its time stamp, TIMESTAMP_RULE); a run whose seal the ledger at HEAD does not hold, or for which that cannot be shown (the ledger outside the repository, git unavailable), is refused before anything is written; at stages generalka and suchy seal_in_git is recorded, not enforced (design B7c 5.2)",
+   "sealed": "an archive is sealed when the ledger holds its sha256: zapis writes the archives of the sessions of the sealed roles of a plan (the campaign at acceptance, package B9; zapis_korpus for a corpus index); an archive the ledger does not hold is not sealed: the ledger is the seal, whatever the path or the role a caller names; the seal binds the session, not only the bytes of its archive (verification of B7c, F8): in plan mode campaign zapis refuses a second archive with other bytes for a plan, mode, role and session the ledger holds (a re-extraction is the same session), in plan mode rehearsal it keeps the second one beside the first (REHEARSAL_RULE: not enforced)",
+   "snapshots": "the raw snapshots of a session enter a detector through kontrola_snimok (verification of B7c, F1): a snapshot directory belongs to the session whose session_id the session.json in it names, or else the session.json of its parent (the session directory of its raw/); the ledger holds that session when it holds an archive of that session id, and then the archive's rule applies to the directory: refused outside the final run that consumed it (plan mode campaign), the rehearsal mark (plan mode rehearsal); a session.json without a session_id is refused by name, and a directory without a session.json in it or its parent names no session (NO_SESSION_RULE)",
+   "stage": "the stage of a final run (proposal 11.1) comes from its ledger, never from an option (design B7c 5.1, question Q15): a run on the ledger of record (ZAZNAM, data/results/kniha_pecati.json) has stage final in plan mode campaign and generalka in plan mode rehearsal; a run on any other ledger has stage suchy with the mark of a dry run (a G1 dry run, proposal 10.2, or a test): it proves the logic of the chain, not the science or the sensor, and is never in the text of the thesis (chapter 11.1); the decisions of kontrola carry the stage and the mark of the ledger they consult; vlastna_kniha switches the ledger every guard reads (KNIHA) to a ledger of its own outside data/results for the G1 command, so that its guards refuse its sealed archives as on the ledger of record, and it refuses a path under data/results and an open final run",
+   "timestamp": "the ledger protects against mistakes, not intent: a person can edit the file; its time stamp is the push of the commit that holds it to the remote repository (proposal 10.6), not its date field; every run records whether the ledger at HEAD held the seals it consumed before it began (seal_in_git: null when the ledger lies outside the repository or git is unavailable), enforced at stage final (SEAL_IN_GIT_RULE)"
+  },
+  "runs": []
+ }
+}
