@@ -56,7 +56,10 @@ SOURCE_SUFFIXES = (".py", ".c", ".h", ".sh", ".sql", ".conf", ".service")
 NOT_MEASUREMENT = {"scripts/campaign_report.py", "scripts/gen_prirucka.py", "scripts/check_claims.sh",
                    "scripts/check_prirucka.sh",
                    # Keeps the chain of readiness records; each record stores this file's own hash.
-                   "scripts/gates.py"}
+                   "scripts/gates.py",
+                   # Drives the lab test on a VM outside every session (harness chapter 5, point 11); no session
+                   # is captured, checked or archived by it, and its record is evidence of no criterion.
+                   "scripts/lab_trial.py"}
 # Measured 2026-10-20 on the working SSD with fsync: full snapshots took
 # 4.7-10.7 s (period 5 s) after sustained delta writes. Without fsync a
 # snapshot is published from the page cache; its SHA-256 (sidecar) is re-checked
