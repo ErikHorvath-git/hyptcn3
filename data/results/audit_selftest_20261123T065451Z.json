@@ -1,0 +1,3233 @@
+{
+  "schema": "hyptcn3/audit-selftest/1",
+  "date": "2026-11-23T06:54:51+00:00",
+  "commit": "8589608c8a132a50e03b896bd4acb147bdcaab87",
+  "command": "scripts/audit_selftest.py --protocol config/collection-v5.json",
+  "host": "Debian GNU/Linux 13 (trixie), kernel 7.2.9+deb13-amd64",
+  "guest": "none: synthetic sessions built from scripts/tests/audit_cases.py and audit_cases_logs.py; no VM is contacted",
+  "n": 223,
+  "protocol": "/home/eh/projects/hyptcn3/config/collection-v5.json",
+  "protocol_sha256": "c5fbb12cdc027c7d5e69a96be2e71801f713ac9f2afcab98576aaf64cea14d0e",
+  "measurement_sha256": "e4537091ac2bc79e421e43c220eb63e75c42fb19015953fed09c7debcc127f0d",
+  "cases_sha256": "2fb592816d08f82dab120f76a6386a829fc9793d4e89b3cf403161582e3f96cf",
+  "replaced": "collection.retazec (the feature extraction from guest RAM) returned the synthetic extraction result of each session; everything else ran as scripts/collection.py audit_session runs",
+  "clean": {
+    "code": 0,
+    "reasons": []
+  },
+  "cases": [
+    {
+      "id": "historical",
+      "check": "historical capture without provenance",
+      "expected": [
+        "historical capture without protocol/session provenance; exploratory only",
+        "session role is not assigned by the protocol"
+      ],
+      "reasons": [
+        "historical capture without protocol/session provenance; exploratory only",
+        "session role is not assigned by the protocol"
+      ],
+      "code": 2,
+      "passed": true
+    },
+    {
+      "id": "protocol_hash",
+      "check": "protocol hash mismatch",
+      "expected": [
+        "logs: traffic_config:protocol_sha256",
+        "protocol hash mismatch"
+      ],
+      "reasons": [
+        "logs: traffic_config:protocol_sha256",
+        "protocol hash mismatch"
+      ],
+      "code": 2,
+      "passed": true
+    },
+    {
+      "id": "incomplete_capture",
+      "check": "incomplete capture or changed guest identity",
+      "expected": [
+        "incomplete capture or changed guest identity",
+        "logs: incomplete_capture"
+      ],
+      "reasons": [
+        "incomplete capture or changed guest identity",
+        "logs: incomplete_capture"
+      ],
+      "code": 2,
+      "passed": true
+    },
+    {
+      "id": "guest_changed",
+      "check": "incomplete capture or changed guest identity (another guest after the capture)",
+      "expected": [
+        "incomplete capture or changed guest identity",
+        "logs: guest_identity_changed"
+      ],
+      "reasons": [
+        "incomplete capture or changed guest identity",
+        "logs: guest_identity_changed"
+      ],
+      "code": 2,
+      "passed": true
+    },
+    {
+      "id": "profile_changed",
+      "check": "kernel profile changed since capture",
+      "expected": [
+        "kernel profile changed since capture"
+      ],
+      "reasons": [
+        "kernel profile changed since capture"
+      ],
+      "code": 2,
+      "passed": true
+    },
+    {
+      "id": "collector_settings",
+      "check": "collector binary or temporal settings mismatch",
+      "expected": [
+        "collector binary or temporal settings mismatch"
+      ],
+      "reasons": [
+        "collector binary or temporal settings mismatch"
+      ],
+      "code": 2,
+      "passed": true
+    },
+    {
+      "id": "mlock_capture",
+      "check": "collector memory locking differs from session settings",
+      "expected": [
+        "collector memory locking differs from session settings"
+      ],
+      "reasons": [
+        "collector memory locking differs from session settings"
+      ],
+      "code": 2,
+      "passed": true
+    },
+    {
+      "id": "mlock_sidecar",
+      "check": "collector memory locking differs from session settings",
+      "expected": [
+        "collector memory locking differs from session settings"
+      ],
+      "reasons": [
+        "collector memory locking differs from session settings"
+      ],
+      "code": 2,
+      "passed": true
+    },
+    {
+      "id": "bin_width",
+      "check": "bin width differs from protocol",
+      "expected": [
+        "bin width differs from protocol"
+      ],
+      "reasons": [
+        "bin width differs from protocol"
+      ],
+      "code": 2,
+      "passed": true
+    },
+    {
+      "id": "image_count",
+      "check": "image/sidecar count mismatch",
+      "expected": [
+        "image/sidecar count mismatch"
+      ],
+      "reasons": [
+        "image/sidecar count mismatch"
+      ],
+      "code": 2,
+      "passed": true
+    },
+    {
+      "id": "sidecar_count",
+      "check": "snapshot count differs from assigned protocol (sidecars)",
+      "expected": [
+        "snapshot count differs from assigned protocol"
+      ],
+      "reasons": [
+        "snapshot count differs from assigned protocol"
+      ],
+      "code": 2,
+      "passed": true
+    },
+    {
+      "id": "sidecar_sequence",
+      "check": "sequence must start at zero and be contiguous (sidecars)",
+      "expected": [
+        "sequence must start at zero and be contiguous",
+        "snapshot count differs from assigned protocol"
+      ],
+      "reasons": [
+        "sequence must start at zero and be contiguous",
+        "snapshot count differs from assigned protocol"
+      ],
+      "code": 2,
+      "passed": true
+    },
+    {
+      "id": "cadence",
+      "check": "full snapshot cadence differs from protocol",
+      "expected": [
+        "full snapshot cadence differs from protocol"
+      ],
+      "reasons": [
+        "full snapshot cadence differs from protocol"
+      ],
+      "code": 2,
+      "passed": true
+    },
+    {
+      "id": "image_checksum",
+      "check": "image checksum mismatch",
+      "expected": [
+        "image checksum mismatch: frame3.vmicd"
+      ],
+      "reasons": [
+        "image checksum mismatch: frame3.vmicd"
+      ],
+      "code": 2,
+      "passed": true
+    },
+    {
+      "id": "missed_slot",
+      "check": "read errors/fill/missed slots",
+      "expected": [
+        "read errors/fill/missed slots: frame3.vmicd"
+      ],
+      "reasons": [
+        "read errors/fill/missed slots: frame3.vmicd"
+      ],
+      "code": 2,
+      "passed": true
+    },
+    {
+      "id": "cycle_over_period",
+      "check": "collector cycle exceeded period",
+      "expected": [
+        "collector cycle exceeded period",
+        "collector cycle time above the audit bound"
+      ],
+      "reasons": [
+        "collector cycle exceeded period",
+        "collector cycle time above the audit bound"
+      ],
+      "code": 2,
+      "passed": true
+    },
+    {
+      "id": "queue_wait",
+      "check": "collector waited for queue memory",
+      "expected": [
+        "collector waited for queue memory: frame3.vmicd"
+      ],
+      "reasons": [
+        "collector waited for queue memory: frame3.vmicd"
+      ],
+      "code": 2,
+      "passed": true
+    },
+    {
+      "id": "sequence_gap",
+      "check": "sequence gap",
+      "expected": [
+        "sequence gap",
+        "sequence must start at zero and be contiguous",
+        "snapshot count differs from assigned protocol",
+        "timestamp gap"
+      ],
+      "reasons": [
+        "sequence gap",
+        "sequence must start at zero and be contiguous",
+        "snapshot count differs from assigned protocol",
+        "timestamp gap"
+      ],
+      "code": 2,
+      "passed": true
+    },
+    {
+      "id": "role_unassigned",
+      "check": "session role is not assigned by the protocol",
+      "expected": [
+        "session role is not assigned by the protocol"
+      ],
+      "reasons": [
+        "session role is not assigned by the protocol"
+      ],
+      "code": 2,
+      "passed": true
+    },
+    {
+      "id": "verdict_rows",
+      "check": "snapshot count differs from assigned protocol (rows)",
+      "expected": [
+        "snapshot count differs from assigned protocol"
+      ],
+      "reasons": [
+        "snapshot count differs from assigned protocol"
+      ],
+      "code": 2,
+      "passed": true
+    },
+    {
+      "id": "timestamp_gap",
+      "check": "timestamp gap (B2 deferred point 9)",
+      "expected": [
+        "timestamp gap"
+      ],
+      "reasons": [
+        "timestamp gap"
+      ],
+      "code": 2,
+      "passed": true
+    },
+    {
+      "id": "sampling_period",
+      "check": "sampling period differs from protocol (B2 deferred point 9)",
+      "expected": [
+        "sampling period differs from protocol"
+      ],
+      "reasons": [
+        "sampling period differs from protocol"
+      ],
+      "code": 2,
+      "passed": true
+    },
+    {
+      "id": "invalid_rows_over_max",
+      "check": "invalid_rows rule: more rows than max",
+      "expected": [
+        "incomplete model inputs under behavioral-inputs-v1"
+      ],
+      "reasons": [
+        "incomplete model inputs under behavioral-inputs-v1"
+      ],
+      "code": 2,
+      "passed": true
+    },
+    {
+      "id": "invalid_rows_cause",
+      "check": "invalid_rows rule: a cause it does not tolerate",
+      "expected": [
+        "incomplete model inputs under behavioral-inputs-v1"
+      ],
+      "reasons": [
+        "incomplete model inputs under behavioral-inputs-v1"
+      ],
+      "code": 2,
+      "passed": true
+    },
+    {
+      "id": "integrity_finding",
+      "check": "integrity findings require review",
+      "expected": [
+        "integrity findings require review before benign admission"
+      ],
+      "reasons": [
+        "integrity findings require review before benign admission"
+      ],
+      "code": 2,
+      "passed": true
+    },
+    {
+      "id": "coverage",
+      "check": "score coverage below design gate",
+      "expected": [
+        "score coverage below design gate 0.773611"
+      ],
+      "reasons": [
+        "score coverage below design gate 0.773611"
+      ],
+      "code": 2,
+      "passed": true
+    },
+    {
+      "id": "periodicity_rule_closed",
+      "check": "6.2 periodicity of flagged rows (rule-closed rows)",
+      "expected": [
+        "periodic flagged rows"
+      ],
+      "reasons": [
+        "periodic flagged rows"
+      ],
+      "code": 2,
+      "passed": true
+    },
+    {
+      "id": "periodicity_union",
+      "check": "6.2 periodicity over invalid and rule-closed rows together",
+      "expected": [
+        "periodic flagged rows"
+      ],
+      "reasons": [
+        "periodic flagged rows"
+      ],
+      "code": 2,
+      "passed": true
+    },
+    {
+      "id": "lateness",
+      "check": "6.2 cycle start lateness",
+      "expected": [
+        "cycle start later than the audit bound"
+      ],
+      "reasons": [
+        "cycle start later than the audit bound"
+      ],
+      "code": 2,
+      "passed": true
+    },
+    {
+      "id": "cycle_delta",
+      "check": "6.2 cycle time of a delta snapshot",
+      "expected": [
+        "collector cycle time above the audit bound"
+      ],
+      "reasons": [
+        "collector cycle time above the audit bound"
+      ],
+      "code": 2,
+      "passed": true
+    },
+    {
+      "id": "cycle_full",
+      "check": "6.2 cycle time of a full snapshot",
+      "expected": [
+        "collector cycle time above the audit bound"
+      ],
+      "reasons": [
+        "collector cycle time above the audit bound"
+      ],
+      "code": 2,
+      "passed": true
+    },
+    {
+      "id": "vm_domain",
+      "check": "6.2 VM identity: domain",
+      "expected": [
+        "sidecar VM identity differs from session"
+      ],
+      "reasons": [
+        "sidecar VM identity differs from session"
+      ],
+      "code": 2,
+      "passed": true
+    },
+    {
+      "id": "vm_vmid",
+      "check": "6.2 VM identity: QEMU pid",
+      "expected": [
+        "sidecar VM identity differs from session"
+      ],
+      "reasons": [
+        "sidecar VM identity differs from session"
+      ],
+      "code": 2,
+      "passed": true
+    },
+    {
+      "id": "qemu_swap",
+      "check": "6.2 QEMU swap forbidden before start",
+      "expected": [
+        "QEMU swap was not disabled before start"
+      ],
+      "reasons": [
+        "QEMU swap was not disabled before start"
+      ],
+      "code": 2,
+      "passed": true
+    },
+    {
+      "id": "qemu_swapped",
+      "check": "6.2 no QEMU memory in swap before start",
+      "expected": [
+        "QEMU memory was swapped before start"
+      ],
+      "reasons": [
+        "QEMU memory was swapped before start"
+      ],
+      "code": 2,
+      "passed": true
+    },
+    {
+      "id": "guest_file_differs",
+      "check": "6.2 deployed guest files equal lab/",
+      "expected": [
+        "deployed guest files differ from lab/"
+      ],
+      "reasons": [
+        "deployed guest files differ from lab/"
+      ],
+      "code": 2,
+      "passed": true
+    },
+    {
+      "id": "guest_file_missing",
+      "check": "6.2 deployed guest files equal lab/ (a file not hashed)",
+      "expected": [
+        "deployed guest files differ from lab/"
+      ],
+      "reasons": [
+        "deployed guest files differ from lab/"
+      ],
+      "code": 2,
+      "passed": true
+    },
+    {
+      "id": "missing_key:session.json:guest_before.stack_manifest",
+      "check": "6.2 every audited key is mandatory",
+      "expected": [
+        "missing key: session.json:guest_before.stack_manifest"
+      ],
+      "reasons": [
+        "missing key: session.json:guest_before.stack_manifest"
+      ],
+      "code": 2,
+      "passed": true
+    },
+    {
+      "id": "missing_key:session.json:protocol_sha256",
+      "check": "6.2 every audited key is mandatory",
+      "expected": [
+        "logs: protocol_hash",
+        "logs: traffic_config:protocol_sha256",
+        "missing key: session.json:protocol_sha256"
+      ],
+      "reasons": [
+        "logs: protocol_hash",
+        "logs: traffic_config:protocol_sha256",
+        "missing key: session.json:protocol_sha256"
+      ],
+      "code": 2,
+      "passed": true
+    },
+    {
+      "id": "missing_key:session.json:guest_before",
+      "check": "6.2 every audited key is mandatory",
+      "expected": [
+        "logs: correlation:unreadable:KeyError: 'auth'",
+        "logs: guest:unreadable:KeyError: 'guest_before'",
+        "logs: guest_identity_changed",
+        "missing key: session.json:guest_before",
+        "missing key: session.json:guest_before.stack_manifest"
+      ],
+      "reasons": [
+        "logs: correlation:unreadable:KeyError: 'auth'",
+        "logs: guest:unreadable:KeyError: 'guest_before'",
+        "logs: guest_identity_changed",
+        "missing key: session.json:guest_before",
+        "missing key: session.json:guest_before.stack_manifest"
+      ],
+      "code": 2,
+      "passed": true
+    },
+    {
+      "id": "missing_key:session.json:profile_sha256",
+      "check": "6.2 every audited key is mandatory",
+      "expected": [
+        "missing key: session.json:profile_sha256"
+      ],
+      "reasons": [
+        "missing key: session.json:profile_sha256"
+      ],
+      "code": 2,
+      "passed": true
+    },
+    {
+      "id": "missing_key:session.json:collector_sha256",
+      "check": "6.2 every audited key is mandatory",
+      "expected": [
+        "logs: collector:unreadable:KeyError: 'collector_sha256'",
+        "missing key: session.json:collector_sha256"
+      ],
+      "reasons": [
+        "logs: collector:unreadable:KeyError: 'collector_sha256'",
+        "missing key: session.json:collector_sha256"
+      ],
+      "code": 2,
+      "passed": true
+    },
+    {
+      "id": "missing_key:session.json:collector_settings.mlock",
+      "check": "6.2 every audited key is mandatory",
+      "expected": [
+        "missing key: session.json:collector_settings.mlock"
+      ],
+      "reasons": [
+        "missing key: session.json:collector_settings.mlock"
+      ],
+      "code": 2,
+      "passed": true
+    },
+    {
+      "id": "missing_key:session.json:role",
+      "check": "6.2 every audited key is mandatory",
+      "expected": [
+        "missing key: session.json:role",
+        "session role is not assigned by the protocol"
+      ],
+      "reasons": [
+        "missing key: session.json:role",
+        "session role is not assigned by the protocol"
+      ],
+      "code": 2,
+      "passed": true
+    },
+    {
+      "id": "missing_key:session.json:cycles",
+      "check": "6.2 every audited key is mandatory",
+      "expected": [
+        "logs: collector:unreadable:KeyError: 'cycles'",
+        "missing key: session.json:cycles"
+      ],
+      "reasons": [
+        "logs: collector:unreadable:KeyError: 'cycles'",
+        "missing key: session.json:cycles"
+      ],
+      "code": 2,
+      "passed": true
+    },
+    {
+      "id": "missing_key:session.json:domain",
+      "check": "6.2 every audited key is mandatory",
+      "expected": [
+        "missing key: session.json:domain"
+      ],
+      "reasons": [
+        "missing key: session.json:domain"
+      ],
+      "code": 2,
+      "passed": true
+    },
+    {
+      "id": "missing_key:session.json:host_context.qemu.pid",
+      "check": "6.2 every audited key is mandatory",
+      "expected": [
+        "missing key: session.json:host_context.qemu.pid"
+      ],
+      "reasons": [
+        "missing key: session.json:host_context.qemu.pid"
+      ],
+      "code": 2,
+      "passed": true
+    },
+    {
+      "id": "missing_key:session.json:host_context.memory.qemu_swap_max",
+      "check": "6.2 every audited key is mandatory",
+      "expected": [
+        "missing key: session.json:host_context.memory.qemu_swap_max"
+      ],
+      "reasons": [
+        "missing key: session.json:host_context.memory.qemu_swap_max"
+      ],
+      "code": 2,
+      "passed": true
+    },
+    {
+      "id": "missing_key:session.json:host_context.memory.qemu_swap_kb",
+      "check": "6.2 every audited key is mandatory",
+      "expected": [
+        "missing key: session.json:host_context.memory.qemu_swap_kb"
+      ],
+      "reasons": [
+        "missing key: session.json:host_context.memory.qemu_swap_kb"
+      ],
+      "code": 2,
+      "passed": true
+    },
+    {
+      "id": "missing_key:session.json:lab_sha256",
+      "check": "6.2 every audited key is mandatory",
+      "expected": [
+        "missing key: session.json:lab_sha256"
+      ],
+      "reasons": [
+        "missing key: session.json:lab_sha256"
+      ],
+      "code": 2,
+      "passed": true
+    },
+    {
+      "id": "missing_key:end.json:completed",
+      "check": "6.2 every audited key is mandatory",
+      "expected": [
+        "logs: incomplete_capture",
+        "missing key: end.json:completed"
+      ],
+      "reasons": [
+        "logs: incomplete_capture",
+        "missing key: end.json:completed"
+      ],
+      "code": 2,
+      "passed": true
+    },
+    {
+      "id": "missing_key:end.json:guest_after",
+      "check": "6.2 every audited key is mandatory",
+      "expected": [
+        "logs: guest_identity_changed",
+        "missing key: end.json:guest_after"
+      ],
+      "reasons": [
+        "logs: guest_identity_changed",
+        "missing key: end.json:guest_after"
+      ],
+      "code": 2,
+      "passed": true
+    },
+    {
+      "id": "missing_key:raw/capture.json:values.collector_sha256",
+      "check": "6.2 every audited key is mandatory",
+      "expected": [
+        "logs: collector:unreadable:KeyError: 'collector_sha256'",
+        "missing key: raw/capture.json:values.collector_sha256"
+      ],
+      "reasons": [
+        "logs: collector:unreadable:KeyError: 'collector_sha256'",
+        "missing key: raw/capture.json:values.collector_sha256"
+      ],
+      "code": 2,
+      "passed": true
+    },
+    {
+      "id": "missing_key:raw/capture.json:values.full_every",
+      "check": "6.2 every audited key is mandatory",
+      "expected": [
+        "missing key: raw/capture.json:values.full_every"
+      ],
+      "reasons": [
+        "missing key: raw/capture.json:values.full_every"
+      ],
+      "code": 2,
+      "passed": true
+    },
+    {
+      "id": "missing_key:raw/capture.json:values.interval_s",
+      "check": "6.2 every audited key is mandatory",
+      "expected": [
+        "missing key: raw/capture.json:values.interval_s"
+      ],
+      "reasons": [
+        "missing key: raw/capture.json:values.interval_s"
+      ],
+      "code": 2,
+      "passed": true
+    },
+    {
+      "id": "missing_key:raw/capture.json:values.mlock",
+      "check": "6.2 every audited key is mandatory",
+      "expected": [
+        "missing key: raw/capture.json:values.mlock"
+      ],
+      "reasons": [
+        "missing key: raw/capture.json:values.mlock"
+      ],
+      "code": 2,
+      "passed": true
+    },
+    {
+      "id": "missing_key:frame3.json:output.full",
+      "check": "6.2 every audited key is mandatory",
+      "expected": [
+        "missing key: frame3.json:output.full"
+      ],
+      "reasons": [
+        "missing key: frame3.json:output.full"
+      ],
+      "code": 2,
+      "passed": true
+    },
+    {
+      "id": "missing_key:frame3.json:output.sha256",
+      "check": "6.2 every audited key is mandatory",
+      "expected": [
+        "missing key: frame3.json:output.sha256"
+      ],
+      "reasons": [
+        "missing key: frame3.json:output.sha256"
+      ],
+      "code": 2,
+      "passed": true
+    },
+    {
+      "id": "missing_key:frame3.json:sched.skipped_before",
+      "check": "6.2 every audited key is mandatory",
+      "expected": [
+        "missing key: frame3.json:sched.skipped_before"
+      ],
+      "reasons": [
+        "missing key: frame3.json:sched.skipped_before"
+      ],
+      "code": 2,
+      "passed": true
+    },
+    {
+      "id": "missing_key:frame3.json:sched.lateness_s",
+      "check": "6.2 every audited key is mandatory",
+      "expected": [
+        "missing key: frame3.json:sched.lateness_s"
+      ],
+      "reasons": [
+        "missing key: frame3.json:sched.lateness_s"
+      ],
+      "code": 2,
+      "passed": true
+    },
+    {
+      "id": "missing_key:frame3.json:capture.total_ms",
+      "check": "6.2 every audited key is mandatory",
+      "expected": [
+        "missing key: frame3.json:capture.total_ms"
+      ],
+      "reasons": [
+        "missing key: frame3.json:capture.total_ms"
+      ],
+      "code": 2,
+      "passed": true
+    },
+    {
+      "id": "missing_key:frame3.json:capture.queue_wait_ms",
+      "check": "6.2 every audited key is mandatory",
+      "expected": [
+        "missing key: frame3.json:capture.queue_wait_ms"
+      ],
+      "reasons": [
+        "missing key: frame3.json:capture.queue_wait_ms"
+      ],
+      "code": 2,
+      "passed": true
+    },
+    {
+      "id": "missing_key:frame3.json:output.mlock",
+      "check": "6.2 every audited key is mandatory",
+      "expected": [
+        "missing key: frame3.json:output.mlock"
+      ],
+      "reasons": [
+        "missing key: frame3.json:output.mlock"
+      ],
+      "code": 2,
+      "passed": true
+    },
+    {
+      "id": "missing_key:frame3.json:output.data_closed_ms",
+      "check": "6.2 every audited key is mandatory",
+      "expected": [
+        "missing key: frame3.json:output.data_closed_ms"
+      ],
+      "reasons": [
+        "missing key: frame3.json:output.data_closed_ms"
+      ],
+      "code": 2,
+      "passed": true
+    },
+    {
+      "id": "missing_key:frame3.json:output.queue_bytes",
+      "check": "6.2 every audited key is mandatory",
+      "expected": [
+        "missing key: frame3.json:output.queue_bytes"
+      ],
+      "reasons": [
+        "missing key: frame3.json:output.queue_bytes"
+      ],
+      "code": 2,
+      "passed": true
+    },
+    {
+      "id": "missing_key:frame3.json:output.queue_jobs",
+      "check": "6.2 every audited key is mandatory",
+      "expected": [
+        "missing key: frame3.json:output.queue_jobs"
+      ],
+      "reasons": [
+        "missing key: frame3.json:output.queue_jobs"
+      ],
+      "code": 2,
+      "passed": true
+    },
+    {
+      "id": "missing_key:frame3.json:vm.domain",
+      "check": "6.2 every audited key is mandatory",
+      "expected": [
+        "missing key: frame3.json:vm.domain"
+      ],
+      "reasons": [
+        "missing key: frame3.json:vm.domain"
+      ],
+      "code": 2,
+      "passed": true
+    },
+    {
+      "id": "missing_key:frame3.json:vm.vmid",
+      "check": "6.2 every audited key is mandatory",
+      "expected": [
+        "missing key: frame3.json:vm.vmid"
+      ],
+      "reasons": [
+        "missing key: frame3.json:vm.vmid"
+      ],
+      "code": 2,
+      "passed": true
+    },
+    {
+      "id": "logs:audit_bounds:unreadable",
+      "check": "audit_bounds:unreadable",
+      "expected": [
+        "logs: audit_bounds:unreadable:ValueError: protocol schema 3 requires the audit section",
+        "logs: protocol_hash",
+        "logs: realism:unreadable:ValueError: protocol schema 3 requires the audit section"
+      ],
+      "reasons": [
+        "logs: audit_bounds:unreadable:ValueError: protocol schema 3 requires the audit section",
+        "logs: protocol_hash",
+        "logs: realism:unreadable:ValueError: protocol schema 3 requires the audit section"
+      ],
+      "code": 2,
+      "passed": true
+    },
+    {
+      "id": "logs:metadata:unreadable",
+      "check": "metadata:unreadable",
+      "expected": [
+        "logs: metadata:unreadable:AttributeError: 'list' object has no attribute 'get'"
+      ],
+      "reasons": [
+        "logs: metadata:unreadable:AttributeError: 'list' object has no attribute 'get'"
+      ],
+      "code": 2,
+      "passed": true
+    },
+    {
+      "id": "logs:manifest:unreadable",
+      "check": "manifest:unreadable",
+      "expected": [
+        "logs: manifest:unreadable:KeyError: 'files'"
+      ],
+      "reasons": [
+        "logs: manifest:unreadable:KeyError: 'files'"
+      ],
+      "code": 2,
+      "passed": true
+    },
+    {
+      "id": "logs:events:unreadable",
+      "check": "events:unreadable",
+      "expected": [
+        "logs: events:unreadable:KeyError: 'source_sha256'"
+      ],
+      "reasons": [
+        "logs: events:unreadable:KeyError: 'source_sha256'"
+      ],
+      "code": 2,
+      "passed": true
+    },
+    {
+      "id": "logs:guest:unreadable",
+      "check": "guest:unreadable",
+      "expected": [
+        "logs: guest:unreadable:KeyError: 'database'"
+      ],
+      "reasons": [
+        "logs: guest:unreadable:KeyError: 'database'"
+      ],
+      "code": 2,
+      "passed": true
+    },
+    {
+      "id": "logs:segments:unreadable",
+      "check": "segments:unreadable",
+      "expected": [
+        "logs: correlation:unreadable:KeyError: 'session:nginx-access.jsonl'",
+        "logs: segments:unreadable:KeyError: 'lines'"
+      ],
+      "reasons": [
+        "logs: correlation:unreadable:KeyError: 'session:nginx-access.jsonl'",
+        "logs: segments:unreadable:KeyError: 'lines'"
+      ],
+      "code": 2,
+      "passed": true
+    },
+    {
+      "id": "logs:traffic:unreadable",
+      "check": "traffic:unreadable",
+      "expected": [
+        "logs: traffic:unreadable:KeyError: 'requests'"
+      ],
+      "reasons": [
+        "logs: traffic:unreadable:KeyError: 'requests'"
+      ],
+      "code": 2,
+      "passed": true
+    },
+    {
+      "id": "logs:correlation:unreadable",
+      "check": "correlation:unreadable",
+      "expected": [
+        "logs: correlation:unreadable:KeyError: 'checks'"
+      ],
+      "reasons": [
+        "logs: correlation:unreadable:KeyError: 'checks'"
+      ],
+      "code": 2,
+      "passed": true
+    },
+    {
+      "id": "logs:monitor:unreadable",
+      "check": "monitor:unreadable",
+      "expected": [
+        "logs: monitor:unreadable:KeyError: 'i'"
+      ],
+      "reasons": [
+        "logs: monitor:unreadable:KeyError: 'i'"
+      ],
+      "code": 2,
+      "passed": true
+    },
+    {
+      "id": "logs:collector:unreadable",
+      "check": "collector:unreadable",
+      "expected": [
+        "logs: collector:unreadable:KeyError: 'requested_cycles'"
+      ],
+      "reasons": [
+        "logs: collector:unreadable:KeyError: 'requested_cycles'"
+      ],
+      "code": 2,
+      "passed": true
+    },
+    {
+      "id": "logs:session_schema",
+      "check": "session_schema",
+      "expected": [
+        "logs: session_schema"
+      ],
+      "reasons": [
+        "logs: session_schema"
+      ],
+      "code": 2,
+      "passed": true
+    },
+    {
+      "id": "logs:end_schema",
+      "check": "end_schema",
+      "expected": [
+        "logs: end_schema"
+      ],
+      "reasons": [
+        "logs: end_schema"
+      ],
+      "code": 2,
+      "passed": true
+    },
+    {
+      "id": "logs:session_identity",
+      "check": "session_identity",
+      "expected": [
+        "logs: session_identity"
+      ],
+      "reasons": [
+        "logs: session_identity"
+      ],
+      "code": 2,
+      "passed": true
+    },
+    {
+      "id": "logs:incomplete_capture",
+      "check": "incomplete_capture",
+      "expected": [
+        "logs: incomplete_capture"
+      ],
+      "reasons": [
+        "logs: incomplete_capture"
+      ],
+      "code": 2,
+      "passed": true
+    },
+    {
+      "id": "logs:incomplete_capture:missing",
+      "check": "incomplete_capture",
+      "expected": [
+        "logs: incomplete_capture"
+      ],
+      "reasons": [
+        "logs: incomplete_capture"
+      ],
+      "code": 2,
+      "passed": true
+    },
+    {
+      "id": "logs:guest_identity_changed",
+      "check": "guest_identity_changed",
+      "expected": [
+        "incomplete capture or changed guest identity",
+        "logs: guest_identity_changed"
+      ],
+      "reasons": [
+        "incomplete capture or changed guest identity",
+        "logs: guest_identity_changed"
+      ],
+      "code": 2,
+      "passed": true
+    },
+    {
+      "id": "logs:child_exit",
+      "check": "child_exit",
+      "expected": [
+        "logs: child_exit:monitor:1"
+      ],
+      "reasons": [
+        "logs: child_exit:monitor:1"
+      ],
+      "code": 2,
+      "passed": true
+    },
+    {
+      "id": "logs:invalid_measure_interval",
+      "check": "invalid_measure_interval",
+      "expected": [
+        "logs: invalid_measure_interval",
+        "logs: snapshot_outside_measure",
+        "logs: traffic_measure_bounds"
+      ],
+      "reasons": [
+        "logs: invalid_measure_interval",
+        "logs: snapshot_outside_measure",
+        "logs: traffic_measure_bounds"
+      ],
+      "code": 2,
+      "passed": true
+    },
+    {
+      "id": "logs:snapshot_outside_measure",
+      "check": "snapshot_outside_measure",
+      "expected": [
+        "logs: snapshot_outside_measure"
+      ],
+      "reasons": [
+        "logs: snapshot_outside_measure"
+      ],
+      "code": 2,
+      "passed": true
+    },
+    {
+      "id": "logs:protocol_hash",
+      "check": "protocol_hash",
+      "expected": [
+        "logs: protocol_hash"
+      ],
+      "reasons": [
+        "logs: protocol_hash"
+      ],
+      "code": 2,
+      "passed": true
+    },
+    {
+      "id": "logs:logs_manifest_schema",
+      "check": "logs_manifest_schema",
+      "expected": [
+        "logs: logs_manifest_schema"
+      ],
+      "reasons": [
+        "logs: logs_manifest_schema"
+      ],
+      "code": 2,
+      "passed": true
+    },
+    {
+      "id": "logs:logs_manifest_hash",
+      "check": "logs_manifest_hash",
+      "expected": [
+        "logs: logs_manifest_hash"
+      ],
+      "reasons": [
+        "logs: logs_manifest_hash"
+      ],
+      "code": 2,
+      "passed": true
+    },
+    {
+      "id": "logs:missing_manifest_entry",
+      "check": "missing_manifest_entry",
+      "expected": [
+        "logs: missing_manifest_entry:traffic.log"
+      ],
+      "reasons": [
+        "logs: missing_manifest_entry:traffic.log"
+      ],
+      "code": 2,
+      "passed": true
+    },
+    {
+      "id": "logs:missing_evidence",
+      "check": "missing_evidence",
+      "expected": [
+        "logs: missing_evidence:traffic.log",
+        "logs: missing_manifest_entry:traffic.log"
+      ],
+      "reasons": [
+        "logs: missing_evidence:traffic.log",
+        "logs: missing_manifest_entry:traffic.log"
+      ],
+      "code": 2,
+      "passed": true
+    },
+    {
+      "id": "logs:evidence_hash",
+      "check": "evidence_hash",
+      "expected": [
+        "logs: evidence_hash:domain.xml"
+      ],
+      "reasons": [
+        "logs: evidence_hash:domain.xml"
+      ],
+      "code": 2,
+      "passed": true
+    },
+    {
+      "id": "logs:evidence_lines",
+      "check": "evidence_lines",
+      "expected": [
+        "logs: evidence_lines:traffic.log"
+      ],
+      "reasons": [
+        "logs: evidence_lines:traffic.log"
+      ],
+      "code": 2,
+      "passed": true
+    },
+    {
+      "id": "logs:evidence_lines:missing",
+      "check": "evidence_lines",
+      "expected": [
+        "logs: evidence_lines:traffic.log"
+      ],
+      "reasons": [
+        "logs: evidence_lines:traffic.log"
+      ],
+      "code": 2,
+      "passed": true
+    },
+    {
+      "id": "logs:torn_evidence",
+      "check": "torn_evidence",
+      "expected": [
+        "logs: torn_evidence:traffic.log"
+      ],
+      "reasons": [
+        "logs: torn_evidence:traffic.log"
+      ],
+      "code": 2,
+      "passed": true
+    },
+    {
+      "id": "logs:evidence_unreadable",
+      "check": "evidence_unreadable",
+      "expected": [
+        "logs: evidence_unreadable:../outside:evidence path escapes session: ../outside"
+      ],
+      "reasons": [
+        "logs: evidence_unreadable:../outside:evidence path escapes session: ../outside"
+      ],
+      "code": 2,
+      "passed": true
+    },
+    {
+      "id": "logs:guest_state_schema",
+      "check": "guest_state_schema",
+      "expected": [
+        "logs: guest_state_schema:after"
+      ],
+      "reasons": [
+        "logs: guest_state_schema:after"
+      ],
+      "code": 2,
+      "passed": true
+    },
+    {
+      "id": "logs:guest_boot_changed",
+      "check": "guest_boot_changed",
+      "expected": [
+        "logs: guest_boot_changed:after"
+      ],
+      "reasons": [
+        "logs: guest_boot_changed:after"
+      ],
+      "code": 2,
+      "passed": true
+    },
+    {
+      "id": "logs:guest_kernel_changed",
+      "check": "guest_kernel_changed",
+      "expected": [
+        "logs: guest_kernel_changed:after"
+      ],
+      "reasons": [
+        "logs: guest_kernel_changed:after"
+      ],
+      "code": 2,
+      "passed": true
+    },
+    {
+      "id": "logs:service_unhealthy",
+      "check": "service_unhealthy",
+      "expected": [
+        "logs: service_unhealthy:after:nginx"
+      ],
+      "reasons": [
+        "logs: service_unhealthy:after:nginx"
+      ],
+      "code": 2,
+      "passed": true
+    },
+    {
+      "id": "logs:guest_clock",
+      "check": "guest_clock",
+      "expected": [
+        "logs: guest_clock:after"
+      ],
+      "reasons": [
+        "logs: guest_clock:after"
+      ],
+      "code": 2,
+      "passed": true
+    },
+    {
+      "id": "logs:service_restarted",
+      "check": "service_restarted",
+      "expected": [
+        "logs: service_restarted:hyptcn-lab@auth"
+      ],
+      "reasons": [
+        "logs: service_restarted:hyptcn-lab@auth"
+      ],
+      "code": 2,
+      "passed": true
+    },
+    {
+      "id": "logs:segment_schema",
+      "check": "segment_schema",
+      "expected": [
+        "logs: segment_schema:pre"
+      ],
+      "reasons": [
+        "logs: segment_schema:pre"
+      ],
+      "code": 2,
+      "passed": true
+    },
+    {
+      "id": "logs:segment_file_missing_or_duplicate",
+      "check": "segment_file_missing_or_duplicate",
+      "expected": [
+        "logs: segment_file_missing_or_duplicate:pre:nginx-access.jsonl"
+      ],
+      "reasons": [
+        "logs: segment_file_missing_or_duplicate:pre:nginx-access.jsonl"
+      ],
+      "code": 2,
+      "passed": true
+    },
+    {
+      "id": "logs:segment_compressed_hash",
+      "check": "segment_compressed_hash",
+      "expected": [
+        "logs: segment_compressed_hash:pre-nginx-access.jsonl.gz"
+      ],
+      "reasons": [
+        "logs: segment_compressed_hash:pre-nginx-access.jsonl.gz"
+      ],
+      "code": 2,
+      "passed": true
+    },
+    {
+      "id": "logs:segment_content_hash",
+      "check": "segment_content_hash",
+      "expected": [
+        "logs: segment_content_hash:pre-nginx-access.jsonl.gz"
+      ],
+      "reasons": [
+        "logs: segment_content_hash:pre-nginx-access.jsonl.gz"
+      ],
+      "code": 2,
+      "passed": true
+    },
+    {
+      "id": "logs:segment_lines",
+      "check": "segment_lines",
+      "expected": [
+        "logs: segment_lines:pre-nginx-access.jsonl.gz"
+      ],
+      "reasons": [
+        "logs: segment_lines:pre-nginx-access.jsonl.gz"
+      ],
+      "code": 2,
+      "passed": true
+    },
+    {
+      "id": "logs:traffic",
+      "check": "traffic",
+      "expected": [
+        "logs: traffic:intervals:end_not_clean"
+      ],
+      "reasons": [
+        "logs: traffic:intervals:end_not_clean"
+      ],
+      "code": 2,
+      "passed": true
+    },
+    {
+      "id": "logs:traffic:missing",
+      "check": "traffic",
+      "expected": [
+        "logs: traffic:requests:worker_errors"
+      ],
+      "reasons": [
+        "logs: traffic:requests:worker_errors"
+      ],
+      "code": 2,
+      "passed": true
+    },
+    {
+      "id": "logs:traffic_headers_disagree",
+      "check": "traffic_headers_disagree",
+      "expected": [
+        "logs: traffic_headers_disagree"
+      ],
+      "reasons": [
+        "logs: traffic_headers_disagree"
+      ],
+      "code": 2,
+      "passed": true
+    },
+    {
+      "id": "logs:traffic_headers_disagree:missing",
+      "check": "traffic_headers_disagree",
+      "expected": [
+        "logs: realism:unreadable:KeyError: 'start_unix'",
+        "logs: traffic_headers_disagree"
+      ],
+      "reasons": [
+        "logs: realism:unreadable:KeyError: 'start_unix'",
+        "logs: traffic_headers_disagree"
+      ],
+      "code": 2,
+      "passed": true
+    },
+    {
+      "id": "logs:traffic_phase_times_disagree",
+      "check": "traffic_phase_times_disagree",
+      "expected": [
+        "logs: traffic_phase_times_disagree"
+      ],
+      "reasons": [
+        "logs: traffic_phase_times_disagree"
+      ],
+      "code": 2,
+      "passed": true
+    },
+    {
+      "id": "logs:traffic_config",
+      "check": "traffic_config",
+      "expected": [
+        "logs: traffic_config:target"
+      ],
+      "reasons": [
+        "logs: traffic_config:target"
+      ],
+      "code": 2,
+      "passed": true
+    },
+    {
+      "id": "logs:traffic_phases",
+      "check": "traffic_phases",
+      "expected": [
+        "logs: traffic:unreadable:KeyError: 'post'",
+        "logs: traffic_phases"
+      ],
+      "reasons": [
+        "logs: traffic:unreadable:KeyError: 'post'",
+        "logs: traffic_phases"
+      ],
+      "code": 2,
+      "passed": true
+    },
+    {
+      "id": "logs:traffic_measure_bounds",
+      "check": "traffic_measure_bounds",
+      "expected": [
+        "logs: traffic_measure_bounds"
+      ],
+      "reasons": [
+        "logs: traffic_measure_bounds"
+      ],
+      "code": 2,
+      "passed": true
+    },
+    {
+      "id": "logs:traffic_snapshot_coverage",
+      "check": "traffic_snapshot_coverage",
+      "expected": [
+        "logs: traffic_snapshot_coverage"
+      ],
+      "reasons": [
+        "logs: traffic_snapshot_coverage"
+      ],
+      "code": 2,
+      "passed": true
+    },
+    {
+      "id": "logs:request_identity",
+      "check": "request_identity",
+      "expected": [
+        "logs: request_identity:0123456789ab-00-00000000"
+      ],
+      "reasons": [
+        "logs: request_identity:0123456789ab-00-00000000"
+      ],
+      "code": 2,
+      "passed": true
+    },
+    {
+      "id": "logs:request_id_missing",
+      "check": "request_id_missing",
+      "expected": [
+        "logs: nginx_request_count::0",
+        "logs: nginx_unknown_request:0123456789ab-00-00000000",
+        "logs: request_id_missing",
+        "logs: service_request_count:"
+      ],
+      "reasons": [
+        "logs: nginx_request_count::0",
+        "logs: nginx_unknown_request:0123456789ab-00-00000000",
+        "logs: request_id_missing",
+        "logs: service_request_count:"
+      ],
+      "code": 2,
+      "passed": true
+    },
+    {
+      "id": "logs:request_timing",
+      "check": "request_timing",
+      "expected": [
+        "logs: request_timing:0123456789ab-00-00000000",
+        "logs: traffic:request_before_arrival:0123456789ab-00-00000000",
+        "logs: traffic:request_outside_interval:0123456789ab-00-00000000"
+      ],
+      "reasons": [
+        "logs: request_timing:0123456789ab-00-00000000",
+        "logs: traffic:request_before_arrival:0123456789ab-00-00000000",
+        "logs: traffic:request_outside_interval:0123456789ab-00-00000000"
+      ],
+      "code": 2,
+      "passed": true
+    },
+    {
+      "id": "logs:request_wall_clock",
+      "check": "request_wall_clock",
+      "expected": [
+        "logs: request_wall_clock:0123456789ab-00-00000000"
+      ],
+      "reasons": [
+        "logs: request_wall_clock:0123456789ab-00-00000000"
+      ],
+      "code": 2,
+      "passed": true
+    },
+    {
+      "id": "logs:request_failed",
+      "check": "request_failed",
+      "expected": [
+        "logs: request_failed:0123456789ab-00-00000004"
+      ],
+      "reasons": [
+        "logs: request_failed:0123456789ab-00-00000004"
+      ],
+      "code": 2,
+      "passed": true
+    },
+    {
+      "id": "logs:traffic_status_incomplete",
+      "check": "traffic_status_incomplete",
+      "expected": [
+        "logs: traffic_status_incomplete"
+      ],
+      "reasons": [
+        "logs: traffic_status_incomplete"
+      ],
+      "code": 2,
+      "passed": true
+    },
+    {
+      "id": "logs:traffic_status_incomplete:missing",
+      "check": "traffic_status_incomplete",
+      "expected": [
+        "logs: traffic_status_incomplete"
+      ],
+      "reasons": [
+        "logs: traffic_status_incomplete"
+      ],
+      "code": 2,
+      "passed": true
+    },
+    {
+      "id": "logs:traffic_status_identity",
+      "check": "traffic_status_identity",
+      "expected": [
+        "logs: traffic_status_identity"
+      ],
+      "reasons": [
+        "logs: traffic_status_identity"
+      ],
+      "code": 2,
+      "passed": true
+    },
+    {
+      "id": "logs:traffic_status_counts",
+      "check": "traffic_status_counts",
+      "expected": [
+        "logs: traffic_status_counts"
+      ],
+      "reasons": [
+        "logs: traffic_status_counts"
+      ],
+      "code": 2,
+      "passed": true
+    },
+    {
+      "id": "logs:nginx_schema",
+      "check": "nginx_schema",
+      "expected": [
+        "logs: nginx_schema"
+      ],
+      "reasons": [
+        "logs: nginx_schema"
+      ],
+      "code": 2,
+      "passed": true
+    },
+    {
+      "id": "logs:nginx_unknown_request",
+      "check": "nginx_unknown_request",
+      "expected": [
+        "logs: nginx_unknown_request:unknown-request"
+      ],
+      "reasons": [
+        "logs: nginx_unknown_request:unknown-request"
+      ],
+      "code": 2,
+      "passed": true
+    },
+    {
+      "id": "logs:nginx_mismatch",
+      "check": "nginx_mismatch",
+      "expected": [
+        "logs: nginx_mismatch:0123456789ab-00-00000000"
+      ],
+      "reasons": [
+        "logs: nginx_mismatch:0123456789ab-00-00000000"
+      ],
+      "code": 2,
+      "passed": true
+    },
+    {
+      "id": "logs:nginx_timestamp",
+      "check": "nginx_timestamp",
+      "expected": [
+        "logs: nginx_timestamp:0123456789ab-00-00000000"
+      ],
+      "reasons": [
+        "logs: nginx_timestamp:0123456789ab-00-00000000"
+      ],
+      "code": 2,
+      "passed": true
+    },
+    {
+      "id": "logs:nginx_request_count",
+      "check": "nginx_request_count",
+      "expected": [
+        "logs: nginx_request_count:0123456789ab-00-00000000:2"
+      ],
+      "reasons": [
+        "logs: nginx_request_count:0123456789ab-00-00000000:2"
+      ],
+      "code": 2,
+      "passed": true
+    },
+    {
+      "id": "logs:preflight_incomplete",
+      "check": "preflight_incomplete",
+      "expected": [
+        "logs: preflight_incomplete"
+      ],
+      "reasons": [
+        "logs: preflight_incomplete"
+      ],
+      "code": 2,
+      "passed": true
+    },
+    {
+      "id": "logs:preflight_failed",
+      "check": "preflight_failed",
+      "expected": [
+        "logs: preflight_failed:smoke"
+      ],
+      "reasons": [
+        "logs: preflight_failed:smoke"
+      ],
+      "code": 2,
+      "passed": true
+    },
+    {
+      "id": "logs:preflight_correlation",
+      "check": "preflight_correlation",
+      "expected": [
+        "logs: preflight_correlation:smoke"
+      ],
+      "reasons": [
+        "logs: preflight_correlation:smoke"
+      ],
+      "code": 2,
+      "passed": true
+    },
+    {
+      "id": "logs:journal_error_or_loss",
+      "check": "journal_error_or_loss",
+      "expected": [
+        "logs: journal_error_or_loss:guest systemd-journald[1]: Suppressed 5 messages from hyptcn-lab@auth"
+      ],
+      "reasons": [
+        "logs: journal_error_or_loss:guest systemd-journald[1]: Suppressed 5 messages from hyptcn-lab@auth"
+      ],
+      "code": 2,
+      "passed": true
+    },
+    {
+      "id": "logs:service_request_count",
+      "check": "service_request_count",
+      "expected": [
+        "logs: service_request_count:0123456789ab-00-00000003"
+      ],
+      "reasons": [
+        "logs: service_request_count:0123456789ab-00-00000003"
+      ],
+      "code": 2,
+      "passed": true
+    },
+    {
+      "id": "logs:service_auth_call",
+      "check": "service_auth_call",
+      "expected": [
+        "logs: service_auth_call:0123456789ab-00-00000004"
+      ],
+      "reasons": [
+        "logs: service_auth_call:0123456789ab-00-00000004"
+      ],
+      "code": 2,
+      "passed": true
+    },
+    {
+      "id": "logs:service_catalog_call",
+      "check": "service_catalog_call",
+      "expected": [
+        "logs: service_catalog_call:0123456789ab-00-00000004"
+      ],
+      "reasons": [
+        "logs: service_catalog_call:0123456789ab-00-00000004"
+      ],
+      "code": 2,
+      "passed": true
+    },
+    {
+      "id": "logs:service_health_call",
+      "check": "service_health_call",
+      "expected": [
+        "logs: service_health_call:0123456789ab-00-00000003:auth"
+      ],
+      "reasons": [
+        "logs: service_health_call:0123456789ab-00-00000003:auth"
+      ],
+      "code": 2,
+      "passed": true
+    },
+    {
+      "id": "logs:nginx_error_log_nonempty",
+      "check": "nginx_error_log_nonempty",
+      "expected": [
+        "logs: nginx_error_log_nonempty:[error] 7#7: upstream timed out while reading response header"
+      ],
+      "reasons": [
+        "logs: nginx_error_log_nonempty:[error] 7#7: upstream timed out while reading response header"
+      ],
+      "code": 2,
+      "passed": true
+    },
+    {
+      "id": "logs:monitor",
+      "check": "monitor",
+      "expected": [
+        "logs: monitor:missing_header"
+      ],
+      "reasons": [
+        "logs: monitor:missing_header"
+      ],
+      "code": 2,
+      "passed": true
+    },
+    {
+      "id": "logs:monitor_session_identity",
+      "check": "monitor_session_identity",
+      "expected": [
+        "logs: monitor_session_identity"
+      ],
+      "reasons": [
+        "logs: monitor_session_identity"
+      ],
+      "code": 2,
+      "passed": true
+    },
+    {
+      "id": "logs:monitor_end_counts",
+      "check": "monitor_end_counts",
+      "expected": [
+        "logs: monitor_end_counts"
+      ],
+      "reasons": [
+        "logs: monitor_end_counts"
+      ],
+      "code": 2,
+      "passed": true
+    },
+    {
+      "id": "logs:monitor_order",
+      "check": "monitor_order",
+      "expected": [
+        "logs: monitor_order"
+      ],
+      "reasons": [
+        "logs: monitor_order"
+      ],
+      "code": 2,
+      "passed": true
+    },
+    {
+      "id": "logs:qemu_swap",
+      "check": "qemu_swap",
+      "expected": [
+        "logs: qemu_swap"
+      ],
+      "reasons": [
+        "logs: qemu_swap"
+      ],
+      "code": 2,
+      "passed": true
+    },
+    {
+      "id": "logs:qemu_swap:absent",
+      "check": "qemu_swap",
+      "expected": [
+        "logs: qemu_swap"
+      ],
+      "reasons": [
+        "logs: qemu_swap"
+      ],
+      "code": 2,
+      "passed": true
+    },
+    {
+      "id": "logs:collector_torn_log",
+      "check": "collector_torn_log",
+      "expected": [
+        "logs: collector_torn_log",
+        "logs: torn_evidence:raw/collect.log"
+      ],
+      "reasons": [
+        "logs: collector_torn_log",
+        "logs: torn_evidence:raw/collect.log"
+      ],
+      "code": 2,
+      "passed": true
+    },
+    {
+      "id": "logs:collector_end_missing_or_duplicate",
+      "check": "collector_end_missing_or_duplicate",
+      "expected": [
+        "logs: collector_end_missing_or_duplicate"
+      ],
+      "reasons": [
+        "logs: collector_end_missing_or_duplicate"
+      ],
+      "code": 2,
+      "passed": true
+    },
+    {
+      "id": "logs:collector_snapshot_count",
+      "check": "collector_snapshot_count",
+      "expected": [
+        "logs: collector_snapshot_count"
+      ],
+      "reasons": [
+        "logs: collector_snapshot_count"
+      ],
+      "code": 2,
+      "passed": true
+    },
+    {
+      "id": "logs:collector_errors_or_missed_slots",
+      "check": "collector_errors_or_missed_slots",
+      "expected": [
+        "logs: collector_errors_or_missed_slots"
+      ],
+      "reasons": [
+        "logs: collector_errors_or_missed_slots"
+      ],
+      "code": 2,
+      "passed": true
+    },
+    {
+      "id": "logs:collector_exit_code",
+      "check": "collector_exit_code",
+      "expected": [
+        "logs: collector_exit_code"
+      ],
+      "reasons": [
+        "logs: collector_exit_code"
+      ],
+      "code": 2,
+      "passed": true
+    },
+    {
+      "id": "logs:collector_hash",
+      "check": "collector_hash",
+      "expected": [
+        "collector binary or temporal settings mismatch",
+        "logs: collector_hash"
+      ],
+      "reasons": [
+        "collector binary or temporal settings mismatch",
+        "logs: collector_hash"
+      ],
+      "code": 2,
+      "passed": true
+    },
+    {
+      "id": "logs:collector_error_log",
+      "check": "collector_error_log",
+      "expected": [
+        "logs: collector_error_log"
+      ],
+      "reasons": [
+        "logs: collector_error_log"
+      ],
+      "code": 2,
+      "passed": true
+    },
+    {
+      "id": "logs:collector_error_log:json",
+      "check": "collector_error_log",
+      "expected": [
+        "logs: collector_error_log"
+      ],
+      "reasons": [
+        "logs: collector_error_log"
+      ],
+      "code": 2,
+      "passed": true
+    },
+    {
+      "id": "logs:collector_warning_unlisted",
+      "check": "collector_warning_unlisted",
+      "expected": [
+        "logs: collector_warning_unlisted:synthetic warning outside every allowed pattern"
+      ],
+      "reasons": [
+        "logs: collector_warning_unlisted:synthetic warning outside every allowed pattern"
+      ],
+      "code": 2,
+      "passed": true
+    },
+    {
+      "id": "logs:collector_warning_unlisted:json",
+      "check": "collector_warning_unlisted",
+      "expected": [
+        "logs: collector_warning_unlisted:synthetic json warning xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+      ],
+      "reasons": [
+        "logs: collector_warning_unlisted:synthetic json warning xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+      ],
+      "code": 2,
+      "passed": true
+    },
+    {
+      "id": "logs:events_schema",
+      "check": "events_schema",
+      "expected": [
+        "logs: events_schema"
+      ],
+      "reasons": [
+        "logs: events_schema"
+      ],
+      "code": 2,
+      "passed": true
+    },
+    {
+      "id": "logs:events_differ_from_plan",
+      "check": "events_differ_from_plan",
+      "expected": [
+        "logs: events_differ_from_plan"
+      ],
+      "reasons": [
+        "logs: events_differ_from_plan"
+      ],
+      "code": 2,
+      "passed": true
+    },
+    {
+      "id": "logs:event_not_started",
+      "check": "event_not_started",
+      "expected": [
+        "logs: event_not_started:restart_sluzby",
+        "logs: request_failed:0123456789ab-00-00000002",
+        "logs: service_restarted:hyptcn-lab@orders"
+      ],
+      "reasons": [
+        "logs: event_not_started:restart_sluzby",
+        "logs: request_failed:0123456789ab-00-00000002",
+        "logs: service_restarted:hyptcn-lab@orders"
+      ],
+      "code": 2,
+      "passed": true
+    },
+    {
+      "id": "logs:event_not_stopped",
+      "check": "event_not_stopped",
+      "expected": [
+        "logs: event_not_stopped:restart_sluzby",
+        "logs: request_failed:0123456789ab-00-00000002",
+        "logs: service_restarted:hyptcn-lab@orders"
+      ],
+      "reasons": [
+        "logs: event_not_stopped:restart_sluzby",
+        "logs: request_failed:0123456789ab-00-00000002",
+        "logs: service_restarted:hyptcn-lab@orders"
+      ],
+      "code": 2,
+      "passed": true
+    },
+    {
+      "id": "logs:event_script_differs",
+      "check": "event_script_differs",
+      "expected": [
+        "logs: event_script_differs:restart_sluzby"
+      ],
+      "reasons": [
+        "logs: event_script_differs:restart_sluzby"
+      ],
+      "code": 2,
+      "passed": true
+    },
+    {
+      "id": "logs:event_script_differs:missing",
+      "check": "event_script_differs",
+      "expected": [
+        "logs: event_script_differs:restart_sluzby"
+      ],
+      "reasons": [
+        "logs: event_script_differs:restart_sluzby"
+      ],
+      "code": 2,
+      "passed": true
+    },
+    {
+      "id": "logs:event_not_executed",
+      "check": "event_not_executed",
+      "expected": [
+        "logs: event_not_executed:restart_sluzby"
+      ],
+      "reasons": [
+        "logs: event_not_executed:restart_sluzby"
+      ],
+      "code": 2,
+      "passed": true
+    },
+    {
+      "id": "logs:event_without_effect",
+      "check": "event_without_effect",
+      "expected": [
+        "logs: event_without_effect:restart_sluzby"
+      ],
+      "reasons": [
+        "logs: event_without_effect:restart_sluzby"
+      ],
+      "code": 2,
+      "passed": true
+    },
+    {
+      "id": "logs:event_without_effect:not_ok",
+      "check": "event_without_effect",
+      "expected": [
+        "logs: event_without_effect:restart_sluzby"
+      ],
+      "reasons": [
+        "logs: event_without_effect:restart_sluzby"
+      ],
+      "code": 2,
+      "passed": true
+    },
+    {
+      "id": "logs:service_restarted:docs",
+      "check": "service_restarted",
+      "expected": [
+        "logs: service_restarted:hyptcn-lab@docs"
+      ],
+      "reasons": [
+        "logs: service_restarted:hyptcn-lab@docs"
+      ],
+      "code": 2,
+      "passed": true
+    },
+    {
+      "id": "logs:traffic_realism:arrival_cv",
+      "check": "traffic_realism",
+      "expected": [
+        "logs: traffic_realism:arrival_cv"
+      ],
+      "reasons": [
+        "logs: traffic_realism:arrival_cv"
+      ],
+      "code": 2,
+      "passed": true
+    },
+    {
+      "id": "logs:traffic_realism:think_time",
+      "check": "traffic_realism",
+      "expected": [
+        "logs: traffic_realism:think_time"
+      ],
+      "reasons": [
+        "logs: traffic_realism:think_time"
+      ],
+      "code": 2,
+      "passed": true
+    },
+    {
+      "id": "logs:traffic_realism:order_share",
+      "check": "traffic_realism",
+      "expected": [
+        "logs: traffic_realism:order_share"
+      ],
+      "reasons": [
+        "logs: traffic_realism:order_share"
+      ],
+      "code": 2,
+      "passed": true
+    },
+    {
+      "id": "logs:traffic_realism:object_concentration",
+      "check": "traffic_realism",
+      "expected": [
+        "logs: traffic_realism:object_concentration"
+      ],
+      "reasons": [
+        "logs: traffic_realism:object_concentration"
+      ],
+      "code": 2,
+      "passed": true
+    },
+    {
+      "id": "logs:traffic_realism:success_rate",
+      "check": "traffic_realism",
+      "expected": [
+        "logs: traffic_realism:success_rate"
+      ],
+      "reasons": [
+        "logs: traffic_realism:success_rate"
+      ],
+      "code": 2,
+      "passed": true
+    },
+    {
+      "id": "logs:traffic_realism:response_sizes",
+      "check": "traffic_realism",
+      "expected": [
+        "logs: traffic_realism:response_sizes"
+      ],
+      "reasons": [
+        "logs: traffic_realism:response_sizes"
+      ],
+      "code": 2,
+      "passed": true
+    },
+    {
+      "id": "logs:traffic_realism:peak_to_mean",
+      "check": "traffic_realism",
+      "expected": [
+        "logs: traffic_realism:peak_to_mean"
+      ],
+      "reasons": [
+        "logs: traffic_realism:peak_to_mean"
+      ],
+      "code": 2,
+      "passed": true
+    },
+    {
+      "id": "logs:traffic_realism:background",
+      "check": "traffic_realism",
+      "expected": [
+        "logs: traffic_realism:background"
+      ],
+      "reasons": [
+        "logs: traffic_realism:background"
+      ],
+      "code": 2,
+      "passed": true
+    },
+    {
+      "id": "logs:offered_load_differs_from_plan",
+      "check": "offered_load_differs_from_plan",
+      "expected": [
+        "logs: offered_load_differs_from_plan"
+      ],
+      "reasons": [
+        "logs: offered_load_differs_from_plan"
+      ],
+      "code": 2,
+      "passed": true
+    },
+    {
+      "id": "logs:intended_status_differs",
+      "check": "intended_status_differs",
+      "expected": [
+        "logs: intended_status_differs:0123456789ab-05-00000001"
+      ],
+      "reasons": [
+        "logs: intended_status_differs:0123456789ab-05-00000001"
+      ],
+      "code": 2,
+      "passed": true
+    },
+    {
+      "id": "logs:realism:unreadable",
+      "check": "realism:unreadable",
+      "expected": [
+        "logs: realism:unreadable:ValueError: invalid envelope: levels",
+        "logs: traffic:envelope_invalid:levels"
+      ],
+      "reasons": [
+        "logs: realism:unreadable:ValueError: invalid envelope: levels",
+        "logs: traffic:envelope_invalid:levels"
+      ],
+      "code": 2,
+      "passed": true
+    },
+    {
+      "id": "logs:traffic_config:profile",
+      "check": "traffic_config",
+      "expected": [
+        "logs: traffic_config:profile"
+      ],
+      "reasons": [
+        "logs: traffic_config:profile"
+      ],
+      "code": 2,
+      "passed": true
+    },
+    {
+      "id": "logs:traffic_config:scenario",
+      "check": "traffic_config",
+      "expected": [
+        "logs: traffic_config:scenario"
+      ],
+      "reasons": [
+        "logs: traffic_config:scenario"
+      ],
+      "code": 2,
+      "passed": true
+    },
+    {
+      "id": "logs:traffic_config:intensity",
+      "check": "traffic_config",
+      "expected": [
+        "logs: traffic_config:intensity"
+      ],
+      "reasons": [
+        "logs: traffic_config:intensity"
+      ],
+      "code": 2,
+      "passed": true
+    },
+    {
+      "id": "logs:traffic_config:rate",
+      "check": "traffic_config",
+      "expected": [
+        "logs: traffic_config:rate"
+      ],
+      "reasons": [
+        "logs: traffic_config:rate"
+      ],
+      "code": 2,
+      "passed": true
+    },
+    {
+      "id": "logs:traffic_config:seeds",
+      "check": "traffic_config",
+      "expected": [
+        "logs: traffic_config:seeds"
+      ],
+      "reasons": [
+        "logs: traffic_config:seeds"
+      ],
+      "code": 2,
+      "passed": true
+    },
+    {
+      "id": "logs:traffic_config:protocol_sha256",
+      "check": "traffic_config",
+      "expected": [
+        "logs: traffic_config:protocol_sha256"
+      ],
+      "reasons": [
+        "logs: traffic_config:protocol_sha256"
+      ],
+      "code": 2,
+      "passed": true
+    },
+    {
+      "id": "logs:traffic_config:profile_parameters",
+      "check": "traffic_config",
+      "expected": [
+        "logs: traffic_config:profile_parameters"
+      ],
+      "reasons": [
+        "logs: traffic_config:profile_parameters"
+      ],
+      "code": 2,
+      "passed": true
+    },
+    {
+      "id": "logs:traffic_config:warmup_s",
+      "check": "traffic_config",
+      "expected": [
+        "logs: traffic_config:warmup_s"
+      ],
+      "reasons": [
+        "logs: traffic_config:warmup_s"
+      ],
+      "code": 2,
+      "passed": true
+    },
+    {
+      "id": "logs:child_exit:traffic",
+      "check": "child_exit",
+      "expected": [
+        "logs: child_exit:traffic:2"
+      ],
+      "reasons": [
+        "logs: child_exit:traffic:2"
+      ],
+      "code": 2,
+      "passed": true
+    },
+    {
+      "id": "logs:service_request_count:docs",
+      "check": "service_request_count",
+      "expected": [
+        "logs: service_request_count:0123456789ab-01-00000002"
+      ],
+      "reasons": [
+        "logs: service_request_count:0123456789ab-01-00000002"
+      ],
+      "code": 2,
+      "passed": true
+    },
+    {
+      "id": "logs:service_auth_call:cart",
+      "check": "service_auth_call",
+      "expected": [
+        "logs: service_auth_call:0123456789ab-04-00000003"
+      ],
+      "reasons": [
+        "logs: service_auth_call:0123456789ab-04-00000003"
+      ],
+      "code": 2,
+      "passed": true
+    },
+    {
+      "id": "logs:traffic:arrivals",
+      "check": "traffic",
+      "expected": [
+        "logs: traffic:requests:end_arrivals_mismatch:arrivals:15!=14"
+      ],
+      "reasons": [
+        "logs: traffic:requests:end_arrivals_mismatch:arrivals:15!=14"
+      ],
+      "code": 2,
+      "passed": true
+    },
+    {
+      "id": "logs:traffic:user_session",
+      "check": "traffic",
+      "expected": [
+        "logs: traffic:request_user_session_unknown:0123456789ab-01-00000003"
+      ],
+      "reasons": [
+        "logs: traffic:request_user_session_unknown:0123456789ab-01-00000003"
+      ],
+      "code": 2,
+      "passed": true
+    },
+    {
+      "id": "logs:traffic:v5_header_missing",
+      "check": "traffic",
+      "expected": [
+        "logs: traffic:v5_header_missing:load_model"
+      ],
+      "reasons": [
+        "logs: traffic:v5_header_missing:load_model"
+      ],
+      "code": 2,
+      "passed": true
+    },
+    {
+      "id": "logs:traffic:v5_header_mismatch",
+      "check": "traffic",
+      "expected": [
+        "logs: traffic:v5_header_mismatch:warmup_s"
+      ],
+      "reasons": [
+        "logs: traffic:v5_header_mismatch:warmup_s"
+      ],
+      "code": 2,
+      "passed": true
+    },
+    {
+      "id": "logs:traffic:rate_invalid",
+      "check": "traffic",
+      "expected": [
+        "logs: traffic:rate_invalid",
+        "logs: traffic_config:rate"
+      ],
+      "reasons": [
+        "logs: traffic:rate_invalid",
+        "logs: traffic_config:rate"
+      ],
+      "code": 2,
+      "passed": true
+    },
+    {
+      "id": "logs:traffic:rate_source_invalid",
+      "check": "traffic",
+      "expected": [
+        "logs: traffic:rate_source_invalid",
+        "logs: traffic_config:rate"
+      ],
+      "reasons": [
+        "logs: traffic:rate_source_invalid",
+        "logs: traffic_config:rate"
+      ],
+      "code": 2,
+      "passed": true
+    },
+    {
+      "id": "logs:traffic:seeds_invalid",
+      "check": "traffic",
+      "expected": [
+        "logs: traffic:seeds_invalid"
+      ],
+      "reasons": [
+        "logs: traffic:seeds_invalid"
+      ],
+      "code": 2,
+      "passed": true
+    },
+    {
+      "id": "logs:traffic:warmup_invalid",
+      "check": "traffic",
+      "expected": [
+        "logs: traffic:warmup_invalid",
+        "logs: traffic_config:warmup_s"
+      ],
+      "reasons": [
+        "logs: traffic:warmup_invalid",
+        "logs: traffic_config:warmup_s"
+      ],
+      "code": 2,
+      "passed": true
+    },
+    {
+      "id": "logs:traffic:profile_unknown",
+      "check": "traffic",
+      "expected": [
+        "logs: traffic:profile_unknown:lab",
+        "logs: traffic_config:profile"
+      ],
+      "reasons": [
+        "logs: traffic:profile_unknown:lab",
+        "logs: traffic_config:profile"
+      ],
+      "code": 2,
+      "passed": true
+    },
+    {
+      "id": "logs:traffic:profile_parameters_invalid",
+      "check": "traffic",
+      "expected": [
+        "logs: traffic:profile_parameters_invalid:max_concurrent",
+        "logs: traffic_config:profile_parameters"
+      ],
+      "reasons": [
+        "logs: traffic:profile_parameters_invalid:max_concurrent",
+        "logs: traffic_config:profile_parameters"
+      ],
+      "code": 2,
+      "passed": true
+    },
+    {
+      "id": "logs:traffic:arrival_cap",
+      "check": "traffic",
+      "expected": [
+        "logs: traffic:arrival_cap:0123456789ab-u4"
+      ],
+      "reasons": [
+        "logs: traffic:arrival_cap:0123456789ab-u4"
+      ],
+      "code": 2,
+      "passed": true
+    },
+    {
+      "id": "logs:traffic:user_session_id",
+      "check": "traffic",
+      "expected": [
+        "logs: traffic:user_session_id:u4"
+      ],
+      "reasons": [
+        "logs: traffic:user_session_id:u4"
+      ],
+      "code": 2,
+      "passed": true
+    },
+    {
+      "id": "logs:traffic:duplicate_user_session",
+      "check": "traffic",
+      "expected": [
+        "logs: traffic:arrivals_outside_intervals:1",
+        "logs: traffic:duplicate_user_session:0123456789ab-u13",
+        "logs: traffic:requests:end_arrivals_mismatch:admitted:14!=15",
+        "logs: traffic:requests:end_arrivals_mismatch:arrivals:14!=15"
+      ],
+      "reasons": [
+        "logs: traffic:arrivals_outside_intervals:1",
+        "logs: traffic:duplicate_user_session:0123456789ab-u13",
+        "logs: traffic:requests:end_arrivals_mismatch:admitted:14!=15",
+        "logs: traffic:requests:end_arrivals_mismatch:arrivals:14!=15"
+      ],
+      "code": 2,
+      "passed": true
+    },
+    {
+      "id": "logs:traffic:request_v5_malformed",
+      "check": "traffic",
+      "expected": [
+        "logs: traffic:request_v5_malformed:0123456789ab-01-00000001"
+      ],
+      "reasons": [
+        "logs: traffic:request_v5_malformed:0123456789ab-01-00000001"
+      ],
+      "code": 2,
+      "passed": true
+    },
+    {
+      "id": "logs:traffic:request_before_arrival",
+      "check": "traffic",
+      "expected": [
+        "logs: traffic:request_before_arrival:0123456789ab-01-00000000"
+      ],
+      "reasons": [
+        "logs: traffic:request_before_arrival:0123456789ab-01-00000000"
+      ],
+      "code": 2,
+      "passed": true
+    },
+    {
+      "id": "logs:traffic:think_s_first",
+      "check": "traffic",
+      "expected": [
+        "logs: traffic:think_s_first:0123456789ab-01-00000000"
+      ],
+      "reasons": [
+        "logs: traffic:think_s_first:0123456789ab-01-00000000"
+      ],
+      "code": 2,
+      "passed": true
+    },
+    {
+      "id": "logs:traffic:think_s_missing",
+      "check": "traffic",
+      "expected": [
+        "logs: traffic:think_s_missing:0123456789ab-01-00000001"
+      ],
+      "reasons": [
+        "logs: traffic:think_s_missing:0123456789ab-01-00000001"
+      ],
+      "code": 2,
+      "passed": true
+    },
+    {
+      "id": "logs:traffic:intended_status_unknown",
+      "check": "traffic",
+      "expected": [
+        "logs: intended_status_differs:0123456789ab-01-00000001",
+        "logs: traffic:intended_status_unknown:0123456789ab-01-00000001"
+      ],
+      "reasons": [
+        "logs: intended_status_differs:0123456789ab-01-00000001",
+        "logs: traffic:intended_status_unknown:0123456789ab-01-00000001"
+      ],
+      "code": 2,
+      "passed": true
+    },
+    {
+      "id": "logs:traffic:end_v5_invalid",
+      "check": "traffic",
+      "expected": [
+        "logs: traffic:requests:end_v5_invalid:dropped"
+      ],
+      "reasons": [
+        "logs: traffic:requests:end_v5_invalid:dropped"
+      ],
+      "code": 2,
+      "passed": true
+    },
+    {
+      "id": "logs:traffic:end_user_sessions_mismatch",
+      "check": "traffic",
+      "expected": [
+        "logs: traffic:requests:end_user_sessions_mismatch"
+      ],
+      "reasons": [
+        "logs: traffic:requests:end_user_sessions_mismatch"
+      ],
+      "code": 2,
+      "passed": true
+    },
+    {
+      "id": "logs:traffic:interval_sessions",
+      "check": "traffic",
+      "expected": [
+        "logs: traffic:interval_sessions:2:admitted_sessions:0!=1",
+        "logs: traffic:interval_sessions:2:dropped_sessions:1!=0"
+      ],
+      "reasons": [
+        "logs: traffic:interval_sessions:2:admitted_sessions:0!=1",
+        "logs: traffic:interval_sessions:2:dropped_sessions:1!=0"
+      ],
+      "code": 2,
+      "passed": true
+    },
+    {
+      "id": "logs:traffic:planned_sessions",
+      "check": "traffic",
+      "expected": [
+        "logs: traffic:planned_sessions:2"
+      ],
+      "reasons": [
+        "logs: traffic:planned_sessions:2"
+      ],
+      "code": 2,
+      "passed": true
+    },
+    {
+      "id": "logs:traffic:active_max",
+      "check": "traffic",
+      "expected": [
+        "logs: traffic:active_max:2"
+      ],
+      "reasons": [
+        "logs: traffic:active_max:2"
+      ],
+      "code": 2,
+      "passed": true
+    },
+    {
+      "id": "logs:traffic:interval_v5_malformed",
+      "check": "traffic",
+      "expected": [
+        "logs: realism:unreadable:KeyError: 'planned_sessions'",
+        "logs: traffic:interval_v5_malformed:2"
+      ],
+      "reasons": [
+        "logs: realism:unreadable:KeyError: 'planned_sessions'",
+        "logs: traffic:interval_v5_malformed:2"
+      ],
+      "code": 2,
+      "passed": true
+    },
+    {
+      "id": "logs:controls:unreadable",
+      "check": "controls:unreadable",
+      "expected": [
+        "logs: controls:unreadable:ValueError: no controls.json",
+        "logs: nginx_unknown_request:"
+      ],
+      "reasons": [
+        "logs: controls:unreadable:ValueError: no controls.json",
+        "logs: nginx_unknown_request:"
+      ],
+      "code": 2,
+      "passed": true
+    },
+    {
+      "id": "logs:controls_schema",
+      "check": "controls_schema",
+      "expected": [
+        "logs: controls_schema"
+      ],
+      "reasons": [
+        "logs: controls_schema"
+      ],
+      "code": 2,
+      "passed": true
+    },
+    {
+      "id": "logs:controls_differ_from_plan",
+      "check": "controls_differ_from_plan",
+      "expected": [
+        "logs: controls_differ_from_plan"
+      ],
+      "reasons": [
+        "logs: controls_differ_from_plan"
+      ],
+      "code": 2,
+      "passed": true
+    },
+    {
+      "id": "logs:controls_differ_from_plan:class",
+      "check": "controls_differ_from_plan",
+      "expected": [
+        "logs: controls_differ_from_plan"
+      ],
+      "reasons": [
+        "logs: controls_differ_from_plan"
+      ],
+      "code": 2,
+      "passed": true
+    },
+    {
+      "id": "logs:controls_differ_from_plan:missing",
+      "check": "controls_differ_from_plan",
+      "expected": [
+        "logs: controls_differ_from_plan",
+        "logs: nginx_unknown_request:"
+      ],
+      "reasons": [
+        "logs: controls_differ_from_plan",
+        "logs: nginx_unknown_request:"
+      ],
+      "code": 2,
+      "passed": true
+    },
+    {
+      "id": "logs:control_not_executed",
+      "check": "control_not_executed",
+      "expected": [
+        "logs: control_not_executed:kontrola_wx_memfd"
+      ],
+      "reasons": [
+        "logs: control_not_executed:kontrola_wx_memfd"
+      ],
+      "code": 2,
+      "passed": true
+    },
+    {
+      "id": "logs:control_without_baseline",
+      "check": "control_without_baseline",
+      "expected": [
+        "logs: control_without_baseline:kontrola_wx_memfd"
+      ],
+      "reasons": [
+        "logs: control_without_baseline:kontrola_wx_memfd"
+      ],
+      "code": 2,
+      "passed": true
+    },
+    {
+      "id": "logs:control_without_effect",
+      "check": "control_without_effect",
+      "expected": [
+        "logs: control_without_effect:kontrola_wx_memfd"
+      ],
+      "reasons": [
+        "logs: control_without_effect:kontrola_wx_memfd"
+      ],
+      "code": 2,
+      "passed": true
+    },
+    {
+      "id": "logs:negative_with_property",
+      "check": "negative_with_property",
+      "expected": [
+        "logs: negative_with_property:kontrola_zapisovac_pamate"
+      ],
+      "reasons": [
+        "logs: negative_with_property:kontrola_zapisovac_pamate"
+      ],
+      "code": 2,
+      "passed": true
+    },
+    {
+      "id": "logs:control_not_cleaned",
+      "check": "control_not_cleaned",
+      "expected": [
+        "logs: control_not_cleaned:kontrola_wx_memfd"
+      ],
+      "reasons": [
+        "logs: control_not_cleaned:kontrola_wx_memfd"
+      ],
+      "code": 2,
+      "passed": true
+    },
+    {
+      "id": "logs:control_script_differs",
+      "check": "control_script_differs",
+      "expected": [
+        "logs: control_script_differs:kontrola_wx_memfd"
+      ],
+      "reasons": [
+        "logs: control_script_differs:kontrola_wx_memfd"
+      ],
+      "code": 2,
+      "passed": true
+    }
+  ],
+  "summary": {
+    "id": "column_summary",
+    "check": "B6a 1.5 summary of every column over the measured rows, recorded only",
+    "patterns": [
+      "constant 7",
+      "5 at i = 3, else 0",
+      "i",
+      "1 for i < n // 2, else 3"
+    ],
+    "code": 0,
+    "reasons": [],
+    "expected": {
+      "mem_changed_ratio": {
+        "rows": 718,
+        "min": 7.0,
+        "max": 7.0,
+        "mean": 7.0,
+        "std": 0.0,
+        "mode": 7.0,
+        "off_mode_share": 0.0,
+        "diff_std": 0.0
+      },
+      "mem_bins_active": {
+        "rows": 718,
+        "min": 0.0,
+        "max": 5.0,
+        "mean": 0.006963788300835654,
+        "std": 0.18646835430356384,
+        "mode": 0.0,
+        "off_mode_share": 0.001392757660167131,
+        "diff_std": 0.26407386650992315
+      },
+      "mem_changed_max": {
+        "rows": 718,
+        "min": 0.0,
+        "max": 717.0,
+        "mean": 358.5,
+        "std": 207.26854561172567,
+        "mode": 0.0,
+        "off_mode_share": 0.9986072423398329,
+        "diff_std": 0.0
+      },
+      "mem_changed_p95": {
+        "rows": 718,
+        "min": 1.0,
+        "max": 3.0,
+        "mean": 2.0,
+        "std": 1.0,
+        "mode": 1.0,
+        "off_mode_share": 0.5,
+        "diff_std": 0.07463926449238299
+      },
+      "mem_changed_spread": {
+        "rows": 718,
+        "min": 7.0,
+        "max": 7.0,
+        "mean": 7.0,
+        "std": 0.0,
+        "mode": 7.0,
+        "off_mode_share": 0.0,
+        "diff_std": 0.0
+      },
+      "mem_entropy_mean": {
+        "rows": 718,
+        "min": 0.0,
+        "max": 5.0,
+        "mean": 0.006963788300835654,
+        "std": 0.18646835430356384,
+        "mode": 0.0,
+        "off_mode_share": 0.001392757660167131,
+        "diff_std": 0.26407386650992315
+      },
+      "mem_entropy_max": {
+        "rows": 718,
+        "min": 0.0,
+        "max": 717.0,
+        "mean": 358.5,
+        "std": 207.26854561172567,
+        "mode": 0.0,
+        "off_mode_share": 0.9986072423398329,
+        "diff_std": 0.0
+      },
+      "mem_zero_ratio": {
+        "rows": 718,
+        "min": 1.0,
+        "max": 3.0,
+        "mean": 2.0,
+        "std": 1.0,
+        "mode": 1.0,
+        "off_mode_share": 0.5,
+        "diff_std": 0.07463926449238299
+      },
+      "proc_total": {
+        "rows": 718,
+        "min": 7.0,
+        "max": 7.0,
+        "mean": 7.0,
+        "std": 0.0,
+        "mode": 7.0,
+        "off_mode_share": 0.0,
+        "diff_std": 0.0
+      },
+      "proc_user": {
+        "rows": 718,
+        "min": 0.0,
+        "max": 5.0,
+        "mean": 0.006963788300835654,
+        "std": 0.18646835430356384,
+        "mode": 0.0,
+        "off_mode_share": 0.001392757660167131,
+        "diff_std": 0.26407386650992315
+      },
+      "proc_kernel": {
+        "rows": 718,
+        "min": 0.0,
+        "max": 717.0,
+        "mean": 358.5,
+        "std": 207.26854561172567,
+        "mode": 0.0,
+        "off_mode_share": 0.9986072423398329,
+        "diff_std": 0.0
+      },
+      "proc_new": {
+        "rows": 718,
+        "min": 1.0,
+        "max": 3.0,
+        "mean": 2.0,
+        "std": 1.0,
+        "mode": 1.0,
+        "off_mode_share": 0.5,
+        "diff_std": 0.07463926449238299
+      },
+      "proc_gone": {
+        "rows": 718,
+        "min": 7.0,
+        "max": 7.0,
+        "mean": 7.0,
+        "std": 0.0,
+        "mode": 7.0,
+        "off_mode_share": 0.0,
+        "diff_std": 0.0
+      },
+      "mod_total": {
+        "rows": 718,
+        "min": 0.0,
+        "max": 5.0,
+        "mean": 0.006963788300835654,
+        "std": 0.18646835430356384,
+        "mode": 0.0,
+        "off_mode_share": 0.001392757660167131,
+        "diff_std": 0.26407386650992315
+      },
+      "mod_delta": {
+        "rows": 718,
+        "min": 0.0,
+        "max": 717.0,
+        "mean": 358.5,
+        "std": 207.26854561172567,
+        "mode": 0.0,
+        "off_mode_share": 0.9986072423398329,
+        "diff_std": 0.0
+      },
+      "sock_total": {
+        "rows": 718,
+        "min": 1.0,
+        "max": 3.0,
+        "mean": 2.0,
+        "std": 1.0,
+        "mode": 1.0,
+        "off_mode_share": 0.5,
+        "diff_std": 0.07463926449238299
+      },
+      "sock_listen": {
+        "rows": 718,
+        "min": 7.0,
+        "max": 7.0,
+        "mean": 7.0,
+        "std": 0.0,
+        "mode": 7.0,
+        "off_mode_share": 0.0,
+        "diff_std": 0.0
+      },
+      "sock_estab": {
+        "rows": 718,
+        "min": 0.0,
+        "max": 5.0,
+        "mean": 0.006963788300835654,
+        "std": 0.18646835430356384,
+        "mode": 0.0,
+        "off_mode_share": 0.001392757660167131,
+        "diff_std": 0.26407386650992315
+      },
+      "proc_wx": {
+        "rows": 718,
+        "min": 0.0,
+        "max": 717.0,
+        "mean": 358.5,
+        "std": 207.26854561172567,
+        "mode": 0.0,
+        "off_mode_share": 0.9986072423398329,
+        "diff_std": 0.0
+      },
+      "proc_memfd": {
+        "rows": 718,
+        "min": 1.0,
+        "max": 3.0,
+        "mean": 2.0,
+        "std": 1.0,
+        "mode": 1.0,
+        "off_mode_share": 0.5,
+        "diff_std": 0.07463926449238299
+      }
+    },
+    "recorded": {
+      "mem_changed_ratio": {
+        "rows": 718,
+        "min": 7.0,
+        "max": 7.0,
+        "mean": 7.0,
+        "std": 0.0,
+        "mode": 7.0,
+        "off_mode_share": 0.0,
+        "diff_std": 0.0
+      },
+      "mem_bins_active": {
+        "rows": 718,
+        "min": 0.0,
+        "max": 5.0,
+        "mean": 0.006963788300835654,
+        "std": 0.18646835430356384,
+        "mode": 0.0,
+        "off_mode_share": 0.001392757660167131,
+        "diff_std": 0.26407386650992315
+      },
+      "mem_changed_max": {
+        "rows": 718,
+        "min": 0.0,
+        "max": 717.0,
+        "mean": 358.5,
+        "std": 207.26854561172567,
+        "mode": 0.0,
+        "off_mode_share": 0.9986072423398329,
+        "diff_std": 0.0
+      },
+      "mem_changed_p95": {
+        "rows": 718,
+        "min": 1.0,
+        "max": 3.0,
+        "mean": 2.0,
+        "std": 1.0,
+        "mode": 1.0,
+        "off_mode_share": 0.5,
+        "diff_std": 0.074639264492383
+      },
+      "mem_changed_spread": {
+        "rows": 718,
+        "min": 7.0,
+        "max": 7.0,
+        "mean": 7.0,
+        "std": 0.0,
+        "mode": 7.0,
+        "off_mode_share": 0.0,
+        "diff_std": 0.0
+      },
+      "mem_entropy_mean": {
+        "rows": 718,
+        "min": 0.0,
+        "max": 5.0,
+        "mean": 0.006963788300835654,
+        "std": 0.18646835430356384,
+        "mode": 0.0,
+        "off_mode_share": 0.001392757660167131,
+        "diff_std": 0.26407386650992315
+      },
+      "mem_entropy_max": {
+        "rows": 718,
+        "min": 0.0,
+        "max": 717.0,
+        "mean": 358.5,
+        "std": 207.26854561172567,
+        "mode": 0.0,
+        "off_mode_share": 0.9986072423398329,
+        "diff_std": 0.0
+      },
+      "mem_zero_ratio": {
+        "rows": 718,
+        "min": 1.0,
+        "max": 3.0,
+        "mean": 2.0,
+        "std": 1.0,
+        "mode": 1.0,
+        "off_mode_share": 0.5,
+        "diff_std": 0.074639264492383
+      },
+      "proc_total": {
+        "rows": 718,
+        "min": 7.0,
+        "max": 7.0,
+        "mean": 7.0,
+        "std": 0.0,
+        "mode": 7.0,
+        "off_mode_share": 0.0,
+        "diff_std": 0.0
+      },
+      "proc_user": {
+        "rows": 718,
+        "min": 0.0,
+        "max": 5.0,
+        "mean": 0.006963788300835654,
+        "std": 0.18646835430356384,
+        "mode": 0.0,
+        "off_mode_share": 0.001392757660167131,
+        "diff_std": 0.26407386650992315
+      },
+      "proc_kernel": {
+        "rows": 718,
+        "min": 0.0,
+        "max": 717.0,
+        "mean": 358.5,
+        "std": 207.26854561172567,
+        "mode": 0.0,
+        "off_mode_share": 0.9986072423398329,
+        "diff_std": 0.0
+      },
+      "proc_new": {
+        "rows": 718,
+        "min": 1.0,
+        "max": 3.0,
+        "mean": 2.0,
+        "std": 1.0,
+        "mode": 1.0,
+        "off_mode_share": 0.5,
+        "diff_std": 0.074639264492383
+      },
+      "proc_gone": {
+        "rows": 718,
+        "min": 7.0,
+        "max": 7.0,
+        "mean": 7.0,
+        "std": 0.0,
+        "mode": 7.0,
+        "off_mode_share": 0.0,
+        "diff_std": 0.0
+      },
+      "mod_total": {
+        "rows": 718,
+        "min": 0.0,
+        "max": 5.0,
+        "mean": 0.006963788300835654,
+        "std": 0.18646835430356384,
+        "mode": 0.0,
+        "off_mode_share": 0.001392757660167131,
+        "diff_std": 0.26407386650992315
+      },
+      "mod_delta": {
+        "rows": 718,
+        "min": 0.0,
+        "max": 717.0,
+        "mean": 358.5,
+        "std": 207.26854561172567,
+        "mode": 0.0,
+        "off_mode_share": 0.9986072423398329,
+        "diff_std": 0.0
+      },
+      "sock_total": {
+        "rows": 718,
+        "min": 1.0,
+        "max": 3.0,
+        "mean": 2.0,
+        "std": 1.0,
+        "mode": 1.0,
+        "off_mode_share": 0.5,
+        "diff_std": 0.074639264492383
+      },
+      "sock_listen": {
+        "rows": 718,
+        "min": 7.0,
+        "max": 7.0,
+        "mean": 7.0,
+        "std": 0.0,
+        "mode": 7.0,
+        "off_mode_share": 0.0,
+        "diff_std": 0.0
+      },
+      "sock_estab": {
+        "rows": 718,
+        "min": 0.0,
+        "max": 5.0,
+        "mean": 0.006963788300835654,
+        "std": 0.18646835430356384,
+        "mode": 0.0,
+        "off_mode_share": 0.001392757660167131,
+        "diff_std": 0.26407386650992315
+      },
+      "proc_wx": {
+        "rows": 718,
+        "min": 0.0,
+        "max": 717.0,
+        "mean": 358.5,
+        "std": 207.26854561172567,
+        "mode": 0.0,
+        "off_mode_share": 0.9986072423398329,
+        "diff_std": 0.0
+      },
+      "proc_memfd": {
+        "rows": 718,
+        "min": 1.0,
+        "max": 3.0,
+        "mean": 2.0,
+        "std": 1.0,
+        "mode": 1.0,
+        "off_mode_share": 0.5,
+        "diff_std": 0.074639264492383
+      }
+    },
+    "passed": true
+  },
+  "unreachable": {
+    "positive control: events.json missing or unreadable": "judged only for a pilot under a protocol with events.pilot_controls, and the self-test audits a planned session of the first role; scripts/tests/test_pozitivna_kontrola.py tests the gate. Protocol v5 has no pilot: the four cases of finding S2 of B3 (events.json missing, a control not executed, not detected, missing) are those of role test_controls in scripts/tests/audit_cases_logs.py (controls:unreadable, control_not_executed, control_without_effect, controls_differ_from_plan:missing; package B8, skeleton addendum)",
+    "positive control not executed: <type>": "judged only for a pilot under a protocol with events.pilot_controls, and the self-test audits a planned session of the first role; scripts/tests/test_pozitivna_kontrola.py tests the gate. Protocol v5 has no pilot: the four cases of finding S2 of B3 (events.json missing, a control not executed, not detected, missing) are those of role test_controls in scripts/tests/audit_cases_logs.py (controls:unreadable, control_not_executed, control_without_effect, controls_differ_from_plan:missing; package B8, skeleton addendum)",
+    "positive control not detected: <type> <hits>/<rows> rows": "judged only for a pilot under a protocol with events.pilot_controls, and the self-test audits a planned session of the first role; scripts/tests/test_pozitivna_kontrola.py tests the gate. Protocol v5 has no pilot: the four cases of finding S2 of B3 (events.json missing, a control not executed, not detected, missing) are those of role test_controls in scripts/tests/audit_cases_logs.py (controls:unreadable, control_not_executed, control_without_effect, controls_differ_from_plan:missing; package B8, skeleton addendum)",
+    "positive control missing from events.json": "judged only for a pilot under a protocol with events.pilot_controls, and the self-test audits a planned session of the first role; scripts/tests/test_pozitivna_kontrola.py tests the gate. Protocol v5 has no pilot: the four cases of finding S2 of B3 (events.json missing, a control not executed, not detected, missing) are those of role test_controls in scripts/tests/audit_cases_logs.py (controls:unreadable, control_not_executed, control_without_effect, controls_differ_from_plan:missing; package B8, skeleton addendum)",
+    "rows closed by a parser rule above the cap": "audit.rule_closed_rows_max is null until G3b (proposal 10.9), so the count is recorded and never a reason; scripts/tests/test_audit_selftest.py checks the reason under a copy with an integer cap"
+  },
+  "passed": true,
+  "seconds": 241.2,
+  "note": "Self-test of the audit checks on synthetic sessions; not a measurement."
+}
