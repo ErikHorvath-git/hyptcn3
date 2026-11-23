@@ -7,6 +7,9 @@ dokazy/B5/kostra/KOSTRA.md section 5 items 1 and 2, against the design dokazy/B5
   peak-to-mean at least the protocol's), the arrival count matches its integral, the login wave of corp;
 - the open loop on a fake clock and a fake HTTP layer: the same seeds give the same run, an arrival over the cap is
   dropped and logged, offered = admitted + dropped in every record that counts them;
+- one customer per user session (package B5c, finding F2 of B5b): on the fake lab's stateful cart no order finds its
+  cart emptied by another user session of its customer, the arrival record names the customer, an arrival that
+  finds every customer held is dropped with that reason, and only the customer depends on the sessions in progress;
 - the state machines on 10 000 user sessions: the order share, the think time (mean and cut), the share of the top
   tenth of objects, the deliberate client errors, the corp actions and upload sizes;
 - the profiles section the generator reads (each malformed value has its named reason) and the command line of 1.3
@@ -60,15 +63,17 @@ TODAY = {
     "phase": {"schema", "n", "type", "phase", "previous", "t_utc", "t_mono", "interval"},
 }
 ADDED = {
-    # concurrency: section 2 of the design asks the header to record one thread per user session or a pool.
+    # concurrency: section 2 of the design asks the header to record one thread per user session or a pool;
+    # customer_assignment: package B5c defines the customer and the drop reason of an arrival record.
     "header": {"profile", "scenario", "intensity", "rate", "rate_source", "seeds", "protocol_sha256",
-               "profile_parameters", "warmup_s", "envelope", "concurrency"},
+               "profile_parameters", "warmup_s", "envelope", "concurrency", "customer_assignment"},
     "request": {"user_session", "step", "object", "intended_status", "think_s"},
     "interval": {"offered_sessions", "admitted_sessions", "dropped_sessions", "planned_sessions", "active_max"},
     "end": {"arrivals", "admitted", "dropped", "user_sessions_completed", "user_sessions_in_progress_at_stop"},
     "phase": set(),
 }
-ARRIVAL = {"schema", "n", "type", "user_session", "t_mono", "t_utc", "phase", "admitted", "active"}
+ARRIVAL = {"schema", "n", "type", "user_session", "t_mono", "t_utc", "phase", "admitted", "active", "customer",
+           "drop_reason"}  # B5c adds the customer and the drop reason.
 LOAD_MODEL = ("open loop: user sessions arrive as a non-homogeneous Poisson process with intensity rate x "
               "envelope(t), at most max_concurrent in progress")
 
@@ -85,48 +90,91 @@ def write_doc(tmp_path, doc, name="protocol.json"):
 
 # ------------------------------------------------------------------ a fake lab: the routes of lab/services.py
 
-def lab_answer(method, path, query, auth, body):
-    """(status, content type, body) of the fake lab: what lab/services.py and lab/nginx.conf answer to the requests
-    of both profiles, the deliberate client errors with their status."""
-    from lab import seed
-    reply = lambda status, doc: (status, JSON_TYPE, json.dumps(doc).encode())  # noqa: E731
-    page = int(query.get("page", ["1"])[0])
-    if (method, path) == ("GET", "/"):
-        return reply(200, {"lab": "fake"})
-    if method == "GET" and path == "/api/catalog":
-        return reply(400, {"error": "page"}) if page < 1 else reply(200, {"products": [{"id": 1}] * 20})
-    if method == "GET" and path.startswith("/api/catalog/"):
-        known = 1 <= int(path.rsplit("/", 1)[1]) <= seed.SIZES["products"]
-        return reply(200, {"id": 1, "name": "x"}) if known else reply(404, {"error": "unknown product"})
-    if method == "GET" and path.startswith("/static/"):
-        return 200, "text/css", b"s" * 3000
-    if (method, path) == ("POST", "/api/auth/token"):
-        return reply(200, {"token": "c-token"})
-    if (method, path) == ("POST", "/api/auth/login"):
-        doc = json.loads(body)
-        good = doc["password"] == seed.employee_password(doc["user"])
-        return reply(200, {"token": "e-token"}) if good else reply(401, {"error": "wrong user or password"})
-    if path in ("/api/cart", "/api/orders"):
-        if auth != "Bearer c-token":
-            return reply(401, {"error": "upstream rejected request"})
-        return reply(201 if (method, path) == ("POST", "/api/orders") else 200, {"items": []})
-    if path == "/api/docs" or path.startswith(("/api/docs/", "/api/reports")):
-        if auth != "Bearer e-token":
-            return reply(401, {"error": "upstream rejected request"})
-        if (method, path) == ("GET", "/api/docs"):
-            return reply(400, {"error": "page"}) if page < 1 else reply(200, {"documents": []})
-        if (method, path) == ("POST", "/api/docs"):
-            return reply(201, {"id": 501, "bytes": len(body)})
-        if method == "GET" and path.startswith("/api/docs/"):
-            known = 1 <= int(path.rsplit("/", 1)[1]) <= seed.SIZES["documents"]
-            if not known:
-                return reply(404, {"error": "unknown document"})
-            return 200, "application/octet-stream", b"d" * 5000
-        if (method, path) == ("POST", "/api/reports"):
-            return reply(202, {"report": REPORT, "status": "queued"})
-        if method == "GET" and path.startswith("/api/reports/"):
-            return reply(200, {"report": path.rsplit("/", 1)[1], "status": "queued"})
-    return reply(404, {"error": "unknown route"})
+CUSTOMER_TOKEN = "c-token:"  # A customer token of the fake lab names its customer, as the lab signs it into its token.
+
+
+class FakeLab:
+    """The fake lab: what lab/services.py and lab/nginx.conf answer to the requests of both profiles, the deliberate
+    client errors with their status. Its cart is state, as the lab's (package B5c; cart_items by user name): a product
+    added under a customer's token stays in that customer's cart until an order of the cart takes the whole cart, and
+    an order of an empty cart gets 400 ("the cart is empty"). `logins` holds (request id, customer) of every customer
+    token handed out, `orders` (customer, {product: quantity}) of every order of a cart."""
+
+    def __init__(self):
+        self.carts, self.logins, self.orders, self.lock = {}, [], [], threading.Lock()
+
+    def answer(self, method, path, query, auth, body, rid=None):
+        """(status, content type, body) of one request; the server of the real run calls it from several threads."""
+        with self.lock:
+            return self._answer(method, path, query, auth or "", body, rid)
+
+    def opener(self, req, timeout=None):
+        """urllib.request.urlopen of the fake lab: answers at once, a 4xx as urllib raises it."""
+        split = urlsplit(req.full_url)
+        status, content_type, body = self.answer(req.get_method(), split.path, parse_qs(split.query),
+                                                 req.get_header("Authorization"), req.data,
+                                                 req.get_header("X-request-id"))
+        if status >= 400:
+            raise urllib.error.HTTPError(req.full_url, status, "fake", {"Content-Type": content_type},
+                                         io.BytesIO(body))
+        return FakeResponse(status, content_type, body)
+
+    def _answer(self, method, path, query, auth, body, rid):
+        from lab import seed
+        reply = lambda status, doc: (status, JSON_TYPE, json.dumps(doc).encode())  # noqa: E731
+        page = int(query.get("page", ["1"])[0])
+        if (method, path) == ("GET", "/"):
+            return reply(200, {"lab": "fake"})
+        if method == "GET" and path == "/api/catalog":
+            return reply(400, {"error": "page"}) if page < 1 else reply(200, {"products": [{"id": 1}] * 20})
+        if method == "GET" and path.startswith("/api/catalog/"):
+            known = 1 <= int(path.rsplit("/", 1)[1]) <= seed.SIZES["products"]
+            return reply(200, {"id": 1, "name": "x"}) if known else reply(404, {"error": "unknown product"})
+        if method == "GET" and path.startswith("/static/"):
+            return 200, "text/css", b"s" * 3000
+        if (method, path) == ("POST", "/api/auth/token"):
+            customer = json.loads(body)["user"]
+            self.logins.append((rid, customer))
+            return reply(200, {"token": CUSTOMER_TOKEN + customer})
+        if (method, path) == ("POST", "/api/auth/login"):
+            doc = json.loads(body)
+            good = doc["password"] == seed.employee_password(doc["user"])
+            return reply(200, {"token": "e-token"}) if good else reply(401, {"error": "wrong user or password"})
+        if path in ("/api/cart", "/api/orders"):
+            if not auth.startswith("Bearer " + CUSTOMER_TOKEN):
+                return reply(401, {"error": "upstream rejected request"})
+            customer = auth[len("Bearer " + CUSTOMER_TOKEN):]
+            cart = self.carts.setdefault(customer, Counter())
+            if (method, path) == ("POST", "/api/cart"):
+                item = json.loads(body)
+                cart[item["product_id"]] += item.get("quantity", 1)
+            if path == "/api/cart":
+                return reply(200, {"items": [{"product_id": p, "quantity": q} for p, q in sorted(cart.items())]})
+            if method == "POST":
+                if json.loads(body) == {"cart": True}:
+                    if not cart:
+                        return reply(400, {"error": "the cart is empty"})
+                    self.orders.append((customer, dict(cart)))
+                    cart.clear()
+                return reply(201, {"id": len(self.orders), "status": "pending"})
+            return reply(200, {"orders": []})
+        if path == "/api/docs" or path.startswith(("/api/docs/", "/api/reports")):
+            if auth != "Bearer e-token":
+                return reply(401, {"error": "upstream rejected request"})
+            if (method, path) == ("GET", "/api/docs"):
+                return reply(400, {"error": "page"}) if page < 1 else reply(200, {"documents": []})
+            if (method, path) == ("POST", "/api/docs"):
+                return reply(201, {"id": 501, "bytes": len(body)})
+            if method == "GET" and path.startswith("/api/docs/"):
+                known = 1 <= int(path.rsplit("/", 1)[1]) <= seed.SIZES["documents"]
+                if not known:
+                    return reply(404, {"error": "unknown document"})
+                return 200, "application/octet-stream", b"d" * 5000
+            if (method, path) == ("POST", "/api/reports"):
+                return reply(202, {"report": REPORT, "status": "queued"})
+            if method == "GET" and path.startswith("/api/reports/"):
+                return reply(200, {"report": path.rsplit("/", 1)[1], "status": "queued"})
+        return reply(404, {"error": "unknown route"})
 
 
 class FakeResponse:
@@ -141,16 +189,6 @@ class FakeResponse:
 
     def read(self, _limit=-1):
         return self.body
-
-
-def fake_opener(req, timeout=None):
-    """urllib.request.urlopen of the fake lab: answers at once, a 4xx as urllib raises it."""
-    split = urlsplit(req.full_url)
-    status, content_type, body = lab_answer(req.get_method(), split.path, parse_qs(split.query),
-                                            req.get_header("Authorization"), req.data)
-    if status >= 400:
-        raise urllib.error.HTTPError(req.full_url, status, "fake", {"Content-Type": content_type}, io.BytesIO(body))
-    return FakeResponse(status, content_type, body)
 
 
 class FakeClock:
@@ -191,11 +229,13 @@ def v5_args(tmp_path, protocol, profile="eshop", scenario="eshop_low", **changes
     return SimpleNamespace(**args)
 
 
-def fake_run(tmp_path, profile="eshop", scenario="eshop_low", cap=None, **changes):
-    """One v5 run on the fake clock and the fake lab: the real prepare_v5, SessionRecorder, UserClient and OpenLoop,
-    requests sent synchronously; the measure phase from warmup_s, post 60 s before the end. Returns (run, request
-    records, interval records)."""
+def fake_run(tmp_path, profile="eshop", scenario="eshop_low", cap=None, lab=None, drain=False, **changes):
+    """One v5 run on the fake clock and the fake lab (`lab`, else a new one): the real prepare_v5, SessionRecorder,
+    UserClient and OpenLoop, requests sent synchronously; the measure phase from warmup_s, post 60 s before the end.
+    The run stops at --dur, or with `drain` once every user session is done. Returns (run, request records, interval
+    records)."""
     from scripts import host_traffic as ht
+    lab = FakeLab() if lab is None else lab
     tmp_path.mkdir(parents=True, exist_ok=True)
     doc = v5_doc()
     if cap is not None:
@@ -204,11 +244,11 @@ def fake_run(tmp_path, profile="eshop", scenario="eshop_low", cap=None, **change
     run = ht.prepare_v5(args)
     stop = threading.Event()
     recorder = None
-    clock = FakeClock(args.dur, stop, [(args.warmup_s, lambda: recorder.switch("measure")),
-                                       (args.dur - 60, lambda: recorder.switch("post"))])
+    clock = FakeClock(args.dur + (10 ** 6 if drain else 0), stop, [(args.warmup_s, lambda: recorder.switch("measure")),
+                                                                   (args.dur - 60, lambda: recorder.switch("post"))])
     files = {"requests": open(args.requests_log, "x"), "intervals": open(args.intervals_log, "x")}
     recorder = ht.SessionRecorder(args, run, stop, files, clock=clock)
-    client = ht.UserClient(args.target, ht.SessionMetrics(0.0, "t0"), recorder, opener=fake_opener)
+    client = ht.UserClient(args.target, ht.SessionMetrics(0.0, "t0"), recorder, opener=lab.opener)
     loop = ht.OpenLoop(run, recorder, client, stop, lambda fn, *a: fn(*a), clock=clock)
     loop.serve()
     recorder.close(loop.end_fields())
@@ -339,6 +379,7 @@ def test_arrivals_over_the_cap_are_dropped_and_logged(tmp_path):
     dropped = [a for a in arrivals if not a["admitted"]]
     assert dropped and len(dropped) < len(arrivals)
     assert all(a["admitted"] == (a["active"] < 4) and 0 <= a["active"] <= 4 for a in arrivals)
+    assert all(a["drop_reason"] == (None if a["admitted"] else "max_concurrent") for a in arrivals)  # Named (B5c).
     assert [a["user_session"] for a in arrivals] == [f"{req[0]['run_id']}-u{n}" for n in range(len(arrivals))]
     admitted = {a["user_session"] for a in arrivals if a["admitted"]}
     assert {r["user_session"] for r in requests} == admitted  # A dropped user session sends nothing.
@@ -358,19 +399,125 @@ def test_arrivals_over_the_cap_are_dropped_and_logged(tmp_path):
     assert {r["phase"] for r in arrivals} == {"warmup", "measure", "post"}
 
 
+# ------------------------------------------------------------------ one customer per user session (package B5c)
+# Finding F2 of B5b, seen in the lab test (rate 8: 3 of 272 orders got an unintended 400): two user sessions of one
+# customer share the lab's cart, and the order of one empties the cart the other then orders. Ten customers instead of
+# the 2000 of lab/seed.py make it certain on the fake lab's cart (judgment: the B5b code gets 9 of 93 orders refused).
+FEW_CUSTOMERS = 10
+
+
+def few_customers_run(tmp_path, monkeypatch, lab=None, **changes):
+    """A drained eshop_high run at rate 1 with FEW_CUSTOMERS customers."""
+    from lab import seed
+    monkeypatch.setitem(seed.SIZES, "customers", FEW_CUSTOMERS)
+    return fake_run(tmp_path, "eshop", "eshop_high", lab=lab, drain=True, rate=1.0, **changes)
+
+
+def drawn_customer(n, customers, seeds=SEEDS, intensity="high"):
+    """The customer eshop user session n draws, None when it does not order: its first draw is whether it orders,
+    its second the customer it would be (B5c), from its own sub-stream of traffic_choices (B5b: random.Random of the
+    first 8 bytes of sha256 of [seed, n]); counted here."""
+    digest = hashlib.sha256(json.dumps([seeds["traffic_choices"], n]).encode()).digest()
+    rng = random.Random(int.from_bytes(digest[:8], "big"))
+    if rng.random() >= v5_doc()["profiles"]["eshop"]["order_share"][intensity]:
+        return None
+    return rng.randint(1, customers)
+
+
+def test_no_order_finds_its_cart_emptied_by_another_user_session_of_its_customer(tmp_path, monkeypatch):
+    lab = FakeLab()
+    _, req, _ = few_customers_run(tmp_path, monkeypatch, lab)
+    requests = of_type(req, "request")
+    orders = [r for r in requests if r["step"] == "order"]  # 80 orders; at least 50 is judgment.
+    assert len(orders) >= 50 and [r["rid"] for r in orders if r["status"] != 201] == []
+    assert len(lab.orders) == len(orders) and all(items for _, items in lab.orders)
+    assert all(r["status"] == r["intended_status"] if r["intended_status"] else r["outcome"] == "ok" for r in requests)
+    # The arrival record names the customer the lab saw at the login, null for a user session that never logs in.
+    admitted = [a for a in of_type(req, "arrival") if a["admitted"]]
+    logins = {rid.rsplit("-", 1)[0]: customer for rid, customer in lab.logins}
+    assert len(logins) == len(lab.logins) == len(orders)
+    assert {a["user_session"]: a["customer"] for a in admitted} == {a["user_session"]: logins.get(a["user_session"])
+                                                                     for a in admitted}
+    # Two user sessions of one customer never overlap (in progress: from the arrival to the end of the last request).
+    end = Counter()
+    for r in requests:
+        end[r["user_session"]] = max(end[r["user_session"]], r["t_end_mono"])
+    spans = sorted((a["customer"], a["t_mono"], end[a["user_session"]]) for a in admitted if a["customer"])
+    assert all(c1 != c2 or e1 <= s2 for (c1, _, e1), (c2, s2, _) in zip(spans, spans[1:]))
+
+
+def replay_customers(req, customers, seeds=SEEDS):
+    """The rule of B5c replayed over the request log of a drained run: each arrival in order of time, with the
+    customers that user sessions in progress hold then (a user session releases its customer at the end of its last
+    request). An ordering user session holds the customer it drew if free, else the next free one by number; with
+    none free it is dropped as all_customers_held. Returns {user session: customer} of the admitted ones."""
+    end, holding, out = Counter(), {}, {}
+    for r in of_type(req, "request"):
+        end[r["user_session"]] = max(end[r["user_session"]], r["t_end_mono"])
+    for a in of_type(req, "arrival"):
+        holding = {c: e for c, e in holding.items() if e > a["t_mono"]}
+        wanted = drawn_customer(int(a["user_session"].rsplit("-u", 1)[1]), customers, seeds)
+        free = [] if wanted is None else [c for c in ((wanted - 1 + k) % customers + 1 for k in range(customers))
+                                          if c not in holding]
+        if wanted is not None and not free:
+            assert (a["admitted"], a["drop_reason"], a["customer"]) == (False, "all_customers_held", None), a
+            assert a["active"] < v5_doc()["profiles"]["eshop"]["max_concurrent"] and len(holding) == customers
+            continue
+        assert (a["admitted"], a["drop_reason"]) == (True, None), a
+        assert a["customer"] == (None if wanted is None else f"zakaznik{free[0]:04d}"), a
+        if wanted is not None:
+            holding[free[0]] = end[a["user_session"]]
+        out[a["user_session"]] = a["customer"]
+    return out
+
+
+def test_a_user_session_holds_the_customer_it_drew_or_the_next_free_one_else_it_is_dropped(tmp_path, monkeypatch):
+    """The customer and the drop with its reason follow the rule on two runs whose arrivals differ, so other user
+    sessions are in progress; every draw of a user session admitted in both runs is the same (its steps, objects,
+    think times and deliberate errors): only its customer depends on the user sessions in progress."""
+    variants = (SEEDS, dict(SEEDS, traffic_arrivals=99))  # The same user sessions, other arrival times.
+    runs = [few_customers_run(tmp_path / str(i), monkeypatch, seeds=json.dumps(seeds))
+            for i, seeds in enumerate(variants)]
+    customers = []
+    for (_, req, ivl), seeds in zip(runs, variants):
+        customers.append({uid.rsplit("-u", 1)[1]: c for uid, c in replay_customers(req, FEW_CUSTOMERS, seeds).items()})
+        arrivals = of_type(req, "arrival")
+        dropped = [a for a in arrivals if a["drop_reason"] == "all_customers_held"]
+        assert dropped and not [a for a in arrivals if a["drop_reason"] == "max_concurrent"]
+        # A dropped arrival is counted as dropped, as one over max_concurrent: arrival records, intervals, end records.
+        for iv in of_type(ivl, "interval"):
+            inside = [a for a in arrivals if iv["mono_start"] <= a["t_mono"] < iv["mono_end"]]
+            assert iv["dropped_sessions"] == sum(not a["admitted"] for a in inside)
+        for last in (req[-1], ivl[-1]):
+            assert (last["arrivals"], last["dropped"]) == (len(arrivals), len(dropped))
+            assert last["admitted"] == last["user_sessions_completed"] == len(arrivals) - len(dropped)
+    common = set(customers[0]) & set(customers[1])  # 486 user sessions; at least 300 is judgment.
+    assert len(common) >= 300 and any(customers[0][n] != customers[1][n] for n in common)
+    fields = lambda r: (r["worker_seq"], r["step"], r["method"], r["route"], r["object"],  # noqa: E731
+                        r["intended_status"], r["think_s"])
+    steps = [{} for _ in runs]
+    for (_, req, _), by_session in zip(runs, steps):
+        for r in of_type(req, "request"):
+            by_session.setdefault(r["user_session"].rsplit("-u", 1)[1], []).append(fields(r))
+    assert all(steps[0][n] == steps[1][n] for n in common)
+
+
 # ------------------------------------------------------------------ the state machines (item 2)
 
 def drive(profile, params, intensity, sessions, answer=None, statuses=None):
-    """The steps of `sessions` user sessions of a profile, every reply from the fake lab (or `answer`); the status
-    of each step's reply is appended to `statuses` when given."""
+    """The steps of `sessions` user sessions of a profile, one after the other, every reply from one fake lab (or
+    `answer`); the status of each step's reply is appended to `statuses` when given. An ordering eshop user session
+    gets the customer it drew, as from the scheduler when no other user session is in progress (package B5c)."""
     from scripts import host_traffic as ht
-    lab, out = ht.Lab(profile, params), []
+    lab, fake, out = ht.Lab(profile, params), FakeLab(), []
     for n in range(sessions):
         session = ht.PROFILES[profile](params, intensity, n, SEEDS, lab, "0123456789ab")
+        if getattr(session, "wanted", None) is not None:  # Before B5c the session drew its customer at the login.
+            session.customer = session.wanted
         steps, step = [], session.start()
         while step is not None:
             steps.append(step)
-            reply = answer(step) if answer else reply_of(step)
+            reply = answer(step) if answer else reply_of(step, fake)
             if statuses is not None:
                 statuses.append(reply.status)
             step = session.reply(reply)
@@ -378,13 +525,14 @@ def drive(profile, params, intensity, sessions, answer=None, statuses=None):
     return out
 
 
-def reply_of(step):
+def reply_of(step, lab=None):
+    """The reply of the fake lab `lab` to a step (of a new one, without a cart, when none is given)."""
     from scripts import host_traffic as ht
     split = urlsplit(step.path)
     body = None if step.body is None else b"upload" if isinstance(step.body, ht.Upload) else json.dumps(
         step.body).encode()
-    status, content_type, raw = lab_answer(step.method, split.path, parse_qs(split.query),
-                                           f"Bearer {step.token}" if step.token else None, body)
+    status, content_type, raw = (lab or FakeLab()).answer(step.method, split.path, parse_qs(split.query),
+                                                          f"Bearer {step.token}" if step.token else None, body)
     payload = json.loads(raw) if content_type == JSON_TYPE else None
     return ht.Reply(status, "ok" if 200 <= status < 300 else "http_error", payload, 0.0)
 
@@ -674,8 +822,9 @@ class LabHandler(BaseHTTPRequestHandler):
     def answer(self):
         split = urlsplit(self.path)
         body = self.rfile.read(int(self.headers.get("Content-Length") or 0))
-        status, content_type, raw = lab_answer(self.command, split.path, parse_qs(split.query),
-                                               self.headers.get("Authorization"), body)
+        status, content_type, raw = self.server.lab.answer(self.command, split.path, parse_qs(split.query),
+                                                           self.headers.get("Authorization"), body,
+                                                           self.headers.get("X-Request-ID"))
         self.send_response(status)
         self.send_header("Content-Type", content_type)
         self.send_header("Content-Length", str(len(raw)))
@@ -691,6 +840,7 @@ class LabHandler(BaseHTTPRequestHandler):
 @pytest.fixture
 def lab_server():
     http = ThreadingHTTPServer(("127.0.0.1", 0), LabHandler)
+    http.lab = FakeLab()
     thread = threading.Thread(target=http.serve_forever)
     thread.start()
     yield f"http://127.0.0.1:{http.server_port}"
@@ -769,6 +919,11 @@ def test_real_run_writes_exactly_the_logs_of_design_1_4(tmp_path, lab_server, pr
     assert [a["user_session"] for a in arrivals] == [f"{run_id}-u{n}" for n in range(len(arrivals))]
     assert len(arrivals) >= 5 and all(type(a["admitted"]) is bool and type(a["active"]) is int for a in arrivals)
     assert all(a["admitted"] == (a["active"] < params["max_concurrent"]) for a in arrivals)
+    # B5c: the named reason of a drop, the customer (a customer of lab/seed.py) only of an admitted eshop user session.
+    assert all(a["drop_reason"] == (None if a["admitted"] else "max_concurrent") for a in arrivals)
+    names = {f"zakaznik{i:04d}" for i in range(1, seed.SIZES["customers"] + 1)}
+    assert all(a["customer"] is None or profile == "eshop" and a["admitted"] and a["customer"] in names
+               for a in arrivals)
     assert [a["t_mono"] for a in arrivals] == sorted(a["t_mono"] for a in arrivals) and arrivals[-1]["t_mono"] < 4
     admitted = {a["user_session"] for a in arrivals if a["admitted"]}
     rows = of_type(requests, "request")

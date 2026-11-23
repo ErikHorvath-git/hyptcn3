@@ -76,7 +76,10 @@ SQL_ORDER_ITEM = "INSERT INTO order_items (order_id, product_id, quantity, price
 SQL_ORDER_LIST = ("SELECT o.id, o.total_cents, o.status, i.product_id, i.quantity, i.price_cents FROM "
                   "(SELECT id, total_cents, status FROM orders WHERE username=%s ORDER BY id DESC LIMIT 50) o "
                   "LEFT JOIN order_items i ON i.order_id = o.id ORDER BY o.id DESC, i.product_id")
-SQL_DOC_PAGE = ("SELECT id, name, owner, bytes, extract(epoch FROM created_at) FROM documents "
+# psycopg2 returns numeric as decimal.Decimal, which json.dumps refuses (TypeError, answered with 400: every document
+# list of the lab test on the VM, package B5c). extract() is numeric since PostgreSQL 14 (Debian 12 has 15), so it is
+# cast to double precision; lab/tests/test_services.py refuses any SQL here whose value can be numeric uncast.
+SQL_DOC_PAGE = ("SELECT id, name, owner, bytes, extract(epoch FROM created_at)::double precision FROM documents "
                 "ORDER BY id DESC LIMIT %s OFFSET %s")
 SQL_DOC_COUNT = "SELECT count(*) FROM documents"
 SQL_DOC = "SELECT id, name, bytes, sha256 FROM documents WHERE id=%s"
@@ -352,7 +355,8 @@ class Handler(BaseHTTPRequestHandler):
                 fetch("catalog", "/healthz", rid=self.rid())
                 fetch("auth", "/healthz", rid=self.rid())
                 with database() as cursor:
-                    cursor.execute("SELECT EXTRACT(EPOCH FROM now() - updated_at) FROM worker_heartbeat WHERE id=1")
+                    cursor.execute("SELECT EXTRACT(EPOCH FROM now() - updated_at)::double precision "
+                                   "FROM worker_heartbeat WHERE id=1")
                     row = cursor.fetchone()
                 if not row or row[0] > 15:
                     self.reply(503, {"status": "degraded", "worker": "stale"})

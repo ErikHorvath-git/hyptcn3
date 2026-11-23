@@ -23,7 +23,10 @@ User sessions arrive as a non-homogeneous Poisson process with intensity
 rate x envelope(t): the envelope over [0, D] is drawn from the seed traffic
 (draw_envelope), the arrival times by inversion of its integral from
 traffic_arrivals; an arrival over max_concurrent user sessions in progress is
-dropped and logged. Each admitted user session runs its profile's state machine
+dropped and logged. An eshop user session that orders holds a customer no other
+user session in progress holds (package B5c: the lab keeps one cart per
+customer); an arrival that finds every customer held is dropped and logged with
+that reason. Each admitted user session runs its profile's state machine
 on its own streams of traffic_choices and traffic_sizes, waits the drawn think
 time before every request but the first, and makes the deliberate client errors
 of its profile. Logs hyptcn3/traffic-request/2 and hyptcn3/traffic-interval/2
@@ -517,6 +520,13 @@ V5_LOAD_MODEL = ("open loop: user sessions arrive as a non-homogeneous Poisson p
 V5_CONCURRENCY = ("one scheduler thread offers each arrival at its time and sends each step of a user session after "
                   "its think time; the requests run in a pool of at most max_concurrent threads, so the request of an "
                   "admitted user session never waits for a thread")
+# Package B5c (finding F2 of B5b): the customer of an eshop user session and the named reasons of a dropped arrival.
+DROP_MAX_CONCURRENT, DROP_CUSTOMERS = "max_concurrent", "all_customers_held"
+V5_CUSTOMERS = ("an eshop user session that orders draws, after whether it orders, the customer it would be, and holds "
+                "a customer from its arrival to its end: that one unless a user session in progress holds it, else the "
+                "next free one by number; an arrival record names it (customer), null for a user session that logs in "
+                "as no customer (eshop browsing, corp); a dropped arrival names its reason (drop_reason): "
+                f"{DROP_MAX_CONCURRENT} user sessions in progress, or {DROP_CUSTOMERS}")
 V5_PHASE_ASSIGNMENT = "by request start time; an arrival by its time"
 V5_INTERVAL_ASSIGNMENT = (INTERVAL_ASSIGNMENT + "; arrivals by their time; planned_sessions is rate x the integral "
                           "of the envelope over the interval, the envelope being 0 outside [0, dur]")
@@ -703,6 +713,34 @@ class Lab:
             self.page_law = Zipf(math.ceil(self.documents / params["page_size"]), s)
 
 
+def customer_name(number):
+    """The user name of customer `number` of lab/seed.py."""
+    return f"zakaznik{number:04d}"
+
+
+class Customers:
+    """The customers that eshop user sessions in progress hold (finding F2 of B5b: the lab keeps one cart per customer,
+    so two user sessions of one customer shared a cart and the order of one emptied the cart the other then ordered,
+    an unintended 400). An ordering user session holds one from its arrival to its end: the one it drew when no user
+    session in progress holds that one, else the next free one by number (the first after the last). Its draws stay
+    those of its own stream; only this choice depends on which user sessions are still in progress."""
+
+    def __init__(self, count):
+        self.count, self.holders = count, {}
+
+    def take(self, wanted, n):
+        """The customer that user session n holds from now on; None when every customer is held."""
+        for k in range(self.count):
+            number = (wanted - 1 + k) % self.count + 1
+            if number not in self.holders:
+                self.holders[number] = n
+                return number
+        return None
+
+    def release(self, number):
+        del self.holders[number]
+
+
 class UserSession:
     """One user session of a v5 profile: steps() yields its requests in order and gets each reply back.
 
@@ -718,6 +756,8 @@ class UserSession:
         share = params["client_errors"]["share"]
         self.error_odds, self.statuses = share / (1 - share), list(params["client_errors"]["statuses"])
         self.token, self.first, self.seq = "", True, 0
+        # The customer it would be and the one it holds (Customers); None for a user session that logs in as none.
+        self.wanted = self.customer = None
         self._steps = self.steps()
 
     def start(self):
@@ -767,12 +807,20 @@ class UserSession:
 
 
 class Eshop(UserSession):
-    """Profile eshop: a customer's funnel (skeleton B5 section 2; profiles.eshop.funnel)."""
+    """Profile eshop: a customer's funnel (skeleton B5 section 2; profiles.eshop.funnel).
+
+    Its first draws, before its first step: whether it orders and, if it does, the customer it would be (uniform). The
+    scheduler gives it a customer no other user session in progress holds when it arrives (Customers), because the
+    lab keeps one cart per customer (finding F2 of B5b)."""
+
+    def __init__(self, params, intensity, n, seeds, lab, run_id):
+        super().__init__(params, intensity, n, seeds, lab, run_id)
+        self.buyer = self.rng.random() < params["order_share"][intensity]
+        self.wanted = self.rng.randint(1, lab.customers) if self.buyer else None
 
     def steps(self):
-        p, f, rng, lab = self.p, self.p["funnel"], self.rng, self.lab
+        f, rng, lab = self.p["funnel"], self.rng, self.lab
         size, viewed = f["page_size"], []
-        buyer = rng.random() < p["order_share"][self.intensity]
         yield from self.page(self.make("home", "/"))
         for _ in range(rng.randint(*f["pages"])):
             if rng.random() < f["search_share"]:
@@ -784,10 +832,10 @@ class Eshop(UserSession):
                 product = lab.product_law.draw(rng)
                 viewed.append(product)
                 yield from self.page(self.make("detail", f"/api/catalog/{product}", obj=product))
-        if not buyer:
+        if not self.buyer:
             return
-        customer = f"zakaznik{rng.randint(1, lab.customers):04d}"
-        yield from self.request(self.make("login", "/api/auth/token", "POST", {"user": customer}), login=True)
+        yield from self.request(self.make("login", "/api/auth/token", "POST", {"user": customer_name(self.customer)}),
+                                login=True)
         for _ in range(rng.randint(*f["cart_items"])):
             product = viewed[rng.randrange(len(viewed))] if viewed else lab.product_law.draw(rng)
             yield from self.request(self.make("cart_add", "/api/cart", "POST", {"product_id": product, "quantity": 1},
@@ -1029,13 +1077,15 @@ class SessionRecorder(Recorder):
                "profile": run.profile, "scenario": run.scenario, "intensity": run.intensity, "rate": run.rate,
                "rate_source": run.rate_source, "seeds": dict(run.seeds), "protocol_sha256": run.protocol_sha256,
                "profile_parameters": run.params, "warmup_s": run.warmup_s, "envelope": run.envelope.as_dict(),
-               "concurrency": V5_CONCURRENCY}
+               "concurrency": V5_CONCURRENCY, "customer_assignment": V5_CUSTOMERS}
         if key == "intervals":
             rec.update(hist_edges_ms=EDGES, hist_precision=HIST_PRECISION)
         return rec
 
-    def arrival(self, n, admitted, active):
-        """Log the arrival of user session n, `active` in progress just before it, and count it in its interval."""
+    def arrival(self, n, active, customer, drop_reason):
+        """Log the arrival of user session n, `active` in progress just before it, with the customer it holds (None:
+        none) or the reason it is dropped (None: admitted), and count it in its interval."""
+        admitted = drop_reason is None
         with self.lock:
             mono, wall = self.clock.mono(), self.clock.wall()
             rel = mono - self.origin
@@ -1046,7 +1096,8 @@ class SessionRecorder(Recorder):
             self.active = active + admitted
             current.active_max = max(current.active_max, self.active)
             rec = {"type": "arrival", "user_session": f"{self.run_id}-u{n}", "t_mono": round(rel, ROUND),
-                   "t_utc": utc(wall), "phase": self.phase, "admitted": admitted, "active": active}
+                   "t_utc": utc(wall), "phase": self.phase, "admitted": admitted, "active": active,
+                   "customer": customer, "drop_reason": drop_reason}
         self.put("requests", rec)
 
     def session_end(self, active):
@@ -1113,9 +1164,10 @@ class UserClient:
 
 class OpenLoop:
     """The scheduler of a v5 run: offers every arrival at its time, admits it while fewer than max_concurrent user
-    sessions are in progress (else drops it), and sends each step of a user session after its think time, counted
-    from the end of the step before. Only its own thread changes its state; the requests run through `submit` (a
-    thread pool; a test passes a synchronous call) and come back as replies."""
+    sessions are in progress and, for an ordering eshop user session, a customer is free (else drops it with the
+    reason), and sends each step of a user session after its think time, counted from the end of the step before.
+    Only its own thread changes its state; the requests run through `submit` (a thread pool; a test passes a
+    synchronous call) and come back as replies."""
 
     def __init__(self, run, recorder, client, stop, submit, clock=CLOCK):
         self.run, self.recorder, self.client, self.stop, self.submit, self.clock = (run, recorder, client, stop,
@@ -1125,6 +1177,7 @@ class OpenLoop:
         heapq.heapify(self.heap)
         self.order = itertools.count(len(run.arrivals))  # Ties of time keep the order of scheduling.
         self.replies, self.sessions, self.pending, self.counts = deque(), {}, 0, Counter()
+        self.customers = Customers(run.lab.customers)
 
     def wake(self):
         with self.cond:
@@ -1167,20 +1220,32 @@ class OpenLoop:
     def _due(self, item):
         _, _, kind, n, step = item
         if kind == "arrival":
-            active = len(self.sessions)
-            admitted = active < self.run.cap
-            self.recorder.arrival(n, admitted, active)
+            session, reason = self._admit(n)
+            customer = None if session is None or session.customer is None else customer_name(session.customer)
+            self.recorder.arrival(n, len(self.sessions), customer, reason)
             self.counts["arrivals"] += 1
-            self.counts["admitted" if admitted else "dropped"] += 1
-            if not admitted:
+            self.counts["dropped" if reason else "admitted"] += 1
+            if reason:
                 return
-            self.sessions[n] = PROFILES[self.run.profile](self.run.params, self.run.intensity, n, self.run.seeds,
-                                                          self.run.lab, self.recorder.run_id)
+            self.sessions[n] = session
             try:
-                step = self.sessions[n].start()
+                step = session.start()
             except Exception as exc:  # noqa: BLE001 - a broken state machine is a worker error
                 return self._fail(n, exc)
         self._send(n, step)
+
+    def _admit(self, n):
+        """(user session, None) for arrival n, or (None, the reason it is dropped): max_concurrent user sessions in
+        progress, or an ordering eshop user session that finds every customer held."""
+        if len(self.sessions) >= self.run.cap:
+            return None, DROP_MAX_CONCURRENT
+        session = PROFILES[self.run.profile](self.run.params, self.run.intensity, n, self.run.seeds, self.run.lab,
+                                             self.recorder.run_id)
+        if session.wanted is not None:
+            session.customer = self.customers.take(session.wanted, n)
+            if session.customer is None:
+                return None, DROP_CUSTOMERS
+        return session, None
 
     def _send(self, n, step):
         session = self.sessions[n]
@@ -1220,7 +1285,9 @@ class OpenLoop:
         self._end(n, "failed")
 
     def _end(self, n, how):
-        del self.sessions[n]
+        session = self.sessions.pop(n)
+        if session.customer is not None:
+            self.customers.release(session.customer)
         self.counts[how] += 1
         self.recorder.session_end(len(self.sessions))
 

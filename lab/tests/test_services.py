@@ -2,10 +2,13 @@
 and 413, the upload cap and the report that runs three subprocesses, one report at a time.
 
 The handlers run in process (no sockets); internal calls between services go to the same in-process handlers.
-The fake database holds a small seeded level of lab/seed.py and runs the named statements of lab/services.py.
+The fake database holds a small seeded level of lab/seed.py and runs the named statements of lab/services.py; it
+returns the Python types psycopg2 returns for the real column types (package B5c: extract() is numeric, a Decimal).
 """
+import ast
 from contextlib import contextmanager
 import copy
+from decimal import Decimal
 import gzip
 import http.client
 import importlib.util
@@ -27,6 +30,19 @@ LAB = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(LAB))
 
 SMALL = {"products": 30, "customers": 5, "employees": 3, "documents": 4, "orders": 6, "carts": 2}
+CREATED_UNIX = 1795397963.65049  # The creation time of the fake's first document (any time does).
+EPOCH = re.compile(r"(?i)extract\(epoch from (?:now\(\) - )?\w+\)(::double precision)?")
+# The worker's heartbeat age that the health check of orders reads (a statement inline in lab/services.py).
+HEARTBEAT_AGE = "SELECT EXTRACT(EPOCH FROM now() - updated_at)::double precision FROM worker_heartbeat WHERE id=1"
+
+
+def psycopg2_epoch(sql, seconds):
+    """What psycopg2 returns for the item extract(epoch FROM ...) of `sql`: PostgreSQL 14 and later (Debian 12 has 15)
+    type extract() numeric, which psycopg2 returns as decimal.Decimal with six decimals; cast to double precision it
+    is a float."""
+    item = EPOCH.search(sql)
+    assert item, sql  # A statement of another form needs its own type here.
+    return float(seconds) if item[1] else Decimal(f"{seconds:.6f}")
 
 
 def load_services(monkeypatch):
@@ -59,7 +75,7 @@ class FakeDatabase:
         self.statements = []
         self.handlers = {
             "SELECT 1": lambda: [(1,)],
-            "SELECT EXTRACT(EPOCH FROM now() - updated_at) FROM worker_heartbeat WHERE id=1": lambda: [(1.0,)],
+            HEARTBEAT_AGE: lambda: [(psycopg2_epoch(HEARTBEAT_AGE, 1.0),)],
             s.SQL_PRODUCT_PAGE: lambda limit, offset: self.products()[offset:offset + limit],
             s.SQL_PRODUCT_COUNT: lambda: [(len(t["products"]),)],
             s.SQL_PRODUCT_SEARCH: lambda pattern, limit, offset: self.products(pattern)[offset:offset + limit],
@@ -77,7 +93,8 @@ class FakeDatabase:
             s.SQL_ORDER: self.order_add,
             s.SQL_ORDER_ITEM: lambda oid, pid, q, price: t["items"].update({(oid, pid): (q, price)}),
             s.SQL_ORDER_LIST: self.order_list,
-            s.SQL_DOC_PAGE: lambda limit, offset: [(i, *t["documents"][i][:3], 0.0)
+            s.SQL_DOC_PAGE: lambda limit, offset: [(i, *t["documents"][i][:3],
+                                                    psycopg2_epoch(s.SQL_DOC_PAGE, t["documents"][i][4]))
                                                    for i in sorted(t["documents"], reverse=True)][offset:offset + limit],
             s.SQL_DOC_COUNT: lambda: [(len(t["documents"]),)],
             s.SQL_DOC: lambda did: [(did, t["documents"][did][0], t["documents"][did][2], t["documents"][did][3])]
@@ -113,7 +130,7 @@ class FakeDatabase:
 
     def document_add(self, name, owner, size, digest):
         did = max(self.tables["documents"], default=0) + 1
-        self.tables["documents"][did] = (name, owner, size, digest)
+        self.tables["documents"][did] = (name, owner, size, digest, CREATED_UNIX + did - 1)  # created_at as unix time
         return [(did,)]
 
     @contextmanager
@@ -288,6 +305,94 @@ def test_documents_upload_list_download_and_log(lab):
     assert status == 200 and data == content and headers["X-Document-SHA256"] == doc["sha256"]
     log = [json.loads(line) for line in (lab.tmp / "logs/docs.log").read_text().splitlines()]
     assert [(e["action"], e["status"]) for e in log] == [("upload", 201), ("list", 200), ("download", 200)]
+
+
+def test_document_list_replies_200_with_the_creation_time_as_a_json_number(lab):
+    """The lab test on the VM got 400 for every document list of profile corp (package B5c): PostgreSQL 15 returned
+    extract(epoch ...) as numeric, psycopg2 as a Decimal, json.dumps refused it and handle_api answered 400."""
+    status, doc, _ = lab.call("docs", "POST", "/api/docs?name=smernica-0001.pdf", token=lab.employee, raw=b"x" * 64)
+    assert status == 201
+    status, listing, headers = lab.call("docs", "GET", "/api/docs?page=1&size=20", token=lab.employee)  # As corp asks.
+    assert status == 200 and headers["Content-Type"] == "application/json"
+    created = listing["documents"][0]["created_unix"]
+    assert type(created) is float and created == CREATED_UNIX
+
+
+# The guard (package B5c): no SQL value of the lab that psycopg2 reads may be numeric, which psycopg2 returns as
+# decimal.Decimal and json.dumps refuses. Numeric are: extract() since PostgreSQL 14, avg() of integers, sum() of
+# bigint, round(), trunc(), div(), ceil() and floor() of numeric, the statistical aggregates, a decimal literal and the
+# type numeric (decimal) itself. The guard does not know the types of the arguments, so every such call, literal or
+# type name must be cast to a float or an integer type, itself or an expression around it (also sum() of integer,
+# which is bigint: the cast costs nothing and keeps the rule simple).
+NUMERIC_CALL = re.compile(r"(?i)\b(extract|avg|sum|round|trunc|div|ceil|ceiling|floor|stddev\w*|variance|var_pop"
+                          r"|var_samp|percentile_cont|percentile_disc)\s*\(")
+NUMERIC_TYPE = re.compile(r"(?i)\b(numeric|decimal)\b")
+NUMERIC_LITERAL = re.compile(r"(?<![\w.])(\d+\.\d*|\.\d+)(?![\w.])")
+NUMBER_CAST = re.compile(r"(?i)\s*::\s*(double precision|float8|float4|real|bigint|int8|integer|int4|smallint|int2"
+                         r"|int)\b")
+SQL_START = re.compile(r"\s*\(?\s*(SELECT|INSERT|UPDATE|DELETE|WITH)\b")
+
+
+def uncast_numeric(sql):
+    """The parts of `sql` whose value PostgreSQL may type numeric with no cast to a float or an integer type right
+    after them or after a parenthesis around them (quoted literals left out)."""
+    text = re.sub(r"'(?:[^']|'')*'", "''", sql)
+    pairs, opened = [], []
+    for i, char in enumerate(text):
+        if char == "(":
+            opened.append(i)
+        elif char == ")" and opened:
+            pairs.append((opened.pop(), i))
+    parts = [m.span() for pattern in (NUMERIC_TYPE, NUMERIC_LITERAL) for m in pattern.finditer(text)]
+    for m in NUMERIC_CALL.finditer(text):
+        parts.append((m.start(), next((c for o, c in pairs if o == m.end() - 1), len(text) - 1) + 1))
+
+    def cast(end):
+        return NUMBER_CAST.match(text, end) is not None
+    return sorted(text[a:b] for a, b in parts if not cast(b) and not any(o < a and b <= c and cast(c + 1)
+                                                                         for o, c in pairs))
+
+
+def psycopg2_statements():
+    """{file: [statement]} of every lab module that imports psycopg2 (today lab/services.py; guest_state.py and
+    udalosti.py run psql and parse its text): every string constant that starts a statement, docstrings left out."""
+    found = {}
+    for path in sorted(LAB.glob("*.py")):
+        tree = ast.parse(path.read_text())
+        modules = {alias.name for node in ast.walk(tree) if isinstance(node, ast.Import) for alias in node.names}
+        modules |= {node.module for node in ast.walk(tree) if isinstance(node, ast.ImportFrom) and node.module}
+        if not any(name.split(".")[0] == "psycopg2" for name in modules):
+            continue
+        docstrings = {id(node.body[0].value) for node in ast.walk(tree)
+                      if isinstance(node, (ast.Module, ast.FunctionDef, ast.ClassDef)) and node.body
+                      and isinstance(node.body[0], ast.Expr) and isinstance(node.body[0].value, ast.Constant)}
+        found[path.name] = [node.value for node in ast.walk(tree)
+                            if isinstance(node, ast.Constant) and isinstance(node.value, str)
+                            and id(node) not in docstrings and SQL_START.match(node.value)]
+    return found
+
+
+def test_no_sql_value_the_lab_reads_through_psycopg2_can_be_numeric():
+    # The guard finds what it must: the document list of B5b, the aggregates, a literal, a cast to numeric.
+    assert uncast_numeric("SELECT id, name, owner, bytes, extract(epoch FROM created_at) FROM documents") == [
+        "extract(epoch FROM created_at)"]
+    assert uncast_numeric("SELECT avg(price_cents), sum(total_cents::bigint) FROM orders") == [
+        "avg(price_cents)", "sum(total_cents::bigint)"]
+    assert uncast_numeric("SELECT round(price_cents / 100.0, 2), CAST(quantity AS numeric) FROM x") == [
+        "100.0", "numeric", "round(price_cents / 100.0, 2)"]
+    for good in ("SELECT extract(epoch FROM created_at)::double precision FROM documents",
+                 "SELECT coalesce(extract(epoch FROM max(created_at)), 0)::float8, sum(quantity)::bigint FROM x",
+                 "SELECT (price_cents * 0.9)::integer FROM products WHERE name ILIKE '%1.5%'"):
+        assert uncast_numeric(good) == [], good
+    statements = psycopg2_statements()  # A new module that imports psycopg2 is read as well.
+    module = ast.parse((LAB / "services.py").read_text())
+    named = {node.targets[0].id: ast.literal_eval(node.value) for node in module.body
+             if isinstance(node, ast.Assign) and getattr(node.targets[0], "id", "").startswith("SQL_")}
+    assert "SQL_DOC_PAGE" in named and set(named.values()) <= set(statements["services.py"])
+    assert {sql: uncast_numeric(sql) for sqls in statements.values() for sql in sqls if uncast_numeric(sql)} == {}
+    assert HEARTBEAT_AGE in statements["services.py"]  # The inline statements are read too.
+    schema = "\n".join(line.split("--", 1)[0] for line in (LAB / "schema.sql").read_text().splitlines())
+    assert NUMERIC_TYPE.findall(schema) == []  # No column is numeric.
 
 
 @pytest.mark.parametrize("size,status", [(1024, 201), (1025, 413)])
