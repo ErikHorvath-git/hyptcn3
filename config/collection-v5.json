@@ -292,13 +292,14 @@
       "event_free_position",
       "event_deck",
       "control_deck",
+      "phase_deck",
       "event_times",
       "traffic",
       "traffic_arrivals",
       "traffic_choices",
       "traffic_sizes"
     ],
-    "rule": "seed = int(sha256(json.dumps([name, group, session, attempt, purpose])).hexdigest()[:16], 16) with the protocol name (the rehearsal's own name in rehearsal mode); session-level purposes (event_times, traffic, traffic_arrivals, traffic_choices, traffic_sizes) take the group name, the position and the attempt; role-level ones (event_free_position, event_deck, control_deck) the role name as group, session -1 and attempt 0; scenario_order is drawn per block of len(scenarios) groups of a role, with group <role>/<block>, session -1 and attempt 0",
+    "rule": "seed = int(sha256(json.dumps([name, group, session, attempt, purpose])).hexdigest()[:16], 16) with the protocol name (the rehearsal's own name in rehearsal mode); session-level purposes (event_times, traffic, traffic_arrivals, traffic_choices, traffic_sizes) take the group name, the position and the attempt; role-level ones (event_free_position, event_deck, control_deck, phase_deck) the role name as group, session -1 and attempt 0; scenario_order is drawn per block of len(scenarios) groups of a role, with group <role>/<block>, session -1 and attempt 0",
     "note": "Every purpose has its own random stream (proposal 5.5); the seeds are new, the v4 schedule was looked at during the fault analysis (proposal 7.3). The traffic of a session (package B5b, skeleton B5 section 2): traffic draws the arrival envelope and is the session's seed, traffic_arrivals the arrival times, traffic_choices the choices of every user session and traffic_sizes the upload sizes (scripts/host_traffic.py)."
   },
   "audit": {

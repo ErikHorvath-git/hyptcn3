@@ -1,16 +1,23 @@
-"""The self-check of protocol v5 (package B4): the real file passes, every deliberate error fails its check.
+"""The self-check of protocol v5 (packages B4 and B4b): the real file passes, every deliberate error fails its check.
 
 scripts/collection.py --protocol P selfcheck (scripts/protocol_v5.py) runs on config/collection-v5.json: every
 check passes except lab_register, which stays pending until package B8 registers its four control kinds in lab/ (B5
 registered the event types and the traffic profiles, skeleton B5 section 5 item 7), so the command exits 2 until B8.
-Each row of the lead's skeleton (dokazy/B4/kostra/KOSTRA.md, section 5) is one deliberate error: the file with one
+Each row of the lead's skeleton (dokazy/B4/kostra/KOSTRA.md, section 5), each property of his must_fix 5 and 6 on
+B4 and each rule of the finding S1 of the B4 verification (package B4b) is one deliberate error: the file with one
 change, the plan with one change or a replacement that changes the assignment.
 Its check fails with exactly the reasons written here and every other check gives what it gives for the real file,
-except the ones a case lists. Only what the plan draws (a group, a scenario, an event type) is read from the plan.
+except the ones a case lists. Only what the plan draws (a group, a scenario, an event type, a card, a time) is read
+from the plan. Since B4b the plan is balanced exactly (every group holds every type once, every type as often in
+every scenario and on every VM of a role, the tenths of the phases within 1), so a change can break a property it is
+not about: a case changes what breaks nothing else, and where that is impossible it lists the other reasons and says
+why. Times are moved by whole intervals of 5 s where the phases must stay, and the rules they meet (first_s,
+min_gap_s, tail_s, the duration span, the guards) are all multiples of the interval in the real file.
 Names package B4 adds are imported inside the tests, so this file collects on the code before B4.
 """
 from collections import Counter
 import json
+import math
 from pathlib import Path
 
 import pytest
@@ -18,13 +25,34 @@ import pytest
 ROOT = Path(__file__).resolve().parents[2]
 V5 = ROOT / "config/collection-v5.json"
 CHECKS = ("keys", "loader", "reachability", "role_sizes", "scenario_balance", "events", "controls",
-          "full_snapshot_guard", "phases", "streams", "role_order", "analysis", "rehearsal", "lab_register")
+          "full_snapshot_guard", "times", "phases", "streams", "role_order", "analysis", "rehearsal", "lab_register")
 PENDING = ("registered by B8: kontrola_davka_procesov, kontrola_modul_jadra, kontrola_pocuvajuci_soket, "
            "kontrola_zapisovac_pamate")
 TYPES = ("naprazdno", "restart_databazy", "udrzba_zaloha", "zamok_tabulky", "zataz_pamate", "zla_konfiguracia_sluzby")
+ROLES = ("train", "dev", "calibration", "test_benign", "test_controls")
+SCENARIOS = ("corp_high", "corp_low", "eshop_high", "eshop_low")
 UNREACHABLE = "protocol(): invalid_rows.max is unreachable under the score coverage gate"
 OUTSIDE = "score coverage gate outside the interval bound to invalid_rows.max"
 REFUSED = "witness with invalid_rows.max rows is refused"
+# B4b, the lead's must_fix 6 on B4: in every role the starts and the stops per tenth of the 5 s interval differ by at
+# most 1, and the start phases of the plan pass a Kolmogorov-Smirnov test at 5 %, and so do its stop phases (F2 of the
+# verification of B4b): 286 starts and stops (12 + 4 + 8 + 12 groups with two sessions of three events, 70 controls),
+# critical 1.3581 / (sqrt(286) + 0.12 + 0.11 / sqrt(286)) = 0.0797.
+TENTH_ROWS = [f"role {role}: {what} per tenth of the interval differ by more than 1" for role in ROLES
+              for what in ("starts", "stops")]
+PLAN_CHECKS = ("role_sizes", "scenario_balance", "events", "controls", "full_snapshot_guard", "times", "phases",
+               "streams", "role_order")
+
+
+def ks_row(distance, what="start"):
+    return (f"{what} phases fail the Kolmogorov-Smirnov test against the uniform law at 5 %: distance {distance:.4f} "
+            f"above the critical 0.0797 of 286 {what}s")
+
+
+def ks_rows(plan):
+    """The KS rows of the starts and of the stops of the plan, with the distances of its phases as counted here."""
+    return [ks_row(_ks([_ends(x)[i] % 5000 / 5000 for s in plan["sessions"] for x in _items(s)]), what)
+            for i, what in enumerate(("start", "stop"))]
 
 
 def _label(s):
@@ -33,6 +61,80 @@ def _label(s):
 
 def _block(group):
     return (int(group.rsplit("-", 1)[1]) - 1) // 4 + 1
+
+
+def _seconds(value):
+    """A time as the self-check writes it: at most three decimals, no trailing zeros."""
+    return f"{value:.3f}".rstrip("0").rstrip(".")
+
+
+def _ms(seconds):
+    return round(seconds * 1000)
+
+
+def _items(s):
+    """The events or the dealt controls of a session."""
+    return [x for x in s.get("events", []) + s.get("controls", []) if x.get("kind", "") is not None]
+
+
+def _ends(x):
+    """(start, stop) of an item in ms."""
+    return _ms(x["start_s"]), _ms(x["start_s"]) + _ms(x["duration_s"])
+
+
+def _move(x, start, stop):
+    """The item starts at `start` and stops at `stop` (ms)."""
+    x["start_s"], x["duration_s"] = start / 1000, (stop - start) / 1000
+
+
+def _tenths(x):
+    """(start tenth, stop tenth) of an item: the tenths of 0.5 s of the 5 s interval its start and its stop lie in."""
+    start, stop = _ends(x)
+    return start % 5000 // 500, stop % 5000 // 500
+
+
+def _ks(values):
+    """The Kolmogorov-Smirnov distance of values in [0, 1) from the uniform law."""
+    xs, n = sorted(values), len(values)
+    return max(max((i + 1) / n - x, x - i / n) for i, x in enumerate(xs))
+
+
+def _into_guard(x):
+    """An item that starts before 1740 s and ends at 1865 s or later starts later by whole intervals, in the first 5 s
+    of the guard of the full snapshot at 1800 s (from 60 s before it), and ends where it ended: its phases, the gap
+    before it (wider), the one after it and tail_s stay, and it lasts at least 1865 - 1745 = 120 s."""
+    start, stop = _ends(x)
+    _move(x, start + math.ceil((1740000 - start) / 5000) * 5000, stop)
+
+
+def _spanning(item):
+    return item["start_s"] < 1740 and item["start_s"] + item["duration_s"] >= 1865
+
+
+def _controls(plan):
+    """(session, control) of every dealt control of the plan."""
+    return [(s, x) for s in plan["sessions"] for x in s.get("controls", []) if x["kind"] is not None]
+
+
+def _card_counts(items):
+    """(occurrences per card and VM, occurrences per card and scenario) of the (session, control) pairs."""
+    return (Counter((x["kind"], x["polarity"], s["vm"]) for s, x in items),
+            Counter((x["kind"], x["polarity"], s["scenario"]) for s, x in items))
+
+
+def _types(s):
+    """The event types of session s."""
+    return {x["type"] for x in s["events"]}
+
+
+def _kinds(s, but):
+    """The kinds of the dealt controls of session s other than the control `but`."""
+    return {x["kind"] for x in s["controls"] if x is not but and x["kind"] is not None}
+
+
+def _trade(x, y, keys):
+    for key in keys:
+        x[key], y[key] = y[key], x[key]
 
 
 # Changes of the file: doc -> the failures they cause {check: reasons}.
@@ -131,28 +233,59 @@ def think_below_mean(doc):
     return {"loader": ["protocol(): invalid profiles"]}
 
 
+def _unplannable(shape):
+    """The failures of a file that loads but cannot be planned because a group cannot hold one full round of the six
+    types over two sessions with events (F1 of the verification of B4b): every check of the plan and the rehearsal
+    name the reason, which ends with the shape of the file."""
+    reason = ("events of role train: one full round of the types per group needs two sessions with events and twice "
+              f"as many types as a session holds ({shape})")
+    return {**{name: ["no plan: " + reason] for name in PLAN_CHECKS}, "rehearsal": ["no rehearsal plan: " + reason]}
+
+
+def two_events_per_session(doc):
+    """Sessions of two events: a group's two sessions with events hold four of the six types."""
+    doc["events"]["per_session"] = [0, 2]
+    return _unplannable("6 types, 2 per session, 2 sessions with events per group")
+
+
+def no_event_free_session(doc):
+    """No event-free session: a group has three sessions with events, nine events of six types."""
+    doc["events"]["per_session"] = [3]
+    return _unplannable("6 types, 3 per session, 3 sessions with events per group")
+
+
 # Changes of the plan of the real file: (doc, plan) -> the failures.
 
 def no_group_on_vm(doc, plan):
+    """Every group of dev moves to VM a. B4b: every group holds every type once, so every type of dev then has its 4
+    events on VM a and none on VM b (F1 of the verification of B4b)."""
     for s in plan["sessions"]:
         if s["role"] == "dev":
             s["vm"] = "a"
-    return {"role_sizes": ["role dev has no group on VM b"]}
+    return {"role_sizes": ["role dev has no group on VM b"],
+            "events": [f"role dev: events of type {t} per VM differ by more than 1" for t in TYPES]}
 
 
 def equal_scenarios(doc, plan):
-    """The second session of a group takes the first one's scenario: in its complete block that scenario is then
-    twice at position 1. The group is one where the scenario counts of its VM stay within 1."""
+    """The second session of a group of train takes the first one's scenario: in its complete block that scenario is
+    then twice at position 1. The group is one where the scenario counts of its VM stay within 1. B4b: the second
+    session's events (or its being event-free) now count under the first one's scenario, and train holds every type
+    and its event-free sessions equally often in every scenario, so each of its types (or the event-free sessions)
+    then differs by 2 between the two scenarios."""
     sessions = plan["sessions"]
     for first, second in zip(sessions, sessions[1:]):
-        if first["group"] == second["group"] and (first["position"], second["position"]) == (0, 1):
+        if (first["role"] == "train" and first["group"] == second["group"]
+                and (first["position"], second["position"]) == (0, 1)):
             counts = Counter(s["scenario"] for s in sessions if (s["role"], s["vm"]) == (first["role"], first["vm"]))
             if counts[first["scenario"]] < counts[second["scenario"]]:
                 break
     second["scenario"] = first["scenario"]
+    events = ([f"role train: events of type {t} per scenario differ by more than 1"
+               for t in sorted({x["type"] for x in second["events"]})] if second["events"]
+              else ["role train: event-free sessions per scenario differ by more than 1"])
     return {"scenario_balance": [f"group {first['group']} repeats scenario {first['scenario']}",
                                  f"scenario {first['scenario']} twice at position 1 in block "
-                                 f"{first['role']}/{_block(first['group'])}"]}
+                                 f"{first['role']}/{_block(first['group'])}"], "events": events}
 
 
 def twice_at_position(doc, plan):
@@ -161,29 +294,289 @@ def twice_at_position(doc, plan):
     assert (first["group"], first["position"], second["group"], second["position"]) == ("v5-train-1", 0,
                                                                                        "v5-train-1", 1)
     first["scenario"], second["scenario"] = second["scenario"], first["scenario"]
+    # B4b: the events of the two sessions change scenario with them; a type only one of them holds (and the
+    # event-free session, when it is one of them) then differs by 2 between the two scenarios.
+    held = [{x["type"] for x in s["events"]} for s in (first, second)]
+    free = [] if first["events"] and second["events"] else [
+        "role train: event-free sessions per scenario differ by more than 1"]
     return {"scenario_balance": [f"scenario {first['scenario']} twice at position 0 in block train/1",
-                                 f"scenario {second['scenario']} twice at position 1 in block train/1"]}
+                                 f"scenario {second['scenario']} twice at position 1 in block train/1"],
+            "events": free + [f"role train: events of type {t} per scenario differ by more than 1"
+                              for t in sorted(held[0] ^ held[1])]}
 
 
 def two_events(doc, plan):
-    s = next(s for s in plan["sessions"] if s["role"] == "train" and s["events"])
-    removed = s["events"].pop()["type"]
+    """A session of train loses an event. B4b: one whose start and stop lie in tenths of the interval that train has
+    most often (8 of its 72 starts or stops), so the tenths of the role stay within 1."""
+    train = [x for s in plan["sessions"] if s["role"] == "train" for x in s["events"]]
+    starts, stops = [Counter(_tenths(x)[i] for x in train) for i in (0, 1)]
+    s, removed = next((s, x) for s in plan["sessions"] if s["role"] == "train" for x in s["events"]
+                      if starts[_tenths(x)[0]] == max(starts.values()) and stops[_tenths(x)[1]] == max(stops.values()))
+    s["events"].remove(removed)
     return {"events": [f"session {_label(s)} has 2 events (allowed [0, 3])",
-                       f"role train: type {removed} has 11 events, below min_per_type 12"]}
+                       f"role train: type {removed['type']} has 11 events, below min_per_type 12"]}
 
 
 def start_in_guard(doc, plan):
-    s = next(s for s in plan["sessions"] if s.get("events"))
-    s["events"][0]["start_s"] = 1770.  # 30 s before the full snapshot of row 360
-    return {"full_snapshot_guard": [f"{_label(s)}: {s['events'][0]['type']} starts at 1770 s inside the guard of "
-                                    "the full snapshot at 1800 s"]}
+    """An event that spans the full snapshot of row 360 (1800 s) starts in its guard (_into_guard). B4b: by whole
+    intervals and with its stop kept, so it keeps its phases and every rule but the guard."""
+    s, x = next((s, x) for s in plan["sessions"] for x in s.get("events", []) if _spanning(x))
+    _into_guard(x)
+    return {"full_snapshot_guard": [f"{_label(s)}: {x['type']} starts at {_seconds(x['start_s'])} s inside the guard "
+                                    "of the full snapshot at 1800 s"]}
 
 
 def locked_to_grid(doc, plan):
+    """Every start moves back to the start of its interval. B4b: so does every stop, which keeps the gaps, the
+    duration spans, first_s, tail_s and the guards (multiples of 5 s); every role then has its starts and stops in
+    tenth 0, and every start phase and every stop phase is 0."""
     for s in plan["sessions"]:
-        for item in s.get("events", []) + [c for c in s.get("controls", []) if c["kind"] is not None]:
-            item["start_s"] = item["start_s"] // 5 * 5  # Guards start and end on a multiple of 5 s: none is met.
-    return {"phases": ["event starts are locked to the sampling grid"]}
+        for item in _items(s):
+            start, stop = _ends(item)
+            _move(item, start // 5000 * 5000, stop // 5000 * 5000)
+    return {"phases": TENTH_ROWS + [ks_row(1), ks_row(1, "stop")]}
+
+
+def same_nonzero_phase(doc, plan):
+    """S1 of the B4 verification: every start and every stop moves within its interval to phase 2.5 s, which the
+    phase check of B4 let pass. Whole intervals keep the gaps, the duration spans, first_s and the guards, and tail_s
+    holds because no stop lies at 3240 s, the latest one tail_s allows."""
+    for s in plan["sessions"]:
+        for item in _items(s):
+            start, stop = _ends(item)
+            assert stop < 3240000
+            _move(item, start // 5000 * 5000 + 2500, stop // 5000 * 5000 + 2500)
+    return {"phases": TENTH_ROWS + [ks_row(.5), ks_row(.5, "stop")]}
+
+
+def one_second_grid(doc, plan):
+    """S1 of the B4 verification: every start and every stop moves back to a whole second (phases 0 to 4 s), which
+    the phase check of B4 let pass; the rules are whole seconds and still hold. Every role then has its starts and
+    stops in the even tenths only; the distances are the ones of the moved phases, computed here."""
+    for s in plan["sessions"]:
+        for item in _items(s):
+            start, stop = _ends(item)
+            _move(item, start // 1000 * 1000, stop // 1000 * 1000)
+    return {"phases": TENTH_ROWS + ks_rows(plan)}
+
+
+def phases_at_tenth_edges(doc, plan):
+    """must_fix 6: every start and every stop moves back to the start of its tenth (a multiple of 0.5 s): the tenths
+    stay as they are in every role, yet the start phases and the stop phases leave the uniform law, which only the
+    two KS rows see (the one of the stops since F2 of the verification of B4b). The rules are multiples of 0.5 s and
+    still hold. The distances are the ones of the moved phases, computed here."""
+    for s in plan["sessions"]:
+        for item in _items(s):
+            start, stop = _ends(item)
+            _move(item, start // 500 * 500, stop // 500 * 500)
+    return {"phases": ks_rows(plan)}
+
+
+def stops_at_interval_start(doc, plan):
+    """must_fix 6: every event of dev that lasts 125 s or more ends at the start of its interval (shorter by its stop
+    phase, never below 120 s): the stops of dev crowd into tenth 0, its starts and every other role keep theirs.
+    B4b: 23 of the 286 stops of the plan then lie at phase 0, which lifts the KS distance of the stops above its
+    critical value (computed here, F2 of the verification of B4b)."""
+    for s in plan["sessions"]:
+        for item in s["events"] if s["role"] == "dev" else []:
+            if item["duration_s"] >= 125:
+                start, stop = _ends(item)
+                _move(item, start, stop // 5000 * 5000)
+    return {"phases": ["role dev: stops per tenth of the interval differ by more than 1", ks_rows(plan)[1]]}
+
+
+def stops_at_tenth_edges(doc, plan):
+    """F2 of the verification of B4b: every stop moves back to the lower edge of its tenth of the interval where the
+    item still lasts 120 s or more (all but one item): the tenths of the stops stay in every role, the starts stay,
+    and every rule holds (a stop only moves earlier, by less than 0.5 s); only the KS row of the stops sees it. The
+    distance is the one of the moved stops, computed here."""
+    for s in plan["sessions"]:
+        for item in _items(s):
+            start, stop = _ends(item)
+            if stop // 500 * 500 - start >= 120000:
+                _move(item, start, stop // 500 * 500)
+    return {"phases": [ks_rows(plan)[1]]}
+
+
+def before_first_s(doc, plan):
+    """S1: the first event of a session starts at about 200 s, before first_s 300 s (earlier by whole intervals, with
+    its duration and phases): the gap after it only widens."""
+    s = next(s for s in plan["sessions"] if s.get("events"))
+    x = s["events"][0]
+    start, stop = _ends(x)
+    shift = (start - 200000) // 5000 * 5000
+    _move(x, start - shift, stop - shift)
+    return {"times": [f"{_label(s)}: {x['type']} starts at {_seconds(x['start_s'])} s, before first_s 300 s"]}
+
+
+def overlapping_events(doc, plan):
+    """S1: the second event of a session starts 5 to 10 s before the first one ends (earlier by whole intervals, with
+    its duration and phases). The first one ends before 1740 s, so the moved start lies in no guard."""
+    s = next(s for s in plan["sessions"] if s.get("events") and _ends(s["events"][0])[1] < 1740000)
+    first, second = s["events"][:2]
+    end, (start, stop) = _ends(first)[1], _ends(second)
+    shift = ((start - end) // 5000 + 2) * 5000
+    _move(second, start - shift, stop - shift)
+    return {"times": [f"{_label(s)}: {second['type']} starts less than min_gap_s 480 s after the item before it ends"]}
+
+
+def duration_2000(doc, plan):
+    """S1: the first event of a session that starts before 1235 s lasts 2000 s to 2005 s (longer by whole intervals,
+    with its phases): it ends before 3240 s, so tail_s holds, but the second event starts less than min_gap_s after
+    it, since the second of three events never starts after 3600 - 360 - 2 * 120 - 480 = 2520 s."""
+    s = next(s for s in plan["sessions"] if s.get("events") and s["events"][0]["start_s"] < 1235)
+    first, second = s["events"][:2]
+    start, stop = _ends(first)
+    _move(first, start, stop + math.ceil((2000000 - (stop - start)) / 5000) * 5000)
+    return {"times": [f"{_label(s)}: {first['type']} lasts {_seconds(first['duration_s'])} s, outside duration_s "
+                      "[120, 360]",
+                      f"{_label(s)}: {second['type']} starts less than min_gap_s 480 s after the item before it ends"]}
+
+
+def ends_in_tail(doc, plan):
+    """S1: the last event of a session moves later by whole intervals until it ends less than tail_s 360 s before the
+    end of the session (by at most 5 s); it then starts after 2880 s, past every guard."""
+    s = next(s for s in plan["sessions"] if s.get("events"))
+    x = s["events"][-1]
+    start, stop = _ends(x)
+    shift = ((3240000 - stop) // 5000 + 1) * 5000
+    _move(x, start + shift, stop + shift)
+    return {"times": [f"{_label(s)}: {x['type']} ends less than tail_s 360 s before the end of the session (3600 s)"]}
+
+
+def event_free_scenarios(doc, plan):
+    """must_fix 5: two groups of train trade the positions of their event-free sessions (the counts per position
+    stay), so that both event-free sessions move to one scenario, which then has two more. The events of the sessions
+    that become event-free move to the scenarios the event-free sessions left; train holds every type equally often
+    in every scenario, so each of their types then differs by 2 or more (fewer events in one scenario need fewer of
+    some type there: the two properties cannot break apart)."""
+    groups = {}
+    for s in plan["sessions"]:
+        if s["role"] == "train":
+            groups.setdefault(s["group"], []).append(s)
+
+    def free(ss):
+        return next(s["position"] for s in ss if not s["events"])
+    a, b = next((a, b) for a in groups.values() for b in groups.values()
+                if free(a) != free(b) and a[free(b)]["scenario"] == b[free(a)]["scenario"])
+    p, q = free(a), free(b)
+    moved = {x["type"] for x in a[q]["events"] + b[p]["events"]}
+    a[p]["events"], a[q]["events"] = a[q]["events"], a[p]["events"]
+    b[q]["events"], b[p]["events"] = b[p]["events"], b[q]["events"]
+    return {"events": ["role train: event-free sessions per scenario differ by more than 1"]
+            + [f"role train: events of type {t} per scenario differ by more than 1" for t in sorted(moved)]}
+
+
+def type_scenarios(doc, plan):
+    """must_fix 5: two events of train in sessions of different scenarios trade their types (neither session held the
+    type it gets): each of the two types is then once more in one scenario and once less in the other. B4b: the two
+    sessions are the two sessions with events of one group, so the group still holds every type once (F1 of the
+    verification of B4b) and no count per VM changes."""
+    events = [(s, x) for s in plan["sessions"] if s["role"] == "train" for x in s["events"]]
+    x, y = next((x, y) for s, x in events for t, y in events
+                if s["group"] == t["group"] and s["scenario"] != t["scenario"] and x["type"] != y["type"]
+                and y["type"] not in _types(s) and x["type"] not in _types(t))
+    _trade(x, y, ("type", "class"))
+    return {"events": [f"role train: events of type {t} per scenario differ by more than 1"
+                       for t in sorted({x["type"], y["type"]})]}
+
+
+def _group_rows(plan, held):
+    """'group G holds type T twice' for the (group, type) pairs `held`, in the order of the groups in the plan."""
+    order = list(dict.fromkeys(s["group"] for s in plan["sessions"]))
+    return [f"group {group} holds type {t} twice"
+            for group, t in sorted(held, key=lambda pair: (order.index(pair[0]), pair[1]))]
+
+
+def type_twice(doc, plan):
+    """What the lead found in B4 and B4b keeps (no type twice in a session): two sessions of train in one scenario
+    and on one VM trade a type so that the first one holds a type twice; no count per scenario or VM changes. B4b:
+    every group holds every type once (F1 of the verification of B4b), so the first session's group then holds that
+    type twice as well, and the second session's group the type it got (its other session with events has it)."""
+    sessions = [s for s in plan["sessions"] if s["role"] == "train" and s["events"]]
+    s, t, x, y = next((s, t, x, y) for s in sessions for t in sessions
+                      if t is not s and (t["scenario"], t["vm"]) == (s["scenario"], s["vm"])
+                      for x in s["events"] for y in t["events"] if y["type"] != x["type"]
+                      and y["type"] in _types(s) and x["type"] not in _types(t))
+    twice, got = y["type"], x["type"]
+    _trade(x, y, ("type", "class"))
+    return {"events": [f"session {_label(s)} holds type {twice} twice"]
+            + _group_rows(plan, [(s["group"], twice), (t["group"], got)])}
+
+
+def group_twice(doc, plan):
+    """F1 of the verification of B4b: two events of train in one scenario and on one VM, in two groups, trade their
+    types. Neither session held the type it gets, so no session holds a type twice and no count per role, scenario
+    or VM changes; but every group holds every type once, so each of the two groups then holds the type it got
+    twice (its other session with events has it) and the type it gave not at all."""
+    events = [(s, x) for s in plan["sessions"] if s["role"] == "train" for x in s["events"]]
+    s, t, x, y = next((s, t, x, y) for s, x in events for t, y in events
+                      if s["group"] != t["group"] and (s["scenario"], s["vm"]) == (t["scenario"], t["vm"])
+                      and y["type"] not in _types(s) and x["type"] not in _types(t))
+    _trade(x, y, ("type", "class"))
+    return {"events": _group_rows(plan, [(s["group"], x["type"]), (t["group"], y["type"])])}
+
+
+def type_vm(doc, plan):
+    """F1 of the verification of B4b: a group of train moves to the other VM. Every group holds every type once, so
+    every type then has 7 events on one VM and 5 on the other. The group misses a scenario that its new VM holds 5
+    times and its old one 4 (train has 18 sessions on each VM, 5, 5, 4 and 4 per scenario), so the scenario counts of
+    both VMs stay within 1."""
+    train, other = [s for s in plan["sessions"] if s["role"] == "train"], {"a": "b", "b": "a"}
+    on_vm = Counter((s["vm"], s["scenario"]) for s in train)
+    groups = {}
+    for s in train:
+        groups.setdefault(s["group"], []).append(s)
+    ss = next(ss for ss in groups.values()
+              if all(on_vm[other[ss[0]["vm"]], n] == 5 for n in set(SCENARIOS) - {s["scenario"] for s in ss}))
+    for s in ss:
+        s["vm"] = other[s["vm"]]
+    return {"events": [f"role train: events of type {t} per VM differ by more than 1" for t in TYPES]}
+
+
+def card_vm(doc, plan):
+    """must_fix 5: two controls of one scenario on different VMs trade their cards. Both cards had 3 of their 7
+    occurrences on the first control's VM: the first card then has 2 there and 5 on the other VM, the second one 4 and
+    3. Neither session held the kind it gets."""
+    items = _controls(plan)
+    per_vm, _ = _card_counts(items)
+    x, y = next((x, y) for s, x in items for t, y in items
+                if s["scenario"] == t["scenario"] and s["vm"] != t["vm"]
+                and (x["kind"], x["polarity"]) != (y["kind"], y["polarity"])
+                and per_vm[x["kind"], x["polarity"], s["vm"]] == 3 and per_vm[y["kind"], y["polarity"], s["vm"]] == 3
+                and x["kind"] not in _kinds(t, y) and y["kind"] not in _kinds(s, x))
+    card = f"{x['kind']}/{x['polarity']}"
+    _trade(x, y, ("kind", "polarity", "class"))
+    return {"controls": [f"control {card}: occurrences per VM differ by more than 1"]}
+
+
+def card_scenario(doc, plan):
+    """must_fix 5: two controls on one VM in different scenarios trade their cards. The first card had 2 occurrences
+    in the second scenario and has 3 then; the second card had its single occurrence of a scenario in the first one
+    and stays within 1. Neither session held the kind it gets."""
+    items = _controls(plan)
+    _, per_scenario = _card_counts(items)
+    x, y = next((x, y) for s, x in items for t, y in items
+                if s["vm"] == t["vm"] and s["scenario"] != t["scenario"]
+                and (x["kind"], x["polarity"]) != (y["kind"], y["polarity"])
+                and per_scenario[x["kind"], x["polarity"], t["scenario"]] == 2
+                and per_scenario[y["kind"], y["polarity"], s["scenario"]] == 1
+                and x["kind"] not in _kinds(t, y) and y["kind"] not in _kinds(s, x))
+    card = f"{x['kind']}/{x['polarity']}"
+    _trade(x, y, ("kind", "polarity", "class"))
+    return {"controls": [f"control {card}: occurrences per scenario differ by more than 1"]}
+
+
+def kind_twice(doc, plan):
+    """must_fix 5: a control trades its card with a control of another session of its (VM, scenario) cell whose kind
+    its own session holds already: that session then holds a kind twice; no count per VM or scenario changes."""
+    items = _controls(plan)
+    s, x, y = next((s, x, y) for s, x in items for t, y in items
+                   if t is not s and (t["vm"], t["scenario"]) == (s["vm"], s["scenario"]) and y["kind"] != x["kind"]
+                   and y["kind"] in _kinds(s, x) and x["kind"] not in _kinds(t, y))
+    twice = y["kind"]
+    _trade(x, y, ("kind", "polarity", "class"))
+    return {"controls": [f"session {_label(s)} holds control kind {twice} twice"]}
 
 
 def common_seed(doc, plan):
@@ -193,10 +586,18 @@ def common_seed(doc, plan):
 
 
 def control_relabelled(doc, plan):
-    """F1 of the B4 verification: one control card dealt twice, another once less."""
-    items = [x for s in plan["sessions"] for x in s.get("controls", []) if x["kind"] is not None]
-    first, other = items[0], next(x for x in items if (x["kind"], x["polarity"]) != (items[0]["kind"], "control")
-                                  and x["polarity"] == "control")
+    """F1 of the B4 verification: one control card dealt twice, another once less. B4b: the control relabelled lies
+    in the (VM, scenario) cell where the first card has no occurrence (3 on that VM, 1 in that scenario), its own
+    card has 4 on that VM and 2 in that scenario, and its session holds no control of the first card's kind, so
+    neither card leaves the balance per VM and per scenario."""
+    items = _controls(plan)
+    per_vm, per_scenario = _card_counts(items)
+    first = items[0][1]
+    kind = first["kind"]
+    other = next(x for s, x in items if x["polarity"] == "control" and x["kind"] != kind
+                 and per_vm[kind, "control", s["vm"]] == 3 and per_scenario[kind, "control", s["scenario"]] == 1
+                 and per_vm[x["kind"], "control", s["vm"]] == 4
+                 and per_scenario[x["kind"], "control", s["scenario"]] == 2 and kind not in _kinds(s, x))
     gone = other["kind"]
     other.update(kind=first["kind"], polarity="control", **{"class": first["class"]})
     expected = sorted([(first["kind"], 8), (gone, 6)])
@@ -204,8 +605,13 @@ def control_relabelled(doc, plan):
 
 
 def control_slot_emptied(doc, plan):
-    """F1: a dealt card replaced by an empty slot: its count falls, and one slot more is empty than the deck leaves."""
-    x = next(x for s in plan["sessions"] for x in s.get("controls", []) if x["kind"] is not None)
+    """F1: a dealt card replaced by an empty slot: its count falls, and one slot more is empty than the deck leaves.
+    B4b: a card with 4 of its occurrences on the session's VM and 2 in its scenario, so it stays within 1 per VM and
+    per scenario."""
+    items = _controls(plan)
+    per_vm, per_scenario = _card_counts(items)
+    x = next(x for s, x in items if per_vm[x["kind"], x["polarity"], s["vm"]] == 4
+             and per_scenario[x["kind"], x["polarity"], s["scenario"]] == 2)
     card = (x["kind"], x["polarity"])
     x.clear()
     x.update(kind=None, reason="deck exhausted")
@@ -214,23 +620,33 @@ def control_slot_emptied(doc, plan):
 
 
 def event_free_first(doc, plan):
-    """F2: in every group of train the event-free session is moved to position 0 (the events change places)."""
+    """F2: in every group of train the event-free session is moved to position 0 (the events change places). Position
+    0 of a block holds every scenario once, so the event-free sessions per scenario stay equal. B4b: the events of a
+    session at position 0 move to another scenario; every type whose counts per scenario then differ by more than 1
+    fails too (counted here: which ones depends on the types the plan drew)."""
     for group in sorted({s["group"] for s in plan["sessions"] if s["role"] == "train"}):
         ss = [s for s in plan["sessions"] if s["group"] == group]
         free = next(s for s in ss if not s["events"])
         ss[0]["events"], free["events"] = free["events"], ss[0]["events"]
-    return {"events": ["role train: event-free sessions per position differ by more than 1"]}
+    cells = Counter((x["type"], s["scenario"]) for s in plan["sessions"] if s["role"] == "train" for x in s["events"])
+    return {"events": ["role train: event-free sessions per position differ by more than 1"]
+            + [f"role train: events of type {t} per scenario differ by more than 1" for t in TYPES
+               if max(cells[t, n] for n in SCENARIOS) - min(cells[t, n] for n in SCENARIOS) > 1]}
 
 
 def group_of_two(doc, plan):
-    """F3: the event-free session of v5-train-1 is dropped: the group has two sessions and none without events, and
-    its scenario is one short on the group's VM."""
-    s = next(s for s in plan["sessions"] if s["group"] == "v5-train-1" and not s["events"])
+    """F3: the event-free session of a group of train is dropped: the group has two sessions and none without events,
+    and its scenario is one short on the group's VM. B4b: the group is the first one whose event-free session has a
+    scenario its VM holds 4 times in train (not 5; 18 sessions over 4 scenarios), which v5-train-1 no longer is;
+    train then has 2 event-free sessions in that scenario and 3 in the others, within 1."""
+    train = [s for s in plan["sessions"] if s["role"] == "train"]
+    on_vm = Counter((s["vm"], s["scenario"]) for s in train)
+    s = next(s for s in train if not s["events"] and on_vm[s["vm"], s["scenario"]] == 4)
     plan["sessions"].remove(s)
     positions = [i for i in range(3) if i != s["position"]]
-    return {"scenario_balance": [f"group v5-train-1 has positions {json.dumps(positions)} (expected 0 to 2)",
+    return {"scenario_balance": [f"group {s['group']} has positions {json.dumps(positions)} (expected 0 to 2)",
                                  f"role train on VM {s['vm']}: scenario counts differ by more than 1"],
-            "events": ["group v5-train-1 has 0 sessions without events"]}
+            "events": [f"group {s['group']} has 0 sessions without events"]}
 
 
 def seed_field(doc, plan):
@@ -269,29 +685,82 @@ def replaced_streams(doc, plan, monkeypatch):
                         ("event_times", "traffic", "traffic_arrivals", "traffic_choices", "traffic_sizes")]}
 
 
-def replaced_in_guard(doc, plan, monkeypatch):
-    """F4: the replacement of a session draws an event start 30 s before the full snapshot at 1800 s."""
-    from scripts import protocol_v5
-    real, target = protocol_v5.replacement, next(s for s in plan["sessions"] if s.get("events"))
+def _replaced(protocol_v5, target, change):
+    """protocol_v5.replacement, but `change` edits the replacement of the session `target`."""
+    real = protocol_v5.replacement
 
-    def in_guard(p, session, attempt, *, mode="campaign"):
+    def changed(p, session, attempt, *, mode="campaign"):
         out = real(p, session, attempt, mode=mode)
         if (session["group"], session["position"]) == (target["group"], target["position"]):
-            out["events"][0]["start_s"] = 1770.
+            change(out)
         return out
-    monkeypatch.setattr(protocol_v5, "replacement", in_guard)
-    return {"full_snapshot_guard": [f"replacement of {_label(target)}: {target['events'][0]['type']} starts at 1770 s "
-                                    "inside the guard of the full snapshot at 1800 s"]}
+    return changed
+
+
+def replaced_in_guard(doc, plan, monkeypatch):
+    """F4: the replacement of a session draws an event start in the guard of the full snapshot at 1800 s. B4b: as in
+    start_in_guard, an event of the replacement that spans the snapshot moves into the guard (_into_guard)."""
+    from scripts import protocol_v5
+    target, index = next((s, i) for s in plan["sessions"]
+                         for i, x in enumerate(protocol_v5.replacement(doc, s, 2).get("events", [])) if _spanning(x))
+    changed = _replaced(protocol_v5, target, lambda out: _into_guard(out["events"][index]))
+    x = changed(doc, target, 2)["events"][index]
+    monkeypatch.setattr(protocol_v5, "replacement", changed)
+    return {"full_snapshot_guard": [f"replacement of {_label(target)}: {x['type']} starts at {_seconds(x['start_s'])} "
+                                    "s inside the guard of the full snapshot at 1800 s"]}
+
+
+def replaced_before_first_s(doc, plan, monkeypatch):
+    """S1 for a replacement (attempt 2 draws new times): its first event starts at about 200 s (earlier by whole
+    intervals, with its duration and phases)."""
+    from scripts import protocol_v5
+    target = next(s for s in plan["sessions"] if s.get("events"))
+
+    def early(out):
+        start, stop = _ends(out["events"][0])
+        shift = (start - 200000) // 5000 * 5000
+        _move(out["events"][0], start - shift, stop - shift)
+    changed = _replaced(protocol_v5, target, early)
+    x = changed(doc, target, 2)["events"][0]
+    monkeypatch.setattr(protocol_v5, "replacement", changed)
+    return {"times": [f"replacement of {_label(target)}: {x['type']} starts at {_seconds(x['start_s'])} s, before "
+                      "first_s 300 s"]}
+
+
+def replaced_tenths(doc, plan, monkeypatch):
+    """B4b: a replacement keeps the tenths of the interval of its starts and stops. Here one event of the replacement
+    starts half a second later, in the next tenth of the same interval, and ends where it ended (it lasted 120.5 s or
+    more): every rule still holds."""
+    from scripts import protocol_v5
+    target = next(s for s in plan["sessions"] if s.get("events"))
+    index = next(i for i, x in enumerate(protocol_v5.replacement(doc, target, 2)["events"])
+                 if _tenths(x)[0] < 9 and x["duration_s"] >= 120.5)
+
+    def later(out):
+        start, stop = _ends(out["events"][index])
+        _move(out["events"][index], start + 500, stop)
+    monkeypatch.setattr(protocol_v5, "replacement", _replaced(protocol_v5, target, later))
+    return {"streams": [f"replacement of {_label(target)} changes the tenths of its phases"]}
 
 
 FILE_CASES = {f.__name__: f for f in (unknown_key, missing_key, gate_085, max_7, six_groups, below_min_per_type,
                                       no_min_per_type, not_interleaved, replacement_without_covers,
                                       method_without_grid, k2a_without_z4, null_outside, rehearsal_name,
-                                      rehearsal_prefix, unknown_to_lab, unknown_profile, think_below_mean)}
+                                      rehearsal_prefix, unknown_to_lab, unknown_profile, think_below_mean,
+                                      # Package B4b, F1 of its verification.
+                                      two_events_per_session, no_event_free_session)}
 PLAN_CASES = {f.__name__: f for f in (no_group_on_vm, equal_scenarios, twice_at_position, two_events, start_in_guard,
                                       locked_to_grid, common_seed, control_relabelled, control_slot_emptied,
-                                      event_free_first, group_of_two, seed_field)}
-REPLACEMENT_CASES = {f.__name__: f for f in (replaced_type, replaced_streams, replaced_in_guard)}
+                                      event_free_first, group_of_two, seed_field,
+                                      # Package B4b: must_fix 5, must_fix 6 and S1 of the B4 verification.
+                                      event_free_scenarios, type_scenarios, type_twice, card_vm, card_scenario,
+                                      kind_twice, same_nonzero_phase, one_second_grid, phases_at_tenth_edges,
+                                      stops_at_interval_start, before_first_s, overlapping_events, duration_2000,
+                                      ends_in_tail,
+                                      # F1 and F2 of the verification of B4b.
+                                      group_twice, type_vm, stops_at_tenth_edges)}
+REPLACEMENT_CASES = {f.__name__: f for f in (replaced_type, replaced_streams, replaced_in_guard,
+                                             replaced_before_first_s, replaced_tenths)}
 CASES = ["real_file", *FILE_CASES, *PLAN_CASES, *REPLACEMENT_CASES, "null_at_g1"]
 
 
@@ -332,6 +801,64 @@ def test_the_rehearsal_is_a_mode_of_the_file_with_10_groups_and_30_sessions():
     plan = protocol_v5.plan(json.loads(V5.read_text()), mode="rehearsal")
     assert (plan["mode"], plan["name"], plan["group_prefix"]) == ("rehearsal", "server-normal-v5-generalka", "g5-")
     assert (len({s["group"] for s in plan["sessions"]}), len(plan["sessions"])) == (10, 30)
+
+
+def test_the_report_records_the_types_by_place_in_the_session_and_the_phases(tmp_path):
+    """B4b: what the lead's must_fix 5 asks to record, not to require (each event type by its place in the session's
+    order), each event type per VM (F1 of the verification of B4b), and the numbers of must_fix 6 (starts and stops
+    per tenth in every role, the KS distances of the 286 start phases and, since F2 of the verification, of the 286
+    stop phases), as counted here from the plan of the file. Every group holds every type once, so every type is on
+    each VM as often as its role has groups there: 6, 2, 4 and 6."""
+    from scripts import protocol_v5
+    doc = json.loads(V5.read_text())
+    plan = protocol_v5.plan(doc)
+    places = {role: {t: [sum(len(s["events"]) > i and s["events"][i]["type"] == t for s in plan["sessions"]
+                             if s["role"] == role) for i in range(3)] for t in TYPES} for role in ROLES[:4]}
+    on_vm = {role: {t: {vm: sum(x["type"] == t for s in plan["sessions"] if (s["role"], s["vm"]) == (role, vm)
+                                for x in s["events"]) for vm in ("a", "b")} for t in TYPES} for role in ROLES[:4]}
+    tenths = {role: {what: [sum(_tenths(x)[i] == d for s in plan["sessions"] if s["role"] == role for x in _items(s))
+                            for d in range(10)] for i, what in enumerate(("starts", "stops"))} for role in ROLES}
+    distance, stops = (_ks([_ends(x)[i] % 5000 / 5000 for s in plan["sessions"] for x in _items(s)]) for i in (0, 1))
+    code, report = selfcheck(tmp_path, doc)
+    assert code == 2 and report["summary"] == {
+        "event_types_by_place_in_session": places, "event_types_by_vm": on_vm, "phase_tenths": tenths,
+        "start_phases_ks": {"starts": 286, "distance": round(distance, 4), "critical": .0797, "level": .05},
+        "stop_phases_ks": {"stops": 286, "distance": round(stops, 4), "critical": .0797, "level": .05}}
+    assert all(max(row) - min(row) <= 1 for role in tenths.values() for row in role.values()) and distance < .0797
+    assert stops < .0797 and all(on_vm[role][t] == {"a": n, "b": n} for t in TYPES
+                                 for role, n in (("train", 6), ("dev", 2), ("calibration", 4), ("test_benign", 6)))
+
+
+@pytest.mark.parametrize("mode", ["campaign", "rehearsal"])
+def test_every_group_holds_one_full_round_of_the_types(mode):
+    """F1 of the verification of B4b, on the plans of the file and of five other protocol names: every group of an
+    event role holds every type once, so every type lies once in every boot; every type is in every scenario of a
+    role equally often in a campaign (its blocks are complete, so every scenario of a role holds two sessions with
+    events per block) and within 1 in the rehearsal (one incomplete block per role)."""
+    from scripts import protocol_v5
+    doc = json.loads(V5.read_text())
+    for name in [doc["name"]] + [f"name-{k}" for k in range(5)]:
+        sessions = protocol_v5.plan(dict(doc, name=name), mode)["sessions"]
+        for role in ROLES[:4]:
+            mine = [s for s in sessions if s["role"] == role]
+            groups = {}
+            for s in mine:
+                groups.setdefault(s["group"], Counter()).update(x["type"] for x in s["events"])
+            assert list(groups.values()) == [Counter(TYPES)] * len(groups), (name, role)
+            cells = Counter((x["type"], s["scenario"]) for s in mine for x in s["events"])
+            spread = max(max(cells[t, n] for n in SCENARIOS) - min(cells[t, n] for n in SCENARIOS) for t in TYPES)
+            assert spread <= (0 if mode == "campaign" else 1), (name, role)
+
+
+def test_a_replacement_keeps_the_tenths_of_its_phases_and_draws_new_times():
+    """B4b: attempt 2 of every planned session keeps the tenth of the interval of each start and stop, so a role's
+    phases stay stratified when a session is replaced; its times and phases are new."""
+    from scripts import protocol_v5
+    doc = json.loads(V5.read_text())
+    for s in protocol_v5.plan(doc)["sessions"]:
+        again = protocol_v5.replacement(doc, s, 2)
+        assert [_tenths(x) for x in _items(again)] == [_tenths(x) for x in _items(s)]
+        assert not _items(s) or [_ends(x) for x in _items(again)] != [_ends(x) for x in _items(s)]
 
 
 def test_the_skeletons_form_of_the_command_checks_the_same_file(tmp_path):

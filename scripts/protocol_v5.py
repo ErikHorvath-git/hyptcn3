@@ -8,10 +8,12 @@ scripts/host_traffic.py reads the profiles section through profiles_problems():
     check_layout(p)                the loader's part: unknown and missing keys, malformed values of the v5 sections
     profiles_problems(p)           every malformed value of the profiles section, as named reasons
     plan(p, mode)                  the schedule of a campaign or of its rehearsal (a mode of the same file)
-    replacement(p, session, n)     attempt n of a planned session: the same assignment, new times and traffic seeds
+    replacement(p, session, n)     attempt n of a planned session: the same assignment and tenths of its phases, new
+                                   times and traffic seeds
     plans_events(p)                whether its sessions list events and keep events.json (log audit, corpus build)
     analysis_plan(p)               the analysis plan the training and the evaluation read (B6, B7)
-    selfcheck(path, mode, stage)   every check of the self-check on the file and on its plan
+    selfcheck(path, mode, stage)   every check of the self-check on the file and on its plan, and summary(p, plan):
+                                   the tables of the plan the report records
 
 The loader does not judge balance, role sizes, the place of null values or the binding of the score coverage
 gate to invalid_rows.max; the self-check does. Its check functions take (doc, plan) so that a test can pass a
@@ -22,6 +24,7 @@ from collections import Counter
 import copy
 from fractions import Fraction
 import hashlib
+import itertools
 import json
 import math
 from pathlib import Path
@@ -39,14 +42,22 @@ TIME_RANK = {"train": 0, "dev": 1, "calibration": 2, "test_benign": 3, "test_con
 INTERLEAVED = ("test_benign", "test_controls")
 # The random streams of the plan and the unit each one is drawn for (proposal 5.5; the streams section). Package
 # B5b adds the traffic streams (skeleton B5 section 2): the arrival times, the choices in a user session and the
-# sizes each have their own; traffic draws the arrival envelope and stays the session's seed.
+# sizes each have their own; traffic draws the arrival envelope and stays the session's seed. Package B4b adds
+# phase_deck: the tenths of the interval in which the starts and the stops of a role lie.
 PURPOSES = {"scenario_order": "block", "event_free_position": "role", "event_deck": "role",
-            "control_deck": "role", "event_times": "session", "traffic": "session", "traffic_arrivals": "session",
-            "traffic_choices": "session", "traffic_sizes": "session"}
+            "control_deck": "role", "phase_deck": "role", "event_times": "session", "traffic": "session",
+            "traffic_arrivals": "session", "traffic_choices": "session", "traffic_sizes": "session"}
 SESSION_PURPOSES = tuple(purpose for purpose, unit in PURPOSES.items() if unit == "session")
 METHODS = ("Z0", "Z1", "Z2", "Z3", "Z4", "Z5", "M")
 MAX_INVALID_ROWS = 6  # Proposal 10.9 and D4: six event boundaries of a session with three events.
-MAX_DRAWS = 1000  # Redraws of a schedule that meets a full-snapshot guard, or of unbalanced scenario blocks.
+# Redraws of a schedule that meets a full-snapshot guard, of unbalanced scenario blocks, of event-free sessions
+# whose positions are unbalanced, and of the cycle of control cells (judgment, accepted by the lead for B4).
+MAX_DRAWS = 1000
+# The lead's must_fix 6 on B4: the phases of the starts and of the stops are stratified by construction over the
+# ten tenths of the collection interval, and the start phases of the whole plan pass a Kolmogorov-Smirnov test
+# against the uniform law at the 5 % level (both numbers are the lead's).
+TENTHS = 10
+KS_LEVEL = .05
 # Names the protocol uses that are registered only from package B8 (the four new control kinds); the check
 # lab_register stays pending while one of them is unknown. B5a registered the empty event naprazdno in
 # lab/udalosti.py, B5b the traffic profiles in scripts/host_traffic.py (PROFILES).
@@ -579,25 +590,55 @@ def guards(p):
             for r in range(0, p["cycles"], p["full_every"])]
 
 
-def _times(p, spans, rng):
-    """[(start, duration)] in ms for items with the given [min, max] durations, in order.
+def _ceil_div(a, b):
+    return -(-a // b)
 
-    Durations are uniform in their span (1 ms grid); the free time of the session is split over the n + 1 gaps by
-    uniform spacings (before the first item, between items, after the last). A draw with a start inside a guard is
-    drawn again, at most MAX_DRAWS times.
+
+def tenth(phase_ms, interval_ms):
+    """The tenth of the interval (0 to TENTHS - 1) in which a phase of phase_ms (0 <= phase_ms < interval_ms) lies."""
+    return phase_ms * TENTHS // interval_ms
+
+
+def _phase(d, interval, rng):
+    """A phase in ms, uniform on the 1 ms grid within tenth d of the interval."""
+    return rng.randint(_ceil_div(d * interval, TENTHS), _ceil_div((d + 1) * interval, TENTHS) - 1)
+
+
+def _times(p, spans, tenths, rng):
+    """[(start, duration)] in ms for items with the given [min, max] durations, in order, whose starts and stops lie
+    in the given (start tenth, stop tenth) of the collection interval (design B4b, the lead's must_fix 6 on B4).
+
+    The phase of every start and stop is uniform within its tenth (1 ms grid). Then whole intervals: the number of
+    intervals of each duration is uniform among those that keep it within its span, and the free intervals of the
+    session are split over the n + 1 gaps by uniform spacings (before the first item, between items, after the
+    last). first_s, min_gap_s, tail_s and the spans hold exactly at these phases, so no time is shifted after the
+    draw. A draw with a start inside a guard is drawn again, at most MAX_DRAWS times.
     """
     if not spans:
         return []
-    e = p["events"]
+    e, interval = p["events"], _ms(p["interval_s"])
     first, gap, tail = _ms(e["first_s"]), _ms(e["min_gap_s"]), _ms(e["tail_s"])
     length, bands = _ms(p["cycles"] * p["interval_s"]), guards(p)
     for _ in range(MAX_DRAWS):
-        durations = [rng.randint(_ms(low), _ms(high)) for low, high in spans]
-        free = length - first - tail - sum(durations) - (len(spans) - 1) * gap
+        phases = [(_phase(start, interval, rng), _phase(stop, interval, rng)) for start, stop in tenths]
+        counts = []  # Whole intervals of each duration: low <= count * interval + stop phase - start phase <= high.
+        for (low, high), (start, stop) in zip(spans, phases):
+            fewest, most = _ceil_div(_ms(low) - (stop - start), interval), (_ms(high) - (stop - start)) // interval
+            if fewest > most:
+                raise ValueError("an item cannot last within its duration span at the phases of its tenths")
+            counts.append(rng.randint(fewest, most))
+        # The earliest interval of each start: first_s before the first one, min_gap_s after the end of the one
+        # before; the latest interval of the last stop leaves tail_s to the end of the session.
+        earliest = [_ceil_div(first - phases[0][0], interval)]
+        for i in range(1, len(spans)):
+            earliest.append(earliest[-1] + counts[i - 1]
+                            + _ceil_div(phases[i - 1][1] + gap - phases[i][0], interval))
+        free = (length - tail - phases[-1][1]) // interval - earliest[-1] - counts[-1]
         if free < 0:
             raise ValueError("event schedule does not fit the session")
         offsets = sorted(rng.randint(0, free) for _ in spans)
-        starts = [first + offsets[i] + sum(durations[:i]) + i * gap for i in range(len(spans))]
+        starts = [(earliest[i] + offsets[i]) * interval + phases[i][0] for i in range(len(spans))]
+        durations = [counts[i] * interval + phases[i][1] - phases[i][0] for i in range(len(spans))]
         if not any(low <= start < high for start in starts for _, low, high in bands):
             return list(zip(starts, durations))
     raise ValueError(f"no schedule outside the full-snapshot guards in {MAX_DRAWS} draws")
@@ -609,16 +650,23 @@ def _timing(p, start, duration):
             "stop_phase_s": (start + duration) % interval / 1000}
 
 
-def _items(p, role, labels, rng):
-    """The timed events (labels: types) or controls (labels: (kind, polarity) or None) of one session attempt."""
+def _items(p, role, labels, tenths, rng):
+    """The timed events (labels: types) or controls (labels: (kind, polarity) or None) of one session attempt;
+    tenths holds the (start tenth, stop tenth) of every label that is not None, in order."""
     if role != CONTROL_ROLE:
-        times = _times(p, [tuple(p["events"]["duration_s"])] * len(labels), rng)
+        times = _times(p, [tuple(p["events"]["duration_s"])] * len(labels), tenths, rng)
         return [{"type": t, "class": p["events"]["types"][t], **_timing(p, *when)} for t, when in zip(labels, times)]
     kinds = p["controls"]["kinds"]
-    times = iter(_times(p, [tuple(p["controls"]["duration_s"])] * sum(x is not None for x in labels), rng))
+    times = iter(_times(p, [tuple(p["controls"]["duration_s"])] * sum(x is not None for x in labels), tenths, rng))
     return [{"kind": None, "reason": "deck exhausted"} if x is None else
             {"kind": x[0], "polarity": x[1], "class": kinds[x[0]]["class"], **_timing(p, *next(times))}
             for x in labels]
+
+
+def item_tenths(p, item):
+    """(start tenth, stop tenth) of a planned event or control, from its start_s and duration_s."""
+    interval, start = _ms(p["interval_s"]), _ms(item["start_s"])
+    return tenth(start % interval, interval), tenth((start + _ms(item["duration_s"])) % interval, interval)
 
 
 def _rounds(rng, cards, rounds):
@@ -647,6 +695,204 @@ def _spread(counts, names):
     return max(counts[n] for n in names) - min(counts[n] for n in names)
 
 
+def _representatives(members, rng, role):
+    """{group: position}: one session of every group of a block, the scenarios of the chosen sessions distinct (a
+    uniform system of distinct representatives, drawn by rejection at most MAX_DRAWS times)."""
+    names = sorted({name for group in members for name in group["scenarios"]})
+    for _ in range(MAX_DRAWS):
+        picked = rng.sample(names, len(members))
+        if all(name in group["scenarios"] for name, group in zip(picked, members)):
+            return {group["group"]: group["scenarios"].index(name) for name, group in zip(picked, members)}
+    raise ValueError(f"no event-free sessions with distinct scenarios in a block of role {role} "
+                     f"after {MAX_DRAWS} draws")
+
+
+def _event_free(groups, g, rng, role):
+    """{group: position of its event-free session} (the lead's must_fix 5 on B4). In every block the event-free
+    sessions hold distinct scenarios, so a complete block holds each scenario once and the counts per scenario in
+    the role differ by at most 1 by construction; all blocks are drawn again until the counts per position in the
+    role differ by at most 1 too, at most MAX_DRAWS times."""
+    blocks = {}
+    for group in groups:
+        blocks.setdefault(group["block"], []).append(group)
+    for _ in range(MAX_DRAWS):
+        chosen = {}
+        for b in sorted(blocks):
+            chosen.update(_representatives(blocks[b], rng, role))
+        if _spread(Counter(chosen.values()), range(g)) <= 1:
+            return chosen
+    raise ValueError(f"event-free sessions of role {role}: positions differ by more than 1 after {MAX_DRAWS} draws")
+
+
+def _orient(edges, rng):
+    """{edge: True when it is walked from its first end to its second}: a random orientation of the multigraph of
+    `edges` ({edge: (end, end)}) under which as many edges enter every vertex as leave it, give or take 1 at a vertex
+    of odd degree. The vertices of odd degree are joined to one extra vertex (None), which makes every degree even;
+    then every component is walked along an Euler circuit (Hierholzer), whose start vertices and turns the stream
+    draws. Every closed walk enters a vertex as often as it leaves it."""
+    ends = {}
+    for edge, (u, v) in edges.items():
+        ends.setdefault(u, []).append((v, edge))
+        ends.setdefault(v, []).append((u, edge))
+    vertices = sorted(ends)
+    odd = [x for x in vertices if len(ends[x]) % 2]
+    for i, x in enumerate(odd):
+        ends[x].append((None, ("extra", i)))
+        ends.setdefault(None, []).append((x, ("extra", i)))
+    vertices += [None] if odd else []
+    for x in vertices:
+        ends[x] = rng.sample(ends[x], len(ends[x]))
+    tail, used = {}, set()
+    for start in rng.sample(vertices, len(vertices)):
+        stack = [start]
+        while stack:
+            u = stack[-1]
+            while ends[u] and ends[u][-1][1] in used:
+                ends[u].pop()
+            if ends[u]:
+                v, edge = ends[u].pop()
+                used.add(edge)
+                tail[edge] = u
+                stack.append(v)
+            else:
+                stack.pop()
+    return {edge: tail[edge] == u for edge, (u, v) in edges.items()}
+
+
+def _deal_events(p, name, role, groups, g):
+    """The event types of every session of an event role (group["labels"]), `count` = max(per_session) types per
+    session, and one event-free session per group when per_session allows 0 (stream event_free_position,
+    _event_free).
+
+    Every group holds one full round of the types, split over its two sessions with events (the v5 file: 6 types,
+    3 in each session), so every type lies once in every boot and as often on every VM as the role has groups
+    there (as in B4; F1 of the verification of B4b; proposal 7.1, 9.1). The stream event_deck pairs the types at
+    random, and a session takes one type of every pair, so it never holds a type twice. For every pair, _orient
+    walks the groups of the role as the edges of the multigraph of the scenarios (a group joins the scenarios of
+    its two sessions with events); the session the walk enters takes the pair's first type, the other one its
+    second. A type is thus in a scenario as often as the walk of its pair enters or leaves it, which is half the
+    role's sessions with events there, rounded either way at an odd count: its counts per scenario differ by at most
+    1 when the counts of those sessions do (the lead's must_fix 5 on B4). In a campaign every scenario of a role
+    holds two sessions with events per block (a block holds it once at every position, and its event-free sessions
+    lie in different scenarios, _event_free), so every type is exactly as often in every scenario (the v5 file: 3,
+    1, 2 and 3 times in train, dev, calibration and test_benign). The order of the types in a session is drawn
+    last. A protocol whose groups cannot hold one full round over two sessions with events (another count of
+    types or of event-free sessions) cannot be planned."""
+    e = p["events"]
+    types, count = sorted(e["types"]), max(e["per_session"])
+    free = 0 in e["per_session"] and count > 0  # One session per group without events.
+    empty = _event_free(groups, g, random.Random(seed(name, "event_free_position", role, -1, 0)), role) if free else {}
+    held = {group["group"]: [i for i in range(g) if empty.get(group["group"]) != i] for group in groups}
+    for group in groups:
+        group["labels"] = [[] for _ in range(g)]
+    if not count or not groups:
+        return
+    if len(types) != 2 * count or any(len(positions) != 2 for positions in held.values()):
+        raise ValueError(f"events of role {role}: one full round of the types per group needs two sessions with "
+                         f"events and twice as many types as a session holds ({len(types)} types, {count} per "
+                         f"session, {len(held[groups[0]['group']])} sessions with events per group)")
+    rng = random.Random(seed(name, "event_deck", role, -1, 0))
+    shuffled = rng.sample(types, len(types))
+    edges = {group["group"]: tuple(group["scenarios"][i] for i in held[group["group"]]) for group in groups}
+    for first, second in zip(shuffled[::2], shuffled[1::2]):
+        forward = _orient(edges, rng)
+        for group in groups:
+            i, j = held[group["group"]]
+            into, out = (j, i) if forward[group["group"]] else (i, j)
+            group["labels"][into].append(first)
+            group["labels"][out].append(second)
+    for group in groups:
+        group["labels"] = [rng.sample(labels, len(labels)) for labels in group["labels"]]
+
+
+def _cell_cycle(cells, rng):
+    """The (VM, scenario) cells of the control role in a cycle that alternates the VMs and, where it can, never puts
+    one scenario into two neighbouring cells (the last cell neighbours the first): the cells of each VM in random
+    order, drawn again at most MAX_DRAWS times; the last draw stays when none qualifies."""
+    by_vm = {}
+    for cell in sorted(cells, key=str):
+        by_vm.setdefault(cell[0], []).append(cell)
+    for _ in range(MAX_DRAWS):
+        rows = [rng.sample(by_vm[vm], len(by_vm[vm])) for vm in sorted(by_vm, key=str)]
+        cycle = [cell for row in itertools.zip_longest(*rows) for cell in row if cell is not None]
+        if len(cycle) < 2 or all(a[1] != b[1] for a, b in zip(cycle, cycle[1:] + cycle[:1])):
+            break
+    return cycle
+
+
+def _deal_controls(p, name, groups, g):
+    """The control slots of every session of role test_controls (group["labels"]: (kind, polarity) or None), from
+    the stream control_deck (the lead's must_fix 5 on B4).
+
+    Each card (kind, polarity) is dealt per_kind or negatives_per_kind times when the deck fits the slots (the
+    slots left over stay empty), else as often as a prefix of the deck of full rounds deals it (a rehearsal). The
+    slots of the role form one sequence: a slot of every (VM, scenario) cell in the order of _cell_cycle, again
+    and again. The cards are laid along it kind by kind (kinds in random order, the polarity that comes first
+    alternating), each card as often as it is dealt, consecutively, the empty slots last. Neighbouring slots lie
+    on different VMs and in different cells, so the occurrences of a card per VM, and in a cycle whose neighbours
+    hold different scenarios per scenario too, differ by at most 1. Within a cell the cards of one kind are dealt
+    round robin to different sessions, so no session holds a kind twice while a cell holds no more cards of one kind
+    than sessions (the v5 file: a kind lays 14 cards along a cycle of 8 cells of 3 sessions; its rehearsal at most 4
+    along 6 cells of one session). The slots of a session are in random order.
+    """
+    c, slots = p["controls"], p["controls"]["slots_per_session"]
+    rng = random.Random(seed(name, "control_deck", CONTROL_ROLE, -1, 0))
+    cards = [((kind, polarity), n) for kind in sorted(c["kinds"])
+             for polarity, n in (("control", c["per_kind"]), ("negative", c["negatives_per_kind"]))]
+    sessions = [(group, i) for group in groups for i in range(g)]
+    total = len(sessions) * slots
+    dealt = Counter(_rounds(rng, cards, max(c["per_kind"], c["negatives_per_kind"]))[:total])
+    cells = {}
+    for group, i in sessions:
+        cells.setdefault((group["vm"], group["scenarios"][i]), []).append((group["group"], i))
+    cycle, left, sequence = _cell_cycle(cells, rng), {cell: len(cells[cell]) * slots for cell in cells}, []
+    while len(sequence) < total:
+        for cell in cycle:
+            if left[cell]:
+                sequence.append(cell)
+                left[cell] -= 1
+    # The polarity that comes first alternates over the kinds of the run (the first one drawn): in a campaign the
+    # first card of a kind starts at the same VM of the cycle, so its VM gets the controls of about half the kinds.
+    first = rng.sample(("control", "negative"), 2)
+    run = [(kind, polarity) for j, kind in enumerate(rng.sample(sorted(c["kinds"]), len(c["kinds"])))
+           for polarity in (first if j % 2 == 0 else first[::-1]) for _ in range(dealt[kind, polarity])]
+    per_cell = {}
+    for cell, card in zip(sequence, run + [None] * (total - len(run))):
+        per_cell.setdefault(cell, []).append(card)
+    labels = {}
+    for cell in cycle:
+        units = {}  # The cards of one kind together; every empty slot alone.
+        for j, card in enumerate(per_cell.get(cell, [])):
+            units.setdefault(card[0] if card else j, []).append(card)
+        flat = [card for unit in rng.sample(list(units.values()), len(units)) for card in rng.sample(unit, len(unit))]
+        members = rng.sample(cells[cell], len(cells[cell]))
+        for j, card in enumerate(flat):
+            labels.setdefault(members[j % len(members)], []).append(card)
+    for group in groups:
+        group["labels"] = [rng.sample(labels.get((group["group"], i), []), slots) for i in range(g)]
+
+
+def _deal_tenths(name, role, groups):
+    """group["tenths"]: the (start tenth, stop tenth) of every item of the role's sessions in time order, from two
+    decks of full rounds of the TENTHS tenths (stream phase_deck): within the role the counts of starts per tenth
+    differ by at most 1, and so do those of stops (the lead's must_fix 6 on B4)."""
+    rng = random.Random(seed(name, "phase_deck", role, -1, 0))
+    n = sum(x is not None for group in groups for labels in group["labels"] for x in labels)
+    rounds = _ceil_div(n, TENTHS)
+    starts = _rounds(rng, [(d, rounds) for d in range(TENTHS)], rounds)
+    stops = _rounds(rng, [(d, rounds) for d in range(TENTHS)], rounds)
+    j = 0
+    for group in groups:
+        group["tenths"] = []
+        for labels in group["labels"]:
+            row = []
+            for x in labels:
+                if x is not None:
+                    row.append((starts[j], stops[j]))
+                    j += 1
+            group["tenths"].append(row)
+
+
 def _merge(lists):
     """One sequence of the groups of several roles: each next group from the role whose placement leaves the
     shares of groups placed so far closest to each other; ties go to the role listed first."""
@@ -671,7 +917,10 @@ def plan(p, mode="campaign"):
     name + rehearsal.name_suffix and the prefix rehearsal.group_prefix, groups_per_role groups in every role.
     Scenarios form balanced incomplete blocks; within a role the scenario counts of one VM differ by at most 1
     (a rehearsal: over the whole plan), which a redraw of the role's blocks (the rehearsal's: of every block)
-    ensures, at most MAX_DRAWS times. Raises ValueError when the protocol cannot be planned.
+    ensures, at most MAX_DRAWS times. Then the events of every event role (_deal_events: the event-free session of
+    each group, one full round of the types in each group), the controls of role test_controls (_deal_controls), the
+    tenths of the starts and stops of every role (_deal_tenths) and the times of every session (_times). Raises
+    ValueError when the protocol cannot be planned.
     """
     name, prefix, sizes = _shape(p, mode)
     vms = [row["name"] for row in p["vms"]] if "vms" in p else [None]
@@ -700,34 +949,12 @@ def plan(p, mode="campaign"):
         else:
             raise ValueError(f"scenario counts of {'the rehearsal' if mode == 'rehearsal' else 'role ' + roles[0]} "
                              f"differ by more than 1 after {MAX_DRAWS} draws")
-    e, c = p["events"], p["controls"]
-    count = max(e["per_session"])
-    free = 0 in e["per_session"] and count > 0  # One session per group without events.
     for role in p["roles"]:
         if role == CONTROL_ROLE:
-            cards = [((kind, polarity), n) for kind in sorted(c["kinds"])
-                     for polarity, n in (("control", c["per_kind"]), ("negative", c["negatives_per_kind"]))]
-            deck = _rounds(random.Random(seed(name, "control_deck", role, -1, 0)), cards,
-                           max(c["per_kind"], c["negatives_per_kind"]))
-            for group in groups[role]:
-                group["labels"] = [[deck.pop(0) if deck else None for _ in range(c["slots_per_session"])]
-                                   for _ in range(g)]
-            continue
-        position_rng = random.Random(seed(name, "event_free_position", role, -1, 0))
-        type_rng = random.Random(seed(name, "event_deck", role, -1, 0))
-        position_deck, type_deck = [], []  # Shuffled full rounds: counts in a role differ by at most 1.
-        for group in groups[role]:
-            if free and not position_deck:
-                position_deck = position_rng.sample(range(g), g)
-            empty = position_deck.pop(0) if free else None
-            group["labels"] = []
-            for i in range(g):
-                labels = []
-                for _ in range(0 if i == empty else count):
-                    if not type_deck:
-                        type_deck = type_rng.sample(sorted(e["types"]), len(e["types"]))
-                    labels.append(type_deck.pop(0))
-                group["labels"].append(labels)
+            _deal_controls(p, name, groups[role], g)
+        else:
+            _deal_events(p, name, role, groups[role], g)
+        _deal_tenths(name, role, groups[role])
     order, merged = [], set()
     for role in p["roles"]:
         if role not in merged:
@@ -738,7 +965,8 @@ def plan(p, mode="campaign"):
     for group in order:
         role = group["role"]
         shared = {"scenario_order": seed(name, "scenario_order", f"{role}/{group['block']}", -1, 0)}
-        for purpose in (("control_deck",) if role == CONTROL_ROLE else ("event_free_position", "event_deck")):
+        for purpose in (("control_deck",) if role == CONTROL_ROLE else ("event_free_position", "event_deck")) + (
+                "phase_deck",):
             shared[purpose] = seed(name, purpose, role, -1, 0)
         for i in range(g):
             seeds = dict(shared, **_session_seeds(name, group["group"], i, 1))
@@ -746,20 +974,23 @@ def plan(p, mode="campaign"):
                        "attempt": 1, "seeds": seeds, "seed": seeds["traffic"], "cycles": p["cycles"]}
             if group["vm"] is not None:
                 session["vm"] = group["vm"]
-            items = _items(p, role, group["labels"][i], random.Random(seeds["event_times"]))
+            items = _items(p, role, group["labels"][i], group["tenths"][i], random.Random(seeds["event_times"]))
             session["controls" if role == CONTROL_ROLE else "events"] = items
             sessions.append(session)
     doc = {"schema": PLAN_SCHEMA, "mode": mode, "name": name, "group_prefix": prefix, "sessions": sessions}
     if vms != [None]:
         doc["sessions_per_vm"] = {vm: sum(s["vm"] == vm for s in sessions) for vm in vms}
     doc.update(planned_hours=len(sessions) * p["cycles"] * p["interval_s"] / 3600,
-               note="Design allocation, not collected data; a replacement keeps the assignment (replacement()).")
+               note="Design allocation, not collected data; a replacement keeps the assignment and the tenths of the "
+                    "interval of its starts and stops (replacement()).")
     return doc
 
 
 def replacement(p, session, attempt, *, mode="campaign"):
     """Attempt `attempt` (2 or later) of a planned session: the same VM, role, group, position, scenario and event
-    types or control kinds in order; new times and new traffic seeds from the streams of this attempt."""
+    types or control kinds in order, and the same tenths of the interval for every start and stop (design B4b: the
+    phases of a role stay stratified when a session is replaced); new phases within those tenths, new durations
+    and gaps, and new traffic seeds from the streams of this attempt."""
     if type(attempt) is not int or attempt < 2:
         raise ValueError("a replacement is attempt 2 or later")
     name = _shape(p, mode)[0]
@@ -769,9 +1000,11 @@ def replacement(p, session, attempt, *, mode="campaign"):
     rng = random.Random(seeds["event_times"])
     if "controls" in session:
         labels = [None if c.get("kind") is None else (c["kind"], c["polarity"]) for c in session["controls"]]
-        out["controls"] = _items(p, CONTROL_ROLE, labels, rng)
+        tenths = [item_tenths(p, c) for c in session["controls"] if c.get("kind") is not None]
+        out["controls"] = _items(p, CONTROL_ROLE, labels, tenths, rng)
     if "events" in session:
-        out["events"] = _items(p, session["role"], [x["type"] for x in session["events"]], rng)
+        tenths = [item_tenths(p, x) for x in session["events"]]
+        out["events"] = _items(p, session["role"], [x["type"] for x in session["events"]], tenths, rng)
     return out
 
 
@@ -882,26 +1115,49 @@ def check_scenario_balance(doc, schedule):
 
 
 def check_events(doc, schedule):
+    """The events of the event roles (proposal 5.5, 7.1, 7.2, 9.1; skeleton §3; the lead's must_fix 5 on B4; F1 of
+    the verification of B4b): every session has a count of per_session events and no type twice, and no group (a
+    boot) holds a type twice; every group one event-free session, whose positions and scenarios differ in a role by
+    at most 1; in a role the counts per type differ by at most 1, and so do the counts of each type per scenario and
+    per VM; min_per_type in a campaign; no events in role test_controls."""
     e = doc["events"]
-    allowed, count = e["per_session"], max(e["per_session"])
+    allowed, count, names = e["per_session"], max(e["per_session"]), sorted(doc["scenarios"])
+    vms = [row["name"] for row in doc["vms"]] if "vms" in doc else []
     sessions = [s for s in schedule["sessions"] if s["role"] != CONTROL_ROLE]
     reasons = [f"session {_label(s)} has {len(s.get('events', []))} events (allowed {json.dumps(allowed)})"
                for s in sessions if len(s.get("events", [])) not in allowed]
+    for s in sessions:
+        held = Counter(x["type"] for x in s.get("events", []))
+        reasons += [f"session {_label(s)} holds type {t} twice" for t in sorted(held) if held[t] > 1]
+    for group, ss in _groups({"sessions": sessions}).items():
+        held = Counter(x["type"] for s in ss for x in s.get("events", []))
+        reasons += [f"group {group} holds type {t} twice" for t in sorted(held) if held[t] > 1]
     if 0 in allowed and count:
         for group, ss in _groups({"sessions": sessions}).items():
             empty = sum(not s.get("events") for s in ss)
             if empty != 1:
                 reasons.append(f"group {group} has {empty} sessions without events")
-        for role in ROLES:  # Skeleton §3: the position of the event-free session is balanced within the role.
-            free = Counter(s["position"] for s in sessions if s["role"] == role and not s.get("events"))
-            if any(s["role"] == role for s in sessions) and _spread(free, range(doc["group_sessions"])) > 1:
+        for role in ROLES:  # Skeleton §3, must_fix 5: positions and scenarios of the event-free sessions in a role.
+            free = [s for s in sessions if s["role"] == role and not s.get("events")]
+            if not any(s["role"] == role for s in sessions):
+                continue
+            if _spread(Counter(s["position"] for s in free), range(doc["group_sessions"])) > 1:
                 reasons.append(f"role {role}: event-free sessions per position differ by more than 1")
+            if _spread(Counter(s["scenario"] for s in free), names) > 1:
+                reasons.append(f"role {role}: event-free sessions per scenario differ by more than 1")
     for role in ROLES:
         if role == CONTROL_ROLE:
             continue
-        counts = Counter(x["type"] for s in sessions if s["role"] == role for x in s.get("events", []))
-        if any(s["role"] == role for s in sessions) and _spread(counts, sorted(e["types"])) > 1:
+        mine = [s for s in sessions if s["role"] == role]
+        counts = Counter(x["type"] for s in mine for x in s.get("events", []))
+        if mine and _spread(counts, sorted(e["types"])) > 1:
             reasons.append(f"role {role}: event type counts differ by more than 1")
+        cells = Counter((x["type"], s["scenario"]) for s in mine for x in s.get("events", []))
+        reasons += [f"role {role}: events of type {t} per scenario differ by more than 1" for t in sorted(e["types"])
+                    if mine and max(cells[t, n] for n in names) - min(cells[t, n] for n in names) > 1]
+        on = Counter((x["type"], s.get("vm")) for s in mine for x in s.get("events", []))
+        reasons += [f"role {role}: events of type {t} per VM differ by more than 1" for t in sorted(e["types"])
+                    if mine and len(vms) > 1 and max(on[t, vm] for vm in vms) - min(on[t, vm] for vm in vms) > 1]
         if schedule["mode"] == "campaign" and role not in e["min_per_type"]:
             reasons.append(f"role {role} has no min_per_type")
         elif schedule["mode"] == "campaign":
@@ -913,16 +1169,18 @@ def check_events(doc, schedule):
 
 
 def check_controls(doc, schedule):
-    """The controls of role test_controls (proposal 7.2, 7.4; skeleton §1, §3, §6): every session has
-    slots_per_session slots, each a card of the deck (a kind of the protocol with its class, polarity control or
-    negative) or empty; in a campaign each kind has per_kind controls and negatives_per_kind negatives and only the
-    slots the deck cannot fill are empty; a rehearsal deals a prefix of the deck, so its card counts differ by at
-    most 1 and no slot is empty while cards remain. No other role has controls."""
+    """The controls of role test_controls (proposal 7.2, 7.4; skeleton §1, §3, §6; the lead's must_fix 5 on B4):
+    every session has slots_per_session slots, each a card of the deck (a kind of the protocol with its class,
+    polarity control or negative) or empty, and holds no kind twice; in a campaign each kind has per_kind controls
+    and negatives_per_kind negatives and only the slots the deck cannot fill are empty; a rehearsal deals a prefix of
+    the deck, so its card counts differ by at most 1 and no slot is empty while cards remain; the occurrences of
+    every card per VM differ by at most 1, and so do those per scenario. No other role has controls."""
     c, slots = doc["controls"], doc["controls"]["slots_per_session"]
     cards = {(kind, polarity): n for kind in sorted(c["kinds"])
              for polarity, n in (("control", c["per_kind"]), ("negative", c["negatives_per_kind"]))}
+    vms, names = [row["name"] for row in doc["vms"]] if "vms" in doc else [], sorted(doc["scenarios"])
     sessions = [s for s in schedule["sessions"] if s["role"] == CONTROL_ROLE]
-    reasons, counts, empty = [], Counter(), 0
+    reasons, counts, empty, where = [], Counter(), 0, Counter()
     for s in sessions:
         items = s.get("controls", [])
         if len(items) != slots:
@@ -934,12 +1192,21 @@ def check_controls(doc, schedule):
                 reasons.append(f"session {_label(s)}: control {x['kind']}/{x.get('polarity')} is no card of the deck")
             else:
                 counts[x["kind"], x["polarity"]] += 1
+                where[x["kind"], x["polarity"], "vm", s.get("vm")] += 1
+                where[x["kind"], x["polarity"], "scenario", s["scenario"]] += 1
+        held = Counter(x["kind"] for x in items if x.get("kind") is not None)
+        reasons += [f"session {_label(s)} holds control kind {kind} twice" for kind in sorted(held) if held[kind] > 1]
     dealt = len(sessions) * slots
     if schedule["mode"] == "campaign":
         reasons += [f"control {kind}/{polarity} has {counts[kind, polarity]} occurrences (expected {n})"
                     for (kind, polarity), n in cards.items() if counts[kind, polarity] != n]
     elif sessions and _spread(counts, cards) > 1:
         reasons.append("rehearsal plan: control counts differ by more than 1")
+    for kind, polarity in cards:
+        for axis, values in (("VM", vms), ("scenario", names)):
+            per = Counter({v: where[kind, polarity, axis.lower(), v] for v in values})
+            if sessions and len(values) > 1 and _spread(per, values) > 1:
+                reasons.append(f"control {kind}/{polarity}: occurrences per {axis} differ by more than 1")
     if sessions and empty != max(0, dealt - sum(cards.values())):
         reasons.append(f"{empty} empty control slots (expected {max(0, dealt - sum(cards.values()))})")
     if any(s.get("controls") for s in schedule["sessions"] if s["role"] != CONTROL_ROLE):
@@ -967,10 +1234,86 @@ def check_full_snapshot_guard(doc, schedule):
     return _guarded(doc, schedule["sessions"]) + _guarded(doc, replacements, "replacement of ")
 
 
+def _timing_problems(doc, sessions, prefix=""):
+    """Reasons for every event or control of `sessions` that starts before first_s, lasts outside its duration span,
+    starts less than min_gap_s after the item before it in its session ends, or ends less than tail_s before the end
+    of the session (S1 of the B4 verification)."""
+    e = doc["events"]
+    first, gap, tail = _ms(e["first_s"]), _ms(e["min_gap_s"]), _ms(e["tail_s"])
+    length = _ms(doc["cycles"] * doc["interval_s"])
+    spans = {"events": e["duration_s"], "controls": doc["controls"]["duration_s"]}
+    reasons = []
+    for s in sessions:
+        before = None  # The end of the item before, in the session's order.
+        for field, span in spans.items():
+            for item in [x for x in s.get(field, []) if x.get("kind", "") is not None]:
+                start, duration = _ms(item["start_s"]), _ms(item["duration_s"])
+                what = f"{prefix}{_label(s)}: {item.get('type', item.get('kind'))}"
+                if start < first:
+                    reasons.append(f"{what} starts at {_seconds(start / 1000)} s, before first_s "
+                                   f"{_seconds(first / 1000)} s")
+                if not _ms(span[0]) <= duration <= _ms(span[1]):
+                    reasons.append(f"{what} lasts {_seconds(duration / 1000)} s, outside duration_s {json.dumps(span)}")
+                if before is not None and start < before + gap:
+                    reasons.append(f"{what} starts less than min_gap_s {_seconds(gap / 1000)} s after the item "
+                                   "before it ends")
+                if start + duration + tail > length:
+                    reasons.append(f"{what} ends less than tail_s {_seconds(tail / 1000)} s before the end of the "
+                                   f"session ({_seconds(length / 1000)} s)")
+                before = start + duration
+    return reasons
+
+
+def check_times(doc, schedule):
+    """Every planned item keeps first_s, its duration span, min_gap_s and tail_s, and so does every item of a
+    replacement (attempt 2 draws new times; S1 of the B4 verification, the lead's must_fix 6 on B4)."""
+    replacements = [replacement(doc, s, 2, mode=schedule["mode"]) for s in schedule["sessions"]]
+    return _timing_problems(doc, schedule["sessions"]) + _timing_problems(doc, replacements, "replacement of ")
+
+
+def ks_distance(values):
+    """The Kolmogorov-Smirnov distance of values in [0, 1) from the uniform law."""
+    xs, n = sorted(values), len(values)
+    return max(max((i + 1) / n - x, x - i / n) for i, x in enumerate(xs)) if xs else 0.
+
+
+def ks_critical(n, level=KS_LEVEL):
+    """The critical KS distance of n values at `level`: Stephens' closed form c / (sqrt(n) + 0.12 + 0.11 / sqrt(n))
+    with c = sqrt(ln(2 / level) / 2). At the 5 % level it lies within 1e-4 of the exact quantile from n = 19 on
+    (n = 286: 0.0797; n = 66, the rehearsal: 0.1645); for n = 2 to 18 it lies up to 0.0014 above it, so it is
+    lenient there (S2 of the verification of B4b, checked against scipy.stats.kstwo for n = 2 to 3000)."""
+    return math.sqrt(math.log(2 / level) / 2) / (math.sqrt(n) + .12 + .11 / math.sqrt(n))
+
+
+def _phases_ms(doc, schedule):
+    """{role: [(start phase, stop phase)]} in ms of the planned items of every role, in plan order."""
+    interval, out = _ms(doc["interval_s"]), {}
+    for s in schedule["sessions"]:
+        for item in _items_of(s):
+            start = _ms(item["start_s"])
+            out.setdefault(s["role"], []).append((start % interval, (start + _ms(item["duration_s"])) % interval))
+    return out
+
+
 def check_phases(doc, schedule):
-    interval = _ms(doc["interval_s"])
-    starts = [_ms(item["start_s"]) for s in schedule["sessions"] for item in _items_of(s)]
-    return ["event starts are locked to the sampling grid"] if starts and all(t % interval == 0 for t in starts) else []
+    """The phases are stratified by construction (the lead's must_fix 6 on B4; S1 of the B4 verification): in every
+    role the counts of event and control starts in the TENTHS tenths of the collection interval differ by at most 1,
+    and so do those of the stops; the start phases of the whole plan pass a Kolmogorov-Smirnov test against the
+    uniform law at KS_LEVEL, and so do its stop phases (F2 of the verification of B4b). Every start at one phase, on
+    the grid or off it, fails both."""
+    interval, phases, reasons = _ms(doc["interval_s"]), _phases_ms(doc, schedule), []
+    for role in ROLES:
+        for i, what in enumerate(("starts", "stops")):
+            counts = Counter(tenth(pair[i], interval) for pair in phases.get(role, []))
+            if phases.get(role) and _spread(counts, range(TENTHS)) > 1:
+                reasons.append(f"role {role}: {what} per tenth of the interval differ by more than 1")
+    for i, what in enumerate(("start", "stop")):
+        values = [pair[i] / interval for role in ROLES for pair in phases.get(role, [])]
+        if values and ks_distance(values) > ks_critical(len(values)):
+            reasons.append(f"{what} phases fail the Kolmogorov-Smirnov test against the uniform law at "
+                           f"{KS_LEVEL * 100:g} %: distance {ks_distance(values):.4f} above the critical "
+                           f"{ks_critical(len(values)):.4f} of {len(values)} {what}s")
+    return reasons
 
 
 def _stream(s, purpose, blocks):
@@ -985,7 +1328,7 @@ def _stream(s, purpose, blocks):
 def check_streams(doc, schedule):
     """No two streams share a seed, the streams of every replacement (attempt 2) included; each session's seed is
     its traffic seed (scripts/campaign.py passes `seed` to the runner); a replacement keeps its session's
-    assignment."""
+    assignment and the tenths of the interval of its starts and stops (design B4b)."""
     k = len(doc["scenarios"])
     groups = _groups(schedule)
     blocks = {}
@@ -1012,6 +1355,8 @@ def check_streams(doc, schedule):
         if ([(x.get("kind"), x.get("polarity")) for x in r.get("controls", [])]
                 != [(x.get("kind"), x.get("polarity")) for x in s.get("controls", [])]):
             reasons.append(f"replacement of {_label(s)} changes kinds")
+        if [item_tenths(doc, x) for x in _items_of(r)] != [item_tenths(doc, x) for x in _items_of(s)]:
+            reasons.append(f"replacement of {_label(s)} changes the tenths of its phases")
     return reasons
 
 
@@ -1084,8 +1429,8 @@ def check_analysis(doc, schedule=None, *, stage="G0"):
 
 
 PLAN_CHECKS = {"role_sizes": check_role_sizes, "scenario_balance": check_scenario_balance, "events": check_events,
-               "controls": check_controls, "full_snapshot_guard": check_full_snapshot_guard, "phases": check_phases,
-               "streams": check_streams, "role_order": check_role_order}
+               "controls": check_controls, "full_snapshot_guard": check_full_snapshot_guard, "times": check_times,
+               "phases": check_phases, "streams": check_streams, "role_order": check_role_order}
 
 
 def _message(error):
@@ -1140,7 +1485,7 @@ def check_lab_register(doc, schedule=None):
 
 
 CHECKS = ("keys", "loader", "reachability", "role_sizes", "scenario_balance", "events", "controls",
-          "full_snapshot_guard", "phases", "streams", "role_order", "analysis", "rehearsal", "lab_register")
+          "full_snapshot_guard", "times", "phases", "streams", "role_order", "analysis", "rehearsal", "lab_register")
 
 
 def evaluate(path, doc, schedule, *, stage="G0", plan_error=None):
@@ -1170,8 +1515,37 @@ def evaluate(path, doc, schedule, *, stage="G0", plan_error=None):
     return out
 
 
+def summary(doc, schedule):
+    """What the self-check records of a plan (the lead's must_fix 5 and 6 on B4; F1 and F2 of the verification of
+    B4b): per event role the count of every event type at each place in its session's order (first, second, ...;
+    recorded, not required) and on every VM of the file (required within 1 by the check events), per role the starts
+    and stops per tenth of the interval, and the Kolmogorov-Smirnov distances of the start and of the stop phases
+    of the whole plan with their critical values."""
+    interval, phases = _ms(doc["interval_s"]), _phases_ms(doc, schedule)
+    places = max((len(s.get("events", [])) for s in schedule["sessions"]), default=0)
+    vms = [row["name"] for row in doc["vms"]] if "vms" in doc else []
+    order, on_vm = {}, {}
+    for role in ROLES:
+        mine = [s for s in schedule["sessions"] if s["role"] == role and "events" in s]
+        if mine:
+            seen = Counter((x["type"], i) for s in mine for i, x in enumerate(s["events"]))
+            order[role] = {t: [seen[t, i] for i in range(places)] for t in sorted(doc["events"]["types"])}
+            on = Counter((x["type"], s.get("vm")) for s in mine for x in s["events"])
+            on_vm[role] = {t: {vm: on[t, vm] for vm in vms} for t in sorted(doc["events"]["types"])}
+    tenths = {role: {what: [Counter(tenth(pair[i], interval) for pair in phases[role])[d] for d in range(TENTHS)]
+                     for i, what in enumerate(("starts", "stops"))} for role in ROLES if role in phases}
+    ks = {}
+    for i, what in enumerate(("starts", "stops")):
+        values = [pair[i] / interval for role in ROLES for pair in phases.get(role, [])]
+        ks[what] = {what: len(values), "distance": round(ks_distance(values), 4),
+                    "critical": round(ks_critical(len(values)), 4) if values else None, "level": KS_LEVEL}
+    return {"event_types_by_place_in_session": order, "event_types_by_vm": on_vm, "phase_tenths": tenths,
+            "start_phases_ks": ks["starts"], "stop_phases_ks": ks["stops"]}
+
+
 def selfcheck(path, *, mode="campaign", stage="G0"):
-    """The self-check report of a protocol file; it parses the file itself and does not need the loader to pass."""
+    """The self-check report of a protocol file; it parses the file itself and does not need the loader to pass.
+    Its summary records tables of the plan (summary(); null when no plan could be made)."""
     if mode not in MODES:
         raise ValueError("unknown plan mode: " + str(mode))
     if stage not in STAGES:
@@ -1186,5 +1560,10 @@ def selfcheck(path, *, mode="campaign", stage="G0"):
     except Exception as exc:  # noqa: BLE001 - every check that needs the plan names the error
         schedule, error = None, _message(exc)
     checks = evaluate(path, doc, schedule, stage=stage, plan_error=error)
+    try:
+        recorded = None if schedule is None else summary(doc, schedule)
+    except Exception:  # noqa: BLE001 - a malformed plan is the checks' to name; the summary is only a record
+        recorded = None
     return {"protocol": str(path.resolve()), "protocol_sha256": hashlib.sha256(raw).hexdigest(), "mode": mode,
-            "stage": stage, "checks": checks, "passed": all(c["result"] == "passed" for c in checks)}
+            "stage": stage, "checks": checks, "summary": recorded,
+            "passed": all(c["result"] == "passed" for c in checks)}
