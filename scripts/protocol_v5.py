@@ -19,6 +19,13 @@ The loader does not judge balance, role sizes, the place of null values or the b
 gate to invalid_rows.max; the self-check does. Its check functions take (doc, plan) so that a test can pass a
 mutated plan. A value a later stage determines (proposal 10.9) is null or preliminary at its one place in the
 file; determined_at names the stage of each such path, and `*` stands for every key of an object at that level.
+The doses of a control kind of class A are null by design (it has none), not determined later (not_applicable).
+
+Package B8 (the lead's skeleton dokazy/B8/kostra/KOSTRA.md, design B8 sections 1.1 and 1.2): every control kind
+states its class, its doses and the occurrences per dose (class B), the feature columns it should move with the
+expected shift of each, and the module kind its candidates; controls.baseline is the tolerance of the level part of
+the return predicate (null until G2). The plan deals every control of class B a dose: each dose has its count among
+the kind's controls and the same among its negatives, and within 1 on every VM.
 """
 from collections import Counter
 import copy
@@ -29,6 +36,7 @@ import json
 import math
 from pathlib import Path
 import random
+import re
 
 SCHEMA = "hyptcn3/collection-protocol/3"
 PLAN_SCHEMA = "hyptcn3/collection-plan/2"
@@ -37,6 +45,11 @@ DETERMINED = ("G1", "G2", "G3a", "G3b")  # The stages a path of determined_at ma
 MODES = ("campaign", "rehearsal")
 ROLES = ("train", "dev", "calibration", "test_benign", "test_controls")
 CONTROL_ROLE = "test_controls"  # Its sessions hold controls on the VM and no events (proposal 7.2, 7.4).
+# The record of a planned control in the session's controls.json (design B8, section 1.4): its class is that of the
+# occurrence, the control or its paired negative, by the polarity of the plan's item; the item's class A or B stays in
+# the record as kind_class (scripts/collection.py Controls, scripts/collection_logs.py, scripts/controls.py).
+CONTROLS_SCHEMA = "hyptcn3/session-controls/1"
+CONTROL_RECORD_CLASS = {"control": "control", "negative": "control_negative"}
 # Proposal 7.3: train, dev and calibration in this order, then the two test roles interleaved in time.
 TIME_RANK = {"train": 0, "dev": 1, "calibration": 2, "test_benign": 3, "test_controls": 3}
 INTERLEAVED = ("test_benign", "test_controls")
@@ -58,11 +71,19 @@ MAX_DRAWS = 1000
 # against the uniform law at the 5 % level (both numbers are the lead's).
 TENTHS = 10
 KS_LEVEL = .05
-# Names the protocol uses that are registered only from package B8 (the four new control kinds); the check
-# lab_register stays pending while one of them is unknown. B5a registered the empty event naprazdno in
-# lab/udalosti.py, B5b the traffic profiles in scripts/host_traffic.py (PROFILES).
-PENDING_IN_LAB = ("kontrola_modul_jadra", "kontrola_pocuvajuci_soket", "kontrola_zapisovac_pamate",
-                  "kontrola_davka_procesov")
+# Names the protocol uses that a later package registers in lab/; the check lab_register stays pending while one of
+# them is unknown. B5a registered the empty event naprazdno in lab/udalosti.py, B5b the traffic profiles in
+# scripts/host_traffic.py (PROFILES), B8 the five control kinds in lab/udalosti.py (CONTROLS): none is left.
+PENDING_IN_LAB = ()
+# The control kinds (package B8; the lead's skeleton dokazy/B8/kostra/KOSTRA.md, section 1, design B8 section 1.1).
+MODULE_KIND = "kontrola_modul_jadra"  # The kind that loads one of its candidate modules (it alone has candidates).
+DIRECTIONS = ("up", "down")  # The direction of a column's expected shift.
+ROW_FLAGS = ("ma_predchodcu", "je_plna")  # Columns of features.snapshot.MENA that say what a row is; none is expected.
+# The quantities of the level part of the return predicate, each with its band [low, high] in controls.baseline once
+# G2 has measured it (null until then): exactly lab/guest_state.py LEVEL_PARTS, the only non-null shape the guest
+# takes (skeleton B8 section 3).
+BASELINE_PARTS = ("processes", "MemAvailable_kb")
+MODULE_NAME = r"[a-z0-9_]+"  # A module name as /proc/modules shows it.
 
 # Every top-level key of a schema-3 protocol; vms or the pair domain/target as in schema 2, two optional notes.
 # A section another package adds (B5b: profiles) is added here and to config/collection-v5.json together.
@@ -75,10 +96,14 @@ OPTIONAL = ("vms_note", "note")
 
 
 class Each:
-    """An object with free keys, each value an object with the fixed inner set `inner`."""
+    """An object with free keys, each value an object with the fixed inner set `inner`; the value of a key that
+    `extra` names has the keys of extra[key] as well (required like the others, unknown under every other key)."""
 
-    def __init__(self, inner):
-        self.inner = inner
+    def __init__(self, inner, extra=None):
+        self.inner, self.extra = inner, dict(extra or {})
+
+    def of(self, key):
+        return {**self.inner, **self.extra.get(key, {})}
 
 
 class Some:
@@ -141,8 +166,14 @@ INNER = {
     "events": _fixed("types", "per_session", "duration_s", "first_s", "min_gap_s", "tail_s", "grace_s",
                      "min_per_type", "note"),
     "full_snapshot_guard": _fixed("before_s", "note"),
+    # Package B8 (design B8 1.1): each kind's class, doses and occurrences per dose (null for class A), the columns
+    # it should move with the expected shift of each, and for the module kind its candidates; controls.baseline is
+    # the tolerance of the level part of the return predicate.
     "controls": _fixed("per_kind", "negatives_per_kind", "slots_per_session", "min_duration_s", "duration_s",
-                       "horizon_s", "note", kinds=Each(_fixed("class"))),
+                       "horizon_s", "baseline", "note",
+                       kinds=Each(_fixed("class", "doses", "per_dose", "columns", "note",
+                                         expect=Each(_fixed("shift", "direction"))),
+                                  extra={MODULE_KIND: _fixed("candidates")})),
     "streams": _fixed("purposes", "rule", "note"),
     "analysis": ANALYSIS,
     "rehearsal": _fixed("name_suffix", "group_prefix", "groups_per_role", "note"),
@@ -160,7 +191,7 @@ def _walk(value, template, path, out, missing_only=False):
     if isinstance(template, Each):
         for key in sorted(value):
             if type(value[key]) is dict:
-                _walk(value[key], template.inner, f"{path}.{key}", out, missing_only)
+                _walk(value[key], template.of(key), f"{path}.{key}", out, missing_only)
         return
     if isinstance(template, Some):
         out.extend(f"unknown protocol key: {path}.{key}" for key in sorted(set(value) - set(template.keys))
@@ -396,15 +427,67 @@ def _ok_guard(p):
     return _number(g["before_s"]) and g["before_s"] >= 0 and type(g["note"]) is str
 
 
+def _positive(value):
+    return _number(value) and value > 0
+
+
+def _positive_int(value):
+    return type(value) is int and value > 0
+
+
+def _distinct(values, ok):
+    """A non-empty list of distinct values that each pass ok()."""
+    return type(values) is list and bool(values) and all(map(ok, values)) and len(set(map(str, values))) == len(values)
+
+
+def _band(value):
+    """[low, high] of finite numbers with low <= high."""
+    return type(value) is list and len(value) == 2 and all(map(_number, value)) and value[0] <= value[1]
+
+
+def _ok_kind(c, kind, k):
+    """One kind of controls.kinds (design B8 1.1). Class A: no doses and no counts per dose (null), one positive
+    expected shift per column. Class B: distinct positive integer doses (the guest's --dose), as many positive
+    integer counts per dose summing to per_kind, which negatives_per_kind equals (each dose has its count among the
+    kind's controls and the same among its negatives), and per column one positive shift or one per dose in the
+    order of doses. Every kind: distinct columns of features.snapshot.MENA other than the row flags, an expectation
+    {shift, direction} for exactly its columns, a note; the module kind distinct module names as its candidates."""
+    from features.snapshot import MENA  # Here: the generator imports this module and needs no feature code.
+    columns, doses, per, expect = k["columns"], k["doses"], k["per_dose"], k["expect"]
+    if k["class"] not in ("A", "B") or type(k["note"]) is not str:
+        return False
+    if not _distinct(columns, lambda name: type(name) is str and name in MENA and name not in ROW_FLAGS):
+        return False
+    if k["class"] == "A" and (doses is not None or per is not None):
+        return False
+    if k["class"] == "B" and not (_distinct(doses, _positive_int) and type(per) is list and len(per) == len(doses)
+                                  and all(map(_positive_int, per))
+                                  and sum(per) == c["per_kind"] == c["negatives_per_kind"]):
+        return False
+    per_dose = len(doses) if k["class"] == "B" else None  # A shift per dose, in the order of doses (class B only).
+    if not (type(expect) is dict and set(expect) == set(columns) and all(
+            type(e) is dict and e["direction"] in DIRECTIONS
+            and (_positive(e["shift"]) or type(e["shift"]) is list and len(e["shift"]) == per_dose
+                 and all(map(_positive, e["shift"]))) for e in expect.values())):
+        return False
+    return kind != MODULE_KIND or _distinct(k["candidates"], lambda name: type(name) is str
+                                            and re.fullmatch(MODULE_NAME, name) is not None)
+
+
 def _ok_controls(p):
     c = p["controls"]
-    if not (type(c["kinds"]) is dict and c["kinds"] and all(
-            _text(kind) and type(v) is dict and v["class"] in ("A", "B") for kind, v in c["kinds"].items())):
-        return False
     if not (_count(c["per_kind"]) and _count(c["negatives_per_kind"]) and _count(c["slots_per_session"])
             and _number(c["min_duration_s"]) and c["min_duration_s"] > 0 and _span(c["duration_s"])
             and c["duration_s"][0] >= c["min_duration_s"] and _number(c["horizon_s"]) and c["horizon_s"] > 0
             and type(c["note"]) is str):
+        return False
+    if not (type(c["kinds"]) is dict and c["kinds"] and all(
+            _text(kind) and type(v) is dict and _ok_kind(c, kind, v) for kind, v in c["kinds"].items())):
+        return False
+    # The tolerance of the level part of the return predicate: null until G2, then a band per quantity.
+    baseline = c["baseline"]
+    if not (baseline is None or type(baseline) is dict and set(baseline) == set(BASELINE_PARTS)
+            and all(map(_band, baseline.values()))):
         return False
     slots = c["slots_per_session"]
     return not (p["roles"][CONTROL_ROLE] and slots) or _fits(p, slots, c["duration_s"][1])
@@ -651,15 +734,16 @@ def _timing(p, start, duration):
 
 
 def _items(p, role, labels, tenths, rng):
-    """The timed events (labels: types) or controls (labels: (kind, polarity) or None) of one session attempt;
-    tenths holds the (start tenth, stop tenth) of every label that is not None, in order."""
+    """The timed events (labels: types) or controls (labels: (kind, polarity, dose) or None) of one session attempt;
+    tenths holds the (start tenth, stop tenth) of every label that is not None, in order. A control states its kind,
+    polarity, the kind's class (A or B) and its dose (null for class A; design B8 1.2)."""
     if role != CONTROL_ROLE:
         times = _times(p, [tuple(p["events"]["duration_s"])] * len(labels), tenths, rng)
         return [{"type": t, "class": p["events"]["types"][t], **_timing(p, *when)} for t, when in zip(labels, times)]
     kinds = p["controls"]["kinds"]
     times = iter(_times(p, [tuple(p["controls"]["duration_s"])] * sum(x is not None for x in labels), tenths, rng))
     return [{"kind": None, "reason": "deck exhausted"} if x is None else
-            {"kind": x[0], "polarity": x[1], "class": kinds[x[0]]["class"], **_timing(p, *next(times))}
+            {"kind": x[0], "polarity": x[1], "class": kinds[x[0]]["class"], "dose": x[2], **_timing(p, *next(times))}
             for x in labels]
 
 
@@ -870,6 +954,53 @@ def _deal_controls(p, name, groups, g):
             labels.setdefault(members[j % len(members)], []).append(card)
     for group in groups:
         group["labels"] = [rng.sample(labels.get((group["group"], i), []), slots) for i in range(g)]
+    _deal_doses(c, groups, rng)  # Last: every draw above is the one of package B4b.
+
+
+def _deal_doses(c, groups, rng):
+    """Every card of group["labels"] becomes (kind, polarity, dose) (design B8 1.2): dose null for a kind of class A;
+    for a kind of class B one of its doses, from the stream control_deck after the cards are dealt (so the deal of
+    package B4b stays as it is).
+
+    A kind of class B draws one deck of full rounds of its doses, per_dose[i] times doses[i]; each of its two cards
+    (control, negative) takes the doses of as many cards of that deck as it is dealt, from the top: in a campaign the
+    whole deck, so each dose has its count among the kind's controls and the same among its negatives, and in a
+    rehearsal a prefix, whose counts per dose differ by at most 1. The doses of a card are then split over the VMs:
+    dose by dose, the larger counts first, each VM takes the even share of the dose and the VMs with the most cards
+    left to fill take one more each, until the remainder is dealt. Every share of a dose then differs by at most 1
+    between the VMs, since the card's occurrences per VM do (_deal_controls). On each VM the card's occurrences take
+    their doses in random order. ValueError when the doses of a card do not fit its occurrences per VM."""
+    where = {}  # (kind, polarity) -> its slots [(group, session index, slot index)] in plan order
+    for group in groups:
+        for i, labels in enumerate(group["labels"]):
+            for j, card in enumerate(labels):
+                if card is not None:
+                    where.setdefault(card, []).append((group, i, j))
+    vms = sorted({group["vm"] for group in groups}, key=str)
+    for kind in sorted(c["kinds"]):
+        k = c["kinds"][kind]
+        if k["class"] != "B":
+            for polarity in ("control", "negative"):
+                for group, i, j in where.get((kind, polarity), []):
+                    group["labels"][i][j] = (kind, polarity, None)
+            continue
+        deck = _rounds(rng, list(zip(k["doses"], k["per_dose"])), max(k["per_dose"]))
+        for polarity in ("control", "negative"):
+            slots = where.get((kind, polarity), [])
+            counts = Counter(deck[:len(slots)])
+            mine = {vm: [slot for slot in slots if slot[0]["vm"] == vm] for vm in vms}
+            left, shares = {vm: len(mine[vm]) for vm in vms}, {vm: [] for vm in vms}
+            rank = {vm: r for r, vm in enumerate(rng.sample(vms, len(vms)))}
+            for dose in sorted(counts, key=lambda d: (-counts[d], k["doses"].index(d))):
+                even, rest = divmod(counts[dose], len(vms))
+                for r, vm in enumerate(sorted(vms, key=lambda v: (-left[v], rank[v]))):
+                    shares[vm] += [dose] * (even + (r < rest))
+                    left[vm] -= even + (r < rest)
+            if any(left.values()):
+                raise ValueError(f"the doses of {kind}/{polarity} do not fit its occurrences per VM")
+            for vm in vms:
+                for (group, i, j), dose in zip(mine[vm], rng.sample(shares[vm], len(shares[vm]))):
+                    group["labels"][i][j] = (kind, polarity, dose)
 
 
 def _deal_tenths(name, role, groups):
@@ -988,9 +1119,9 @@ def plan(p, mode="campaign"):
 
 def replacement(p, session, attempt, *, mode="campaign"):
     """Attempt `attempt` (2 or later) of a planned session: the same VM, role, group, position, scenario and event
-    types or control kinds in order, and the same tenths of the interval for every start and stop (design B4b: the
-    phases of a role stay stratified when a session is replaced); new phases within those tenths, new durations
-    and gaps, and new traffic seeds from the streams of this attempt."""
+    types or control kinds (with their polarities and doses, package B8) in order, and the same tenths of the
+    interval for every start and stop (design B4b: the phases of a role stay stratified when a session is replaced);
+    new phases within those tenths, new durations and gaps, and new traffic seeds from the streams of this attempt."""
     if type(attempt) is not int or attempt < 2:
         raise ValueError("a replacement is attempt 2 or later")
     name = _shape(p, mode)[0]
@@ -999,7 +1130,8 @@ def replacement(p, session, attempt, *, mode="campaign"):
     out = dict(copy.deepcopy(session), attempt=attempt, seeds=seeds, seed=seeds["traffic"])
     rng = random.Random(seeds["event_times"])
     if "controls" in session:
-        labels = [None if c.get("kind") is None else (c["kind"], c["polarity"]) for c in session["controls"]]
+        labels = [None if c.get("kind") is None else (c["kind"], c["polarity"], c.get("dose"))
+                  for c in session["controls"]]
         tenths = [item_tenths(p, c) for c in session["controls"] if c.get("kind") is not None]
         out["controls"] = _items(p, CONTROL_ROLE, labels, tenths, rng)
     if "events" in session:
@@ -1174,13 +1306,18 @@ def check_controls(doc, schedule):
     polarity control or negative) or empty, and holds no kind twice; in a campaign each kind has per_kind controls
     and negatives_per_kind negatives and only the slots the deck cannot fill are empty; a rehearsal deals a prefix of
     the deck, so its card counts differ by at most 1 and no slot is empty while cards remain; the occurrences of
-    every card per VM differ by at most 1, and so do those per scenario. No other role has controls."""
+    every card per VM differ by at most 1, and so do those per scenario. No other role has controls.
+
+    The doses (package B8, design B8 1.2): a control of a kind of class A has none (null), one of class B one of the
+    kind's doses; in a campaign each dose of a kind of class B has its count per_dose among the kind's controls and
+    the same among its negatives, a rehearsal deals a prefix of the kind's deck of doses, so the counts per dose of a
+    card differ by at most 1; on the VMs the occurrences of every dose of a card differ by at most 1."""
     c, slots = doc["controls"], doc["controls"]["slots_per_session"]
     cards = {(kind, polarity): n for kind in sorted(c["kinds"])
              for polarity, n in (("control", c["per_kind"]), ("negative", c["negatives_per_kind"]))}
     vms, names = [row["name"] for row in doc["vms"]] if "vms" in doc else [], sorted(doc["scenarios"])
     sessions = [s for s in schedule["sessions"] if s["role"] == CONTROL_ROLE]
-    reasons, counts, empty, where = [], Counter(), 0, Counter()
+    reasons, counts, empty, where, doses = [], Counter(), 0, Counter(), Counter()
     for s in sessions:
         items = s.get("controls", [])
         if len(items) != slots:
@@ -1194,6 +1331,13 @@ def check_controls(doc, schedule):
                 counts[x["kind"], x["polarity"]] += 1
                 where[x["kind"], x["polarity"], "vm", s.get("vm")] += 1
                 where[x["kind"], x["polarity"], "scenario", s["scenario"]] += 1
+                allowed, dose = c["kinds"][x["kind"]]["doses"], x.get("dose")
+                if (dose is not None) if allowed is None else (type(dose) is not int or dose not in allowed):
+                    reasons.append(f"session {_label(s)}: control {x['kind']}/{x['polarity']} has dose "
+                                   f"{json.dumps(dose)} (doses of the kind: {json.dumps(allowed)})")
+                elif dose is not None:
+                    doses[x["kind"], x["polarity"], dose] += 1
+                    doses[x["kind"], x["polarity"], dose, s.get("vm")] += 1
         held = Counter(x["kind"] for x in items if x.get("kind") is not None)
         reasons += [f"session {_label(s)} holds control kind {kind} twice" for kind in sorted(held) if held[kind] > 1]
     dealt = len(sessions) * slots
@@ -1207,6 +1351,18 @@ def check_controls(doc, schedule):
             per = Counter({v: where[kind, polarity, axis.lower(), v] for v in values})
             if sessions and len(values) > 1 and _spread(per, values) > 1:
                 reasons.append(f"control {kind}/{polarity}: occurrences per {axis} differ by more than 1")
+        k = c["kinds"][kind]
+        if k["class"] != "B" or not sessions:
+            continue
+        if schedule["mode"] == "campaign":
+            reasons += [f"control {kind}/{polarity}: dose {dose} has {doses[kind, polarity, dose]} occurrences "
+                        f"(expected {n})" for dose, n in zip(k["doses"], k["per_dose"])
+                        if doses[kind, polarity, dose] != n]
+        elif _spread(Counter({d: doses[kind, polarity, d] for d in k["doses"]}), k["doses"]) > 1:
+            reasons.append(f"rehearsal plan: control {kind}/{polarity}: dose counts differ by more than 1")
+        reasons += [f"control {kind}/{polarity}: occurrences of dose {dose} per VM differ by more than 1"
+                    for dose in k["doses"] if len(vms) > 1
+                    and _spread(Counter({vm: doses[kind, polarity, dose, vm] for vm in vms}), vms) > 1]
     if sessions and empty != max(0, dealt - sum(cards.values())):
         reasons.append(f"{empty} empty control slots (expected {max(0, dealt - sum(cards.values()))})")
     if any(s.get("controls") for s in schedule["sessions"] if s["role"] != CONTROL_ROLE):
@@ -1328,7 +1484,8 @@ def _stream(s, purpose, blocks):
 def check_streams(doc, schedule):
     """No two streams share a seed, the streams of every replacement (attempt 2) included; each session's seed is
     its traffic seed (scripts/campaign.py passes `seed` to the runner); a replacement keeps its session's
-    assignment and the tenths of the interval of its starts and stops (design B4b)."""
+    assignment (the doses of its controls included, package B8) and the tenths of the interval of its starts and
+    stops (design B4b)."""
     k = len(doc["scenarios"])
     groups = _groups(schedule)
     blocks = {}
@@ -1355,6 +1512,8 @@ def check_streams(doc, schedule):
         if ([(x.get("kind"), x.get("polarity")) for x in r.get("controls", [])]
                 != [(x.get("kind"), x.get("polarity")) for x in s.get("controls", [])]):
             reasons.append(f"replacement of {_label(s)} changes kinds")
+        elif [x.get("dose") for x in r.get("controls", [])] != [x.get("dose") for x in s.get("controls", [])]:
+            reasons.append(f"replacement of {_label(s)} changes doses")
         if [item_tenths(doc, x) for x in _items_of(r)] != [item_tenths(doc, x) for x in _items_of(s)]:
             reasons.append(f"replacement of {_label(s)} changes the tenths of its phases")
     return reasons
@@ -1403,9 +1562,19 @@ def _nulls(value, path=""):
 CONFIRMATORY = {"k1": ["Z3", "Z5"], "k2a": ["Z1", "Z2", "Z4"], "k2b": ["Z3", "Z5"]}
 
 
+def not_applicable(doc):
+    """The paths whose null means "none", not a value a later stage determines (package B8): the doses and the
+    counts per dose of a control kind of class A."""
+    controls = doc.get("controls") if type(doc.get("controls")) is dict else {}
+    kinds = controls.get("kinds") if type(controls.get("kinds")) is dict else {}
+    return {f"controls.kinds.{kind}.{key}" for kind, k in sorted(kinds.items())
+            if type(k) is dict and k.get("class") == "A" for key in ("doses", "per_dose")}
+
+
 def check_analysis(doc, schedule=None, *, stage="G0"):
     """The analysis plan is complete and compares K1, K2a and K2b with the methods of proposal 4.1; null only at a
-    path of determined_at; with stage Gk every path of a stage up to Gk holds a value."""
+    path of determined_at or where it means none (not_applicable); with stage Gk every path of a stage up to Gk holds
+    a value."""
     if stage not in STAGES:
         raise ValueError("unknown stage: " + str(stage))
     reasons = []
@@ -1419,8 +1588,9 @@ def check_analysis(doc, schedule=None, *, stage="G0"):
                            f"proposal 4.1 names {json.dumps(methods)}")
     determined = doc.get("determined_at") if type(doc.get("determined_at")) is dict else {}
     patterns = [x for paths in determined.values() if type(paths) is list for x in paths if type(x) is str]
+    none = not_applicable(doc)
     reasons += [f"null outside determined_at: {path}" for path in _nulls(doc)
-                if not any(_matches(path, pattern) for pattern in patterns)]
+                if path not in none and not any(_matches(path, pattern) for pattern in patterns)]
     for name in DETERMINED:
         if STAGES.index(name) <= STAGES.index(stage) and type(determined.get(name)) is list:
             reasons += [f"null at {path} determined at {name} (stage {stage})"
@@ -1466,8 +1636,20 @@ def lab_names():
             "control kind": set(udalosti.CONTROLS)}
 
 
+def lab_controls():
+    """{kind: {class, doses, candidates}} as lab/udalosti.py runs the control kinds (package B8): the class of each,
+    the doses of class B (null for class A) and the module candidates of the module kind (null for the others)."""
+    from lab import udalosti
+    return {kind: {"class": udalosti.CLASSES[kind],
+                   "doses": list(udalosti.DOSES[kind]) if kind in udalosti.DOSES else None,
+                   "candidates": list(udalosti.MODULE_CANDIDATES) if kind == MODULE_KIND else None}
+            for kind in udalosti.CONTROLS}
+
+
 def check_lab_register(doc, schedule=None):
-    """(result, reasons): failed on a name the lab does not know, pending on a name B8 will add."""
+    """(result, reasons): failed on a name the lab does not know, pending on a name a later package will add (none
+    since B8); failed too when a control kind of the protocol has another class, other doses or other module
+    candidates than lab/udalosti.py runs (package B8: the guest refuses a dose it does not know)."""
     known = lab_names()
     wanted = (("event type", sorted(doc["events"]["types"])),
               ("profile", sorted({s["profile"] for s in doc["scenarios"].values()})),
@@ -1477,10 +1659,14 @@ def check_lab_register(doc, schedule=None):
         for name in names:
             if name not in known[kind]:
                 (pending if name in PENDING_IN_LAB else unknown).append(name)
-    if unknown:
-        return "failed", [f"unknown to lab/: {name}" for name in unknown]
+    lab = lab_controls()
+    differ = [f"control kind {kind}: {field} {json.dumps(spec.get(field))} differs from lab/udalosti.py "
+              f"{json.dumps(lab[kind][field])}" for kind, spec in sorted(doc["controls"]["kinds"].items())
+              if kind in lab for field in ("class", "doses", "candidates") if spec.get(field) != lab[kind][field]]
+    if unknown or differ:
+        return "failed", [f"unknown to lab/: {name}" for name in unknown] + differ
     if pending:
-        return "pending", ["registered by B8: " + ", ".join(pending)]
+        return "pending", ["registered by a later package: " + ", ".join(pending)]
     return "passed", []
 
 

@@ -20,10 +20,22 @@ code or the correlation of a new route at a time; a case that needs one profile 
 of it. They apply once the schema-3 layout has the profiles section (agent T of B5b, scripts/protocol_v5.py
 TOP_LEVEL): from then on every schema-3 protocol has it. Until then UNREACHABLE names their keys with that reason.
 A case of the base list whose reasons differ under v5 takes them from the protocol (expected is a callable).
+
+Package B8 (design B8 1.4, skeleton B8 section 5 item 4): CONTROL_CASES start from the clean session of role
+test_controls (controls_session: a control of class A and a negative of class B that ran faultlessly, the guest's
+health polls without request id inside their start and stop calls) and break one predicate or record at a time:
+a control not executed, without the return predicate, without its effect, not cleaned, a negative with its
+property, a record that differs from the plan or is missing, controls.json missing (the four cases of finding S2
+of B3, whose pilot protocol v5 does not have).
 """
+import copy
 import gzip
 import json
+from pathlib import Path
 
+from scripts import collection
+from scripts.protocol_v5 import CONTROL_RECORD_CLASS, CONTROL_ROLE, CONTROLS_SCHEMA
+from scripts.tests import boundary_sessions as bs
 from scripts.tests import test_collection_logs as evidence
 from scripts.tests import test_traffic_log as sample
 from scripts.tests.audit_case import Case
@@ -763,10 +775,131 @@ _V5_CASES = [
 ]
 
 
-def _cases(rows):
+# Package B8: the clean session of role test_controls and the cases of the section controls of the log audit.
+
+CONTROLS = (("kontrola_wx_memfd", "control"), ("kontrola_zapisovac_pamate", "negative"))
+CONTROL_KIND, NEGATIVE_KIND = (kind for kind, _ in CONTROLS)
+# The guest's predicates of a faultless occurrence (lab/udalosti.py, design B8 1.3); the level part is not judged
+# while controls.baseline is null.
+BASELINE = {"ok": True, "exact": {"ok": True, "residues": []},
+            "level": {"judged": False, "why": "controls.baseline null until G2"}, "evidence": []}
+EFFECT = {"ok": True, "predicate": "synthetic", "evidence": {"members": [4321, 4322]}}
+CLEANUP = {"ok": True, "residues": [], "evidence": []}
+
+
+def control_items(p):
+    """The planned controls of the clean session of role test_controls as the plan states them: a control of
+    kontrola_wx_memfd (class A, no dose) 2 s after the measurement starts and a negative of kontrola_zapisovac_pamate
+    (class B, its first dose) 8 s after it, 3 s each, so that both fit the short sessions of the test protocols."""
+    kinds, interval, items = p["controls"]["kinds"], p["interval_s"], []
+    for (kind, polarity), start in zip(CONTROLS, (2., 8.)):
+        k = kinds[kind]
+        items.append({"kind": kind, "polarity": polarity, "class": k["class"],
+                      "dose": None if k["doses"] is None else k["doses"][0], "start_s": start, "duration_s": 3.,
+                      "start_phase_s": start % interval, "stop_phase_s": (start + 3.) % interval})
+    return items
+
+
+def control_records(items, measure_start):
+    """The records of controls.json as scripts/collection.py Controls leaves them after a faultless run of `items`
+    (design B8 1.4): the item with its class under kind_class, the occurrence's class, executed, the host times
+    of both calls, the replies of labctl and at the top the guest's baseline, effect and cleanup."""
+    records = []
+    for item in items:
+        start = measure_start + item["start_s"]
+        stop = start + item["duration_s"]
+        reply = {"schema": "hyptcn3/lab-event/1", "type": item["kind"], "ok": True, "error": None, "health": 200,
+                 "script_sha256": evidence.SCRIPT_SHA256, "kind": item["kind"], "polarity": item["polarity"],
+                 "dose": item["dose"], "class": CONTROL_RECORD_CLASS[item["polarity"]]}
+        record = {key: value for key, value in item.items() if key != "class"}
+        record.update(kind_class=item["class"], executed=True, host_start_unix=start, host_started_unix=start + .2,
+                      host_stop_unix=stop, host_stopped_unix=stop + .3,
+                      start=dict(reply, action="start", started=True, baseline=copy.deepcopy(BASELINE)),
+                      stop=dict(reply, action="stop", effect=copy.deepcopy(EFFECT), cleanup=copy.deepcopy(CLEANUP)),
+                      baseline=copy.deepcopy(BASELINE), effect=copy.deepcopy(EFFECT), cleanup=copy.deepcopy(CLEANUP),
+                      **{"class": CONTROL_RECORD_CLASS[item["polarity"]]})
+        records.append(record)
+    return records
+
+
+def health_polls(records):
+    """The nginx lines of the guest's health polls without request id in the calls of the records (lab/udalosti.py
+    polls once at the end of a start and twice in a stop: its wait for health 200 and its reply)."""
+    times = [t for r in records for t in (r["host_started_unix"] - .1, r["host_stopped_unix"] - .2,
+                                          r["host_stopped_unix"] - .1)]
+    return [json.dumps({"schema": "hyptcn3/nginx-access/1", "rid": "", "forwarded_rid": "x", "method": "GET",
+                        "uri": "/healthz", "status": 200, "msec": t}) + "\n" for t in times]
+
+
+def controls_session(root, p, protocol_path, name):
+    """The clean session of role test_controls below `root` (package B8): a boundary_sessions.Session.
+
+    The first planned session of plan(p) as a session of test_controls (as its VM sees the protocol), of full
+    length, built as the clean session of the self-test is but without an event: session.json plans no event
+    (events.json holds none) and the controls of control_items(p), controls.json holds their records after a
+    faultless run (control_records), and the session's nginx log the guest's health polls inside their calls."""
+    root = Path(root)
+    place = dict(collection.plan(p)["sessions"][0], role=CONTROL_ROLE, group=f"{p['group_prefix']}{CONTROL_ROLE}-1")
+    pv = collection.for_vm(p, place.get("vm"))
+    items = control_items(p)
+    session = bs.build_session(root, pv, protocol_path, place, session_id=name, base=bs.time_base(p, CONTROL_ROLE, 0),
+                               profile=bs.profile_dir(root / (name + "-profile")),
+                               meta={"events": [], "event_grace_s": p["events"]["grace_s"],
+                                     "source_sha256": {"lab/udalosti.py": evidence.SCRIPT_SHA256}, "controls": items})
+    d = session.directory
+    records = control_records(items, _read(d, "end.json")["measure_start_unix"])
+    _write(d, "events.json", {"schema": "hyptcn3/session-events/1", "events": []})
+    _write(d, "controls.json", {"schema": CONTROLS_SCHEMA, "controls": records})
+    _set_segment(d, "session", "nginx-access.jsonl", lambda lines: [*lines, *health_polls(records)])
+    evidence.seal(d)
+    return session
+
+
+def _control(index, change):
+    """mutate: change(record) of record `index` of controls.json (0: the control, 1: the negative), then reseal."""
+    return edit("controls.json", lambda doc: change(doc["controls"][index]))
+
+
+def _failed(name):
+    return lambda record: record[name].update(ok=False)
+
+
+def _without_controls_json(d, p, result):
+    (d / "controls.json").unlink()
+    evidence.seal(d)
+
+
+_CONTROL_CASES = [
+    # Finding S2 of B3: without the records no call of a control admits its health polls either.
+    ("controls:unreadable", _without_controls_json,
+     logs("controls:unreadable:ValueError: no controls.json", "nginx_unknown_request:")),
+    ("controls_schema", edit("controls.json", lambda doc: doc.update(schema="hyptcn3/session-controls/9")),
+     logs("controls_schema")),
+    ("controls_differ_from_plan", _control(0, lambda r: r.update(start_s=r["start_s"] + 1)),
+     logs("controls_differ_from_plan")),
+    ("controls_differ_from_plan:class", _control(1, lambda r: r.update({"class": r["kind_class"]})),
+     logs("controls_differ_from_plan")),
+    # S2: a planned control missing from controls.json (the negative): its calls admit no health poll.
+    ("controls_differ_from_plan:missing", edit("controls.json", lambda doc: doc["controls"].pop()),
+     logs("controls_differ_from_plan", "nginx_unknown_request:")),
+    ("control_not_executed", _control(0, lambda r: r.update(executed=False)),
+     logs("control_not_executed:" + CONTROL_KIND)),
+    ("control_without_baseline", _control(0, _failed("baseline")), logs("control_without_baseline:" + CONTROL_KIND)),
+    # S2: the counterpart of a positive control not detected, from the guest's effect predicate (no feature is read).
+    ("control_without_effect", _control(0, _failed("effect")), logs("control_without_effect:" + CONTROL_KIND)),
+    ("negative_with_property", _control(1, _failed("effect")), logs("negative_with_property:" + NEGATIVE_KIND)),
+    ("control_not_cleaned", _control(0, _failed("cleanup")), logs("control_not_cleaned:" + CONTROL_KIND)),
+    ("control_script_differs", _control(0, lambda r: r["stop"].update(script_sha256="0" * 64)),
+     logs("control_script_differs:" + CONTROL_KIND)),
+]
+
+
+def _cases(rows, session=None):
     return [Case("logs:" + name, name.split(":")[0] if not name.endswith(":unreadable") else name,
-                 expected if callable(expected) else sorted(expected), mutate) for name, mutate, expected in rows]
+                 expected if callable(expected) else sorted(expected), mutate, session)
+            for name, mutate, expected in rows]
 
 
 V5_CASES = _cases(_V5_CASES)
-LOG_CASES = _cases(_CASES) + V5_CASES
+CONTROL_CASES = _cases(_CONTROL_CASES, controls_session)
+LOG_CASES = _cases(_CASES) + V5_CASES + CONTROL_CASES

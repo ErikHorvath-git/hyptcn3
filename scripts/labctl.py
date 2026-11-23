@@ -215,6 +215,37 @@ def stored_effect(effect):
                          "guest_effect": effect}}
 
 
+# The class of a control's record (design B8, section 1.4): the control or its paired negative, by the polarity; the
+# same mapping as scripts/protocol_v5.py CONTROL_RECORD_CLASS (labctl runs without the repository's modules).
+CONTROL_CLASS = {"control": "control", "negative": "control_negative"}
+
+
+def stored_baseline(baseline):
+    """The return predicate of a control's start reply as the record keeps it (design B8, section 1.3): the guest's
+    own when it is a dict with a boolean ok, an exact part with a boolean ok, a level part that says whether it was
+    judged (and then with a boolean ok) and evidence, and ok is the exact part's and the judged level part's;
+    otherwise a false one naming what came back, so the record never claims a return the guest did not report."""
+    if type(baseline) is dict and type(baseline.get("ok")) is bool and "evidence" in baseline:
+        exact, level = baseline.get("exact"), baseline.get("level")
+        if (type(exact) is dict and type(exact.get("ok")) is bool and type(level) is dict
+                and type(level.get("judged")) is bool and (not level["judged"] or type(level.get("ok")) is bool)
+                and baseline["ok"] is (exact["ok"] and (not level["judged"] or level["ok"]))):
+            return baseline
+    return {"ok": False, "exact": None, "level": None,
+            "evidence": {"error": "start reply without a well-formed baseline (lab/udalosti.py older than B8?)",
+                         "guest_baseline": baseline}}
+
+
+def stored_cleanup(cleanup):
+    """The cleanup of a control's stop reply as the record keeps it (design B8, section 1.3): the guest's own when it
+    is a dict with a boolean ok and evidence, otherwise a false one naming what came back."""
+    if type(cleanup) is dict and type(cleanup.get("ok")) is bool and "evidence" in cleanup:
+        return cleanup
+    return {"ok": False,
+            "evidence": {"error": "stop reply without a well-formed cleanup (lab/udalosti.py older than B8?)",
+                         "guest_cleanup": cleanup}}
+
+
 class Lab:
     def __init__(self, uri="qemu:///session", domain="hyptcn-lab", vm=None, port=PORT):
         if not re.fullmatch(r"[a-zA-Z0-9][a-zA-Z0-9_-]{0,50}", domain):
@@ -319,15 +350,34 @@ class Lab:
         return json.loads(self.guest("python3 /opt/hyptcn-lab/guest_state.py "
                                      + " ".join(shlex.quote(str(a)) for a in args), timeout=timeout))
 
-    def event(self, action, kind, timeout=180):
-        """Start or stop one benign operational event (lab/udalosti.py) and parse its JSON reply.
+    def event(self, action, kind, timeout=180, *, polarity=None, dose=None, levels=None, tolerance=None):
+        """Start or stop one benign operational event or control (lab/udalosti.py) and parse its JSON reply.
 
         The guest evaluates the effect predicate in stop, before it restores the lab; the stop record keeps
-        that effect (stored_effect), the log audit refuses an event whose effect is not ok."""
-        reply = json.loads(self.guest("python3 /opt/hyptcn-lab/udalosti.py "
-                                      + shlex.quote(action) + " " + shlex.quote(kind), timeout=timeout))
-        if action == "stop":
+        that effect (stored_effect), the log audit refuses an event whose effect is not ok.
+
+        A control (package B8; a polarity is given) runs with the guest's command line of design B8 1.3: its polarity,
+        its dose for a kind of class B, and at the start the session's starting levels (`levels`, the object
+        guest_state.py levels printed) and the protocol's tolerance (controls.baseline, null until G2). The reply
+        keeps the guest's return predicate of the start (stored_baseline), the effect and the cleanup of the stop
+        (stored_effect, stored_cleanup), and names the occurrence at its top: kind, polarity, dose and class, control
+        or control_negative (design B8 1.4)."""
+        command = ["python3", "/opt/hyptcn-lab/udalosti.py", action, kind]
+        if polarity is not None:
+            command += ["--polarity", polarity, *(["--dose", dose] if dose is not None else [])]
+            if action == "start":
+                command += ["--levels", json.dumps(levels, sort_keys=True), "--tolerance", json.dumps(tolerance)]
+        reply = json.loads(self.guest(" ".join(shlex.quote(str(part)) for part in command), timeout=timeout))
+        if polarity is None:
+            if action == "stop":
+                reply["effect"] = stored_effect(reply.get("effect"))
+            return reply
+        if action == "start":
+            reply["baseline"] = stored_baseline(reply.get("baseline"))
+        elif action == "stop":
             reply["effect"] = stored_effect(reply.get("effect"))
+            reply["cleanup"] = stored_cleanup(reply.get("cleanup"))
+        reply.update(kind=kind, polarity=polarity, dose=dose, **{"class": CONTROL_CLASS[polarity]})
         return reply
 
     def fetch_segment(self, doc, dest):
@@ -657,11 +707,38 @@ class Lab:
              "--out", out])
 
 
+def control_options(parser, args):
+    """The options of `event` for a control (package B8, design B8 1.3) as keyword arguments of Lab.event, {} for an
+    event; a usage error (parser.error) for options that do not belong together: --dose, --levels and --tolerance
+    only with --polarity, --levels and --tolerance only and always at the start of a control, --levels a JSON object
+    and --tolerance JSON null or an object, --dose a positive number."""
+    given = [name for name in ("dose", "levels", "tolerance") if getattr(args, name) is not None]
+    if args.polarity is None:
+        if given:
+            parser.error("--dose, --levels and --tolerance belong to the event of a control (--polarity)")
+        return {}
+    start = args.event[0] == "start"
+    if start != (args.levels is not None) or start != (args.tolerance is not None):
+        parser.error("--levels and --tolerance belong to the start of a control, and it needs both")
+    if args.dose is not None and args.dose < 1:
+        parser.error("--dose is a positive number")
+    options = {"polarity": args.polarity, "dose": args.dose}
+    if start:
+        try:
+            levels, tolerance = json.loads(args.levels), json.loads(args.tolerance)
+        except ValueError as error:
+            parser.error(f"--levels and --tolerance are JSON: {error}")
+        if type(levels) is not dict or not (tolerance is None or type(tolerance) is dict):
+            parser.error("--levels is a JSON object (guest_state.py levels) and --tolerance null or an object")
+        options.update(levels=levels, tolerance=tolerance)
+    return options
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("command", choices=["up", "create", "clone", "start", "deploy", "status", "stop", "reboot",
-                                            "traffic-start", "traffic-stop", "exec", "logs", "state", "clock",
-                                            "sync-clock", "segment", "journal", "event"])
+                                            "traffic-start", "traffic-stop", "exec", "logs", "state", "levels",
+                                            "clock", "sync-clock", "segment", "journal", "event"])
     parser.add_argument("--domain", default="hyptcn-lab")
     parser.add_argument("--vm", help="VM name of a multi-VM protocol (own state file, traffic unit and port); "
                                      "clone: the new disk gets a fresh machine-id and hostname before its first boot")
@@ -671,12 +748,21 @@ def main(argv=None):
     parser.add_argument("--guest-command", help="Command for exec, executed inside the lab VM")
     parser.add_argument("--label", help="segment/journal: exclusive guest segment label")
     parser.add_argument("--dest", type=Path, help="segment/journal: existing host directory for verified copies")
-    parser.add_argument("--event", nargs=2, metavar=("ACTION", "TYPE"), help="event: start|stop and event type")
+    parser.add_argument("--event", nargs=2, metavar=("ACTION", "TYPE"),
+                        help="event: start|stop and event type or control kind")
+    parser.add_argument("--polarity", choices=("control", "negative"),
+                        help="event of a control kind (lab/udalosti.py CONTROLS, package B8): the control or its "
+                             "paired negative")
+    parser.add_argument("--dose", type=int, help="event of a control of class B: its dose")
+    parser.add_argument("--levels", help="start of a control: the session's starting levels, the JSON object "
+                                         "guest_state.py levels printed")
+    parser.add_argument("--tolerance", help="start of a control: controls.baseline of the protocol as JSON (null "
+                                            "until G2)")
     parser.add_argument("--since", type=float, help="journal: start, Unix seconds")
     parser.add_argument("--until", type=float, help="journal: end, Unix seconds")
     parser.add_argument("--protocol", type=Path,
-                        help="up/traffic-start: the protocol the lab serves; under schema 3 the old traffic unit is "
-                             "refused before any step")
+                        help="up/traffic-start (required): the protocol the lab serves, of schema 1 or 2; under schema "
+                             "3 the old traffic unit is refused before any step")
     args = parser.parse_args(argv)
     if args.domain == args.source:
         parser.error("Lab domain must be different from the experiment source")
@@ -684,13 +770,17 @@ def main(argv=None):
         parser.error("--vm and --port belong together")
     if args.command == "clone" and args.vm is None:
         parser.error("clone creates a further VM and requires --vm and --port")
-    if args.command in ("up", "traffic-start") and args.protocol is not None:
+    if args.command in ("up", "traffic-start"):
+        # Finding F5 of the B5b verification: without the protocol the old generator unit would start under v5 too.
+        if args.protocol is None:
+            parser.error(args.command + " requires --protocol (the protocol the lab serves)")
         try:
             protocol = json.loads(args.protocol.read_text())
         except (OSError, ValueError) as error:
             parser.error(f"cannot read --protocol: {error}")
         if type(protocol) is dict and protocol.get("schema") == SCHEMA_3:
             raise RuntimeError(OLD_GENERATOR_UNDER_V5)
+    control = control_options(parser, args) if args.command == "event" and args.event else {}
     try:
         lab = Lab(args.uri, args.domain, args.vm, PORT if args.port is None else args.port)
     except ValueError as error:
@@ -736,6 +826,9 @@ def main(argv=None):
     if args.command == "state":
         lab.owned()
         print(json.dumps(lab.helper("state"), sort_keys=True))
+    if args.command == "levels":  # The level values at the start of a session (proposal 5.4; package B8).
+        lab.owned()
+        print(json.dumps(lab.helper("levels"), sort_keys=True))
     if args.command == "clock":
         print(json.dumps(lab.clock()))
     if args.command == "sync-clock":
@@ -747,7 +840,7 @@ def main(argv=None):
         lab.owned()
         if not args.event:
             parser.error("event requires --event ACTION TYPE")
-        print(json.dumps(lab.event(*args.event), sort_keys=True))
+        print(json.dumps(lab.event(*args.event, **control), sort_keys=True))
     if args.command in ("segment", "journal"):
         lab.owned()
         if not args.label or not args.dest or not args.dest.is_dir():

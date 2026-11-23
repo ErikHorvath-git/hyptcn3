@@ -10,8 +10,9 @@ test: build
 check:
 	bash scripts/check_claims.sh
 
+# The single lab VM of the protocols of schema 1 and 2 (hyptcn-lab, port 18080); labctl up requires the protocol.
 lab-up:
-	python3 scripts/labctl.py up
+	python3 scripts/labctl.py up --protocol config/collection-v2.json
 
 lab-status:
 	python3 scripts/labctl.py status

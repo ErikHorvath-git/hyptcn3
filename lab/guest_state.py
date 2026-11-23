@@ -7,11 +7,14 @@ between measured sessions so that each segment belongs to exactly one run.
 Protocol v5 (proposal 5.4): `reset --seed S` returns the database and the
 documents to the seeded level of lab/seed.py, `pretouch` lets one process
 touch as much memory as the largest event and exit, `levels` prints the
-level values recorded at the start of each session.
+level values recorded at the start of each session. Package B8: `baseline
+--levels JSON --tolerance JSON|null` prints the return predicate a control
+needs before it starts (lab/udalosti.py; skeleton B8 section 3).
 """
 import gzip
 import hashlib
 import json
+import math
 import os
 from pathlib import Path
 import pwd
@@ -248,8 +251,8 @@ def files(directory, pattern="*"):
     return {"files": len(found), "bytes": sum(p.stat().st_size for p in found)}
 
 
-def levels():
-    """Level values at the start of a session (proposal 5.4): processes, memory, database rows and sizes, files."""
+def tasks():
+    """(processes, threads): every /proc/PID/status that can be read; levels and the return predicate count alike."""
     processes = threads = 0
     for status in PROC.glob("[0-9]*/status"):
         try:
@@ -258,6 +261,12 @@ def levels():
             continue
         processes += 1
         threads += next((int(line.split()[1]) for line in text.splitlines() if line.startswith("Threads:")), 0)
+    return processes, threads
+
+
+def levels():
+    """Level values at the start of a session (proposal 5.4): processes, memory, database rows and sizes, files."""
+    processes, threads = tasks()
     out = run("runuser", "-u", "postgres", "--", "psql", "-XtAF", "|", "hyptcn_lab", "-c", LEVELS).strip()
     stat = os.statvfs("/")
     print(json.dumps({"schema": "hyptcn3/guest-levels/1", "utc_unix": time.time(), "processes": processes,
@@ -271,10 +280,92 @@ def levels():
                                   "free_bytes": stat.f_bavail * stat.f_frsize}}, sort_keys=True))
 
 
+# The level part of the return predicate (skeleton B8 section 3): each quantity, where `levels` printed it at the
+# start of the session. The tolerance (controls.baseline of the protocol, null until G2 measures it) gives for each one
+# the band [low, high] that its change since the start of the session may span: the 1st to the 99th percentile of
+# that change in a long lab trial without events.
+LEVEL_PARTS = {"processes": ("processes",), "MemAvailable_kb": ("meminfo_kb", "MemAvailable")}
+UNJUDGED = {"judged": False, "why": "controls.baseline null until G2"}
+
+
+def _level(levels, path):
+    for key in path:
+        levels = levels.get(key) if type(levels) is dict else None
+    return levels
+
+
+def _band(value):
+    return (type(value) is list and len(value) == 2 and all(type(v) in (int, float) and math.isfinite(v)
+                                                              for v in value) and value[0] <= value[1])
+
+
+def levels_and_tolerance(levels_text, tolerance_text):
+    """The --levels and --tolerance of the return predicate (design B8, section 1.3), or SystemExit."""
+    try:
+        levels, tolerance = json.loads(levels_text), json.loads(tolerance_text)
+    except ValueError:
+        raise SystemExit("invalid --levels or --tolerance: not JSON")
+    if type(levels) is not dict:
+        raise SystemExit("invalid --levels: not the JSON object guest_state.py levels printed")
+    if tolerance is not None:
+        if type(tolerance) is not dict or set(tolerance) != set(LEVEL_PARTS) or not all(map(_band, tolerance.values())):
+            raise SystemExit("invalid --tolerance: null or {" + ", ".join(f'"{name}": [low, high]'
+                                                                         for name in LEVEL_PARTS) + "}")
+        if not all(type(_level(levels, path)) is int for path in LEVEL_PARTS.values()):
+            raise SystemExit("invalid --levels: no processes and meminfo_kb.MemAvailable to judge the level part")
+    return levels, tolerance
+
+
+def failed_units():
+    out = run("systemctl", "list-units", "--state=failed", "--all", "--plain", "--no-legend", "--no-pager")
+    return [line.split()[0] for line in out.splitlines() if line.strip()]
+
+
+def level_part(levels, tolerance):
+    """Processes and available memory now against the session's start (UNJUDGED while the tolerance is null)."""
+    if tolerance is None:
+        return dict(UNJUDGED)
+    now = {"processes": tasks()[0], "MemAvailable_kb": meminfo()["MemAvailable"]}
+    part = {"judged": True}
+    for name, path in LEVEL_PARTS.items():
+        start, (low, high) = _level(levels, path), tolerance[name]
+        part[name] = {"start": start, "now": now[name], "change": now[name] - start, "tolerance": [low, high],
+                      "ok": low <= now[name] - start <= high}
+    part["ok"] = all(part[name]["ok"] for name in LEVEL_PARTS)
+    return part
+
+
+def baseline(levels, tolerance, controls=None):
+    """The return predicate (skeleton B8 section 3) as {ok, exact, level, evidence}. The exact part: no residue of a
+    control (lab/udalosti.py residues: a process, the memfd or the negative's file, a candidate module, the listening
+    port) and no failed unit; the level part: level_part. `evidence` names every residue and every level outside its
+    band. Never raises: what cannot be read is a residue."""
+    if controls is None:
+        import udalosti as controls
+    found = []
+    for what, reader in (("the residues of the controls", lambda: controls.residues(PROC)),
+                         ("the failed units", lambda: [{"residue": "unit", "unit": u} for u in failed_units()])):
+        try:
+            found += reader()
+        except Exception as exc:  # noqa: BLE001  A residue that cannot be ruled out is one.
+            found.append({"residue": "error", "what": what, "error": f"{type(exc).__name__}: {exc}"[:300]})
+    try:
+        level = level_part(levels, tolerance)
+    except Exception as exc:  # noqa: BLE001
+        level = {"judged": True, "ok": False, "error": f"{type(exc).__name__}: {exc}"[:300]}
+    outside = [f"level {name} changed by {level[name]['change']} since the start, outside {level[name]['tolerance']}"
+               for name in LEVEL_PARTS if level["judged"] and name in level and not level[name]["ok"]]
+    if level["judged"] and "error" in level:
+        outside.append("the level part could not be judged: " + level["error"])
+    exact = {"ok": not found, "residues": found}
+    return {"ok": exact["ok"] and (not level["judged"] or level["ok"]), "exact": exact, "level": level,
+            "evidence": [controls.says(r) for r in found] + outside}
+
+
 def main(argv):
     if not argv:
         raise SystemExit("usage: guest_state.py state|segment LABEL|journal LABEL SINCE UNTIL|cleanup LABEL|"
-                         "reset --seed S|pretouch|levels")
+                         "reset --seed S|pretouch|levels|baseline --levels JSON --tolerance JSON|null")
     command, args = argv[0], argv[1:]
     if command == "state" and not args:
         state()
@@ -290,6 +381,10 @@ def main(argv):
         pretouch()
     elif command == "levels" and not args:
         levels()
+    elif command == "baseline" and len(args) == 4 and {args[0], args[2]} == {"--levels", "--tolerance"}:
+        options = dict(zip(args[::2], args[1::2]))
+        found = baseline(*levels_and_tolerance(options["--levels"], options["--tolerance"]))
+        print(json.dumps({"schema": "hyptcn3/guest-baseline/1", "utc_unix": time.time(), **found}, sort_keys=True))
     else:
         raise SystemExit("invalid guest_state.py arguments")
 

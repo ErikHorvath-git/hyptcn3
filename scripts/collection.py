@@ -922,7 +922,8 @@ def v5_run(a, p):
 
     Returns {"cycles", "events", "traffic"}: the session's length, its events as session.json records them, and the
     traffic block of session.json, from which traffic_command() makes the generator's command line (design B5b
-    1.3); dur_s, the span of the generator's envelope, is the planned run: warmup_s and cycles intervals.
+    1.3); dur_s, the span of the generator's envelope, is the planned run: warmup_s and cycles intervals. A session
+    of role test_controls has "controls" too: its planned controls as session.json records them (package B8).
     """
     run = v5_arguments(a, p)
     return run if a.role == "diagnostic" else v5_planned(a, p)
@@ -971,7 +972,7 @@ def v5_arguments(a, p):
 
 def v5_planned(a, p):
     """The part of v5_run for a session of a planned role: the protocol's rate, the planned session's seeds and
-    events, and the readiness records up to G4."""
+    events (a session of test_controls: its controls as well, package B8), and the readiness records up to G4."""
     rate = p["scenarios"][a.scenario]["rate"]
     if rate is None:
         raise ValueError(f"scenario {a.scenario} has no rate (null until G2): a session of a planned role runs at the "
@@ -991,8 +992,11 @@ def v5_planned(a, p):
         gates.require(gates.ROOT / "data/results", a.protocol, "G5")
     except ValueError as error:
         raise ValueError("a session of a planned role needs valid readiness records up to G4: " + str(error)) from None
-    # A session of test_controls plans controls instead of events (package B8).
-    return {"cycles": cycles, "events": planned[0].get("events", []),
+    # A session of test_controls plans controls instead of events (package B8): its occurrences in the order of the
+    # plan, the slots the deck left empty out, each as the plan states it (kind, polarity, class, dose and times).
+    controls = ({"controls": [x for x in planned[0]["controls"] if x.get("kind") is not None]}
+                if "controls" in planned[0] else {})
+    return {"cycles": cycles, "events": planned[0].get("events", []), **controls,
             "traffic": _v5_traffic(a, p, rate, "protocol", seeds, cycles)}
 
 
@@ -1191,6 +1195,9 @@ def run_session(a, p):
                     "role": a.role, "group": a.group, "group_attempt": attempt, "scenario": a.scenario,
                     "typ": "benign", "seed": a.seed, "cycles": cycles, "guest_before": before,
                     **({"events": events, "event_grace_s": p["events"]["grace_s"]} if "events" in p else {}),
+                    # The planned controls of a session of test_controls (package B8; collection_logs compares them
+                    # with controls.json).
+                    **({"controls": v5["controls"]} if schema3 and "controls" in v5 else {}),
                     "protocol_sha256": digest(a.protocol), "source_sha256": source_hashes,
                     "lab_sha256": lab, "measurement_sha256": measurement_sources(),
                     "profile_sha256": {str(f.relative_to(prof)): digest(f) for f in prof.rglob("*") if f.is_file()},
@@ -1205,7 +1212,7 @@ def run_session(a, p):
                         "catalog_share": s["catalog_share"], "write_share": s["write_share"],
                         "summary_interval_s": 5, "load_model": "closed loop, not a fixed request rate"},
                     "metadata_not_model_inputs": ["scenario", "seed", "traffic", "boot_id", "group", "session_id", "events",
-                                                  "vm", "domain"],
+                                                  "controls", "vm", "domain"],
                     "working_storage": storage_identity(base),
                     "host_context": {"host_boot": Path("/proc/sys/kernel/random/boot_id").read_text().strip(),
                                      "qemu": qemu, "memory": memory, "python": sys.executable,
@@ -1280,6 +1287,84 @@ class Events:
                           "note": "Benign operational events; host times bound each event, guest replies are evidence."})
 
 
+def control_record(item):
+    """The record of a planned control in controls.json before it runs (design B8, section 1.4): the plan's item as it
+    is, but its class A or B under kind_class; class is the occurrence's, control or control_negative by its
+    polarity (protocol_v5.CONTROL_RECORD_CLASS), and executed is false until it ran."""
+    record = {key: value for key, value in item.items() if key != "class"}
+    record.update(kind_class=item.get("class"), executed=False,
+                  **{"class": protocol_v5.CONTROL_RECORD_CLASS.get(item.get("polarity"))})
+    return record
+
+
+class Controls:
+    """Planned controls of role test_controls (lab/udalosti.py, package B8), offsets from the measurement start.
+
+    One occurrence at a time, run as the events are (Events): its start at start_s, its stop at start_s +
+    duration_s. The start passes the session's starting levels (`levels`, read before the warmup) and the protocol's
+    tolerance (controls.baseline, null until G2): the guest evaluates the return predicate first and starts nothing
+    when it does not hold (skeleton B8 section 3: no waiting, no retry). The stop always runs, also after a start that
+    failed or was refused and after an interruption: the guest evaluates the effect while the occurrence is in place,
+    stops it and evaluates the cleanup. Each record keeps the guest's baseline, effect and cleanup at its top
+    (labctl keeps them in its replies, a malformed one as false), and the occurrence is executed only when it
+    started, both calls succeeded and the stack is healthy afterwards. The log audit reads nothing else of it."""
+
+    def __init__(self, p, planned, step, levels=None):
+        self.p, self.step, self.levels, self.active = p, step, levels, None
+        self.records = [control_record(item) for item in planned]
+
+    def call(self, record, action):
+        arguments = ["event", "--event", action, record["kind"], "--polarity", record["polarity"],
+                     *(["--dose", str(record["dose"])] if record.get("dose") is not None else [])]
+        if action == "start":
+            arguments += ["--levels", json.dumps(self.levels, sort_keys=True),
+                          "--tolerance", json.dumps(self.p["controls"]["baseline"])]
+        try:
+            return lab_json(self.p, *arguments, timeout=240)
+        except (subprocess.SubprocessError, OSError, ValueError) as exc:
+            return {"ok": False, "error": f"{type(exc).__name__}: {exc}"[:300]}
+
+    def tick(self, origin):
+        now = time.time()
+        if self.active is not None:
+            record = self.records[self.active]
+            if now >= origin + record["start_s"] + record["duration_s"]:
+                if not self.stop():
+                    raise ValueError("lab not restored after control " + record["kind"])
+            return
+        for index, record in enumerate(self.records):
+            if "host_start_unix" not in record and now >= origin + record["start_s"]:
+                self.active = index  # Before the call: an interruption must still stop it.
+                record["host_start_unix"] = time.time()
+                record["start"] = self.call(record, "start")
+                record["host_started_unix"] = time.time()
+                record["baseline"] = record["start"].get("baseline")
+                started = record["start"].get("ok") is True and record["start"].get("started") is True
+                self.step("control-start", kind=record["kind"], polarity=record["polarity"], started=started)
+                if not started and not self.stop():
+                    raise ValueError("lab not restored after control " + record["kind"])
+                return
+
+    def stop(self):
+        record, self.active = self.records[self.active], None
+        record["host_stop_unix"] = time.time()
+        record["stop"] = self.call(record, "stop")
+        record["host_stopped_unix"] = time.time()
+        record["effect"], record["cleanup"] = record["stop"].get("effect"), record["stop"].get("cleanup")
+        restored = record["stop"].get("ok") is True and record["stop"].get("health") == 200
+        start = record.get("start", {})
+        record["executed"] = start.get("ok") is True and start.get("started") is True and restored
+        self.step("control-stop", kind=record["kind"], polarity=record["polarity"], executed=record["executed"])
+        return restored
+
+    def close(self, path):
+        if self.active is not None:
+            self.stop()
+        write_json(path, {"schema": protocol_v5.CONTROLS_SCHEMA, "controls": self.records,
+                          "note": "Controls on the VM and their paired negatives (package B8); host times bound each "
+                                  "occurrence, the guest's baseline, effect and cleanup are its evidence."})
+
+
 def capture_session(p, out, metadata, cycles):
     owner = (int(os.environ["SUDO_UID"]), int(os.environ["SUDO_GID"])) if "SUDO_UID" in os.environ else None
     guest = out / "guest"
@@ -1290,6 +1375,9 @@ def capture_session(p, out, metadata, cycles):
     children = {}
     interrupts = Interrupts()
     events = Events(p, metadata["events"], lambda name, **values: step(name, **values)) if "events" in metadata else None
+    # A session of test_controls (package B8): the levels its controls start against are read in the preflight.
+    controls = (Controls(p, metadata["controls"], lambda name, **values: step(name, **values))
+                if "controls" in metadata else None)
 
     def step(name, **values):
         status["steps"][name] = {"unix": time.time(), **values}
@@ -1323,6 +1411,14 @@ def capture_session(p, out, metadata, cycles):
             raise ValueError("preflight functional check failed: " + (smoke.stdout + smoke.stderr)[-500:])
         step("functional-check", result=smoke.stdout.strip()[-200:])
         write_guest("state_before.json", lab_json(p, "state"))
+        if controls:
+            # The session's starting levels (lab/guest_state.py levels, proposal 5.4): the level part of the return
+            # predicate before every control compares the guest with them (skeleton B8 section 3).
+            controls.levels = lab_json(p, "levels")
+            if type(controls.levels) is not dict:
+                raise ValueError("the guest's levels are no JSON object")
+            write_guest("levels_before.json", controls.levels)
+            step("levels", processes=controls.levels.get("processes"))
         pre = lab_json(p, "segment", "--label", out.name + "-pre", "--dest", guest)
         write_guest("pre_segment.json", pre)
         expected = smoke_rids(out / "preflight_smoke.json")
@@ -1377,6 +1473,8 @@ def capture_session(p, out, metadata, cycles):
                     raise ValueError("another host_traffic.py appeared during capture")
             if events:
                 events.tick(status["measure_start_unix"])
+            if controls:
+                controls.tick(status["measure_start_unix"])
             time.sleep(1)
         status["capture_finished_unix"] = time.time()
         status["collector_rc"] = children["collector"].returncode
@@ -1427,6 +1525,11 @@ def capture_session(p, out, metadata, cycles):
                 events.close(out / "events.json")
             except OSError as exc:
                 status["events_error"] = str(exc)
+        if controls:
+            try:
+                controls.close(out / "controls.json")
+            except OSError as exc:
+                status["controls_error"] = str(exc)
         # No snapshot without the measured phase: the campaign may retry such an attempt.
         status["measurement_started"] = "measure_start_unix" in status
         if status["interrupted"]:
@@ -1807,7 +1910,7 @@ def main(argv=None):
     sub.add_parser("plan")
     run = sub.add_parser("run")
     run.add_argument("--role", choices=["pilot", "diagnostic", "train", "dev", "calibration", "test_benign",
-                                        "test_events"],
+                                        "test_events", "test_controls"],
                      required=True)
     run.add_argument("--scenario", default="steady")
     run.add_argument("--group", required=True)

@@ -170,7 +170,8 @@ journalctl --user -u hyptcn-lab-traffic -n 30 --no-pager
 
 # Zastaviť iba premávku; VM a API zostanú bežať
 make lab-traffic-stop
-python3 scripts/labctl.py traffic-start
+# traffic-start (a up) žiada protokol, ktorý lab obsluhuje (schéma 1 alebo 2; nález F5 overenia B5b)
+python3 scripts/labctl.py traffic-start --protocol config/collection-v2.json
 
 # Ďalší ohraničený beh s vlastným seed a počtom klientov
 python3 scripts/host_traffic.py --profile lab --target http://127.0.0.1:18080 \

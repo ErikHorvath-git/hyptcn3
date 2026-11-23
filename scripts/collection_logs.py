@@ -17,6 +17,12 @@ status (every other request still must be 2xx), the generator's exit code must b
 nginx and the services are correlated for every route of lab/nginx.conf with the internal calls of
 lab/services.py, and the section "realism" refuses a session that misses a realism requirement of proposal 5.7
 (traffic_realism:<name>) or whose offered load differs from the plan (proposal 5.3).
+
+A session of role test_controls (package B8, design B8 section 1.4) keeps its controls in controls.json. The
+section "controls" reads only the three predicates the guest computed for each occurrence (baseline, effect,
+cleanup) and whether it ran: the sealed role, no feature is read (skeleton B8 section 4). The guest's health polls
+without a request id are admitted inside a control's start and stop calls, as inside an event window; nothing
+else is (a control is benign and inert: the service answers as outside every window).
 """
 import argparse
 from collections import Counter, defaultdict
@@ -33,7 +39,8 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 from features.audit_policy import audit_bounds, tolerate
 from scripts import host_monitor, traffic_log
-from scripts.protocol_v5 import SCHEMA as SCHEMA_3, plans_events
+from scripts.protocol_v5 import (CONTROL_RECORD_CLASS, CONTROL_ROLE, CONTROLS_SCHEMA, SCHEMA as SCHEMA_3,
+                                 plans_events)
 
 SCHEMA = "hyptcn3/collection-logs-audit/1"
 REQUIRED = ("preflight_smoke.json", "host_monitor.jsonl", "host_monitor.log", "traffic.json", "traffic.log",
@@ -65,6 +72,12 @@ SHA256 = re.compile(r"[0-9a-f]{64}")
 # The exceptions of features/audit_policy.py TOLERATED that this audit admits, in result["tolerated"].
 LOG_EXCEPTIONS = ("collector_warnings", "event_traffic_exit", "event_unit_restarts", "event_window_requests",
                   "event_window_health_checks", "event_window_journal", "event_window_nginx_errors")
+# The host times of a control's record (scripts/collection.py Controls): its start call, then its stop call.
+CONTROL_CALLS = (("host_start_unix", "host_started_unix"), ("host_stop_unix", "host_stopped_unix"))
+# A call's window reaches this far beyond its host times: the guest clock may differ from the host's by up to 1 s
+# (the bound of guest_clock below), and nginx stamps the guest's polls with the guest's time (executor's judgment,
+# the margin an event window has before its start).
+CALL_MARGIN_S = 1.0
 
 
 def digest(path):
@@ -147,6 +160,9 @@ def audit_logs(directory, *, snapshot_times=()):
     # Protocol v3: [host start - 1 s, host stop done + grace] of each event. Failures inside a window
     # are expected evidence of the event; outside every window the checks stay as strict as in v2.
     windows, event_types, known_pids = [], [], {}
+    # Package B8: [host start - 1 s, host done + 1 s] of each start and stop call of a control; only the guest's
+    # health polls without a request id are admitted there (lab/udalosti.py polls them in every control call).
+    calls = []
     # Requests inside an event window: one exception each, counted in traffic(); traffic() and correlation()
     # relax their checks for exactly these.
     during = set()
@@ -158,6 +174,9 @@ def audit_logs(directory, *, snapshot_times=()):
 
     def in_window(*times):
         return any(lo <= t <= hi for t in times for lo, hi in windows)
+
+    def in_call(*times):
+        return any(lo <= t <= hi for t in times for lo, hi in calls)
 
     def check(condition, key, detail=None):
         if not condition:
@@ -393,8 +412,9 @@ def audit_logs(directory, *, snapshot_times=()):
             check(row.get("schema") == "hyptcn3/nginx-access/1", "nginx_schema")
             rid = row["rid"]
             if (rid == "" and row["method"] == "GET" and row["uri"] == "/healthz"
-                    and in_window(finite(row["msec"]))):
-                tolerated["event_health_checks"] += 1  # lab/udalosti.py polls health with no request id.
+                    and (in_window(finite(row["msec"])) or in_call(finite(row["msec"])))):
+                # lab/udalosti.py polls health with no request id, in an event and in a control's call.
+                tolerated["event_health_checks" if in_window(row["msec"]) else "control_health_checks"] += 1
                 tolerate(counts, "event_window_health_checks")
                 continue
             if rid not in expected:
@@ -475,7 +495,7 @@ def audit_logs(directory, *, snapshot_times=()):
                 problems.add("nginx_error_log_nonempty", line[:180])
         return {"requests": len(expected), "nginx_matched_once": sum(matched[rid] == 1 for rid in expected),
                 "service_records": sum(service.values()), "preflight_requests": len(smoke["values"]["checks"]),
-                **({"tolerated_in_events": dict(tolerated)} if windows else {})}
+                **({"tolerated_in_events": dict(tolerated)} if windows or calls else {})}
 
     def monitor():
         end = read_json(directory / "end.json")
@@ -563,17 +583,69 @@ def audit_logs(directory, *, snapshot_times=()):
         return {"events": len(doc["events"]), "executed": sum(r.get("executed") is True for r in doc["events"]),
                 "windows": windows, "types": event_types}
 
+    def controls():
+        """Package B8 (design B8 1.4): the records of controls.json against the planned controls of session.json,
+        and for each occurrence whether it ran and the guest's three predicates, nothing else (the sealed role)."""
+        meta = read_json(directory / "session.json")
+        if not (directory / "controls.json").is_file():
+            raise ValueError("no controls.json")  # Finding S2 of B3: as an events.json missing in an event session.
+        doc = read_json(directory / "controls.json")
+        check(doc.get("schema") == CONTROLS_SCHEMA, "controls_schema")
+        # Every key of each planned control (as the plan states it) has its value in the record, but its class A or
+        # B, which the record keeps as kind_class; the record's class is the occurrence's by its polarity.
+        planned, records = meta["controls"], doc["controls"]
+        check(type(planned) is list and type(records) is list and len(planned) == len(records) and all(
+            type(item) is dict and type(record) is dict
+            and all(key in record and record[key] == item[key] for key in item if key != "class")
+            and record.get("kind_class") == item.get("class")
+            and record.get("class") == CONTROL_RECORD_CLASS.get(item.get("polarity"))
+            for item, record in zip(planned, records)), "controls_differ_from_plan")
+        # The level part of the return predicate is judged once the protocol has a tolerance (design B8 1.3).
+        tolerance = protocol.get("controls", {}).get("baseline") if type(protocol.get("controls")) is dict else None
+        script = meta["source_sha256"].get("lab/udalosti.py")
+        for record in records:
+            kind = record.get("kind")
+            times = [record.get(key) for pair in CONTROL_CALLS for key in pair]
+            check(record.get("executed") is True and all(type(t) in (int, float) and math.isfinite(t) for t in times),
+                  "control_not_executed", kind)
+            baseline = record.get("baseline")
+            level = baseline.get("level") if type(baseline) is dict else None
+            check(type(baseline) is dict and baseline.get("ok") is True
+                  and (tolerance is None or type(level) is dict and level.get("judged") is True),
+                  "control_without_baseline", kind)
+            effect = record.get("effect")
+            effective = type(effect) is dict and effect.get("ok") is True
+            if record.get("polarity") == "negative":  # Its tree ran and the property was absent (skeleton B8 §2).
+                check(effective, "negative_with_property", kind)
+            else:
+                check(effective, "control_without_effect", kind)
+            cleanup = record.get("cleanup")
+            check(type(cleanup) is dict and cleanup.get("ok") is True, "control_not_cleaned", kind)
+            # The deployed guest script must be the one hashed at session start, as for an event.
+            check(type(script) is str and SHA256.fullmatch(script) is not None
+                  and all(type(record.get(step)) is dict and record[step].get("script_sha256") == script
+                          for step in ("start", "stop")), "control_script_differs", kind)
+            for start, done in CONTROL_CALLS:
+                if all(type(record.get(key)) in (int, float) and math.isfinite(record[key]) for key in (start, done)):
+                    calls.append((record[start] - CALL_MARGIN_S, record[done] + CALL_MARGIN_S))
+        return {"controls": len(records), "executed": sum(r.get("executed") is True for r in records
+                                                          if type(r) is dict), "calls": calls}
+
     section("audit_bounds", read_bounds)
     section("metadata", metadata)
     section("manifest", manifest)
     try:
-        planned = "events" in read_json(directory / "session.json")
+        meta = read_json(directory / "session.json")
+        planned, controlled = "events" in meta, "controls" in meta or meta.get("role") == CONTROL_ROLE
     except (OSError, ValueError):
-        planned = False  # The metadata section has already recorded why.
+        planned = controlled = False  # The metadata section has already recorded why.
     # A protocol that plans events plans them for each of its sessions (collection.run_session): a session.json
     # without them fails the events section instead of skipping it (under schema 3: per_session above 0).
     if planned or plans_events(protocol):
         section("events", events)
+    # A session of test_controls holds its planned controls (package B8): without them the section fails too.
+    if controlled:
+        section("controls", controls)
     section("guest", guest)
     contents, requests = {}, []
 

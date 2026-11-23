@@ -7,7 +7,10 @@
     mutate    mutate(d, p, result) changes the sealed clean session directory d and returns a changed copy of the
               extraction result, or None to keep it; a case that edits evidence listed in the logs manifest reseals
               it (test_collection_logs.seal) unless the manifest itself is what the case breaks
+    session   the clean session the case starts from: None for the clean session of the self-test (audit_cases.py
+              clean_session), or a builder of the same signature (package B8: the clean session of role
+              test_controls, audit_cases_logs.controls_session)
 """
 from collections import namedtuple
 
-Case = namedtuple("Case", "id check expected mutate")
+Case = namedtuple("Case", "id check expected mutate session", defaults=(None,))

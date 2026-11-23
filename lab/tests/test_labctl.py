@@ -38,6 +38,8 @@ CREATE = ["systemd-run", "--user", "--unit", "hyptcn-libvirtd", "-p", "MemorySwa
           "/usr/sbin/libvirtd", "--timeout=120"]
 DAEMON_COMMANDS = {"virsh", "systemctl", "systemd-run"}  # What way 1 may run; never busctl.
 REAL_LISTENING = getattr(labctl, "listening", None)  # Kept before nothing_real replaces it in every test.
+# Package B8 (finding F5 of the B5b verification): labctl up requires the protocol the lab serves, of schema 1 or 2.
+SCHEMA_2 = ["--protocol", str(Path(labctl.REPO) / "config/collection-v2.json")]
 
 
 @pytest.fixture(autouse=True)
@@ -261,7 +263,8 @@ def test_every_start_of_the_vm_disables_qemu_swap_before_anything_else(monkeypat
     monkeypatch.setattr(labctl.Lab, "qemu_swap_off", lambda self: steps.append("swap off") or {"memory_swap_max": "0"})
     monkeypatch.setattr(labctl.Lab, "guest", guest)
     try:
-        labctl.main([command])  # start ends after the swap step; up and deploy go on into the guest.
+        # start ends after the swap step; up and deploy go on into the guest.
+        labctl.main([command, *(SCHEMA_2 if command == "up" else [])])
     except Stop:
         pass
     starts = [i for i, step in enumerate(steps) if step == "start"]
@@ -332,7 +335,7 @@ def test_a_failed_swap_step_ends_the_command_with_the_owner_command_after_its_ot
                                                                 self.guest("true")) and None)
     with pytest.raises(RuntimeError, match="^QEMU swap is not disabled: cannot move QEMU 42 .*" + re.escape(owner)
                        + "$"):
-        labctl.main([command])
+        labctl.main([command, *(SCHEMA_2 if command == "up" else [])])
     up_to_rest = ["clone", "start", "swap off"] if command == "up" else ["start", "swap off"]
     assert steps == up_to_rest + rest + (["health"] if command == "deploy" else [])
     lines = [json.loads(line) for line in capsys.readouterr().out.splitlines() if line.startswith("{")]

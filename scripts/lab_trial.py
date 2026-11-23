@@ -913,6 +913,12 @@ NOT_IN_JOURNAL = {
     "HTTP server poll": "socketserver's poll timeout runs inside the services and logs nothing",
     "event stop health wait": "runs in labctl event stop; its output goes back to the host (events.json), not into "
                               "the journal",
+    "control start and stop wait": "runs in labctl event start and stop of a control; its output goes back to the "
+                                   "host (controls.json), not into the journal",
+    "control memory writer loop": "the writer's rounds go into its output file in /run/hyptcn-udalosti, which the "
+                                  "stop reads into the effect; it writes no journal line",
+    "control process batch loop": "the batch's reports go into its output file in /run/hyptcn-udalosti, which the "
+                                  "stop reads into the effect; its short processes write no journal line",
     "log segment reopen wait": "runs in labctl segment between runs; its output goes back to the host",
     "deployment health wait": "runs in lab/install.sh under labctl deploy; its output is the deploy step's "
                               "(labctl_deploy.stdout)",

@@ -1,8 +1,8 @@
 """The self-check of protocol v5 (packages B4 and B4b): the real file passes, every deliberate error fails its check.
 
 scripts/collection.py --protocol P selfcheck (scripts/protocol_v5.py) runs on config/collection-v5.json: every
-check passes except lab_register, which stays pending until package B8 registers its four control kinds in lab/ (B5
-registered the event types and the traffic profiles, skeleton B5 section 5 item 7), so the command exits 2 until B8.
+check passes, lab_register included since package B8 registered its control kinds in lab/ (B5 registered the event
+types and the traffic profiles, skeleton B5 section 5 item 7; skeleton B8 section 5 item 6), so the command exits 0.
 Each row of the lead's skeleton (dokazy/B4/kostra/KOSTRA.md, section 5), each property of his must_fix 5 and 6 on
 B4 and each rule of the finding S1 of the B4 verification (package B4b) is one deliberate error: the file with one
 change, the plan with one change or a replacement that changes the assignment.
@@ -26,8 +26,6 @@ ROOT = Path(__file__).resolve().parents[2]
 V5 = ROOT / "config/collection-v5.json"
 CHECKS = ("keys", "loader", "reachability", "role_sizes", "scenario_balance", "events", "controls",
           "full_snapshot_guard", "times", "phases", "streams", "role_order", "analysis", "rehearsal", "lab_register")
-PENDING = ("registered by B8: kontrola_davka_procesov, kontrola_modul_jadra, kontrola_pocuvajuci_soket, "
-           "kontrola_zapisovac_pamate")
 TYPES = ("naprazdno", "restart_databazy", "udrzba_zaloha", "zamok_tabulky", "zataz_pamate", "zla_konfiguracia_sluzby")
 ROLES = ("train", "dev", "calibration", "test_benign", "test_controls")
 SCENARIOS = ("corp_high", "corp_low", "eshop_high", "eshop_low")
@@ -231,6 +229,36 @@ def unknown_profile(doc):
 def think_below_mean(doc):
     doc["profiles"]["eshop"]["think_s"]["max"] = 5  # Below the mean of 7 s.
     return {"loader": ["protocol(): invalid profiles"]}
+
+
+# Package B8: the controls section (design B8 1.1) and the lab's register of its kinds (skeleton B8 section 5 item 6).
+CANDIDATES = '["crc7", "crc8", "ts_kmp"]'
+
+
+def module_without_candidates(doc):
+    """The module kind names its candidates (design B8 1.1): without them the layout misses a key, and the protocol
+    no longer names the candidates lab/udalosti.py tries."""
+    del doc["controls"]["kinds"]["kontrola_modul_jadra"]["candidates"]
+    reason = "missing protocol key: controls.kinds.kontrola_modul_jadra.candidates"
+    return {"keys": [reason], "loader": ["protocol(): " + reason],
+            "lab_register": ["control kind kontrola_modul_jadra: candidates null differs from lab/udalosti.py "
+                             + CANDIDATES]}
+
+
+def dose_unknown_to_lab(doc):
+    """A dose the guest does not run (lab/udalosti.py DOSES; it refuses any other): the file loads and plans the dose,
+    lab_register fails."""
+    doc["controls"]["kinds"]["kontrola_davka_procesov"]["doses"] = [2, 10, 40]
+    return {"lab_register": ["control kind kontrola_davka_procesov: doses [2, 10, 40] differs from lab/udalosti.py "
+                             "[2, 10, 50]"]}
+
+
+def per_dose_short(doc):
+    """The counts per dose of the writer sum to 6, not to per_kind 7: the file does not load, and the plan cannot deal
+    its seven controls a dose each (a rehearsal deals two of them and can)."""
+    doc["controls"]["kinds"]["kontrola_zapisovac_pamate"]["per_dose"] = [2, 2, 2]
+    reason = "no plan: the doses of kontrola_zapisovac_pamate/control do not fit its occurrences per VM"
+    return {"loader": ["protocol(): invalid controls"], **{name: [reason] for name in PLAN_CHECKS}}
 
 
 def _unplannable(shape):
@@ -537,23 +565,24 @@ def type_vm(doc, plan):
 def card_vm(doc, plan):
     """must_fix 5: two controls of one scenario on different VMs trade their cards. Both cards had 3 of their 7
     occurrences on the first control's VM: the first card then has 2 there and 5 on the other VM, the second one 4 and
-    3. Neither session held the kind it gets."""
+    3. Neither session held the kind it gets. B8: both cards are of class A (no dose), so no dose moves to another
+    VM (the doses of a card are within 1 on every VM, check controls)."""
     items = _controls(plan)
     per_vm, _ = _card_counts(items)
     x, y = next((x, y) for s, x in items for t, y in items
                 if s["scenario"] == t["scenario"] and s["vm"] != t["vm"]
-                and (x["kind"], x["polarity"]) != (y["kind"], y["polarity"])
+                and (x["kind"], x["polarity"]) != (y["kind"], y["polarity"]) and x["dose"] is y["dose"] is None
                 and per_vm[x["kind"], x["polarity"], s["vm"]] == 3 and per_vm[y["kind"], y["polarity"], s["vm"]] == 3
                 and x["kind"] not in _kinds(t, y) and y["kind"] not in _kinds(s, x))
     card = f"{x['kind']}/{x['polarity']}"
-    _trade(x, y, ("kind", "polarity", "class"))
+    _trade(x, y, ("kind", "polarity", "class", "dose"))
     return {"controls": [f"control {card}: occurrences per VM differ by more than 1"]}
 
 
 def card_scenario(doc, plan):
     """must_fix 5: two controls on one VM in different scenarios trade their cards. The first card had 2 occurrences
     in the second scenario and has 3 then; the second card had its single occurrence of a scenario in the first one
-    and stays within 1. Neither session held the kind it gets."""
+    and stays within 1. Neither session held the kind it gets. B8: a card takes its dose along; the VM stays."""
     items = _controls(plan)
     _, per_scenario = _card_counts(items)
     x, y = next((x, y) for s, x in items for t, y in items
@@ -563,19 +592,20 @@ def card_scenario(doc, plan):
                 and per_scenario[y["kind"], y["polarity"], s["scenario"]] == 1
                 and x["kind"] not in _kinds(t, y) and y["kind"] not in _kinds(s, x))
     card = f"{x['kind']}/{x['polarity']}"
-    _trade(x, y, ("kind", "polarity", "class"))
+    _trade(x, y, ("kind", "polarity", "class", "dose"))
     return {"controls": [f"control {card}: occurrences per scenario differ by more than 1"]}
 
 
 def kind_twice(doc, plan):
     """must_fix 5: a control trades its card with a control of another session of its (VM, scenario) cell whose kind
-    its own session holds already: that session then holds a kind twice; no count per VM or scenario changes."""
+    its own session holds already: that session then holds a kind twice; no count per VM or scenario changes. B8: a
+    card takes its dose along."""
     items = _controls(plan)
     s, x, y = next((s, x, y) for s, x in items for t, y in items
                    if t is not s and (t["vm"], t["scenario"]) == (s["vm"], s["scenario"]) and y["kind"] != x["kind"]
                    and y["kind"] in _kinds(s, x) and x["kind"] not in _kinds(t, y))
     twice = y["kind"]
-    _trade(x, y, ("kind", "polarity", "class"))
+    _trade(x, y, ("kind", "polarity", "class", "dose"))
     return {"controls": [f"session {_label(s)} holds control kind {twice} twice"]}
 
 
@@ -589,15 +619,17 @@ def control_relabelled(doc, plan):
     """F1 of the B4 verification: one control card dealt twice, another once less. B4b: the control relabelled lies
     in the (VM, scenario) cell where the first card has no occurrence (3 on that VM, 1 in that scenario), its own
     card has 4 on that VM and 2 in that scenario, and its session holds no control of the first card's kind, so
-    neither card leaves the balance per VM and per scenario."""
+    neither card leaves the balance per VM and per scenario. B8: the first card is the first one of class A (no dose)
+    for which such a control of class A exists, so the counts per dose stay as they are."""
     items = _controls(plan)
     per_vm, per_scenario = _card_counts(items)
-    first = items[0][1]
-    kind = first["kind"]
-    other = next(x for s, x in items if x["polarity"] == "control" and x["kind"] != kind
-                 and per_vm[kind, "control", s["vm"]] == 3 and per_scenario[kind, "control", s["scenario"]] == 1
-                 and per_vm[x["kind"], "control", s["vm"]] == 4
-                 and per_scenario[x["kind"], "control", s["scenario"]] == 2 and kind not in _kinds(s, x))
+    first, other = next((first, x) for _, first in items if first["dose"] is None for s, x in items
+                        if x["polarity"] == "control" and x["kind"] != first["kind"] and x["dose"] is None
+                        and per_vm[first["kind"], "control", s["vm"]] == 3
+                        and per_scenario[first["kind"], "control", s["scenario"]] == 1
+                        and per_vm[x["kind"], "control", s["vm"]] == 4
+                        and per_scenario[x["kind"], "control", s["scenario"]] == 2
+                        and first["kind"] not in _kinds(s, x))
     gone = other["kind"]
     other.update(kind=first["kind"], polarity="control", **{"class": first["class"]})
     expected = sorted([(first["kind"], 8), (gone, 6)])
@@ -607,16 +639,72 @@ def control_relabelled(doc, plan):
 def control_slot_emptied(doc, plan):
     """F1: a dealt card replaced by an empty slot: its count falls, and one slot more is empty than the deck leaves.
     B4b: a card with 4 of its occurrences on the session's VM and 2 in its scenario, so it stays within 1 per VM and
-    per scenario."""
+    per scenario. B8: a card of class A (no dose), so the counts per dose stay as they are."""
     items = _controls(plan)
     per_vm, per_scenario = _card_counts(items)
-    x = next(x for s, x in items if per_vm[x["kind"], x["polarity"], s["vm"]] == 4
+    x = next(x for s, x in items if x["dose"] is None and per_vm[x["kind"], x["polarity"], s["vm"]] == 4
              and per_scenario[x["kind"], x["polarity"], s["scenario"]] == 2)
     card = (x["kind"], x["polarity"])
     x.clear()
     x.update(kind=None, reason="deck exhausted")
     return {"controls": [f"control {card[0]}/{card[1]} has 6 occurrences (expected 7)",
                          "3 empty control slots (expected 2)"]}
+
+
+def _dosed(plan):
+    """(session, control) of every dealt control of class B (it has a dose)."""
+    return [(s, x) for s, x in _controls(plan) if x["dose"] is not None]
+
+
+def dose_of_class_a(doc, plan):
+    """Package B8 (design B8 1.2): a control of class A has no dose; here the first one gets the writer's first."""
+    s, x = next((s, x) for s, x in _controls(plan) if x["dose"] is None)
+    x["dose"] = 16
+    return {"controls": [f"session {_label(s)}: control {x['kind']}/{x['polarity']} has dose 16 (doses of the kind: "
+                         "null)"]}
+
+
+def dose_unknown(doc, plan):
+    """B8: a control of class B dealt a dose twice (once on each VM) gets a dose its kind does not have: its own dose
+    is then one short, on the VMs 1 and 0."""
+    counts = Counter((x["kind"], x["polarity"], x["dose"]) for _, x in _dosed(plan))
+    s, x = next((s, x) for s, x in _dosed(plan) if counts[x["kind"], x["polarity"], x["dose"]] == 2)
+    dose, doses = x["dose"], doc["controls"]["kinds"][x["kind"]]["doses"]
+    x["dose"] = dose + 1
+    return {"controls": [f"session {_label(s)}: control {x['kind']}/{x['polarity']} has dose {dose + 1} (doses of the "
+                         f"kind: {json.dumps(doses)})",
+                         f"control {x['kind']}/{x['polarity']}: dose {dose} has 1 occurrences (expected 2)"]}
+
+
+def dose_counts(doc, plan):
+    """B8: each dose of a kind of class B has its count among the kind's controls and the same among its negatives. A
+    control of a dose dealt twice takes the other dose its card has twice: the first then has 1 occurrence and the
+    other 3, on the VMs 0 and 1, and 2 and 1."""
+    counts = Counter((x["kind"], x["polarity"], x["dose"]) for _, x in _dosed(plan))
+    s, x = next((s, x) for s, x in _dosed(plan) if counts[x["kind"], x["polarity"], x["dose"]] == 2)
+    k = doc["controls"]["kinds"][x["kind"]]
+    dose, other = x["dose"], next(d for d, n in zip(k["doses"], k["per_dose"]) if n == 2 and d != x["dose"])
+    x["dose"] = other
+    card = f"{x['kind']}/{x['polarity']}"
+    return {"controls": [f"control {card}: dose {d} has {n} occurrences (expected 2)"
+                         for d, n in sorted([(dose, 1), (other, 3)], key=lambda pair: k["doses"].index(pair[0]))]}
+
+
+def dose_vm(doc, plan):
+    """B8: the doses of a card lie within 1 on the VMs. Two controls of one card of class B on different VMs trade
+    their doses: the first one's dose lies once on each VM, the second one's twice on the second control's VM and
+    once on the other. The first dose then lies twice on one VM and never on the other; the counts stay."""
+    items = _dosed(plan)
+    on = Counter((x["kind"], x["polarity"], x["dose"], s["vm"]) for s, x in items)
+    x, y = next((x, y) for s, x in items for t, y in items
+                if (x["kind"], x["polarity"]) == (y["kind"], y["polarity"]) and s["vm"] != t["vm"]
+                and on[x["kind"], x["polarity"], x["dose"], s["vm"]] == on[x["kind"], x["polarity"], x["dose"], t["vm"]]
+                == 1 and on[y["kind"], y["polarity"], y["dose"], t["vm"]] == 2
+                and on[y["kind"], y["polarity"], y["dose"], s["vm"]] == 1)
+    dose = x["dose"]
+    _trade(x, y, ("dose",))
+    return {"controls": [f"control {x['kind']}/{x['polarity']}: occurrences of dose {dose} per VM differ by more "
+                         "than 1"]}
 
 
 def event_free_first(doc, plan):
@@ -743,12 +831,28 @@ def replaced_tenths(doc, plan, monkeypatch):
     return {"streams": [f"replacement of {_label(target)} changes the tenths of its phases"]}
 
 
+def replaced_dose(doc, plan, monkeypatch):
+    """B8: a replacement keeps the doses of its controls; here one control of class B of the replacement gets another
+    dose of its kind."""
+    from scripts import protocol_v5
+    target, index = next((s, i) for s in plan["sessions"] for i, x in enumerate(s.get("controls", []))
+                         if x.get("dose") is not None)
+
+    def other(out):
+        x = out["controls"][index]
+        x["dose"] = next(d for d in doc["controls"]["kinds"][x["kind"]]["doses"] if d != x["dose"])
+    monkeypatch.setattr(protocol_v5, "replacement", _replaced(protocol_v5, target, other))
+    return {"streams": [f"replacement of {_label(target)} changes doses"]}
+
+
 FILE_CASES = {f.__name__: f for f in (unknown_key, missing_key, gate_085, max_7, six_groups, below_min_per_type,
                                       no_min_per_type, not_interleaved, replacement_without_covers,
                                       method_without_grid, k2a_without_z4, null_outside, rehearsal_name,
                                       rehearsal_prefix, unknown_to_lab, unknown_profile, think_below_mean,
                                       # Package B4b, F1 of its verification.
-                                      two_events_per_session, no_event_free_session)}
+                                      two_events_per_session, no_event_free_session,
+                                      # Package B8: the controls section and the lab's register of its kinds.
+                                      module_without_candidates, dose_unknown_to_lab, per_dose_short)}
 PLAN_CASES = {f.__name__: f for f in (no_group_on_vm, equal_scenarios, twice_at_position, two_events, start_in_guard,
                                       locked_to_grid, common_seed, control_relabelled, control_slot_emptied,
                                       event_free_first, group_of_two, seed_field,
@@ -758,9 +862,11 @@ PLAN_CASES = {f.__name__: f for f in (no_group_on_vm, equal_scenarios, twice_at_
                                       stops_at_interval_start, before_first_s, overlapping_events, duration_2000,
                                       ends_in_tail,
                                       # F1 and F2 of the verification of B4b.
-                                      group_twice, type_vm, stops_at_tenth_edges)}
+                                      group_twice, type_vm, stops_at_tenth_edges,
+                                      # Package B8: the doses of the controls (design B8 1.2).
+                                      dose_of_class_a, dose_unknown, dose_counts, dose_vm)}
 REPLACEMENT_CASES = {f.__name__: f for f in (replaced_type, replaced_streams, replaced_in_guard,
-                                             replaced_before_first_s, replaced_tenths)}
+                                             replaced_before_first_s, replaced_tenths, replaced_dose)}
 CASES = ["real_file", *FILE_CASES, *PLAN_CASES, *REPLACEMENT_CASES, "null_at_g1"]
 
 
@@ -786,11 +892,10 @@ def test_selfcheck_passes_the_file_and_fails_each_deliberate_error(case, tmp_pat
         failures = {} if case == "real_file" else FILE_CASES[case](doc) if case in FILE_CASES else {
             "analysis": [f"null at analysis.{k}.m determined at G1 (stage G1)" for k in ("k1", "k2a", "k2b")]}
         code, report = selfcheck(tmp_path, doc, *(["--stage", "G1"] if case == "null_at_g1" else []))
-        assert code == 2 and report["passed"] is False  # lab_register is pending until B8 at the least
+        assert (code, report["passed"]) == ((0, True) if case == "real_file" else (2, False))  # Since B8.
         assert (report["mode"], report["stage"]) == ("campaign", "G1" if case == "null_at_g1" else "G0")
         checks = report["checks"]
     expected = {name: ("passed", []) for name in CHECKS}
-    expected["lab_register"] = ("pending", [PENDING])
     expected.update({name: ("failed", reasons) for name, reasons in failures.items()})
     assert [c["check"] for c in checks] == list(CHECKS)
     assert {c["check"]: (c["result"], c["reasons"]) for c in checks} == expected
@@ -820,7 +925,7 @@ def test_the_report_records_the_types_by_place_in_the_session_and_the_phases(tmp
                             for d in range(10)] for i, what in enumerate(("starts", "stops"))} for role in ROLES}
     distance, stops = (_ks([_ends(x)[i] % 5000 / 5000 for s in plan["sessions"] for x in _items(s)]) for i in (0, 1))
     code, report = selfcheck(tmp_path, doc)
-    assert code == 2 and report["summary"] == {
+    assert code == 0 and report["summary"] == {
         "event_types_by_place_in_session": places, "event_types_by_vm": on_vm, "phase_tenths": tenths,
         "start_phases_ks": {"starts": 286, "distance": round(distance, 4), "critical": .0797, "level": .05},
         "stop_phases_ks": {"stops": 286, "distance": round(stops, 4), "critical": .0797, "level": .05}}
@@ -865,8 +970,8 @@ def test_the_skeletons_form_of_the_command_checks_the_same_file(tmp_path):
     """S4 of the B4 verification: `collection.py selfcheck --protocol P` (skeleton §2) works like the global form."""
     from scripts import collection
     after, before = tmp_path / "after.json", tmp_path / "before.json"
-    assert collection.main(["selfcheck", "--protocol", str(V5), "--out", str(after)]) == 2
-    assert collection.main(["--protocol", str(V5), "selfcheck", "--out", str(before)]) == 2
+    assert collection.main(["selfcheck", "--protocol", str(V5), "--out", str(after)]) == 0
+    assert collection.main(["--protocol", str(V5), "selfcheck", "--out", str(before)]) == 0
     assert json.loads(after.read_text()) == json.loads(before.read_text())
 
 
@@ -876,7 +981,6 @@ def test_the_skeletons_form_of_the_command_checks_the_same_file(tmp_path):
 
 def expected_checks(**failures):
     expected = {name: ("passed", []) for name in CHECKS}
-    expected["lab_register"] = ("pending", [PENDING])
     expected.update({name: ("failed", reasons) for name, reasons in failures.items()})
     return expected
 
@@ -910,3 +1014,124 @@ def test_reachability_fails_when_a_witness_falls_back_to_worst_invalid_rows(tmp_
         "witness with invalid_rows.max + 1 rows is not refused by the gate alone",
         "witness with invalid_rows.max rows fell back to worst_invalid_rows",
         "witness with invalid_rows.max + 1 rows fell back to worst_invalid_rows"])
+
+
+# Package B8: the controls section of the file (design B8 1.1) and the doses of the plan (design B8 1.2).
+
+def _kind(name, **values):
+    return lambda c: c["kinds"][name].update(values)
+
+
+def _expect(name, column, **values):
+    return lambda c: c["kinds"][name]["expect"][column].update(values)
+
+
+@pytest.mark.parametrize("change, reason", [
+    (lambda c: c.update(baseline={"processes": [-5, 5], "MemAvailable_kb": [-200000, 100000]}), None),
+    (_expect("kontrola_wx_memfd", "proc_wx", tolerance=.1),
+     "unknown protocol key: controls.kinds.kontrola_wx_memfd.expect.proc_wx.tolerance"),
+    (lambda c: c["kinds"]["kontrola_modul_jadra"].pop("candidates"),
+     "missing protocol key: controls.kinds.kontrola_modul_jadra.candidates"),
+    (lambda c: c["kinds"]["kontrola_davka_procesov"]["expect"]["proc_new"].pop("direction"),
+     "missing protocol key: controls.kinds.kontrola_davka_procesov.expect.proc_new.direction"),
+    (lambda c: c.pop("baseline"), "missing protocol key: controls.baseline"),
+    (_kind("kontrola_wx_memfd", doses=[16], per_dose=[7]), "invalid controls"),
+    (_kind("kontrola_zapisovac_pamate", doses=[16, 16, 256]), "invalid controls"),
+    (_kind("kontrola_zapisovac_pamate", doses=[16, 64, 256.5]), "invalid controls"),
+    (_kind("kontrola_zapisovac_pamate", per_dose=[2, 2, 2]), "invalid controls"),
+    (lambda c: c.update(negatives_per_kind=6), "invalid controls"),
+    (_kind("kontrola_pocuvajuci_soket", columns=["sock_listening"],
+           expect={"sock_listening": {"shift": .5, "direction": "up"}}), "invalid controls"),
+    (_kind("kontrola_pocuvajuci_soket", columns=["je_plna"], expect={"je_plna": {"shift": .5, "direction": "up"}}),
+     "invalid controls"),
+    (lambda c: c["kinds"]["kontrola_wx_memfd"]["expect"].pop("proc_memfd"), "invalid controls"),
+    (_expect("kontrola_wx_memfd", "proc_wx", direction="sideways"), "invalid controls"),
+    (_expect("kontrola_wx_memfd", "proc_wx", shift=0), "invalid controls"),
+    (_expect("kontrola_wx_memfd", "proc_wx", shift=[.5]), "invalid controls"),
+    (_expect("kontrola_davka_procesov", "proc_new", shift=[2, 10]), "invalid controls"),
+    (_kind("kontrola_modul_jadra", candidates=["crc-7"]), "invalid controls"),
+    (lambda c: c.update(baseline={"processes": [5, -5], "MemAvailable_kb": [-1, 1]}), "invalid controls"),
+    (lambda c: c.update(baseline={"processes": [-5, 5]}), "invalid controls"),
+], ids=["measured_tolerance", "unknown_key", "no_candidates", "no_direction", "no_baseline",
+        "dose_of_class_a", "doses_not_distinct", "dose_not_an_integer", "counts_per_dose", "fewer_negatives",
+        "column_not_a_feature", "column_a_row_flag", "expectation_per_column", "direction", "shift_not_positive",
+        "shift_list_of_class_a", "shift_per_dose", "candidate_name", "band_reversed", "band_missing"])
+def test_the_loader_knows_every_key_and_value_of_the_controls_section(change, reason):
+    """Design B8 1.1: the layout knows every key of the controls section (the module kind alone has candidates; the
+    real file, whose other kinds have none, passes the self-check) and the value check every rule of a kind and of
+    the tolerance controls.baseline: null in the file until G2, then a band per quantity of lab/guest_state.py
+    LEVEL_PARTS, which loads."""
+    from scripts import protocol_v5
+    doc = json.loads(V5.read_text())
+    change(doc["controls"])
+    if reason is None:
+        protocol_v5.check_layout(doc)
+    else:
+        with pytest.raises(ValueError) as refused:
+            protocol_v5.check_layout(doc)
+        assert str(refused.value) == reason
+
+
+def test_the_doses_of_class_a_are_null_by_design_and_only_they():
+    """A null dose means "none" only for a kind of class A; elsewhere a null outside determined_at fails as before."""
+    from scripts import protocol_v5
+    doc = json.loads(V5.read_text())
+    assert protocol_v5.not_applicable(doc) == {f"controls.kinds.{kind}.{key}" for key in ("doses", "per_dose") for kind
+                                               in ("kontrola_wx_memfd", "kontrola_modul_jadra",
+                                                   "kontrola_pocuvajuci_soket")}
+    assert protocol_v5.check_analysis(doc) == []
+    doc["controls"]["kinds"]["kontrola_davka_procesov"]["doses"] = None
+    assert protocol_v5.check_analysis(doc) == [
+        "null outside determined_at: controls.kinds.kontrola_davka_procesov.doses"]
+
+
+@pytest.mark.parametrize("mode", ["campaign", "rehearsal"])
+def test_every_control_of_class_b_is_dealt_a_dose_after_its_card(mode, monkeypatch):
+    """Design B8 1.2 on the plans of the file and of five other protocol names: a control of class A has no dose, one
+    of class B one of its kind's doses; in a campaign each dose has its count per_dose among the kind's controls and
+    the same among its negatives, in a rehearsal the counts of a card differ by at most 1; on each VM a dose of a card
+    differs by at most 1 from the other VM. The doses are dealt last: the plan that deals none is the same plan."""
+    from scripts import protocol_v5
+    doc = json.loads(V5.read_text())
+    kinds = doc["controls"]["kinds"]
+    for name in [doc["name"]] + [f"name-{k}" for k in range(5)]:
+        plan = protocol_v5.plan(dict(doc, name=name), mode)
+        items = _controls(plan)
+        assert all(x["dose"] is None if kinds[x["kind"]]["class"] == "A" else x["dose"] in kinds[x["kind"]]["doses"]
+                   for _, x in items), name
+        for kind in ("kontrola_zapisovac_pamate", "kontrola_davka_procesov"):
+            k = kinds[kind]
+            for polarity in ("control", "negative"):
+                mine = [(s, x) for s, x in items if (x["kind"], x["polarity"]) == (kind, polarity)]
+                counts = Counter(x["dose"] for _, x in mine)
+                if mode == "campaign":
+                    assert counts == dict(zip(k["doses"], k["per_dose"])), (name, kind, polarity)
+                else:
+                    assert max(counts[d] for d in k["doses"]) - min(counts[d] for d in k["doses"]) <= 1
+                on = Counter((x["dose"], s["vm"]) for s, x in mine)
+                assert all(abs(on[d, "a"] - on[d, "b"]) <= 1 for d in k["doses"]), (name, kind, polarity)
+        monkeypatch.setattr(protocol_v5, "_deal_doses", lambda c, groups, rng: [
+            labels.__setitem__(j, card + (None,)) for group in groups for labels in group["labels"]
+            for j, card in enumerate(labels) if card is not None])
+        undosed = protocol_v5.plan(dict(doc, name=name), mode)
+        monkeypatch.undo()
+        for _, x in items:
+            x["dose"] = None
+        assert json.loads(json.dumps(undosed)) == json.loads(json.dumps(plan)), name
+
+
+def test_a_rehearsal_deals_a_card_a_prefix_of_its_kinds_doses():
+    """B8: in the rehearsal a card of class B has two controls with two different doses (a prefix of its kind's deck,
+    one on each VM). The same dose on both leaves the third and second dose at none: refused, the VMs stay within 1."""
+    from scripts import protocol_v5
+    doc = json.loads(V5.read_text())
+    plan = protocol_v5.plan(doc, "rehearsal")
+    assert protocol_v5.check_controls(doc, plan) == []
+    pairs = {}
+    for s, x in _dosed(plan):
+        pairs.setdefault((x["kind"], x["polarity"]), []).append(x)
+    (kind, polarity), (x, y) = next((card, pair) for card, pair in sorted(pairs.items()) if len(pair) == 2)
+    assert x["dose"] != y["dose"]
+    y["dose"] = x["dose"]
+    assert protocol_v5.check_controls(doc, plan) == [
+        f"rehearsal plan: control {kind}/{polarity}: dose counts differ by more than 1"]

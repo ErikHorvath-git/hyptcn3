@@ -53,11 +53,13 @@ def clean_session(root, p, protocol_path, name):
 
 def run_case(root, p, protocol_path, case=None):
     """The clean session under `p` in root/<case id> (root/clean without a case), changed by case.mutate, audited.
+    A case with its own clean session (case.session, package B8) starts from that one.
 
     Returns the boundary_sessions.Audit of the real audit (code 0 accepted, 2 refused).
     """
     where = "clean" if case is None else case.id.replace("/", "_")
-    session = clean_session(Path(root) / where, p, protocol_path, SESSION)
+    build = clean_session if case is None or case.session is None else case.session
+    session = build(Path(root) / where, p, protocol_path, SESSION)
     result = None if case is None else case.mutate(session.directory, p, copy.deepcopy(session.result))
     return bs.audit(session, p, result=result)
 
@@ -409,7 +411,11 @@ RAM_CASES = [
 ]
 
 POSITIVE_CONTROL = ("judged only for a pilot under a protocol with events.pilot_controls, and the self-test audits a "
-                    "planned session of the first role; scripts/tests/test_pozitivna_kontrola.py tests the gate")
+                    "planned session of the first role; scripts/tests/test_pozitivna_kontrola.py tests the gate. "
+                    "Protocol v5 has no pilot: the four cases of finding S2 of B3 (events.json missing, a control "
+                    "not executed, not detected, missing) are those of role test_controls in "
+                    "scripts/tests/audit_cases_logs.py (controls:unreadable, control_not_executed, "
+                    "control_without_effect, controls_differ_from_plan:missing; package B8, skeleton addendum)")
 UNREACHABLE = {
     "positive control: events.json missing or unreadable": POSITIVE_CONTROL,
     "positive control not executed: <type>": POSITIVE_CONTROL,
