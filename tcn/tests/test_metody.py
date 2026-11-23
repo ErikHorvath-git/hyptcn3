@@ -13,6 +13,12 @@ agent K writes (synthetic protocol dicts here).
 The data are synthetic normalized inputs, and for M and the alarm rule synthetic frames with an untrained, seeded TCN:
 mechanics only, no number is a detection result (HONESTY P4). The names of package B7a are imported inside the tests,
 so this file collects on the code before it.
+
+Package B7b (agent F, design dokazy/B7/navrh/NAVRH_B7b.md 1.1 and 4): the deferred findings of the verification of
+B7a. F1 and F2 (question Q12, provisional): the clean traffic without the full-snapshot band, the placeable traffic
+with it and the controls, the rate per observed hour of clean traffic; F3: the grids refused as the protocol refuses
+them; F6: fit on the roles train and dev only, the budget at exactly analysis.seeds; F5: one test for each mutant
+that survived (M01 in the budget's cases, M02, M03, M05, M14, M16; M04 is tcn/tests/test_tvrdenia.py's).
 """
 import copy
 import json
@@ -114,6 +120,21 @@ def everywhere(windows):
     return np.ones(len(windows), dtype=bool)
 
 
+def quiet(windows):
+    """The Traffic of a window set whose sessions hold no event and no control (package B7b: every window and every
+    row clean); the rate takes it (RATE_RULE)."""
+    from tcn.metody import traffic
+    return traffic(windows, {ident: [] for ident in windows.session_ids}, protocol())
+
+
+def as_role(windows, role):
+    """The same windows as a window set of another role. Package B7b: fit takes window sets of roles train and dev
+    only (F6 of the verification of B7a); a test whose train and dev are one synthetic set passes it as both roles."""
+    out = copy.copy(windows)
+    out.role = role
+    return out
+
+
 def edges(method, windows, threshold):
     """The seq of the windows where an alarm of `method` begins at `threshold`."""
     from tcn.metody import alarm_edges
@@ -152,11 +173,12 @@ def test_z1_alarms_at_a_level_shift():
     record = z1.fit(train, dev, protocol=protocol(), seed=0)
     assert record["columns"] == list(Z1_INPUTS) and record["chosen"] == {"statistic": "value", "parameter": None}
     assert edges(z1, test, matched(z1, calibration, 0)) == [152]
-    result = matched_rate(z1, calibration, everywhere(calibration), 0, k=K, n=N,
-                          roles={"test_benign": (test, everywhere(test))})
+    result = matched_rate(z1, calibration, quiet(calibration), 0, k=K, n=N,
+                          roles={"test_benign": (test, quiet(test))})
     assert (result["label"], result["alarms"], result["rates"]["calibration"]["alarms"]) == ("Z1:value", 0, 0)
     assert result["rates"]["test_benign"]["alarms"] == 1
-    assert result["rates"]["test_benign"]["per_hour"] == pytest.approx(1 / (len(test) * INTERVAL / 3600))
+    # Package B7b (F2 of the verification of B7a): per observed hour of clean traffic, the 300 rows of the session.
+    assert result["rates"]["test_benign"]["per_hour"] == pytest.approx(1 / (300 * INTERVAL / 3600))
 
 
 @pytest.mark.parametrize("prefer, chosen", [
@@ -207,7 +229,7 @@ def test_z1_statistics_by_hand(statistic, parameter, rows, center, spread, score
     norm = normalizer(("mem_changed_max",))
     train = window_set([np.where(np.arange(207) % 2, -1.0, 1.0)[:, None]], norm)
     z1 = Z1(statistic=statistic, parameter=parameter)
-    record = z1.fit(train, train, protocol=protocol(), seed=0)
+    record = z1.fit(train, as_role(train, "dev"), protocol=protocol(), seed=0)
     assert (record["center"][0], record["spread"][0]) == pytest.approx((center, spread))
     window = window_set([np.array(rows, dtype=float)[:, None]], norm)
     assert z1.scores(window)[0] == pytest.approx(score)
@@ -220,7 +242,7 @@ def test_z1_needs_the_criterion_of_its_selection():
     with pytest.raises(ValueError, match=r"^Z1 is selected by the share of the interventions inserted into dev that "
                                          r"it detects \(skeleton section 2, package B7b\): its fit needs that "
                                          r"criterion$"):
-        Z1().fit(train, train, protocol=protocol(), seed=0)
+        Z1().fit(train, as_role(train, "dev"), protocol=protocol(), seed=0)
 
 
 def test_z2_alarms_where_a_count_leaves_its_mode():
@@ -239,7 +261,7 @@ def test_z2_alarms_where_a_count_leaves_its_mode():
     calibration = window_set([session(3, 300)], norm, role="calibration")
     test = window_set([session(4, 300, block=True)], norm, role="test_benign")
     z2 = Z2()
-    record = z2.fit(train, train, protocol=protocol(), seed=0)
+    record = z2.fit(train, as_role(train, "dev"), protocol=protocol(), seed=0)
     assert record["counts"] == ["proc_total"] and record["modes"] == [5.0]
     scores = z2.scores(test)
     assert set(scores[(test.seq >= 100) & (test.seq < 120)]) == {3.0}
@@ -253,7 +275,7 @@ def test_z2_needs_a_count_among_the_inputs():
     train = window_set([noise(1, 100, 1)], norm)
     with pytest.raises(ValueError, match=r"^Z2 has no count \(a column of analysis\.scale\.floor 1\) among the TCN "
                                          r"inputs$"):
-        Z2().fit(train, train, protocol=protocol(), seed=0)
+        Z2().fit(train, as_role(train, "dev"), protocol=protocol(), seed=0)
 
 
 def walk(seed, rows, step):
@@ -284,7 +306,7 @@ def test_z3_predictors_by_hand():
     from tcn.metody import Z3
     norm = normalizer(("mem_changed_ratio",))
     dev = window_set([np.array([0, 0, 0, 0, 0, 0, 1, 2], dtype=float)[:, None]], norm, role="dev")
-    record = Z3().fit(dev, dev, protocol=protocol(), seed=0)
+    record = Z3().fit(as_role(dev, "train"), dev, protocol=protocol(), seed=0)
     assert [c["dev_loss"] for c in record["candidates"]] == pytest.approx(
         [0.5 * (2 - p) ** 2 for p in (1, 1 / 7, 0.3, 0.7)])
 
@@ -295,7 +317,7 @@ def test_z3_is_not_fitted_before_its_grid():
     train = window_set([walk(1, 100, .1)], norm)
     with pytest.raises(ValueError, match=r"^analysis\.methods\.Z3\.grid is null: the grid of Z3 is determined in G3a "
                                          r"\(determined_at\), so Z3 is not fitted before it$"):
-        Z3().fit(train, train, protocol=protocol(("analysis.methods.Z3.grid", None)), seed=0)
+        Z3().fit(train, as_role(train, "dev"), protocol=protocol(("analysis.methods.Z3.grid", None)), seed=0)
 
 
 def ar1(seed, rows, phi):
@@ -359,7 +381,7 @@ def test_z5_fits_a_bin_by_the_loss_of_training():
         sessions.append((noise(seed, 300, 1), local))
     train = window_set([g for g, _ in sessions], norm, bins=[local for _, local in sessions])
     z5 = Z5()
-    z5.fit(train, train, protocol=protocol(), seed=0)
+    z5.fit(train, as_role(train, "dev"), protocol=protocol(), seed=0)
     bins = z5.coefficients[1]
     assert bins[0, 2] == pytest.approx(1.0, abs=1e-3) and np.abs(bins[1:, 2]).max() < 1e-3
 
@@ -388,7 +410,7 @@ def test_z4_on_a_load_jump(variant, alarms):
     test_x, test_load = session(5, np.where(np.arange(300) < 150, 10.0, 30.0), departure=True)
     test = window_set([test_x], norm, role="test_benign", loads=[test_load])
     z4 = Z4(variant)
-    z4.fit(train, train, protocol=protocol(), seed=0)
+    z4.fit(train, as_role(train, "dev"), protocol=protocol(), seed=0)
     assert z4.label == "Z4:" + variant
     assert edges(z4, test, matched(z4, calibration, 0)) == alarms
 
@@ -399,7 +421,7 @@ def test_z4_needs_the_offered_load():
     train = window_set([noise(1, 100, 1)], norm)
     with pytest.raises(ValueError, match=r"^Z4 needs the offered load of every row; the window set of train has "
                                          r"none$"):
-        Z4("load").fit(train, train, protocol=protocol(), seed=0)
+        Z4("load").fit(train, as_role(train, "dev"), protocol=protocol(), seed=0)
 
 
 def test_z0_never_alarms_and_its_random_variant_meets_the_rate():
@@ -413,10 +435,10 @@ def test_z0_never_alarms_and_its_random_variant_meets_the_rate():
     calibration = window_set([noise(s, 600, 1) for s in (1, 2)], norm, role="calibration")
     role = window_set([noise(s, 3000, 1) for s in (3, 4)], norm, role="test_benign")
     z0 = Z0()
-    z0.fit(calibration, calibration, protocol=protocol(), seed=0)
-    assert rate(z0.scores(role), role, matched(z0, calibration, 4), k=K, n=N, clean=everywhere(role))["alarms"] == 0
-    result = z0_random(calibration, 4, protocol=protocol(), mode="campaign", k=K, n=N, clean=everywhere(calibration),
-                       roles={"test_benign": (role, everywhere(role))})
+    z0.fit(as_role(calibration, "train"), as_role(calibration, "dev"), protocol=protocol(), seed=0)
+    assert rate(z0.scores(role), role, matched(z0, calibration, 4), k=K, n=N, traffic=quiet(role))["alarms"] == 0
+    result = z0_random(calibration, 4, protocol=protocol(), mode="campaign", k=K, n=N, traffic=quiet(calibration),
+                       roles={"test_benign": (role, quiet(role))})
     assert result["repetitions"] == 200 and len(result["roles"]["calibration"]["alarms"]) == 200
     on_calibration, on_role = result["roles"]["calibration"], result["roles"]["test_benign"]
     # judgment: the count at a threshold is the budget unless the step after it adds two alarms at once, so the mean
@@ -476,27 +498,36 @@ def test_the_budget_counts_clean_traffic_only():
     assert budget([alarm_count(scores, windows, 1, k=K, n=N, clean=clean)]) == 1
 
 
-@pytest.mark.parametrize("counts, expected", [([2, 0, 5, 1, 2], 2), ([1, 2, 3, 4], 3)])
+@pytest.mark.parametrize("counts, expected", [
+    ([2, 0, 5, 1, 2], 2), ([1, 2, 3, 4], 3),
+    # Package B7b (F5 of the verification of B7a, mutant M01): the median 0, where the mean (4) would give 4.
+    ([0, 0, 0, 10, 10], 0),
+])
 def test_the_budget_is_the_median_over_the_seeds_rounded_up(counts, expected):
     from tcn.metody import budget
     assert budget(counts) == expected
 
 
-@pytest.mark.parametrize("end, anchored, clean", [
-    (37, False, True), (38, False, False), (49, False, False),  # The band of the full snapshot at row 50: 60 s before
-    (58, False, False), (64, False, False), (65, False, True),  # it to 8 rows after, [t(38), t(58)).
-    (99, False, True), (100, False, False), (121, False, False), (122, False, True),  # The event 100-110 with 20 s.
-    (122, True, False), (123, True, True),  # Anchored: the anchor of the window ending at 122 is row 114.
+@pytest.mark.parametrize("end, anchored, clean, placeable", [
+    # Package B7b (F1 of the verification of B7a, question Q12, provisional): the band of the full snapshot at row 50,
+    # 60 s before it to 8 rows after, [t(38), t(58)), is no part of clean traffic; it bounds only the placeable windows.
+    (37, False, True, True), (38, False, True, False), (49, False, True, False),
+    (58, False, True, False), (64, False, True, False), (65, False, True, True),
+    # The event 100-110 with 20 s of reverberation: neither clean nor placeable.
+    (99, False, True, True), (100, False, False, False), (121, False, False, False), (122, False, True, True),
+    (122, True, False, False), (123, True, True, True),  # Anchored: the anchor of the window ending at 122 is row 114.
 ])
-def test_clean_windows(end, anchored, clean):
-    """CLEAN_RULE on one session of 200 rows (window 8, 5 s apart) with a full snapshot at row 50 (no window holds it)
-    and an event from row 100 to row 110 with a reverberation of 20 s (rows up to 114)."""
-    from tcn.metody import clean_windows
+def test_clean_windows(end, anchored, clean, placeable):
+    """CLEAN_RULE and PLACEABLE_RULE on one session of 200 rows (window 8, 5 s apart) with a full snapshot at row 50
+    (no window holds it) and an event from row 100 to row 110 with a reverberation of 20 s (rows up to 114)."""
+    from tcn.metody import clean_windows, placeable_windows
     norm = normalizer(("mem_changed_ratio", "proc_total"), differenced=("proc_total",) if anchored else ())
     windows = window_set([np.zeros((200, 2))], norm, barriers=(50,), full=[50])
     event = {"host_start_unix": 1000 + 5 * 100., "host_stopped_unix": 1000 + 5 * 110.}
-    mask = clean_windows(windows, {"session-0": [event]}, protocol(("analysis.reverberation_s", 20)))
+    p = protocol(("analysis.reverberation_s", 20))
+    mask = clean_windows(windows, {"session-0": [event]}, p)
     assert mask[list(windows.seq).index(end)] == clean
+    assert placeable_windows(windows, {"session-0": [event]}, p)[list(windows.seq).index(end)] == placeable
 
 
 def test_clean_windows_need_the_events_of_every_session():
@@ -657,7 +688,7 @@ def test_m_scores_and_losses_are_those_of_its_bundle():
         assert losses[i] == pytest.approx(0.5 * reference["global_error"] + 0.5 * np.mean(reference["bin_errors"]),
                                           rel=1e-5, abs=1e-6)
     clean = np.arange(len(windows)) >= len(windows) // 3
-    result = model_budget([MetodaM(b) for b in models], windows, clean)
+    result = model_budget([MetodaM(b) for b in models], windows, clean, protocol=protocol(("analysis.seeds", [0, 1])))
     counts = [alarm_count(MetodaM(b).scores(windows), windows, b.threshold, k=K, n=N, clean=clean) for b in models]
     assert [(r["seed"], r["threshold"], r["alarms"]) for r in result["seeds"]] == [
         (0, models[0].threshold, counts[0]), (1, models[1].threshold, counts[1])]
@@ -701,9 +732,9 @@ def test_the_matched_rate_takes_any_method_of_the_interface(method, reason):
     calibration = window_set([noise(1, 60, 1)], norm, role="calibration")
     if reason is not None:
         with pytest.raises(ValueError, match=reason):
-            matched_rate(method, calibration, everywhere(calibration), 0, k=K, n=N, roles={})
+            matched_rate(method, calibration, quiet(calibration), 0, k=K, n=N, roles={})
         return
-    result = matched_rate(method, calibration, everywhere(calibration), 0, k=K, n=N, roles={})
+    result = matched_rate(method, calibration, quiet(calibration), 0, k=K, n=N, roles={})
     assert (result["label"], result["kind"], result["alarms"], list(result["rates"])) == (
         "zscore", "detector", 0, ["calibration"])
 
@@ -732,7 +763,7 @@ def test_k1_takes_the_losses_of_the_wrapper():
     windows = Okna.from_sessions(records("calibration"), norm, contract, role="calibration", interval_s=INTERVAL)
     methods = {"Z3": Z3(), "Z5": Z5()}
     for method in methods.values():
-        method.fit(train, train, protocol=protocol(), seed=0)
+        method.fit(train, as_role(train, "dev"), protocol=protocol(), seed=0)
     boots = {"calibration-1": "group-1", "calibration-2": "group-2"}
     losses = {seed: m.losses(windows) for seed, m in models.items()}
     result = tvrdenia.hodnoty_k1(doc, losses, {name: m.losses(windows) for name, m in methods.items()},
@@ -882,10 +913,295 @@ def test_the_descriptive_methods_run_in_the_matched_rate(name):
     seed = next(s for n, s in opisne.runs(doc) if n == name)
     method = opisne.method(name)
     method.fit(train, dev, protocol=doc, seed=seed)
-    result = matched_rate(method, calibration, everywhere(calibration), 2, k=K, n=N,
-                          roles={"test_benign": (test, everywhere(test))})
-    assert (result["label"], result["kind"], result["alarms"] <= 2) == (name, method.kind, True)
+    result = matched_rate(method, calibration, quiet(calibration), 2, k=K, n=N,
+                          roles={"test_benign": (test, quiet(test))})
+    # Package B7b (F4 of the verification of B7a): the label of a method that draws from a seed carries it.
+    label = name if seed is None else f"{name}:seed {seed}"
+    assert (result["label"], result["kind"], result["alarms"] <= 2) == (label, method.kind, True)
     assert set(result["rates"]) == {"calibration", "test_benign"}
     losses = method.losses(test)
     assert (losses is None) == (method.kind == "detector")
     assert losses is None or (losses.shape == (len(test),) and np.isfinite(losses).all())
+
+
+# ------------------------------------------------------------------ package B7b (agent F): the deferred findings of B7a
+
+
+def test_a_v5_session_without_events_is_clean_traffic_in_every_scored_window():
+    """F1 and F2 of the verification of B7a (question Q12, provisional): a session of the v5 shape of the real file
+    (720 rows of 5 s, full snapshots at rows 0 and 360, window 32, full_snapshot_guard.before_s 60) without any event.
+    Each of its 656 scored windows is clean traffic (proposal 4.2); the band of the full snapshots leaves 582 of them
+    placeable (74 fewer: the 31 windows after each snapshot and the 12 before the second). The observed clean time is
+    its 720 rows, one hour; the scored clean time its 656 windows."""
+    from tcn.metody import Okna, rate, traffic
+    doc = json.loads((ROOT / "config/collection-v5.json").read_text())
+    rows, window, interval = doc["cycles"], doc["window_rows"], doc["interval_s"]
+    full = [p for p in range(rows) if p % doc["full_every"] == 0]
+    session = {"id": "s", "global": np.zeros((rows, 1)), "local": np.zeros((rows, 1, 4)), "seq": np.arange(rows),
+               "timestamp": 1000. + interval * np.arange(rows), "full_times": [1000. + interval * p for p in full],
+               "load": None}
+    windows = Okna([session], [(0, end, None) for end in range(window - 1, rows)
+                               if not any(end - window + 1 <= f <= end for f in full)],
+                   role="calibration", normalizer=normalizer(("mem_changed_ratio",)), window_rows=window,
+                   max_gap_s=doc["max_gap_s"], interval_s=interval)
+    t = traffic(windows, {"s": []}, doc)
+    assert (full, len(windows), int(t.clean.sum()), int(t.placeable.sum())) == ([0, 360], 656, 656, 582)
+    result = rate(np.zeros(len(windows)), windows, 0.0, k=3, n=5, traffic=t)
+    assert (result["rows"], result["windows"], result["hours"]) == (720, 656, 1.0)
+    assert (result["scored_hours"], result["scored_share"]) == (pytest.approx(656 * 5 / 3600), pytest.approx(656 / 720))
+
+
+def test_the_rate_is_per_observed_hour_of_clean_traffic():
+    """F2 (and the mutant M02) of the verification of B7a: one session of 300 rows (window 8, 5 s apart) with an event
+    from row 100 to row 110 and 20 s of reverberation (to row 114). A row is clean when the 8 rows ending at it miss the
+    event and its reverberation: rows 0 to 99 and 122 to 299, 278 rows; the clean windows end at rows 7 to 99 and 122 to
+    299, 271 of 293. Alarms begin at rows 62 and 202, clean, and 106, in the event: the rate is 2 per 278 rows of 5 s,
+    beside it 2 per 271 scored clean windows and the scored share 271 / 278."""
+    from tcn.metody import NO_CONTROLS, rate, traffic
+    windows, scores = scored(np.zeros(293))
+    for first in (60, 104, 200):
+        scores[(windows.seq >= first) & (windows.seq < first + 5)] = 5
+    event = {"host_start_unix": 1000 + 5 * 100., "host_stopped_unix": 1000 + 5 * 110.}
+    t = traffic(windows, {"session-0": [event]}, protocol(("analysis.reverberation_s", 20)))
+    assert {key: t.record()[key] for key in ("rows", "clean_rows", "windows", "clean_windows", "placeable_windows",
+                                              "events", "controls")} == {
+        "rows": 300, "clean_rows": 278, "windows": 293, "clean_windows": 271, "placeable_windows": 271, "events": 1,
+        "controls": NO_CONTROLS}
+    result = rate(scores, windows, 1.0, k=K, n=N, traffic=t)
+    assert (result["alarms"], result["rows"], result["windows"]) == (2, 278, 271)
+    assert result["hours"] == pytest.approx(278 * 5 / 3600)
+    assert result["per_hour"] == pytest.approx(2 / (278 * 5 / 3600))
+    assert result["scored_hours"] == pytest.approx(271 * 5 / 3600)
+    assert result["per_scored_hour"] == pytest.approx(2 / (271 * 5 / 3600))
+    assert result["scored_share"] == pytest.approx(271 / 278)
+
+
+CONTROL = {"host_start_unix": 1000 + 5 * 100., "host_stopped_unix": 1000 + 5 * 110.}
+
+
+@pytest.mark.parametrize("role, controls, reason", [
+    ("test_controls", {"session-0": [CONTROL]}, None),
+    ("calibration", None, None),
+    ("test_controls", None, r"^the sessions of role test_controls hold controls on the VM: give the records of their "
+                            r"controls \(controls\.json; \[\] for a session without one\)$"),
+    ("test_controls", {}, r"^controls maps the id of every session of the window set, and no other, to its control "
+                          r"records \(\[\] for a session without controls\)$"),
+    ("test_controls", {"session-0": [{"host_start_unix": 1500.}]},
+     r"^a control of session session-0 needs host_start_unix <= host_stopped_unix$"),
+], ids=["control", "no_controls_by_rule", "controls_missing", "session_missing", "control_without_stop"])
+def test_a_control_is_no_clean_traffic(role, controls, reason):
+    """CLEAN_RULE (judgment): a control placed on the VM, from row 100 to row 110 with 20 s of reverberation, leaves the
+    clean and the placeable windows as an event does (the windows ending at rows 100 to 121). Only role test_controls
+    holds controls, so its traffic needs their records; another role's takes none by the named rule NO_CONTROLS, which
+    the record states."""
+    from tcn.metody import NO_CONTROLS, traffic
+    windows = window_set([np.zeros((200, 1))], normalizer(("mem_changed_ratio",)), role=role)
+    p = protocol(("analysis.reverberation_s", 20))
+    if reason is not None:
+        with pytest.raises(ValueError, match=reason):
+            traffic(windows, {"session-0": []}, p, controls=controls)
+        return
+    t = traffic(windows, {"session-0": []}, p, controls=controls)
+    expected = ~((windows.seq >= 100) & (windows.seq <= 121)) if controls else everywhere(windows)
+    assert np.array_equal(t.clean, expected) and np.array_equal(t.placeable, expected)
+    assert t.record()["controls"] == (1 if controls else NO_CONTROLS)
+
+
+@pytest.mark.parametrize("which, reason", [
+    ("mask", r"^the rate is per observed hour of clean traffic \(RATE_RULE\): it takes the Traffic of the window set "
+             r"\(tcn\.metody\.traffic\), not a mask$"),
+    ("other", r"^the Traffic is of another window set$"),
+], ids=["a_mask", "the_traffic_of_another_set"])
+def test_the_rate_takes_the_traffic_of_its_window_set(which, reason):
+    """RATE_RULE: the observed time comes with the Traffic of the window set (the good input: the tests above)."""
+    from tcn.metody import rate
+    windows, scores = scored(np.zeros(20))
+    other, _ = scored(np.zeros(20))
+    with pytest.raises(ValueError, match=reason):
+        rate(scores, windows, 1.0, k=K, n=N, traffic=everywhere(windows) if which == "mask" else quiet(other))
+
+
+@pytest.mark.parametrize("method, value, reason", [
+    ("Z1", {"moving_average_rows": [WINDOW], "cusum_shift": [0, 0.5]}, None),
+    ("Z3", {"ewma_alpha": [1.5]}, "analysis.methods.Z3.grid.ewma_alpha must be a non-empty list of distinct numbers in "
+                                  "(0, 1]"),
+    ("Z3", {"ewma_alpha": ["fast"]}, "analysis.methods.Z3.grid.ewma_alpha must be a non-empty list of distinct numbers "
+                                     "in (0, 1]"),
+    ("Z5", {"ridge_alpha": [-1.0]}, "analysis.methods.Z5.grid.ridge_alpha must be a non-empty list of distinct "
+                                    "positive numbers"),
+    ("Z5", {"ridge_alpha": [1, 1.0]}, "analysis.methods.Z5.grid.ridge_alpha must be a non-empty list of distinct "
+                                      "positive numbers"),
+    ("Z1", {"moving_average_rows": [0], "cusum_shift": [0.5]},
+     "analysis.methods.Z1.grid.moving_average_rows must be a non-empty list of distinct integers of at least 1 and at "
+     "most window_rows"),
+    ("Z1", {"moving_average_rows": [2.5], "cusum_shift": [0.5]},
+     "analysis.methods.Z1.grid.moving_average_rows must be a non-empty list of distinct integers of at least 1 and at "
+     "most window_rows"),
+    ("Z1", {"moving_average_rows": [WINDOW + 1], "cusum_shift": [0.5]},
+     "analysis.methods.Z1.grid.moving_average_rows must be a non-empty list of distinct integers of at least 1 and at "
+     "most window_rows"),
+    ("Z1", {"moving_average_rows": [4], "cusum_shift": [-2]},
+     "analysis.methods.Z1.grid.cusum_shift must be a non-empty list of distinct numbers of at least 0 (normalized "
+     "units)"),
+    # Mutant P5 of the verification of B7b: the lower bounds 0 of ewma_alpha and ridge_alpha are not taken.
+    ("Z3", {"ewma_alpha": [1]}, None),
+    ("Z3", {"ewma_alpha": [0]}, "analysis.methods.Z3.grid.ewma_alpha must be a non-empty list of distinct numbers in "
+                                "(0, 1]"),
+    ("Z5", {"ridge_alpha": [0]}, "analysis.methods.Z5.grid.ridge_alpha must be a non-empty list of distinct positive "
+                                 "numbers"),
+], ids=["bounds_taken", "ewma_above_1", "ewma_a_name", "ridge_negative", "ridge_twice_by_value", "average_of_0",
+        "average_not_an_integer", "average_longer_than_the_window", "cusum_negative", "ewma_of_1", "ewma_of_0",
+        "ridge_of_0"])
+def test_a_grid_is_refused_as_the_protocol_refuses_it(method, value, reason):
+    """F3 of the verification of B7a: tcn.metody.grid refuses exactly the grids that scripts/protocol_v5.py
+    grid_problem names under the protocol's window_rows (8 here), with its text (GRID_DOMAINS, one constant for both):
+    the verifier's probes, a value repeated as 1 and 1.0 and a moving average longer than the window; the bounds of
+    the domains (a moving average of the window's 8 rows, a CUSUM shift of 0, an ewma_alpha of 1) are taken, the open
+    lower bounds (an ewma_alpha and a ridge_alpha of 0) are not (F5 of the verification of B7b)."""
+    from scripts import protocol_v5
+    from tcn.metody import grid
+    p = protocol((f"analysis.methods.{method}.grid", value))
+    assert protocol_v5.grid_problem(method, value, WINDOW) == reason
+    if reason is None:
+        assert grid(p, method) == value
+        return
+    with pytest.raises(ValueError) as refused:
+        grid(p, method)
+    assert str(refused.value) == reason
+
+
+@pytest.mark.parametrize("roles, reason", [
+    (("train", "dev"), None),
+    (("train", "test_benign"), "fit takes the window sets of roles train and dev (analysis.selection: never on a test "
+                               "role), not train and test_benign"),
+    (("test_benign", "test_benign"), "fit takes the window sets of roles train and dev (analysis.selection: never on "
+                                     "a test role), not test_benign and test_benign"),
+], ids=["roles_of_the_fit", "selected_on_a_test_role", "fitted_on_a_test_role"])
+def test_fit_takes_train_and_dev_of_their_roles(roles, reason):
+    """F6 of the verification of B7a: Z3 and Z5 were selected on a window set of role test_benign, and Z3 fitted with
+    train = dev = test_benign; every fit (Metoda._bind) now refuses window sets of other roles than train and dev and
+    writes the roles into its record."""
+    from tcn.metody import Z3, Z5
+    norm = normalizer(("mem_changed_ratio",))
+    train = window_set([walk(1, 200, .1)], norm, role=roles[0])
+    dev = window_set([walk(2, 200, .1)], norm, role=roles[1])
+    for method in (Z3(), Z5()):
+        if reason is None:
+            assert method.fit(train, dev, protocol=protocol(), seed=0)["roles"] == {"train": "train", "dev": "dev"}
+            continue
+        with pytest.raises(ValueError) as refused:
+            method.fit(train, dev, protocol=protocol(), seed=0)
+        assert str(refused.value) == reason
+
+
+@pytest.mark.parametrize("seeds, reason", [
+    ((1, 0), None),
+    ((0, 0), "the budget takes M at every seed of analysis.seeds [0, 1], each once, not at the seeds [0, 0]"),
+    ((0,), "the budget takes M at every seed of analysis.seeds [0, 1], each once, not at the seeds [0]"),
+], ids=["every_seed", "one_seed_twice", "a_seed_missing"])
+def test_the_budget_takes_m_at_exactly_the_seeds_of_the_analysis(seeds, reason):
+    """F6 of the verification of B7a: model_budget took one seed twice and a part of analysis.seeds (here [0, 1]); it
+    takes M at exactly its seeds, each once, in any order."""
+    from tcn.metody import MetodaM, Okna, model_budget
+    bundles = {seed: bundle(seed) for seed in set(seeds)}
+    windows = Okna.from_sessions(records("calibration"), bundles[0].normalizer, bundles[0].contract,
+                                 role="calibration", interval_s=INTERVAL)
+    models = [MetodaM(bundles[seed]) for seed in seeds]
+    p = protocol(("analysis.seeds", [0, 1]))
+    if reason is None:
+        result = model_budget(models, windows, quiet(windows), protocol=p)
+        assert [row["seed"] for row in result["seeds"]] == [1, 0]
+        return
+    with pytest.raises(ValueError) as refused:
+        model_budget(models, windows, everywhere(windows), protocol=p)
+    assert str(refused.value) == reason
+
+
+def test_z5_keeps_its_intercept_out_of_the_penalty():
+    """F5 of the verification of B7a, mutant M03: the global input is 3 plus noise of 0.01; at the strength 1e6 every
+    coefficient of the rows before the last is about 0 and the intercept, which is not penalized, is the mean 3 (a
+    penalized one would shrink to about 0 too and predict 0)."""
+    from tcn.metody import Z5
+    norm = normalizer(("mem_changed_ratio",))
+    train = window_set([3 + 0.01 * noise(1, 300, 1)], norm)
+    z5 = Z5()
+    z5.fit(train, as_role(train, "dev"), protocol=protocol(("analysis.methods.Z5.grid", {"ridge_alpha": [1e6]})),
+           seed=0)
+    intercept, rest = z5.coefficients[0][0, 0], z5.coefficients[0][1:, 0]
+    assert intercept == pytest.approx(3, abs=0.01) and np.abs(rest).max() < 1e-4
+
+
+def test_the_walk_takes_the_scores_of_every_calibration_window():
+    """F5, mutant M05: the threshold walks the distinct scores of every calibration window, the windows outside clean
+    traffic included (the rule k of n runs over every window). Window 3, outside clean traffic, scores 1 and windows 4
+    and 5 score 2: at the threshold 2 nothing exceeds, at 1 two windows do (no 3 of 5), at 0 three, and the alarm begins
+    at window 5, a clean one. At a budget of 0 the threshold is therefore 1, the score of no clean window; a walk over
+    the scores of the clean windows alone would stop at 2."""
+    from tcn.metody import matched_threshold
+    windows, scores = scored([0, 0, 0, 1, 2, 2, 0, 0, 0, 0, 0, 0, 0])
+    result = matched_threshold(scores, windows, 0, k=K, n=N, clean=np.arange(len(windows)) != 3)
+    assert (result["threshold"], result["alarms"], result["walked"], result["first_excess"]) == (
+        1.0, 0, 3, {"threshold": 0.0, "alarms": 1})
+
+
+def test_z4_residual_has_the_floor_of_its_spread():
+    """F5, mutant M14: an input that is exactly 0.1 times the load in train leaves residuals of 0, so its spread is the
+    floor of the column in normalized units (1e-3 here); a departure of 0.01 from the load then scores 10, where a
+    spread of 0 would give a score without bound."""
+    from tcn.metody import Z4
+    norm = normalizer(("mem_changed_ratio",))
+    load = np.random.default_rng(1).uniform(5, 15, 300)
+    train = window_set([0.1 * load[:, None]], norm, loads=[load])
+    z4 = Z4("residual")
+    assert z4.fit(train, as_role(train, "dev"), protocol=protocol(), seed=0)["spread"] == pytest.approx([1e-3])
+    flat = np.full(20, 10.0)
+    x = 0.1 * flat[:, None]
+    x[-1, 0] += 0.01
+    test = window_set([x], norm, role="test_benign", loads=[flat])
+    assert z4.scores(test)[-1] == pytest.approx(10.0, rel=1e-6)
+
+
+def test_z2_takes_the_mode_not_the_median():
+    """F5, mutant M16: proc_total is 5, 7 or 8 (four, three and three rows of ten), so over the last rows of the train
+    windows its mode is 5 and its median 7: Z2 takes the mode, and a window ending at 5, 7 or 8 scores 0, 2 or 3."""
+    from tcn.metody import Z2
+    norm = normalizer(("mem_changed_ratio", "proc_total"))
+    count = np.tile([5., 5., 5., 5., 7., 7., 7., 8., 8., 8.], 30)
+    train = window_set([np.stack((noise(1, 300), count), axis=1)], norm)
+    z2 = Z2()
+    assert z2.fit(train, as_role(train, "dev"), protocol=protocol(), seed=0)["modes"] == [5.0]
+    assert np.median(count[WINDOW - 1:]) == 7.0
+    assert sorted(set(z2.scores(train))) == [0.0, 2.0, 3.0]
+
+
+@pytest.mark.parametrize("index, reason", [
+    (1, None),
+    (2, r"^the set holds the sessions 0 to 1, not 2$"),
+], ids=["a_session", "no_such_session"])
+def test_the_session_arrays_are_read_only_views(index, reason):
+    """The merge of B7b: Okna.session_arrays (and sessions) is the public accessor of a session's arrays for
+    tcn/zasahy.py and tcn/diagnostiky.py: the constructor's layout (SESSION_KEYS), the values of the set, read-only
+    views of its own arrays; a window set built from them holds the same windows. UNEVALUATED is one constant."""
+    from tcn import diagnostiky, k2
+    from tcn.metody import SESSION_KEYS, UNEVALUATED, Okna
+    loads = [np.arange(40.), np.arange(40.) + 1]
+    windows = window_set([noise(1, 40, 1), noise(2, 40, 1)], normalizer(("mem_changed_ratio",)), loads=loads,
+                         full=[0])
+    if reason is not None:
+        with pytest.raises(ValueError, match=reason):
+            windows.session_arrays(index)
+        return
+    found = windows.session_arrays(index)
+    assert list(found) == list(SESSION_KEYS) and found["id"] == "session-1" and found["full_times"] == [1000.]
+    assert np.array_equal(found["global"], noise(2, 40, 1)) and np.array_equal(found["load"], loads[1])
+    assert np.array_equal(found["timestamp"], 1000. + INTERVAL * np.arange(40))
+    for key in ("global", "local", "seq", "timestamp", "load"):
+        assert not found[key].flags.writeable
+        with pytest.raises(ValueError, match="read-only"):
+            found[key][0] = 0
+    again = Okna(windows.sessions(), [tuple(int(x) for x in row[:2]) + (None,) for row in windows.index],
+                 role=windows.role, normalizer=windows.normalizer, window_rows=WINDOW, max_gap_s=GAP,
+                 interval_s=INTERVAL)
+    assert np.array_equal(again.seq, windows.seq) and np.array_equal(again.last_load(range(len(again))),
+                                                                      windows.last_load(range(len(windows))))
+    assert UNEVALUATED == k2.UNEVALUATED == diagnostiky.UNEVALUATED == "nevyhodnotené"

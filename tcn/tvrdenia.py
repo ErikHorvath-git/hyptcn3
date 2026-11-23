@@ -20,8 +20,13 @@ mu da volajuci; ziadny archiv, prehratie ani rolu neotvara (testovacie roly skor
       cista funkcia troch vysledkov: better, not_better, undecided (kluce analysis.wording).
 
 Okna, ich straty a priznak cistej prevadzky dava volajuci (navrh B7a 1.1 az 1.3: tie iste okna a normalizer
-balika M pre vsetky metody, strata je treningova strata safeguard/model.py LOSS_FORMULA, cista prevadzka su
-skorovane okna mimo okien udalosti, mimo dozvuku analysis.reverberation_s a mimo pasma plnej snimky).
+balika M pre vsetky metody, strata je treningova strata safeguard/model.py LOSS_FORMULA; cista prevadzka su
+skorovane okna mimo udalosti a ich dozvuku analysis.reverberation_s, navrh kap. 4.2, tcn/metody.py CLEAN_RULE:
+otazka Q12 veducemu, docasne podla navrhu vykonavatela, balik B7b; pasmo plnej snimky do nej nepatri).
+
+Balik B7b (otazka Q13 veducemu, docasne podla navrhu vykonavatela): K2a porovnava oba varianty Z4 ako dve
+porovnania Z4:load a Z4:residual (analysis.k2a.compare), kazde s vlastnym prudom bootstrap (k2a/Z4:load,
+k2a/Z4:residual); rozhodni ich berie z planu analyzy bez zmeny kodu a "lepsi" vyzaduje prekonat oba.
 """
 
 from fractions import Fraction

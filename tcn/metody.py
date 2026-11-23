@@ -12,11 +12,13 @@ Binding texts: the lead's skeleton dokazy/B7/kostra/KOSTRA.md sections 2 and 3 w
                                 addendum (z-score, isolation forest, GRU, LSTM) are tcn/opisne.py
     errors(...)                 the loss (LOSS_FORMULA) and the score (SCORE_FORMULA) of predictions of the last row,
                                 by safeguard.model.prediction_errors (design 1.3)
-    clean_windows(...)          the clean traffic (CLEAN_RULE)
+    traffic(...) -> Traffic     the traffic of a window set: its clean windows (CLEAN_RULE), its placeable windows
+                                (PLACEABLE_RULE) and its observed time (OBSERVED_RULE); clean_windows(...) and
+                                placeable_windows(...) give the two masks alone
     alarm_edges, alarm_count    the alarm rule (ALARM_RULE)
     model_budget, budget        the budget (BUDGET_RULE)
-    matched_threshold, rate     the threshold of a method at the budget (THRESHOLD_RULE), its alarms per hour on a
-                                role (RATE_RULE)
+    matched_threshold, rate     the threshold of a method at the budget (THRESHOLD_RULE), its alarms per observed
+                                hour of clean traffic on a role (RATE_RULE)
     matched_rate(method, ...)   both for one fitted method: the threshold, the alarms at it and the rate on every
                                 role given
     z0_random(...)              the random variant of Z0 at the matched rate over its repetitions (Z0_RANDOM_RULE)
@@ -41,6 +43,16 @@ autoregression, MetodaM the TCN bundle of one seed. The rule of each is its *_RU
 record; the grids of Z1, Z3 and Z5 come from analysis.methods.<m>.grid (null until G3a) with the parameters of
 scripts/protocol_v5.py GRID_PARAMETERS (each holds what GRID_VALUES says), and the selection of each is its
 *_SELECTION. A detector's losses() is None.
+
+Package B7b (agent F; design dokazy/B7/navrh/NAVRH_B7b.md 1.1 and 4, the deferred findings of the verification of
+B7a). F1, F2 (question Q12 to the lead, provisional by the executor's proposal): clean traffic is the time outside the
+events and their reverberation (proposal 4.2, as tcn/eval.py), and it gives the budget, the thresholds, the rates and
+K1; the full-snapshot band bounds only the placeable traffic, where the interventions lie; the rate is per observed
+hour of clean traffic, the scored share and the rate per scored clean hour beside it. F3: the value domains of the
+grids are scripts/protocol_v5.py GRID_DOMAINS (grid_problem), one constant for this module and the protocol's check.
+F6: fit takes the window sets of roles train and dev only, and writes the roles into its record; model_budget takes
+M at exactly the seeds of analysis.seeds. Q13: Z4_VARIANTS are scripts/protocol_v5.py VARIANTS["Z4"], each a
+comparison of its own in K2a.
 """
 import hashlib
 import json
@@ -50,9 +62,16 @@ import numpy as np
 import torch
 
 from safeguard.model import LOSS_FORMULA, SCORE_FORMULA, anomaly_score, prediction_errors
+# The constants this module shares with the protocol's check (F3 of the verification of B7a, question Q13): the
+# grids, their domains, the variants of Z4 and the role of the controls. scripts/protocol_v5.py imports nothing of
+# tcn/ and no feature code at import.
+from scripts.protocol_v5 import CONTROL_ROLE, GRID_DOMAINS, GRID_PARAMETERS, VARIANTS, grid_problem, grid_value_ok
 
 KINDS = ("detector", "predictor")
 MODES = ("campaign", "rehearsal")  # The plan modes of scripts/protocol_v5.py: the name of an analysis stream.
+# Proposal 6.4 and 8.5: the outcome of a class with fewer than its evaluable minimum (K2, tcn/k2.py) and of a
+# diagnostic with fewer than its positive episodes (tcn/diagnostiky.py); one constant for both (merge of B7b).
+UNEVALUATED = "nevyhodnotené"
 # The floats of the bins in one batch of a window set: memory only, no result depends on it.
 BATCH_ELEMENTS = 2 ** 22
 
@@ -67,15 +86,29 @@ ALARM_RULE = (
     "discontinuity of the WindowBuffer break the run of window ends); an alarm counts at the window of its edge")
 CLEAN_RULE = (
     "a window is clean when the span of its frames, from its first frame (the anchor of an anchored window) to its "
-    "last row, meets none of these closed or half-open intervals of its session: an event from host_start_unix to "
-    "host_stopped_unix plus analysis.reverberation_s (the event and its reverberation, joined as tcn/eval.py "
-    "kategorie_udalosti joins them), and the full-snapshot band [T - full_snapshot_guard.before_s, T + window_rows * "
-    "interval_s) of each full snapshot of the session at T (scripts/protocol_v5.py guards: up to the first scored row "
-    "after it); judgment: one overlap rule for the three, over every frame the window's inputs depend on")
+    "last row, meets no closed interval [host_start_unix, host_stopped_unix + analysis.reverberation_s] of an event of "
+    "its session (the event and its reverberation, joined as tcn/eval.py kategorie_udalosti joins them) nor of a "
+    "control of its session (controls.json, either polarity; only role test_controls holds controls; judgment: an "
+    "occurrence placed on the VM is no clean traffic and has the reverberation of an event); proposal 4.2: clean "
+    "traffic is the time outside the events and their reverberation (question Q12 to the lead, provisional by the "
+    "executor's proposal: the full-snapshot band is no part of it and bounds only PLACEABLE_RULE); judgment: one "
+    "overlap rule over every frame the window's inputs depend on")
+PLACEABLE_RULE = (
+    "a window is placeable when it is clean (CLEAN_RULE) and its span meets no full-snapshot band [T - "
+    "full_snapshot_guard.before_s, T + window_rows * interval_s) of a full snapshot of its session at T "
+    "(scripts/protocol_v5.py guards: up to the first scored row after it): the lead's skeleton B7 section 5 places the "
+    "interventions in clean scored traffic outside the events, the controls, their reverberation and that band")
+OBSERVED_RULE = (
+    "the observed time of a window set is one interval_s per row of its sessions, every frame scored or not (as "
+    "tcn/eval.py _expozicia counts the rows of a replay); a row is clean when the span from the row L - 1 rows before "
+    "it (the session's first row when fewer; L the frames of a window, window_rows and the anchor when anchored) to "
+    "the row meets no interval of CLEAN_RULE, so the row that ends a clean window is a clean row; the clean observed "
+    "time is one interval_s per clean row, the scored clean time one interval_s per clean window")
 BUDGET_RULE = (
     "the median over the seeds of M's alarms (ALARM_RULE) on the clean windows of calibration (CLEAN_RULE), each seed "
-    "at its own calibrated threshold, rounded up (skeleton B7 section 3, design 1.2); safeguard.training.calibrate() "
-    "alarm_events counts every calibration window, events included, and is not the budget")
+    "at its own calibrated threshold, rounded up (skeleton B7 section 3, design 1.2), M taken at exactly the seeds of "
+    "analysis.seeds, each once (F6 of the verification of B7a); safeguard.training.calibrate() alarm_events counts "
+    "every calibration window, events included, and is not the budget")
 THRESHOLD_RULE = (
     "the distinct scores of the method on the windows of calibration are walked from the top down as thresholds; the "
     "threshold is the last one before the first at which the alarms on the clean windows (ALARM_RULE, CLEAN_RULE) "
@@ -83,8 +116,10 @@ THRESHOLD_RULE = (
     "the walk stops at the first excess; with a budget of 0 the threshold is the most sensitive one before the first "
     "alarm; when no threshold exceeds the budget, the walk ends at the lowest score (exhausted)")
 RATE_RULE = (
-    "the alarms (ALARM_RULE) on the clean windows of a role at a threshold, per hour of those windows: their number "
-    "times interval_s (the scored clean time)")
+    "the alarms (ALARM_RULE) that begin in a clean window of a role at a threshold, per observed hour of clean traffic "
+    "(OBSERVED_RULE: its clean rows times interval_s; proposals 8.3 and 4.2, the main denominator); beside it the "
+    "scored clean hours (its clean windows times interval_s), the alarms per scored clean hour and the scored share of "
+    "the clean observed time")
 STREAM_RULE = (
     "a stream of the analysis takes scripts/protocol_v5.py seed(name, purpose, unit, -1, 0) with the protocol name of "
     "the plan mode (the rehearsal's own name in rehearsal mode), the unit of z0_alarms being the role on whose windows "
@@ -136,7 +171,9 @@ Z4_RULE = (
     "anomaly); variant residual regresses each TCN input on the offered load of the same row over the last rows of "
     "the train windows (least squares with an intercept) and scores a window by the largest |residual_c| / v_c at its "
     "last row, v_c the standard deviation of the train residuals of input c, at least its floor in normalized units "
-    "as in Z1; neither has a free parameter and the skeleton names both, so both are reported (judgment)")
+    "as in Z1; neither has a free parameter and the skeleton names both, so both are reported (judgment) and each is a "
+    "comparison of its own in K2a, Z4:load and Z4:residual (question Q13 to the lead, provisional by the executor's "
+    "proposal)")
 Z5_RULE = (
     "linear autoregression (ridge) on the same window (proposal 8.3), the linear counterpart of M's two branches: the "
     "global inputs of the window's last row from those of the rows before it (all of them, flattened, with an "
@@ -157,22 +194,16 @@ M_RULE = (
     "safeguard/training.py compute them (float32)")
 
 # What the list of each parameter of a grid holds (analysis.methods.<m>.grid, null until G3a; design 1.4). The
-# parameters of each method are scripts/protocol_v5.py GRID_PARAMETERS, one constant for the protocol and this module
-# (merge of B7a); Z0, Z2, Z4 and M have no free parameter (grid {}, never read here).
-GRID_VALUES = {"moving_average_rows": "integers of at least 1 and at most window_rows",
-               "cusum_shift": "numbers of at least 0 (normalized units)",
-               "ewma_alpha": "numbers in (0, 1]",
-               "ridge_alpha": "positive numbers"}
+# parameters of each method are scripts/protocol_v5.py GRID_PARAMETERS and their domains its GRID_DOMAINS, one
+# constant for the protocol and this module (merge of B7a; F3 of the verification of B7a); Z0, Z2, Z4 and M have no
+# free parameter (grid {}, never read here). GRID_VALUES says in words what each list holds.
+GRID_VALUES = {name: domain["text"] for name, domain in GRID_DOMAINS.items()}
+# The parameters this module implements (Z1: moving average and CUSUM; Z3: EWMA; Z5: ridge).
+READS = ("moving_average_rows", "cusum_shift", "ewma_alpha", "ridge_alpha")
 
 
 def _number(value):
     return isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value)
-
-
-GRID_CHECKS = {"moving_average_rows": lambda v: type(v) is int and v >= 1,
-               "cusum_shift": lambda v: _number(v) and v >= 0,
-               "ewma_alpha": lambda v: _number(v) and 0 < v <= 1,
-               "ridge_alpha": lambda v: _number(v) and v > 0}
 
 # ------------------------------------------------------------------ the protocol keys (design 1.6)
 
@@ -191,28 +222,23 @@ def protocol_value(protocol, path):
 
 def grid(protocol, method):
     """analysis.methods.<method>.grid of Z1, Z3 or Z5, checked: null until G3a is refused by name (the method has free
-    parameters, design 1.4), and so is a grid without exactly the parameters of scripts/protocol_v5.py GRID_PARAMETERS,
-    each a non-empty list of distinct values as GRID_VALUES says."""
-    from scripts.protocol_v5 import GRID_PARAMETERS
+    parameters, design 1.4), and so is a grid that scripts/protocol_v5.py grid_problem refuses under the protocol's
+    window_rows (exactly the parameters of GRID_PARAMETERS, each a non-empty list of distinct values of its domain,
+    GRID_DOMAINS: the protocol's value check refuses the same grids, F3 of the verification of B7a)."""
     if method not in GRID_PARAMETERS:
         raise ValueError(f"method {method!r} reads no grid; the grids are those of {', '.join(GRID_PARAMETERS)}")
-    unknown = [name for name in GRID_PARAMETERS[method] if name not in GRID_VALUES]
+    unknown = [name for name in GRID_PARAMETERS[method] if name not in READS]
     if unknown:
         raise ValueError(f"scripts/protocol_v5.py GRID_PARAMETERS names the parameter {unknown[0]} of {method}, which "
                          "tcn/metody.py does not read")
     path = f"analysis.methods.{method}.grid"
     value = protocol_value(protocol, path)
-    keys = {name: GRID_VALUES[name] for name in GRID_PARAMETERS[method]}
     if value is None:
         raise ValueError(f"{path} is null: the grid of {method} is determined in G3a (determined_at), so {method} is "
                          "not fitted before it")
-    if type(value) is not dict or set(value) != set(keys):
-        raise ValueError(f"{path} must be an object of exactly the keys {', '.join(keys)}")
-    for key, what in keys.items():
-        items = value[key]
-        if (type(items) is not list or not items or not all(map(GRID_CHECKS[key], items))
-                or len(set(items)) != len(items)):
-            raise ValueError(f"{path}.{key} must be a non-empty list of distinct {what}")
+    problem = grid_problem(method, value, protocol_value(protocol, "window_rows"))
+    if problem is not None:
+        raise ValueError(problem)
     return value
 
 
@@ -267,12 +293,13 @@ class Okna:
 
     role: the role of the sessions (a role of the protocol; the unit of the stream z0_alarms). sessions: per session
     {id, global (T, G), local (T, B, 4), seq (T,), timestamp (T,), full_times, load}: the normalized inputs of every
-    frame of the session (normalizer.inputs), its seq and time, the times of its full snapshots (the bands of
-    CLEAN_RULE) and its offered load per frame (Z4; None for every session when it is not given). windows: per window
-    (session index, position of its last row, position of its anchor or None), in the order of the sessions and of
-    seq within one. The batches are built from the session arrays when asked, never copied as sliding tensors (as
-    safeguard.training.Windows): arrays() gives float64 numpy batches with the anchor first (design 1.1), batches()
-    and indices the protocol of safeguard.training.Windows (the rows after the anchor as float32 tensors)."""
+    frame of the session (normalizer.inputs), its seq and time (the rows of OBSERVED_RULE), the times of its full
+    snapshots (the bands of PLACEABLE_RULE) and its offered load per frame (Z4; None for every session when it is not
+    given). windows: per window (session index, position of its last row, position of its anchor or None), in the
+    order of the sessions and of seq within one. The batches are built from the session arrays when asked, never
+    copied as sliding tensors (as safeguard.training.Windows): arrays() gives float64 numpy batches with the anchor
+    first (design 1.1), batches() and indices the protocol of safeguard.training.Windows (the rows after the anchor as
+    float32 tensors)."""
 
     def __init__(self, sessions, windows, *, role, normalizer, window_rows, max_gap_s, interval_s):
         from safeguard.features import FeatureNormalizer
@@ -466,6 +493,30 @@ class Okna:
             raise ValueError(f"normalization rule {self.normalizer.rule.name} has no floor (analysis.scale.floor)")
         return np.array([floor[name] for name in self.input_names]) / self.normalizer.global_scale
 
+    def session_arrays(self, s):
+        """The session at index s of the set as the constructor takes it (SESSION_KEYS): its id, its normalized inputs
+        global (T, G) and local (T, B, 4), seq, timestamp, the times of its full snapshots and its offered load (None
+        when the set has none), the arrays read-only views of the set's own (a caller that changes a session works on a
+        copy; a window set built from them shares them). The one public accessor of the session state for code
+        outside this module (tcn/zasahy.py, tcn/diagnostiky.py; merge of B7b); index, resets, positions, seq and
+        timestamp of the windows are public attributes."""
+        if type(s) is not int or not 0 <= s < len(self.session_ids):
+            raise ValueError(f"the set holds the sessions 0 to {len(self.session_ids) - 1}, not {s!r}")
+
+        def view(values):
+            if values is None:
+                return None
+            out = values.view()
+            out.flags.writeable = False
+            return out
+        return {"id": self.session_ids[s], "global": view(self._global[s]), "local": view(self._local[s]),
+                "seq": view(self._seq[s]), "timestamp": view(self._times[s]), "full_times": list(self.full_times[s]),
+                "load": view(self._load[s])}
+
+    def sessions(self):
+        """session_arrays of every session of the set, in order."""
+        return [self.session_arrays(s) for s in range(len(self.session_ids))]
+
     def same(self, other):
         """Whether `other` holds windows of the same inputs and alarm resets: normalizer, window_rows, max_gap_s."""
         return (isinstance(other, Okna) and other.normalizer_sha256 == self.normalizer_sha256
@@ -522,10 +573,22 @@ def _scores(scores, windows):
 
 
 def _mask(clean, windows):
+    """The clean windows: the boolean mask given, or the clean mask of the Traffic of this window set."""
+    if isinstance(clean, Traffic):
+        return _traffic(clean, windows).clean
     mask = np.asarray(clean)
     if mask.shape != (len(windows),) or mask.dtype != bool:
-        raise ValueError(f"clean is a boolean mask of the {len(windows)} windows (clean_windows)")
+        raise ValueError(f"clean is a boolean mask of the {len(windows)} windows (clean_windows) or their Traffic")
     return mask
+
+
+def _traffic(value, windows):
+    if not isinstance(value, Traffic):
+        raise ValueError("the rate is per observed hour of clean traffic (RATE_RULE): it takes the Traffic of the "
+                         "window set (tcn.metody.traffic), not a mask")
+    if value.windows is not windows:
+        raise ValueError("the Traffic is of another window set")
+    return value
 
 
 def _edges(exceed, windows, k, n):
@@ -557,10 +620,73 @@ def alarm_count(scores, windows, threshold, *, k, n, clean):
     return int((edges & _mask(clean, windows)).sum())
 
 
-def clean_windows(windows, events, protocol):
-    """The clean windows of a window set (CLEAN_RULE): `events` maps the id of every session of the set to the records
-    of its events (events.json: host_start_unix, host_stopped_unix; [] for a session without one); reverberation_s,
-    the band before a full snapshot, window_rows and interval_s are the protocol's."""
+NO_CONTROLS = ("none: the role holds no controls (scripts/protocol_v5.py CONTROL_ROLE: only the sessions of "
+               "test_controls hold controls on the VM)")
+
+
+class Traffic:
+    """The traffic of one window set (traffic()): CLEAN_RULE, PLACEABLE_RULE and OBSERVED_RULE.
+
+    windows: the window set (Okna) it is of; clean, placeable: read-only boolean masks of its windows; row_clean: per
+    session of the set, a read-only boolean mask of its rows (clean rows, OBSERVED_RULE); rows and clean_rows: their
+    counts; hours, clean_hours: the observed time of every row and of the clean rows, scored_clean_hours that of the
+    clean windows, in hours; controls: what was given for the controls (their count, or NO_CONTROLS); record(): the
+    counts and the rules as JSON. The masks of a window set are given as they are (alarm_count, matched_threshold,
+    model_budget and K1 take one); the rate takes the Traffic (rate, matched_rate, z0_random)."""
+
+    def __init__(self, windows, clean, placeable, row_clean, *, events, controls):
+        self.windows = _okna(windows, "windows")
+        self.clean, self.placeable = clean, placeable
+        self.row_clean = tuple(row_clean)
+        for mask in (clean, placeable, *self.row_clean):
+            mask.flags.writeable = False
+        self.rows = sum(len(mask) for mask in self.row_clean)
+        self.clean_rows = int(sum(int(mask.sum()) for mask in self.row_clean))
+        self.events, self.controls = events, controls
+
+    @property
+    def hours(self):
+        return self.rows * self.windows.interval_s / 3600
+
+    @property
+    def clean_hours(self):
+        return self.clean_rows * self.windows.interval_s / 3600
+
+    @property
+    def scored_clean_hours(self):
+        return int(self.clean.sum()) * self.windows.interval_s / 3600
+
+    def record(self):
+        clean = self.clean_hours
+        return {"role": self.windows.role, "rows": self.rows, "clean_rows": self.clean_rows,
+                "windows": len(self.windows), "clean_windows": int(self.clean.sum()),
+                "placeable_windows": int(self.placeable.sum()), "hours": self.hours, "clean_hours": clean,
+                "scored_clean_hours": self.scored_clean_hours,
+                "scored_share": self.scored_clean_hours / clean if clean > 0 else None, "events": self.events,
+                "controls": self.controls, "clean_rule": CLEAN_RULE, "placeable_rule": PLACEABLE_RULE,
+                "observed_rule": OBSERVED_RULE}
+
+
+def _occurrences(records, ident, what):
+    """[(host_start_unix, host_stopped_unix)] of the event or control records of one session; `what` is "an event" or
+    "a control"."""
+    if type(records) not in (list, tuple):
+        raise ValueError(f"the records of session {ident} are a list ({what} is a record of it)")
+    out = []
+    for record in records:
+        a, b = (record.get(key) if type(record) is dict else None for key in ("host_start_unix", "host_stopped_unix"))
+        if not (_number(a) and _number(b) and a <= b):
+            raise ValueError(f"{what} of session {ident} needs host_start_unix <= host_stopped_unix")
+        out.append((a, b))
+    return out
+
+
+def traffic(windows, events, protocol, *, controls=None):
+    """The Traffic of a window set (CLEAN_RULE, PLACEABLE_RULE, OBSERVED_RULE): `events` maps the id of every session
+    of the set to the records of its events (events.json: host_start_unix, host_stopped_unix; [] for a session without
+    one), `controls` to the records of its controls (controls.json, the same host times; [] for a session without
+    one). controls None is the named rule NO_CONTROLS, refused for a window set of role test_controls, whose sessions
+    hold them. reverberation_s, the band before a full snapshot, window_rows and interval_s are the protocol's."""
     _okna(windows, "windows")
     reverberation = protocol_value(protocol, "analysis.reverberation_s")
     before = protocol_value(protocol, "full_snapshot_guard.before_s")
@@ -573,21 +699,55 @@ def clean_windows(windows, events, protocol):
     if type(events) is not dict or set(events) != set(windows.session_ids):
         raise ValueError("events maps the id of every session of the window set, and no other, to its event records "
                          "([] for a session without events)")
+    if controls is None:
+        if windows.role == CONTROL_ROLE:
+            raise ValueError("the sessions of role test_controls hold controls on the VM: give the records of their "
+                             "controls (controls.json; [] for a session without one)")
+        controls, given = {ident: [] for ident in windows.session_ids}, NO_CONTROLS
+    elif type(controls) is not dict or set(controls) != set(windows.session_ids):
+        raise ValueError("controls maps the id of every session of the window set, and no other, to its control "
+                         "records ([] for a session without controls)")
+    else:
+        given = None
     clean = np.ones(len(windows), dtype=bool)
+    placeable = np.ones(len(windows), dtype=bool)
+    row_clean, counts = [], {"events": 0, "controls": 0}
     for s, ident in enumerate(windows.session_ids):
-        mine = windows.window_session == s
-        start, end = windows.start[mine], windows.timestamp[mine]
+        spans = _occurrences(events[ident], ident, "an event")
+        mine = _occurrences(controls[ident], ident, "a control")
+        counts["events"] += len(spans)
+        counts["controls"] += len(mine)
+        spans += mine
+        selection = windows.window_session == s
+        start, end = windows.start[selection], windows.timestamp[selection]
         hit = np.zeros(len(start), dtype=bool)
-        for record in events[ident]:
-            a, b = (record.get(key) if type(record) is dict else None for key in ("host_start_unix",
-                                                                                  "host_stopped_unix"))
-            if not (_number(a) and _number(b) and a <= b):
-                raise ValueError(f"an event of session {ident} needs host_start_unix <= host_stopped_unix")
+        for a, b in spans:
             hit |= (end >= a) & (start <= b + reverberation)
+        band = np.zeros(len(start), dtype=bool)
         for t in windows.full_times[s]:
-            hit |= (end >= t - before) & (start < t + rows * interval)
-        clean[mine] = ~hit
-    return clean
+            band |= (end >= t - before) & (start < t + rows * interval)
+        clean[selection] = ~hit
+        placeable[selection] = ~hit & ~band
+        times = windows._times[s]
+        first = times[np.maximum(np.arange(len(times)) - (windows.length - 1), 0)]
+        row_hit = np.zeros(len(times), dtype=bool)
+        for a, b in spans:
+            row_hit |= (times >= a) & (first <= b + reverberation)
+        row_clean.append(~row_hit)
+    return Traffic(windows, clean, placeable, row_clean, events=counts["events"],
+                   controls=counts["controls"] if given is None else given)
+
+
+def clean_windows(windows, events, protocol, *, controls=None):
+    """The clean windows of a window set (CLEAN_RULE): a copy of the clean mask of traffic(windows, events, protocol,
+    controls=controls), which the budget, the thresholds and K1 read (the rates read the Traffic itself)."""
+    return traffic(windows, events, protocol, controls=controls).clean.copy()
+
+
+def placeable_windows(windows, events, protocol, *, controls=None):
+    """The placeable windows of a window set (PLACEABLE_RULE): a copy of the placeable mask of traffic(...); the
+    interventions of package B7b lie there (the lead's skeleton B7 section 5)."""
+    return traffic(windows, events, protocol, controls=controls).placeable.copy()
 
 
 # ------------------------------------------------------------------ the budget, the threshold, the rate (design 1.2)
@@ -600,11 +760,19 @@ def budget(counts):
     return int(math.ceil(float(np.median(counts))))
 
 
-def model_budget(models, calibration, clean):
+def model_budget(models, calibration, clean, *, protocol):
     """BUDGET_RULE: the clean calibration alarms of each seed's bundle (MetodaM) at its own threshold and alarm rule,
-    and the budget."""
+    and the budget; the bundles are M at exactly the seeds of analysis.seeds of `protocol`, each once (F6 of the
+    verification of B7a). clean: the boolean mask of the calibration windows or their Traffic."""
     if type(models) not in (list, tuple) or not models or not all(isinstance(m, MetodaM) for m in models):
         raise ValueError("the budget takes M of every seed (MetodaM)")
+    seeds = protocol_value(protocol, "analysis.seeds")
+    if type(seeds) is not list or not seeds or not all(type(s) is int for s in seeds):
+        raise ValueError("analysis.seeds is a non-empty list of integers")
+    found = [m.seed for m in models]
+    if len(set(found)) != len(found) or sorted(found) != sorted(seeds):
+        raise ValueError(f"the budget takes M at every seed of analysis.seeds {seeds}, each once, not at the seeds "
+                         f"{found}")
     _calibration(calibration)
     rules = {(m.k, m.n) for m in models}
     if len(rules) != 1:
@@ -647,20 +815,26 @@ def matched_threshold(scores, calibration, budget_value, *, k, n, clean):
             "first_excess": None, "exhausted": True, "rule": THRESHOLD_RULE}
 
 
-def rate(scores, windows, threshold, *, k, n, clean):
-    """RATE_RULE: {alarms, windows (clean), hours, per_hour (None when no window is clean), rule}."""
-    mask = _mask(clean, _okna(windows, "windows"))
-    alarms = alarm_count(scores, windows, threshold, k=k, n=n, clean=mask)
-    hours = int(mask.sum()) * windows.interval_s / 3600
-    return {"alarms": alarms, "windows": int(mask.sum()), "hours": hours,
-            "per_hour": alarms / hours if hours > 0 else None, "rule": RATE_RULE}
+def rate(scores, windows, threshold, *, k, n, traffic):
+    """RATE_RULE on the Traffic `traffic` of the window set: {alarms (that begin in a clean window), rows (clean),
+    windows (clean), hours (the clean observed hours), per_hour (the rate; None when no row is clean), scored_hours
+    (the scored clean hours), per_scored_hour (None when no window is clean), scored_share (None when no row is clean),
+    rule}."""
+    t = _traffic(traffic, _okna(windows, "windows"))
+    alarms = alarm_count(scores, windows, threshold, k=k, n=n, clean=t.clean)
+    hours, scored = t.clean_hours, t.scored_clean_hours
+    return {"alarms": alarms, "rows": t.clean_rows, "windows": int(t.clean.sum()), "hours": hours,
+            "per_hour": alarms / hours if hours > 0 else None, "scored_hours": scored,
+            "per_scored_hour": alarms / scored if scored > 0 else None,
+            "scored_share": scored / hours if hours > 0 else None, "rule": RATE_RULE}
 
 
-def matched_rate(method, calibration, clean, budget_value, *, k, n, roles):
+def matched_rate(method, calibration, traffic, budget_value, *, k, n, roles):
     """The matched alarm rate of one fitted method (design 1.2): its threshold at the budget on calibration
-    (matched_threshold, THRESHOLD_RULE) with the alarms at it, and its alarms per hour (RATE_RULE) on calibration and
-    on every role of `roles` ({name: (window set, its clean mask)}; {} for none). The method is any object of the
-    interface of Metoda (name, kind, scores), a subclass or not (tcn/opisne.py's are not); label defaults to name."""
+    (matched_threshold, THRESHOLD_RULE, over the clean windows of the Traffic `traffic` of calibration) with the
+    alarms at it, and its alarms per observed hour of clean traffic (RATE_RULE) on calibration and on every role of
+    `roles` ({name: (window set, its Traffic)}; {} for none). The method is any object of the interface of Metoda
+    (name, kind, scores), a subclass or not (tcn/opisne.py's are not); label defaults to name."""
     if not (type(getattr(method, "name", None)) is str and getattr(method, "kind", None) in KINDS
             and callable(getattr(method, "scores", None))):
         raise ValueError("the matched rate takes a fitted method of the interface of tcn.metody.Metoda (name, kind, "
@@ -669,12 +843,13 @@ def matched_rate(method, calibration, clean, budget_value, *, k, n, roles):
     if type(roles) is not dict or "calibration" in roles or not all(
             type(v) is tuple and len(v) == 2 and isinstance(v[0], Okna) and v[0].role == name
             for name, v in roles.items()):
-        raise ValueError("roles maps each role other than calibration to (its window set, its clean mask)")
+        raise ValueError("roles maps each role other than calibration to (its window set, its Traffic)")
+    _traffic(traffic, calibration)
     scores = method.scores(calibration)
-    found = matched_threshold(scores, calibration, budget_value, k=k, n=n, clean=clean)
-    rates = {"calibration": rate(scores, calibration, found["threshold"], k=k, n=n, clean=clean)}
-    for name, (windows, mask) in roles.items():
-        rates[name] = rate(method.scores(windows), windows, found["threshold"], k=k, n=n, clean=mask)
+    found = matched_threshold(scores, calibration, budget_value, k=k, n=n, clean=traffic.clean)
+    rates = {"calibration": rate(scores, calibration, found["threshold"], k=k, n=n, traffic=traffic)}
+    for name, (windows, mine) in roles.items():
+        rates[name] = rate(method.scores(windows), windows, found["threshold"], k=k, n=n, traffic=mine)
     return {"name": method.name, "label": getattr(method, "label", method.name), "kind": method.kind, "k": k,
             "n": n, **found, "rates": rates}
 
@@ -689,7 +864,9 @@ class Metoda:
     variant: what distinguishes methods of one name (None, or e.g. Z4's "load" and "residual"); label: name, or
     name:variant.
     fit(train, dev, *, protocol, seed) -> dict: the window sets of the roles train and dev under M's normalizer (the
-        same normalizer, refused otherwise); selection on dev only; returns what was chosen and why (JSON).
+        same normalizer, refused otherwise; a window set of another role is refused, F6 of the verification of B7a:
+        analysis.selection never selects on a test role); selection on dev only; returns what was chosen and why
+        (JSON), with the roles of the two window sets.
     scores(windows) -> np.ndarray (len(windows),): one finite score per window, higher is more anomalous; a window set
         of another normalizer or window is refused.
     losses(windows) -> np.ndarray | None: a predictor's loss of each window (LOSS_FORMULA by errors()); None for a
@@ -728,9 +905,13 @@ class Metoda:
         raise NotImplementedError(f"{self.label} is a predictor and gives its losses")
 
     def _bind(self, train, dev, seed):
-        """The record every fit begins with; binds the method to the normalizer of train, which dev must share."""
+        """The record every fit begins with; binds the method to the normalizer of train, which dev must share; train
+        is of role train and dev of role dev (F6 of the verification of B7a)."""
         _okna(train, "train")
         _okna(dev, "dev")
+        if (train.role, dev.role) != ("train", "dev"):
+            raise ValueError(f"fit takes the window sets of roles train and dev (analysis.selection: never on a test "
+                             f"role), not {train.role} and {dev.role}")
         if not train.same(dev):
             raise ValueError("train and dev hold windows of different normalizers or windows; every method sees M's")
         if type(seed) is not int or seed < 0:
@@ -740,7 +921,8 @@ class Metoda:
         self._normalizer_sha256 = train.normalizer_sha256
         self._windows = (train.window_rows, train.max_gap_s, train.interval_s)
         return {"name": self.name, "variant": self.variant, "label": self.label, "kind": self.kind, "seed": seed,
-                "normalizer_sha256": train.normalizer_sha256, "windows": {"train": len(train), "dev": len(dev)}}
+                "normalizer_sha256": train.normalizer_sha256, "roles": {"train": train.role, "dev": dev.role},
+                "windows": {"train": len(train), "dev": len(dev)}}
 
     def _check(self, windows):
         _okna(windows, "windows")
@@ -803,33 +985,41 @@ class Z0Random(Metoda):
         return uniform_scores(windows, self.streams[windows.role], self.repetition + 1)[self.repetition]
 
 
-def z0_random(calibration, budget_value, *, protocol, mode, k, n, clean, roles):
+def z0_random(calibration, budget_value, *, protocol, mode, k, n, traffic, roles):
     """Z0_RANDOM_RULE over analysis.matched_rate.z0_repetitions repetitions: each repetition's threshold on
-    `calibration` (its clean mask `clean`) at `budget_value`, then its alarms on calibration and on each role of
-    `roles` ({name: (window set, clean mask)}); the alarms of every repetition and their means."""
+    `calibration` (the clean windows of its Traffic `traffic`) at `budget_value`, then its alarms on calibration and on
+    each role of `roles` ({name: (window set, its Traffic)}); the alarms of every repetition and their means, per
+    observed hour of clean traffic (RATE_RULE) and per scored clean hour."""
     _calibration(calibration)
     if type(roles) is not dict or "calibration" in roles or not all(
             type(v) is tuple and len(v) == 2 and calibration.same(v[0]) and v[0].role == name
             for name, v in roles.items()):
         raise ValueError("roles maps each role other than calibration to (its window set, of calibration's "
-                         "normalizer, its clean mask)")
+                         "normalizer, its Traffic)")
+    _traffic(traffic, calibration)
     repetitions = z0_repetitions(protocol)
     streams = {name: stream_seed(protocol, "z0_alarms", name, mode=mode) for name in ("calibration", *roles)}
-    sets = {"calibration": (calibration, clean), **roles}
+    sets = {"calibration": (calibration, traffic), **roles}
+    for windows, mine in sets.values():
+        _traffic(mine, windows)
     numbers = {name: uniform_scores(windows, streams[name], repetitions) for name, (windows, _) in sets.items()}
     found = {name: [] for name in sets}
-    hours = dict.fromkeys(sets)
     for repetition in range(repetitions):
         chosen = matched_threshold(numbers["calibration"][repetition], calibration, budget_value, k=k, n=n,
-                                   clean=clean)
-        for name, (windows, mask) in sets.items():
-            result = rate(numbers[name][repetition], windows, chosen["threshold"], k=k, n=n, clean=mask)
-            found[name].append(result["alarms"])
-            hours[name] = result["hours"]
+                                   clean=traffic.clean)
+        for name, (windows, mine) in sets.items():
+            found[name].append(alarm_count(numbers[name][repetition], windows, chosen["threshold"], k=k, n=n,
+                                           clean=mine.clean))
+
+    def per(alarms, hours):
+        return alarms / hours if hours > 0 else None
     return {"rule": Z0_RANDOM_RULE, "stream": "z0_alarms", "stream_seeds": streams, "stream_rule": STREAM_RULE,
-            "mode": mode, "repetitions": repetitions, "budget": budget_value, "k": k, "n": n,
-            "roles": {name: {"alarms": counts, "mean_alarms": float(np.mean(counts)), "hours": hours[name],
-                             "mean_per_hour": float(np.mean(counts)) / hours[name] if hours[name] else None}
+            "rate_rule": RATE_RULE, "mode": mode, "repetitions": repetitions, "budget": budget_value, "k": k, "n": n,
+            "roles": {name: {"alarms": counts, "mean_alarms": float(np.mean(counts)),
+                             "hours": sets[name][1].clean_hours,
+                             "mean_per_hour": per(float(np.mean(counts)), sets[name][1].clean_hours),
+                             "scored_hours": sets[name][1].scored_clean_hours,
+                             "mean_per_scored_hour": per(float(np.mean(counts)), sets[name][1].scored_clean_hours)}
                       for name, counts in found.items()}}
 
 
@@ -871,9 +1061,12 @@ class Z1(Metoda):
                 raise ValueError("Z1 selects its statistic by a criterion, a callable; one candidate is "
                                  "Z1(statistic=..., parameter=...)")
         else:
-            needs = {"moving_average": GRID_CHECKS["moving_average_rows"], "cusum": GRID_CHECKS["cusum_shift"]}
+            # The domain of the parameter (scripts/protocol_v5.py GRID_DOMAINS); the bound window_rows of a moving
+            # average is checked at the fit, against the window of train.
+            needs = {"moving_average": "moving_average_rows", "cusum": "cusum_shift"}
             if criterion is not None or statistic not in STATISTICS or (
-                    not needs[statistic](parameter) if statistic in needs else parameter is not None):
+                    not grid_value_ok(needs[statistic], parameter, None) if statistic in needs
+                    else parameter is not None):
                 raise ValueError("a candidate of Z1 is one of " + ", ".join(STATISTICS) + " with the length of the "
                                  "moving average or the shift of the CUSUM and no criterion")
         self.criterion, self.statistic, self.parameter = criterion, statistic, parameter
@@ -896,7 +1089,8 @@ class Z1(Metoda):
         if self.statistic is None:
             return self._select(train, dev, protocol, seed)
         record = self._bind(train, dev, seed)
-        if self.statistic == "moving_average" and self.parameter > train.window_rows:
+        if self.statistic == "moving_average" and not grid_value_ok("moving_average_rows", self.parameter,
+                                                                    train.window_rows):
             raise ValueError(f"a moving average of {self.parameter} rows exceeds the window of {train.window_rows}")
         if self.statistic == "mem_changed_max":
             if "mem_changed_max" not in train.input_names:
@@ -1167,7 +1361,8 @@ class Z5(Metoda):
 # ------------------------------------------------------------------ Z4
 
 
-Z4_VARIANTS = ("load", "residual")
+# The variants of Z4, each a comparison of its own in K2a (scripts/protocol_v5.py VARIANTS, question Q13).
+Z4_VARIANTS = VARIANTS["Z4"]
 
 
 class Z4(Metoda):

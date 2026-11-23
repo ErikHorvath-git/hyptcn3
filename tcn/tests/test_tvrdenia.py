@@ -4,6 +4,9 @@ bodu 8): kazdy z troch vysledkov, p-hodnota pre 12 bootov proti rucnemu poctu (v
 znamienok), interval zopakovatelny zo svojho seedu, odmietnuta hranica m null a znenie z protokolu. Hodnoty su
 synteticke so znamou odpovedou; ziadny archiv ani rola sa necita. Mena balika B7a sa importuju vo vnutri testov,
 aby subor zbieral aj na kode pred nim.
+
+Balik B7b (agent F, navrh NAVRH_B7b 1.4 a 4): uplne vymenovanie aj pri 16 bootoch (F5 overenia B7a, mutant M04) a
+K2a voci obom variantom Z4 ako dvom porovnaniam (otazka Q13, docasne podla navrhu vykonavatela).
 """
 
 from fractions import Fraction
@@ -307,3 +310,45 @@ def test_rozhodni_odmietne_zly_vstup_s_dovodom(tvrdenie, hodnoty, rezim, dovod):
     with pytest.raises(ValueError) as odmietnute:
         tvrdenia.rozhodni(protokol(), tvrdenie, hodnoty, rezim=rezim)
     assert str(odmietnute.value) == dovod
+
+
+# ------------------------------------------------------------------ balik B7b (agent F)
+
+
+def test_pri_16_bootoch_test_vymenuje_vsetky_vektory():
+    """F5 overenia B7a, mutant M04: kostra B7 bod 4 vymenuje vsetky vektory pri 16 bootoch a menej, teda aj presne pri
+    16 (2^16 = 65536 vektorov; generator sa necerpa). Rovnake odchylky: |sum e d| >= |sum d| iba pre e samych plus a
+    samych minus, p = 2 / 65536."""
+    from tcn import tvrdenia
+    generator = np.random.default_rng(0)
+    stav = generator.bit_generator.state
+    assert tvrdenia.zamena_znamienka([.25] * 16, presne_do=16, vyberov=10000, generator=generator) == {
+        "p_value": 2 / 65536, "kind": "exact", "sign_vectors": 65536}
+    assert generator.bit_generator.state == stav
+
+
+@pytest.mark.parametrize("z4_residual, vysledok, rozhodujuce", [
+    (VYSOKO, "better", ["Z1", "Z2", "Z4:load", "Z4:residual"]),
+    (NULA, "not_better", ["Z4:residual"]),
+], ids=["better_against_both_variants", "not_better_against_one"])
+def test_k2a_porovnava_oba_varianty_z4_kazdy_svojim_prudom(z4_residual, vysledok, rozhodujuce):
+    """Otazka Q13 (docasne podla navrhu vykonavatela): analysis.k2a.compare su Z1, Z2, Z4:load a Z4:residual, kazde
+    porovnanie s vlastnym prudom bootstrap (k2a/<porovnanie>). "Lepsi" vyzaduje dolnu hranicu nad m voci obom
+    variantom Z4; variant, ktoreho horna hranica je pod m, da "nie lepsi" sam."""
+    from scripts import protocol_v5
+    from tcn import tvrdenia
+    doc = protokol()
+    assert doc["analysis"]["k2a"]["compare"] == ["Z1", "Z2", "Z4:load", "Z4:residual"]
+    hodnoty = {z: dict(zip(BOOTY, VYSOKO)) for z in ("Z1", "Z2", "Z4:load")}
+    hodnoty["Z4:residual"] = dict(zip(BOOTY, z4_residual))
+    r = tvrdenia.rozhodni(doc, "k2a", hodnoty, rezim="campaign")
+    assert (r["compare"], r["outcome"], r["decisive_methods"]) == (list(hodnoty), vysledok, rozhodujuce)
+    assert {z: v["stream"] for z, v in r["methods"].items()} == {
+        z: {"purpose": "bootstrap", "unit": f"k2a/{z}", "seed": protocol_v5.seed("server-normal-v5", "bootstrap",
+                                                                                   f"k2a/{z}", -1, 0)}
+        for z in hodnoty}
+    with pytest.raises(ValueError) as odmietnute:
+        tvrdenia.rozhodni(doc, "k2a", {"Z1": hodnoty["Z1"], "Z2": hodnoty["Z2"], "Z4": hodnoty["Z4:load"]},
+                          rezim="campaign")
+    assert str(odmietnute.value) == ("hodnoty tvrdenia k2a su pre ['Z1', 'Z2', 'Z4'], analysis.k2a.compare je ['Z1', "
+                                     "'Z2', 'Z4:load', 'Z4:residual']")

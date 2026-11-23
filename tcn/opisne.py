@@ -21,6 +21,14 @@ and labels, which no method here reads), or the pair (global inputs (N, L, G), b
 other form is refused by name. tcn.metody.Okna, the window set of the wrapper, is such an object (merge of B7a). A
 fitted method takes only windows of the shape (L rows, G global inputs, B bins) it was fitted on.
 
+BINDING (package B7b, F4 of the verification of B7a). Fitted on window sets of the wrapper (tcn.metody.Okna, known
+here by their normalizer_sha256, role, window_rows, max_gap_s and interval_s), a method is bound to their normalizer
+and window as tcn.metody.Metoda._bind and _check bind Z0 to Z5: train is of role train and dev of role dev, both of one
+normalizer and window, and it scores and loses only window sets of the same; its record names the normalizer and the
+roles. Fitted on the pair of arrays or on safeguard.training.Windows, which carry neither, it is unbound (the record
+says so) and refuses a window set of the wrapper. The label of a method that draws from a seed carries the seed
+("gru:seed 3", as tcn.metody.MetodaM's "M:seed 3"), so the records of the matched rate of its seeds differ.
+
 INPUT (addendum 2 point 1: the behaviour features and the bin summary): tcn.baselines.zluc_biny, per row the G global
 inputs, the mean over the bins of each of the four per-bin channels and their maximum over the bins, G + 8 columns.
 - zscore: ZSCORE. Nothing is drawn, nothing is selected.
@@ -77,6 +85,12 @@ TARGET = ("row L from rows 1 to L - 1 of the summary, by one linear head of G + 
 SCORE_RULE = SCORE_FORMULA + " (judgment: the score of M, the model they are compared with)"
 SIZE_RULE = ("the hidden size whose parameter count is closest to M's predictor, safeguard.model.Predictor of "
              "analysis.architecture with the G global inputs (tcn.baselines.skryte_pre_prediktor)")
+BINDING = ("fitted on window sets of the wrapper (tcn.metody.Okna), the method is bound to their normalizer and window "
+           "(normalizer_sha256, window_rows, max_gap_s, interval_s), takes train of role train and dev of role dev of "
+           "one of them and scores only window sets of the same; fitted on the pair of arrays or on "
+           "safeguard.training.Windows, which carry neither, it is unbound and scores no window set of the wrapper (F4 "
+           "of the verification of B7a, as tcn.metody.Metoda._bind and _check)")
+IDENTITY = ("normalizer_sha256", "window_rows", "max_gap_s", "interval_s")  # What binds a window set of the wrapper.
 TRAINING_RULE = ("as M (safeguard.training._fit with _prediction_loss): Adam at analysis.architecture.learning_rate, "
                  "the gradient clip analysis.architecture.gradient_clip, batches of analysis.architecture.batch_size "
                  "and the epoch of the best dev loss with the stop of analysis.stopping, repeated once with twice the "
@@ -253,11 +267,25 @@ def _batches(windows, name, shape):
         yield batch[0], batch[1]
 
 
-def _record(method, entry, seed, shape, windows, **fields):
-    """The record of a fit: the method, its registered entry's text, the seed, the input, the shape and the windows,
-    then what was chosen on dev and why (`fields`)."""
-    return {"name": method.name, "kind": method.kind, "what": entry["what"], "seed": seed, "input": INPUT,
-            "shape": {"window_rows": shape[0], "inputs": shape[1], "bins": shape[2]}, "windows": windows, **fields}
+def _record(method, entry, seed, shape, windows, binding, roles, **fields):
+    """The record of a fit: the method, its label, its registered entry's text, the seed, the input, the shape, the
+    windows, the binding (BINDING: the normalizer and the roles, None for unbound window sets), then what was chosen
+    on dev and why (`fields`)."""
+    return {"name": method.name, "variant": method.variant, "label": method.label, "kind": method.kind,
+            "what": entry["what"], "seed": seed, "input": INPUT,
+            "shape": {"window_rows": shape[0], "inputs": shape[1], "bins": shape[2]}, "windows": windows,
+            "normalizer_sha256": None if binding is None else binding[0], "roles": roles, "binding": BINDING,
+            **fields}
+
+
+def _bound(windows):
+    """Whether `windows` is a window set of the wrapper (tcn.metody.Okna: it has its normalizer's fingerprint, its role
+    and its window), read by duck typing (this module does not import tcn.metody)."""
+    return all(hasattr(windows, key) for key in IDENTITY + ("role",))
+
+
+def _identity(windows):
+    return tuple(getattr(windows, key) for key in IDENTITY)
 
 
 # ------------------------------------------------------------------ the methods
@@ -268,11 +296,58 @@ class _Method:
 
     def __init__(self):
         self.shape = None
+        self.seed = None
+        self.binding = None  # IDENTITY of the window sets of the fit, None when they carry none (BINDING).
+
+    @property
+    def variant(self):
+        """The seed of a method that draws from one, as "seed 3" (None for the z-score or before the fit)."""
+        return None if self.seed is None else f"seed {self.seed}"
+
+    @property
+    def label(self):
+        """name, or name:variant ("gru:seed 3"), as tcn.metody.Metoda.label (F4 of the verification of B7a)."""
+        return self.name if self.variant is None else f"{self.name}:{self.variant}"
+
+    def _bind(self, train, dev):
+        """(binding, roles) of the window sets of a fit (BINDING): for window sets of the wrapper their IDENTITY and
+        {train, dev: role} after the roles and the identity are checked, else (None, None)."""
+        if not _bound(train):
+            if dev is not None and _bound(dev):
+                raise ValueError(f"{self.name}: train and dev are both window sets of the wrapper (tcn.metody.Okna) or "
+                                 "neither")
+            return None, None
+        if not _bound(dev):
+            raise ValueError(f"{self.name}: train and dev are both window sets of the wrapper (tcn.metody.Okna) or "
+                             "neither")
+        if (train.role, dev.role) != ("train", "dev"):
+            raise ValueError(f"{self.name}: fit takes the window sets of roles train and dev (analysis.selection: "
+                             f"never on a test role), not {train.role} and {dev.role}")
+        if _identity(train) != _identity(dev):
+            raise ValueError(f"{self.name}: train and dev hold windows of different normalizers or windows; every "
+                             "method sees M's")
+        return _identity(train), {"train": train.role, "dev": dev.role}
 
     def _fitted(self):
         if self.shape is None:
             raise ValueError(f"{self.name}: fit has not run")
         return self.shape
+
+    def _check(self, windows):
+        """The shape of the fit, after the window set to score is checked against the binding of the fit (BINDING)."""
+        shape = self._fitted()
+        if self.binding is None:
+            if _bound(windows):
+                raise ValueError(f"{self.label} was fitted on windows without a normalizer (the pair of arrays or "
+                                 "safeguard.training.Windows): it scores no window set of the wrapper "
+                                 "(tcn.metody.Okna)")
+        elif not _bound(windows):
+            raise ValueError(f"{self.label} is bound to the normalizer of the window sets of its fit: it scores window "
+                             "sets of the wrapper (tcn.metody.Okna) only")
+        elif _identity(windows) != self.binding:
+            raise ValueError(f"{self.label} was fitted on windows of another normalizer or window; every method sees "
+                             "the windows of its bundle M")
+        return shape
 
     def losses(self, windows):
         """None: a detector gives no loss (design B7a 1.1)."""
@@ -288,18 +363,20 @@ class ZScoreMethod(_Method):
         return zluc_biny(g, local).double().numpy().mean(axis=1, keepdims=True)
 
     def fit(self, train, dev, *, protocol, seed):
-        """The mean and the deviation of the window means of train; dev is not read (no free parameter)."""
+        """The mean and the deviation of the window means of train; dev is not read (no free parameter), only bound
+        (BINDING)."""
         entry = _registered(self.name, protocol, seed)
+        binding, roles = self._bind(train, dev)
         train = window_set(train)
         shape = _first_shape(train)
         means = np.concatenate([self._means(g, local) for g, local in _batches(train, self.name, shape)])
         self.model = ZScoreAnomalia(tuple(range(means.shape[-1])), indikatory=()).fit(means)
-        self.shape = shape
-        return _record(self, entry, seed, shape, {"train": len(train.indices)}, statistic=ZSCORE, chosen=None,
-                       why="no free parameter: nothing is selected on dev, which is not read")
+        self.shape, self.seed, self.binding = shape, seed, binding
+        return _record(self, entry, seed, shape, {"train": len(train.indices)}, binding, roles, statistic=ZSCORE,
+                       chosen=None, why="no free parameter: nothing is selected on dev, which is not read")
 
     def scores(self, windows):
-        shape = self._fitted()
+        shape = self._check(windows)
         return np.concatenate([self.model.skore(self._means(g, local)) for g, local in _batches(windows, self.name,
                                                                                                shape)])
 
@@ -313,20 +390,22 @@ class IForestMethod(_Method):
         return zluc_biny(g, local).double().numpy()
 
     def fit(self, train, dev, *, protocol, seed):
-        """The forest of the seed over the windows of train; dev is not read (fixed hyperparameters)."""
+        """The forest of the seed over the windows of train; dev is not read (fixed hyperparameters), only bound
+        (BINDING)."""
         entry = _registered(self.name, protocol, seed)
+        binding, roles = self._bind(train, dev)
         train = window_set(train)
         shape = _first_shape(train)
         self.model = IsolationForestAnomalia(seed=seed).fit(
             np.concatenate([self._windows(g, local) for g, local in _batches(train, self.name, shape)]))
-        self.shape = shape
-        return _record(self, entry, seed, shape, {"train": len(train.indices)}, statistic=IFOREST, chosen=None,
-                       why="fixed hyperparameters of tcn/baselines.py (200 trees, max_samples auto): nothing is "
-                           "selected on dev, which is not read",
+        self.shape, self.seed, self.binding = shape, seed, binding
+        return _record(self, entry, seed, shape, {"train": len(train.indices)}, binding, roles, statistic=IFOREST,
+                       chosen=None, why="fixed hyperparameters of tcn/baselines.py (200 trees, max_samples auto): "
+                                        "nothing is selected on dev, which is not read",
                        trees=self.model.m.n_estimators, random_state=seed)
 
     def scores(self, windows):
-        shape = self._fitted()
+        shape = self._check(windows)
         return np.concatenate([self.model.skore_nezaporne(self._windows(g, local))
                                for g, local in _batches(windows, self.name, shape)])
 
@@ -358,6 +437,7 @@ class _Recurrent(_Method):
         """Trained on train with the epoch of the best dev loss, as M (TRAINING_RULE)."""
         entry = _registered(self.name, protocol, seed)
         settings = training_settings(protocol)
+        binding, roles = self._bind(train, dev)
         train, dev = window_set(train), window_set(dev)
         shape = _first_shape(train)
         if shape[0] < 2:
@@ -372,9 +452,9 @@ class _Recurrent(_Method):
         stop, history = _fit(net, _prediction_loss, train, dev, learning_rate=architecture["learning_rate"],
                              clip=architecture["gradient_clip"], batch_size=architecture["batch_size"],
                              stopping=settings["stopping"], seed=seed, name="predictor")
-        self.net, self.shape = net, shape
-        return _record(self, entry, seed, shape, {"train": len(train.indices), "dev": len(dev.indices)},
-                       target=TARGET, loss_formula=LOSS_FORMULA, score_formula=SCORE_RULE, hidden=hidden,
+        self.net, self.shape, self.seed, self.binding = net, shape, seed, binding
+        return _record(self, entry, seed, shape, {"train": len(train.indices), "dev": len(dev.indices)}, binding,
+                       roles, target=TARGET, loss_formula=LOSS_FORMULA, score_formula=SCORE_RULE, hidden=hidden,
                        parameters=parameters, tcn_parameters=target, size_rule=SIZE_RULE, training=TRAINING_RULE,
                        chosen={"epoch": stop["selected_epoch"]},
                        why="the epoch of the lowest dev loss under analysis.stopping, as M (proposal 8.3)", stop=stop,
@@ -383,7 +463,7 @@ class _Recurrent(_Method):
 
     def _errors(self, windows):
         """safeguard.model.prediction_errors of each window: (global error (N,), bin errors (N, B))."""
-        shape = self._fitted()
+        shape = self._check(windows)
         self.net.eval()
         global_errors, bin_errors = [], []
         with torch.inference_mode():

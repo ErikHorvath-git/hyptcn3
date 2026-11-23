@@ -24,6 +24,7 @@ BEHAVIOR = "behavioral-inputs-v1"
 CLEAN = "score coverage gate is unreachable for "
 WORST = "invalid_rows.max is unreachable under the score coverage gate"
 DEFAULT_GATE = 17 / 20  # what protocol versions 1 and 2 mean without min_score_coverage
+ANALYSIS = "invalid analysis"  # Since package B7b: the loader's refusal of a schema-3 window under 2 rows (expected).
 
 
 def window_count(rows, window_rows, full_every, invalid=()):
@@ -202,8 +203,10 @@ def test_the_smallest_document_needs_every_key(tmp_path):
 
 
 def test_schema_3_requires_the_coverage_gate(tmp_path):
-    doc = smallest(3, 1, 20, 20, 40, rule=0)  # clean shares 19/20 and 38/40, above the old default
-    assert window_count(20, 1, 20) / 20 >= DEFAULT_GATE and window_count(40, 1, 20) / 40 >= DEFAULT_GATE
+    # Clean shares 18/20 and 36/40, above the old default. Window 2: since package B7b a schema-3 document needs a
+    # window of 2 rows at least (F2 of its verification: the contexts and the moving average of the analysis plan).
+    doc = smallest(3, 2, 20, 20, 40, rule=0)
+    assert window_count(20, 2, 20) / 20 >= DEFAULT_GATE and window_count(40, 2, 20) / 40 >= DEFAULT_GATE
     # Since package B4 the loader names every missing key of the v5 layout before the gate's reader is asked.
     with pytest.raises(ValueError, match="^missing protocol key: min_score_coverage$"):
         collection.protocol(write(tmp_path / "p.json", doc))
@@ -237,7 +240,9 @@ def test_schemas_1_and_2_keep_the_default_gate_to_one_window_in_2000(tmp_path, s
 # T09, the reader itself: a stated gate is a number in (0, 1]; anything else is refused before a window is counted.
 
 INVALID_GATE = "invalid minimum score coverage"
-GATE_SHAPE = (1, 20, 20, 40)  # window_rows, full_every, cycles, pilot_cycles: clean shares 19/20 and 38/40
+# window_rows, full_every, cycles, pilot_cycles: clean shares 18/20 and 36/40 (window 2: a schema-3 document needs a
+# window of 2 rows at least since package B7b, F2 of its verification).
+GATE_SHAPE = (2, 20, 20, 40)
 OUT_OF_RANGE = {"zero": 0, "zero_float": float(0), "negative": -DEFAULT_GATE, "above_1": 21 / 20,
                 "next_above_1": math.nextafter(1, 2)}
 WRONG_TYPE = {"true": True, "false": False, "string": str(DEFAULT_GATE), "null": None, "list": [DEFAULT_GATE],
@@ -404,7 +409,12 @@ def around(*counts):
 
 
 def expected(W, F, N, P, gate, schema, rule):
-    """Decision of the oracle: the clean pilot, then the clean session, then (schema 3) the worst session."""
+    """Decision of the oracle: the clean pilot, then the clean session, then (schema 3) the worst session. Before them,
+    since package B7b (F2 of its verification), schema 3 refuses a window under 2 rows by its analysis plan: the
+    contexts of the diagnostics (1 to window_rows - 1) and the moving average of the validity predicate (2 to
+    window_rows rows) have no value there."""
+    if schema == 3 and W < 2:
+        return ANALYSIS
     for key, rows in (("pilot_cycles", P), ("cycles", N)):
         if window_count(rows, W, F) / rows < gate:
             return CLEAN + key
@@ -444,7 +454,7 @@ def disagreements(grid, select):
 
 def test_grid_has_every_kind_of_cell(grid):
     wants = [want for want, _, _ in grid.values()]
-    assert {CLEAN + "pilot_cycles", CLEAN + "cycles", WORST, "loads"} == set(wants)
+    assert {CLEAN + "pilot_cycles", CLEAN + "cycles", WORST, "loads", ANALYSIS} == set(wants)
     between = [cell for cell, (want, _, b) in grid.items() if b]
     assert len({cell[:4] for cell in between}) >= 10
     # A gate above both clean shares names the pilot: the pilot is checked first.

@@ -426,14 +426,15 @@
       "phase_deck",
       "z0_alarms",
       "bootstrap",
+      "injections",
       "event_times",
       "traffic",
       "traffic_arrivals",
       "traffic_choices",
       "traffic_sizes"
     ],
-    "rule": "seed = int(sha256(json.dumps([name, group, session, attempt, purpose])).hexdigest()[:16], 16) with the protocol name (the rehearsal's own name in rehearsal mode); session-level purposes (event_times, traffic, traffic_arrivals, traffic_choices, traffic_sizes) take the group name, the position and the attempt; role-level ones (event_free_position, event_deck, control_deck, phase_deck) the role name as group, session -1 and attempt 0; scenario_order is drawn per block of len(scenarios) groups of a role, with group <role>/<block>, session -1 and attempt 0; the purposes of the analysis (package B7a), which the plan does not draw, take session -1 and attempt 0 as well and as group: z0_alarms the role on whose windows the random variant of Z0 places its alarms, bootstrap the comparison <claim>/<method> of a confirmatory claim with one method it compares (for example k1/Z3); the analysis draws from numpy.random.default_rng(seed), z0_alarms the repetitions of the random variant of Z0 in order, each one number of [0, 1) for every window of the role in the order of its window set (tcn/metody.py Z0_RANDOM_RULE), bootstrap the resamples of the interval first and then, above analysis.statistics.exact_up_to_boots boots, the sign vectors of the test (scripts/protocol_v5.py analysis_seed)",
-    "note": "Every purpose has its own random stream (proposal 5.5); the seeds are new, the v4 schedule was looked at during the fault analysis (proposal 7.3). The traffic of a session (package B5b, skeleton B5 section 2): traffic draws the arrival envelope and is the session's seed, traffic_arrivals the arrival times, traffic_choices the choices of every user session and traffic_sizes the upload sizes (scripts/host_traffic.py). Package B7a adds the streams of the analysis z0_alarms and bootstrap (design B7a 1.6); the plan draws neither, and every purpose has its own seed, so no seed of the plan changed."
+    "rule": "seed = int(sha256(json.dumps([name, group, session, attempt, purpose])).hexdigest()[:16], 16) with the protocol name (the rehearsal's own name in rehearsal mode); session-level purposes (event_times, traffic, traffic_arrivals, traffic_choices, traffic_sizes) take the group name, the position and the attempt; role-level ones (event_free_position, event_deck, control_deck, phase_deck) the role name as group, session -1 and attempt 0; scenario_order is drawn per block of len(scenarios) groups of a role, with group <role>/<block>, session -1 and attempt 0; the purposes of the analysis (package B7a), which the plan does not draw, take session -1 and attempt 0 as well and as group: z0_alarms the role on whose windows the random variant of Z0 places its alarms, bootstrap the comparison <claim>/<method> of a confirmatory claim with one method it compares (for example k1/Z3); the analysis draws from numpy.random.default_rng(seed), z0_alarms the repetitions of the random variant of Z0 in order, each one number of [0, 1) for every window of the role in the order of its window set (tcn/metody.py Z0_RANDOM_RULE), bootstrap the resamples of the interval first and then, above analysis.statistics.exact_up_to_boots boots, the sign vectors of the test (scripts/protocol_v5.py analysis_seed); injections (package B7b), which the plan does not draw either, takes session -1 and attempt 0 and as group the carrier role and the class <role>/<class> of the interventions of K2 (test_benign/C, test_benign/D, test_controls/C, test_controls/D) or dev for the interventions inserted into dev for the selection of Z1, and the analysis draws the placements of each unit from numpy.random.default_rng(seed) in the order tcn/zasahy.py UNIT_RULE states (for dev C first, then D; per class the deal of the lengths, then of the orders or groups, then per intervention its start, its donor for D and its permutation for C in random order)",
+    "note": "Every purpose has its own random stream (proposal 5.5); the seeds are new, the v4 schedule was looked at during the fault analysis (proposal 7.3). The traffic of a session (package B5b, skeleton B5 section 2): traffic draws the arrival envelope and is the session's seed, traffic_arrivals the arrival times, traffic_choices the choices of every user session and traffic_sizes the upload sizes (scripts/host_traffic.py). Package B7a adds the streams of the analysis z0_alarms and bootstrap (design B7a 1.6); the plan draws neither, and every purpose has its own seed, so no seed of the plan changed. Package B7b adds the stream injections of the interventions into features (design B7b 1.4); the plan draws it neither, so no seed of the plan changed."
   },
   "audit": {
     "lateness_max_s": 0.5,
@@ -579,7 +580,7 @@
         "grid": null
       },
       "Z4": {
-        "what": "a threshold on the offered load; regression of the features on the load",
+        "what": "a threshold on the offered load (variant load); the residual of a regression of the features on the load (variant residual); each variant is a comparison of its own in K2a (question Q13 to the lead, provisional by the executor's proposal)",
         "grid": {}
       },
       "Z5": {
@@ -635,7 +636,7 @@
     "matched_rate": {
       "budget": "median over the seeds of M's alarms on the clean traffic of calibration, rounded up",
       "z0_repetitions": 200,
-      "note": "Proposal 8.3 and the lead's skeleton B7 section 3: every method gets the same windows, M's normalizer and the rule k of n (analysis.alarm_rule), and an alarm is a rising edge of that rule. The budget is the count of M's alarms on the clean traffic of role calibration (its scored windows outside the event windows, outside the reverberation reverberation_s and outside the full-snapshot band), the median over analysis.seeds rounded up. The threshold of a method walks its observed scores from the top down and takes the last one before the first at which its alarm count exceeds the budget (the count is not monotonic in the threshold); with a budget of 0 that is the most sensitive threshold without an alarm (the lead's judgment). The actual rate on test_benign is reported for every method. Z0 never alarms; its random variant alarms at the matched rate, z0_repetitions repetitions from the stream z0_alarms, and the mean is reported (200, the lead's number)."
+      "note": "Proposal 8.3 and the lead's skeleton B7 section 3: every method gets the same windows, M's normalizer and the rule k of n (analysis.alarm_rule), and an alarm is a rising edge of that rule. The budget is the count of M's alarms on the clean traffic of role calibration (its scored windows outside the events and their reverberation reverberation_s, proposal 4.2; question Q12 to the lead, provisional by the executor's proposal: the full-snapshot band is no part of clean traffic and bounds only where the interventions are placed), the median over analysis.seeds rounded up. The threshold of a method walks its observed scores from the top down and takes the last one before the first at which its alarm count exceeds the budget (the count is not monotonic in the threshold); with a budget of 0 that is the most sensitive threshold without an alarm (the lead's judgment). In K2 each seed of M walks to the budget like every method (tcn/k2.py DETECTION_RULE; judgment: M enters K2 by the median of the shares of its seeds, so each seed is held to the alarm budget of its comparators), and the diagnostics of the alarm rule and of the threshold from clean traffic report each seed so beside its bundle threshold (tcn/diagnostiky.py SEED_WALK_RULE; verification of B7b, F4). The actual rate on test_benign is reported for every method in alarms per observed hour of clean traffic (its rows outside the events and their reverberation times interval_s, proposal 8.3 and 4.2), with the scored share of that time and the alarms per scored clean hour beside it. Z0 never alarms; its random variant alarms at the matched rate, z0_repetitions repetitions from the stream z0_alarms, and the mean is reported (200, the lead's number)."
     },
     "qualification": {
       "near_constant_share": 0.01,
@@ -702,7 +703,8 @@
       "compare": [
         "Z1",
         "Z2",
-        "Z4"
+        "Z4:load",
+        "Z4:residual"
       ],
       "m": null,
       "rule": "95th percentile on >= 20 structure-free seeds (G1)"
@@ -747,7 +749,11 @@
           24,
           48
         ],
-        "per_boot": 6
+        "per_boot": 6,
+        "orders": [
+          "reversed",
+          "random"
+        ]
       },
       "D": {
         "lengths": [
@@ -756,10 +762,81 @@
           24,
           48
         ],
-        "per_boot": 6
+        "per_boot": 6,
+        "groups": {
+          "memory": [
+            "mem_changed_ratio",
+            "mem_bins_active",
+            "mem_changed_max",
+            "mem_changed_p95",
+            "mem_changed_spread",
+            "mem_entropy_mean",
+            "mem_entropy_max",
+            "mem_zero_ratio",
+            "changed_ratio",
+            "zero_ratio",
+            "entropy_mean",
+            "has_changed"
+          ],
+          "processes": [
+            "proc_total",
+            "proc_user",
+            "proc_kernel",
+            "proc_new",
+            "proc_gone",
+            "proc_wx",
+            "proc_memfd"
+          ],
+          "modules": [
+            "mod_total",
+            "mod_delta"
+          ],
+          "sockets": [
+            "sock_total",
+            "sock_listen",
+            "sock_estab"
+          ]
+        }
       },
       "boots": 20,
-      "validity": "every column, its first difference and rolling mean inside train quantiles"
+      "validity": {
+        "quantiles": [
+          0.001,
+          0.999
+        ],
+        "moving_average_rows": 6,
+        "note": "Proposal 7.4 and the lead's skeleton B7 section 5 ('ka\u017ed\u00fd st\u013apec, jeho prv\u00e1 diferencia a k\u013azav\u00fd priemer'), computed from the features alone (tcn/zasahy.py VALIDITY_RULE). What is judged: every TCN input column the intervention changes (its value as M's normalizer gives it, a column of class differenced by its first difference), its first difference (the row minus the row before it) and its moving average (the mean of the last moving_average_rows rows), at the rows that read the block: from the block's first row to the last row whose moving average reads a row of the block, the first difference back after the block among them; each such value lies between the quantiles of the same quantity at the last rows of the windows of role train (numpy, linear). A value the intervention leaves unchanged is not judged (it is the benign session's; for class D no column outside the swapped group), and neither are the values of the scored bins (a column is a TCN input column; at these quantiles a bin that changes in fewer than 0.1 % of the train rows has lo = hi). This is a reading of skeleton section 5, which would judge every value at those rows; question Q14 to the lead is open. The quantiles 0.001 and 0.999 are the lead's judgment; moving_average_rows 6 (30 s) is the author's judgment: the shortest block, so that the average at the last row of a block of any length reads block rows only and shows a level shift of the block in full."
+      },
+      "min_evaluable": 8,
+      "volume_class": "An intervention whose copy fails the validity predicate goes to the volume class (proposal 7.4: it is moved, never dropped; the lead's skeleton B7 section 5: reported apart). It is not evaluable: it counts as detected by no method in the share of its planned class (the table by class and length) and in the pooled share of K2 (interventions.note), whose denominators stay the planned interventions (proposal 6.4), and the volume class is reported in a table of its own by planned class and length with the share each method detects (judgment).",
+      "note": "Proposal 7.4 and the lead's skeleton B7 sections 5 and 9 (design B7b 1.2): C reverses or shuffles the rows of a block (orders), D replaces one group of columns in a block by the same rows of another session of the same scenario and position (groups); the lengths of 6, 12, 24 and 48 rows and six interventions of each class per boot in the 20 boots of test_benign and test_controls are the lead's numbers. Each intervention lies on a copy of one session of its own (the rows outside its block stay bit for bit), in placeable traffic (tcn/metody.py PLACEABLE_RULE: clean scored traffic outside the events, the controls, their reverberation and the full-snapshot band), and changes only the inputs of the neural channel (the TCN inputs and the scored bins of M's normalizer). Within a role the lengths differ by at most 1 (the lead's rule), and so do the orders of C and the groups of D (judgment); the placements come from the unit <role>/<class> of the stream injections. The same plan per boot of dev, from the unit dev of the stream, gives the interventions inserted into dev: they select Z1 (analysis.selection) and never enter K2. The groups of D are judgment from the definitions in features/snapshot.py: memory holds the eight aggregates mem_* and the four channels of every scored bin, from whose page counts the aggregates are computed (the has_changed of a bin masks its entropy, so a bin stays whole); processes the counts of processes, of the new and the gone ones and of the processes with W+X pages or a memfd file, which count processes too; modules the module count and its change; sockets the socket counts. Each group keeps the relations within it (a sum, a subset, the change of one quantity), so D breaks only the relations between groups (proposal 7.4); a column of class rule or dropped (G3a) is no TCN input and D leaves it as it is. An intervention is evaluable when it passes the validity predicate and at least analysis.evaluable.scored_share of its first analysis.evaluable.first_s seconds is scored (proposal 6.4); a class with fewer than min_evaluable evaluable interventions is nevyhodnoten\u00e9 (proposal 6.4, the lead's skeleton B7 section 5), and min_evaluable is analysis.min_occurrences (proposal 6.4 states one rule for a type or a class). K2 pools the two classes (the lead's skeleton B7 section 9: D is computed from every intervention of both classes; tcn/k2.py POOL_RULE): whenever at least one class is evaluated, the share of a method in a boot is the number of its evaluable interventions detected over every planned intervention of both classes in the boot, the volume class and the interventions not placed in the denominator and never a success, a class below the minimum included; such a class is reported nevyhodnoten\u00e9 by class, in the record of K2 and in its table by class and length (descriptive), and K2a and K2b are nevyhodnoten\u00e9 only when no class is evaluated. Z1's criterion on the interventions inserted into dev pools the classes alike (verification of B7b, F1)."
+    },
+    "diagnostics": {
+      "tree_depth": 3,
+      "min_positive_episodes": 20,
+      "contexts": [
+        1,
+        2,
+        4,
+        8,
+        16,
+        31
+      ],
+      "alarm_rules": [
+        [
+          2,
+          3
+        ],
+        [
+          3,
+          5
+        ],
+        [
+          4,
+          7
+        ]
+      ],
+      "note": "Proposal 8.5 and the lead's skeleton B7 section 6, descriptive only (they decide neither K1 nor K2): the decision tree of depth at most tree_depth over the raw columns of the last row, their differences and the largest bin change, cross-validated by boots, and the share of one member, both also for Z1 to Z3, where they must come out threshold-like or the diagnostic is not used, and with fewer than min_positive_episodes positive episodes not evaluated; the context truncated to each length of contexts rows (31 is the full context of the window of 32 rows), for M and for Z3 and Z5; the alarm rules [k, n] of alarm_rules, analysis.alarm_rule among them; the model with shuffled context (the last row kept) and the network with random weights; the threshold from clean traffic only beside the main one (proposal 8.7) and the threshold with one boot of calibration left out; the partial models over the memory aggregates mem_* only, over the global part only and over the bin part only (the skeleton's addendum 2 point 3). The numbers are the lead's (skeleton section 6)."
     },
     "horizon_s": 180,
     "reverberation_s": 300,
@@ -768,7 +845,7 @@
       "scored_share": 0.5
     },
     "min_occurrences": 8,
-    "note": "The analysis plan of proposal 10.1 point 3 (chapters 6.4, 7.4, 8.3, 8.4): the model enters K1 and K2 by its median over the five seeds, the deployed bundle is seed 0 (D14); fpr 0.01 and the rule 3 of 5 are kept (chapter 12); K1 against the prediction methods, K2a against the threshold methods, K2b against the methods with time and no learning; an occurrence is evaluable when at least half of its first 60 s is scored; a type or class with fewer than 8 evaluable occurrences is not evaluated. The bounds m are set in G1, the grids and the classes of the columns (analysis.columns) in G3a. The numbers of the G0 rows are the author's judgment by proposal 10.9. Package B7a (the lead's skeleton dokazy/B7/kostra/KOSTRA.md sections 2 to 4 and its addendum 2 point 1): Z0, Z2, Z4 and M have no free parameter (grid {}), only the grids of Z1, Z3 and Z5 wait for G3a; descriptive_methods are the z-score, the isolation forest and the GRU and LSTM predictors in the same wrapper as Z0 to Z5 (M's windows and normalizer, the behaviour inputs with the bin summary of tcn/baselines.py zluc_biny, a threshold at the matched alarm rate), reported beside M and Z (the loss of the predictors, the share of interventions detected, the alarms per hour) and deciding neither K1 nor K2; wording holds the conclusions of chapter 8.4 word for word (the text inside its quotation marks, the blanks where the table has them); matched_rate and statistics hold the rules of the matched alarm rate and of the interval and the test of K1 and K2."
+    "note": "The analysis plan of proposal 10.1 point 3 (chapters 6.4, 7.4, 8.3, 8.4): the model enters K1 and K2 by its median over the five seeds, the deployed bundle is seed 0 (D14); fpr 0.01 and the rule 3 of 5 are kept (chapter 12); K1 against the prediction methods, K2a against the threshold methods, K2b against the methods with time and no learning; an occurrence is evaluable when at least half of its first 60 s is scored; a type or class with fewer than 8 evaluable occurrences is not evaluated. The bounds m are set in G1, the grids and the classes of the columns (analysis.columns) in G3a. The numbers of the G0 rows are the author's judgment by proposal 10.9. Package B7a (the lead's skeleton dokazy/B7/kostra/KOSTRA.md sections 2 to 4 and its addendum 2 point 1): Z0, Z2, Z4 and M have no free parameter (grid {}), only the grids of Z1, Z3 and Z5 wait for G3a; descriptive_methods are the z-score, the isolation forest and the GRU and LSTM predictors in the same wrapper as Z0 to Z5 (M's windows and normalizer, the behaviour inputs with the bin summary of tcn/baselines.py zluc_biny, a threshold at the matched alarm rate), reported beside M and Z (the loss of the predictors, the share of interventions detected, the alarms per hour) and deciding neither K1 nor K2; wording holds the conclusions of chapter 8.4 word for word (the text inside its quotation marks, the blanks where the table has them); matched_rate and statistics hold the rules of the matched alarm rate and of the interval and the test of K1 and K2. Package B7b (the lead's skeleton B7 sections 5, 6 and 9, design B7b 1.4): interventions holds the orders of C, the groups of D, the validity predicate, the evaluable minimum and the volume class, and diagnostics the bounds of the diagnostics of proposal 8.5. K2 pools the classes C and D (skeleton section 9): a class with fewer than 8 evaluable interventions is reported nevyhodnoten\u00e9 by class and stays in the pooled shares, and K2 is nevyhodnoten\u00e9 only when no class is evaluated (interventions.note). K2a compares the two variants of Z4 as two comparisons, Z4:load and Z4:residual, each with its own stream bootstrap, and 'better' needs M to beat both: question Q13 to the lead, provisional by the executor's proposal and waiting for the lead's answer (if he answers otherwise, only k2a.compare and scripts/protocol_v5.py CONFIRMATORY change). Clean traffic, for the budget, the thresholds, the rates and K1, is the time outside the events and their reverberation (proposal 4.2; question Q12 to the lead, provisional by the executor's proposal): the full-snapshot band bounds only where the interventions are placed, and the rate is per observed hour of clean traffic."
   },
   "rehearsal": {
     "name_suffix": "-generalka",

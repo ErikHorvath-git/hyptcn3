@@ -10,6 +10,10 @@ windows of M (safeguard.training.Windows) and the refusals by name.
 
 Synthetic data, mechanics only: no number here is a detection result (HONESTY P4). The names of package B7a are
 imported inside the tests, so this file collects on the code before it.
+
+Package B7b (agent F, design dokazy/B7/navrh/NAVRH_B7b.md 4, F4 of the verification of B7a): fitted on window sets
+of the wrapper (tcn.metody.Okna), a method is bound to their normalizer and roles as Z0 to Z5 are, and the label of
+a method that draws from a seed carries the seed.
 """
 import json
 from pathlib import Path
@@ -341,3 +345,89 @@ def test_methods_take_the_windows_of_m():
         assert record["shape"] == {"window_rows": 8, "inputs": len(normalizer.input_names), "bins": 2}
         assert len(method.scores(dev)) == len(dev.indices)
         np.testing.assert_allclose(method.scores(dev), method.scores(pair), rtol=1e-6)
+
+
+# ------------------------------------------------------------------ package B7b (agent F): F4 of the B7a verification
+
+
+def _normalizer(mean=0.):
+    """A normalizer (safeguard/features.py) of the G first behaviour columns as TCN inputs and B bins of 4096 pages,
+    of mean `mean` and scale 1: mean 5 gives another normalizer of the same shape (the verifier's probe)."""
+    from features.qualification import LOCAL_SCALED
+    from safeguard.features import GLOBAL_NAMES, FeatureNormalizer, NormalizationRule
+    classes = {name: "neural" if name in GLOBAL_NAMES[:G] else "rule" for name in GLOBAL_NAMES}
+    rule = NormalizationRule("analysis.columns", classes, dict.fromkeys(GLOBAL_NAMES, 1e-3), True, 1,
+                             dict.fromkeys(LOCAL_SCALED, 1e-6))
+    return FeatureNormalizer(rule, np.full(G, mean), np.ones(G), [(0, 4096), (1, 4096)], [], np.zeros((B, 4)),
+                             np.ones((B, 4)), 1, 0)
+
+
+def okna(role, seed, normalizer, rows=24):
+    """A window set of the wrapper (tcn.metody.Okna) of role `role` under `normalizer`: one synthetic session of `rows`
+    rows of noise, 5 s apart, a window of L rows ending at every row from the L-th."""
+    from tcn.metody import Okna
+    rng = np.random.default_rng(seed)
+    local = rng.uniform(0, 1, (rows, B, 4))
+    local[..., 3] = rng.integers(0, 2, (rows, B))
+    session = {"id": f"{role}-{seed}", "global": rng.normal(size=(rows, G)), "local": local, "seq": np.arange(rows),
+               "timestamp": 1000. + 5 * np.arange(rows), "full_times": [], "load": None}
+    return Okna([session], [(0, end, None) for end in range(L - 1, rows)], role=role, normalizer=normalizer,
+                window_rows=L, max_gap_s=7.5, interval_s=5.)
+
+
+@pytest.mark.parametrize("name, seed", [("zscore", None), ("iforest", 3), ("gru", 3)])
+def test_a_method_fitted_on_window_sets_of_the_wrapper_is_bound_to_them(name, seed):
+    """F4 of the verification of B7a: fitted on window sets of the wrapper, a method records their normalizer and roles
+    and scores (and a predictor loses) window sets of the same normalizer and window; the label of a method that draws
+    from a seed carries it ("iforest:seed 3"), the z-score's is its name."""
+    from tcn import opisne
+    from tcn.metody import fingerprint
+    norm = _normalizer()
+    method = opisne.method(name)
+    record = method.fit(okna("train", 1, norm), okna("dev", 2, norm), protocol=protocol({"stopping.max_epochs": 1}),
+                        seed=seed)
+    label = name if seed is None else f"{name}:seed {seed}"
+    assert (record["label"], method.label, record["normalizer_sha256"], record["roles"]) == (
+        label, label, fingerprint(norm), {"train": "train", "dev": "dev"})
+    test = okna("test_benign", 3, norm)
+    assert method.scores(test).shape == (len(test),)
+    assert method.losses(test) is None if method.kind == "detector" else method.losses(test).shape == (len(test),)
+
+
+@pytest.mark.parametrize("case, reason", [
+    ("scores_another_normalizer", "iforest:seed 3 was fitted on windows of another normalizer or window; every method "
+                                  "sees the windows of its bundle M"),
+    ("scores_a_pair", "iforest:seed 3 is bound to the normalizer of the window sets of its fit: it scores window sets "
+                      "of the wrapper (tcn.metody.Okna) only"),
+    ("dev_of_a_test_role", "iforest: fit takes the window sets of roles train and dev (analysis.selection: never on a "
+                           "test role), not train and test_benign"),
+    ("dev_of_another_normalizer", "iforest: train and dev hold windows of different normalizers or windows; every "
+                                  "method sees M's"),
+    ("dev_a_pair", "iforest: train and dev are both window sets of the wrapper (tcn.metody.Okna) or neither"),
+    ("unbound_scores_the_wrapper", "iforest:seed 3 was fitted on windows without a normalizer (the pair of arrays or "
+                                   "safeguard.training.Windows): it scores no window set of the wrapper "
+                                   "(tcn.metody.Okna)"),
+], ids=["scores_another_normalizer", "scores_a_pair", "dev_of_a_test_role", "dev_of_another_normalizer", "dev_a_pair",
+        "unbound_scores_the_wrapper"])
+def test_the_binding_refuses_by_name(case, reason):
+    """F4 (BINDING, one bad input per check): a window set of another normalizer of the same shape, which the method
+    scored before, and the pair of arrays after a fit on window sets of the wrapper; at the fit a dev of a test role or
+    of another normalizer, or of another form than train; and a method fitted on the pair of arrays, unbound, given a
+    window set of the wrapper."""
+    from tcn import opisne
+    norm, p = _normalizer(), protocol()
+    method = opisne.method("iforest")
+    train = okna("train", 1, norm)
+    calls = {"scores_another_normalizer": lambda: method.scores(okna("test_benign", 3, _normalizer(5.))),
+             "scores_a_pair": lambda: method.scores(level_windows([0., 1.])),
+             "dev_of_a_test_role": lambda: method.fit(train, okna("test_benign", 2, norm), protocol=p, seed=3),
+             "dev_of_another_normalizer": lambda: method.fit(train, okna("dev", 2, _normalizer(5.)), protocol=p,
+                                                             seed=3),
+             "dev_a_pair": lambda: method.fit(train, level_windows([0., 1.]), protocol=p, seed=3),
+             "unbound_scores_the_wrapper": lambda: method.scores(okna("test_benign", 3, norm))}
+    if case.startswith("scores"):
+        method.fit(train, okna("dev", 2, norm), protocol=p, seed=3)
+    elif case == "unbound_scores_the_wrapper":
+        method.fit(level_windows(np.linspace(-1, 1, 32)), None, protocol=p, seed=3)
+    with refused(reason):
+        calls[case]()

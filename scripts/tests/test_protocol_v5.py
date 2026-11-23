@@ -15,7 +15,10 @@ why. Times are moved by whole intervals of 5 s where the phases must stay, and t
 min_gap_s, tail_s, the duration span, the guards) are all multiples of the interval in the real file.
 Names package B4 adds are imported inside the tests, so this file collects on the code before B4. Packages B6a and
 B7a add one deliberate error for each key of the analysis plan they add or change (B7a: also the streams of the
-analysis, which the plan never draws).
+analysis, which the plan never draws). Package B7b (agent F) adds one for each key of design B7b 1.4: the orders of
+C, the groups of D, the validity predicate, the evaluable minimum and the volume class, the diagnostics, the stream
+injections, the two variants of Z4 in K2a (question Q13, provisional) and the domains of the grids (F3 of the
+verification of B7a).
 """
 from collections import Counter
 import json
@@ -198,9 +201,11 @@ def method_without_grid(doc):
 
 
 def k2a_without_z4(doc):
-    """The lead's must_fix 4 on B4: K2a is decided against Z1, Z2 and Z4 (proposal 4.1)."""
-    doc["analysis"]["k2a"]["compare"].remove("Z4")
-    return {"analysis": ['analysis.k2a.compare is ["Z1", "Z2"], proposal 4.1 names ["Z1", "Z2", "Z4"]']}
+    """The lead's must_fix 4 on B4: K2a is decided against Z1, Z2 and Z4 (proposal 4.1). Package B7b (question Q13,
+    provisional): against both variants of Z4, so one variant left out fails."""
+    doc["analysis"]["k2a"]["compare"].remove("Z4:residual")
+    return {"analysis": ['analysis.k2a.compare is ["Z1", "Z2", "Z4:load"], proposal 4.1 names ["Z1", "Z2", '
+                         '"Z4:load", "Z4:residual"]']}
 
 
 def null_outside(doc):
@@ -286,6 +291,80 @@ def level_of_95(doc):
     """The level of the interval is a share in (0, 1): 0.95, chapter 8.4."""
     doc["analysis"]["statistics"]["level"] = 95
     return INVALID_ANALYSIS
+
+
+# Package B7b (design B7b 1.4): one deliberate error in each key it adds or changes; the loader refuses the section
+# (analysis, or streams for its purposes), every other check gives what it gives for the real file.
+
+def c_without_orders(doc):
+    """Class C names its orders, reversed and random (proposal 7.4): without them the layout misses a key."""
+    del doc["analysis"]["interventions"]["C"]["orders"]
+    reason = "missing protocol key: analysis.interventions.C.orders"
+    return {"keys": [reason], "loader": ["protocol(): " + reason], "analysis": ["missing analysis key: "
+                                                                              "analysis.interventions.C.orders"]}
+
+
+def groups_share_a_column(doc):
+    """The groups of class D partition the inputs of the neural channel: proc_wx in processes and in memory as well is
+    refused."""
+    doc["analysis"]["interventions"]["D"]["groups"]["memory"].append("proc_wx")
+    return INVALID_ANALYSIS
+
+
+def validity_quantiles_reversed(doc):
+    """The validity predicate lies between a lower and a higher quantile of role train (0.001 and 0.999)."""
+    doc["analysis"]["interventions"]["validity"]["quantiles"] = [.999, .001]
+    return INVALID_ANALYSIS
+
+
+def min_evaluable_apart_from_min_occurrences(doc):
+    """Proposal 6.4 states one rule for a type or a class: the evaluable minimum of the interventions is
+    analysis.min_occurrences (8), not another number."""
+    doc["analysis"]["interventions"]["min_evaluable"] = 7
+    return INVALID_ANALYSIS
+
+
+def contexts_not_increasing(doc):
+    """The contexts of the diagnostics are increasing lengths: 16 after 31 is refused."""
+    doc["analysis"]["diagnostics"]["contexts"] = [1, 2, 4, 8, 31, 16]
+    return INVALID_ANALYSIS
+
+
+def k2a_with_z4_unsplit(doc):
+    """Question Q13 (provisional): Z4 enters K2a by each variant, so a bare Z4 names no comparison; the analysis check
+    names the comparisons of proposal 4.1 with the two variants."""
+    doc["analysis"]["k2a"]["compare"] = ["Z1", "Z2", "Z4"]
+    return {"loader": ["protocol(): invalid analysis"],
+            "analysis": ['analysis.k2a.compare is ["Z1", "Z2", "Z4"], proposal 4.1 names ["Z1", "Z2", "Z4:load", '
+                         '"Z4:residual"]']}
+
+
+def grid_longer_than_the_window(doc):
+    """F3 of the verification of B7a: a moving average of Z1 reads at most the window_rows (32) rows of a window, so a
+    filled grid with 33 is refused by the protocol as tcn/metody.py refuses it."""
+    doc["analysis"]["methods"]["Z1"]["grid"] = {"moving_average_rows": [33], "cusum_shift": [.5]}
+    return INVALID_ANALYSIS
+
+
+def validity_average_longer_than_the_window(doc):
+    """F2 of the verification of B7b: the moving average of the validity predicate is taken over the last rows of a
+    window of train, so 33 rows (more than the window_rows 32) are refused by the protocol as tcn/zasahy.py refuses
+    them."""
+    doc["analysis"]["interventions"]["validity"]["moving_average_rows"] = 33
+    return INVALID_ANALYSIS
+
+
+def context_of_the_whole_window(doc):
+    """F2 of the verification of B7b: a window holds its target and at most window_rows - 1 (31) rows of context, so a
+    context of 32 rows is refused by the protocol as tcn/diagnostiky.py refuses it."""
+    doc["analysis"]["diagnostics"]["contexts"] = [1, 2, 4, 8, 16, 32]
+    return INVALID_ANALYSIS
+
+
+def streams_without_injections(doc):
+    """streams.purposes names injections, the stream of the interventions (package B7b)."""
+    doc["streams"]["purposes"].remove("injections")
+    return {"loader": ["protocol(): invalid streams"]}
 
 
 def streams_without_bootstrap(doc):
@@ -841,6 +920,15 @@ def session_draws_an_analysis_stream(doc, plan):
                         f"replacement of {_label(s)} draws the analysis stream bootstrap"]}
 
 
+def session_draws_injections(doc, plan):
+    """Package B7b: injections is no stream of the plan either; a session that draws it fails, and so does its
+    replacement."""
+    s = plan["sessions"][0]
+    s["seeds"]["injections"] = 1
+    return {"streams": [f"session {_label(s)} draws the analysis stream injections",
+                        f"replacement of {_label(s)} draws the analysis stream injections"]}
+
+
 def replaced_type(doc, plan, monkeypatch):
     from scripts import protocol_v5
     real, target = protocol_v5.replacement, next(s for s in plan["sessions"] if s.get("events"))
@@ -955,6 +1043,19 @@ def analysis_seed_of_the_plan(doc, plan, monkeypatch):
     return {"streams": ["purposes bootstrap and traffic share a seed"]}
 
 
+def injection_seed_of_the_plan(doc, plan, monkeypatch):
+    """Package B7b: the seed of the stream injections of the unit test_benign/C under the campaign's name equals the
+    traffic seed of the first session of the plan (a monkeypatch): the streams check sees two purposes on one seed."""
+    from scripts import protocol_v5
+    real, traffic = protocol_v5._analysis_seed, plan["sessions"][0]["seeds"]["traffic"]
+
+    def shared(name, purpose, unit):
+        return (traffic if (name, purpose, unit) == (doc["name"], "injections", "test_benign/C")
+                else real(name, purpose, unit))
+    monkeypatch.setattr(protocol_v5, "_analysis_seed", shared)
+    return {"streams": ["purposes injections and traffic share a seed"]}
+
+
 FILE_CASES = {f.__name__: f for f in (unknown_key, missing_key, gate_085, max_7, six_groups, below_min_per_type,
                                       no_min_per_type, not_interleaved, replacement_without_covers,
                                       method_without_grid, k2a_without_z4, null_outside, rehearsal_name,
@@ -969,7 +1070,13 @@ FILE_CASES = {f.__name__: f for f in (unknown_key, missing_key, gate_085, max_7,
                                       # Package B7a: the keys of the analysis plan it adds or changes, the streams.
                                       grid_of_a_method_without_parameters, grid_of_z3_outside_determined_at,
                                       selection_without_z1, gru_on_four_seeds, wording_without_a_blank,
-                                      z0_without_repetitions, level_of_95, streams_without_bootstrap)}
+                                      z0_without_repetitions, level_of_95, streams_without_bootstrap,
+                                      # Package B7b: the keys of design B7b 1.4 and the stream injections.
+                                      c_without_orders, groups_share_a_column, validity_quantiles_reversed,
+                                      min_evaluable_apart_from_min_occurrences, contexts_not_increasing,
+                                      k2a_with_z4_unsplit, grid_longer_than_the_window, streams_without_injections,
+                                      # F2 of the verification of B7b: the two keys bound to window_rows.
+                                      validity_average_longer_than_the_window, context_of_the_whole_window)}
 PLAN_CASES = {f.__name__: f for f in (no_group_on_vm, equal_scenarios, twice_at_position, two_events, start_in_guard,
                                       locked_to_grid, common_seed, control_relabelled, control_slot_emptied,
                                       event_free_first, group_of_two, seed_field,
@@ -983,11 +1090,15 @@ PLAN_CASES = {f.__name__: f for f in (no_group_on_vm, equal_scenarios, twice_at_
                                       # Package B8: the doses of the controls (design B8 1.2).
                                       dose_of_class_a, dose_unknown, dose_counts, dose_vm,
                                       # Package B7a: the streams of the analysis are no streams of the plan.
-                                      session_draws_an_analysis_stream)}
+                                      session_draws_an_analysis_stream,
+                                      # Package B7b: nor is the stream injections.
+                                      session_draws_injections)}
 REPLACEMENT_CASES = {f.__name__: f for f in (replaced_type, replaced_streams, replaced_in_guard,
                                              replaced_before_first_s, replaced_tenths, replaced_dose,
                                              # Package B7a: a monkeypatched seed of the analysis.
-                                             analysis_seed_of_the_plan)}
+                                             analysis_seed_of_the_plan,
+                                             # Package B7b: one of the stream injections.
+                                             injection_seed_of_the_plan)}
 CASES = ["real_file", *FILE_CASES, *PLAN_CASES, *REPLACEMENT_CASES, "null_at_g1"]
 
 
@@ -1408,16 +1519,19 @@ def test_the_plan_draws_no_stream_of_the_analysis_and_their_seeds_follow_the_rul
     z0_alarms per role and bootstrap per comparison of a confirmatory claim."""
     from scripts import protocol_v5
     doc = json.loads(V5.read_text())
+    # Package B7b: bootstrap per variant of Z4 in K2a (question Q13, provisional) and the stream injections.
     units = {"z0_alarms": list(ROLES),
-             "bootstrap": ["k1/Z3", "k1/Z5", "k2a/Z1", "k2a/Z2", "k2a/Z4", "k2b/Z3", "k2b/Z5"]}
+             "bootstrap": ["k1/Z3", "k1/Z5", "k2a/Z1", "k2a/Z2", "k2a/Z4:load", "k2a/Z4:residual", "k2b/Z3",
+                           "k2b/Z5"],
+             "injections": ["test_benign/C", "test_benign/D", "test_controls/C", "test_controls/D", "dev"]}
     assert protocol_v5.analysis_units(doc) == units
-    assert set(doc["streams"]["purposes"]) == set(protocol_v5.PURPOSES) and {"z0_alarms", "bootstrap"} <= set(
-        protocol_v5.PURPOSES)
+    assert set(doc["streams"]["purposes"]) == set(protocol_v5.PURPOSES) and {"z0_alarms", "bootstrap",
+                                                                             "injections"} <= set(protocol_v5.PURPOSES)
     for mode, name in (("campaign", "server-normal-v5"), ("rehearsal", "server-normal-v5-generalka")):
         plan = protocol_v5.plan(doc, mode)
         drawn = {purpose for s in plan["sessions"] for x in (s, protocol_v5.replacement(doc, s, 2, mode=mode))
                  for purpose in x["seeds"]}
-        assert drawn == set(protocol_v5.PURPOSES) - {"z0_alarms", "bootstrap"}, mode
+        assert drawn == set(protocol_v5.PURPOSES) - {"z0_alarms", "bootstrap", "injections"}, mode
         assert {(purpose, unit): protocol_v5.analysis_seed(doc, purpose, unit, mode=mode)
                 for purpose, mine in units.items() for unit in mine} == {
             (purpose, unit): protocol_v5.seed(name, purpose, unit, -1, 0) for purpose, mine in units.items()
@@ -1425,15 +1539,139 @@ def test_the_plan_draws_no_stream_of_the_analysis_and_their_seeds_follow_the_rul
 
 
 @pytest.mark.parametrize("purpose, unit, mode, reason", [
-    ("traffic", "test_benign", "campaign", "'traffic' is no stream of the analysis (z0_alarms, bootstrap)"),
+    ("traffic", "test_benign", "campaign", "'traffic' is no stream of the analysis (z0_alarms, bootstrap, "
+                                           "injections)"),
     ("z0_alarms", "test", "campaign", "'test' is no unit of the analysis stream z0_alarms (train, dev, calibration, "
                                       "test_benign, test_controls)"),
     ("bootstrap", "k1/Z1", "campaign", "'k1/Z1' is no unit of the analysis stream bootstrap (k1/Z3, k1/Z5, k2a/Z1, "
-                                       "k2a/Z2, k2a/Z4, k2b/Z3, k2b/Z5)"),
+                                       "k2a/Z2, k2a/Z4:load, k2a/Z4:residual, k2b/Z3, k2b/Z5)"),
     ("bootstrap", "k1/Z3", "final", "unknown plan mode: final"),
-], ids=["purpose_of_the_plan", "unknown_role", "method_k1_does_not_compare", "unknown_mode"])
+    # Package B7b: injections per carrier role and class and for the insertion into dev only.
+    ("injections", "calibration/C", "campaign",
+     "'calibration/C' is no unit of the analysis stream injections (test_benign/C, test_benign/D, test_controls/C, "
+     "test_controls/D, dev)"),
+], ids=["purpose_of_the_plan", "unknown_role", "method_k1_does_not_compare", "unknown_mode",
+        "injections_of_a_role_without_interventions"])
 def test_a_seed_of_the_analysis_is_refused_for_an_unknown_purpose_unit_or_mode(purpose, unit, mode, reason):
     from scripts import protocol_v5
     with pytest.raises(ValueError) as refused:
         protocol_v5.analysis_seed(json.loads(V5.read_text()), purpose, unit, mode=mode)
     assert str(refused.value) == reason
+
+
+# Package B7b: the keys of the analysis plan of design B7b 1.4. The layout knows every key, and the value check every
+# rule of each: one bad input per rule, and good inputs (another partition of the groups, the main alarm rule alone;
+# the bounds of the grids' domains are taken in tcn/tests/test_metody.py, where both checks read one constant).
+
+def _regroup(change):
+    """A change of the analysis section: the groups of class D become change(groups), read when the test runs (so that
+    this file collects on the code and the file before package B7b)."""
+    def apply(a):
+        a["interventions"]["D"]["groups"] = change(json.loads(json.dumps(a["interventions"]["D"]["groups"])))
+    return apply
+
+
+@pytest.mark.parametrize("change, reason", [
+    (_regroup(lambda g: {"memory": g["memory"], "processes": g["processes"], "objects": g["modules"] + g["sockets"]}),
+     None),
+    (_at("diagnostics.alarm_rules", [[3, 5]]), None),
+    (_at("interventions.C.orders", ["reversed", "shuffled"]), "invalid analysis"),
+    # The merge of B7b: the protocol refuses what tcn/zasahy.py refuses (lengths distinct, C of at least 2 rows) and
+    # the first seconds of an evaluable occurrence lie within the horizon.
+    (_at("interventions.D.lengths", [6, 6, 12]), "invalid analysis"),
+    (_at("interventions.C.lengths", [1, 6]), "invalid analysis"),
+    (_at("evaluable.first_s", 240), "invalid analysis"),
+    (_at("interventions.C.orders", []), "invalid analysis"),
+    (_at("interventions.D.groups", {}), "invalid analysis"),
+    (_regroup(lambda g: dict(g, memory=g["memory"] + ["mem_unknown"])), "invalid analysis"),
+    (_regroup(lambda g: dict(g, memory=[c for c in g["memory"] if c != "mem_zero_ratio"])), "invalid analysis"),
+    (_regroup(lambda g: dict(g, memory=[c for c in g["memory"] if c != "has_changed"],
+                             processes=g["processes"] + ["has_changed"])), "invalid analysis"),
+    (_regroup(lambda g: {" " if name == "sockets" else name: columns for name, columns in g.items()}),
+     "invalid analysis"),
+    (_at("interventions.validity", "every column, its first difference and rolling mean inside train quantiles"),
+     "invalid analysis"),
+    (_at("interventions.validity.quantiles", [0, 1]), "invalid analysis"),
+    (_at("interventions.validity.quantiles", [.001]), "invalid analysis"),
+    (_at("interventions.validity.moving_average_rows", 1), "invalid analysis"),
+    (_at("interventions.validity.moving_average_rows", 6.0), "invalid analysis"),
+    (_at("interventions.validity.note"), "missing protocol key: analysis.interventions.validity.note"),
+    (_at("interventions.volume_class", " "), "invalid analysis"),
+    (_at("interventions.note"), "missing protocol key: analysis.interventions.note"),
+    (_at("diagnostics.tree_depth", 0), "invalid analysis"),
+    (_at("diagnostics.min_positive_episodes", 20.0), "invalid analysis"),
+    (_at("diagnostics.contexts", []), "invalid analysis"),
+    (_at("diagnostics.contexts", [2, 2, 31]), "invalid analysis"),
+    (_at("diagnostics.contexts", [0, 31]), "invalid analysis"),
+    (_at("diagnostics.alarm_rules", [[2, 3], [4, 7]]), "invalid analysis"),
+    (_at("diagnostics.alarm_rules", [[3, 2], [3, 5]]), "invalid analysis"),
+    (_at("diagnostics.alarm_rules", [[3, 5], [3, 5]]), "invalid analysis"),
+    (_at("diagnostics.depth", 3), "unknown protocol key: analysis.diagnostics.depth"),
+    # F3 of the verification of B7a: the domains of the grids (scripts/protocol_v5.py GRID_DOMAINS).
+    (_at("methods.Z3.grid", {"ewma_alpha": [1.5]}), "invalid analysis"),
+    (_at("methods.Z3.grid", {"ewma_alpha": ["fast"]}), "invalid analysis"),
+    (_at("methods.Z5.grid", {"ridge_alpha": [-1]}), "invalid analysis"),
+    (_at("methods.Z5.grid", {"ridge_alpha": [1, 1.0]}), "invalid analysis"),
+    (_at("methods.Z1.grid", {"moving_average_rows": [0], "cusum_shift": [.5]}), "invalid analysis"),
+    (_at("methods.Z1.grid", {"moving_average_rows": [2.5], "cusum_shift": [.5]}), "invalid analysis"),
+    (_at("methods.Z1.grid", {"moving_average_rows": [4], "cusum_shift": [-2]}), "invalid analysis"),
+    # F2 of the verification of B7b: the moving average and the contexts within the window of 32 rows.
+    (_at("interventions.validity.moving_average_rows", 32), None),
+    (_at("interventions.validity.moving_average_rows", 33), "invalid analysis"),
+    (_at("diagnostics.contexts", [1, 2, 4, 8, 16, 32]), "invalid analysis"),
+    # F5 of the verification of B7b (mutant P5): the open lower bounds of the grids' domains.
+    (_at("methods.Z3.grid", {"ewma_alpha": [0]}), "invalid analysis"),
+    (_at("methods.Z5.grid", {"ridge_alpha": [0]}), "invalid analysis"),
+], ids=["groups_another_partition", "main_alarm_rule_alone", "order_unknown", "lengths_twice", "c_of_one_row",
+        "first_s_beyond_the_horizon", "no_order",
+        "no_group", "group_column_unknown", "group_column_missing", "bin_split_over_groups", "group_without_a_name",
+        "validity_a_text", "quantiles_at_0_and_1", "one_quantile", "average_of_one_row", "average_not_an_integer",
+        "validity_no_note", "volume_class_blank", "interventions_no_note", "tree_depth_0",
+        "episodes_not_an_integer", "no_context", "context_twice",
+        "context_0", "alarm_rules_without_the_main", "alarm_rule_k_above_n", "alarm_rule_twice",
+        "diagnostics_unknown_key", "ewma_above_1", "ewma_a_name", "ridge_negative",
+        "ridge_twice_by_value", "average_of_0", "average_not_an_integer", "cusum_negative",
+        "average_of_the_window", "average_longer_than_the_window", "context_of_the_whole_window", "ewma_of_0",
+        "ridge_of_0"])
+def test_the_loader_knows_every_key_and_value_of_the_analysis_plan_of_b7b(change, reason):
+    """Design B7b 1.4: analysis.interventions (the orders of C of ORDERS; the groups of D, named, partitioning the 20
+    behaviour columns and the four channels of a bin, which stay in one group; the validity predicate's quantiles
+    0 < low < high < 1 and its moving average of an integer of 2 to window_rows rows, with a note; min_evaluable equal
+    to analysis.min_occurrences, the FILE case; the volume class a text), analysis.diagnostics (the depth and the
+    episodes integers of at least 1; the contexts increasing integers of 1 to window_rows - 1, the FILE case another
+    order; distinct rules k of n with the main one among them) and the domains of the grids (F3 of the verification of
+    B7a, their open lower bounds F5 of the verification of B7b). F2 of the verification of B7b: the moving average and
+    the contexts are bound to the window of 32 rows."""
+    from scripts import protocol_v5
+    doc = json.loads(V5.read_text())
+    change(doc["analysis"])
+    if reason is None:
+        protocol_v5.check_layout(doc)
+    else:
+        with pytest.raises(ValueError) as refused:
+            protocol_v5.check_layout(doc)
+        assert str(refused.value) == reason
+
+
+def test_the_keys_of_b7b_are_those_the_skeleton_names():
+    """The values of design B7b 1.4 in the real file: C reversed and random; D the four groups memory, processes,
+    modules and sockets over every input of the neural channel; the predicate at the quantiles 0.001 and 0.999 of
+    train with a moving average of 6 rows; the evaluable minimum 8, analysis.min_occurrences; the diagnostics of
+    proposal 8.5; K2a against Z1, Z2 and both variants of Z4 (question Q13, provisional), and the variants are those of
+    tcn/metody.py's Z4."""
+    from features.archive import BEHAVIOR_NAMES
+    from features.windows import BIN_PRIZNAKY
+    from scripts import protocol_v5
+    a = json.loads(V5.read_text())["analysis"]
+    i = a["interventions"]
+    assert (i["C"]["orders"], list(i["D"]["groups"]), i["validity"]["quantiles"], i["validity"]["moving_average_rows"],
+            i["min_evaluable"], a["min_occurrences"]) == (["reversed", "random"], ["memory", "processes", "modules",
+                                                                                  "sockets"], [.001, .999], 6, 8, 8)
+    assert sorted(c for columns in i["D"]["groups"].values() for c in columns) == sorted(BEHAVIOR_NAMES + BIN_PRIZNAKY)
+    keys = ("tree_depth", "min_positive_episodes", "contexts", "alarm_rules")
+    assert {key: a["diagnostics"][key] for key in keys} == {
+        "tree_depth": 3, "min_positive_episodes": 20, "contexts": [1, 2, 4, 8, 16, 31],
+        "alarm_rules": [[2, 3], [3, 5], [4, 7]]}
+    assert a["k2a"]["compare"] == protocol_v5.CONFIRMATORY["k2a"] == ["Z1", "Z2", "Z4:load", "Z4:residual"]
+    assert protocol_v5.VARIANTS == {"Z4": ("load", "residual")} and protocol_v5.COMPARISONS == (
+        "Z0", "Z1", "Z2", "Z3", "Z4:load", "Z4:residual", "Z5")

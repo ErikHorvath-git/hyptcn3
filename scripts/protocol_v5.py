@@ -16,7 +16,11 @@ scripts/host_traffic.py reads the profiles section through profiles_problems():
     analysis_plan(p)               the analysis plan the training and the evaluation read (B6, B7)
     analysis_seed(p, purpose, unit, mode=...)
                                    the seed of a stream of the analysis (B7a): z0_alarms per role, bootstrap per
-                                   comparison of a confirmatory claim; the plan draws neither
+                                   comparison of a confirmatory claim, injections (B7b) per carrier role and class
+                                   and for the insertion into dev; the plan draws none of them
+    grid_problem(method, grid, window_rows)
+                                   the problem of a filled grid of Z1, Z3 or Z5 (GRID_DOMAINS), or None; the value
+                                   check and tcn/metody.py both use it (B7b)
     selfcheck(path, mode, stage)   every check of the self-check on the file and on its plan, and summary(p, plan):
                                    the tables of the plan the report records
 
@@ -47,6 +51,16 @@ conclusions of chapter 8.4 word for word for K1, K2a and K2b and each outcome; a
 the matched alarm rate and the repetitions of Z0; analysis.statistics the interval and the test of the claims. The
 streams gain z0_alarms and bootstrap, which the analysis draws and the plan does not (analysis_seed), so no draw of
 the plan changes.
+
+Package B7b (the lead's skeleton dokazy/B7/kostra/KOSTRA.md sections 5, 6 and 9, design B7b 1.4):
+analysis.interventions states the order variants of class C, the column groups of class D, the validity predicate
+(its quantiles of role train and the length of its moving average), the evaluable minimum and the rule of the volume
+class; analysis.diagnostics the bounds of the descriptive diagnostics of proposal 8.5; the stream injections places
+the interventions, per carrier role and class and once for the interventions inserted into dev (INJECTION_UNITS), and
+the plan draws it no more than z0_alarms or bootstrap. Question Q13 to the lead, provisional by the executor's
+proposal: Z4 enters K2a by each of its variants (VARIANTS), each a comparison of its own. F3 of the verification of
+B7a: the value domain of every grid parameter is one constant (GRID_DOMAINS, grid_problem) for this check and
+tcn/metody.py.
 """
 from collections import Counter
 import copy
@@ -82,7 +96,9 @@ INTERLEAVED = ("test_benign", "test_controls")
 # (the random alarms of Z0 at the matched alarm rate on that role's windows) and bootstrap per comparison of a
 # confirmatory claim with one method (the resamples of its interval, then the sign vectors of its test); they take no
 # unit of the plan, so SESSION_PURPOSES and every draw of the plan stay as they were (analysis_seed).
-ANALYSIS_PURPOSES = {"z0_alarms": "role", "bootstrap": "comparison"}
+# Package B7b (design B7b 1.4) adds injections, the placements of the interventions into features (skeleton B7
+# sections 5 and 9) per unit of INJECTION_UNITS; the plan draws it no more than the other two.
+ANALYSIS_PURPOSES = {"z0_alarms": "role", "bootstrap": "comparison", "injections": "insertion"}
 PURPOSES = {"scenario_order": "block", "event_free_position": "role", "event_deck": "role",
             "control_deck": "role", "phase_deck": "role", **ANALYSIS_PURPOSES, "event_times": "session",
             "traffic": "session", "traffic_arrivals": "session", "traffic_choices": "session",
@@ -95,6 +111,38 @@ METHODS = ("Z0", "Z1", "Z2", "Z3", "Z4", "Z5", "M")
 # M's epoch is analysis.stopping's).
 GRID_PARAMETERS = {"Z1": ("moving_average_rows", "cusum_shift"), "Z3": ("ewma_alpha",), "Z5": ("ridge_alpha",)}
 GRIDDED = tuple(GRID_PARAMETERS)
+# F3 of the verification of B7a (design B7b 1.4): the value domain of each grid parameter, one constant for the value
+# check of analysis.methods and for tcn/metody.py (grid_value_ok, grid_problem): integers or numbers, the lowest and
+# the highest value and whether each is allowed; a highest of "window_rows" is the protocol's window_rows (a moving
+# average reads the window_rows rows of a window, tcn/metody.py Z1_RULE).
+GRID_DOMAINS = {
+    "moving_average_rows": {"integer": True, "low": 1, "low_allowed": True, "high": "window_rows",
+                            "high_allowed": True, "text": "integers of at least 1 and at most window_rows"},
+    "cusum_shift": {"integer": False, "low": 0, "low_allowed": True, "high": None, "high_allowed": None,
+                    "text": "numbers of at least 0 (normalized units)"},
+    "ewma_alpha": {"integer": False, "low": 0, "low_allowed": False, "high": 1, "high_allowed": True,
+                   "text": "numbers in (0, 1]"},
+    "ridge_alpha": {"integer": False, "low": 0, "low_allowed": False, "high": None, "high_allowed": None,
+                    "text": "positive numbers"},
+}
+# Question Q13 to the lead, provisional by the executor's proposal (design B7b 1.4): a method with variants enters a
+# confirmatory claim by each variant, "<method>:<variant>", each a comparison of its own with its own stream bootstrap,
+# so that "better" needs M to beat every variant; Z4 has the variants of tcn/metody.py Z4_VARIANTS (skeleton B7
+# section 2: the offered load and the residual on it). COMPARISONS are the names a claim may compare.
+VARIANTS = {"Z4": ("load", "residual")}
+COMPARISONS = tuple(name for method in METHODS if method != "M"
+                    for name in ([f"{method}:{v}" for v in VARIANTS[method]] if method in VARIANTS else [method]))
+# Package B7b (the lead's skeleton B7 sections 5 and 9, design B7b 1.2 and 1.4): the interventions into features of
+# classes C and D, carried by the sessions of the test roles (K2) and inserted into dev for the selection of Z1
+# (never in K2); the units of the stream injections are "<carrier role>/<class>" and DEV_INSERTION.
+INTERVENTION_CLASSES = ("C", "D")
+CARRIERS = ("test_benign", "test_controls")
+DEV_INSERTION = "dev"
+INJECTION_UNITS = tuple(f"{role}/{name}" for role in CARRIERS for name in INTERVENTION_CLASSES) + (DEV_INSERTION,)
+ORDERS = ("reversed", "random")  # The order of the rows of a block of class C (proposal 7.4).
+# The shortest block of each class (tcn/zasahy.py MIN_LENGTH, merge of B7b; judgment: a block of one row has no order
+# to change, so C needs two).
+MIN_BLOCK_ROWS = {"C": 2, "D": 1}
 # The descriptive methods of the core (skeleton B7, addendum 2 point 1; proposal 8.3), listed apart from METHODS so
 # that analysis.methods stays Z0 to Z5 and M; the networks run on every seed of analysis.seeds (design B7a 1.6). A
 # method of UNSEEDED draws nothing: its seeds are null and it runs once, with seed None; every other one has a
@@ -176,12 +224,14 @@ def _fixed(*keys, **inner):
 
 
 _TEST = _fixed("statistic", "compare", "m", "rule")
-_INTERVENTION = _fixed("lengths", "per_boot")
+_LENGTHS = ("lengths", "per_boot")
 # Package B6a (design B6a 1.1): the bounds of the qualification of the feature columns (G0), the class of each of
 # the 20 columns (analysis.columns, null until G3a, which replaces analysis.column_mask), the scale rule of the
 # normalizer (G0) and, in architecture, the TCN of the thesis with its optimizer (G0). Package B7a (design B7a 1.6):
 # the descriptive methods apart from methods, the wordings of the conclusions per claim and outcome, the matched
-# alarm rate and the statistics of the claims (all G0).
+# alarm rate and the statistics of the claims (all G0). Package B7b (design B7b 1.4): the interventions gain the
+# orders of C, the groups of D (free names, so the template does not walk them), the validity predicate as an object,
+# the evaluable minimum and the volume class; the diagnostics of proposal 8.5 (all G0).
 ANALYSIS = _fixed(
     "seeds", "deploy_seed", "fpr", "selection", "columns", "horizon_s", "reverberation_s", "min_occurrences",
     "note",
@@ -197,7 +247,10 @@ ANALYSIS = _fixed(
     k1=_TEST, k2a=_TEST, k2b=_TEST,
     statistics=_fixed("bootstrap", "exact_up_to_boots", "level", "note"),
     wording={claim: _fixed(*OUTCOMES) for claim in CLAIMS},
-    interventions=_fixed("boots", "validity", C=_INTERVENTION, D=_INTERVENTION),
+    interventions=_fixed("boots", "min_evaluable", "volume_class", "note",
+                         validity=_fixed("quantiles", "moving_average_rows", "note"),
+                         C=_fixed(*_LENGTHS, "orders"), D=_fixed(*_LENGTHS, "groups")),
+    diagnostics=_fixed("tree_depth", "min_positive_episodes", "contexts", "alarm_rules", "note"),
     evaluable=_fixed("first_s", "scored_share"))
 # The traffic profiles of the generator (package B5b, design B5b 1.1; scripts/host_traffic.py PROFILES implements
 # exactly these): the keys every profile has, and those of each profile. arrivals is the envelope family of the
@@ -611,20 +664,46 @@ def _ok_qualification(a):
         for name, cls in columns.items()))
 
 
-def _grid(value):
-    """A grid of a method with free parameters (G3a): a non-empty object of parameter names, each with a non-empty
-    list of distinct values (numbers or names)."""
-    return type(value) is dict and bool(value) and all(
-        _text(name) and _distinct(values, lambda x: _number(x) or _text(x)) for name, values in value.items())
+def grid_value_ok(name, value, window_rows):
+    """Whether `value` lies in the domain of the grid parameter `name` (GRID_DOMAINS) under the protocol's
+    window_rows: an integer where the domain says so, else a finite number (no bool), within its bounds. window_rows
+    None leaves the bound window_rows unchecked, for the candidate of tcn/metody.py Z1 built before its window is known
+    (its fit checks it against the window of train)."""
+    domain = GRID_DOMAINS[name]
+    if not _number(value) or (domain["integer"] and type(value) is not int):
+        return False
+    low, high = domain["low"], domain["high"]
+    if high == "window_rows":
+        high = window_rows
+    return ((value >= low if domain["low_allowed"] else value > low)
+            and (high is None or (value <= high if domain["high_allowed"] else value < high)))
 
 
-def _ok_methods(a):
+def grid_problem(method, value, window_rows):
+    """The problem of a filled grid of `method` (a method of GRID_PARAMETERS) under the protocol's window_rows, as a
+    text, or None: exactly the parameters of GRID_PARAMETERS, each a non-empty list of distinct values (by value, so 1
+    and 1.0 are one value) of its domain (GRID_DOMAINS). tcn/metody.py grid() raises the text; the value check of
+    analysis.methods refuses a grid with a problem (F3 of the verification of B7a: one domain for both)."""
+    path = f"analysis.methods.{method}.grid"
+    names = GRID_PARAMETERS[method]
+    if type(value) is not dict or set(value) != set(names):
+        return f"{path} must be an object of exactly the keys {', '.join(names)}"
+    for name in names:
+        items = value[name]
+        if (type(items) is not list or not items or not all(grid_value_ok(name, x, window_rows) for x in items)
+                or len(set(items)) != len(items)):
+            return f"{path}.{name} must be a non-empty list of distinct {GRID_DOMAINS[name]['text']}"
+    return None
+
+
+def _ok_methods(p):
     """Skeleton B7 section 2 (design B7a 1.4 and 1.6): every method of METHODS states what it is; a method of GRIDDED
     has a grid of its free parameters, null until G3a (determined_at), and filled it holds exactly the parameters of
-    GRID_PARAMETERS; every other one has none: {} from G0 on."""
+    GRID_PARAMETERS, each within its domain (grid_problem, under the protocol's window_rows); every other one has
+    none: {} from G0 on."""
     return all(type(m) is dict and _text(m["what"]) and (
-        (m["grid"] is None or (_grid(m["grid"]) and set(m["grid"]) == set(GRID_PARAMETERS[name]))) if name in GRIDDED
-        else (type(m["grid"]) is dict and not m["grid"])) for name, m in a["methods"].items())
+        (m["grid"] is None or grid_problem(name, m["grid"], p["window_rows"]) is None) if name in GRIDDED
+        else (type(m["grid"]) is dict and not m["grid"])) for name, m in p["analysis"]["methods"].items())
 
 
 def _names_every_method(text):
@@ -670,6 +749,63 @@ def _ok_claims_b7a(a):
             and type(s["note"]) is str)
 
 
+def _ok_interventions(p):
+    """Design B7b 1.4 (the lead's skeleton B7 section 5, proposal 6.4 and 7.4): each class has its lengths, distinct
+    and of at least MIN_BLOCK_ROWS rows (as tcn/zasahy.py refuses others, merge of B7b), and its count per boot; C names
+    its orders (of ORDERS); D names its groups, which partition the inputs of the neural
+    channel (the 20 columns of features.archive.BEHAVIOR_NAMES and the four channels of a bin, features/windows.py
+    BIN_PRIZNAKY, which lie in one group); the validity predicate has the quantiles 0 < low < high < 1 of role train
+    and a moving average of at least 2 rows and at most window_rows (tcn/zasahy.py takes the average of the last rows
+    of a window of train: F2 of the verification of B7b; scripts/tests/boundary_sessions.py v5_sections scales it to
+    the window of a test protocol); the evaluable minimum is analysis.min_occurrences (proposal 6.4 states one rule
+    for a type or a class); the volume class is a text and the note a string."""
+    # Here: the generator imports this module and needs no feature code.
+    from features.archive import BEHAVIOR_NAMES
+    from features.windows import BIN_PRIZNAKY
+    a = p["analysis"]
+    i = a["interventions"]
+    for name in INTERVENTION_CLASSES:
+        if not (_distinct(i[name]["lengths"], lambda n: _count(n, MIN_BLOCK_ROWS[name]))
+                and _count(i[name]["per_boot"], 1)):
+            return False
+    inputs = set(BEHAVIOR_NAMES) | set(BIN_PRIZNAKY)
+    groups = i["D"]["groups"]
+    if not (_distinct(i["C"]["orders"], lambda order: order in ORDERS) and type(groups) is dict and groups
+            and all(_text(name) and _distinct(columns, lambda column: column in inputs)
+                    for name, columns in groups.items())):
+        return False
+    every = [column for columns in groups.values() for column in columns]
+    if sorted(every) != sorted(inputs) or not any(set(BIN_PRIZNAKY) <= set(columns) for columns in groups.values()):
+        return False
+    v = i["validity"]
+    q, rows = v["quantiles"], v["moving_average_rows"]
+    return (type(q) is list and len(q) == 2 and all(map(_number, q)) and 0 < q[0] < q[1] < 1
+            and _count(rows, 2) and rows <= p["window_rows"] and type(v["note"]) is str
+            and _count(i["min_evaluable"], 1) and i["min_evaluable"] == a["min_occurrences"]
+            and _count(i["boots"], 1) and _text(i["volume_class"]) and type(i["note"]) is str)
+
+
+def _ok_diagnostics(p):
+    """Design B7b 1.4 (proposal 8.5, the lead's skeleton B7 section 6): the depth of the tree and the fewest positive
+    episodes are integers of at least 1; the contexts are increasing integers from 1 to window_rows - 1 (a window holds
+    its target and at most window_rows - 1 rows of context, as tcn/diagnostiky.py truncates it: F2 of the verification
+    of B7b; scripts/tests/boundary_sessions.py v5_sections scales them to the window of a test protocol); the alarm
+    rules are distinct pairs [k, n] with 1 <= k <= n, the rule of analysis.alarm_rule among them (the sensitivity is
+    told around it)."""
+    a = p["analysis"]
+    d, main = a["diagnostics"], a["alarm_rule"]
+    contexts, rules = d["contexts"], d["alarm_rules"]
+    return (_count(d["tree_depth"], 1) and _count(d["min_positive_episodes"], 1)
+            and type(contexts) is list and bool(contexts)
+            and all(_count(c, 1) and c <= p["window_rows"] - 1 for c in contexts)
+            and contexts == sorted(set(contexts))
+            and type(rules) is list and bool(rules) and all(
+                type(r) is list and len(r) == 2 and _count(r[0], 1) and _count(r[1], 1) and r[0] <= r[1]
+                for r in rules)
+            and len({tuple(r) for r in rules}) == len(rules) and [main["k"], main["n"]] in rules
+            and type(d["note"]) is str)
+
+
 def _ok_analysis(p):
     a = p["analysis"]
     arch, stop, rule = a["architecture"], a["stopping"], a["alarm_rule"]
@@ -685,27 +821,26 @@ def _ok_analysis(p):
     if not (_number(a["fpr"]) and 0 < a["fpr"] < 1 and _count(rule["k"], 1) and _count(rule["n"], 1)
             and rule["k"] <= rule["n"]):
         return False
-    if not (_ok_methods(a) and _ok_descriptive(a) and _ok_claims_b7a(a)):
+    if not (_ok_methods(p) and _ok_descriptive(a) and _ok_claims_b7a(a)):
         return False
     if not (_names_every_method(a["selection"]) and _ok_qualification(a)):
         return False
     for name in ("k1", "k2a", "k2b"):
         t = a[name]
         compare = t["compare"]
-        if not (_text(t["statistic"]) and type(compare) is list and compare and len(set(compare)) == len(compare)
-                and set(compare) <= set(METHODS) - {"M"} and (t["m"] is None or _number(t["m"])) and _text(t["rule"])):
+        # A comparison names a method of METHODS but M, a method with variants by one of them (COMPARISONS, Q13).
+        if not (_text(t["statistic"]) and type(compare) is list and compare and all(type(c) is str for c in compare)
+                and len(set(compare)) == len(compare) and set(compare) <= set(COMPARISONS)
+                and (t["m"] is None or _number(t["m"])) and _text(t["rule"])):
             return False
-    i = a["interventions"]
-    for name in ("C", "D"):
-        lengths = i[name]["lengths"]
-        if not (type(lengths) is list and lengths and all(_count(n, 1) for n in lengths)
-                and _count(i[name]["per_boot"], 1)):
-            return False
+    if not (_ok_interventions(p) and _ok_diagnostics(p)):
+        return False
     ev = a["evaluable"]
-    return (_count(i["boots"], 1) and _text(i["validity"]) and all(_number(a[k]) and a[k] > 0 for k in (
-        "horizon_s", "reverberation_s")) and _number(ev["first_s"]) and ev["first_s"] > 0
-        and _number(ev["scored_share"]) and 0 < ev["scored_share"] <= 1 and _count(a["min_occurrences"], 1)
-        and type(a["note"]) is str)
+    # The first seconds that make an occurrence evaluable lie within the horizon (merge of B7b: tcn/zasahy.py places
+    # an intervention with every window of its horizon, so its first first_s seconds are scored).
+    return (all(_number(a[k]) and a[k] > 0 for k in ("horizon_s", "reverberation_s")) and _number(ev["first_s"])
+            and 0 < ev["first_s"] <= a["horizon_s"] and _number(ev["scored_share"]) and 0 < ev["scored_share"] <= 1
+            and _count(a["min_occurrences"], 1) and type(a["note"]) is str)
 
 
 def _ok_rehearsal(p):
@@ -812,12 +947,14 @@ def _analysis_seed(name, purpose, unit):
 
 
 def analysis_units(p):
-    """{purpose: [its units]} of the streams of the analysis (design B7a 1.6): z0_alarms per role of the protocol,
-    bootstrap per comparison "<claim>/<method>" of a confirmatory claim with each method it compares (CLAIMS and
-    analysis.<claim>.compare of the checked analysis plan, for example "k1/Z3")."""
+    """{purpose: [its units]} of the streams of the analysis (design B7a 1.6, B7b 1.4): z0_alarms per role of the
+    protocol, bootstrap per comparison "<claim>/<method>" of a confirmatory claim with each method it compares (CLAIMS
+    and analysis.<claim>.compare of the checked analysis plan, for example "k1/Z3" or "k2a/Z4:load"), injections per
+    carrier role and class and once for the insertion into dev (INJECTION_UNITS, for example "test_benign/C")."""
     a = analysis_plan(p)
     return {"z0_alarms": list(ROLES), "bootstrap": [f"{claim}/{method}" for claim in CLAIMS
-                                                    for method in a[claim]["compare"]]}
+                                                    for method in a[claim]["compare"]],
+            "injections": list(INJECTION_UNITS)}
 
 
 def analysis_seed(p, purpose, unit, *, mode):
@@ -826,8 +963,10 @@ def analysis_seed(p, purpose, unit, *, mode):
     analysis draws with numpy.random.default_rng. z0_alarms is drawn per role (unit: a role of ROLES), the random alarms
     of Z0 at the matched alarm rate on that role's windows; bootstrap per comparison of a confirmatory claim (unit
     "<claim>/<method>", analysis_units), the resamples of its interval and then, above
-    analysis.statistics.exact_up_to_boots boots, the sign vectors of its test. The plan draws neither (check_streams).
-    The mode has no default. ValueError for another schema, an unknown mode, purpose or unit."""
+    analysis.statistics.exact_up_to_boots boots, the sign vectors of its test; injections (package B7b) per carrier
+    role and class "<role>/<class>" and once for the interventions inserted into dev ("dev"), the placements of the
+    interventions in the order the code that inserts them states. The plan draws none of them (check_streams). The
+    mode has no default. ValueError for another schema, an unknown mode, purpose or unit."""
     if purpose not in ANALYSIS_PURPOSES:
         raise ValueError(f"{purpose!r} is no stream of the analysis ({', '.join(ANALYSIS_PURPOSES)})")
     units = analysis_units(p)[purpose]
@@ -1708,7 +1847,8 @@ def check_streams(doc, schedule):
 
     Package B7a: the streams of the analysis (ANALYSIS_PURPOSES) are no streams of the plan, so no session and no
     replacement draws one, and their seeds under the plan's name (z0_alarms per role, bootstrap per comparison of
-    CONFIRMATORY, which the analysis check binds to the file) share none with each other or with the plan."""
+    CONFIRMATORY, which the analysis check binds to the file, and since package B7b injections per unit of
+    INJECTION_UNITS) share none with each other or with the plan."""
     k = len(doc["scenarios"])
     groups = _groups(schedule)
     blocks = {}
@@ -1722,7 +1862,7 @@ def check_streams(doc, schedule):
             if purpose not in ANALYSIS_PURPOSES:  # A seed of the analysis in the plan is a reason of its own (below).
                 owners.setdefault(value, {})[_stream(s, purpose, blocks)] = purpose
     units = {"z0_alarms": ROLES, "bootstrap": [f"{claim}/{method}" for claim, methods in CONFIRMATORY.items()
-                                               for method in methods]}
+                                               for method in methods], "injections": INJECTION_UNITS}
     for purpose, names in units.items():
         for unit in names:
             owners.setdefault(_analysis_seed(schedule["name"], purpose, unit), {})[purpose, unit] = purpose
@@ -1790,8 +1930,10 @@ def _nulls(value, path=""):
 
 # Proposal 4.1: K1 against Z3 and Z5, K2a against the threshold methods Z1, Z2 and Z4, K2b against Z3 and Z5. A
 # result "better" must beat every method of its list, so a method left out would lighten the claim (the lead's
-# must_fix 4 on B4).
-CONFIRMATORY = {"k1": ["Z3", "Z5"], "k2a": ["Z1", "Z2", "Z4"], "k2b": ["Z3", "Z5"]}
+# must_fix 4 on B4). Package B7b (question Q13 to the lead, provisional by the executor's proposal): Z4 enters K2a by
+# both its variants (VARIANTS), each a comparison of its own; if the lead answers otherwise, only this list and
+# analysis.k2a.compare change.
+CONFIRMATORY = {"k1": ["Z3", "Z5"], "k2a": ["Z1", "Z2", "Z4:load", "Z4:residual"], "k2b": ["Z3", "Z5"]}
 
 
 def not_applicable(doc):

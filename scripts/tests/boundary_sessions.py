@@ -300,8 +300,9 @@ def v5_sections(scenarios, roles, *, group_sessions, window_rows, max_per_campai
     intensity, rate} in the file's order (the profiles section as the file has it, so each names one of its
     profiles); the roles given plus test_controls with no group; group_sessions given
     (the families give len(scenarios), so every group holds every scenario); no interleaving; events whose
-    per_session [0] plans no event; the analysis on the document's window; replacement.max_per_campaign as the
-    document had (0: a document without a rule replaced nothing); status test_only.
+    per_session [0] plans no event; the analysis on the document's window (scaled_to_window);
+    replacement.max_per_campaign as the document had (0: a document without a rule replaced nothing); status
+    test_only.
     """
     v5 = _v5_file()
     out = {key: copy.deepcopy(v5[key]) for key in V5_SECTIONS}
@@ -311,7 +312,25 @@ def v5_sections(scenarios, roles, *, group_sessions, window_rows, max_per_campai
                scenarios={name: dict(entries[i % len(entries)]) for i, name in enumerate(scenarios)},
                events=dict(out["events"], per_session=[0]),
                replacement=dict(out["replacement"], max_per_campaign=max_per_campaign))
-    out["analysis"]["architecture"]["window_rows"] = window_rows
+    out["analysis"] = scaled_to_window(out["analysis"], window_rows)
+    return out
+
+
+def scaled_to_window(analysis, window_rows):
+    """A copy of the analysis section of config/collection-v5.json on a window of `window_rows` rows (package B7b, F2 of
+    its verification: the protocol binds these keys to window_rows): the TCN's window_rows; the moving average of the
+    validity predicate (analysis.interventions.validity.moving_average_rows, at most window_rows) the file's or the
+    window when shorter; the contexts of the diagnostics (analysis.diagnostics.contexts, 1 to window_rows - 1) the
+    file's below window_rows - 1 and the full context window_rows - 1, as the file has 31 for its window of 32. A
+    window under 2 rows holds no context and no moving average of 2 rows: the section is then left as the file has it
+    but the window, and the protocol refuses it (the v5 analysis needs a window of at least 2 rows)."""
+    out = copy.deepcopy(analysis)
+    out["architecture"]["window_rows"] = window_rows
+    if window_rows >= 2:
+        validity = out["interventions"]["validity"]
+        validity["moving_average_rows"] = min(validity["moving_average_rows"], window_rows)
+        diagnostics = out["diagnostics"]
+        diagnostics["contexts"] = [c for c in diagnostics["contexts"] if c < window_rows - 1] + [window_rows - 1]
     return out
 
 
