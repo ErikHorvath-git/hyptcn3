@@ -1926,6 +1926,35 @@ def test_the_loader_knows_every_key_and_value_of_the_analysis_plan_of_b7b(change
         assert str(refused.value) == reason
 
 
+def window_refusal(rows):
+    """The refusal of a schema-3 window too short for the analysis plan, written out here (package B10)."""
+    return (f"invalid window_rows: {json.dumps(rows)}, protocol schema 3 needs an integer of at least 2 rows, the "
+            "target and one row of context (analysis.interventions.validity.moving_average_rows lies in [2, "
+            "window_rows], analysis.diagnostics.contexts in [1, window_rows - 1])")
+
+
+@pytest.mark.parametrize("rows", [1, 0, True, 2.0], ids=["one_row", "no_row", "boolean", "float"])
+def test_a_window_too_short_for_the_analysis_plan_is_refused_by_its_name(tmp_path, rows):
+    """A finding the verification of B7b left for B10 (dokazy/B7/odlozene_B7b.md): since F2 a schema-3 window under 2
+    rows holds neither the moving average of the validity predicate nor a context of the diagnostics, and the loader
+    refused it with the general "invalid analysis". The refusal names window_rows, in the layout check, in the analysis
+    plan's reader and in the loader; a window of 2 rows passes the window check (and then the analysis check names its
+    keys bound to 32 rows)."""
+    from scripts import collection, protocol_v5
+    doc = json.loads(V5.read_text())
+    doc["window_rows"] = doc["analysis"]["architecture"]["window_rows"] = rows
+    for read in (protocol_v5.check_layout, protocol_v5.analysis_plan,
+                 lambda d: collection.protocol(tmp_path / "p.json")):
+        (tmp_path / "p.json").write_text(json.dumps(doc))
+        with pytest.raises(ValueError) as refused:
+            read(doc)
+        assert str(refused.value) == window_refusal(rows)
+    doc["window_rows"] = doc["analysis"]["architecture"]["window_rows"] = 2
+    with pytest.raises(ValueError) as refused:
+        protocol_v5.check_layout(doc)
+    assert str(refused.value) == "invalid analysis"  # Contexts up to 31 and an average of 6 rows need 32 rows.
+
+
 def test_the_keys_of_b7b_are_those_the_skeleton_names():
     """The values of design B7b 1.4 in the real file: C reversed and random; D the four groups memory, processes,
     modules and sockets over every input of the neural channel; the predicate at the quantiles 0.001 and 0.999 of

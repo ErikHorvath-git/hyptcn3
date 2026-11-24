@@ -948,6 +948,31 @@ def attachments_problem(value):
     return None
 
 
+# The fewest rows of a window of protocol schema 3: its target and one row of context (the analysis plan binds
+# analysis.interventions.validity.moving_average_rows to [2, window_rows] and analysis.diagnostics.contexts to
+# [1, window_rows - 1]: F2 of the verification of B7b).
+MIN_WINDOW_ROWS = 2
+
+
+def window_problem(p):
+    """Why the window of a schema-3 protocol cannot hold its analysis plan, as a text naming window_rows, or None
+    (a finding left by the verification of B7b, package B10: the refusal names the window, not only the analysis)."""
+    rows = p.get("window_rows") if type(p) is dict else None
+    if type(rows) is int and rows >= MIN_WINDOW_ROWS:
+        return None
+    return (f"invalid window_rows: {json.dumps(rows)}, protocol schema 3 needs an integer of at least "
+            f"{MIN_WINDOW_ROWS} rows, the target and one row of context (analysis.interventions.validity."
+            "moving_average_rows lies in [2, window_rows], analysis.diagnostics.contexts in [1, window_rows - 1])")
+
+
+def _ok_window(p):
+    """The value check of window_rows under schema 3 (window_problem); its refusal is raised by name."""
+    problem = window_problem(p)
+    if problem is not None:
+        raise ValueError(problem)
+    return True
+
+
 def _ok_analysis(p):
     a = p["analysis"]
     arch, stop, rule = a["architecture"], a["stopping"], a["alarm_rule"]
@@ -1037,14 +1062,16 @@ VALUE_CHECKS = (
     ("interleave", _ok_interleave), ("scenarios", _ok_scenarios), ("profiles", _ok_profiles),
     ("scenario_rule", _ok_scenario_rule), ("events", _ok_events), ("full_snapshot_guard", _ok_guard),
     ("controls", _ok_controls), ("streams", _ok_streams), ("streams.seeded_level", _ok_seeded_level),
-    ("analysis", _ok_analysis), ("rehearsal", _ok_rehearsal), ("determined_at", _ok_determined))
+    ("window_rows", _ok_window), ("analysis", _ok_analysis), ("rehearsal", _ok_rehearsal),
+    ("determined_at", _ok_determined))
 
 
 def check_layout(p):
     """The loader's v5 checks: the first unknown or missing key, then the first malformed v5 section.
 
     ValueError `unknown protocol key: <path>`, `missing protocol key: <path>` or `invalid <section>`; a determined_at
-    that scripts/gates.py could not bind gives `invalid determined_at: <the reason of gates.later_paths>`.
+    that scripts/gates.py could not bind gives `invalid determined_at: <the reason of gates.later_paths>`, and a window
+    too short for the analysis plan `invalid window_rows: <why>` (window_problem, before the analysis section).
     """
     problems = layout_problems(p)
     if problems:
@@ -1078,6 +1105,7 @@ def analysis_plan(p):
     _walk(p.get("analysis") if type(p.get("analysis")) is dict else {}, ANALYSIS, "analysis", missing)
     if missing:
         raise ValueError(missing[0])
+    _ok_window(p)  # As the loader: a window too short for the plan is refused by name first (window_problem).
     try:
         good = _ok_analysis(p)
     except (KeyError, TypeError, AttributeError, IndexError):
