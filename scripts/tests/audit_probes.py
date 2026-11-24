@@ -24,7 +24,9 @@ ROWS holds the table (skeleton 1.1): one row per risk of class P and one per row
     tests    pytest node ids that repeat the probe on today's code; each passes today (test_audit_probes.py) and fails
              on the commit `before` (the records dokazy/B10/pred_po/ of agent A's tree and dokazy/B10/pred_po_zlucene/
              of the merged tree, design decision 5);
-    fixed    (package, commit) of each package that fixed it, the oldest first;
+    fixed    (package, commit) of each package that fixed it, the oldest first; beside the skeleton's packages a
+             later fix inside B10 is (LATER, commit, item), whose commit's subject names package B10 and the item it
+             fixes (the deferred item or the lead's answer; the verification of B10, F2);
     before   the parent of the oldest commit of `fixed` (skeleton 6: of two packages the older);
     kind     refusal, or limit (row 9, a bound of a unit file) or status (row 11, the status nevyhodnotené): design
              decision 3;
@@ -38,7 +40,8 @@ A risk of class P sits in exactly one row, and so does every risk SKELETON names
 The test of the table is scripts/tests/test_audit_probes.py. The test ids and the line numbers are facts of the tree at
 the merge of B10: agent A wrote them at base 966ff9b; the merge moved the lines that agent C's and agent Q's commits
 shift, added agent D's tests of the numeric cap to row 4, and gave row 5 agent Q's test and reason of the
-collector's major faults (Q29). A merge that moves a line or renames a test changes this table with it.
+collector's major faults (Q29); the fix round names those two fixes of B10 in `fixed` of rows 4 and 5. A merge that
+moves a line or renames a test changes this table with it.
 Only a table: no number here is a measurement.
 """
 from collections import namedtuple
@@ -154,6 +157,9 @@ SKELETON = (
 GONE = ("scripts/tests/test_early_stop_count.py::test_a_continuation_counts_only_its_own_sessions",)
 
 Row = namedtuple("Row", "number risks probe tests fixed before kind reasons open")
+# The package whose later fix may stand in `fixed` beside the skeleton's packages, with the item it fixes (the
+# verification of B10, F2): B10 makes the deferred fixes of the closed packages (design B10 decision 6).
+LATER = "B10"
 
 SELFTEST = "scripts/tests/test_audit_selftest.py::"
 CASE = SELFTEST + "test_bad_session_is_refused_with_exactly_its_reasons"
@@ -180,15 +186,15 @@ ROWS = (
          "lab/tests/test_udalosti_effect.py::test_predicate_is_true_with_the_effect_and_false_without"
          "[zataz_pamate-none-14]"),
         (("B3", "0b3c276"), ("B5a", "2a95852")), "c39accb", "refusal",
-        (("event_not_executed", "scripts/collection_logs.py:605"),
-         ("event_without_effect", "scripts/collection_logs.py:608")),
+        (("event_not_executed", "scripts/collection_logs.py:608"),
+         ("event_without_effect", "scripts/collection_logs.py:611")),
         ()),
     Row(3, (("capture", "R6"),),
         "a collector warning did not reject the session (the verifier's probe: two WARN lines accepted)",
         ("scripts/tests/test_collection_logs.py::test_collector_warning_is_judged_by_the_allowed_patterns[null]",
          CASE + "[logs:collector_warning_unlisted]"),
         (("B3", "0b3c276"),), "c39accb", "refusal",
-        (("collector_warning_unlisted", "scripts/collection_logs.py:588"),),
+        (("collector_warning_unlisted", "scripts/collection_logs.py:591"),),
         ()),
     Row(4, (("capture", "R3"),),
         "rows closed by a parser rule were accepted without a limit, a test with a numeric cap (the verifier's probe: "
@@ -198,7 +204,7 @@ ROWS = (
          SELFTEST + "test_the_self_test_builds_the_case_of_the_cap_once_the_cap_is_a_number[three]",
          SELFTEST + "test_the_self_test_builds_the_case_of_the_cap_once_the_cap_is_a_number[four]",
          SELFTEST + "test_the_self_test_builds_the_case_of_the_cap_once_the_cap_is_a_number[every_row]"),
-        (("B3", "0b3c276"),), "c39accb", "refusal",
+        (("B3", "0b3c276"), (LATER, "f0506e8", "B3 S1")), "c39accb", "refusal",
         (("rows closed by a parser rule above the cap", "features/acceptance.py:250"),),
         ("audit.rule_closed_rows_max is null in config/collection-v5.json until G3b (proposal 10.9), so under the G0 "
          "file the verifier's probe is still accepted: its rows are counted in exceptions.rule_closed_rows and are "
@@ -211,12 +217,12 @@ ROWS = (
          SELFTEST + "test_run_session_refuses_qemu_memory_that_was_swapped_before_start[8592]",
          "scripts/tests/test_collector_majflt.py::test_a_bound_refuses_one_cycle_above_it_and_accepts_a_cycle_at_it"
          "[zero]"),
-        (("B3", "0b3c276"), ("B5a", "2a95852")), "c39accb", "refusal",
+        (("B3", "0b3c276"), ("B5a", "2a95852"), (LATER, "a446043", "Q29")), "c39accb", "refusal",
         (("QEMU swap was not disabled before start: memory.swap.max is ", "scripts/collection.py:1177"),
          ("QEMU memory was swapped before start: qemu_swap_kb is ", "scripts/collection.py:1181"),
          ("QEMU swap was not disabled before start", "scripts/collection.py:1857"),
          ("QEMU memory was swapped before start", "scripts/collection.py:1861"),
-         ("qemu_swap", "scripts/collection_logs.py:558"),
+         ("qemu_swap", "scripts/collection_logs.py:561"),
          ("collector major faults per cycle above the audit bound", "scripts/collection.py:1951")),
         ("audit.collector_majflt_max is null in config/collection-v5.json until G2 (proposal 10.9, the lead's answer "
          "to Q29; the fix of B10, agent Q), so under the G0 file the probe of 500 collector major faults per cycle is "
@@ -248,7 +254,7 @@ ROWS = (
          "[offered_load_differs_from_plan]",
          CASE + "[logs:offered_load_differs_from_plan]"),
         (("B5b", "e64e619"),), "11319ee", "refusal",
-        (("offered_load_differs_from_plan", "scripts/collection_logs.py:730"),),
+        (("offered_load_differs_from_plan", "scripts/collection_logs.py:733"),),
         ()),
     Row(9, (("lab", "LAB-02"),),
         "a loop of restarts without end (the record ran no probe of the code: the verifier computed the gaps by "

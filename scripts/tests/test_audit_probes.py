@@ -4,9 +4,12 @@
 The table is scripts/tests/audit_probes.py. Its checks:
     problems()         the classification holds exactly the 72 risk ids of the record; every risk of class P and every
                        row of the lead's skeleton section 2 has its row (design decision 2), rows 1 to 15 are the
-                       skeleton's rows in its order with its packages, and every further row holds a risk of class P;
+                       skeleton's rows in its order with its packages, beside which only a later fix of B10 stands
+                       (LATER, with the item it fixes; the verification of B10, F2), and every further row holds a
+                       risk of class P;
     phrase_problems()  each class rests on a phrase that stands verbatim in its reader's text of the record;
-    commit_problems()  the fixing commits name their package and `before` is the parent of the oldest (skeleton 6);
+    commit_problems()  the fixing commits name their package (a later fix of B10 its package and its item) and
+                       `before` is the parent of the oldest (skeleton 6);
     reason_problems()  each exact reason stands verbatim on its line of the file (design decision 3);
 and every test id of the table exists and passes in one run of its own (design decision 4). Each check has its good
 input (the table as it is) and, where the design names the failure, one bad input with exactly its problem. That every
@@ -18,6 +21,7 @@ number here is a measurement.
 from collections import Counter
 import json
 from pathlib import Path
+import re
 import subprocess
 import sys
 import time
@@ -78,10 +82,11 @@ def problems(record, classes, rows, skeleton):
             continue
         if match[0].number != n:
             out.append(f"row {match[0].number} holds row {n} of the skeleton ({_name(risks)})")
-        fixed = [package for package, _ in match[0].fixed]
+        named = [entry[0] for entry in match[0].fixed]
+        fixed = [package for package in named if package != table.LATER]  # A later fix of B10 stands beside them.
         if not (all(any(p.startswith(s) for s in packages) for p in fixed)
                 and all(any(p.startswith(s) for p in fixed) for s in packages)):
-            out.append(f"row {match[0].number}: packages {', '.join(fixed)} are not the skeleton's "
+            out.append(f"row {match[0].number}: packages {', '.join(named)} are not the skeleton's "
                        f"{', '.join(packages)}")
     rows_of_skeleton = [set(risks) for risks, _ in skeleton]
     for row in rows:
@@ -89,6 +94,11 @@ def problems(record, classes, rows, skeleton):
             out.append(f"row {row.number} is no row of the skeleton and holds no risk of class P")
         if row.kind not in table.KINDS or not row.tests or not row.reasons or not row.fixed:
             out.append(f"row {row.number} lacks its kind, a test, a reason or a fix")
+        for entry in row.fixed:  # (package, commit), or (LATER, commit, item) for a later fix of B10.
+            if not (len(entry) == 2 and entry[0] != table.LATER
+                    or len(entry) == 3 and entry[0] == table.LATER and type(entry[2]) is str and entry[2]):
+                out.append(f"row {row.number}: fix {entry} is neither (package, commit) nor ({table.LATER}, commit, "
+                           "item)")
     return sorted(out)
 
 
@@ -110,14 +120,22 @@ def _git(*args):
 
 
 def commit_problems(rows, git=_git):
-    """A fixing commit whose subject does not name its package, fixes out of time order, or a `before` that is not
-    the parent of the oldest fix (skeleton 6: of two packages the older one)."""
-    out = []
+    """A fixing commit whose subject does not name its package (a later fix of B10: package B10 and the item it fixes),
+    fixes out of time order, or a `before` that is not the parent of the oldest fix (skeleton 6: of two packages the
+    older one)."""
+    later, out = _table().LATER, []
     for row in rows:
-        full = [git("rev-parse", commit + "^{commit}") for _, commit in row.fixed]
-        for (package, commit), sha in zip(row.fixed, full):
-            if f"package {package}:" not in git("log", "-1", "--format=%s", sha):
-                out.append(f"row {row.number}: commit {commit} does not name package {package}")
+        full = [git("rev-parse", entry[1] + "^{commit}") for entry in row.fixed]
+        for entry, sha in zip(row.fixed, full):
+            package, commit, subject = entry[0], entry[1], git("log", "-1", "--format=%s", sha)
+            if package != later:
+                if f"package {package}:" not in subject:
+                    out.append(f"row {row.number}: commit {commit} does not name package {package}")
+            elif not re.search(rf"\bpackage {later}\b", subject):
+                out.append(f"row {row.number}: commit {commit} does not name package {later}")
+            elif len(entry) < 3 or not re.search(rf"(?<!\w){re.escape(str(entry[2]))}(?!\w)", subject):
+                item = entry[2] if len(entry) > 2 else None
+                out.append(f"row {row.number}: commit {commit} does not name the item {item}")
         if any(git("merge-base", a, b) != a for a, b in zip(full, full[1:])):
             out.append(f"row {row.number}: the fixes are not oldest first")
         if git("rev-parse", row.before + "^{commit}") != git("rev-parse", full[0] + "^"):
@@ -172,6 +190,24 @@ def _extra_row(classes, rows, skeleton):
     return classes, rows + (rows[17]._replace(number=19, risks=(("process", "R12"),)),), skeleton
 
 
+# The verification of B10, F2: a later fix of B10 stands beside the skeleton's packages, with its item, and only B10's.
+
+def _later_fix_alone(classes, rows, skeleton):
+    return classes, rows[:3] + (rows[3]._replace(fixed=rows[3].fixed[1:]),) + rows[4:], skeleton
+
+
+def _later_fix_of_another_package(classes, rows, skeleton):
+    return classes, rows[:3] + (rows[3]._replace(fixed=(("B3", "0b3c276"), ("B9b", "f700204"))),) + rows[4:], skeleton
+
+
+def _later_fix_without_its_item(classes, rows, skeleton):
+    return classes, rows[:4] + (rows[4]._replace(fixed=rows[4].fixed[:2] + (("B10", "a446043"),)),) + rows[5:], skeleton
+
+
+def _item_of_a_skeleton_package(classes, rows, skeleton):
+    return classes, (rows[0]._replace(fixed=(("B3", "0b3c276", "S1"),)),) + rows[1:], skeleton
+
+
 @pytest.mark.parametrize("change, expected", [
     (None, []),
     (_without_class, ["risk process R12 of the record has no class"]),
@@ -180,12 +216,21 @@ def _extra_row(classes, rows, skeleton):
     (_twice, ["risk capture R5 sits in 2 rows"]),
     (_other_package, ["row 7: packages B5a are not the skeleton's B4"]),
     (_extra_row, ["row 19 is no row of the skeleton and holds no risk of class P"]),
+    (_later_fix_alone, ["row 4: packages B10 are not the skeleton's B3"]),
+    (_later_fix_of_another_package, ["row 4: packages B3, B9b are not the skeleton's B3"]),
+    (_later_fix_without_its_item, ["row 5: fix ('B10', 'a446043') is neither (package, commit) nor (B10, commit, "
+                                   "item)"]),
+    (_item_of_a_skeleton_package, ["row 1: fix ('B3', '0b3c276', 'S1') is neither (package, commit) nor (B10, commit, "
+                                   "item)"]),
 ], ids=["as_it_is", "risk_without_class", "probe_without_row", "skeleton_row_without_row", "risk_in_two_rows",
-        "package_not_the_skeletons", "row_without_a_reason_to_be"])
+        "package_not_the_skeletons", "row_without_a_reason_to_be", "later_fix_alone", "later_fix_of_another_package",
+        "later_fix_without_its_item", "item_of_a_skeleton_package"])
 def test_each_check_of_the_table_names_its_break(record, change, expected):
     """Design decision 2: a risk id of the record without a class, a risk of class P without a row and a row of the
     skeleton without a row each fail the table, and so do a risk in two rows, a fix of another package than the
-    skeleton's and a row that is neither a row of the skeleton nor one of a probe."""
+    skeleton's and a row that is neither a row of the skeleton nor one of a probe. The verification of B10, F2: beside
+    the skeleton's packages a later fix of B10 stands with the item it fixes (rows 4 and 5 as they are), never alone,
+    and the later fix of another package, a B10 fix without its item or an item on another fix still fail."""
     table = _table()
     classes, rows, skeleton = table.CLASSES, table.ROWS, table.SKELETON
     if change is not None:
@@ -215,7 +260,14 @@ def test_each_class_rests_on_a_phrase_of_the_record(record, change, expected):
     ({"fixed": (("B5a", "2a95852"), ("B3", "0b3c276"))},
      ["row 1: the fixes are not oldest first", "row 1: before c39accb is not the parent of 2a95852"]),
     ({"fixed": (("B4", "0b3c276"),)}, ["row 1: commit 0b3c276 does not name package B4"]),
-], ids=["as_it_is", "before_is_the_fix", "fixes_out_of_order", "package_not_in_the_subject"])
+    # The verification of B10, F2: the commit of a later fix of B10 names package B10 and the item in its subject.
+    ({"fixed": (("B3", "0b3c276"), ("B10", "2a95852", "B5a"))}, ["row 1: commit 2a95852 does not name package B10"]),
+    ({"fixed": (("B3", "0b3c276"), ("B10", "a446043", "B3 S1"))},
+     ["row 1: commit a446043 does not name the item B3 S1"]),
+    ({"fixed": (("B10", "f0506e8", "B3 S1"), ("B3", "0b3c276"))},
+     ["row 1: the fixes are not oldest first", "row 1: before c39accb is not the parent of f0506e8"]),
+], ids=["as_it_is", "before_is_the_fix", "fixes_out_of_order", "package_not_in_the_subject", "later_fix_not_of_b10",
+        "later_fix_of_another_item", "later_fix_before_the_skeletons"])
 def test_the_before_commit_is_the_parent_of_the_oldest_fix(change, expected):
     table = _table()
     rows = table.ROWS if change is None else (table.ROWS[0]._replace(**change),)
