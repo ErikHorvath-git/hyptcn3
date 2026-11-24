@@ -320,8 +320,10 @@ TOP = {"schema", "stage", "mark", "plan_mode", "corpus_index", "corpus_index_sha
 FAILED = {"schema", "stage", "mark", "plan_mode", "corpus_index", "corpus_index_sha256", "rehearsal", "order_rule",
           "campaign", "corpus", "seal", "seal_note", "gate", "tree", "models", "status", "failed_step", "error", "rule",
           "replays", "opisné"}
+# Finding N4 of the B7c confirmation (package B10): the rates on the sealed roles of M and Z0 to Z5 and their table of
+# K2 by class and length, the volume class and its finding are descriptive (matched_rates, k2_values).
 OPISNE = {"metrics", "diagnostics", "descriptive_methods", "losses", "tables", "training", "unscored", "z0_random",
-          "linkage", "rule_channel_only"}
+          "linkage", "rule_channel_only", "matched_rates", "k2_values"}
 CONFIRMATORY, DESCRIPTIVE = ("M", "Z0", "Z1", "Z2", "Z3", "Z4", "Z5"), ("zscore", "iforest", "gru", "lstm")
 
 
@@ -330,9 +332,10 @@ def _names(labels):
 
 
 def _parts(v, seeds):
-    """Proposal 9.1: the exact key sets of the values and of opisné; the matched thresholds, the fits and the values
-    of K2 of M and Z0 to Z5 at the top level, those of the descriptive methods under opisné; the wording of the rule
-    channel filled with a number (finding F6)."""
+    """Proposal 9.1: the exact key sets of the values and of opisné; the matched thresholds on calibration, the fits
+    and the pooled values of K2 of M and Z0 to Z5 at the top level, their rates on the sealed roles, their table by
+    class and length, the volume class and its finding under opisné (finding N4 of the B7c confirmation), and those of
+    the descriptive methods under opisné; the wording of the rule channel filled with a number (finding F6)."""
     from safeguard.training import RULE_CHANNEL_ONLY
     o = v["opisné"]
     assert set(v) == TOP and set(o) == OPISNE
@@ -343,8 +346,14 @@ def _parts(v, seeds):
     for key in ("thresholds", "detected"):
         assert _names(v["k2_values"][key]) == set(CONFIRMATORY) and _names(descriptive["k2_values"][key]) == set(
             DESCRIPTIVE)
-    assert all(_names(row.get("shares", {})) <= set(CONFIRMATORY) for row in v["k2_values"]["table"])
+    assert {"table", "volume", "volume_finding"}.isdisjoint(v["k2_values"]) and set(o["k2_values"]) == {
+        "table", "volume", "volume_finding", "rules"}
+    assert all(_names(row.get("shares", {})) <= set(CONFIRMATORY) for row in o["k2_values"]["table"])
     assert all(_names(row.get("shares", {})) <= set(DESCRIPTIVE) for row in descriptive["k2_values"]["table"])
+    assert o["k2_values"]["volume_finding"]["rule"] and set(o["k2_values"]["volume"]) == {"C", "D"}
+    assert all(set(found["rates"]) == {"calibration"} for found in v["matched"].values())
+    assert set(o["matched_rates"]) == set(v["matched"]) and all(
+        set(rates) == set(SEALED) for rates in o["matched_rates"].values())
     wording = o["rule_channel_only"]
     assert wording["wording"] == RULE_CHANNEL_ONLY and set(wording["increment"]["per_seed"]) == {
         str(seed) for seed in seeds}
@@ -400,7 +409,7 @@ def _attachments(v, out, corpus):
         assert np.array_equal(series["exceed"][i], series["score"][i] > series["threshold"][i])
         assert not (series["edge"][i] & ~series["up"][i]).any()
         for role, mine in roles.items():
-            rate = matched[label]["rates"][role]
+            rate = (o["matched_rates"][label] if label in o["matched_rates"] else matched[label]["rates"])[role]
             assert (int((series["edge"][i] & series["row_clean"] & mine).sum()),
                     int((series["row_clean"] & mine).sum())) == (rate["alarms"], rate["windows"]), (label, role)
     # M's replay rows, as the events.jsonl of its replay holds them.
@@ -598,7 +607,9 @@ def test_a_rehearsal_runs_the_final_command_end_to_end_into_one_record(corpus, m
     assert [m["seed"] for m in v["models"]] == p["analysis"]["seeds"]
     matched = {**v["matched"], **o["descriptive_methods"]["matched"]}
     assert _names(matched) == {"M", "Z0", "Z1", "Z2", "Z3", "Z4", "Z5", "zscore", "iforest", "gru", "lstm"}
-    assert all(set(found["rates"]) == {"calibration", *SEALED} for found in matched.values())
+    # Finding N4 of the B7c confirmation: the rates on the sealed roles of M and Z0 to Z5 lie under opisné.
+    assert all(set(found["rates"]) | set(o["matched_rates"].get(label, {})) == {"calibration", *SEALED}
+               for label, found in matched.items())
     for section in ("budget", "k2_values", "interventions"):
         assert v[section], section
     for section in ("z0_random", "losses", "diagnostics"):
@@ -1007,3 +1018,41 @@ def test_the_wording_of_the_rule_channel_is_filled_with_the_increment(case):
     assert (found["increment"]["median"], found["all_detection_by_rule_channel"]) == (value, flag)
     assert found["wording"] == RULE_CHANNEL_ONLY and found["increment"]["per_seed"]["1"]["neural_not_rule"] == round(
         8 * increments[1])
+
+
+def test_the_descriptive_values_of_k2_and_the_rates_on_the_sealed_roles_are_parted_under_opisne():
+    """Finding N4 of the B7c confirmation (package B10): of the values of K2 (tcn.k2 k2_values) the confirmatory part
+    keeps the thresholds, detections and shares of M and Z0 to Z5 and no table by class and length, volume class or
+    finding of the volume class (skeleton B7 sections 9 and 5, the lead's answer to Q14): those three go to
+    opisné.k2_values with the columns of M and Z0 to Z5; the descriptive methods keep their part as before. Of the
+    matched rates (rates_on) the top level keeps the threshold and the rate on calibration of M and Z0 to Z5, and the
+    rates on the sealed roles go to opisné.matched_rates (proposal 8.3). Values of the shape of both, here by hand."""
+    from tcn import finalne
+    labels, descriptive = ("M:seed 0", "Z1", "zscore"), {"zscore"}
+    confirmatory = ("M:seed 0", "Z1")
+
+    def per(value, names=labels):
+        return {label: value for label in names}
+    row = {"class": "C", "length": 4, "planned": 2, "evaluable": 1, "volume": 1, "not_placed": 0,
+           "volume_share": .5, "status": "nevyhodnotené", "class_status": "evaluated", "shares": per(.5),
+           "model_median": .5}
+    cell = {"count": 1, "detected": per(1), "shares": per(1.), "ids": ["C-4-1"]}
+    finding = {"bound": .5, "cells": [], "finding": False, "rule": "the rule of the volume class"}
+    values = {"schema": "hyptcn3/k2-values/1", "thresholds": per({"threshold": 1.}), "detected": per({"C-4-1": True}),
+              "shares": per({"boot-1": .5}), "status": "evaluated", "rules": {"k2": "the rule of K2"},
+              "table": [row], "volume": {"C": dict(cell, lengths={"4": dict(cell)})}, "volume_finding": finding}
+    top, opisne, methods = finalne.split_k2(values, descriptive)
+    assert top == {"schema": "hyptcn3/k2-values/1", "thresholds": per({"threshold": 1.}, confirmatory),
+                   "detected": per({"C-4-1": True}, confirmatory), "shares": per({"boot-1": .5}, confirmatory),
+                   "status": "evaluated", "rules": {"k2": "the rule of K2"}}
+    mine = dict(cell, detected=per(1, confirmatory), shares=per(1., confirmatory))
+    assert opisne == {"table": [dict(row, shares=per(.5, confirmatory))],
+                      "volume": {"C": dict(mine, lengths={"4": mine})}, "volume_finding": finding,
+                      "rules": {"k2": "the rule of K2"}}
+    assert (methods["labels"], methods["thresholds"], methods["table"][0]["shares"]) == (
+        ["zscore"], {"zscore": {"threshold": 1.}}, {"zscore": .5})
+    rates = {"calibration": {"alarms": 1}, "test_benign": {"alarms": 2}, "test_controls": {"alarms": 3}}
+    matched = per({"label": "any", "threshold": 1., "rates": rates})
+    top, sealed = finalne.split_matched(matched, descriptive)
+    assert top == per({"label": "any", "threshold": 1., "rates": {"calibration": {"alarms": 1}}}, confirmatory)
+    assert sealed == per({"test_benign": {"alarms": 2}, "test_controls": {"alarms": 3}}, confirmatory)

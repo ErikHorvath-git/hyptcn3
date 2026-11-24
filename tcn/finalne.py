@@ -142,10 +142,13 @@ CONFIRMATORY_RULE = (
     "proposal 9.1 ('Potvrdzujúce sú iba K1 a K2. Všetko ostatné sa zapisuje pod kľúč „opisné“.'): the top level of the "
     "values holds the metadata of the run (its stage, mark, status and seal, the gate records, the tree, the corpus, "
     "the campaign record, the bundles of M, the replays, the attachments and the rules) and the confirmatory part, the "
-    "claims and conclusions of K1, K2a and K2b and the values they rest on: the budget, the matched thresholds and the "
-    "fits of M and Z0 to Z5, the interventions and the values of K2 of M and Z0 to Z5; every other result is under "
-    "opisné: the metrics of design 1.3 (O2 to O4 and the thesis block, the outcomes of the controls), the diagnostics, "
-    "every value of the descriptive methods (their fits, matched rates and values of K2), the losses of the "
+    "claims and conclusions of K1, K2a and K2b and the values they rest on: the budget, the matched thresholds on "
+    "calibration and the fits of M and Z0 to Z5, the interventions and the pooled values of K2 of M and Z0 to Z5; "
+    "every other result is under opisné: the metrics of design 1.3 (O2 to O4 and the thesis block, the outcomes of the "
+    "controls), the diagnostics, the rates of the matched thresholds of M and Z0 to Z5 on the sealed roles "
+    "(matched_rates, proposal 8.3), their table of K2 by class and length (skeleton B7 section 9), the volume class "
+    "(section 5) and its finding (the lead's answer to Q14) (k2_values: finding N4 of the B7c confirmation, package "
+    "B10), every value of the descriptive methods (their fits, matched rates and values of K2), the losses of the "
     "predictors, the tables by boot, VM and profile, the summaries of the trainings, the unscored time, Z0's random "
     "alarms, the linkage table and the wording of the rule channel (RULE_CHANNEL_RULE); a failed record has opisné as "
     "well, empty")
@@ -985,19 +988,28 @@ def _volume_cell(cell, labels, inside):
     return out
 
 
+# The descriptive results of K2 of M and Z0 to Z5 (finding N4 of the B7c confirmation, package B10): the table by class
+# and length (skeleton B7 section 9), the volume class (section 5) and its finding (the lead's answer to Q14).
+K2_DESCRIPTIVE = ("table", "volume", "volume_finding")
+
+
 def split_k2(values, descriptive):
     """CONFIRMATORY_RULE for the values of K2 (tcn.k2 k2_values over every method): (the confirmatory part, the
-    descriptive part). The confirmatory part is the values as they are without the labels of the descriptive methods
-    (`descriptive`); the descriptive part holds those labels' thresholds, detections and shares and their columns of
-    the table by class and length and of the volume class. Every value of k2_values is per label or of the
-    interventions, so the parting changes no number."""
-    confirmatory = dict(values, thresholds=_by_label(values["thresholds"], descriptive, False),
-                        detected=_by_label(values["detected"], descriptive, False),
-                        table=[dict(row, shares=_by_label(row["shares"], descriptive, False)) if "shares" in row
-                               else dict(row) for row in values["table"]],
-                        volume={cls: _volume_cell(cell, descriptive, False) for cls, cell in values["volume"].items()})
+    descriptive part of M and Z0 to Z5, the part of the descriptive methods). The confirmatory part is the values as
+    they are without the labels of the descriptive methods (`descriptive`) and without K2_DESCRIPTIVE; the second
+    holds K2_DESCRIPTIVE for the other labels (opisné.k2_values, finding N4 of the B7c confirmation); the third holds
+    the descriptive methods' thresholds, detections and shares and their columns of the table by class and length and
+    of the volume class. Every value of k2_values is per label or of the interventions, so the parting changes no
+    number."""
+    confirmatory = {key: value for key, value in values.items() if key not in K2_DESCRIPTIVE}
+    confirmatory.update(thresholds=_by_label(values["thresholds"], descriptive, False),
+                        detected=_by_label(values["detected"], descriptive, False))
     if "shares" in values:
         confirmatory["shares"] = _by_label(values["shares"], descriptive, False)
+    opisne = {"table": [dict(row, shares=_by_label(row["shares"], descriptive, False)) if "shares" in row
+                        else dict(row) for row in values["table"]],
+              "volume": {cls: _volume_cell(cell, descriptive, False) for cls, cell in values["volume"].items()},
+              "volume_finding": values["volume_finding"], "rules": values["rules"]}
     rows = []
     for row in values["table"]:
         mine = {key: value for key, value in row.items() if key != "model_median"}
@@ -1009,7 +1021,19 @@ def split_k2(values, descriptive):
             "shares": _by_label(values["shares"], descriptive, True) if "shares" in values else None, "table": rows,
             "volume": {cls: _volume_cell(cell, descriptive, True) for cls, cell in values["volume"].items()},
             "rules": values["rules"]}
-    return confirmatory, part
+    return confirmatory, opisne, part
+
+
+def split_matched(matched, descriptive):
+    """CONFIRMATORY_RULE for the matched rates (rates_on of every method): (the matched thresholds of M and Z0 to Z5
+    with their rates on calibration, the rates of those thresholds on the sealed roles, opisné.matched_rates: proposal
+    8.3 reports them beside each method, finding N4 of the B7c confirmation). The descriptive methods' matched rates
+    stay whole under opisné.descriptive_methods.matched (_by_label)."""
+    top, rates = {}, {}
+    for label, found in _by_label(matched, descriptive, False).items():
+        top[label] = dict(found, rates={role: rate for role, rate in found["rates"].items() if role not in SEALED})
+        rates[label] = {role: rate for role, rate in found["rates"].items() if role in SEALED}
+    return top, rates
 
 
 def wording_of(manifests, labels=None, *, before_seal=False):
@@ -1533,14 +1557,15 @@ def sealed_part(ctx, prepared, run, progress):
     progress["step"] = "4: the record"
     claims = {"k1": claim_k1, **claims_k2}
     descriptive = prepared["descriptive"]
-    k2_confirmatory, k2_descriptive = split_k2(values, descriptive)
+    k2_confirmatory, k2_opisne, k2_descriptive = split_k2(values, descriptive)
+    matched_top, matched_rates = split_matched(matched, descriptive)
     wording = rule_channel_only([m.bundle.manifest for m in ms],
                                 {seed: found["v5"]["o4"] for seed, found in metrics["o4"].items()})
     complete = {
         **_common(ctx, run), "status": "complete",
         "replays": {"directory": str(ctx["replays"].resolve()), "rule": REPLAY_RULE, "sessions": replay_records},
         "budget": budget, "methods": _by_label(prepared["fits"], descriptive, False),
-        "matched": _by_label(matched, descriptive, False), "claims": claims,
+        "matched": matched_top, "claims": claims,
         "conclusions": {claim: {"outcome": value.get("outcome"), "status": value.get("status", EVALUATED),
                                 "wording": value.get("wording"), "conclusion": value.get("conclusion")}
                         for claim, value in claims.items()},
@@ -1550,7 +1575,7 @@ def sealed_part(ctx, prepared, run, progress):
                   "improvement": IMPROVEMENT_RULE, "confirmatory": CONFIRMATORY_RULE, "boots": BOOTS_RULE,
                   "out": OUT_RULE, "attachments": ATTACHMENT_RULE},
         OPISNE: {
-            "metrics": metrics, "diagnostics": diagnostics,
+            "metrics": metrics, "diagnostics": diagnostics, "matched_rates": matched_rates, "k2_values": k2_opisne,
             "descriptive_methods": {"methods": _by_label(prepared["fits"], descriptive, True),
                                     "matched": _by_label(matched, descriptive, True), "k2_values": k2_descriptive},
             "losses": losses, "tables": tables, "training": dict(prepared["training"], rule=TRAINING_RULE),
