@@ -36,9 +36,9 @@ ROWS holds the table (skeleton 1.1): one row per risk of class P and one per row
 A risk of class P sits in exactly one row, and so does every risk SKELETON names.
 
 The test of the table is scripts/tests/test_audit_probes.py. The test ids and the line numbers are facts of the tree at
-the merge of B10: agent A wrote them at base 966ff9b, and the merge moved the lines that agent C's commits shift and
-added agent D's tests of the numeric cap to row 4. A merge that moves a line or renames a test changes this table
-with it.
+the merge of B10: agent A wrote them at base 966ff9b; the merge moved the lines that agent C's and agent Q's commits
+shift, added agent D's tests of the numeric cap to row 4, and gave row 5 agent Q's test and reason of the
+collector's major faults (Q29). A merge that moves a line or renames a test changes this table with it.
 Only a table: no number here is a measurement.
 """
 from collections import namedtuple
@@ -165,7 +165,7 @@ ROWS = (
         "sidecar)",
         (CASE + "[lateness]",),
         (("B3", "0b3c276"),), "c39accb", "refusal",
-        (("cycle start later than the audit bound", "scripts/collection.py:1903"),),
+        (("cycle start later than the audit bound", "scripts/collection.py:1923"),),
         ()),
     Row(2, (("capture", "R7"), ("lab", "LAB-04")),
         "an event that did not run or had no effect was accepted (the auditor's probe: an unexecuted event accepted "
@@ -208,16 +208,21 @@ ROWS = (
         "process or memory data, and 500 collector major faults per cycle were accepted)",
         (CASE + "[logs:qemu_swap]", CASE + "[logs:qemu_swap:absent]", CASE + "[qemu_swap]", CASE + "[qemu_swapped]",
          SELFTEST + "test_run_session_refuses_qemu_swap_that_is_not_forbidden[max]",
-         SELFTEST + "test_run_session_refuses_qemu_memory_that_was_swapped_before_start[8592]"),
+         SELFTEST + "test_run_session_refuses_qemu_memory_that_was_swapped_before_start[8592]",
+         "scripts/tests/test_collector_majflt.py::test_a_bound_refuses_one_cycle_above_it_and_accepts_a_cycle_at_it"
+         "[zero]"),
         (("B3", "0b3c276"), ("B5a", "2a95852")), "c39accb", "refusal",
         (("QEMU swap was not disabled before start: memory.swap.max is ", "scripts/collection.py:1177"),
          ("QEMU memory was swapped before start: qemu_swap_kb is ", "scripts/collection.py:1181"),
-         ("QEMU swap was not disabled before start", "scripts/collection.py:1838"),
-         ("QEMU memory was swapped before start", "scripts/collection.py:1842"),
-         ("qemu_swap", "scripts/collection_logs.py:558")),
-        ("the probe of 500 collector major faults per cycle is still accepted: the audit never reads the sidecar's "
-         "capture.rusage, and proposal 6.2 gates QEMU swap only, while capture R4's protocol control asked for "
-         "collector majflt 0 (a finding of B10 for the lead)",)),
+         ("QEMU swap was not disabled before start", "scripts/collection.py:1857"),
+         ("QEMU memory was swapped before start", "scripts/collection.py:1861"),
+         ("qemu_swap", "scripts/collection_logs.py:558"),
+         ("collector major faults per cycle above the audit bound", "scripts/collection.py:1951")),
+        ("audit.collector_majflt_max is null in config/collection-v5.json until G2 (proposal 10.9, the lead's answer "
+         "to Q29; the fix of B10, agent Q), so under the G0 file the probe of 500 collector major faults per cycle is "
+         "still accepted: the audit records and prints the counts (values.collector_majflt) and they are never a "
+         "reason (scripts/tests/audit_cases.py UNREACHABLE); the bound refuses under a copy with a numeric bound, and "
+         "the self-test then builds the case collector_majflt_above_bound",)),
     Row(6, (("capture", "R1"), ("lab", "LAB-01")),
         "event starts on multiples of the capture interval (the record ran no probe: the verifier recomputed the "
         "phases over stored records)",

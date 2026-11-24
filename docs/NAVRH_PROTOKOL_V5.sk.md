@@ -351,6 +351,7 @@ audit a archivácia po jednej, zmrazený commit a hash protokolu.
 | meškanie začiatku cyklu | najviac 0,5 s (desatina intervalu) | meškanie dnes nikto nekontroluje |
 | čas cyklu | delta najviac 1,5 s, plná snímka najviac 3,5 s | rezerva pre dve VM je nezmeraná |
 | varovanie zberača mimo zoznamu povolených vzorov zamieta | zoznam z G2 | varovania sa dnes iba ukladajú |
+| major faulty zberača na cyklus (`capture.rusage.majflt`) | `audit.collector_majflt_max`, `null` do G2, pravidlo kap. 10.9 (vedúci 2026-11-24, Q29) | sonda s 500 major faultami na cyklus prešla (riziko capture R4) |
 | doména a PID v každom sidecari sa zhodujú so session | presná zhoda | chýbajúca väzba na VM |
 | každá plánovaná udalosť prebehla a má účinok | predikát | udalosť bez účinku sa dnes prijme |
 | nasadené súbory v hosťovi sa zhodujú s `lab/` v commite | presná zhoda | zastaraný hosť prejde pilotom |
@@ -362,12 +363,6 @@ Hranice z mechanizmu sa určia v G0. Stupne G2 a G3 overia iba to, či ich syst�
 nie, opravuje sa systém, nie hranica. Do kvality riadku pribudne výsledok prechodu zoznamu
 procesov v oboch smeroch a počty preskočených úloh; pri každej session sa zapíše posun
 mriežok oboch zberačov.
-
-Audit zapíše a vytlačí major faulty zberača na cyklus (`capture.rusage.majflt` každého
-sidecaru: najväčší počet, jeho seq, súčet a počet cyklov; sidecar bez počtu, ktorý je celé
-číslo aspoň 0, je dôvod, nikdy nie 0) a od G2 zamietne session s cyklom nad hranicou
-`audit.collector_majflt_max`, ktorá je do G2 `null` (zmena vedúceho 2026-11-24, odpoveď
-na otázku Q29).
 
 Každá kontrola má test, ktorý ju spustí na zlej session a dostane presne očakávaný dôvod
 (samotest kontrol). Bez platného záznamu samotestu pre aktuálny kód sa zber nespustí.
