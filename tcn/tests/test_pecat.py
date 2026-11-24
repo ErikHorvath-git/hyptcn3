@@ -325,6 +325,21 @@ def test_the_tracked_ledger_is_a_record_of_data_results():
         "hyptcn3/seal-ledger/1", list(SEALED_ROLES), [])
 
 
+def test_the_rule_the_ledger_keeps_for_snapshots_reads_the_restore_marker():
+    """Finding F3 of the B10 verification: the guard reads the restore marker of a raw/ restored from an archive (the
+    lead's answer to Q19) after the session.json of the same directory and before its parent's, so the rule of the
+    snapshots that the ledger keeps (RULES['snapshots'], and the tracked ledger) states that reading."""
+    from tcn import pecat
+    rule = pecat.RULES["snapshots"]
+    assert all(text in rule for text in (
+        f"the session.json in it names, or else its restore marker {pecat.RESTORED} names",
+        "or else the session.json and then the restore marker of its parent",
+        "a session.json or a restore marker without a session_id is refused by name",
+        "a directory without a session.json or a restore marker in it or its parent names no session"))
+    ledger = json.loads((ROOT / "data/results/kniha_pecati.json").read_text())
+    assert ledger["values"]["rules"]["snapshots"] == rule
+
+
 # ------------------------------------------------------------------ the guards
 
 

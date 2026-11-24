@@ -173,19 +173,22 @@ UNREADABLE_RULE = (
     "replay reads it and fails as it did before the seal")
 SNAPSHOT_RULE = (
     "the raw snapshots of a session enter a detector through kontrola_snimok (verification of B7c, F1): a snapshot "
-    "directory belongs to the session whose session_id the session.json in it names, or else the session.json of its "
-    "parent (the session directory of its raw/); the ledger holds that session when it holds an archive of that "
-    "session id, and then the archive's rule applies to the directory: refused outside the final run that consumed it "
-    "(plan mode campaign), the rehearsal mark (plan mode rehearsal); a session.json without a session_id is refused by "
-    "name, and a directory without a session.json in it or its parent names no session (NO_SESSION_RULE)")
+    "directory belongs to the session whose session_id the session.json in it names, or else its restore marker "
+    "restored_from.json names (a raw/ restored from an archive, RESTORED_RULE, the lead's answer to Q19), or else the "
+    "session.json and then the restore marker of its parent (the session directory of its raw/); the ledger holds that "
+    "session when it holds an archive of that session id, and then the archive's rule applies to the directory: "
+    "refused outside the final run that consumed it (plan mode campaign), the rehearsal mark (plan mode rehearsal); a "
+    "session.json or a restore marker without a session_id is refused by name, and a directory without a session.json "
+    "or a restore marker in it or its parent names no session (NO_SESSION_RULE)")
 NO_SESSION_RULE = (
     "a snapshot directory without a session.json or a restore marker in it or in its parent names no session, so the "
     "ledger cannot be consulted (the live capture of safeguard run, a lab test outside a campaign: no tool of the "
     "repository restored it from an archive, RESTORED_RULE): it is let through and the decision says so")
 # The lead's answer to question Q19 (2026-11-24; finding N1 of the B7c confirmation, package B10). RESTORED is the name
 # scripts/collection_archive.py RESTORED gives the marker (tcn/ imports nothing of scripts/collection_archive.py, which
-# imports scripts/collection.py; tcn/tests/test_pecat.py checks that the two names are one). Not in RULES: the ledger
-# keeps those, and the tracked ledger holds the rules of the code.
+# imports scripts/collection.py; tcn/tests/test_pecat.py checks that the two names are one). Not in RULES:
+# SNAPSHOT_RULE, which the ledger keeps, states the guard's reading of the marker (finding F3 of the B10
+# verification), and this text goes into the decision on a restored directory.
 RESTORED = "restored_from.json"
 RESTORED_RULE = (
     "a raw/ restored from the archive of a session (scripts/collection_archive.py restore_raw, the lead's answer to "
