@@ -101,12 +101,12 @@ def final_run(tmp_path):
     run.close()
 
 
-def session(kind, shifted=INSIDE, columns=None, wx_only=(), invalid=(), full_every=360):
+def session(kind, shifted=INSIDE, columns=None, wx_only=(), invalid=(), full_every=360, rows=ROWS):
     """The extraction result of a session with one occurrence of `kind`: every column of the kind at LEVEL, the
     `columns` (default: all of them) plus SHIFT in the rows `shifted` and plus 5 SHIFT in the DECOYS, the W+X and memfd
-    patterns of PID in the shifted rows and the DECOYS (in the rows `wx_only` W+X alone), the rows `invalid` unclosed
-    and a full snapshot every `full_every` rows."""
-    result, _ = bs.extraction_result("s", ROWS, full_every, t0=T0, interval_s=5, bins=BINS,
+    patterns of PID in the shifted rows and the DECOYS (in the rows `wx_only` W+X alone), the rows `invalid` unclosed,
+    a full snapshot every `full_every` rows, and `rows` rows (package B10: more for a longer occurrence)."""
+    result, _ = bs.extraction_result("s", rows, full_every, t0=T0, interval_s=5, bins=BINS,
                                      quality={seq: bs.unclosed_row() for seq in invalid})
     columns = KINDS[kind]["columns"] if columns is None else columns
     for seq, row in enumerate(result["matica"]):
@@ -157,6 +157,9 @@ MEASURED = [seq for seq in INSIDE if seq not in (70, 71, 80)]
     # A horizon without a scored row: no 32 measured rows in a row end in it. The outcomes from the features are
     # judged on the measured rows alone.
     ("kontrola_modul_jadra", "control", {}, GAPS, MEASURED, True, True, False),
+    # Package B10, S8 of the B8 verification (mutant O7): a module control without the module in any row (last, so
+    # that the ids above keep their numbers).
+    ("kontrola_modul_jadra", "control", {}, {"shifted": []}, [], False, False, True),
 ])
 def test_outcomes(kind, polarity, record, change, showing, saw, moved, scored, final_run):
     from scripts.controls import outcomes
@@ -178,6 +181,38 @@ def test_outcomes(kind, polarity, record, change, showing, saw, moved, scored, f
         assert column["expect"] == (shift[doses.index(dose)] if type(shift) is list else shift)
 
 
+def test_a_row_scored_after_the_horizon_does_not_score_the_occurrence(final_run):
+    """S8 of the B8 verification (package B10, mutant O9): the sensor scored the occurrence when a window the live
+    detector scores ends in its horizon (start to start + horizon_s 180 s), not later. A 360 s occurrence over the rows
+    of GAPS in a session of 140 rows: the horizon holds no run of 32 measured rows, while after the full snapshot at
+    row 80 the windows end from row 112 on, inside the occurrence and after its horizon."""
+    from features.coverage import scorable_windows
+    from scripts.controls import outcomes
+    kind, doc = "kontrola_modul_jadra", protocol()
+    result = session(kind, rows=140, **GAPS)
+    out = outcomes(occurrence(kind, host_stop_unix=START + 360, host_stopped_unix=START + 363), result, doc,
+                   role="test_controls", final_evaluation=True)
+    windows, _ = scorable_windows(result, doc, "control-" + kind, 140)
+    scored = {int(m["seq_do"]) for m in windows.meta}
+    assert scored & set(out["window"]["inside"]) == set(range(112, 132)) and out["window"]["horizon"] == HORIZON
+    assert (out["window"]["scored"], out["sensor_scored"]) == ([], False)
+
+
+def test_the_writer_shows_its_dose_only_beyond_the_bytes_of_the_reference_rows(final_run):
+    """S8 of the B8 verification (package B10, mutant O12): the writer's change in a row is its changed bytes less
+    those of the reference rows (LEVEL .02 of the 512 MiB guest, 10.24 MiB). The rows wholly inside at a change ratio
+    of .135, 69.12 MiB, would hold the dose of 64 MiB with the reference counted in; less it, 58.88 MiB, none shows
+    it."""
+    from scripts.controls import outcomes
+    kind = "kontrola_zapisovac_pamate"
+    result = session(kind)
+    for seq in INSIDE:
+        result["matica"][seq][MENA.index("mem_changed_ratio")] = .135
+    saw = outcomes(occurrence(kind), result, protocol(), role="test_controls", final_evaluation=True)["parser_saw"]
+    assert (saw["ok"], saw["showing"]) == (False, [])
+    assert saw["object"]["reference_bytes"] == pytest.approx(.02 * (512 << 20))
+
+
 @pytest.mark.parametrize("fall,reached", [(False, False), (True, True)])
 def test_expectation_down(fall, reached):
     """A column expected to fall: one socket more does not reach the expected shift, one fewer does."""
@@ -188,6 +223,38 @@ def test_expectation_down(fall, reached):
         result["matica"][seq][MENA.index("sock_listen")] -= 2
     column = outcomes(occurrence(kind), result, doc, role="pilot")["column_moved"]["columns"]["sock_listen"]
     assert (column["shift"], column["direction"], column["reached"]) == (-1 if fall else 1, "down", reached)
+
+
+def test_the_writer_is_judged_on_the_memory_of_the_bins_mem_changed_ratio_counts():
+    """V1 of dokazy/B11/odlozene_B11.md (package B10): under schema 3 mem_changed_ratio is a share of the bins of at
+    least analysis.scale.min_bin_pages pages (1024: the lead's answer to Q10), so the writer's changed bytes are that
+    share times their memory, not the memory of every bin. The layout here has a bin of 1 page and one of 64 pages
+    beside its 32 bins of 4096 (as the hyptcn-lab layout has): a row one page short of the dose of 64 MiB over the
+    32 bins does not show it, a row one page above it does; under schema 2 every bin counts, and the row one page
+    short shows it (65 / 131072 of the dose more, about 8 pages)."""
+    from scripts.controls import outcomes
+    kind, page, mib, size = "kontrola_zapisovac_pamate", 4096, 1 << 20, 16 << 20
+    counted = BINS * 4096 * page  # 512 MiB in the 32 bins of 4096 pages; the bins of 1 and 64 pages lie below 1024.
+    found = {}
+    for label, short, schema in (("one_page_below", 1, 3), ("one_page_above", -1, 3), ("schema_2", 1, 2)):
+        result, doc = session(kind), protocol()
+        layout = result["layout"]  # Two more physical regions: one page in bin 32 and 64 pages in bin 33.
+        layout["regions"] = [{"gpa": 0, "bytes": BINS * size}, {"gpa": BINS * size, "bytes": page},
+                             {"gpa": (BINS + 1) * size, "bytes": 64 * page}]
+        layout["memsize"] = (BINS * 4096 + 65) * page
+        layout["bins"] = [*layout["bins"], [BINS, 1], [BINS + 1, 64]]
+        result["biny"] = list(range(BINS + 2))
+        result["perbin"] = [[*row, row[0], row[0]] for row in result["perbin"]]
+        assert layout["page_size"] == page and doc["analysis"]["scale"]["min_bin_pages"] == 1024
+        for seq in INSIDE:
+            result["matica"][seq][MENA.index("mem_changed_ratio")] = (
+                LEVEL["mem_changed_ratio"] + (DOSE[kind] * mib - short * page) / counted)
+        if schema == 2:
+            doc["schema"] = "hyptcn3/collection-protocol/2"
+        saw = outcomes(occurrence(kind), result, doc, role="pilot")["parser_saw"]
+        found[label] = (saw["ok"], saw["showing"], saw["object"]["memory_bytes"], saw["object"].get("min_bin_pages"))
+    assert found == {"one_page_below": (False, [], counted, 1024), "one_page_above": (True, INSIDE, counted, 1024),
+                     "schema_2": (True, INSIDE, counted + 65 * page, None)}
 
 
 @pytest.mark.parametrize("kind,record,change,why,moved,moved_why", [
@@ -224,6 +291,8 @@ def test_feature_archive_gives_the_same_outcomes(tmp_path):
     ("test_control", "final", False, "unknown session role: 'test_control'"),  # A misspelt role opens nothing.
     ("test_controls", "G6", True, "unknown stage of the record: 'G6' (proposal 11.1: suchy, skuska, generalka, "
                                   "final)"),
+    # Package B10 (O14 of the B8 verification on the seal of B7c): only True is the final evaluation, not a truthy 1.
+    ("test_controls", "final", 1, SEALED),
 ])
 def test_sealed_role(role, stage, final_evaluation, reason, request, tmp_path):
     """Package B7c: the final evaluation is the final command's run (final_run); at a stage before the final one the

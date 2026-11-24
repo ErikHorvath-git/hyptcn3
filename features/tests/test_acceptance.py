@@ -88,10 +88,12 @@ def sections():
     from features import audit_policy
     from scripts.tests.boundary_sessions import traffic_bounds  # Package B5b: the traffic bounds of the v5 file.
     from scripts.tests.boundary_sessions import early_stop_bounds  # Package B9b: the early stop of the v5 file.
+    # Q29: the bound of the collector's major faults per cycle and its note, as the v5 file has them (null until G2).
+    from scripts.tests.boundary_sessions import collector_majflt_bounds
     return {"audit": {"lateness_max_s": .1, "cycle_ms_max": {"delta": 300, "full": 700},
                       "periodicity": {"equal_spacings": 3, "min_spacing_rows": STEP + 1, "note": "test bounds"},
-                      "warnings_allowed": None, "rule_closed_rows_max": None, "traffic": traffic_bounds(),
-                      "early_stop": early_stop_bounds()},
+                      "warnings_allowed": None, "rule_closed_rows_max": None, **collector_majflt_bounds(),
+                      "traffic": traffic_bounds(), "early_stop": early_stop_bounds()},
             "exceptions": {name: {"cause": "synthetic", "decision": "synthetic", "expected": None}
                            for name in audit_policy.TOLERATED}}
 
@@ -571,6 +573,9 @@ UNREADABLE = {
     "findings_missing": (lambda d: _with_quality(d, lambda q: q[1].pop("findings")), "invalid quality record", True),
     "validity_missing": (lambda d: _with_quality(d, lambda q: q[1].pop("behavior_valid")), "invalid quality record",
                          True),
+    # Finding S5 of B3 (package B10, mutant m23): without process_walk a row could hide a list a parser rule closed.
+    "process_walk_missing": (lambda d: _with_quality(d, lambda q: q[1].pop("process_walk")), "invalid quality record",
+                             True),
     # A counter that is no JSON value exists only in an extraction result; an archive stores quality as JSON.
     "counter_not_json": (lambda d: _with_quality(d, lambda q: q[F // 2].update(read_errors=np.int64(0))),
                          "invalid quality record", False),
@@ -1044,14 +1049,16 @@ def v5_grid(max_rows, gate):
     from scripts.tests.boundary_sessions import traffic_bounds  # Package B5b: the traffic bounds of the v5 file.
     # Package B9b: the early stop of the v5 file; without an events section the protocol has no event type to bound.
     from scripts.tests.boundary_sessions import early_stop_bounds
+    # Q29: the bound of the collector's major faults per cycle and its note, as the v5 file has them (null until G2).
+    from scripts.tests.boundary_sessions import collector_majflt_bounds
     return {"schema": "hyptcn3/collection-protocol/3", "quality_policy": BEHAVIOR, "interval_s": 5,
             "max_gap_s": 7.5, "stride": 1, "bin_bytes": BIN_BYTES, "window_rows": 32, "full_every": 360,
             "cycles": 720, "pilot_cycles": 600, "min_score_coverage": gate,
             "invalid_rows": {"max": max_rows, "traversals": ["processes"]},
             "audit": {"lateness_max_s": .5, "cycle_ms_max": {"delta": 1500, "full": 3500},
                       "periodicity": {"equal_spacings": 2, "min_spacing_rows": 2, "note": "strictest test bound"},
-                      "warnings_allowed": None, "rule_closed_rows_max": None, "traffic": traffic_bounds(),
-                      "early_stop": early_stop_bounds([])}}
+                      "warnings_allowed": None, "rule_closed_rows_max": None, **collector_majflt_bounds(),
+                      "traffic": traffic_bounds(), "early_stop": early_stop_bounds([])}}
 
 
 @pytest.mark.parametrize("count", range(1, 8))

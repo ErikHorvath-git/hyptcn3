@@ -48,9 +48,10 @@ def p(tmp_path_factory):
     return doc
 
 
-def session(root, p, scenario, *, event=False, measure_s=MEASURE_S, **variant):
-    """A sealed session of build() under p in `scenario`, its traffic that of the profile (v5_traffic)."""
-    d = evidence.build(Path(root), event=event, measure_s=measure_s)
+def session(root, p, scenario, *, event=False, measure_s=MEASURE_S, snapshots=10, **variant):
+    """A sealed session of build() under p in `scenario` (`snapshots` cycles), its traffic that of the profile
+    (v5_traffic)."""
+    d = evidence.build(Path(root), event=event, measure_s=measure_s, snapshots=snapshots)
     evidence.write(d / "protocol.json", p)
     meta = json.loads((d / "session.json").read_text())
     evidence.write(d / "session.json", dict(meta, scenario=scenario, protocol_sha256=logs.digest(d / "protocol.json")))
@@ -141,7 +142,8 @@ def test_realism_of_a_synthetic_log_gives_exactly_its_known_values(tmp_path, p):
     assert (len(thinks), max(thinks), len(outside), max(sizes), min(sizes)) == (23, 12., 33, 150000, 10)
     assert requirement(found, "think_time")["bound"] == {
         "mean": design["think_s"]["mean"], "max": design["think_s"]["max"],
-        "tolerance": round(4 * statistics.stdev(thinks) / math.sqrt(len(thinks)), 6)}
+        "tolerance": round(4 * statistics.stdev(thinks) / math.sqrt(len(thinks)), 6),
+        "lag_s": 1.0}  # Package B10: the generator's own delay a realized maximum may add (judgment, THINK_LAG_S).
     assert requirement(found, "order_share")["bound"] == {
         "share": design["order_share"]["low"],
         "tolerance": round(4 * math.sqrt(design["order_share"]["low"] * (1 - design["order_share"]["low"]) / 10), 6)}
@@ -174,7 +176,9 @@ def broken(name):
     e = evidence
     return {
         "arrival_cv": ("steady", {"spacings": (1.,) * (len(e.ESHOP) - 1)}),  # Evenly spaced: CV 0.
-        "think_time": ("steady", {"thinks": (75.,)}),
+        # Four think times of 75 s in a user session need a longer measure phase than 60 s, and the protocol's
+        # planned run of the session's cycles covers it (package B10: the realized think times, F6 of B5b).
+        "think_time": ("steady", {"thinks": (75.,), "measure_s": 400, "snapshots": 400}),
         "order_share": ("steady", {"sessions": tuple(s if e.ORDER in s else [*s, e.CART_ADD, e.ORDER]
                                                      for s in e.ESHOP)}),
         "object_concentration": ("steady", {"sessions": _distinct(e.ESHOP)}),
@@ -199,6 +203,122 @@ def test_a_log_that_breaks_one_requirement_is_refused_with_its_name(tmp_path, p,
     failed = [r["name"] for r in found["requirements"] if not r["ok"]] + (
         ["offered_load_differs_from_plan"] if not found["offered_load"]["ok"] else [])
     assert failed == [name]
+
+
+def test_the_think_time_is_that_of_the_request_times_not_the_logged_draw(tmp_path, p):
+    """Finding F6 of the B5b verification (package B10): think_time judges the realized think times, the start of a
+    request minus the end of the request before it in its user session, not the drawn think_s the generator logs. The
+    verifier's probe: the clean session of eshop, its requests of the measure phase moved to 1 ms after the end of
+    the one before, think_s unchanged, fails think_time with the realized times as its value; the clean session,
+    whose requests follow by their think times, passes with the same times as think_s says."""
+    d = session(tmp_path, p, "steady")
+
+    def realized(rows):
+        out = []
+        for uid in sorted({r["user_session"] for r in rows if r.get("type") == "request"}):
+            mine = sorted((r for r in rows if r.get("type") == "request" and r["user_session"] == uid),
+                          key=lambda r: r["t_start_mono"])
+            out += [round(b["t_start_mono"] - a["t_end_mono"], 6) for a, b in zip(mine, mine[1:])
+                    if b["phase"] == "measure"]
+        return out
+    rows = records(d)
+    logged = [r["think_s"] for r in rows if r.get("type") == "request" and r["phase"] == "measure"
+              and r["think_s"] is not None]
+    assert sorted(realized(rows)) == sorted(logged) and requirement(realism(d, p), "think_time")["ok"]
+    for uid in {r["user_session"] for r in rows if r.get("type") == "request" and r["phase"] == "measure"}:
+        mine = sorted((r for r in rows if r.get("type") == "request" and r["user_session"] == uid),
+                      key=lambda r: r["t_start_mono"])
+        for before, r in zip(mine, mine[1:]):
+            r["t_start_mono"] = round(before["t_end_mono"] + .001, 6)
+            r["t_end_mono"] = round(r["t_start_mono"] + r["duration_ms"] / 1000, 6)
+    evidence.jsonl(d / "traffic_requests.jsonl", rows)
+    times = realized(rows)
+    found = requirement(realism(d, p), "think_time")
+    assert [r["think_s"] for r in rows if r.get("type") == "request" and r["phase"] == "measure"
+            and r["think_s"] is not None] == logged  # The draws as logged.
+    assert found["value"] == {"mean": round(statistics.mean(times), 6), "max": max(times), "n": len(times)}
+    assert max(times) < 1 and not found["ok"]
+
+
+# Package B10, F7 of the B5b verification (its mutants M18 to M21, M23, M28 and M29): the other side of each two-sided
+# bound, and each part of the background on its own; one log each that breaks the requirement and nothing else.
+GONE = evidence.Step("detail", "GET", "/api/catalog/7", 7, 404, 40, 404)  # A deliberate 404 on the top object.
+OTHER_SIDE = {
+    # Eight spacings of 0.25 and one of 4: CV 1.77, above 1.2.
+    "arrival_cv:above": ("steady", {"spacings": (.25,) * (len(evidence.ESHOP) - 2) + (4.,)}),
+    # Every drawn think 20 s: the mean 19.1 s lies far from the profile's 7 s, and every think is below its 70 s.
+    # The requests follow by their think times (F6 of B5b), so the measure phase is 200 s of 200 cycles.
+    "think_time:mean": ("steady", {"thinks": (20.,), "measure_s": 200, "snapshots": 200}),
+    # One drawn think of 71.5 s among 22 of 4 s: the mean stays within its tolerance of the profile's 7 s, and the
+    # realized maximum lies 0.5 s above think_s.max plus THINK_LAG_S, 71 s (finding F4 of the B10 verification; its
+    # mutant C6 drops the check of the maximum).
+    "think_time:max": ("steady", {"thinks": (71.5,) + (4.,) * 22, "measure_s": 200, "snapshots": 200}),
+    # Four more deliberate 404s (on the most requested object, so the concentration holds): 34 of 39 answered 2xx,
+    # 0.872, below success_min 0.88.
+    "success_rate:below_min": ("steady", {"sessions": tuple([*steps, GONE] if i < 4 else steps
+                                                            for i, steps in enumerate(evidence.ESHOP))}),
+    # 70 user sessions of eshop high, none of them orders: 0 against 0.2 within 0.19 (4 standard errors of 70).
+    "order_share:too_few": ("bursty", {"sessions": tuple([s for s in steps if s not in (evidence.ORDER, evidence.CART,
+                                                                                         evidence.CART_ADD)]
+                                                         for steps in evidence.ESHOP) * 7,
+                                       "spacings": (.25, .25, 2.5) * 23}),
+    "offered_load_differs_from_plan:above": ("bursty", {"rate_factor": .5}),  # Twice the planned user sessions.
+    "background:logins": ("office", {"sessions": tuple([s for s in steps if s != evidence.LOGIN]
+                                                       for steps in evidence.CORP)}),  # No login at all.
+    # The largest download 200000 bytes, 3.1 times the median one (64000): no tail of 10 times.
+    "background:tail": ("office", {"sessions": tuple([s._replace(bytes=200000) if s.bytes == 900000 else s
+                                                      for s in steps] for steps in evidence.CORP)}),
+}
+
+
+@pytest.mark.parametrize("case", OTHER_SIDE)
+def test_a_log_that_breaks_the_other_side_of_a_requirement_is_refused_with_its_name(tmp_path, p, case):
+    name = case.split(":")[0]
+    scenario, variant = OTHER_SIDE[case]
+    d = session(tmp_path, p, scenario, **variant)
+    result = audit(d)
+    reason = name if name == "offered_load_differs_from_plan" else "traffic_realism:" + name
+    assert result["problems"] == [reason]
+    found = result["sections"]["realism"]
+    failed = [r["name"] for r in found["requirements"] if not r["ok"]] + (
+        ["offered_load_differs_from_plan"] if not found["offered_load"]["ok"] else [])
+    assert failed == [name]
+
+
+def test_a_think_time_at_the_maximum_plus_the_generators_lag_is_admitted(tmp_path, p):
+    """Finding F4 of the B10 verification: a realized think time of exactly think_s.max plus THINK_LAG_S (the
+    executor's judgment, package B10, F6 of B5b), 71 s, among 22 of 4 s keeps the requirement and the session
+    accepted; its mutant C5 leaves the lag out. One 0.5 s above it is OTHER_SIDE['think_time:max'], refused."""
+    top = p["profiles"]["eshop"]["think_s"]["max"] + tl.THINK_LAG_S
+    d = session(tmp_path, p, "steady", thinks=(top,) + (4.,) * 22, measure_s=200, snapshots=200)
+    found = requirement(realism(d, p), "think_time")
+    assert (found["value"]["max"], found["bound"]["max"] + found["bound"]["lag_s"], found["ok"]) == (top, top, True)
+    assert audit(d)["problems"] == []
+
+
+def test_the_protocol_states_the_allowance_of_the_maximum_think_time():
+    """Finding F4 of the B10 verification: audit.traffic.note of the v5 file states THINK_LAG_S, by which the realized
+    maximum think time may exceed profiles.eshop.think_s.max, and whose judgment it is (proposal 5.7 says the same)."""
+    note = json.loads(bs.V5.read_text())["audit"]["traffic"]["note"]
+    assert f"may lie at most {tl.THINK_LAG_S:g} s above profiles.eshop.think_s.max" in note
+    assert "scripts/traffic_log.py THINK_LAG_S, the executor's judgment, package B10" in note
+
+
+def test_the_offered_load_is_summed_over_the_intervals_outside_every_window(tmp_path, p):
+    """F7 of the B5b verification (package B10, mutant M27): the offered and the planned user sessions are both summed
+    over the measure-phase intervals that overlap no window. The clean log offers its plan exactly over every
+    interval; windows inside the two intervals that hold two arrivals each leave 6 offered of about 8.93 planned,
+    a ratio below the tolerance of 0.2."""
+    d = session(tmp_path, p, "steady")
+    start = records(d)[0]["start_unix"]
+    ivs = [r for r in records(d, "traffic_intervals.jsonl") if r.get("type") == "interval" and r["phase"] == "measure"]
+    busy = [iv for iv in ivs if iv["offered_sessions"] == 2]
+    kept = [iv for iv in ivs if iv["offered_sessions"] != 2]
+    offered, planned = sum(iv["offered_sessions"] for iv in kept), sum(iv["planned_sessions"] for iv in kept)
+    assert (len(busy), offered, realism(d, p)["offered_load"]["ok"]) == (2, 6, True)
+    windows = [(start + iv["mono_start"] + .1, start + iv["mono_end"] - .1) for iv in busy]
+    assert realism(d, p, windows)["offered_load"] == {"offered": 6, "planned": round(planned, 6),
+                                                      "ratio": round(6 / planned, 6), "ok": False}
 
 
 def test_the_cv_is_computed_on_spacings_rescaled_by_the_envelope(tmp_path, p):
@@ -374,12 +494,67 @@ def m_cap(r, i, p):
 
 def m_dropped(r, i, p):
     last = _arrivals(r)[LAST]
-    last.update(admitted=False, active=p["profiles"]["eshop"]["max_concurrent"])  # Dropped at the cap, but counted
-    index = _interval_of(i, last["t_mono"])["interval"]  # as admitted, and its requests were sent.
+    last.update(admitted=False, active=p["profiles"]["eshop"]["max_concurrent"],  # Dropped at the cap, but counted
+                drop_reason="max_concurrent")  # as admitted, and its requests were sent.
+    index = _interval_of(i, last["t_mono"])["interval"]
     return [f"interval_sessions:{index}:admitted_sessions:1!=0", f"interval_sessions:{index}:dropped_sessions:0!=1",
             *(f"request_user_session_dropped:{rid}" for rid in _requests_of(r, LAST)),
             f"requests:end_arrivals_mismatch:admitted:{LAST + 1}!={LAST}",
             f"requests:end_arrivals_mismatch:dropped:0!=1"]
+
+
+# Finding F1 of the B5c verification (package B10): the drop reason and the customer of an arrival are read.
+
+def m_drop_reason(r, i, p):
+    _arrivals(r)[4]["drop_reason"] = "max_concurrent"  # Admitted, with the reason of a drop.
+    return [f"arrival_drop_reason:{_user(4)}"]
+
+
+def m_customers_held(r, i, p):
+    last = _arrivals(r)[LAST]  # All customers held while fewer user sessions than customers are in progress.
+    last.update(admitted=False, drop_reason="all_customers_held")
+    return [f"arrival_customers:{_user(LAST)}", *_dropped_counts(r, i, last)]
+
+
+def _dropped_counts(r, i, last):
+    index = _interval_of(i, last["t_mono"])["interval"]
+    return [f"interval_sessions:{index}:admitted_sessions:1!=0", f"interval_sessions:{index}:dropped_sessions:0!=1",
+            *(f"request_user_session_dropped:{rid}" for rid in _requests_of(r, LAST)),
+            f"requests:end_arrivals_mismatch:admitted:{LAST + 1}!={LAST}",
+            f"requests:end_arrivals_mismatch:dropped:0!=1"]
+
+
+def m_customer_unknown(r, i, p):
+    _arrivals(r)[4]["customer"] = "zakaznik9999"  # lab/seed.py has 2000 customers.
+    return [f"arrival_customer:{_user(4)}"]
+
+
+def m_customer_held_twice(r, i, p):
+    # u1 of build() orders and holds zakaznik0001 until its order ends at 1.5 s; u2 arrives in that time.
+    assert _arrivals(r)[1]["customer"] == "zakaznik0001" and _arrivals(r)[2]["customer"] is None
+    _arrivals(r)[2]["customer"] = "zakaznik0001"
+    return [f"customer_held_twice:{_user(2)}"]
+
+
+def m_customer_held_twice_briefly(r, i, p):
+    # The verification of B10 (its mutant C9): an overlap under 1 s counts too. u0 holds its customer from its arrival
+    # at 0.01 s to the end of its request at 0.103 s; u1 arrives at 0.02 s holding zakaznik0001, given to u0 as well.
+    u0, u1 = _arrivals(r)[0], _arrivals(r)[1]
+    end = max(x["t_end_mono"] for x in _requests(r) if x["user_session"] == _user(0))
+    assert u0["customer"] is None and u1["customer"] == "zakaznik0001" and 0 < end - u1["t_mono"] < 1
+    u0["customer"] = "zakaznik0001"
+    return [f"customer_held_twice:{_user(1)}"]
+
+
+def m_customers_held_at_customers(r, i, p):
+    # The verification of B10 (its mutant C8): a drop for held customers with exactly as many user sessions in
+    # progress as lab/seed.py has customers is one, the fewest that can hold them all, below a cap above that.
+    from lab import seed
+    customers = seed.SIZES["customers"]
+    _headers(r, i, lambda h: h["profile_parameters"].update(max_concurrent=customers + 1))
+    last = _arrivals(r)[LAST]
+    last.update(admitted=False, drop_reason="all_customers_held", active=customers)
+    return _dropped_counts(r, i, last)
 
 
 def m_interval_offered(r, i, p):

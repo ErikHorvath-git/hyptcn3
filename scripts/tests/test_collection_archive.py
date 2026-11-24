@@ -366,6 +366,21 @@ def test_colliding_stored_names_are_rejected(bulky):
     assert not dst.exists() and not dst.with_name(".partial-" + dst.name).exists()
 
 
+def restored_members(target, archive):
+    """{name: bytes} of the restored members of `target`, after the check of its restore marker (the lead's answer to
+    question Q19, package B10): the session of the archive's session.json of the fixture (no session_id there, so
+    none; its campaign_id), the archive, the sha256 of its manifest and of the session.json."""
+    found = {p.name: p.read_bytes() for p in Path(target).iterdir()}
+    assert "restored_from.json" in found, "the restored directory holds no restore marker"
+    marker = json.loads(found.pop("restored_from.json"))
+    assert {key: value for key, value in marker.items() if key != "date"} == {
+        "schema": arc.RESTORED_SCHEMA, "session_id": None, "campaign_id": "test", "archive": str(archive),
+        "manifest_sha256": arc.digest(archive / arc.MANIFEST),
+        "session_json_sha256": arc.digest(archive / "session.json"),
+        "source": str(archive.parent.parent / "working/session"), "rule": arc.RESTORE_RULE}
+    return found
+
+
 def test_plain_archive_manifest_unchanged_and_restorable(session, tmp_path):
     src, dst = session
     originals = {p.name: p.read_bytes() for p in (src / "raw").iterdir()}
@@ -375,7 +390,7 @@ def test_plain_archive_manifest_unchanged_and_restorable(session, tmp_path):
     assert all(set(v) == {"size", "sha256"} for v in doc["files"].values())
     assert arc.verify_archive(dst, src) == doc
     summary = arc.restore_raw(dst, tmp_path / "restored")
-    assert {p.name: p.read_bytes() for p in (tmp_path / "restored").iterdir()} == originals
+    assert restored_members(tmp_path / "restored", dst) == originals
     assert summary["files"] == 2
     assert summary["bytes"] == summary["stored_bytes"] == sum(map(len, originals.values()))
 
@@ -387,7 +402,7 @@ def test_restore_raw_reproduces_compressed_members(bulky, tmp_path, capsys):
     move(src, dst, compress="zstd")
     target = tmp_path / "restored"
     summary = arc.restore_raw(dst, target)
-    assert {p.name: p.read_bytes() for p in target.iterdir()} == originals
+    assert restored_members(target, dst) == originals
     assert summary["files"] == 3 and summary["bytes"] == sum(map(len, originals.values())) > summary["stored_bytes"]
     with pytest.raises(ValueError, match="already exists"):
         arc.restore_raw(dst, target)
@@ -396,6 +411,40 @@ def test_restore_raw_reproduces_compressed_members(bulky, tmp_path, capsys):
     assert arc.main(["restore", str(dst), str(tmp_path / "again")]) == 0
     assert json.loads(capsys.readouterr().out)["files"] == 3
     assert (tmp_path / "again/c.vmicd").read_bytes() == originals["c.vmicd"]
+
+
+def _member_named_like_the_marker(src, monkeypatch):
+    (src / "raw" / arc.RESTORED).write_text("{}")
+    return f"archive has a raw/ member named {arc.RESTORED}, the name of the restore marker"
+
+
+def _session_json_no_object(src, monkeypatch):
+    (src / "session.json").write_text("[]")
+    return "archive member session.json is no JSON object; its session cannot be read"
+
+
+def _session_json_compressed(src, monkeypatch):
+    # The archiver compresses large raw images and logs only (COMPRESS_SUFFIXES, COMPRESS_MIN_BYTES): an archive
+    # stored under another rule holds session.json compressed.
+    monkeypatch.setattr(arc, "COMPRESS_SUFFIXES", arc.COMPRESS_SUFFIXES + (".json",))
+    monkeypatch.setattr(arc, "COMPRESS_MIN_BYTES", 1)
+    return "archive member session.json is stored compressed; its session cannot be read"
+
+
+@pytest.mark.parametrize("change", [_member_named_like_the_marker, _session_json_no_object,
+                                    pytest.param(_session_json_compressed, marks=needs_zstd)],
+                         ids=["member_named_like_the_marker", "session_json_no_object", "session_json_compressed"])
+def test_restore_raw_refuses_by_name_an_archive_whose_marker_it_cannot_write(session, tmp_path, monkeypatch, change):
+    """The lead's answer to Q19 (package B10; the verification of B10, its mutants R3, R5 and R4): restore_raw refuses
+    by name, before the target exists, an archive with a raw/ member named like the restore marker, one whose
+    session.json is no JSON object, and one whose session.json is stored compressed."""
+    src, dst = session
+    reason = change(src, monkeypatch)
+    arc.archive_session(src, dst, lambda: None, compress="zstd" if change is _session_json_compressed else None)
+    target = tmp_path / "restored"
+    with pytest.raises(ValueError, match="^" + re.escape(reason) + "$"):
+        arc.restore_raw(dst, target)
+    assert not target.exists()
 
 
 @pytest.mark.parametrize("target", ["/", "/home"])

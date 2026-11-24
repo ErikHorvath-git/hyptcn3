@@ -861,6 +861,28 @@ def test_the_rows_of_a_control_and_of_its_negative_are_left_out(tmp_path, ledger
     assert {row["column"]: row for row in kept["table"]}["mod_total"]["class"] == "neural"
 
 
+def test_an_occurrence_leaves_out_and_counts_only_measured_rows(tmp_path):
+    """V4 of the B11 verification (package B10, mutant A13): RULES controls_left_out counts the measured rows an
+    occurrence leaves out. A module control of 300 s over the rows of seq 41 to 100 of a session whose rows of seq 50
+    and 51 are not measured (an invalid row and the row after it, without a predecessor): its mask covers the 60 rows,
+    and it leaves out 58 measured rows, in its own count and in the session's."""
+    from features.qualification import controls_left_out
+    from scripts import collection, protocol_v5
+    start = 1700000000.
+    times = start + 5 * np.arange(ROWS + 1)
+    measured = np.ones(ROWS + 1, dtype=bool)
+    measured[[0, 50, 51]] = False  # The full snapshot of seq 0, the invalid row and the row after it.
+    module = start + 5 * 40 + 2.5
+    path = tmp_path / "controls.json"
+    path.write_text(json.dumps({"schema": protocol_v5.CONTROLS_SCHEMA, "note": "synthetic record of the test",
+                                "controls": [control("kontrola_modul_jadra", "control", module, 300.)]}))
+    record = {"id": "s", "role": "test_controls", "controls": str(path), "controls_sha256": collection.digest(path)}
+    mask, left = controls_left_out(record, json.loads(V5.read_text()), times, measured)
+    assert np.flatnonzero(mask).tolist() == list(range(41, 101))
+    assert left == {"rows": 58, "occurrences": [{"kind": "kontrola_modul_jadra", "polarity": "control",
+                                                 "after_unix": module, "until_unix": module + 300., "rows": 58}]}
+
+
 @pytest.mark.parametrize("held_as", ["campaign", "rehearsal"])
 def test_a_sealed_archive_of_a_campaign_in_a_rehearsal_is_refused_before_it_is_opened(tmp_path, ledger, monkeypatch,
                                                                                       capsys, held_as):

@@ -94,7 +94,8 @@ ORDER_RULE = (
     "in plan mode campaign the carrier boots of the index against analysis.interventions.boots, BOOTS_RULE, the seal's "
     "state on the ledger by tcn.pecat stav, so that a seal that cannot be consumed is refused here, the outputs with "
     "the paths of the attachments, OUT_RULE, the gate records of the run's stage, GATE_RULE, at stage final a "
-    "committed tree of code, the campaign record, the bundles, the sharp check of the index of safeguard/training.py "
+    "committed tree of code, the campaign record, the bundles with the one wording of the rule channel they carry "
+    "(RULE_CHANNEL_RULE, finding N5 of the B7c confirmation), the sharp check of the index of safeguard/training.py "
     "validate_index, which opens no archive, and the files of every session); 1 everything that reads only the roles "
     "without a seal: the sessions of train, dev and calibration, the budget from M's clean calibration traffic "
     "(tcn.metody BUDGET_RULE), the fits of Z0 to Z5 (Z1 selected by the interventions inserted into dev at the budget) "
@@ -141,10 +142,13 @@ CONFIRMATORY_RULE = (
     "proposal 9.1 ('Potvrdzujúce sú iba K1 a K2. Všetko ostatné sa zapisuje pod kľúč „opisné“.'): the top level of the "
     "values holds the metadata of the run (its stage, mark, status and seal, the gate records, the tree, the corpus, "
     "the campaign record, the bundles of M, the replays, the attachments and the rules) and the confirmatory part, the "
-    "claims and conclusions of K1, K2a and K2b and the values they rest on: the budget, the matched thresholds and the "
-    "fits of M and Z0 to Z5, the interventions and the values of K2 of M and Z0 to Z5; every other result is under "
-    "opisné: the metrics of design 1.3 (O2 to O4 and the thesis block, the outcomes of the controls), the diagnostics, "
-    "every value of the descriptive methods (their fits, matched rates and values of K2), the losses of the "
+    "claims and conclusions of K1, K2a and K2b and the values they rest on: the budget, the matched thresholds on "
+    "calibration and the fits of M and Z0 to Z5, the interventions and the pooled values of K2 of M and Z0 to Z5; "
+    "every other result is under opisné: the metrics of design 1.3 (O2 to O4 and the thesis block, the outcomes of the "
+    "controls), the diagnostics, the rates of the matched thresholds of M and Z0 to Z5 on the sealed roles "
+    "(matched_rates, proposal 8.3), their table of K2 by class and length (skeleton B7 section 9), the volume class "
+    "(section 5) and its finding (the lead's answer to Q14) (k2_values: finding N4 of the B7c confirmation, package "
+    "B10), every value of the descriptive methods (their fits, matched rates and values of K2), the losses of the "
     "predictors, the tables by boot, VM and profile, the summaries of the trainings, the unscored time, Z0's random "
     "alarms, the linkage table and the wording of the rule channel (RULE_CHANNEL_RULE); a failed record has opisné as "
     "well, empty")
@@ -155,7 +159,9 @@ RULE_CHANNEL_RULE = (
     "polarity control of test_controls (tcn.eval INCREMENT_RULE, the total group of O4): the median over the seeds of "
     "M (judgment: M enters every claim by that median, D14), each seed's counts beside it, nevyhodnotené when the "
     "increment of a seed is; all detection is carried by the rule channel (all_detection_by_rule_channel) when that "
-    "increment is 0 while the rule channel detects a planned control")
+    "increment is 0 while the rule channel detects a planned control; the sentence is the conclusion of that case "
+    "only, so the record holds its text only when the flag is true, and otherwise text null with the reason (why), "
+    "the increment and its counts kept (finding N3 of the B7c confirmation, package B10)")
 REPLAY_RULE = (
     "one replay per seed of M and sealed session, inside the run, by safeguard.cli replay_directory (safeguard replay "
     "--archive of the loaded bundle: tcn.pecat kontrola first, configuration.json with archive_sha256 and the seal's "
@@ -982,19 +988,28 @@ def _volume_cell(cell, labels, inside):
     return out
 
 
+# The descriptive results of K2 of M and Z0 to Z5 (finding N4 of the B7c confirmation, package B10): the table by class
+# and length (skeleton B7 section 9), the volume class (section 5) and its finding (the lead's answer to Q14).
+K2_DESCRIPTIVE = ("table", "volume", "volume_finding")
+
+
 def split_k2(values, descriptive):
     """CONFIRMATORY_RULE for the values of K2 (tcn.k2 k2_values over every method): (the confirmatory part, the
-    descriptive part). The confirmatory part is the values as they are without the labels of the descriptive methods
-    (`descriptive`); the descriptive part holds those labels' thresholds, detections and shares and their columns of
-    the table by class and length and of the volume class. Every value of k2_values is per label or of the
-    interventions, so the parting changes no number."""
-    confirmatory = dict(values, thresholds=_by_label(values["thresholds"], descriptive, False),
-                        detected=_by_label(values["detected"], descriptive, False),
-                        table=[dict(row, shares=_by_label(row["shares"], descriptive, False)) if "shares" in row
-                               else dict(row) for row in values["table"]],
-                        volume={cls: _volume_cell(cell, descriptive, False) for cls, cell in values["volume"].items()})
+    descriptive part of M and Z0 to Z5, the part of the descriptive methods). The confirmatory part is the values as
+    they are without the labels of the descriptive methods (`descriptive`) and without K2_DESCRIPTIVE; the second
+    holds K2_DESCRIPTIVE for the other labels (opisné.k2_values, finding N4 of the B7c confirmation); the third holds
+    the descriptive methods' thresholds, detections and shares and their columns of the table by class and length and
+    of the volume class. Every value of k2_values is per label or of the interventions, so the parting changes no
+    number."""
+    confirmatory = {key: value for key, value in values.items() if key not in K2_DESCRIPTIVE}
+    confirmatory.update(thresholds=_by_label(values["thresholds"], descriptive, False),
+                        detected=_by_label(values["detected"], descriptive, False))
     if "shares" in values:
         confirmatory["shares"] = _by_label(values["shares"], descriptive, False)
+    opisne = {"table": [dict(row, shares=_by_label(row["shares"], descriptive, False)) if "shares" in row
+                        else dict(row) for row in values["table"]],
+              "volume": {cls: _volume_cell(cell, descriptive, False) for cls, cell in values["volume"].items()},
+              "volume_finding": values["volume_finding"], "rules": values["rules"]}
     rows = []
     for row in values["table"]:
         mine = {key: value for key, value in row.items() if key != "model_median"}
@@ -1006,19 +1021,51 @@ def split_k2(values, descriptive):
             "shares": _by_label(values["shares"], descriptive, True) if "shares" in values else None, "table": rows,
             "volume": {cls: _volume_cell(cell, descriptive, True) for cls, cell in values["volume"].items()},
             "rules": values["rules"]}
-    return confirmatory, part
+    return confirmatory, opisne, part
+
+
+def split_matched(matched, descriptive):
+    """CONFIRMATORY_RULE for the matched rates (rates_on of every method): (the matched thresholds of M and Z0 to Z5
+    with their rates on calibration, the rates of those thresholds on the sealed roles, opisné.matched_rates: proposal
+    8.3 reports them beside each method, finding N4 of the B7c confirmation). The descriptive methods' matched rates
+    stay whole under opisné.descriptive_methods.matched (_by_label)."""
+    top, rates = {}, {}
+    for label, found in _by_label(matched, descriptive, False).items():
+        top[label] = dict(found, rates={role: rate for role, rate in found["rates"].items() if role not in SEALED})
+        rates[label] = {role: rate for role, rate in found["rates"].items() if role in SEALED}
+    return top, rates
+
+
+def wording_of(manifests, labels=None, *, before_seal=False):
+    """RULE_CHANNEL_RULE: the one wording analysis_wording.rule_channel_only that the bundles of M carry (the manifests
+    in the order of `labels`, the labels of M), a text with its ellipsis; else ValueError by name. It reads only the
+    manifests, so the final command asks it in step 0 (ORDER_RULE, before_seal: the refusal says so), before the seal
+    is consumed (finding N5 of the B7c confirmation, package B10), and rule_channel_only once more when it fills the
+    text."""
+    labels = [f"bundle {i + 1}" for i in range(len(manifests))] if labels is None else list(labels)
+    wordings = [((m.get("analysis_wording") or {}).get("rule_channel_only")) if type(m) is dict else None
+                for m in manifests]
+    if not wordings:
+        raise ValueError("no bundle of M carries the wording analysis_wording.rule_channel_only")
+    first = wordings[0]
+    other = [label for label, wording in zip(labels, wordings) if wording != first]
+    if other or type(first) is not dict or "…" not in str(first.get("text")):
+        verb = "carries" if len(other) == 1 else "carry"
+        why = (f"{', '.join(other)} {verb} another one than {labels[0]}" if other else
+               f"{labels[0]} carries none" if type(first) is not dict else "its text holds no ellipsis")
+        raise ValueError("the bundles of M carry one wording analysis_wording.rule_channel_only with its ellipsis "
+                         f"(safeguard/training.py RULE_CHANNEL_ONLY): {why}"
+                         + ("; refused before the seal is consumed (RULE_CHANNEL_RULE)" if before_seal else ""))
+    return first
 
 
 def rule_channel_only(manifests, o4):
-    """RULE_CHANNEL_RULE: the wording of the bundles (one text with its ellipsis) filled with the median over the seeds
-    of the increment of the neural channel over the rule channel in the total of the planned controls (o4: {seed: the
-    O4 block of tcn.eval for test_controls}), the counts of every seed, and whether all detection is carried by the
-    rule channel."""
-    wordings = [((m.get("analysis_wording") or {}).get("rule_channel_only")) for m in manifests]
-    first = wordings[0]
-    if any(w != first for w in wordings) or type(first) is not dict or "…" not in str(first.get("text")):
-        raise ValueError("the bundles of M carry one wording analysis_wording.rule_channel_only with its ellipsis "
-                         "(safeguard/training.py RULE_CHANNEL_ONLY)")
+    """RULE_CHANNEL_RULE: the wording of the bundles (one text with its ellipsis, wording_of) filled with the median
+    over the seeds of the increment of the neural channel over the rule channel in the total of the planned controls
+    (o4: {seed: the O4 block of tcn.eval for test_controls}), the counts of every seed, and whether all detection is
+    carried by the rule channel; the filled text only when it is, else text null with the reason why (finding N3 of
+    the B7c confirmation)."""
+    first = wording_of(manifests)
     per_seed = {}
     for seed, block in o4.items():
         computed = type(block) is dict and block.get("computed") is True
@@ -1027,10 +1074,19 @@ def rule_channel_only(manifests, o4):
     shares = [item["share"] for item in per_seed.values()]
     value = None if not shares or any(x is None for x in shares) else float(np.median(shares))
     rule_detects = any(item.get("rule", 0) > 0 for item in per_seed.values())
-    return {"text": first["text"].replace("…", UNEVALUATED if value is None else f"{value:.4g}"),
+    flag = None if value is None else (value == 0 and rule_detects)
+    if flag is True:
+        why = None
+    elif flag is None:
+        why = ("the increment of a seed is nevyhodnotené, so whether all detection is carried by the rule channel is "
+               "not decided")
+    elif value > 0:
+        why = f"the neural channel adds detections over the rule channel (median increment {value:.4g})"
+    else:
+        why = "the rule channel detects no planned control, so it carries no detection"
+    return {"text": first["text"].replace("…", f"{value:.4g}") if flag is True else None, "why": why,
             "wording": first, "increment": {"median": value, "per_seed": per_seed},
-            "all_detection_by_rule_channel": None if value is None else (value == 0 and rule_detects),
-            "rule": RULE_CHANNEL_RULE}
+            "all_detection_by_rule_channel": flag, "rule": RULE_CHANNEL_RULE}
 
 
 # ------------------------------------------------------------------ the diagnostics
@@ -1370,6 +1426,7 @@ def refusals(corpus, models, *, campaign, replays, out):
     kampan = campaign_record(campaign, doc, path)
     index_sha256 = _digest(path)
     ms, model_records = bundles(models, index_sha256, protocol, plan)
+    wording_of([m.bundle.manifest for m in ms], [m.label for m in ms], before_seal=True)  # N5 of the B7c confirmation.
     _, _, records = validate_index(path, diagnostic=False)
     check_inputs(records)
     rehearsal = None if mode == "campaign" else {
@@ -1500,14 +1557,15 @@ def sealed_part(ctx, prepared, run, progress):
     progress["step"] = "4: the record"
     claims = {"k1": claim_k1, **claims_k2}
     descriptive = prepared["descriptive"]
-    k2_confirmatory, k2_descriptive = split_k2(values, descriptive)
+    k2_confirmatory, k2_opisne, k2_descriptive = split_k2(values, descriptive)
+    matched_top, matched_rates = split_matched(matched, descriptive)
     wording = rule_channel_only([m.bundle.manifest for m in ms],
                                 {seed: found["v5"]["o4"] for seed, found in metrics["o4"].items()})
     complete = {
         **_common(ctx, run), "status": "complete",
         "replays": {"directory": str(ctx["replays"].resolve()), "rule": REPLAY_RULE, "sessions": replay_records},
         "budget": budget, "methods": _by_label(prepared["fits"], descriptive, False),
-        "matched": _by_label(matched, descriptive, False), "claims": claims,
+        "matched": matched_top, "claims": claims,
         "conclusions": {claim: {"outcome": value.get("outcome"), "status": value.get("status", EVALUATED),
                                 "wording": value.get("wording"), "conclusion": value.get("conclusion")}
                         for claim, value in claims.items()},
@@ -1517,7 +1575,7 @@ def sealed_part(ctx, prepared, run, progress):
                   "improvement": IMPROVEMENT_RULE, "confirmatory": CONFIRMATORY_RULE, "boots": BOOTS_RULE,
                   "out": OUT_RULE, "attachments": ATTACHMENT_RULE},
         OPISNE: {
-            "metrics": metrics, "diagnostics": diagnostics,
+            "metrics": metrics, "diagnostics": diagnostics, "matched_rates": matched_rates, "k2_values": k2_opisne,
             "descriptive_methods": {"methods": _by_label(prepared["fits"], descriptive, True),
                                     "matched": _by_label(matched, descriptive, True), "k2_values": k2_descriptive},
             "losses": losses, "tables": tables, "training": dict(prepared["training"], rule=TRAINING_RULE),

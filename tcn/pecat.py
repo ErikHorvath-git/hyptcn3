@@ -31,7 +31,8 @@ command (python -m tcn.finalne, package B7c agent E), on the same replays for ev
                                 kontrola of the archives a window set holds (tcn.metody.Okna, safeguard.training.Windows)
     kontrola_snimok(directory, *, purpose, ledger=None)
                                 the check before the raw snapshots of a session enter a detector: the session that the
-                                session.json of the directory or of its parent names (SNAPSHOT_RULE)
+                                session.json of the directory or of its parent names (SNAPSHOT_RULE), or the marker of
+                                a raw/ restored from an archive (RESTORED_RULE, the lead's answer to Q19)
     stav(index, *, ledger=None) the seal of a corpus without consuming it: its identity, what the ledger holds, its runs
     spotrebuj(index, *, out, command, ledger=None) -> Beh
                                 consumes the seal of a corpus, once, for the final run of this process (RUN_RULE);
@@ -172,15 +173,29 @@ UNREADABLE_RULE = (
     "replay reads it and fails as it did before the seal")
 SNAPSHOT_RULE = (
     "the raw snapshots of a session enter a detector through kontrola_snimok (verification of B7c, F1): a snapshot "
-    "directory belongs to the session whose session_id the session.json in it names, or else the session.json of its "
-    "parent (the session directory of its raw/); the ledger holds that session when it holds an archive of that "
-    "session id, and then the archive's rule applies to the directory: refused outside the final run that consumed it "
-    "(plan mode campaign), the rehearsal mark (plan mode rehearsal); a session.json without a session_id is refused by "
-    "name, and a directory without a session.json in it or its parent names no session (NO_SESSION_RULE)")
+    "directory belongs to the session whose session_id the session.json in it names, or else its restore marker "
+    "restored_from.json names (a raw/ restored from an archive, RESTORED_RULE, the lead's answer to Q19), or else the "
+    "session.json and then the restore marker of its parent (the session directory of its raw/); the ledger holds that "
+    "session when it holds an archive of that session id, and then the archive's rule applies to the directory: "
+    "refused outside the final run that consumed it (plan mode campaign), the rehearsal mark (plan mode rehearsal); a "
+    "session.json or a restore marker without a session_id is refused by name, and a directory without a session.json "
+    "or a restore marker in it or its parent names no session (NO_SESSION_RULE)")
 NO_SESSION_RULE = (
-    "a snapshot directory without a session.json in it or in its parent names no session, so the ledger cannot be "
-    "consulted (the live capture of safeguard run, a lab test outside a campaign): it is let through and the decision "
-    "says so")
+    "a snapshot directory without a session.json or a restore marker in it or in its parent names no session, so the "
+    "ledger cannot be consulted (the live capture of safeguard run, a lab test outside a campaign: no tool of the "
+    "repository restored it from an archive, RESTORED_RULE): it is let through and the decision says so")
+# The lead's answer to question Q19 (2026-11-24; finding N1 of the B7c confirmation, package B10). RESTORED is the name
+# scripts/collection_archive.py RESTORED gives the marker (tcn/ imports nothing of scripts/collection_archive.py, which
+# imports scripts/collection.py; tcn/tests/test_pecat.py checks that the two names are one). Not in RULES:
+# SNAPSHOT_RULE, which the ledger keeps, states the guard's reading of the marker (finding F3 of the B10
+# verification), and this text goes into the decision on a restored directory.
+RESTORED = "restored_from.json"
+RESTORED_RULE = (
+    "a raw/ restored from the archive of a session (scripts/collection_archive.py restore_raw, the lead's answer to "
+    "question Q19) holds the marker restored_from.json naming the session of the archive's session.json; the guard "
+    "reads it as it reads a session.json, in the directory and then in its parent, after the session.json of the "
+    "same directory: a marker without a session_id is refused by name, and the snapshots of a sealed session restored "
+    "from its archive are refused like those of the session itself")
 NO_ARCHIVE_RULE = (
     "a window set whose sessions name no feature archive (built from arrays: synthetic data, the tests) holds no sealed "
     "archive; a window set of tcn.metody.Okna.from_sessions names the archive of every session (features_sha256 of its "
@@ -756,9 +771,11 @@ def kontrola_okien(windows, purpose, *, ledger=None):
 
 
 def _session_of(directory):
-    """(the session.json, the session id) of a snapshot directory (SNAPSHOT_RULE): the session.json in it, else in its
-    parent; (None, None) when neither exists; ValueError by name for one that cannot be read or names no session_id."""
-    for meta in (directory / "session.json", directory.parent / "session.json"):
+    """(the session.json or the restore marker, the session id) of a snapshot directory (SNAPSHOT_RULE, RESTORED_RULE):
+    the session.json in it, else its restore marker, else the same in its parent; (None, None) when none exists;
+    ValueError by name for one that cannot be read or names no session_id."""
+    for meta in (directory / "session.json", directory / RESTORED, directory.parent / "session.json",
+                 directory.parent / RESTORED):
         if meta.is_file():
             try:
                 doc = json.loads(meta.read_text(encoding="utf-8"))
@@ -776,24 +793,29 @@ def _session_of(directory):
 def kontrola_snimok(directory, *, purpose, ledger=None):
     """The check before the raw snapshots of a session enter a detector (SNAPSHOT_RULE, GUARD_RULE): `directory` is the
     snapshot directory (its raw/ or the session directory), purpose names the entry point in a refusal. The decision
-    of kontrola for the archives the ledger holds of the session its session.json names, with the directory, the
-    session.json and the session: allowed not_sealed when the ledger holds none, no_session when no session.json names
-    one (NO_SESSION_RULE). Raises Zapecatene for the snapshots of a session the ledger seals for a campaign outside the
-    final run that consumed its archive."""
+    of kontrola for the archives the ledger holds of the session its session.json names (or the restore marker of a
+    raw/ restored from an archive, RESTORED_RULE), with the directory, the session.json, the marker and the session:
+    allowed not_sealed when the ledger holds none, no_session when neither names one (NO_SESSION_RULE). Raises
+    Zapecatene for the snapshots of a session the ledger seals for a campaign outside the final run that consumed its
+    archive."""
     if type(purpose) is not str or not purpose:
         raise ValueError("kontrola_snimok names the entry point that asks (purpose)")
     directory, path = Path(directory).resolve(), _ledger_path(ledger)
     meta, ident = _session_of(directory)
-    where = {"directory": str(directory), "session_json": None if meta is None else str(meta), "session": ident}
+    restored = meta is not None and meta.name == RESTORED
+    where = {"directory": str(directory), "session_json": None if meta is None or restored else str(meta),
+             "restored_from": str(meta) if restored else None, "session": ident}
+    snapshot_rule = SNAPSHOT_RULE + (" | " + RESTORED_RULE if restored else "")
     if ident is None:
         return dict(_decision(purpose, path, None, None, "no_session", ledger=path, rule=NO_SESSION_RULE), **where)
     held = sorted(sha for sha, entry in _read(path)["values"]["archives"].items() if entry.get("session") == ident)
     if not held:
         return dict(_decision(purpose, path, None, [], "not_sealed", ledger=path, sealed=False,
-                              rule=SNAPSHOT_RULE + " | " + SEALED_RULE), **where)
-    decision = kontrola(sha256=held, purpose=purpose, ledger=ledger,
-                        what=f"the snapshot directory {directory} of session {ident}")
-    return dict(decision, rule=SNAPSHOT_RULE + " | " + decision["rule"], **where)
+                              rule=snapshot_rule + " | " + SEALED_RULE), **where)
+    what = f"the snapshot directory {directory} of session {ident}" + (
+        f", restored from an archive ({meta})" if restored else "")
+    decision = kontrola(sha256=held, purpose=purpose, ledger=ledger, what=what)
+    return dict(decision, rule=snapshot_rule + " | " + decision["rule"], **where)
 
 
 # ------------------------------------------------------------------ the final run

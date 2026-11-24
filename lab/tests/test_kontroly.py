@@ -97,6 +97,15 @@ def test_effect_of_each_kind_holds_exactly_for_the_control_with_its_property_and
         assert measured["evidence"]["members"] == [600, 601]
 
 
+def test_the_log_audit_knows_the_conditions_each_negatives_property_breaks():
+    """Finding S1 of the B8 verification (package B10): the log audit names a negative whose effect predicate fails
+    by the conditions of effect.evidence.failed, negative_with_property for a condition its property breaks
+    (scripts/collection_logs.py NEGATIVE_PROPERTY); those are exactly the conditions that fail in a negative with the
+    property present (PROPERTY, the test above), so no condition of the guest is named wrongly."""
+    from scripts import collection_logs
+    assert collection_logs.NEGATIVE_PROPERTY == {kind: tuple(PROPERTY[kind][1]) for kind in KINDS}
+
+
 def remembered_as(**values):
     def change(guest, kind):
         path = guest.state / f"{kind}.before.json"
@@ -128,6 +137,37 @@ def not_started(guest, kind):
     (guest.state / f"{kind}.before.json").unlink()
 
 
+# Package B10, S8 of the B8 verification: a property that holds in part (its mutants P1, P2, P3, P5 and P6).
+
+def _reports_of(guest, kind):
+    return [json.loads(line) for line in (guest.state / f"{kind}.out").read_text().splitlines()]
+
+
+def one_rewrite(guest, kind):
+    """The writer's last round the other way: the control rewrites the dose in one later round only, the negative
+    rewrites it in one."""
+    *rounds, last = _reports_of(guest, kind)
+    guest.report(kind, *rounds, {**last, "bytes": 0 if last["bytes"] else 64 << 20})
+
+
+def slow_batch(guest, kind):
+    """The batch starts 5 processes a second for the dose of 10, below BATCH_RATE_FLOOR 0.8 times the dose."""
+    guest.report(kind, *({**r, "started": r["started"] // 2} for r in _reports_of(guest, kind)))
+
+
+def another_listener(guest, kind):
+    """A process outside the occurrence listens on the port, not the program's socket (inode 4242)."""
+    table = guest.proc / "net" / "tcp"
+    table.write_text("".join(line for line in table.read_text().splitlines(keepends=True) if " 4242 " not in line))
+    guest.listen(udalosti.CONTROL_PORT, 5555)
+
+
+def wx_without_memfd(guest, kind):
+    """The program holds the W+X page and no memfd."""
+    for fd in (guest.proc / "601" / "fd").iterdir():
+        fd.unlink()
+
+
 FURTHER = [  # (kind, polarity, the good state changed by, the one condition that fails)
     ("kontrola_pocuvajuci_soket", "control", remembered_as(polarity="negative"),
      ["the occurrence in place is this polarity and dose"]),
@@ -148,6 +188,12 @@ FURTHER = [  # (kind, polarity, the good state changed by, the one condition tha
     ("kontrola_modul_jadra", "control", sysfs("class/net/dummy0"), ["loading it created no network interface"]),
     ("kontrola_modul_jadra", "control", sysfs("dev/char/10:200"), ["loading it created no device"]),
     ("kontrola_modul_jadra", "control", not_started, ["a candidate was chosen at the start", "the module is loaded"]),
+    ("kontrola_zapisovac_pamate", "control", one_rewrite, ["every later round rewrote the dose"]),  # P1
+    ("kontrola_zapisovac_pamate", "negative", one_rewrite, ["no later round rewrote it"]),  # P2
+    ("kontrola_davka_procesov", "control", slow_batch, ["it starts the dose of processes a second"]),  # P3
+    ("kontrola_pocuvajuci_soket", "control", another_listener, ["a process of the occurrence listens on the port"]),
+    ("kontrola_wx_memfd", "control", wx_without_memfd,
+     ["one process of the occurrence holds an rwx mapping and the memfd"]),  # P6; the line above P5.
 ]
 
 

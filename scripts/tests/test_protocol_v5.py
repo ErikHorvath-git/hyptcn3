@@ -26,6 +26,9 @@ of class B in no scenario of a negative of it) and for F3 of the verification of
 tests of the control deal at other rehearsal sizes (N1 of the confirmation of B4b) and of the bounds where the counts
 allow the doses to pair. Its fix (F4 and F6 of its verification) replaces the stream guest_reset of B9a by the one
 seeded level streams.seeded_level, with one deliberate error, and adds the bound of the pairing check at equality.
+Package B10 (agent D) adds one deliberate error for each check of S2 of the B4 verification whose mutant survived
+(C2, C8, C9, C11 and C20), a test of the reachability check at max 6 (C21), and per_dose [2, 3, 3] (D7 of S8 of the
+B8 verification).
 """
 from collections import Counter
 import json
@@ -485,6 +488,16 @@ def per_dose_short(doc):
     return {"loader": ["protocol(): invalid controls"], **{name: [reason] for name in PLAN_CHECKS}}
 
 
+def per_dose_long(doc):
+    """S8 of the B8 verification (package B10, mutant D7): the counts per dose of the writer sum to 8, more than
+    per_kind 7. The file does not load; the plan deals the kind's seven controls and its seven negatives from the deck
+    of 2 + 3 + 3 cards and runs one card short of the last dose, 256."""
+    doc["controls"]["kinds"]["kontrola_zapisovac_pamate"]["per_dose"] = [2, 3, 3]
+    return {"loader": ["protocol(): invalid controls"],
+            "controls": [f"control kontrola_zapisovac_pamate/{polarity}: dose 256 has 2 occurrences (expected 3)"
+                         for polarity in ("control", "negative")]}
+
+
 def boots_apart_from_the_carriers(doc):
     """Package B9a (F3 of the verification of B7c): analysis.interventions.boots is the count of the boots of the
     carrier roles of the campaign plan, 12 groups of test_benign and 8 of test_controls; tcn/k2.py refused another
@@ -500,6 +513,15 @@ def seeded_level_of_19_digits(doc):
     lab/guest_state.py reset --seed, which takes 1 to 18 digits, so 10^18 is refused by the loader."""
     doc["streams"]["seeded_level"]["seed"] = 10 ** 18
     return {"loader": ["protocol(): invalid streams.seeded_level"]}
+
+
+def gate_at_the_lower_end(doc):
+    """S2 of the B4 verification (package B10, mutant C20): the gate at the lower end of the interval bound to
+    invalid_rows.max 3, (656 - 33 * 4) / 720 (656 clean windows of 720 rows, 33 lost per isolated row), which the
+    interval excludes: the witness of max + 1 = 4 isolated rows keeps exactly the gate and is accepted, so the gate
+    alone does not refuse it."""
+    doc["min_score_coverage"] = (656 - 33 * 4) / 720
+    return {"reachability": [OUTSIDE, "witness with invalid_rows.max + 1 rows is not refused by the gate alone"]}
 
 
 def early_stop_rate_below_zero(doc):
@@ -1146,6 +1168,57 @@ def dose_unpaired(doc, plan):
     raise AssertionError("no trade of two doses on one VM leaves exactly one dose unpaired")
 
 
+# Package B10 (agent D): S2 of the B4 verification, one deliberate error for each check whose mutant survived (C2,
+# C8, C9, C11; C20 is a change of the file, C21 the test of the reachability check below).
+
+def start_past_the_snapshot(doc, plan):
+    """Mutant C2: the guard of the full snapshot at 1800 s reaches to its row + window_rows (1960 s). An item that
+    starts before 1740 s and ends at 1975 s or later starts later by whole intervals, in the first 5 s after 1850 s,
+    and ends where it ended: its phases, the gap after it and tail_s stay, the gap before it widens, and it lasts at
+    least 1975 - 1855 = 120 s. Unlike start_in_guard it starts after the snapshot, not before it."""
+    s, x = next((s, x) for s in plan["sessions"] for x in _items(s)
+                if x["start_s"] < 1740 and x["start_s"] + x["duration_s"] >= 1975)
+    start, stop = _ends(x)
+    _move(x, start + math.ceil((1850000 - start) / 5000) * 5000, stop)
+    assert 1850 <= x["start_s"] < 1855
+    return {"full_snapshot_guard": [f"{_label(s)}: {x.get('type', x.get('kind'))} starts at "
+                                    f"{_seconds(x['start_s'])} s inside the guard of the full snapshot at 1800 s"]}
+
+
+def type_counts_apart(doc, plan):
+    """Mutant C8: an event of dev takes a type its session does not hold. Every group holds every type once and each
+    type has dev's min_per_type 4 events, so the type it gave has 3, below min_per_type, the type it got 5, and the
+    counts of the role differ by 2; its group holds the type it got twice. No count per scenario or VM leaves its
+    bound (one type 1 to 0 and the other 1 to 2 in the session's scenario, 2 to 1 and 2 to 3 on its VM)."""
+    s, x = next((s, x) for s in plan["sessions"] if s["role"] == "dev" for x in s["events"])
+    got = next(t for t in TYPES if t not in _types(s))
+    gave, x["type"], x["class"] = x["type"], got, doc["events"]["types"][got]
+    return {"events": [f"group {s['group']} holds type {got} twice",
+                       "role dev: event type counts differ by more than 1",
+                       f"role dev: type {gave} has 3 events, below min_per_type 4"]}
+
+
+def controls_session_with_an_event(doc, plan):
+    """Mutant C9: the first session of test_controls holds a copy of the first event of the plan. The check events
+    names the role. test_controls has no rule of events to draw a replacement's event times from, so the three checks
+    that draw the replacements cannot draw that session's (a KeyError of replacement(), not named; the check events
+    is the one that names the error)."""
+    t = next(s for s in plan["sessions"] if s["role"] == "test_controls")
+    t["events"] = [json.loads(json.dumps(next(s for s in plan["sessions"] if s.get("events"))["events"][0]))]
+    error = ["cannot check: KeyError: 'n'"]
+    return {"events": ["role test_controls has events"], "full_snapshot_guard": error, "times": error,
+            "streams": error}
+
+
+def role_out_of_time_order(doc, plan):
+    """Mutant C11: the last session of the last group of train moves to the end of the plan, after the test roles;
+    its group keeps its positions and every item keeps its times."""
+    last = [s for s in plan["sessions"] if s["role"] == "train"][-1]
+    plan["sessions"].remove(last)
+    plan["sessions"].append(last)
+    return {"role_order": ["role train is out of time order"]}
+
+
 def replaced_type(doc, plan, monkeypatch):
     from scripts import protocol_v5
     real, target = protocol_v5.replacement, next(s for s in plan["sessions"] if s.get("events"))
@@ -1303,7 +1376,10 @@ FILE_CASES = {f.__name__: f for f in (unknown_key, missing_key, gate_085, max_7,
                                       # B9a: the one seeded level of the guest (F4 of its verification).
                                       boots_apart_from_the_carriers, seeded_level_of_19_digits,
                                       # Package B9b: the rule of the early stop (audit.early_stop).
-                                      early_stop_rate_below_zero)}
+                                      early_stop_rate_below_zero,
+                                      # Package B10: S2 of the B4 verification (mutant C20), S8 of the B8
+                                      # verification (mutant D7).
+                                      gate_at_the_lower_end, per_dose_long)}
 PLAN_CASES = {f.__name__: f for f in (no_group_on_vm, equal_scenarios, twice_at_position, two_events, start_in_guard,
                                       locked_to_grid, common_seed, control_relabelled, control_slot_emptied,
                                       event_free_first, group_of_two, seed_field,
@@ -1324,7 +1400,10 @@ PLAN_CASES = {f.__name__: f for f in (no_group_on_vm, equal_scenarios, twice_at_
                                       # B4b and S3 of the B8 verification.
                                       train_on_one_vm, type_outside_the_deck, kind_outside_the_deck,
                                       tenth_spread_of_two, starts_at_upper_tenth_edges,
-                                      event_shortened_below_the_span, control_before_first_s, dose_unpaired)}
+                                      event_shortened_below_the_span, control_before_first_s, dose_unpaired,
+                                      # Package B10: S2 of the B4 verification (mutants C2, C8, C9, C11).
+                                      start_past_the_snapshot, type_counts_apart, controls_session_with_an_event,
+                                      role_out_of_time_order)}
 REPLACEMENT_CASES = {f.__name__: f for f in (replaced_type, replaced_streams, replaced_in_guard,
                                              replaced_before_first_s, replaced_tenths, replaced_dose,
                                              # Package B7a: a monkeypatched seed of the analysis.
@@ -1363,6 +1442,17 @@ def test_selfcheck_passes_the_file_and_fails_each_deliberate_error(case, tmp_pat
     expected.update({name: ("failed", reasons) for name, reasons in failures.items()})
     assert [c["check"] for c in checks] == list(CHECKS)
     assert {c["check"]: (c["result"], c["reasons"]) for c in checks} == expected
+
+
+def test_the_reachability_check_admits_invalid_rows_max_6_with_its_gate():
+    """S2 of the B4 verification (package B10, mutant C21): proposal 10.9 allows invalid_rows.max up to 6, so max 6
+    with the gate that admits exactly 6 isolated rows, (656 - 33 * 6) / 720, passes the check, and max 7 with the gate
+    of 7 rows, (656 - 33 * 7) / 720, is above 6 (656 clean windows of 720 rows, 33 lost per isolated row)."""
+    from scripts import protocol_v5
+    doc = json.loads(V5.read_text())
+    for count, reasons in ((6, []), (7, ["invalid_rows.max above 6"])):
+        doc["invalid_rows"]["max"], doc["min_score_coverage"] = count, (656 - 33 * count) / 720
+        assert protocol_v5.check_reachability(doc) == reasons
 
 
 def test_the_rehearsal_is_a_mode_of_the_file_with_10_groups_and_30_sessions():
@@ -1573,6 +1663,22 @@ def test_the_loader_knows_every_key_and_value_of_the_controls_section(change, re
         with pytest.raises(ValueError) as refused:
             protocol_v5.check_layout(doc)
         assert str(refused.value) == reason
+
+
+def test_the_expected_shifts_of_the_controls_are_values_of_g0():
+    """The lead's answer to question Q20 (2026-11-24; finding S6 of the B8 verification, package B10): the expected
+    shifts controls.kinds.*.expect are values of G0, the owner's judgment that he may change only before G1, and G2
+    does not determine them, so no note of a kind says "until G2", every one names them a value of G0, the section's
+    note states the rule once, and no stage of determined_at names a key of controls.kinds."""
+    doc = json.loads(V5.read_text())
+    c = doc["controls"]
+    notes = {kind: k["note"] for kind, k in c["kinds"].items()}
+    assert [kind for kind, note in notes.items() if "until G2" in note] == []
+    assert all("value" in note and "of G0 (controls.note)" in note or "a value of G0, controls.note" in note
+               for note in notes.values()), notes
+    assert ("controls.kinds.*.expect) are values of G0 (the lead's answer to question Q20" in c["note"]
+            and "change only before G1" in c["note"] and "checks them on the lab with controls.baseline" in c["note"])
+    assert not [path for paths in doc["determined_at"].values() for path in paths if path.startswith("controls.kinds")]
 
 
 def test_the_nulls_by_design_are_the_doses_of_class_a_and_the_seeds_of_a_method_that_draws_nothing():
@@ -1924,6 +2030,35 @@ def test_the_loader_knows_every_key_and_value_of_the_analysis_plan_of_b7b(change
         with pytest.raises(ValueError) as refused:
             protocol_v5.check_layout(doc)
         assert str(refused.value) == reason
+
+
+def window_refusal(rows):
+    """The refusal of a schema-3 window too short for the analysis plan, written out here (package B10)."""
+    return (f"invalid window_rows: {json.dumps(rows)}, protocol schema 3 needs an integer of at least 2 rows, the "
+            "target and one row of context (analysis.interventions.validity.moving_average_rows lies in [2, "
+            "window_rows], analysis.diagnostics.contexts in [1, window_rows - 1])")
+
+
+@pytest.mark.parametrize("rows", [1, 0, True, 2.0], ids=["one_row", "no_row", "boolean", "float"])
+def test_a_window_too_short_for_the_analysis_plan_is_refused_by_its_name(tmp_path, rows):
+    """A finding the verification of B7b left for B10 (dokazy/B7/odlozene_B7b.md): since F2 a schema-3 window under 2
+    rows holds neither the moving average of the validity predicate nor a context of the diagnostics, and the loader
+    refused it with the general "invalid analysis". The refusal names window_rows, in the layout check, in the analysis
+    plan's reader and in the loader; a window of 2 rows passes the window check (and then the analysis check names its
+    keys bound to 32 rows)."""
+    from scripts import collection, protocol_v5
+    doc = json.loads(V5.read_text())
+    doc["window_rows"] = doc["analysis"]["architecture"]["window_rows"] = rows
+    for read in (protocol_v5.check_layout, protocol_v5.analysis_plan,
+                 lambda d: collection.protocol(tmp_path / "p.json")):
+        (tmp_path / "p.json").write_text(json.dumps(doc))
+        with pytest.raises(ValueError) as refused:
+            read(doc)
+        assert str(refused.value) == window_refusal(rows)
+    doc["window_rows"] = doc["analysis"]["architecture"]["window_rows"] = 2
+    with pytest.raises(ValueError) as refused:
+        protocol_v5.check_layout(doc)
+    assert str(refused.value) == "invalid analysis"  # Contexts up to 31 and an average of 6 rows need 32 rows.
 
 
 def test_the_keys_of_b7b_are_those_the_skeleton_names():

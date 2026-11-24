@@ -24,7 +24,11 @@ BEHAVIOR = "behavioral-inputs-v1"
 CLEAN = "score coverage gate is unreachable for "
 WORST = "invalid_rows.max is unreachable under the score coverage gate"
 DEFAULT_GATE = 17 / 20  # what protocol versions 1 and 2 mean without min_score_coverage
-ANALYSIS = "invalid analysis"  # Since package B7b: the loader's refusal of a schema-3 window under 2 rows (expected).
+# Since package B7b the loader refuses a schema-3 window under 2 rows; since package B10 by naming window_rows (the
+# grid's one such window has 1 row).
+ANALYSIS = ("invalid window_rows: 1, protocol schema 3 needs an integer of at least 2 rows, the target and one row of "
+            "context (analysis.interventions.validity.moving_average_rows lies in [2, window_rows], "
+            "analysis.diagnostics.contexts in [1, window_rows - 1])")
 
 
 def window_count(rows, window_rows, full_every, invalid=()):

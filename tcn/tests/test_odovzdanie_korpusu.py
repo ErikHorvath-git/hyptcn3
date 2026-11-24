@@ -270,7 +270,8 @@ def _relacia_cez_audit(koren, monkeypatch, riadok):
     from safeguard.tests.test_features import sample as snimka
     from scripts.tests import boundary_sessions as bs, test_collection_logs as dokazy
 
-    adresar = dokazy.build(koren, event=True)
+    # 60 s merania: relacie pouzivatelov prevadzky v5 nasleduju po casoch premyslania (balik B10, F6 z B5b).
+    adresar = dokazy.build(koren, event=True, measure_s=60)
     (adresar / "profile").mkdir()
     (adresar / "profile" / "symbols.txt").write_text("synteticky profil testu\n")
     # Dokazy pomocky maju desat snimok v dvoch sekundach; brana pokrytia je preto nizsie nez v kampani.

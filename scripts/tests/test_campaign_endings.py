@@ -1174,6 +1174,55 @@ def test_an_early_stop_is_never_resumed_after_a_change_of_the_frozen_code(tmp_pa
     assert [x["event"] for x in invalid["values"]["deviations"]] == ["earlier_ending", "invalidation"]
 
 
+def test_a_runner_held_inside_refuse_ended_captures_nothing_after_a_stopped_ending(tmp_path, monkeypatch):
+    """V3 of the B11 verification (package B10, its mutant G1; the verifier's probe test_probe_n1_stopped.py): the
+    test below with an ending of another kind, since a runner that read held_ending alone would stop on a pause but
+    not on this. VM b's runner is held inside refuse_ended while VM a's runner is stopped by the operator's request
+    during its first capture, so the campaign's stopped record is written while VM b is held. An ending of any kind
+    recorded after the run's count stops the runner before its next capture (ENDING_RULE): VM b captures nothing
+    after the stopped record, its state says stopped, and no second record is written. With the count taken after the
+    refusals (as at 540a098) VM b captured three sessions."""
+    h = harness(tmp_path, monkeypatch)
+    directory = campaign_of(h, limit=1)
+    monkeypatch.setattr(collection, "Interrupts", NoSignals)
+    main = threading.main_thread()
+    monkeypatch.setattr(threading, "main_thread", lambda: threading.current_thread())
+    at_hook, go, outcome = threading.Event(), threading.Event(), []
+    real_refuse_ended = c.refuse_ended
+
+    def refuse_ended(*args, **kwargs):
+        if threading.current_thread() is not main and not at_hook.is_set():
+            at_hook.set()
+            assert go.wait(THREAD_S)
+        return real_refuse_ended(*args, **kwargs)
+    monkeypatch.setattr(c, "refuse_ended", refuse_ended)
+
+    def run_b():
+        try:
+            with contextlib.redirect_stdout(io.StringIO()):
+                outcome.append(c.execute(directory, vm="b"))
+        except BaseException as error:  # noqa: BLE001 - reported by the test
+            outcome.append(error)
+    held = threading.Thread(target=run_b, daemon=True)
+    held.start()
+    try:
+        assert at_hook.wait(THREAD_S)
+        assert h.status(directory, "b").get("status") != "running"  # Held before its state says running.
+        stop_during_the_first_capture(h, monkeypatch, directory, "a", "the operator's stop of the test")
+        with contextlib.redirect_stdout(io.StringIO()):
+            assert c.execute(directory, vm="a") == 0
+        (ending, _), = records(directory)
+        assert ending == "stopped"
+        captured = len(h.of(directory))
+    finally:
+        go.set()
+        held.join(THREAD_S)
+    assert not held.is_alive() and outcome == [0], outcome
+    assert h.of(directory)[captured:] == [] and [ending for ending, _ in records(directory)] == ["stopped"]
+    state = h.status(directory, "b")
+    assert (state["status"], state["stage"]) == ("stopped", "between-sessions")
+
+
 def test_a_runner_held_inside_refuse_ended_captures_nothing_after_a_pause(tmp_path, monkeypatch):
     """N1 of the confirmation of B9b (the verifier's probe sondy/potvrdenie/test_p1b_window.py): VM b's runner is held
     inside refuse_ended, after refuse_held and before its first capture, while VM a's first session is rejected over
@@ -1258,6 +1307,37 @@ def test_the_count_of_the_early_stop_runs_on_across_the_continuation(tmp_path, m
     assert {k: early["decision"][k] for k in ("count", "occurrences", "bound", "sessions", "since", "continued")} == {
         "count": 2, "occurrences": 2, "bound": 1, "sessions": 2, "since": None, "continued": "kampan"}
     assert len(h.of(continuation)) == 1  # Nothing is captured after the session that stopped it.
+
+
+def test_the_count_runs_on_across_the_continuation_also_after_a_rejected_session(tmp_path, monkeypatch):
+    """V4 of the B11 verification (package B10, mutant F6): EARLY_STOP_RULE asks the early stop after the audit of a
+    rejected session as well, with the count of the continuation. As the test above, but the continuation's first
+    session is rejected too: its one marked row is 1 of 1 alone, and with the paused campaign's 2 in 2 occurrences
+    over 2 audited sessions, above the bound 1, so the early stop is decided on the path of the rejection, and its
+    decision names the paused campaign. The rejection also uses up the continuation's limit 0, and a continuation is
+    never continued, so its record is that of an invalid campaign, which lists the early stop among its deviations."""
+    edit = lambda doc: doc["audit"]["early_stop"]["marked_rows_rate_per_type"].update({"restart_databazy": 0.05})
+    h = harness(tmp_path, monkeypatch)
+    protocol = h.protocol("kampan-protocol", limit=0, edit=edit)
+    directory = h.init(protocol, "campaign", "kampan", estimate_from=ended_rehearsal(h, protocol, "kampan-generalka"))
+    first = h.plan_rows(directory)[0]
+    for name in ("kampan", "pokracovanie"):
+        h.reject.add((name, first["group"], first["scenario"], 1))
+        h.marked[name, first["group"], first["scenario"], 1] = {"restart_databazy": 1}
+    assert h.step(directory, first["vm"])
+    assert c.latest_ending(directory)["ending"] == "paused"
+    continuation = continue_campaign(h, protocol, directory, "the rejection came from the host's backup job, now "
+                                                             "disabled (synthetic cause of the test)")
+    with contextlib.redirect_stdout(io.StringIO()):
+        assert c.execute(continuation, vm=first["vm"]) == 0
+    (ending, record), = records(continuation)
+    sid = next(r for r in h.plan_rows(continuation) if r["vm"] == first["vm"])["session_id"]
+    assert ending == "invalid" and [x["event"] for x in record["values"]["deviations"]] == [
+        "pause", "continuation", "early_stop", "invalidation"]
+    early, = (x for x in record["values"]["deviations"] if x["event"] == "early_stop")
+    assert early["session"] == sid and early["cause"].startswith(f"early stop after the audit of {sid}: 2 marked rows")
+    assert {k: early["decision"][k] for k in ("count", "occurrences", "bound", "sessions", "since", "continued")} == {
+        "count": 2, "occurrences": 2, "bound": 1, "sessions": 2, "since": None, "continued": "kampan"}
 
 
 def test_a_continuation_carries_the_deviations_of_the_paused_record_or_names_it(tmp_path, monkeypatch):

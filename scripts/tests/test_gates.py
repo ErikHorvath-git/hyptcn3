@@ -260,6 +260,26 @@ def test_a_record_of_a_schema_3_protocol_writes_nothing_unless_its_self_check_pa
     assert list(results.iterdir()) == [path]
 
 
+def test_a_check_pending_in_the_lab_also_writes_nothing(world, monkeypatch):
+    """F8 of the B5b verification (package B10, mutant M45): a check that did not pass is not only a failed one. A
+    name a later package registers in lab/ (protocol_v5.PENDING_IN_LAB, empty since B8, so here a monkeypatch) leaves
+    lab_register pending, and the record is refused with nothing written."""
+    from scripts import protocol_v5
+    protocol, results, state = world
+    monkeypatch.setattr(gates, "selfcheck_problems", state["selfcheck"])
+    doc = v5_copy(protocol)
+    known = {"event type": set(doc["events"]["types"]) - {"naprazdno"},
+             "profile": {s["profile"] for s in doc["scenarios"].values()},
+             "control kind": set(doc["controls"]["kinds"])}
+    monkeypatch.setattr(protocol_v5, "lab_names", lambda: known)
+    monkeypatch.setattr(protocol_v5, "PENDING_IN_LAB", ("naprazdno",))
+    with pytest.raises(ValueError) as refused:
+        write(world, "G0")
+    assert str(refused.value) == ("protocol self-check for stage G0 did not pass, nothing recorded: lab_register "
+                                  "pending: registered by a later package: naprazdno")
+    assert list(results.iterdir()) == []
+
+
 def test_the_self_check_before_a_record_reads_schema_3_only(world, tmp_path):
     """Schemas 1 and 2, and a file that is no JSON object, are recorded as before: no self-check applies."""
     protocol, _, state = world

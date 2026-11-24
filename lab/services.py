@@ -78,7 +78,7 @@ SQL_ORDER_LIST = ("SELECT o.id, o.total_cents, o.status, i.product_id, i.quantit
                   "LEFT JOIN order_items i ON i.order_id = o.id ORDER BY o.id DESC, i.product_id")
 # psycopg2 returns numeric as decimal.Decimal, which json.dumps refuses (TypeError, answered with 400: every document
 # list of the lab test on the VM, package B5c). extract() is numeric since PostgreSQL 14 (Debian 12 has 15), so it is
-# cast to double precision; lab/tests/test_services.py refuses any SQL here whose value can be numeric uncast.
+# cast to double precision; lab/tests/test_services.py refuses the numeric calls, literals and type it lists if uncast.
 SQL_DOC_PAGE = ("SELECT id, name, owner, bytes, extract(epoch FROM created_at)::double precision FROM documents "
                 "ORDER BY id DESC LIMIT %s OFFSET %s")
 SQL_DOC_COUNT = "SELECT count(*) FROM documents"

@@ -666,7 +666,9 @@ _V5_CASES = [
     # One realism requirement of proposal 5.7 broken at a time (scripts/traffic_log.py realism).
     ("traffic_realism:arrival_cv", traffic("eshop", spacings=(1.,) * (len(E.ESHOP) - 1)),
      logs("traffic_realism:arrival_cv")),  # Evenly spaced arrivals: CV 0.
-    ("traffic_realism:think_time", traffic("eshop", thinks=(75.,)), logs("traffic_realism:think_time")),
+    # Realized think times far below the profile's mean (package B10, F6 of B5b: the request times are judged, and
+    # think times of 75 s would not fit the short sessions of the test protocols).
+    ("traffic_realism:think_time", traffic("eshop", thinks=(.25, .5, .75)), logs("traffic_realism:think_time")),
     ("traffic_realism:order_share", traffic("eshop", sessions=tuple(
         s if E.ORDER in s else [*s, E.CART_ADD, E.ORDER] for s in E.ESHOP)), logs("traffic_realism:order_share")),
     ("traffic_realism:object_concentration", traffic("eshop", sessions=_distinct(E.ESHOP)),
@@ -698,12 +700,26 @@ _V5_CASES = [
      logs("traffic_config:rate")),
     ("traffic_config:seeds", headers(lambda h: h["seeds"].update(traffic=h["seeds"]["traffic"] + 1)),
      logs("traffic_config:seeds")),
+    # Finding F3 of the B5b verification (package B10): every seed, the rate and config.dur of the header are those of
+    # the traffic block of session.json, and its dur_s is the protocol's planned run (warmup_s and cycles intervals).
+    ("traffic_config:seeds:arrivals", headers(lambda h: h["seeds"].update(
+        traffic_arrivals=h["seeds"]["traffic_arrivals"] + 1)), logs("traffic_config:seeds")),
+    ("traffic_config:rate:session", edit("session.json", lambda m: m["traffic"].update(rate=2 * m["traffic"]["rate"]),
+                                         seal=False), logs("traffic_config:rate")),
+    ("traffic_config:dur", headers(lambda h: h["config"].update(dur=h["config"]["dur"] + 5)),
+     logs("traffic_config:dur")),
+    ("traffic_config:dur:planned", steps(  # Header and session.json alike, but not the planned run.
+        edit("session.json", lambda m: m["traffic"].update(dur_s=m["traffic"]["dur_s"] + 5), seal=False),
+        headers(lambda h: h["config"].update(dur=h["config"]["dur"] + 5))), logs("traffic_config:dur")),
     ("traffic_config:protocol_sha256", headers(lambda h: h.update(protocol_sha256="0" * 64)),
      logs("traffic_config:protocol_sha256")),
     ("traffic_config:profile_parameters", headers(lambda h: h["profile_parameters"].update(
         max_concurrent=h["profile_parameters"]["max_concurrent"] + 1)), logs("traffic_config:profile_parameters")),
     ("traffic_config:warmup_s", headers(lambda h: h.update(warmup_s=h["warmup_s"] - 1)),
      logs("traffic_config:warmup_s")),
+    # The verification of B10 (its mutant C4): traffic.warmup_s of session.json is bound too, the header unchanged.
+    ("traffic_config:warmup_s:session", edit("session.json", lambda m: m["traffic"].update(
+        warmup_s=m["traffic"]["warmup_s"] - 1), seal=False), logs("traffic_config:warmup_s")),
     # The exit code must be the one the request log implies (0 or 1 by host_traffic.py's rule); 2 never is.
     ("child_exit:traffic", edit("end.json", lambda e: e.update(traffic_rc=2), seal=False),
      logs("child_exit:traffic:2")),
@@ -730,7 +746,8 @@ _V5_CASES = [
      logs("traffic:rate_invalid", "traffic_config:rate")),
     ("traffic:rate_source_invalid", both_headers(lambda h: h.update(rate_source="guess")),
      logs("traffic:rate_source_invalid", "traffic_config:rate")),
-    ("traffic:seeds_invalid", both_headers(lambda h: h["seeds"].pop("traffic_sizes")), logs("traffic:seeds_invalid")),
+    ("traffic:seeds_invalid", both_headers(lambda h: h["seeds"].pop("traffic_sizes")),  # F3 of B5b: not session.json's.
+     logs("traffic:seeds_invalid", "traffic_config:seeds")),
     ("traffic:warmup_invalid", both_headers(lambda h: h.update(warmup_s=h["envelope"]["t_s"][-1])),  # Not before D.
      logs("traffic:warmup_invalid", "traffic_config:warmup_s")),
     ("traffic:profile_unknown", both_headers(lambda h: h.update(profile="lab")),
@@ -739,6 +756,11 @@ _V5_CASES = [
      logs("traffic:profile_parameters_invalid:max_concurrent", "traffic_config:profile_parameters")),
     ("traffic:arrival_cap", traffic_rows(lambda r, i: _arrivals(r)[4].update(  # Admitted at the cap.
         active=r[0]["profile_parameters"]["max_concurrent"])), logs("traffic:arrival_cap:" + U4)),
+    # Finding F1 of the B5c verification (package B10): the drop reason and the customer of an arrival are read.
+    ("traffic:arrival_drop_reason", traffic_rows(lambda r, i: _arrivals(r)[4].update(drop_reason="max_concurrent")),
+     logs("traffic:arrival_drop_reason:" + U4)),
+    ("traffic:arrival_customer", traffic_rows(lambda r, i: _arrivals(r)[4].update(customer="zakaznik9999")),
+     logs("traffic:arrival_customer:" + U4)),
     ("traffic:user_session_id", traffic_rows(lambda r, i: [x.update(user_session="u4") for x in r
                                                            if x.get("user_session") == U4]),
      logs("traffic:user_session_id:u4")),
@@ -864,6 +886,39 @@ def _failed(name):
     return lambda record: record[name].update(ok=False)
 
 
+def _negative_failed(*conditions):
+    """mutate (of the negative's record): its effect predicate false with these failed conditions (lab/udalosti.py
+    names them in effect.evidence.failed; finding S1 of the B8 verification, package B10)."""
+    return lambda record: record["effect"].update(ok=False, evidence=dict(record["effect"]["evidence"],
+                                                                        failed=list(conditions)))
+
+
+def _refused_start(record):
+    """mutate: the start of the negative refused by the return predicate (lab/udalosti.py control_start: nothing
+    started), then the stop of nothing, as scripts/collection.py Controls records it: not executed, the baseline false,
+    and the effect and the cleanup of that stop false with the residue that refused the start (finding S1 of B8)."""
+    refused = dict(BASELINE, ok=False, exact={"ok": False, "residues": [{"residue": "process", "pid": 77}]})
+    record["start"].update(ok=False, error="the return predicate does not hold", started=False,
+                           baseline=copy.deepcopy(refused))
+    record.update(executed=False, baseline=copy.deepcopy(refused))
+    for key in ("effect", "cleanup"):
+        record[key] = dict(record[key], ok=False)
+        record["stop"][key] = dict(record[key])
+    record["effect"]["evidence"] = dict(record["effect"]["evidence"], failed=["the process tree runs"])
+
+
+def _started_nothing(record):
+    """mutate: the start of the negative started nothing while the return predicate held (its baseline true), so it is
+    no refused start (the verification of B10, its mutant C19): not executed, and the stop's effect and cleanup false
+    as _refused_start leaves them."""
+    record["start"].update(ok=False, error="the program did not start", started=False)
+    record.update(executed=False)
+    for key in ("effect", "cleanup"):
+        record[key] = dict(record[key], ok=False)
+        record["stop"][key] = dict(record[key])
+    record["effect"]["evidence"] = dict(record["effect"]["evidence"], failed=["the process tree runs"])
+
+
 def _without_controls_json(d, p, result):
     (d / "controls.json").unlink()
     evidence.seal(d)
@@ -884,10 +939,30 @@ _CONTROL_CASES = [
      logs("controls_differ_from_plan", "nginx_unknown_request:")),
     ("control_not_executed", _control(0, lambda r: r.update(executed=False)),
      logs("control_not_executed:" + CONTROL_KIND)),
+    # Package B10, S8 of the B8 verification (mutant A1): executed, but a host time of its calls is missing; without it
+    # the stop call admits none of its health polls either.
+    ("control_not_executed:host_times", _control(0, lambda r: r.pop("host_stopped_unix")),
+     logs("control_not_executed:" + CONTROL_KIND, "nginx_unknown_request:")),
+    # Mutant A2 of the same verification: the record keeps the plan's class A or B as kind_class.
+    ("controls_differ_from_plan:kind_class", _control(0, lambda r: r.update(kind_class="B")),
+     logs("controls_differ_from_plan")),
     ("control_without_baseline", _control(0, _failed("baseline")), logs("control_without_baseline:" + CONTROL_KIND)),
     # S2: the counterpart of a positive control not detected, from the guest's effect predicate (no feature is read).
     ("control_without_effect", _control(0, _failed("effect")), logs("control_without_effect:" + CONTROL_KIND)),
-    ("negative_with_property", _control(1, _failed("effect")), logs("negative_with_property:" + NEGATIVE_KIND)),
+    # S1 of B8: the property seen (the negative's own condition failed) and a negative not in place (another one).
+    ("negative_with_property", _control(1, _negative_failed("no later round rewrote it")),
+     logs("negative_with_property:" + NEGATIVE_KIND)),
+    ("negative_not_in_place", _control(1, _negative_failed("the process tree runs", "it holds the dose")),
+     logs("negative_not_in_place:" + NEGATIVE_KIND)),
+    ("negative_not_in_place:unnamed", _control(1, _failed("effect")), logs("negative_not_in_place:" + NEGATIVE_KIND)),
+    # S1 of B8: a start refused by the return predicate is not executed and has no baseline, nothing more.
+    ("control_not_executed:refused", _control(1, _refused_start),
+     logs("control_not_executed:" + NEGATIVE_KIND, "control_without_baseline:" + NEGATIVE_KIND)),
+    # The verification of B10 (its mutant C19): a start that started nothing while its baseline held is no refused
+    # start, so the negative's effect and cleanup are judged as well.
+    ("control_not_executed:not_refused", _control(1, _started_nothing),
+     logs("control_not_executed:" + NEGATIVE_KIND, "negative_not_in_place:" + NEGATIVE_KIND,
+          "control_not_cleaned:" + NEGATIVE_KIND)),
     ("control_not_cleaned", _control(0, _failed("cleanup")), logs("control_not_cleaned:" + CONTROL_KIND)),
     ("control_script_differs", _control(0, lambda r: r["stop"].update(script_sha256="0" * 64)),
      logs("control_script_differs:" + CONTROL_KIND)),

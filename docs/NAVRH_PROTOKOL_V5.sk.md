@@ -265,6 +265,11 @@ Viacstupňové dávky v profile `corp` dodávajú benígne deje s časovou štru
   okien udalostí s plánom (±20 %). Doručená záťaž počas udalostí sa iba vykazuje, aby
   zamietnutie nezáviselo od typu udalosti.
 - 1 až 3 % chýb klienta (404, 401, 400).
+- Audit obálku neprepočítava; z protokolu a zo seedu hlavičky ju prepočíta nástroj mimo meracieho
+  kódu nad session G2, nad session oboch generálok a po uzavretí kampane nad každou prijatou
+  session, pričom číta iba logy prevádzky a žiadne skóre, takže sa zapečatených rolí netýka,
+  a nezhoda je odchýlka kampane (zápis v denníku odchýlok pri zázname ukončenia) a nález pre
+  vedúceho (zmena vedúceho 2026-11-24, odpoveď na otázku Q30).
 
 ### 5.4 Stav hosťa
 
@@ -329,6 +334,10 @@ generátora, nginx a hosťa pre každý profil a intenzitu v stupni G2 a potom p
 | premenlivosť | pomer špičky k priemeru intenzity v session aspoň 2 | návrh autora |
 | činnosť na pozadí (`corp`) | periodické úlohy s náhodným oneskorením, vlny prihlásení, dokumenty s dlhým chvostom veľkostí | návrh autora bez priameho zdroja |
 
+Čas na rozmyslenie sa posudzuje na skutočných odstupoch požiadaviek relácie (od konca jednej
+po začiatok ďalšej), nie na vylosovaných časoch, a najväčší z nich smie 70 s prekročiť najviac
+o 1 s vlastného oneskorenia generátora (úsudok vykonávateľa, balík B10).
+
 Session, ktorá požiadavky neplní, sa zamietne ako session s nesprávnou záťažou. Čo sa takto
 overiť nedá: zloženie prevádzky skutočného podniku, obsah požiadaviek a správanie skutočných
 používateľov. Práca to uvedie ako obmedzenie. Presné parametre zdrojov sa overia pri písaní
@@ -351,6 +360,7 @@ audit a archivácia po jednej, zmrazený commit a hash protokolu.
 | meškanie začiatku cyklu | najviac 0,5 s (desatina intervalu) | meškanie dnes nikto nekontroluje |
 | čas cyklu | delta najviac 1,5 s, plná snímka najviac 3,5 s | rezerva pre dve VM je nezmeraná |
 | varovanie zberača mimo zoznamu povolených vzorov zamieta | zoznam z G2 | varovania sa dnes iba ukladajú |
+| major faulty zberača na cyklus (`capture.rusage.majflt`) | `audit.collector_majflt_max`, `null` do G2, pravidlo kap. 10.9 (vedúci 2026-11-24, Q29) | sonda s 500 major faultami na cyklus prešla (riziko capture R4) |
 | doména a PID v každom sidecari sa zhodujú so session | presná zhoda | chýbajúca väzba na VM |
 | každá plánovaná udalosť prebehla a má účinok | predikát | udalosť bez účinku sa dnes prijme |
 | nasadené súbory v hosťovi sa zhodujú s `lab/` v commite | presná zhoda | zastaraný hosť prejde pilotom |
@@ -754,9 +764,11 @@ kladný.
   nasýtení meria pre každý profil diagnostický rad krokov, nie session, na kópii protokolu, v ktorej
   `max_concurrent` neviaže (aspoň 4 × 60 × najvyššia skúšaná rýchlosť). Krok zlyhá na serveri, keď požiadavka
   špičky nemá očakávaný výsledok alebo p95 latencie špičky je aspoň 1000 ms (úsudok nástroja skúšky labu);
-  zahodená relácia alebo krok bez špičky krok zneplatní a rad skončí chybou. Po prvom zlyhanom kroku sa hranica
-  dohľadá delením intervalu v geometrickom strede (tri desatinné miesta), kým zlyhaný krok nie je menej než
-  1,15-násobok obslúženého. Priepustnosť je najvyšší obslúžený krok a `rate` je jej `peak_share`. Poradie: pred
+  zahodená relácia alebo krok bez špičky krok zneplatní a rad skončí chybou (nález F1 overenia B5c). Po prvom
+  zlyhanom kroku sa hranica dohľadá delením intervalu (odpoveď vedúceho na Q5) v geometrickom strede, zaokrúhlenom
+  na tri desatinné miesta (úsudok vykonávateľa, balík B11), kým zlyhaný krok nie je menej než 1,15-násobok
+  obslúženého (čítanie vykonávateľa, balík B11: vedúci píše „kým susedné kroky nie sú bližšie než 15 %“).
+  Priepustnosť je najvyšší obslúžený krok a `rate` je jej `peak_share`. Poradie: pred
   behmi pri `rate` high sa nastaví predbežný strop, ktorý neviaže (cesta stupňa G2, záznamy G0 a G1 ostávajú
   platné, nový záznam samotestu auditu), potom dlhý beh pri `rate` high, a `max_concurrent` profilu je potom
   dvojnásobok najväčšieho počtu súbežných relácií v jeho meranej fáze (`determined_at` G2). `rate` high musí
@@ -833,6 +845,7 @@ Q17 a Q28).
 | tolerancia neplatných riadkov na session | G2 | najmenšie číslo, pri ktorom je podľa miery na hranicu udalosti z G2 pravdepodobnosť prekročenia v jednej session pod 1 %; najviac 6 |
 | strop riadkov uzavretých pravidlom na session; hranica skorého zastavenia | G3b | 99. percentil Poissonovho rozdelenia pri miere z G2 a G3b spolu, na typ udalosti; pri hranici skorého zastavenia je to miera na výskyt typu a s 99. percentilom so strednou hodnotou miera × počet výskytov typu sa po každom audite porovná počet označených riadkov kampane, nie jednej session (kap. 7.5; vedúci 2026-11-24, Q24) |
 | zoznam povolených varovaní zberača | G2 | všetky vzory pozorované pri bezchybných behoch |
+| major faulty zberača na cyklus | G2 | najväčší počet na cyklus v bezchybných behoch G2 na oboch VM; pri nule 0 (vedúci 2026-11-24, Q29) |
 | strop súbežnosti profilov (`profiles.*.max_concurrent`) | G2 | dvojnásobok najväčšieho počtu súbežných relácií pri `rate` high v dlhom behu (kap. 10.3); do G2 platia predbežné hodnoty 500 a 250 (vedúci 2026-11-24, Q5) |
 
 Čísla v riadkoch G0 sú návrh autora podľa úsudku. Sú zapísané pred akýmikoľvek dátami

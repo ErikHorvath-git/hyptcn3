@@ -325,6 +325,21 @@ def test_the_tracked_ledger_is_a_record_of_data_results():
         "hyptcn3/seal-ledger/1", list(SEALED_ROLES), [])
 
 
+def test_the_rule_the_ledger_keeps_for_snapshots_reads_the_restore_marker():
+    """Finding F3 of the B10 verification: the guard reads the restore marker of a raw/ restored from an archive (the
+    lead's answer to Q19) after the session.json of the same directory and before its parent's, so the rule of the
+    snapshots that the ledger keeps (RULES['snapshots'], and the tracked ledger) states that reading."""
+    from tcn import pecat
+    rule = pecat.RULES["snapshots"]
+    assert all(text in rule for text in (
+        f"the session.json in it names, or else its restore marker {pecat.RESTORED} names",
+        "or else the session.json and then the restore marker of its parent",
+        "a session.json or a restore marker without a session_id is refused by name",
+        "a directory without a session.json or a restore marker in it or its parent names no session"))
+    ledger = json.loads((ROOT / "data/results/kniha_pecati.json").read_text())
+    assert ledger["values"]["rules"]["snapshots"] == rule
+
+
 # ------------------------------------------------------------------ the guards
 
 
@@ -501,6 +516,70 @@ def test_the_session_of_a_snapshot_directory_decides(tmp_path, ledger, of_record
     assert (summary["seal"]["mark"], summary["seal"]["rehearsal"], configuration["mark"]) == (
         mark, case == "rehearsal", mark)
     assert summary["stop_reason"] == "empty_input"  # The empty raw/: nothing was read.
+
+
+def archived_session(root, ident, meta=None):
+    """A session directory of `ident` with two raw members and its verified archive (scripts/collection_archive.py
+    archive_session, members stored plain); (the archive, the session.json's document)."""
+    from scripts import collection_archive as arc
+    meta = {"session_id": ident, "campaign_id": "kampan-1", "role": "test_benign"} if meta is None else meta
+    source = Path(root) / "sessions" / ident
+    (source / "raw").mkdir(parents=True)
+    for name in ("frame0.vmicd", "frame0.json"):
+        (source / "raw" / name).write_bytes(b"synthetic " + name.encode())
+    (source / "session.json").write_text(json.dumps(meta))
+    archive = Path(root) / "archive" / ident
+    arc.archive_session(source, archive, lambda: None)
+    return archive, meta
+
+
+def test_the_snapshots_restored_from_the_archive_of_a_sealed_session_are_refused_by_name(sealed, ledger, tmp_path):
+    """The lead's answer to question Q19 (finding N1 of the B7c confirmation, package B10):
+    scripts/collection_archive.py restore_raw writes into the new directory the marker restored_from.json, which names
+    the session of the archive's session.json (its session_id and campaign_id), the archive and its sha256 as the
+    receipt states it (the sha256 of the manifest) and the sha256 of the session.json; the snapshot guard reads it as a
+    session.json, so the raw snapshots of a sealed session restored from its archive are refused by name, at the guard
+    and at an entry point, before anything is written. A restored raw/ of a session the ledger does not hold is not
+    sealed and names its marker; a marker without a session_id is refused by name, as a session.json without one."""
+    from safeguard.runtime import run_directory
+    from scripts import collection_archive as arc
+    from tcn import pecat
+    _, records = sealed
+    archive, meta = archived_session(tmp_path, "tb-1")
+    target = tmp_path / "restored" / "raw"
+    summary = arc.restore_raw(archive, target)
+    where = (f"the snapshot directory {target.resolve()} of session tb-1, restored from an archive "
+             f"({target.resolve() / 'restored_from.json'})")
+    with pytest.raises(pecat.Zapecatene) as error:
+        pecat.kontrola_snimok(target, purpose="test")
+    assert str(error.value) == sealed_message("test", where, records["tb-1"], "campaign", ledger)
+    out = tmp_path / "replay"
+    with pytest.raises(pecat.Zapecatene) as error:
+        run_directory(None, target, tmp_path / "no-profile", out, preserve=False)
+    assert str(error.value) == sealed_message("safeguard.runtime.run_directory", where, records["tb-1"], "campaign",
+                                              ledger)
+    assert not out.exists()
+    assert pecat.RESTORED == arc.RESTORED == "restored_from.json"
+    marker = json.loads((target / "restored_from.json").read_text())
+    assert {key: marker[key] for key in ("schema", "session_id", "campaign_id", "archive", "manifest_sha256",
+                                         "session_json_sha256", "rule")} == {
+        "schema": "hyptcn3/restored-raw/1", "session_id": "tb-1", "campaign_id": "kampan-1", "archive": str(archive),
+        "manifest_sha256": sha(archive / "archive-manifest.json"), "session_json_sha256": sha(archive / "session.json"),
+        "rule": arc.RESTORE_RULE}
+    assert sorted(p.name for p in target.iterdir()) == ["frame0.json", "frame0.vmicd", "restored_from.json"]
+    assert (summary["restored_from"], summary["session_id"]) == (str(target / "restored_from.json"), "tb-1")
+    # A session the ledger does not hold: not sealed, the decision names the marker.
+    other, _ = archived_session(tmp_path / "other", "tr-9")
+    decision = pecat.kontrola_snimok(arc.restore_raw(other, tmp_path / "other-raw")["target"], purpose="test")
+    assert (decision["allowed"], decision["session"], decision["session_json"], decision["restored_from"]) == (
+        "not_sealed", "tr-9", None, str((tmp_path / "other-raw" / "restored_from.json").resolve()))
+    # An archive whose session.json names no session: its marker is refused by name.
+    nameless, _ = archived_session(tmp_path / "nameless", "x", meta={"role": "test_benign"})
+    restored = Path(arc.restore_raw(nameless, tmp_path / "nameless-raw")["target"]).resolve()
+    with pytest.raises(ValueError) as error:
+        pecat.kontrola_snimok(restored, purpose="test")
+    assert str(error.value) == (f"{restored / 'restored_from.json'} names no session_id: the session of the snapshot "
+                                f"directory {restored} cannot be told (tcn/pecat.py SNAPSHOT_RULE)")
 
 
 def test_a_method_given_a_window_set_of_a_sealed_archive_refuses_it(sealed, ledger):

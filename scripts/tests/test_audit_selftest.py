@@ -152,7 +152,7 @@ def recorded(small, tmp_path, monkeypatch):
     from scripts import audit_selftest
     from scripts.tests import audit_cases
     two = audit_cases.RAM_CASES[:2]
-    monkeypatch.setattr(audit_selftest, "cases", lambda: two)
+    monkeypatch.setattr(audit_selftest, "cases", lambda p: two)  # The self-test's list under p (B10, S1 of B3).
     p, path, _ = small
     out = tmp_path / "records" / "audit_selftest_a.json"
     out.parent.mkdir()
@@ -415,9 +415,14 @@ def test_selftest_protocol_carries_the_bounds_of_g0_and_the_whole_register():
     p = collection.protocol(SELFTEST_PROTOCOL)
     assert (p["schema"], p["interval_s"], p["max_gap_s"], p["window_rows"], p["full_every"], p["cycles"]) == (
         "hyptcn3/collection-protocol/3", 5, 7.5, 32, 360, 720)
-    assert {k: v for k, v in p["audit"].items() if k not in ("periodicity", "traffic", "early_stop")} == {
+    assert {k: v for k, v in p["audit"].items()
+            if k not in ("periodicity", "traffic", "early_stop", "collector_majflt_note")} == {
         "lateness_max_s": .5, "cycle_ms_max": {"delta": 1500, "full": 3500}, "warnings_allowed": None,
-        "rule_closed_rows_max": None}
+        "rule_closed_rows_max": None, "collector_majflt_max": None}
+    # The lead's answer to Q29: the bound of the collector's major faults per cycle is null until G2, its note holds
+    # the rule (scripts/tests/test_collector_majflt.py reads it in full).
+    assert all(text in p["audit"]["collector_majflt_note"]
+               for text in ("Q29", "G2", "both VMs", "at zero the bound is 0"))
     # Package B9b and its fix (Q24): the rule of the early stop, one rate per event type of the file, each null until
     # G3b, and the stop for periodicity of the lead's skeleton B9 (row skoré zastavenie).
     early_stop = p["audit"]["early_stop"]
@@ -490,6 +495,56 @@ def test_cap_of_rule_closed_rows_once_it_is_set(small, closed, codes):
     assert verdict["reasons"] == ["rows closed by a parser rule above the cap"] * len(codes)
 
 
+CAP_REASON = "rows closed by a parser rule above the cap"
+
+
+@pytest.mark.parametrize("cap", [0, 3, 4, 96], ids=["zero", "three", "four", "every_row"])
+def test_the_self_test_builds_the_case_of_the_cap_once_the_cap_is_a_number(small, tmp_path, cap):
+    """Finding S1 of B3 (package B10): once G3b sets audit.rule_closed_rows_max to a number, the self-test's list
+    (audit_cases.cases) holds the case of cap + 1 rule-closed rows after the RAM cases, the periodicity cases give the
+    cap's reason where their rule-closed rows (4 and 2) exceed the cap, UNREACHABLE no longer names it, and
+    require_selftest asks a record for that list. With a cap no session of the protocol exceeds (96 of 96 rows) the
+    list is that of a null cap and the reason stays unreachable. Under the null cap of G0 nothing changes."""
+    from scripts import audit_selftest, collection
+    from scripts.tests import audit_cases, boundary_sessions as bs
+    p, _, _ = small
+    assert (audit_cases.cases(p), audit_cases.unreachable(p)) == (audit_cases.CASES, audit_cases.UNREACHABLE)
+    doc = copy.deepcopy(p)
+    doc["audit"]["rule_closed_rows_max"] = cap
+    path = bs.write_protocol(tmp_path / "protocol.json", doc)
+    capped = collection.protocol(path)
+    reachable = cap < capped["cycles"]
+    listed = audit_cases.cases(capped)
+    ids = [case.id for case in listed]
+    assert ids == [case.id for case in audit_cases.RAM_CASES] + ["rule_closed_above_cap"] * reachable + [
+        case.id for case in audit_cases.LOG_CASES]
+    unreachable = audit_cases.unreachable(capped)
+    assert (CAP_REASON in unreachable) is not reachable
+    assert reachable or unreachable[CAP_REASON] == ("audit.rule_closed_rows_max is 96, and a session of 96 rows cannot "
+                                                    "hold more rule-closed rows")
+    expected = {"periodicity_rule_closed": ["periodic flagged rows", *[CAP_REASON] * (cap < 4)],
+                "periodicity_union": ["periodic flagged rows", *[CAP_REASON] * (cap < 2)],
+                "rule_closed_above_cap": [CAP_REASON]}
+    for case in (case for case in listed if case.id in expected):
+        audit = audit_cases.run_case(tmp_path / "cases", capped, path, case)
+        assert (audit.code, audit.values["reasons"]) == (2, sorted(expected[case.id]))
+        assert audit_cases.expected(case, capped) == sorted(expected[case.id])
+    # require_selftest under the capped protocol: a passed record of the list without the case of the cap is refused
+    # while a session can exceed the cap; one of the self-test's list is accepted.
+    record = {"schema": audit_selftest.SCHEMA, "date": "2026-11-24T00:00:00+00:00", "passed": True,
+              "protocol_sha256": sha256(path), "measurement_sha256": audit_selftest.measurement_sha256(),
+              "cases_sha256": audit_selftest.cases_sha256()}
+    for name, cases in (("without_the_cap", audit_cases.CASES), ("self_test", listed)):
+        directory = tmp_path / name
+        directory.mkdir()
+        (directory / "audit_selftest_a.json").write_text(json.dumps(dict(record, cases=[{"id": c.id} for c in cases])))
+        if name == "without_the_cap" and reachable:
+            with pytest.raises(ValueError, match="^" + REFUSED + "$"):
+                audit_selftest.require_selftest(path, directory)
+        else:
+            assert audit_selftest.require_selftest(path, directory)["cases"] == [{"id": c.id} for c in cases]
+
+
 @pytest.mark.parametrize("seqs, spacing, run", [
     ([], 2, (0, None)), ([5], 2, (0, None)), ([5, 6, 7, 8, 9], 2, (0, None)), ([5, 7, 9, 11], 2, (3, 2)),
     ([5, 7, 9, 11], 3, (0, None)), ([11, 5, 9, 7, 7], 2, (3, 2)),
@@ -531,6 +586,55 @@ def test_spacing_mode_is_recorded_and_never_a_reason(small):
     assert audit.values["timing"]["spacing_mode"] == {"spacing": 5, "count": 4, "spacings": 6}
     assert audit.values["timing"]["periodic_run"]["equal_spacings"] == 2
     assert audit.values["exceptions"]["rule_closed_rows"]["observed"] == len(RESONANCE)
+
+
+def test_the_counts_the_audit_only_records_are_those_of_a_session_that_has_them(small):
+    """Findings S3 and S4 of B3 (package B10; mutants m16, m17, m18 and m29): four rule-closed rows of the walks prev,
+    tail, meet and prev at the spacing of the pattern, a row whose backward walk closed over other tasks and two rows
+    with tasks skipped. The session is refused for the pattern alone; the record counts the four rows as rule-closed,
+    in the register's exception and in the facts, lists the row of the backward walk, sums the skipped tasks and
+    states the run of three equal spacings of 2 rows (none of these is a reason)."""
+    from scripts.tests import audit_cases, boundary_sessions as bs
+    from scripts.tests.audit_case import Case
+    p, path, root = small
+    pattern = audit_cases._periodic("rtmr")(p)
+    assert {seq: q["process_walk"] for seq, q in pattern.items()} == {9: "prev", 11: "tail", 13: "meet", 15: "prev"}
+    quality = {**pattern, 40: dict(bs.complete_row(), process_walk_backward={"closed": True, "agrees": False}),
+               50: dict(bs.complete_row(), skipped_tasks={"sockets": 2, "memory_patterns": 0}),
+               60: dict(bs.complete_row(), skipped_tasks={"sockets": 1, "memory_patterns": 3})}
+    case = Case("recorded_counts", "counts the audit records and never judges", ["periodic flagged rows"],
+                audit_cases._rows_quality(lambda p: quality))
+    v = audit_cases.run_case(root / "recorded", p, path, case).values
+    assert (v["accepted"], v["reasons"]) == (False, ["periodic flagged rows"])
+    assert (v["exceptions"]["rule_closed_rows"]["observed"], v["acceptance"]["facts"]["rule_closed_seq"]) == (
+        4, [9, 11, 13, 15])
+    assert (v["quality"]["process_walk_backward_disagrees_seq"], v["quality"]["skipped_tasks"]) == (
+        [40], {"sockets": 3, "memory_patterns": 3})
+    assert v["timing"]["periodic_run"] == {"equal_spacings": 3, "spacing": 2, "min_spacing_rows": 2,
+                                           "flagged_rows": 4}
+
+
+def test_the_rate_of_the_generator_is_judged_against_the_protocol_once_the_protocol_has_one(small, tmp_path):
+    """F4 of the B5b verification (package B10, mutant M36): from G2 every corpus session runs at the rate of its
+    scenario in the protocol (scenarios.*.rate, null until G2). Under a copy of the small protocol with a rate for
+    every scenario (1 user session a second, a number of this test only) the clean session's generator states that
+    rate with the source protocol and is accepted, and the self-test's case that gives the header the other source
+    is refused with traffic_config:rate, as it is under a null rate."""
+    from scripts import collection
+    from scripts.tests import audit_cases, boundary_sessions as bs
+    p, _, _ = small
+    doc = copy.deepcopy(p)
+    for scenario in doc["scenarios"].values():
+        scenario["rate"] = 1.
+    path = bs.write_protocol(tmp_path / "protocol.json", doc)
+    rated = collection.protocol(path)
+    clean = audit_cases.run_case(tmp_path / "cases", rated, path)
+    assert (clean.code, clean.values["reasons"]) == (0, [])
+    header = json.loads((Path(clean.values["session_dir"]) / "traffic_requests.jsonl").read_text().splitlines()[0])
+    assert (header["rate_source"], header["rate"]) == ("protocol", 1.)
+    case = case_of("logs:traffic_config:rate")
+    audit = audit_cases.run_case(tmp_path / "cases", rated, path, case)
+    assert (audit.code, audit.values["reasons"]) == (2, ["logs: traffic_config:rate"])
 
 
 def test_the_audit_records_the_summary_of_every_column_and_never_a_reason(small, recorded):

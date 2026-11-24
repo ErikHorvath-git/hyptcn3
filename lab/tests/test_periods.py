@@ -2,9 +2,10 @@
 
 The scan finds in the deployed files of lab/ every Restart= of a unit (also in a .conf drop-in), every timer (a
 systemd one and nginx's log flush) and every loop that sleeps or waits (also in code another process runs:
-python3 -c and bash -c strings), and the test fails on one the
-register does not name at its source line, or on a register line that no longer points at one. A process
-creating entry must be bounded or have a random delay (proposal 5.6).
+python3 -c and bash -c strings; since package B10, F2 of the B5a verification, also a loop that sleeps in a helper of
+its module, runs the sleep binary or waits in a shell read -t, and a Restart = with spaces in a string), and the test
+fails on one the register does not name at its source line, or on a register line that no longer points at one. A
+process creating entry must be bounded or have a random delay (proposal 5.6).
 """
 import ast
 import json
@@ -38,17 +39,24 @@ def unit_items(text):
     return found
 
 
+READ_TIMEOUT = re.compile(r"\bread\b(\s+-\w+)*\s+-\w*t")  # read -t: waits up to its timeout (F2 of B5a).
+
+
 def shell_items(text):
-    """Shell loops (for, while, until ... done) that run sleep; each open loop at its first line."""
+    """Shell loops (for, while, until ... done) that run sleep or a read with a timeout; each open loop at its first
+    line."""
     found, open_loops = set(), []
     for number, line in enumerate(text.splitlines(), 1):
-        for token in re.findall(r"[A-Za-z_]+", line.split("#", 1)[0]):
+        code = line.split("#", 1)[0]
+        for token in re.findall(r"[A-Za-z_]+", code):
             if token in ("for", "while", "until"):
                 open_loops.append(number)
             elif token == "done" and open_loops:
                 open_loops.pop()
             elif token == "sleep":
                 found.update(("loop", n) for n in open_loops)
+        if READ_TIMEOUT.search(code):
+            found.update(("loop", n) for n in open_loops)
     return found
 
 
@@ -68,6 +76,26 @@ def _name(call):
     return getattr(call.func, "attr", None) or getattr(call.func, "id", None)
 
 
+def _runs_sleep(call):
+    """A call that runs the sleep binary: its first argument a command list or a shell line that starts with sleep
+    (subprocess.run(['sleep', '5']), os.system('sleep 5'); F2 of the B5a verification)."""
+    first = call.args[0] if call.args else None
+    if isinstance(first, (ast.List, ast.Tuple)) and first.elts:
+        first = first.elts[0]
+    return isinstance(first, ast.Constant) and isinstance(first.value, str) and re.match(r"\s*sleep\b", first.value)
+
+
+def _sleepers(tree):
+    """Names of the functions of the module that sleep or wait, also through another such function (F2 of the B5a
+    verification: a loop that sleeps in a helper waits as one that sleeps itself)."""
+    functions = [n for n in ast.walk(tree) if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))]
+    sleeping, grew = set(), True
+    while grew:
+        found = {f.name for f in functions if any(_name(c) in SLEEPS | sleeping or _runs_sleep(c) for c in _calls(f))}
+        grew, sleeping = found != sleeping, found
+    return sleeping
+
+
 def string_items(text):
     """Periodic code in a string another process runs (python3 -c, bash -c, a unit file written by a script)."""
     try:
@@ -77,7 +105,8 @@ def string_items(text):
     return {kind for kind, _ in found | shell_items(text) | unit_items(text)}
 
 
-CODE = re.compile(r"\b(sleep|wait)\b|Restart=|" + TIMER.pattern)  # A string that may hold periodic code.
+# A string that may hold periodic code ("Restart = always" too: F2 of the B5a verification).
+CODE = re.compile(r"\b(sleep|wait)\b|Restart\s*=|" + TIMER.pattern)
 
 
 def python_items(text):
@@ -85,9 +114,10 @@ def python_items(text):
     docstrings = {id(node.body[0].value) for node in ast.walk(tree)
                   if isinstance(node, (ast.Module, ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef))
                   and node.body and isinstance(node.body[0], ast.Expr) and isinstance(node.body[0].value, ast.Constant)}
-    found = set()
+    found, waits = set(), SLEEPS | _sleepers(tree)
     for node in ast.walk(tree):
-        if isinstance(node, (ast.For, ast.AsyncFor, ast.While)) and any(_name(c) in SLEEPS for c in _calls(node)):
+        if isinstance(node, (ast.For, ast.AsyncFor, ast.While)) and any(_name(c) in waits or _runs_sleep(c)
+                                                                        for c in _calls(node)):
             found.add(("loop", node.lineno))
         elif isinstance(node, ast.Call) and _name(node) in LOOPS:
             found.add(("loop", node.lineno))
@@ -210,6 +240,16 @@ def test_bounds_and_random_delays_of_the_register_are_those_of_the_source():
     ("extra3.py", "DROPIN = '[Service]\\nRestart=always\\nRestartSec=1\\n'\n", "restart", 1),
     ("hyptcn-lab-catalog-override.conf", "[Service]\nRestart=always\nRestartSec=1\n", "restart", 2),
     ("extra-nginx.conf", "server {\n    access_log /var/log/x.jsonl json buffer=8k flush=5s;\n}\n", "timer", 2),
+    # Package B10, F2 of the verification of B5a (its probes P2 to P5): a sleep in a helper the loop calls, the sleep
+    # binary run through subprocess, a shell loop that waits in read -t, and Restart = always in a Python string.
+    ("extra_wait.py", "import time\n\n\ndef pause():\n    time.sleep(1)\n\n\ndef wait_health(healthy):\n"
+     "    for _ in range(30):\n        if healthy():\n            return\n        pause()\n", "loop", 9),
+    ("extra_poll.py", "import subprocess\n\n\ndef poll():\n    while True:\n"
+     "        subprocess.run(['curl', '-fsS', 'http://127.0.0.1:8080/healthz'])\n"
+     "        subprocess.run(['sleep', '5'])\n", "loop", 5),
+    ("extra_read.sh", "#!/bin/sh\nwhile true; do\n    curl -fsS http://127.0.0.1:8080/healthz\n"
+     "    read -t 5 _ < /dev/zero || true\ndone\n", "loop", 2),
+    ("extra_unit.py", "UNIT = '[Service]\\nExecStart=/bin/true\\nRestart = always\\n'\n", "restart", 1),
 ])
 def test_an_unregistered_restart_timer_or_sleeping_loop_fails(tmp_path, name, text, kind, line):
     copy = tmp_path / "lab"
@@ -333,3 +373,22 @@ def test_the_measured_spacing_after_the_change_is_pending_or_holds_the_property(
         assert pending.strip() and "Q27" in pending and "--postgres-debug1" in pending
     else:
         assert "pending" not in measured and "67s" in after["setting"] and remainder(after["spacings"]["median"])[1]
+
+
+def test_the_measured_spacing_after_the_change_is_the_record_of_the_window():
+    """measured.after (the lead's answer to Q27; finding F6 of the B10 verification), read the way the before test
+    reads its record: the record measured.after.record names, of stage skuska, at measured.after.path, holds the same
+    spacings of the window's long run at 67 s, and its property of Q9 the same remainder, 2.338 s past a multiple of
+    5 s. A missing record fails the test."""
+    after = autovacuum()["measured"]["after"]
+    record = json.loads((LAB.parent / after["record"]).read_text())
+    periods = record
+    for key in after["path"].split("."):
+        periods = periods[key]
+    found = next(e for e in periods if e["name"] == "PostgreSQL autovacuum launcher")
+    assert (record["stage"], after["stage"], after["path"]) == ("skuska", "skuska", "values.periods")
+    assert after["spacings"] == found["spacings"] and after["run"] in record["command"]
+    assert remainder(after["spacings"]["median"]) == (after["remainder_s"], True)
+    assert (after["remainder_s"], True) == (record["values"]["autovacuum_property"]["remainder_s"],
+                                            record["values"]["autovacuum_property"]["ok"])
+    assert after["databases"] == len(DATABASES) and "67s" in after["setting"]

@@ -122,6 +122,14 @@ CASES = [
     ("zataz_pamate", lambda f: load(f, 389 << 10), False),
     ("kontrola_wx_memfd", lambda f: control(f, RWX), True),
     ("kontrola_wx_memfd", lambda f: control(f, RWX.replace("rwxp", "r-xp")), False),
+    # Package B10, F3 of the verification of B5a (its mutants E1, E2, E3, E5, E6): each part of a predicate fails it
+    # alone, and the load holds at its bound. Appended, so the ids above keep their numbers.
+    ("zla_konfiguracia_sluzby", lambda f: catalog_loop(f, "4", (200, {"products": []}, None)), False),  # No failure.
+    ("zla_konfiguracia_sluzby", lambda f: catalog_loop(f, "0", REFUSED), False),  # No restart of the catalog.
+    ("zamok_tabulky", lambda f: (locked(f, 1), f.http.update({("POST", udalosti.ORDERS_URL): (201, {}, None)})),
+     False),  # The lock is held and the write still went through.
+    ("restart_databazy", main_pid("restart_databazy", "postgresql@15-main", ""), False),  # No MainPID after it.
+    ("zataz_pamate", lambda f: load(f, 390 << 10), True),  # Exactly LOAD_MIN_KIB, 390 MiB.
 ]
 
 

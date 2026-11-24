@@ -397,6 +397,22 @@ def test_train_session_after_a_test_session_is_refused(campaign_corpus, tmp_path
             validate_index(write_index(c, doc, tmp_path / "late.json"))
 
 
+def test_a_train_session_that_ends_as_the_first_dev_session_starts_is_refused(campaign_corpus, tmp_path):
+    """N1 of the B6a verification (package B10, mutant D5): every session of a role ends before any session of the
+    next rank starts, so a train session whose last row lies at the very time of the first row of the first dev
+    session is out of time order (the meaning kept from before package B6a)."""
+    c = campaign_corpus
+    moved = c.plan[0]
+    first_dev = min((s for s in c.plan if s["role"] == "dev"), key=lambda s: c.times[c.sids[label(s)]][0])
+    start = c.times[c.sids[label(first_dev)]][0]
+    sid = "touching-" + c.sids[label(moved)]
+    audit = session(tmp_path / "sessions", c, moved, sid, start - INTERVAL * (CYCLES - 1))
+    assert c.times[sid][1] == start
+    with refused(f"dataset roles are not chronologically separated: train session {sid} ends after dev session "
+                 f"{c.sids[label(first_dev)]} starts"):
+        build(c, [audit if key == label(moved) else a for key, a in c.audits.items()])
+
+
 def test_protocol_of_schema_2_keeps_its_rule_and_the_index_names_it(tmp_path):
     """Every scenario in every group of the four roles of schema 2, as before: the index names the rule, has no plan
     mode and no positions, and a missing role is the mismatch it was; a plan mode is refused there."""

@@ -155,6 +155,11 @@ vedľa ktorého treba skopírovať `session.json` (bootový kontext):
 .venv/bin/python -m scripts.collection_archive restore <archív>/campaigns/<id>/collections/<session> <nový>/raw
 ```
 
+Obnova zapíše do nového adresára pred prvým členom aj značku `restored_from.json`: `session_id`
+a `campaign_id` z archívneho `session.json`, cestu archívu a sha256 jeho manifestu (ako ho uvádza
+potvrdenka). Stráž snímok (`tcn/pecat.py kontrola_snimok`) ju číta ako `session.json`, takže snímky
+zapečatenej session obnovené z archívu odmietne menom (odpoveď vedúceho na Q19, balík B10).
+
 Obnova a opätovná extrakcia boli overené na reálnom diagnostickom behu
 ([výsledok](../data/results/collection_archive_roundtrip_20261020.json)):
 obnovili sa všetky snímky a vedľajšie súbory, príznaky prvého súvislého
@@ -405,6 +410,14 @@ a odchýlky. Záznam takého ukončenia ju nesie v `values.merania_entry`, každ
 vypíše aj so sha256 záznamu, ktorý záznam sám v sebe niesť nemôže. Po
 zastavení sa dokumentácia ani záznamy necommitujú: zmrazený strom
 (`FROZEN_TREE_RULE`) by ďalší beh odmietol.
+
+Po ukončení, ktoré kampaň uzavrie, a pred commitom záznamov prepočíta nástroj
+mimo meracieho kódu obálku prevádzky každej prijatej session z protokolu a zo
+seedu hlavičky a porovná ju s obálkou hlavičky; audit ju neprepočítava (odpoveď
+vedúceho na otázku Q30, 2026-11-24; návrh, kap. 5.3). Nástroj číta iba logy
+prevádzky, žiadne skóre. Nezhoda ide ako odchýlka do
+[ODCHYLKY_V5.sk.md](ODCHYLKY_V5.sk.md) a vedúcemu ako nález. Nástroj príde
+s prípravou G2 a beží aj nad session G2 a oboch generálok.
 
 Rovnaký príkaz pokračuje z existujúcich artefaktov, nezačína novú kampaň.
 Dokončené session sa nezbierajú znova. Prerušené kopírovanie a uvoľňovanie

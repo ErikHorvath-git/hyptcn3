@@ -187,6 +187,32 @@ def test_a_continuation_counts_on_from_the_paused_campaign_until_its_own_early_s
         (moment + timedelta(seconds=1)).isoformat(), 1, None)
 
 
+def test_a_continuation_counts_the_paused_campaign_from_its_own_restart_point(directory, tmp_path):
+    """V4 of the B11 verification (package B10, mutant F3): the paused campaign's files count in a continuation only
+    when audited after that campaign's own restart point (continued_count with early_stop_restart). The paused
+    campaign: a session with one marked row, then an early stop (its ending with an early-stop trigger: the restart
+    point; a resume after it uses no continuation, RESUME_RULE), then a session with one more audited after it. The
+    continuation's first session with one more is 2 of 2 occurrences at the bound 2: no stop, and the count names the
+    paused campaign's restart point; counted from that campaign's start it would be 3 of 3, above 2."""
+    p = protocol(**{TYPE: RATE})
+    assert check(directory, "a", "kampan_01_a", p, 1, 1) is None
+    moment = datetime.fromisoformat(camp.now())
+    restart = (moment + timedelta(seconds=1)).isoformat()
+    ending(directory, "stopped", restart, early=True)
+    values, report = audit(directory, "kampan_02_a", 1, 1)
+    write_new(directory / "marked" / "kampan_02_a.json", {
+        "schema": camp.MARKED_SCHEMA, "vm": "a", "session": "kampan_02_a",
+        "audited_at": (moment + timedelta(seconds=2)).isoformat(), "marked_rows_by_type": values["marked_rows_by_type"],
+        "event_occurrences_by_type": values["event_occurrences_by_type"], "audit": str(report),
+        "audit_sha256": digest(report)})
+    continuation, continues = continuation_of(directory, tmp_path)
+    assert check(continuation, "a", "pokracovanie_01_a", p, 1, 1, continues=continues) is None
+    shown = state(continuation, "a")
+    assert shown["marked_rows_counts"][TYPE] == {"marked": 2, "occurrences": 2, "rate": RATE, "bound": 2}
+    assert (shown["marked_rows_since"], shown["marked_rows_sessions"], shown["marked_rows_continued"]) == (
+        restart, 2, "kampan")
+
+
 @pytest.mark.parametrize("case", ["gone", "changed"])
 def test_a_paused_campaign_that_cannot_be_counted_is_an_error_by_name(directory, tmp_path, case):
     """EARLY_STOP_RULE (package B11): a continuation counts on from the paused campaign only where and as the

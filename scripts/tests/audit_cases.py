@@ -6,7 +6,10 @@ audits it with the real scripts/collection.py::audit_session (boundary_sessions.
 the feature extraction from guest RAM, is replaced by the synthetic extraction result). RAM_CASES holds one case
 for every reason audit_session and the acceptance verdict can give; UNREACHABLE names the reasons no session
 built under such a protocol reaches, with the reason why. CASES adds the cases of the log audit
-(scripts/tests/audit_cases_logs.py). Expected reasons are written here, never taken from the code under test;
+(scripts/tests/audit_cases_logs.py). The self-test runs cases(p): CASES, and the case of a bound once the protocol
+sets it to a number (package B10, finding S1 of B3: the cap of rule-closed rows from G3b; the lead's answer to Q29:
+the bound of the collector's major faults per cycle from G2), with unreachable(p) for
+UNREACHABLE. Expected reasons are written here, never taken from the code under test;
 a case depends on the protocol only through its own parameters (grid, bounds, gate, rule). Where a bad session
 also breaks what the log audit reads (end.json, some keys of session.json and raw/capture.json), its expected
 reasons include the log audit's "logs: ..." ones.
@@ -248,13 +251,51 @@ def _clustered_open_walks(p):
     return {seq: bs.unclosed_row() for seq in range(_middle(p), _middle(p) + count)}
 
 
+# The walk of a row a parser rule closed, by its letter in _periodic (features/acceptance.py RULE_CLOSED_WALKS).
+WALKS = {"r": "prev", "t": "tail", "m": "meet"}
+
+
 def _periodic(kinds):
-    """Rows of the given kinds (open walk 'u' or rule-closed 'r') at the smallest spacing the bound counts."""
+    """Rows of the given kinds (open walk 'u', or closed by a parser rule: 'r' prev, 't' tail, 'm' meet) at the
+    smallest spacing the bound counts."""
     def rows(p):
         spacing, start = _bounds(p)["periodicity"]["min_spacing_rows"], p["window_rows"] + 1
-        return {start + i * spacing: bs.unclosed_row() if kind == "u" else bs.rule_closed_row()
+        return {start + i * spacing: bs.unclosed_row() if kind == "u" else bs.rule_closed_row(WALKS[kind])
                 for i, kind in enumerate(kinds)}
     return rows
+
+
+# The cap of rule-closed rows (finding S1 of B3): audit.rule_closed_rows_max is null until G3b sets it (proposal
+# 10.9). Once it is a number, a case with more rule-closed rows than the cap gets the cap's reason too, and the
+# self-test builds the case of cap + 1 such rows (cases()).
+CAP = "rows closed by a parser rule above the cap"
+
+
+def _cap(p):
+    """audit.rule_closed_rows_max of p: an int from G3b, None before, and None without an audit section (schemas 1
+    and 2 have no cap, features/audit_policy.py audit_bounds)."""
+    bounds = _bounds(p)
+    return None if bounds is None else bounds["rule_closed_rows_max"]
+
+
+def _capped(reasons, kinds):
+    """expected: `reasons`, and the cap's reason where p's cap is below the rule-closed rows of the kinds."""
+    closed = sum(kind in WALKS for kind in kinds)
+    return lambda p: sorted([*reasons, *([CAP] if type(_cap(p)) is int and closed > _cap(p) else [])])
+
+
+def _cap_reachable(p):
+    """Whether a session of p can hold more rule-closed rows than the cap: the cap is a number below the rows."""
+    return type(_cap(p)) is int and _cap(p) + 1 <= p["cycles"]
+
+
+def _above_cap(p):
+    """cap + 1 rows closed by a parser rule side by side, from the middle of the first chain where they fit there and
+    from row 0 otherwise: one burst, so never periodic, and valid rows, so the windows stay those of the clean
+    session."""
+    count = _cap(p) + 1
+    start = _middle(p) if _middle(p) + count <= p["cycles"] else 0
+    return {seq: bs.rule_closed_row() for seq in range(start, start + count)}
 
 
 def _coverage(p):
@@ -278,6 +319,27 @@ def _over_period(d, p, result):
     _sidecar(d, FRAME, _set("capture.total_ms", p["interval_s"] * 1000))
 
 
+# The collector's major faults per cycle (the lead's answer to Q29): under schema 3 the audit reads
+# capture.rusage.majflt of every sidecar; a count that is missing or no integer of at least 0 is a reason whatever the
+# bound (MAJFLT_COUNT), and a count above audit.collector_majflt_max another (MAJFLT). The bound is null until G2 sets
+# it (proposal 10.9); once it is a number, the self-test builds the case of one cycle at bound + 1 (cases()).
+MAJFLT = "collector major faults per cycle above the audit bound"
+MAJFLT_COUNT = f"collector major fault count is not an integer of at least 0: frame{FRAME}.json:capture.rusage.majflt"
+
+
+def _majflt_max(p):
+    """audit.collector_majflt_max of p: an int from G2, None before, and None without an audit section (schemas 1 and
+    2 have no bound and the audit does not read the count, features/audit_policy.py audit_bounds)."""
+    bounds = _bounds(p)
+    return None if bounds is None else bounds["collector_majflt_max"]
+
+
+def _majflt_above(d, p, result):
+    """One cycle (frame FRAME, a delta snapshot) with bound + 1 major faults of the collector; every other cycle has
+    none."""
+    _sidecar(d, FRAME, _set("capture.rusage.majflt", _majflt_max(p) + 1))
+
+
 SESSION_KEYS = ("protocol_sha256", "guest_before", "profile_sha256", "collector_sha256", "collector_settings.mlock",
                 "role", "cycles", "domain", "host_context.qemu.pid", "host_context.memory.qemu_swap_max",
                 "host_context.memory.qemu_swap_kb", "lab_sha256")
@@ -285,7 +347,8 @@ END_KEYS = ("completed", "guest_after")
 CAPTURE_KEYS = ("values.collector_sha256", "values.full_every", "values.interval_s", "values.mlock")
 SIDECAR_KEYS = ("output.full", "output.sha256", "sched.skipped_before", "sched.lateness_s", "capture.total_ms",
                 "capture.queue_wait_ms", "output.mlock", "output.data_closed_ms", "output.queue_bytes",
-                "output.queue_jobs", "vm.domain", "vm.vmid")
+                "output.queue_jobs", "vm.domain", "vm.vmid",
+                "capture.rusage.majflt")  # Q29: read under schema 3, a missing count is never 0.
 # What else a missing key takes away. The log audit reads some keys too (scripts/collection_logs.py).
 ALSO_MISSING = {
     "session.json:protocol_sha256": ["logs: protocol_hash"],
@@ -300,8 +363,10 @@ ALSO_MISSING = {
     "raw/capture.json:values.collector_sha256": ["logs: collector:unreadable:KeyError: 'collector_sha256'"],
 }
 # What a missing key takes away from the v5 traffic checks as well (package B5b): the generator's header names the
-# protocol hash session.json states.
-V5_ALSO_MISSING = {"session.json:protocol_sha256": ["logs: traffic_config:protocol_sha256"]}
+# protocol hash session.json states; and since package B10 (finding F3 of B5b) the span of its envelope is the planned
+# run of the session's cycles.
+V5_ALSO_MISSING = {"session.json:protocol_sha256": ["logs: traffic_config:protocol_sha256"],
+                   "session.json:cycles": ["logs: traffic_config:dur"]}
 
 
 def _missing(name, dotted):
@@ -379,16 +444,20 @@ RAM_CASES = [
         "integrity findings require review before benign admission"],
          _rows_quality(lambda p: {_middle(p): bs.finding_row()})),
     Case("coverage", "score coverage below design gate", _coverage, _no_predecessor),
-    Case("periodicity_rule_closed", "6.2 periodicity of flagged rows (rule-closed rows)", ["periodic flagged rows"],
-         _rows_quality(_periodic("rrrr"))),
+    # Rule-closed rows of all three walks (finding S3 of B3): a wrong list of walks misses one, and with it the pattern.
+    Case("periodicity_rule_closed", "6.2 periodicity of flagged rows (rule-closed rows of the walks prev, tail, meet)",
+         _capped(["periodic flagged rows"], "rtmr"), _rows_quality(_periodic("rtmr"))),
     Case("periodicity_union", "6.2 periodicity over invalid and rule-closed rows together",
-         ["periodic flagged rows"], _rows_quality(_periodic("urur"))),
+         _capped(["periodic flagged rows"], "urur"), _rows_quality(_periodic("urur"))),
     # New checks of proposal 6.2.
     Case("lateness", "6.2 cycle start lateness", ["cycle start later than the audit bound"], _late),
     Case("cycle_delta", "6.2 cycle time of a delta snapshot", ["collector cycle time above the audit bound"],
          _cycle("delta")),
     Case("cycle_full", "6.2 cycle time of a full snapshot", ["collector cycle time above the audit bound"],
          _cycle("full")),
+    # The lead's answer to Q29: a count of major faults that is no count is a reason under every bound, null included.
+    Case("collector_majflt_not_a_count", "6.2 collector major faults per cycle (Q29): a count below 0",
+         [MAJFLT_COUNT], _frame(_set("capture.rusage.majflt", -1))),
     Case("vm_domain", "6.2 VM identity: domain", ["sidecar VM identity differs from session"],
          _frame(_set("vm.domain", "another-domain"))),
     Case("vm_vmid", "6.2 VM identity: QEMU pid", ["sidecar VM identity differs from session"],
@@ -421,13 +490,53 @@ UNREACHABLE = {
     "positive control not executed: <type>": POSITIVE_CONTROL,
     "positive control not detected: <type> <hits>/<rows> rows": POSITIVE_CONTROL,
     "positive control missing from events.json": POSITIVE_CONTROL,
-    "rows closed by a parser rule above the cap": (
+    CAP: (
         "audit.rule_closed_rows_max is null until G3b (proposal 10.9), so the count is recorded and never a "
-        "reason; scripts/tests/test_audit_selftest.py checks the reason under a copy with an integer cap"),
+        "reason; once it is a number the self-test builds the case rule_closed_above_cap (cases()), and "
+        "scripts/tests/test_audit_selftest.py checks it under a copy with an integer cap"),
+    MAJFLT: (
+        "audit.collector_majflt_max is null until G2 (proposal 10.9, the lead's answer to Q29), so the major faults "
+        "of the collector per cycle are recorded and printed (values.collector_majflt) and never this reason; once it "
+        "is a number the self-test builds the case collector_majflt_above_bound (cases()), and "
+        "scripts/tests/test_collector_majflt.py checks it under a copy with a numeric bound"),
 }
+# Finding S1 of B3: the case of the cap, which the self-test builds only under a protocol whose cap a session can
+# exceed (cases()).
+CAP_CASE = Case("rule_closed_above_cap", "rule_closed_rows_max of proposal 10.9: cap + 1 rule-closed rows, no pattern",
+                [CAP], _rows_quality(_above_cap))
+# The lead's answer to Q29: the case of the bound of the collector's major faults, which the self-test builds once the
+# bound is a number (cases()); a session can always hold one cycle at bound + 1.
+MAJFLT_CASE = Case("collector_majflt_above_bound",
+                   "6.2 collector major faults per cycle (Q29): one cycle at audit.collector_majflt_max + 1", [MAJFLT],
+                   _majflt_above)
 
 
-CASES = RAM_CASES + LOG_CASES
+CASES = RAM_CASES + LOG_CASES  # The cases under every protocol; cases(p) is the self-test's list under p.
+
+
+def cases(p):
+    """The cases of the self-test under protocol p (scripts/audit_selftest.py; finding S1 of B3): CASES, and after the
+    RAM cases the case of cap + 1 rule-closed rows (CAP_CASE) once p's cap is a number a session of p can exceed, then
+    the case of one cycle at bound + 1 major faults of the collector (MAJFLT_CASE) once p's bound is a number (the
+    lead's answer to Q29). Every other case takes its expectation from p (the periodicity cases name the cap's reason
+    where their rule-closed rows exceed it)."""
+    return [*RAM_CASES, *([CAP_CASE] if _cap_reachable(p) else []),
+            *([MAJFLT_CASE] if type(_majflt_max(p)) is int else []), *LOG_CASES]
+
+
+def unreachable(p):
+    """UNREACHABLE under p: the cap's reason while no case of cases(p) reaches it (null until G3b, or a cap no session
+    of p can exceed), and without it once CAP_CASE is built; the reason of the bound of the collector's major faults
+    while that bound is null (until G2), and without it once MAJFLT_CASE is built."""
+    out = dict(UNREACHABLE)
+    if _cap_reachable(p):
+        del out[CAP]
+    elif type(_cap(p)) is int:
+        out[CAP] = (f"audit.rule_closed_rows_max is {_cap(p)}, and a session of {p['cycles']} rows cannot hold more "
+                    "rule-closed rows")
+    if type(_majflt_max(p)) is int:
+        del out[MAJFLT]
+    return out
 
 
 # Package B6a (design B6a 1.5): the audit records the summary of every column (values.columns) and never makes it a

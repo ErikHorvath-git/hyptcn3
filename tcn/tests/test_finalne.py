@@ -320,8 +320,10 @@ TOP = {"schema", "stage", "mark", "plan_mode", "corpus_index", "corpus_index_sha
 FAILED = {"schema", "stage", "mark", "plan_mode", "corpus_index", "corpus_index_sha256", "rehearsal", "order_rule",
           "campaign", "corpus", "seal", "seal_note", "gate", "tree", "models", "status", "failed_step", "error", "rule",
           "replays", "opisné"}
+# Finding N4 of the B7c confirmation (package B10): the rates on the sealed roles of M and Z0 to Z5 and their table of
+# K2 by class and length, the volume class and its finding are descriptive (matched_rates, k2_values).
 OPISNE = {"metrics", "diagnostics", "descriptive_methods", "losses", "tables", "training", "unscored", "z0_random",
-          "linkage", "rule_channel_only"}
+          "linkage", "rule_channel_only", "matched_rates", "k2_values"}
 CONFIRMATORY, DESCRIPTIVE = ("M", "Z0", "Z1", "Z2", "Z3", "Z4", "Z5"), ("zscore", "iforest", "gru", "lstm")
 
 
@@ -330,9 +332,10 @@ def _names(labels):
 
 
 def _parts(v, seeds):
-    """Proposal 9.1: the exact key sets of the values and of opisné; the matched thresholds, the fits and the values
-    of K2 of M and Z0 to Z5 at the top level, those of the descriptive methods under opisné; the wording of the rule
-    channel filled with a number (finding F6)."""
+    """Proposal 9.1: the exact key sets of the values and of opisné; the matched thresholds on calibration, the fits
+    and the pooled values of K2 of M and Z0 to Z5 at the top level, their rates on the sealed roles, their table by
+    class and length, the volume class and its finding under opisné (finding N4 of the B7c confirmation), and those of
+    the descriptive methods under opisné; the wording of the rule channel filled with a number (finding F6)."""
     from safeguard.training import RULE_CHANNEL_ONLY
     o = v["opisné"]
     assert set(v) == TOP and set(o) == OPISNE
@@ -343,12 +346,23 @@ def _parts(v, seeds):
     for key in ("thresholds", "detected"):
         assert _names(v["k2_values"][key]) == set(CONFIRMATORY) and _names(descriptive["k2_values"][key]) == set(
             DESCRIPTIVE)
-    assert all(_names(row.get("shares", {})) <= set(CONFIRMATORY) for row in v["k2_values"]["table"])
+    assert {"table", "volume", "volume_finding"}.isdisjoint(v["k2_values"]) and set(o["k2_values"]) == {
+        "table", "volume", "volume_finding", "rules"}
+    assert all(_names(row.get("shares", {})) <= set(CONFIRMATORY) for row in o["k2_values"]["table"])
     assert all(_names(row.get("shares", {})) <= set(DESCRIPTIVE) for row in descriptive["k2_values"]["table"])
+    assert o["k2_values"]["volume_finding"]["rule"] and set(o["k2_values"]["volume"]) == {"C", "D"}
+    assert all(set(found["rates"]) == {"calibration"} for found in v["matched"].values())
+    assert set(o["matched_rates"]) == set(v["matched"]) and all(
+        set(rates) == set(SEALED) for rates in o["matched_rates"].values())
     wording = o["rule_channel_only"]
-    assert wording["wording"] == RULE_CHANNEL_ONLY and "…" not in wording["text"]
-    assert wording["text"].startswith(RULE_CHANNEL_ONLY["text"][:-1]) and set(wording["increment"]["per_seed"]) == {
+    assert wording["wording"] == RULE_CHANNEL_ONLY and set(wording["increment"]["per_seed"]) == {
         str(seed) for seed in seeds}
+    # Finding N3 of the B7c confirmation (package B10): the sentence only when all detection is the rule channel's.
+    if wording["all_detection_by_rule_channel"] is True:
+        assert "…" not in wording["text"] and wording["text"].startswith(RULE_CHANNEL_ONLY["text"][:-1])
+        assert wording["why"] is None
+    else:
+        assert wording["text"] is None and type(wording["why"]) is str and wording["why"]
 
 
 def _attachments(v, out, corpus):
@@ -395,7 +409,7 @@ def _attachments(v, out, corpus):
         assert np.array_equal(series["exceed"][i], series["score"][i] > series["threshold"][i])
         assert not (series["edge"][i] & ~series["up"][i]).any()
         for role, mine in roles.items():
-            rate = matched[label]["rates"][role]
+            rate = (o["matched_rates"][label] if label in o["matched_rates"] else matched[label]["rates"])[role]
             assert (int((series["edge"][i] & series["row_clean"] & mine).sum()),
                     int((series["row_clean"] & mine).sum())) == (rate["alarms"], rate["windows"]), (label, role)
     # M's replay rows, as the events.jsonl of its replay holds them.
@@ -593,7 +607,9 @@ def test_a_rehearsal_runs_the_final_command_end_to_end_into_one_record(corpus, m
     assert [m["seed"] for m in v["models"]] == p["analysis"]["seeds"]
     matched = {**v["matched"], **o["descriptive_methods"]["matched"]}
     assert _names(matched) == {"M", "Z0", "Z1", "Z2", "Z3", "Z4", "Z5", "zscore", "iforest", "gru", "lstm"}
-    assert all(set(found["rates"]) == {"calibration", *SEALED} for found in matched.values())
+    # Finding N4 of the B7c confirmation: the rates on the sealed roles of M and Z0 to Z5 lie under opisné.
+    assert all(set(found["rates"]) | set(o["matched_rates"].get(label, {})) == {"calibration", *SEALED}
+               for label, found in matched.items())
     for section in ("budget", "k2_values", "interventions"):
         assert v[section], section
     for section in ("z0_random", "losses", "diagnostics"):
@@ -792,6 +808,67 @@ def test_a_failure_while_the_attachments_are_written_leaves_none(corpus, models,
     assert (entry["stage"], entry["closed"]["outcome"]) == ("suchy", "failed") and pecat.otvoreny() is None
 
 
+def test_a_failed_write_of_the_record_leaves_no_attachment(corpus, models, campaign_record, ledger, gates_passed,
+                                                           tmp_path, tmp_path_factory, monkeypatch):
+    """V4 of the B11 verification (package B10, mutant D5): ATTACHMENT_RULE, no attachment lies beside no record. A dry
+    run on a ledger of its own writes its three attachments; when the write of its record itself fails (the test's
+    error in _write_record), the run removes the attachments it wrote and raises, and the record's directory is
+    empty."""
+    from tcn import finalne, pecat
+    real, removed = finalne._remove, []
+
+    def fails(out, record):
+        raise OSError("the test's failure of the record")
+    monkeypatch.setattr(finalne, "_write_record", fails)
+    monkeypatch.setattr(finalne, "_remove", lambda paths: (removed.extend(paths), real(paths))[1])
+    own = tmp_path_factory.mktemp("own-record") / "kniha_pecati.json"
+    pecat.zaloz(command="a dry run's own ledger", ledger=own)
+    out = tmp_path / "dry" / "record.json"
+    out.parent.mkdir()
+    with pytest.raises(OSError, match="^the test's failure of the record$"):
+        finalne.evaluate(corpus["index"], models, campaign=campaign_record, replays=tmp_path / "replays", out=out,
+                         ledger=own)
+    assert removed == [out.with_name(f"record.{name}.npz") for name in ("series", "losses", "copies")]
+    assert sorted(path.name for path in out.parent.iterdir()) == [] and pecat.otvoreny() is None
+
+
+def test_a_replay_changed_after_it_was_written_is_refused_by_its_sha256(corpus, models, campaign_record, ledger,
+                                                                       gates_passed, tmp_path, tmp_path_factory,
+                                                                       monkeypatch):
+    """V4 of the B11 verification (package B10, mutant D7): SERIES_RULE reads the events.jsonl of a replay of M only
+    after the check of its sha256 against the replay's record. Its file changed after the replay wrote it (one blank
+    line more, so its rows read the same) is refused by name at the arrays of the attachments: the run writes its
+    failed record, which names no attachment, and closes failed."""
+    from tcn import finalne, pecat
+    real = finalne._replay_rows
+    changed = []
+
+    def rows(grid, replays, models):
+        windows, s = grid.sessions[0]
+        ident = windows.session_ids[s]
+        path = Path(replays[ident][str(models[0].seed)]["directory"]) / "events.jsonl"
+        path.write_text(path.read_text() + "\n")
+        changed.append((ident, models[0].seed))
+        return real(grid, replays, models)
+    monkeypatch.setattr(finalne, "_replay_rows", rows)
+    own = tmp_path_factory.mktemp("own-replay") / "kniha_pecati.json"
+    pecat.zaloz(command="a dry run's own ledger", ledger=own)
+    out = tmp_path / "dry" / "record.json"
+    out.parent.mkdir()
+    with pytest.raises(ValueError) as error:
+        finalne.evaluate(corpus["index"], models, campaign=campaign_record, replays=tmp_path / "replays", out=out,
+                         ledger=own)
+    (ident, seed), = changed
+    reason = (f"the events.jsonl of the replay of session {ident} by seed {seed} is not the one its replay wrote "
+              "(files_sha256; SERIES_RULE)")
+    assert str(error.value) == reason
+    v = json.loads(out.read_text())["values"]
+    assert (v["status"], v["failed_step"], v["error"]) == (
+        "failed", "3: the arrays of the attachments (ATTACHMENT_RULE)", "ValueError: " + reason)
+    assert set(v) == FAILED and sorted(path.name for path in out.parent.iterdir()) == ["record.json"]
+    assert pecat.otvoreny() is None
+
+
 @pytest.mark.parametrize("option", ["--stage", "--ledger"])
 def test_the_command_line_takes_no_stage_and_no_ledger(option, corpus, campaign_record, tmp_path, capsys):
     """Design B7c 5.1 (question Q15): the stage of the record is the stage of its run on its ledger, and the command
@@ -934,25 +1011,109 @@ def test_a_refusal_before_the_seal_consumes_nothing(case, corpus, campaign_corpu
         assert existing.read_bytes() == b"an earlier attachment"
 
 
-@pytest.mark.parametrize("case", ["neural_adds", "rule_carries_all"])
+@pytest.mark.parametrize("case", ["another_text", "no_ellipsis"])
+def test_bundles_of_another_wording_of_the_rule_channel_are_refused_before_the_seal(case, corpus, models,
+                                                                                   campaign_record, of_record,
+                                                                                   gates_passed, results, tmp_path,
+                                                                                   capsys):
+    """Finding N5 of the B7c confirmation (package B10): the bundles of M carry one wording of the rule channel
+    (analysis_wording.rule_channel_only, safeguard/training.py RULE_CHANNEL_ONLY) with its ellipsis, and the final
+    command refuses another one in step 0 (ORDER_RULE), from the manifests alone, before the seal is consumed: the
+    ledger keeps its bytes and no replay or record is written. Copies of the bundles, the manifest of the bundle of the
+    last seed with another text, or every one without the ellipsis."""
+    import shutil
+    from tcn import finalne, pecat
+    seeds = corpus["protocol"]["analysis"]["seeds"]
+    copies = []
+    for path in models:
+        copy = tmp_path / "bundles" / path.name
+        shutil.copytree(path, copy)
+        manifest = json.loads((copy / "manifest.json").read_text())
+        wording = manifest["analysis_wording"]["rule_channel_only"]
+        if case == "no_ellipsis":
+            wording["text"] = wording["text"].replace("…", "0")
+        elif manifest["training"]["seed"] == seeds[-1]:
+            wording["text"] += " (iné znenie)"
+        (copy / "manifest.json").write_text(json.dumps(manifest))
+        copies.append(copy)
+    why = (f"M:seed {seeds[-1]} carries another one than M:seed {seeds[0]}" if case == "another_text"
+           else "its text holds no ellipsis")
+    out, replays, before = results / "record.json", tmp_path / "replays", of_record.read_bytes()
+    code = finalne._hlavny(_argv(corpus, copies, campaign_record, tmp_path, **{"--out": out}))
+    assert of_record.read_bytes() == before and pecat.otvoreny() is None  # No run of the seal, not even a failed one.
+    assert not out.exists() and not replays.exists()
+    assert code == 2 and capsys.readouterr().err == (
+        "tcn.finalne: the bundles of M carry one wording analysis_wording.rule_channel_only with its ellipsis "
+        f"(safeguard/training.py RULE_CHANNEL_ONLY): {why}; refused before the seal is consumed (RULE_CHANNEL_RULE)\n")
+
+
+@pytest.mark.parametrize("case", ["neural_adds", "rule_carries_all", "no_detection", "not_computed"])
 def test_the_wording_of_the_rule_channel_is_filled_with_the_increment(case):
     """Finding F6 (proposal 8.2, question Q6): the wording the bundles carry (safeguard/training.py RULE_CHANNEL_ONLY)
     with its ellipsis filled by the median over the seeds of the increment of the neural channel over the rule
     channel in the total of the planned controls, and the flag of all detection carried by the rule channel: false
     when the neural channel adds detections (median 0.25), true when the increment is 0 while the rule channel
-    detects."""
+    detects, false when no channel detects, nevyhodnotené (None) when the O4 of a seed is not computed. Finding N3 of
+    the B7c confirmation (package B10): the sentence is the conclusion of the case of the flag true only, so the
+    record holds the filled text then, and otherwise null with the reason; the increment and its counts stay."""
     from safeguard.training import RULE_CHANNEL_ONLY
     from tcn import finalne
-    increments = {"neural_adds": [0.125, 0.25, 0.25, 0.375, 0.5], "rule_carries_all": [0.0] * 5}[case]
+    increments = {"neural_adds": [0.125, 0.25, 0.25, 0.375, 0.5]}.get(case, [0.0] * 5)
+    rule = 0 if case == "no_detection" else 2
     o4 = {seed: {"computed": True, "control": {"total": {"neural_over_rule": {
-        "planned": 8, "rule": 2, "rule_or_neural": 2 + round(8 * x), "neural_not_rule": round(8 * x), "share": x,
-        "status": "evaluated"}}}} for seed, x in enumerate(increments)}
+        "planned": 8, "rule": rule, "rule_or_neural": rule + round(8 * x), "neural_not_rule": round(8 * x),
+        "share": x, "status": "evaluated"}}}} for seed, x in enumerate(increments)}
+    if case == "not_computed":
+        o4[3] = {"computed": False}
     manifests = [{"analysis_wording": {"rule_channel_only": dict(RULE_CHANNEL_ONLY)}} for _ in increments]
     found = finalne.rule_channel_only(manifests, o4)
-    value = {"neural_adds": 0.25, "rule_carries_all": 0.0}[case]
-    assert found["text"] == RULE_CHANNEL_ONLY["text"].replace("…", {"neural_adds": "0.25", "rule_carries_all": "0"}[
-        case])
-    assert (found["increment"]["median"], found["all_detection_by_rule_channel"]) == (
-        value, case == "rule_carries_all")
+    value, flag, why = {
+        "neural_adds": (0.25, False, "the neural channel adds detections over the rule channel (median increment "
+                                     "0.25)"),
+        "rule_carries_all": (0.0, True, None),
+        "no_detection": (0.0, False, "the rule channel detects no planned control, so it carries no detection"),
+        "not_computed": (None, None, "the increment of a seed is nevyhodnotené, so whether all detection is carried "
+                                     "by the rule channel is not decided")}[case]
+    assert found["text"] == (RULE_CHANNEL_ONLY["text"].replace("…", "0") if case == "rule_carries_all" else None)
+    assert found["why"] == why
+    assert (found["increment"]["median"], found["all_detection_by_rule_channel"]) == (value, flag)
     assert found["wording"] == RULE_CHANNEL_ONLY and found["increment"]["per_seed"]["1"]["neural_not_rule"] == round(
         8 * increments[1])
+
+
+def test_the_descriptive_values_of_k2_and_the_rates_on_the_sealed_roles_are_parted_under_opisne():
+    """Finding N4 of the B7c confirmation (package B10): of the values of K2 (tcn.k2 k2_values) the confirmatory part
+    keeps the thresholds, detections and shares of M and Z0 to Z5 and no table by class and length, volume class or
+    finding of the volume class (skeleton B7 sections 9 and 5, the lead's answer to Q14): those three go to
+    opisné.k2_values with the columns of M and Z0 to Z5; the descriptive methods keep their part as before. Of the
+    matched rates (rates_on) the top level keeps the threshold and the rate on calibration of M and Z0 to Z5, and the
+    rates on the sealed roles go to opisné.matched_rates (proposal 8.3). Values of the shape of both, here by hand."""
+    from tcn import finalne
+    labels, descriptive = ("M:seed 0", "Z1", "zscore"), {"zscore"}
+    confirmatory = ("M:seed 0", "Z1")
+
+    def per(value, names=labels):
+        return {label: value for label in names}
+    row = {"class": "C", "length": 4, "planned": 2, "evaluable": 1, "volume": 1, "not_placed": 0,
+           "volume_share": .5, "status": "nevyhodnotené", "class_status": "evaluated", "shares": per(.5),
+           "model_median": .5}
+    cell = {"count": 1, "detected": per(1), "shares": per(1.), "ids": ["C-4-1"]}
+    finding = {"bound": .5, "cells": [], "finding": False, "rule": "the rule of the volume class"}
+    values = {"schema": "hyptcn3/k2-values/1", "thresholds": per({"threshold": 1.}), "detected": per({"C-4-1": True}),
+              "shares": per({"boot-1": .5}), "status": "evaluated", "rules": {"k2": "the rule of K2"},
+              "table": [row], "volume": {"C": dict(cell, lengths={"4": dict(cell)})}, "volume_finding": finding}
+    top, opisne, methods = finalne.split_k2(values, descriptive)
+    assert top == {"schema": "hyptcn3/k2-values/1", "thresholds": per({"threshold": 1.}, confirmatory),
+                   "detected": per({"C-4-1": True}, confirmatory), "shares": per({"boot-1": .5}, confirmatory),
+                   "status": "evaluated", "rules": {"k2": "the rule of K2"}}
+    mine = dict(cell, detected=per(1, confirmatory), shares=per(1., confirmatory))
+    assert opisne == {"table": [dict(row, shares=per(.5, confirmatory))],
+                      "volume": {"C": dict(mine, lengths={"4": mine})}, "volume_finding": finding,
+                      "rules": {"k2": "the rule of K2"}}
+    assert (methods["labels"], methods["thresholds"], methods["table"][0]["shares"]) == (
+        ["zscore"], {"zscore": {"threshold": 1.}}, {"zscore": .5})
+    rates = {"calibration": {"alarms": 1}, "test_benign": {"alarms": 2}, "test_controls": {"alarms": 3}}
+    matched = per({"label": "any", "threshold": 1., "rates": rates})
+    top, sealed = finalne.split_matched(matched, descriptive)
+    assert top == per({"label": "any", "threshold": 1., "rates": {"calibration": {"alarms": 1}}}, confirmatory)
+    assert sealed == per({"test_benign": {"alarms": 2}, "test_controls": {"alarms": 3}}, confirmatory)

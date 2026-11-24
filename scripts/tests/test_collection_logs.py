@@ -291,7 +291,9 @@ def v5_traffic(d, p, *, scenario=None, sessions=None, spacings=SPACINGS, thinks=
     The five requests of build() stay as they are, each in a user session that arrived in the warmup (LEGACY).
     The user sessions of `sessions` (default ESHOP or CORP by the scenario's profile) arrive in the measure phase
     after build()'s event window, at the times where the integral of the planned envelope makes the spacings
-    `spacings` (one fewer than sessions); their requests follow within milliseconds, think times from `thinks`. The
+    `spacings` (one fewer than sessions); their requests last 1 ms each and follow one another by the think times of
+    `thinks`, each from the end of the request before (as the generator sends them; the log audit judges these
+    realized think times since package B10, finding F6 of B5b), and every user session ends in the measure phase. The
     envelope is 0 but for one triangle of level 1 (flat: level 1 throughout); the rate (when the scenario has none)
     makes the offered load of the intervals outside every window equal the planned one, rate_factor times off.
     scenario: another scenario of p for the session (session.json follows).
@@ -326,11 +328,19 @@ def v5_traffic(d, p, *, scenario=None, sessions=None, spacings=SPACINGS, thinks=
         windows = [(e["host_start_unix"] - 1 - base, e["host_stopped_unix"] + meta["event_grace_s"] - base)
                    for e in logs.read_json(d / "events.json")["events"] if "host_stopped_unix" in e]
     first = max([2.01, *(hi + .01 for _, hi in windows)])  # After the first interval and every window.
-    last = stop - .05
+    # The think times of each user session in turn, and its length: 1 ms a request and its think times.
+    turns = [sum(len(steps) - 1 for steps in sessions[:k]) for k in range(len(sessions))]
+    gaps = [[thinks[(turns[k] + j) % len(thinks)] for j in range(len(steps) - 1)] for k, steps in enumerate(sessions)]
+    lengths = [.001 * (len(steps) + 1) + sum(gaps[k]) for k, steps in enumerate(sessions)]
+    last = stop - .05 - max(lengths)  # The last user session ends before the post phase.
     if last - first < .1:
         raise ValueError("no room for the user sessions of the measure phase")
     warmup = p["warmup_s"]
-    span = max(end_mono, warmup) + 1  # D: the envelope spans [0, D]; warmup_s < D.
+    # D: the envelope spans [0, D], the planned run of the protocol (collection._v5_traffic: warmup_s and cycles
+    # intervals), which the log audit binds since package B10 (finding F3 of B5b); warmup_s < D.
+    span = warmup + meta["cycles"] * p["interval_s"]
+    if span <= max(end_mono, warmup):
+        raise ValueError("the planned run of the protocol ends before the logs of build() do")
     # Peak-to-mean twice the bound: a triangle of width (measure length / bound); flat: level 1 everywhere.
     width = min(last - first, (stop - 1) / p["scenario_rule"]["min_peak_to_mean"])
     rate = s["rate"]
@@ -363,11 +373,11 @@ def v5_traffic(d, p, *, scenario=None, sessions=None, spacings=SPACINGS, thinks=
 
     def phase(t):
         return "warmup" if t < 1 else "measure" if t < stop else "post"
-    turn = 0
     for k, (at, steps) in enumerate(zip(arrive, sessions)):
         mine = []
         for j, step in enumerate(steps):
-            start = round(at + .001 + .002 * j, 6)
+            think = None if j == 0 else gaps[k][j - 1]
+            start = round(at + .001 if j == 0 else mine[-1]["t_end_mono"] + think, 6)
             r = sample.request(j, math.floor(start), phase(start), start, 1., status=step.status, method=step.method,
                                route=step.route)
             failed = not 200 <= step.status < 300
@@ -375,13 +385,12 @@ def v5_traffic(d, p, *, scenario=None, sessions=None, spacings=SPACINGS, thinks=
                      outcome="http_error" if failed else "ok", error=f"HTTPError: HTTP Error {step.status}" if failed
                      else None, t_start_utc=utc(start, base), t_end_utc=utc(r["t_end_mono"], base),
                      response_bytes=step.bytes, step=step.step, object=step.object, intended_status=step.intended,
-                     think_s=None if j == 0 else thinks[turn % len(thinks)])
-            turn += j > 0
+                     think_s=think)
             mine.append(r)
         users.append((at, mine))
     users.sort(key=lambda user: user[0])
     ends = [max(r["t_end_mono"] for r in mine) for _, mine in users]
-    arrivals = []
+    arrivals, buyers = [], 0
     for n, (at, mine) in enumerate(users):
         uid = f"{sample.RUN}-u{n}"
         for r in mine:
@@ -389,8 +398,14 @@ def v5_traffic(d, p, *, scenario=None, sessions=None, spacings=SPACINGS, thinks=
         active = sum(1 for m in range(n) if ends[m] > at)
         if active >= params["max_concurrent"]:
             raise ValueError("the user sessions of this traffic need a larger max_concurrent")
+        # Package B5c: an eshop user session that orders holds a customer of its own (scripts/host_traffic.py
+        # Customers; the log audit checks it since package B10, finding F1 of B5c), every other one none.
+        orders = profile == "eshop" and any(r["method"] == "POST" and r["route"] == "/api/orders"
+                                            and r.get("intended_status") is None for r in mine)
+        buyers += orders
         arrivals.append({"type": "arrival", "user_session": uid, "t_mono": at, "t_utc": utc(at, base),
-                         "phase": phase(at), "admitted": True, "active": active})
+                         "phase": phase(at), "admitted": True, "active": active,
+                         "customer": f"zakaznik{buyers:04d}" if orders else None, "drop_reason": None})
     requests = sorted((r for _, mine in users for r in mine), key=lambda r: r["t_start_mono"])
 
     # The rate: the offered load of the measure intervals outside every window equals the plan (rate_factor off).
@@ -446,7 +461,7 @@ def v5_traffic(d, p, *, scenario=None, sessions=None, spacings=SPACINGS, thinks=
                        "intensity": s["intensity"], "rate": rate, "rate_source": v5["rate_source"], "seeds": seeds,
                        "seed": meta["seed"], "target": meta["traffic"]["target"],
                        "summary_interval_s": meta["traffic"]["summary_interval_s"], "warmup_s": warmup,
-                       "dur": config["dur"], "load_model": LOAD_MODEL}
+                       "dur_s": config["dur"], "load_model": LOAD_MODEL}
     write(d / "session.json", meta)
 
     # nginx and the services for the new requests (build() wrote those of the legacy ones).
@@ -618,6 +633,8 @@ def test_builder_parameters_reach_the_audited_evidence(tmp_path):
     ("late_nginx_error", "nginx_error_log_nonempty"), ("not_stopped", "event_not_stopped"),
     ("plan", "events_differ_from_plan"), ("no_events_file", "events:unreadable"),
     ("script", "event_script_differs"), ("late_health_check", "nginx_unknown_request"),
+    # Finding S5 of B3 (package B10, mutant m25): a protocol that plans events and a session.json that lists none.
+    ("not_listed", "events:unreadable"),
 ])
 def test_event_session_stays_strict_outside_windows(tmp_path, case, problem):
     d = build(tmp_path, event=True)
@@ -656,6 +673,11 @@ def test_event_session_stays_strict_outside_windows(tmp_path, case, problem):
         else:
             del doc["events"][0]["host_stopped_unix"]
         write(d / "events.json", doc)
+    elif case == "not_listed":  # An events section plans events under schemas 1 and 2 (protocol_v5.plans_events).
+        write(d / "protocol.json", {"synthetic": True, "events": {}})
+        meta = logs.read_json(d / "session.json")
+        del meta["events"]
+        write(d / "session.json", dict(meta, protocol_sha256=logs.digest(d / "protocol.json")))
     else:
         (d / "events.json").unlink()
     seal(d)
@@ -716,9 +738,12 @@ def test_collector_warning_is_judged_by_the_allowed_patterns(session, schema, al
         bounds = json.loads((logs.ROOT / "config/collection-v5.json").read_text())["audit"]
         # Package B9b: and the early stop of the v5 file; this protocol has no events section, so no type to bound.
         early_stop = dict(bounds["early_stop"], marked_rows_rate_per_type={})
+        # Q29: and the bound of the collector's major faults per cycle with its note (null until G2).
         doc["audit"] = {"lateness_max_s": .5, "cycle_ms_max": {"delta": 1500, "full": 3500},
                         "periodicity": {"equal_spacings": 3, "min_spacing_rows": 2, "note": "test"},
-                        "warnings_allowed": allowed, "rule_closed_rows_max": None, "traffic": bounds["traffic"],
+                        "warnings_allowed": allowed, "rule_closed_rows_max": None,
+                        "collector_majflt_max": bounds["collector_majflt_max"],
+                        "collector_majflt_note": bounds["collector_majflt_note"], "traffic": bounds["traffic"],
                         "early_stop": early_stop}
     write(session / "protocol.json", doc)
     meta = logs.read_json(session / "session.json")
@@ -731,6 +756,21 @@ def test_collector_warning_is_judged_by_the_allowed_patterns(session, schema, al
     assert result["problems"] == (["collector_warning_unlisted:" + message] if unlisted else [])
     assert result["tolerated"]["collector_warnings"] == int(schema == 3 and not unlisted)
     assert result["sections"]["collector"]["warnings"] == [WARN_LINE]
+
+
+def test_a_warning_under_bounds_that_cannot_be_read_is_judged_as_under_the_null_list(session):
+    """Finding S5 of B3 (package B10, mutant m26): a schema-3 protocol whose audit section cannot be read admits no
+    warning, as the null list of G0 does: the warning is a problem beside the unreadable bounds, never unjudged."""
+    write(session / "protocol.json", {"schema": "hyptcn3/collection-protocol/3", "interval_s": 5})  # No audit section.
+    meta = logs.read_json(session / "session.json")
+    write(session / "session.json", dict(meta, protocol_sha256=logs.digest(session / "protocol.json")))
+    with (session / "raw/collect.log").open("a") as stream:
+        stream.write(WARN_LINE + "\n")
+    seal(session)
+    result = logs.audit_logs(session)
+    assert result["problems"] == ["audit_bounds:unreadable:ValueError: protocol schema 3 requires the audit section",
+                                  "collector_warning_unlisted:" + WARN_LINE.split("WARN  ", 1)[1]]
+    assert result["tolerated"]["collector_warnings"] == 0
 
 
 def test_snapshot_must_be_inside_traffic_phase(session):
