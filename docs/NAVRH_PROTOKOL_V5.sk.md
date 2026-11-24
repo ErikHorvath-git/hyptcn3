@@ -334,6 +334,10 @@ generátora, nginx a hosťa pre každý profil a intenzitu v stupni G2 a potom p
 | premenlivosť | pomer špičky k priemeru intenzity v session aspoň 2 | návrh autora |
 | činnosť na pozadí (`corp`) | periodické úlohy s náhodným oneskorením, vlny prihlásení, dokumenty s dlhým chvostom veľkostí | návrh autora bez priameho zdroja |
 
+Čas na rozmyslenie sa posudzuje na skutočných odstupoch požiadaviek relácie (od konca jednej
+po začiatok ďalšej), nie na vylosovaných časoch, a najväčší z nich smie 70 s prekročiť najviac
+o 1 s vlastného oneskorenia generátora (úsudok vykonávateľa, balík B10).
+
 Session, ktorá požiadavky neplní, sa zamietne ako session s nesprávnou záťažou. Čo sa takto
 overiť nedá: zloženie prevádzky skutočného podniku, obsah požiadaviek a správanie skutočných
 používateľov. Práca to uvedie ako obmedzenie. Presné parametre zdrojov sa overia pri písaní

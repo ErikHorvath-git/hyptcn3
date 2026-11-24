@@ -249,6 +249,10 @@ OTHER_SIDE = {
     # Every drawn think 20 s: the mean 19.1 s lies far from the profile's 7 s, and every think is below its 70 s.
     # The requests follow by their think times (F6 of B5b), so the measure phase is 200 s of 200 cycles.
     "think_time:mean": ("steady", {"thinks": (20.,), "measure_s": 200, "snapshots": 200}),
+    # One drawn think of 71.5 s among 22 of 4 s: the mean stays within its tolerance of the profile's 7 s, and the
+    # realized maximum lies 0.5 s above think_s.max plus THINK_LAG_S, 71 s (finding F4 of the B10 verification; its
+    # mutant C6 drops the check of the maximum).
+    "think_time:max": ("steady", {"thinks": (71.5,) + (4.,) * 22, "measure_s": 200, "snapshots": 200}),
     # Four more deliberate 404s (on the most requested object, so the concentration holds): 34 of 39 answered 2xx,
     # 0.872, below success_min 0.88.
     "success_rate:below_min": ("steady", {"sessions": tuple([*steps, GONE] if i < 4 else steps
@@ -279,6 +283,25 @@ def test_a_log_that_breaks_the_other_side_of_a_requirement_is_refused_with_its_n
     failed = [r["name"] for r in found["requirements"] if not r["ok"]] + (
         ["offered_load_differs_from_plan"] if not found["offered_load"]["ok"] else [])
     assert failed == [name]
+
+
+def test_a_think_time_at_the_maximum_plus_the_generators_lag_is_admitted(tmp_path, p):
+    """Finding F4 of the B10 verification: a realized think time of exactly think_s.max plus THINK_LAG_S (the
+    executor's judgment, package B10, F6 of B5b), 71 s, among 22 of 4 s keeps the requirement and the session
+    accepted; its mutant C5 leaves the lag out. One 0.5 s above it is OTHER_SIDE['think_time:max'], refused."""
+    top = p["profiles"]["eshop"]["think_s"]["max"] + tl.THINK_LAG_S
+    d = session(tmp_path, p, "steady", thinks=(top,) + (4.,) * 22, measure_s=200, snapshots=200)
+    found = requirement(realism(d, p), "think_time")
+    assert (found["value"]["max"], found["bound"]["max"] + found["bound"]["lag_s"], found["ok"]) == (top, top, True)
+    assert audit(d)["problems"] == []
+
+
+def test_the_protocol_states_the_allowance_of_the_maximum_think_time():
+    """Finding F4 of the B10 verification: audit.traffic.note of the v5 file states THINK_LAG_S, by which the realized
+    maximum think time may exceed profiles.eshop.think_s.max, and whose judgment it is (proposal 5.7 says the same)."""
+    note = json.loads(bs.V5.read_text())["audit"]["traffic"]["note"]
+    assert f"may lie at most {tl.THINK_LAG_S:g} s above profiles.eshop.think_s.max" in note
+    assert "scripts/traffic_log.py THINK_LAG_S, the executor's judgment, package B10" in note
 
 
 def test_the_offered_load_is_summed_over_the_intervals_outside_every_window(tmp_path, p):

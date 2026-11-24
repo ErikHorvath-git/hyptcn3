@@ -56,10 +56,11 @@ V5_END_KEYS = ("arrivals", "admitted", "dropped", "user_sessions_completed", "us
 # t_mono and the interval bounds are rounded to 6 decimals: an arrival within this of a bound may belong to either
 # interval.
 TIME_EPS = 1e-6
-# Judgment (finding F6 of the B5b verification, package B10): the think time realism() judges is the realized one,
+# The executor's judgment (package B10, finding F6 of B5b): the think time realism() judges is the realized one,
 # from the end of a request to the start of the next request of its user session; the generator's scheduler and its
 # pool add their own delay to a drawn think time, so the realized maximum may lie this much above the profile's
-# think_s.max (a drawn time is cut at it) before the requirement fails.
+# think_s.max (a drawn time is cut at it) before the requirement fails. Proposal 5.7 and audit.traffic.note of the
+# protocol state the allowance.
 THINK_LAG_S = 1.0
 V5_PROFILES = ("eshop", "corp")
 # The requirements realism() returns, in this order (design B5b 1.5); each failing one is the log-audit reason
