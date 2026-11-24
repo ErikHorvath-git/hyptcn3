@@ -446,16 +446,21 @@ def test_no_order_finds_its_cart_emptied_by_another_user_session_of_its_customer
     assert all(c1 != c2 or e1 <= s2 for (c1, _, e1), (c2, s2, _) in zip(spans, spans[1:]))
 
 
-def replay_customers(req, customers, seeds=SEEDS):
+def replay_customers(req, customers, seeds=SEEDS, cap=None):
     """The rule of B5c replayed over the request log of a drained run: each arrival in order of time, with the
     customers that user sessions in progress hold then (a user session releases its customer at the end of its last
     request). An ordering user session holds the customer it drew if free, else the next free one by number; with
-    none free it is dropped as all_customers_held. Returns {user session: customer} of the admitted ones."""
+    none free it is dropped as all_customers_held. With `cap` (package B10, F2 of the B5c verification) an arrival
+    over max_concurrent (cap user sessions in progress) is dropped as max_concurrent before it takes a customer, and
+    holds none. Returns {user session: customer} of the admitted ones."""
     end, holding, out = Counter(), {}, {}
     for r in of_type(req, "request"):
         end[r["user_session"]] = max(end[r["user_session"]], r["t_end_mono"])
     for a in of_type(req, "arrival"):
         holding = {c: e for c, e in holding.items() if e > a["t_mono"]}
+        if cap is not None and a["active"] >= cap:
+            assert (a["admitted"], a["drop_reason"], a["customer"]) == (False, "max_concurrent", None), a
+            continue
         wanted = drawn_customer(int(a["user_session"].rsplit("-u", 1)[1]), customers, seeds)
         free = [] if wanted is None else [c for c in ((wanted - 1 + k) % customers + 1 for k in range(customers))
                                           if c not in holding]
@@ -469,6 +474,21 @@ def replay_customers(req, customers, seeds=SEEDS):
             holding[free[0]] = end[a["user_session"]]
         out[a["user_session"]] = a["customer"]
     return out
+
+
+def test_a_user_session_dropped_over_max_concurrent_holds_no_customer(tmp_path, monkeypatch):
+    """F2 of the B5c verification (package B10, mutant G6): max_concurrent is checked before a customer is taken, so a
+    user session dropped over the cap holds none. A drained run with max_concurrent 4 (judgment: it drops arrivals
+    over the cap and lets ordering user sessions through) and FEW_CUSTOMERS customers drops arrivals as max_concurrent
+    and admits ordering ones; the rule replayed with the cap gives every customer, and since at most 4 of the 10
+    customers are ever held, no arrival is dropped as all_customers_held."""
+    _, req, _ = few_customers_run(tmp_path, monkeypatch, cap=4)
+    arrivals = of_type(req, "arrival")
+    assert [a for a in arrivals if a["drop_reason"] == "max_concurrent"]
+    assert [a for a in arrivals if a["admitted"] and a["customer"] is not None]
+    assert not [a for a in arrivals if a["drop_reason"] == "all_customers_held"]
+    customers = replay_customers(req, FEW_CUSTOMERS, cap=4)
+    assert customers == {a["user_session"]: a["customer"] for a in arrivals if a["admitted"]}
 
 
 def test_a_user_session_holds_the_customer_it_drew_or_the_next_free_one_else_it_is_dropped(tmp_path, monkeypatch):

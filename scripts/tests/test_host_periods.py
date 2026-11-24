@@ -3,9 +3,10 @@ answer to Q4), in the manner of lab/tests/test_periods.py.
 
 The scan finds in the sources of the host processes that run during a session every Restart= and RestartSec= of a
 unit (also as a --property of systemd-run), every timer (On...= of a unit, --on-... of systemd-run) and every loop
-that sleeps or waits, also in code another process runs (python3 -c and bash -c strings, the body of a shell here
-document). The test fails on a construct the register does not name at its source line and on a register line that
-no longer points at one. A process-creating active entry must be bounded or have a random delay (proposal 5.6). The
+that sleeps or waits (since package B10 also with a timeout given by position), also in code another process runs
+(python3 -c and bash -c strings, the body of a shell here document). The test fails on a construct the register
+does not name at its source line and on a register line that no longer points at one. A process-creating active
+entry must be bounded or have a random delay (proposal 5.6). The
 collection grid, the drift of two concurrent collectors and the host's timers outside the repository are declared
 only (kind "system"); a schema-3 session records the latter at its start (session.json host_context.timers). The old
 generator's user unit (scripts/labctl.py traffic) restarts at the collection period: it has the start limit of the
@@ -106,16 +107,26 @@ def string_items(text):
     return {kind for kind, _ in found | shell_items(text) | unit_items(text)}
 
 
+def _positional_timeout(call):
+    """A timeout given by position (package B10, F1+ of the confirmation of the B5b verification): queue get(block,
+    timeout) with a literal block flag (a dict.get takes none), and Thread.join(timeout) with a literal number (a
+    str.join takes no number)."""
+    name, args = _name(call), call.args
+    return (name == "get" and len(args) >= 2 and isinstance(args[0], ast.Constant) and type(args[0].value) is bool
+            or name == "join" and len(args) == 1 and isinstance(args[0], ast.Constant)
+            and type(args[0].value) in (int, float))
+
+
 def _waits(call):
     """The call waits between rounds: a sleep or wait, or a blocking call given a timeout (a `timeout` keyword, the
-    fourth argument of select, the argument of a poll object's poll)."""
+    fourth argument of select, the argument of a poll object's poll, a timeout by position)."""
     name = _name(call)
     if name in SLEEPS:
         return True
     if name not in BLOCKING:
         return False
     return (any(k.arg == "timeout" for k in call.keywords) or name == "select" and len(call.args) >= 4
-            or name == "poll" and len(call.args) >= 1)
+            or name == "poll" and len(call.args) >= 1 or _positional_timeout(call))
 
 
 def python_items(text):
@@ -269,6 +280,11 @@ def test_an_unreadable_protocol_of_the_old_generator_unit_is_a_usage_error(tmp_p
      "while True"),
     ("scripts/collection.py", "\n\ndef planted(fd):\n    for _ in range(9):\n        select.select([fd], [], [], 5)\n",
      "loop", "for _ in"),
+    # Package B10, F1+ of the confirmation of the B5b verification: a timeout given by position.
+    ("scripts/host_monitor.py", "\n\ndef planted(items):\n    while True:\n        items.get(True, 1)\n", "loop",
+     "while True"),
+    ("scripts/host_monitor.py", "\n\ndef planted(worker):\n    for _ in range(9):\n        worker.join(5)\n", "loop",
+     "for _ in"),
 ])
 def test_an_unregistered_restart_timer_or_sleeping_loop_fails(tmp_path, name, text, kind, marker):
     copy = tmp_path / "host"

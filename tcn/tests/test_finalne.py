@@ -792,6 +792,67 @@ def test_a_failure_while_the_attachments_are_written_leaves_none(corpus, models,
     assert (entry["stage"], entry["closed"]["outcome"]) == ("suchy", "failed") and pecat.otvoreny() is None
 
 
+def test_a_failed_write_of_the_record_leaves_no_attachment(corpus, models, campaign_record, ledger, gates_passed,
+                                                           tmp_path, tmp_path_factory, monkeypatch):
+    """V4 of the B11 verification (package B10, mutant D5): ATTACHMENT_RULE, no attachment lies beside no record. A dry
+    run on a ledger of its own writes its three attachments; when the write of its record itself fails (the test's
+    error in _write_record), the run removes the attachments it wrote and raises, and the record's directory is
+    empty."""
+    from tcn import finalne, pecat
+    real, removed = finalne._remove, []
+
+    def fails(out, record):
+        raise OSError("the test's failure of the record")
+    monkeypatch.setattr(finalne, "_write_record", fails)
+    monkeypatch.setattr(finalne, "_remove", lambda paths: (removed.extend(paths), real(paths))[1])
+    own = tmp_path_factory.mktemp("own-record") / "kniha_pecati.json"
+    pecat.zaloz(command="a dry run's own ledger", ledger=own)
+    out = tmp_path / "dry" / "record.json"
+    out.parent.mkdir()
+    with pytest.raises(OSError, match="^the test's failure of the record$"):
+        finalne.evaluate(corpus["index"], models, campaign=campaign_record, replays=tmp_path / "replays", out=out,
+                         ledger=own)
+    assert removed == [out.with_name(f"record.{name}.npz") for name in ("series", "losses", "copies")]
+    assert sorted(path.name for path in out.parent.iterdir()) == [] and pecat.otvoreny() is None
+
+
+def test_a_replay_changed_after_it_was_written_is_refused_by_its_sha256(corpus, models, campaign_record, ledger,
+                                                                       gates_passed, tmp_path, tmp_path_factory,
+                                                                       monkeypatch):
+    """V4 of the B11 verification (package B10, mutant D7): SERIES_RULE reads the events.jsonl of a replay of M only
+    after the check of its sha256 against the replay's record. Its file changed after the replay wrote it (one blank
+    line more, so its rows read the same) is refused by name at the arrays of the attachments: the run writes its
+    failed record, which names no attachment, and closes failed."""
+    from tcn import finalne, pecat
+    real = finalne._replay_rows
+    changed = []
+
+    def rows(grid, replays, models):
+        windows, s = grid.sessions[0]
+        ident = windows.session_ids[s]
+        path = Path(replays[ident][str(models[0].seed)]["directory"]) / "events.jsonl"
+        path.write_text(path.read_text() + "\n")
+        changed.append((ident, models[0].seed))
+        return real(grid, replays, models)
+    monkeypatch.setattr(finalne, "_replay_rows", rows)
+    own = tmp_path_factory.mktemp("own-replay") / "kniha_pecati.json"
+    pecat.zaloz(command="a dry run's own ledger", ledger=own)
+    out = tmp_path / "dry" / "record.json"
+    out.parent.mkdir()
+    with pytest.raises(ValueError) as error:
+        finalne.evaluate(corpus["index"], models, campaign=campaign_record, replays=tmp_path / "replays", out=out,
+                         ledger=own)
+    (ident, seed), = changed
+    reason = (f"the events.jsonl of the replay of session {ident} by seed {seed} is not the one its replay wrote "
+              "(files_sha256; SERIES_RULE)")
+    assert str(error.value) == reason
+    v = json.loads(out.read_text())["values"]
+    assert (v["status"], v["failed_step"], v["error"]) == (
+        "failed", "3: the arrays of the attachments (ATTACHMENT_RULE)", "ValueError: " + reason)
+    assert set(v) == FAILED and sorted(path.name for path in out.parent.iterdir()) == ["record.json"]
+    assert pecat.otvoreny() is None
+
+
 @pytest.mark.parametrize("option", ["--stage", "--ledger"])
 def test_the_command_line_takes_no_stage_and_no_ledger(option, corpus, campaign_record, tmp_path, capsys):
     """Design B7c 5.1 (question Q15): the stage of the record is the stage of its run on its ledger, and the command
