@@ -56,6 +56,11 @@ V5_END_KEYS = ("arrivals", "admitted", "dropped", "user_sessions_completed", "us
 # t_mono and the interval bounds are rounded to 6 decimals: an arrival within this of a bound may belong to either
 # interval.
 TIME_EPS = 1e-6
+# Judgment (finding F6 of the B5b verification, package B10): the think time realism() judges is the realized one,
+# from the end of a request to the start of the next request of its user session; the generator's scheduler and its
+# pool add their own delay to a drawn think time, so the realized maximum may lie this much above the profile's
+# think_s.max (a drawn time is cut at it) before the requirement fails.
+THINK_LAG_S = 1.0
 V5_PROFILES = ("eshop", "corp")
 # The requirements realism() returns, in this order (design B5b 1.5); each failing one is the log-audit reason
 # traffic_realism:<name>. A requirement of one profile only is listed only for that profile (proposal 5.7).
@@ -721,9 +726,12 @@ def realism(requests_path, intervals_path, protocol, scenario, *, windows=()):
                             from 0 to t (time rescaling: an open loop with intensity rate x envelope gives unit
                             Poisson spacings, CV 1; skeleton B5 section 4); all offered arrivals; within
                             audit.traffic.arrival_cv
-      think_time (eshop)    the drawn think times (think_s): their mean within think_mean_tolerance_se standard
-                            errors (sample standard deviation over sqrt(n)) of profiles.eshop.think_s.mean, their
-                            maximum at most think_s.max
+      think_time (eshop)    the realized think times of the requests of the measure phase but the first of each
+                            user session: its start minus the end of the request before it in its user session
+                            (t_start_mono - t_end_mono, 6 decimals; finding F6 of the B5b verification: not the
+                            drawn think_s), their mean within think_mean_tolerance_se standard errors (sample standard
+                            deviation over sqrt(n)) of profiles.eshop.think_s.mean, their maximum at most think_s.max
+                            plus THINK_LAG_S
       order_share (eshop)   the share of the admitted user sessions that arrived in the measure phase, lie outside
                             every window (arrival and every request) and place an order (POST /api/orders without
                             an intended status), within order_share_tolerance_se standard errors
@@ -802,17 +810,28 @@ def realism(requests_path, intervals_path, protocol, scenario, *, windows=()):
 
     if profile == "eshop":
         design = params["think_s"]
-        thinks = [r["think_s"] for r in requests if r["think_s"] is not None]
+        by_session = defaultdict(list)
+        for r in every:
+            by_session[r["user_session"]].append(r)
+        thinks = []  # The realized think times (finding F6 of B5b): from the end of the request before.
+        for rows in by_session.values():
+            rows.sort(key=lambda r: r["t_start_mono"])
+            thinks += [round(r["t_start_mono"] - before["t_end_mono"], 6) for before, r in zip(rows, rows[1:])
+                       if r["phase"] == "measure"]
         mean = tolerance = largest = None
         if len(thinks) >= 2:
             mean = sum(thinks) / len(thinks)
             sd = math.sqrt(sum((x - mean) ** 2 for x in thinks) / (len(thinks) - 1))
             tolerance, largest = limit["think_mean_tolerance_se"] * sd / math.sqrt(len(thinks)), max(thinks)
-        good = mean is not None and abs(mean - design["mean"]) <= tolerance and largest <= design["max"]
+        good = (mean is not None and abs(mean - design["mean"]) <= tolerance
+                and largest <= design["max"] + THINK_LAG_S)
         out.append(_requirement("think_time", {"mean": _round(mean), "max": largest, "n": len(thinks)},
-                                {"mean": design["mean"], "tolerance": _round(tolerance), "max": design["max"]}, good,
-                                f"{len(thinks)} think times of the measure phase; the mean within "
-                                f"{limit['think_mean_tolerance_se']:g} standard errors of the profile's mean"))
+                                {"mean": design["mean"], "tolerance": _round(tolerance), "max": design["max"],
+                                 "lag_s": THINK_LAG_S}, good,
+                                f"{len(thinks)} think times of the measure phase, each from the end of the request "
+                                "before it in its user session to its own start; the mean within "
+                                f"{limit['think_mean_tolerance_se']:g} standard errors of the profile's mean, the "
+                                f"maximum at most its max plus {THINK_LAG_S:g} s of the generator's own delay"))
 
         share_design = params["order_share"][intensity]
         sessions = {a["user_session"]: {"times": [_unix(a["t_utc"])], "orders": 0} for a in arrivals if a["admitted"]}

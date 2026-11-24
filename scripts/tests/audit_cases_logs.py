@@ -666,7 +666,9 @@ _V5_CASES = [
     # One realism requirement of proposal 5.7 broken at a time (scripts/traffic_log.py realism).
     ("traffic_realism:arrival_cv", traffic("eshop", spacings=(1.,) * (len(E.ESHOP) - 1)),
      logs("traffic_realism:arrival_cv")),  # Evenly spaced arrivals: CV 0.
-    ("traffic_realism:think_time", traffic("eshop", thinks=(75.,)), logs("traffic_realism:think_time")),
+    # Realized think times far below the profile's mean (package B10, F6 of B5b: the request times are judged, and
+    # think times of 75 s would not fit the short sessions of the test protocols).
+    ("traffic_realism:think_time", traffic("eshop", thinks=(.25, .5, .75)), logs("traffic_realism:think_time")),
     ("traffic_realism:order_share", traffic("eshop", sessions=tuple(
         s if E.ORDER in s else [*s, E.CART_ADD, E.ORDER] for s in E.ESHOP)), logs("traffic_realism:order_share")),
     ("traffic_realism:object_concentration", traffic("eshop", sessions=_distinct(E.ESHOP)),

@@ -291,7 +291,9 @@ def v5_traffic(d, p, *, scenario=None, sessions=None, spacings=SPACINGS, thinks=
     The five requests of build() stay as they are, each in a user session that arrived in the warmup (LEGACY).
     The user sessions of `sessions` (default ESHOP or CORP by the scenario's profile) arrive in the measure phase
     after build()'s event window, at the times where the integral of the planned envelope makes the spacings
-    `spacings` (one fewer than sessions); their requests follow within milliseconds, think times from `thinks`. The
+    `spacings` (one fewer than sessions); their requests last 1 ms each and follow one another by the think times of
+    `thinks`, each from the end of the request before (as the generator sends them; the log audit judges these
+    realized think times since package B10, finding F6 of B5b), and every user session ends in the measure phase. The
     envelope is 0 but for one triangle of level 1 (flat: level 1 throughout); the rate (when the scenario has none)
     makes the offered load of the intervals outside every window equal the planned one, rate_factor times off.
     scenario: another scenario of p for the session (session.json follows).
@@ -326,7 +328,11 @@ def v5_traffic(d, p, *, scenario=None, sessions=None, spacings=SPACINGS, thinks=
         windows = [(e["host_start_unix"] - 1 - base, e["host_stopped_unix"] + meta["event_grace_s"] - base)
                    for e in logs.read_json(d / "events.json")["events"] if "host_stopped_unix" in e]
     first = max([2.01, *(hi + .01 for _, hi in windows)])  # After the first interval and every window.
-    last = stop - .05
+    # The think times of each user session in turn, and its length: 1 ms a request and its think times.
+    turns = [sum(len(steps) - 1 for steps in sessions[:k]) for k in range(len(sessions))]
+    gaps = [[thinks[(turns[k] + j) % len(thinks)] for j in range(len(steps) - 1)] for k, steps in enumerate(sessions)]
+    lengths = [.001 * (len(steps) + 1) + sum(gaps[k]) for k, steps in enumerate(sessions)]
+    last = stop - .05 - max(lengths)  # The last user session ends before the post phase.
     if last - first < .1:
         raise ValueError("no room for the user sessions of the measure phase")
     warmup = p["warmup_s"]
@@ -367,11 +373,11 @@ def v5_traffic(d, p, *, scenario=None, sessions=None, spacings=SPACINGS, thinks=
 
     def phase(t):
         return "warmup" if t < 1 else "measure" if t < stop else "post"
-    turn = 0
     for k, (at, steps) in enumerate(zip(arrive, sessions)):
         mine = []
         for j, step in enumerate(steps):
-            start = round(at + .001 + .002 * j, 6)
+            think = None if j == 0 else gaps[k][j - 1]
+            start = round(at + .001 if j == 0 else mine[-1]["t_end_mono"] + think, 6)
             r = sample.request(j, math.floor(start), phase(start), start, 1., status=step.status, method=step.method,
                                route=step.route)
             failed = not 200 <= step.status < 300
@@ -379,8 +385,7 @@ def v5_traffic(d, p, *, scenario=None, sessions=None, spacings=SPACINGS, thinks=
                      outcome="http_error" if failed else "ok", error=f"HTTPError: HTTP Error {step.status}" if failed
                      else None, t_start_utc=utc(start, base), t_end_utc=utc(r["t_end_mono"], base),
                      response_bytes=step.bytes, step=step.step, object=step.object, intended_status=step.intended,
-                     think_s=None if j == 0 else thinks[turn % len(thinks)])
-            turn += j > 0
+                     think_s=think)
             mine.append(r)
         users.append((at, mine))
     users.sort(key=lambda user: user[0])

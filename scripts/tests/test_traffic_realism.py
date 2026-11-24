@@ -48,9 +48,10 @@ def p(tmp_path_factory):
     return doc
 
 
-def session(root, p, scenario, *, event=False, measure_s=MEASURE_S, **variant):
-    """A sealed session of build() under p in `scenario`, its traffic that of the profile (v5_traffic)."""
-    d = evidence.build(Path(root), event=event, measure_s=measure_s)
+def session(root, p, scenario, *, event=False, measure_s=MEASURE_S, snapshots=10, **variant):
+    """A sealed session of build() under p in `scenario` (`snapshots` cycles), its traffic that of the profile
+    (v5_traffic)."""
+    d = evidence.build(Path(root), event=event, measure_s=measure_s, snapshots=snapshots)
     evidence.write(d / "protocol.json", p)
     meta = json.loads((d / "session.json").read_text())
     evidence.write(d / "session.json", dict(meta, scenario=scenario, protocol_sha256=logs.digest(d / "protocol.json")))
@@ -141,7 +142,8 @@ def test_realism_of_a_synthetic_log_gives_exactly_its_known_values(tmp_path, p):
     assert (len(thinks), max(thinks), len(outside), max(sizes), min(sizes)) == (23, 12., 33, 150000, 10)
     assert requirement(found, "think_time")["bound"] == {
         "mean": design["think_s"]["mean"], "max": design["think_s"]["max"],
-        "tolerance": round(4 * statistics.stdev(thinks) / math.sqrt(len(thinks)), 6)}
+        "tolerance": round(4 * statistics.stdev(thinks) / math.sqrt(len(thinks)), 6),
+        "lag_s": 1.0}  # Package B10: the generator's own delay a realized maximum may add (judgment, THINK_LAG_S).
     assert requirement(found, "order_share")["bound"] == {
         "share": design["order_share"]["low"],
         "tolerance": round(4 * math.sqrt(design["order_share"]["low"] * (1 - design["order_share"]["low"]) / 10), 6)}
@@ -174,7 +176,9 @@ def broken(name):
     e = evidence
     return {
         "arrival_cv": ("steady", {"spacings": (1.,) * (len(e.ESHOP) - 1)}),  # Evenly spaced: CV 0.
-        "think_time": ("steady", {"thinks": (75.,)}),
+        # Four think times of 75 s in a user session need a longer measure phase than 60 s, and the protocol's
+        # planned run of the session's cycles covers it (package B10: the realized think times, F6 of B5b).
+        "think_time": ("steady", {"thinks": (75.,), "measure_s": 400, "snapshots": 400}),
         "order_share": ("steady", {"sessions": tuple(s if e.ORDER in s else [*s, e.CART_ADD, e.ORDER]
                                                      for s in e.ESHOP)}),
         "object_concentration": ("steady", {"sessions": _distinct(e.ESHOP)}),
@@ -199,6 +203,41 @@ def test_a_log_that_breaks_one_requirement_is_refused_with_its_name(tmp_path, p,
     failed = [r["name"] for r in found["requirements"] if not r["ok"]] + (
         ["offered_load_differs_from_plan"] if not found["offered_load"]["ok"] else [])
     assert failed == [name]
+
+
+def test_the_think_time_is_that_of_the_request_times_not_the_logged_draw(tmp_path, p):
+    """Finding F6 of the B5b verification (package B10): think_time judges the realized think times, the start of a
+    request minus the end of the request before it in its user session, not the drawn think_s the generator logs. The
+    verifier's probe: the clean session of eshop, its requests of the measure phase moved to 1 ms after the end of
+    the one before, think_s unchanged, fails think_time with the realized times as its value; the clean session,
+    whose requests follow by their think times, passes with the same times as think_s says."""
+    d = session(tmp_path, p, "steady")
+
+    def realized(rows):
+        out = []
+        for uid in sorted({r["user_session"] for r in rows if r.get("type") == "request"}):
+            mine = sorted((r for r in rows if r.get("type") == "request" and r["user_session"] == uid),
+                          key=lambda r: r["t_start_mono"])
+            out += [round(b["t_start_mono"] - a["t_end_mono"], 6) for a, b in zip(mine, mine[1:])
+                    if b["phase"] == "measure"]
+        return out
+    rows = records(d)
+    logged = [r["think_s"] for r in rows if r.get("type") == "request" and r["phase"] == "measure"
+              and r["think_s"] is not None]
+    assert sorted(realized(rows)) == sorted(logged) and requirement(realism(d, p), "think_time")["ok"]
+    for uid in {r["user_session"] for r in rows if r.get("type") == "request" and r["phase"] == "measure"}:
+        mine = sorted((r for r in rows if r.get("type") == "request" and r["user_session"] == uid),
+                      key=lambda r: r["t_start_mono"])
+        for before, r in zip(mine, mine[1:]):
+            r["t_start_mono"] = round(before["t_end_mono"] + .001, 6)
+            r["t_end_mono"] = round(r["t_start_mono"] + r["duration_ms"] / 1000, 6)
+    evidence.jsonl(d / "traffic_requests.jsonl", rows)
+    times = realized(rows)
+    found = requirement(realism(d, p), "think_time")
+    assert [r["think_s"] for r in rows if r.get("type") == "request" and r["phase"] == "measure"
+            and r["think_s"] is not None] == logged  # The draws as logged.
+    assert found["value"] == {"mean": round(statistics.mean(times), 6), "max": max(times), "n": len(times)}
+    assert max(times) < 1 and not found["ok"]
 
 
 def test_the_cv_is_computed_on_spacings_rescaled_by_the_envelope(tmp_path, p):

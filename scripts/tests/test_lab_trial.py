@@ -189,7 +189,8 @@ def env(tmp_path, monkeypatch):
 def synthetic(env, name, scenario, **traffic):
     """Synthetic logs of a v5 profile for the run named `name` (test_collection_logs build and v5_traffic)."""
     from scripts.tests import test_collection_logs as evidence
-    d = evidence.build(env.tmp / "synthetic", session_name=name)
+    # 60 s of measure phase: the user sessions of v5_traffic follow by their think times (package B10, F6 of B5b).
+    d = evidence.build(env.tmp / "synthetic", session_name=name, measure_s=60)
     evidence.v5_traffic(d, env.p, scenario=scenario, **traffic)
     return d
 
