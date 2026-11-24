@@ -6,7 +6,8 @@ An interrupted copy never authorizes deletion of its source.
 
 Large raw/log members may be stored zstd-compressed (manifest schema 2). A
 compressed member is published only after its decompressed stream reproduced
-the original size and SHA-256; `restore_raw` re-extracts raw/ later.
+the original size and SHA-256; `restore_raw` re-extracts raw/ later, with the
+marker RESTORED that names the archive's session (RESTORE_RULE).
 """
 import argparse
 from datetime import datetime, timezone
@@ -38,6 +39,18 @@ COMPRESS_MIN_BYTES = 64 * 1024
 PLAIN_KEYS = {"size", "sha256"}
 COMPRESSED_KEYS = PLAIN_KEYS | {"stored", "stored_size", "stored_sha256", "codec"}
 CHUNK = 4 * 1024 * 1024
+# The lead's answer to question Q19 (2026-11-24; finding N1 of the B7c confirmation, package B10): a restored raw/
+# carries the marker of its origin, which tcn/pecat.py kontrola_snimok reads as it reads a session.json (its name ends
+# in no _<number>_, so no snapshot reader takes it for a sidecar: safeguard/runtime.py _candidate_files).
+RESTORED = "restored_from.json"
+RESTORED_SCHEMA = "hyptcn3/restored-raw/1"
+RESTORE_RULE = (
+    "the lead's answer to question Q19 (2026-11-24): restore_raw writes into the new directory, before its first "
+    "member, the marker restored_from.json with the session_id and the campaign_id of the archive's session.json, the "
+    "path of the archive and its sha256 as the receipt states it (the sha256 of its manifest) and the sha256 of that "
+    "session.json; the guard of the snapshots (tcn/pecat.py kontrola_snimok) reads the marker as a session.json, so "
+    "the raw snapshots restored from the archive of a sealed session are refused by name like those of the session "
+    "itself, and NO_SESSION_RULE covers only directories that no tool of the repository restored from an archive")
 
 
 def now():
@@ -450,13 +463,35 @@ def archive_session(source, destination, guard, *, reclaim=False, campaign_id=No
     return doc
 
 
+def restore_marker(destination, doc):
+    """The marker RESTORED of a raw/ restored from the verified archive `destination` with manifest `doc`
+    (RESTORE_RULE): the session named by the archive's session.json (its session_id and campaign_id, None where it has
+    none), the archive, the sha256 of its manifest (as reclaim_raw's receipt states it) and of the session.json."""
+    item = doc["files"].get("session.json")
+    meta = {}
+    if item is not None:
+        if "codec" in item:
+            raise ValueError("archive member session.json is stored compressed; its session cannot be read")
+        meta = read_json(destination / "session.json")
+        if type(meta) is not dict:
+            raise ValueError("archive member session.json is no JSON object; its session cannot be read")
+    return {"schema": RESTORED_SCHEMA, "session_id": meta.get("session_id"), "campaign_id": meta.get("campaign_id"),
+            "archive": str(destination), "manifest_sha256": digest(destination / MANIFEST),
+            "session_json_sha256": None if item is None else item["sha256"], "source": doc["source"],
+            "date": now(), "rule": RESTORE_RULE}
+
+
 def restore_raw(destination, target, *, reserve_bytes=2**30):
-    """Re-extract the raw/ members of a verified archive into a new directory."""
+    """Re-extract the raw/ members of a verified archive into a new directory, after the marker RESTORED that names
+    the archive's session (RESTORE_RULE: first, so that an interrupted restore names its session as well)."""
     destination, target = Path(destination).absolute(), Path(target).absolute()
     if target.exists() or target.is_symlink():
         raise ValueError("restore target already exists: " + str(target))
     doc = verify_archive(destination)
     members = {n[4:]: v for n, v in doc["files"].items() if n.startswith("raw/")}
+    if RESTORED in members:
+        raise ValueError(f"archive has a raw/ member named {RESTORED}, the name of the restore marker")
+    marker = restore_marker(destination, doc)
     needed = sum(v["size"] for v in members.values())
     existing = target
     while not existing.exists():
@@ -464,6 +499,7 @@ def restore_raw(destination, target, *, reserve_bytes=2**30):
     if shutil.disk_usage(existing).free < needed + reserve_bytes:
         raise ValueError("insufficient disk space for restore")
     mkdir_durable(target)
+    write_new(target / RESTORED, marker)
     for name, item in members.items():
         out = target / name
         mkdir_durable(out.parent)
@@ -478,7 +514,8 @@ def restore_raw(destination, target, *, reserve_bytes=2**30):
         sync_dir(out.parent)
     return {"archive": str(destination), "target": str(target), "schema": doc["schema"],
             "files": len(members), "bytes": needed,
-            "stored_bytes": sum(v.get("stored_size", v["size"]) for v in members.values())}
+            "stored_bytes": sum(v.get("stored_size", v["size"]) for v in members.values()),
+            "restored_from": str(target / RESTORED), "session_id": marker["session_id"]}
 
 
 def main(argv=None):

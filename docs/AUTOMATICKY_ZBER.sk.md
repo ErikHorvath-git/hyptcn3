@@ -155,6 +155,11 @@ vedľa ktorého treba skopírovať `session.json` (bootový kontext):
 .venv/bin/python -m scripts.collection_archive restore <archív>/campaigns/<id>/collections/<session> <nový>/raw
 ```
 
+Obnova zapíše do nového adresára pred prvým členom aj značku `restored_from.json`: `session_id`
+a `campaign_id` z archívneho `session.json`, cestu archívu a sha256 jeho manifestu (ako ho uvádza
+potvrdenka). Stráž snímok (`tcn/pecat.py kontrola_snimok`) ju číta ako `session.json`, takže snímky
+zapečatenej session obnovené z archívu odmietne menom (odpoveď vedúceho na Q19, balík B10).
+
 Obnova a opätovná extrakcia boli overené na reálnom diagnostickom behu
 ([výsledok](../data/results/collection_archive_roundtrip_20261020.json)):
 obnovili sa všetky snímky a vedľajšie súbory, príznaky prvého súvislého

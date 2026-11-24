@@ -366,6 +366,21 @@ def test_colliding_stored_names_are_rejected(bulky):
     assert not dst.exists() and not dst.with_name(".partial-" + dst.name).exists()
 
 
+def restored_members(target, archive):
+    """{name: bytes} of the restored members of `target`, after the check of its restore marker (the lead's answer to
+    question Q19, package B10): the session of the archive's session.json of the fixture (no session_id there, so
+    none; its campaign_id), the archive, the sha256 of its manifest and of the session.json."""
+    found = {p.name: p.read_bytes() for p in Path(target).iterdir()}
+    assert "restored_from.json" in found, "the restored directory holds no restore marker"
+    marker = json.loads(found.pop("restored_from.json"))
+    assert {key: value for key, value in marker.items() if key != "date"} == {
+        "schema": arc.RESTORED_SCHEMA, "session_id": None, "campaign_id": "test", "archive": str(archive),
+        "manifest_sha256": arc.digest(archive / arc.MANIFEST),
+        "session_json_sha256": arc.digest(archive / "session.json"),
+        "source": str(archive.parent.parent / "working/session"), "rule": arc.RESTORE_RULE}
+    return found
+
+
 def test_plain_archive_manifest_unchanged_and_restorable(session, tmp_path):
     src, dst = session
     originals = {p.name: p.read_bytes() for p in (src / "raw").iterdir()}
@@ -375,7 +390,7 @@ def test_plain_archive_manifest_unchanged_and_restorable(session, tmp_path):
     assert all(set(v) == {"size", "sha256"} for v in doc["files"].values())
     assert arc.verify_archive(dst, src) == doc
     summary = arc.restore_raw(dst, tmp_path / "restored")
-    assert {p.name: p.read_bytes() for p in (tmp_path / "restored").iterdir()} == originals
+    assert restored_members(tmp_path / "restored", dst) == originals
     assert summary["files"] == 2
     assert summary["bytes"] == summary["stored_bytes"] == sum(map(len, originals.values()))
 
@@ -387,7 +402,7 @@ def test_restore_raw_reproduces_compressed_members(bulky, tmp_path, capsys):
     move(src, dst, compress="zstd")
     target = tmp_path / "restored"
     summary = arc.restore_raw(dst, target)
-    assert {p.name: p.read_bytes() for p in target.iterdir()} == originals
+    assert restored_members(target, dst) == originals
     assert summary["files"] == 3 and summary["bytes"] == sum(map(len, originals.values())) > summary["stored_bytes"]
     with pytest.raises(ValueError, match="already exists"):
         arc.restore_raw(dst, target)
