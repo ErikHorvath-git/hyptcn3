@@ -934,6 +934,42 @@ def test_a_refusal_before_the_seal_consumes_nothing(case, corpus, campaign_corpu
         assert existing.read_bytes() == b"an earlier attachment"
 
 
+@pytest.mark.parametrize("case", ["another_text", "no_ellipsis"])
+def test_bundles_of_another_wording_of_the_rule_channel_are_refused_before_the_seal(case, corpus, models,
+                                                                                   campaign_record, of_record,
+                                                                                   gates_passed, results, tmp_path,
+                                                                                   capsys):
+    """Finding N5 of the B7c confirmation (package B10): the bundles of M carry one wording of the rule channel
+    (analysis_wording.rule_channel_only, safeguard/training.py RULE_CHANNEL_ONLY) with its ellipsis, and the final
+    command refuses another one in step 0 (ORDER_RULE), from the manifests alone, before the seal is consumed: the
+    ledger keeps its bytes and no replay or record is written. Copies of the bundles, the manifest of the bundle of the
+    last seed with another text, or every one without the ellipsis."""
+    import shutil
+    from tcn import finalne, pecat
+    seeds = corpus["protocol"]["analysis"]["seeds"]
+    copies = []
+    for path in models:
+        copy = tmp_path / "bundles" / path.name
+        shutil.copytree(path, copy)
+        manifest = json.loads((copy / "manifest.json").read_text())
+        wording = manifest["analysis_wording"]["rule_channel_only"]
+        if case == "no_ellipsis":
+            wording["text"] = wording["text"].replace("…", "0")
+        elif manifest["training"]["seed"] == seeds[-1]:
+            wording["text"] += " (iné znenie)"
+        (copy / "manifest.json").write_text(json.dumps(manifest))
+        copies.append(copy)
+    why = (f"M:seed {seeds[-1]} carries another one than M:seed {seeds[0]}" if case == "another_text"
+           else "its text holds no ellipsis")
+    out, replays, before = results / "record.json", tmp_path / "replays", of_record.read_bytes()
+    code = finalne._hlavny(_argv(corpus, copies, campaign_record, tmp_path, **{"--out": out}))
+    assert of_record.read_bytes() == before and pecat.otvoreny() is None  # No run of the seal, not even a failed one.
+    assert not out.exists() and not replays.exists()
+    assert code == 2 and capsys.readouterr().err == (
+        "tcn.finalne: the bundles of M carry one wording analysis_wording.rule_channel_only with its ellipsis "
+        f"(safeguard/training.py RULE_CHANNEL_ONLY): {why}; refused before the seal is consumed (RULE_CHANNEL_RULE)\n")
+
+
 @pytest.mark.parametrize("case", ["neural_adds", "rule_carries_all"])
 def test_the_wording_of_the_rule_channel_is_filled_with_the_increment(case):
     """Finding F6 (proposal 8.2, question Q6): the wording the bundles carry (safeguard/training.py RULE_CHANNEL_ONLY)

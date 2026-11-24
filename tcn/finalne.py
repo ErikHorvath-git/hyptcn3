@@ -94,7 +94,8 @@ ORDER_RULE = (
     "in plan mode campaign the carrier boots of the index against analysis.interventions.boots, BOOTS_RULE, the seal's "
     "state on the ledger by tcn.pecat stav, so that a seal that cannot be consumed is refused here, the outputs with "
     "the paths of the attachments, OUT_RULE, the gate records of the run's stage, GATE_RULE, at stage final a "
-    "committed tree of code, the campaign record, the bundles, the sharp check of the index of safeguard/training.py "
+    "committed tree of code, the campaign record, the bundles with the one wording of the rule channel they carry "
+    "(RULE_CHANNEL_RULE, finding N5 of the B7c confirmation), the sharp check of the index of safeguard/training.py "
     "validate_index, which opens no archive, and the files of every session); 1 everything that reads only the roles "
     "without a seal: the sessions of train, dev and calibration, the budget from M's clean calibration traffic "
     "(tcn.metody BUDGET_RULE), the fits of Z0 to Z5 (Z1 selected by the interventions inserted into dev at the budget) "
@@ -1009,16 +1010,35 @@ def split_k2(values, descriptive):
     return confirmatory, part
 
 
-def rule_channel_only(manifests, o4):
-    """RULE_CHANNEL_RULE: the wording of the bundles (one text with its ellipsis) filled with the median over the seeds
-    of the increment of the neural channel over the rule channel in the total of the planned controls (o4: {seed: the
-    O4 block of tcn.eval for test_controls}), the counts of every seed, and whether all detection is carried by the
-    rule channel."""
-    wordings = [((m.get("analysis_wording") or {}).get("rule_channel_only")) for m in manifests]
+def wording_of(manifests, labels=None, *, before_seal=False):
+    """RULE_CHANNEL_RULE: the one wording analysis_wording.rule_channel_only that the bundles of M carry (the manifests
+    in the order of `labels`, the labels of M), a text with its ellipsis; else ValueError by name. It reads only the
+    manifests, so the final command asks it in step 0 (ORDER_RULE, before_seal: the refusal says so), before the seal
+    is consumed (finding N5 of the B7c confirmation, package B10), and rule_channel_only once more when it fills the
+    text."""
+    labels = [f"bundle {i + 1}" for i in range(len(manifests))] if labels is None else list(labels)
+    wordings = [((m.get("analysis_wording") or {}).get("rule_channel_only")) if type(m) is dict else None
+                for m in manifests]
+    if not wordings:
+        raise ValueError("no bundle of M carries the wording analysis_wording.rule_channel_only")
     first = wordings[0]
-    if any(w != first for w in wordings) or type(first) is not dict or "…" not in str(first.get("text")):
+    other = [label for label, wording in zip(labels, wordings) if wording != first]
+    if other or type(first) is not dict or "…" not in str(first.get("text")):
+        verb = "carries" if len(other) == 1 else "carry"
+        why = (f"{', '.join(other)} {verb} another one than {labels[0]}" if other else
+               f"{labels[0]} carries none" if type(first) is not dict else "its text holds no ellipsis")
         raise ValueError("the bundles of M carry one wording analysis_wording.rule_channel_only with its ellipsis "
-                         "(safeguard/training.py RULE_CHANNEL_ONLY)")
+                         f"(safeguard/training.py RULE_CHANNEL_ONLY): {why}"
+                         + ("; refused before the seal is consumed (RULE_CHANNEL_RULE)" if before_seal else ""))
+    return first
+
+
+def rule_channel_only(manifests, o4):
+    """RULE_CHANNEL_RULE: the wording of the bundles (one text with its ellipsis, wording_of) filled with the median
+    over the seeds of the increment of the neural channel over the rule channel in the total of the planned controls
+    (o4: {seed: the O4 block of tcn.eval for test_controls}), the counts of every seed, and whether all detection is
+    carried by the rule channel."""
+    first = wording_of(manifests)
     per_seed = {}
     for seed, block in o4.items():
         computed = type(block) is dict and block.get("computed") is True
@@ -1370,6 +1390,7 @@ def refusals(corpus, models, *, campaign, replays, out):
     kampan = campaign_record(campaign, doc, path)
     index_sha256 = _digest(path)
     ms, model_records = bundles(models, index_sha256, protocol, plan)
+    wording_of([m.bundle.manifest for m in ms], [m.label for m in ms], before_seal=True)  # N5 of the B7c confirmation.
     _, _, records = validate_index(path, diagnostic=False)
     check_inputs(records)
     rehearsal = None if mode == "campaign" else {
