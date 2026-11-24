@@ -265,6 +265,11 @@ Viacstupňové dávky v profile `corp` dodávajú benígne deje s časovou štru
   okien udalostí s plánom (±20 %). Doručená záťaž počas udalostí sa iba vykazuje, aby
   zamietnutie nezáviselo od typu udalosti.
 - 1 až 3 % chýb klienta (404, 401, 400).
+- Audit obálku neprepočítava; z protokolu a zo seedu hlavičky ju prepočíta nástroj mimo meracieho
+  kódu nad session G2, nad session oboch generálok a po uzavretí kampane nad každou prijatou
+  session, pričom číta iba logy prevádzky a žiadne skóre, takže sa zapečatených rolí netýka,
+  a nezhoda je odchýlka kampane (zápis v denníku odchýlok pri zázname ukončenia) a nález pre
+  vedúceho (zmena vedúceho 2026-11-24, odpoveď na otázku Q30).
 
 ### 5.4 Stav hosťa
 

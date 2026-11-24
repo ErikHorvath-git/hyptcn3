@@ -411,6 +411,14 @@ vypíše aj so sha256 záznamu, ktorý záznam sám v sebe niesť nemôže. Po
 zastavení sa dokumentácia ani záznamy necommitujú: zmrazený strom
 (`FROZEN_TREE_RULE`) by ďalší beh odmietol.
 
+Po ukončení, ktoré kampaň uzavrie, a pred commitom záznamov prepočíta nástroj
+mimo meracieho kódu obálku prevádzky každej prijatej session z protokolu a zo
+seedu hlavičky a porovná ju s obálkou hlavičky; audit ju neprepočítava (odpoveď
+vedúceho na otázku Q30, 2026-11-24; návrh, kap. 5.3). Nástroj číta iba logy
+prevádzky, žiadne skóre. Nezhoda ide ako odchýlka do
+[ODCHYLKY_V5.sk.md](ODCHYLKY_V5.sk.md) a vedúcemu ako nález. Nástroj príde
+s prípravou G2 a beží aj nad session G2 a oboch generálok.
+
 Rovnaký príkaz pokračuje z existujúcich artefaktov, nezačína novú kampaň.
 Dokončené session sa nezbierajú znova. Prerušené kopírovanie a uvoľňovanie
 pracovných raw kópií sú obnoviteľné. Prerušená extrakcia dostane nový názov

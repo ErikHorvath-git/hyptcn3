@@ -380,7 +380,10 @@ def audit_logs(directory, *, snapshot_times=(), archived_raw=False):
             # collection run. Finding F3 of the B5b verification (package B10): every seed of the header, the rate
             # with its source and config.dur equal the traffic block of session.json, from which run_session made
             # the command line (collection.traffic_command), and that block's dur_s is the planned run of the
-            # protocol, warmup_s and cycles intervals (collection._v5_traffic).
+            # protocol, warmup_s and cycles intervals (collection._v5_traffic). The envelope is not redrawn from the
+            # protocol here; its inputs are bound, the frozen generator determines it from them, and a tool outside
+            # the measurement code redraws it over the G2 sessions, the rehearsals, and every accepted session of a
+            # closed campaign (the lead's answer to Q30, 2026-11-24).
             s = protocol["scenarios"].get(meta["scenario"], {})
             config, run, seeds, rate = header["config"], meta["traffic"], header.get("seeds"), s.get("rate")
             parameters, cycles = header.get("profile_parameters"), meta.get("cycles")
