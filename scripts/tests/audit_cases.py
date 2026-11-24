@@ -7,7 +7,8 @@ the feature extraction from guest RAM, is replaced by the synthetic extraction r
 for every reason audit_session and the acceptance verdict can give; UNREACHABLE names the reasons no session
 built under such a protocol reaches, with the reason why. CASES adds the cases of the log audit
 (scripts/tests/audit_cases_logs.py). The self-test runs cases(p): CASES, and the case of a bound once the protocol
-sets it to a number (package B10, finding S1 of B3: the cap of rule-closed rows from G3b), with unreachable(p) for
+sets it to a number (package B10, finding S1 of B3: the cap of rule-closed rows from G3b; the lead's answer to Q29:
+the bound of the collector's major faults per cycle from G2), with unreachable(p) for
 UNREACHABLE. Expected reasons are written here, never taken from the code under test;
 a case depends on the protocol only through its own parameters (grid, bounds, gate, rule). Where a bad session
 also breaks what the log audit reads (end.json, some keys of session.json and raw/capture.json), its expected
@@ -318,6 +319,27 @@ def _over_period(d, p, result):
     _sidecar(d, FRAME, _set("capture.total_ms", p["interval_s"] * 1000))
 
 
+# The collector's major faults per cycle (the lead's answer to Q29): under schema 3 the audit reads
+# capture.rusage.majflt of every sidecar; a count that is missing or no integer of at least 0 is a reason whatever the
+# bound (MAJFLT_COUNT), and a count above audit.collector_majflt_max another (MAJFLT). The bound is null until G2 sets
+# it (proposal 10.9); once it is a number, the self-test builds the case of one cycle at bound + 1 (cases()).
+MAJFLT = "collector major faults per cycle above the audit bound"
+MAJFLT_COUNT = f"collector major fault count is not an integer of at least 0: frame{FRAME}.json:capture.rusage.majflt"
+
+
+def _majflt_max(p):
+    """audit.collector_majflt_max of p: an int from G2, None before, and None without an audit section (schemas 1 and
+    2 have no bound and the audit does not read the count, features/audit_policy.py audit_bounds)."""
+    bounds = _bounds(p)
+    return None if bounds is None else bounds["collector_majflt_max"]
+
+
+def _majflt_above(d, p, result):
+    """One cycle (frame FRAME, a delta snapshot) with bound + 1 major faults of the collector; every other cycle has
+    none."""
+    _sidecar(d, FRAME, _set("capture.rusage.majflt", _majflt_max(p) + 1))
+
+
 SESSION_KEYS = ("protocol_sha256", "guest_before", "profile_sha256", "collector_sha256", "collector_settings.mlock",
                 "role", "cycles", "domain", "host_context.qemu.pid", "host_context.memory.qemu_swap_max",
                 "host_context.memory.qemu_swap_kb", "lab_sha256")
@@ -325,7 +347,8 @@ END_KEYS = ("completed", "guest_after")
 CAPTURE_KEYS = ("values.collector_sha256", "values.full_every", "values.interval_s", "values.mlock")
 SIDECAR_KEYS = ("output.full", "output.sha256", "sched.skipped_before", "sched.lateness_s", "capture.total_ms",
                 "capture.queue_wait_ms", "output.mlock", "output.data_closed_ms", "output.queue_bytes",
-                "output.queue_jobs", "vm.domain", "vm.vmid")
+                "output.queue_jobs", "vm.domain", "vm.vmid",
+                "capture.rusage.majflt")  # Q29: read under schema 3, a missing count is never 0.
 # What else a missing key takes away. The log audit reads some keys too (scripts/collection_logs.py).
 ALSO_MISSING = {
     "session.json:protocol_sha256": ["logs: protocol_hash"],
@@ -432,6 +455,9 @@ RAM_CASES = [
          _cycle("delta")),
     Case("cycle_full", "6.2 cycle time of a full snapshot", ["collector cycle time above the audit bound"],
          _cycle("full")),
+    # The lead's answer to Q29: a count of major faults that is no count is a reason under every bound, null included.
+    Case("collector_majflt_not_a_count", "6.2 collector major faults per cycle (Q29): a count below 0",
+         [MAJFLT_COUNT], _frame(_set("capture.rusage.majflt", -1))),
     Case("vm_domain", "6.2 VM identity: domain", ["sidecar VM identity differs from session"],
          _frame(_set("vm.domain", "another-domain"))),
     Case("vm_vmid", "6.2 VM identity: QEMU pid", ["sidecar VM identity differs from session"],
@@ -468,11 +494,21 @@ UNREACHABLE = {
         "audit.rule_closed_rows_max is null until G3b (proposal 10.9), so the count is recorded and never a "
         "reason; once it is a number the self-test builds the case rule_closed_above_cap (cases()), and "
         "scripts/tests/test_audit_selftest.py checks it under a copy with an integer cap"),
+    MAJFLT: (
+        "audit.collector_majflt_max is null until G2 (proposal 10.9, the lead's answer to Q29), so the major faults "
+        "of the collector per cycle are recorded and printed (values.collector_majflt) and never this reason; once it "
+        "is a number the self-test builds the case collector_majflt_above_bound (cases()), and "
+        "scripts/tests/test_collector_majflt.py checks it under a copy with a numeric bound"),
 }
 # Finding S1 of B3: the case of the cap, which the self-test builds only under a protocol whose cap a session can
 # exceed (cases()).
 CAP_CASE = Case("rule_closed_above_cap", "rule_closed_rows_max of proposal 10.9: cap + 1 rule-closed rows, no pattern",
                 [CAP], _rows_quality(_above_cap))
+# The lead's answer to Q29: the case of the bound of the collector's major faults, which the self-test builds once the
+# bound is a number (cases()); a session can always hold one cycle at bound + 1.
+MAJFLT_CASE = Case("collector_majflt_above_bound",
+                   "6.2 collector major faults per cycle (Q29): one cycle at audit.collector_majflt_max + 1", [MAJFLT],
+                   _majflt_above)
 
 
 CASES = RAM_CASES + LOG_CASES  # The cases under every protocol; cases(p) is the self-test's list under p.
@@ -480,21 +516,26 @@ CASES = RAM_CASES + LOG_CASES  # The cases under every protocol; cases(p) is the
 
 def cases(p):
     """The cases of the self-test under protocol p (scripts/audit_selftest.py; finding S1 of B3): CASES, and after the
-    RAM cases the case of cap + 1 rule-closed rows (CAP_CASE) once p's cap is a number a session of p can exceed.
-    Every other case takes its expectation from p (the periodicity cases name the cap's reason where their
-    rule-closed rows exceed it)."""
-    return [*RAM_CASES, *([CAP_CASE] if _cap_reachable(p) else []), *LOG_CASES]
+    RAM cases the case of cap + 1 rule-closed rows (CAP_CASE) once p's cap is a number a session of p can exceed, then
+    the case of one cycle at bound + 1 major faults of the collector (MAJFLT_CASE) once p's bound is a number (the
+    lead's answer to Q29). Every other case takes its expectation from p (the periodicity cases name the cap's reason
+    where their rule-closed rows exceed it)."""
+    return [*RAM_CASES, *([CAP_CASE] if _cap_reachable(p) else []),
+            *([MAJFLT_CASE] if type(_majflt_max(p)) is int else []), *LOG_CASES]
 
 
 def unreachable(p):
     """UNREACHABLE under p: the cap's reason while no case of cases(p) reaches it (null until G3b, or a cap no session
-    of p can exceed), and without it once CAP_CASE is built."""
+    of p can exceed), and without it once CAP_CASE is built; the reason of the bound of the collector's major faults
+    while that bound is null (until G2), and without it once MAJFLT_CASE is built."""
     out = dict(UNREACHABLE)
     if _cap_reachable(p):
         del out[CAP]
     elif type(_cap(p)) is int:
         out[CAP] = (f"audit.rule_closed_rows_max is {_cap(p)}, and a session of {p['cycles']} rows cannot hold more "
                     "rule-closed rows")
+    if type(_majflt_max(p)) is int:
+        del out[MAJFLT]
     return out
 
 

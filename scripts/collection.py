@@ -1780,6 +1780,23 @@ def marked_rows_record(directory, native, metadata, p, flagged, result):
             "marked_rows_outside_events": outside, "marked_rows_note": MARKED_ROWS_RULE}
 
 
+def majflt_record(faults):
+    """values.collector_majflt of the audit (the lead's answer to question Q29, 2026-11-24; risk capture R4 of the code
+    audit): the major faults of the collector's sampling thread during each cycle, capture.rusage.majflt of every
+    sidecar (getrusage RUSAGE_THREAD over the cycle, vmicollect/src/collector.c), read under protocol schema 3 only.
+    `faults` holds (count, seq) of every sidecar with a usable count, in seq order. The record is {max, max_seq, sum,
+    cycles}: the largest count of one cycle, the seq of the first cycle with it, the sum over the cycles counted and
+    their number; max, max_seq and sum are null when no sidecar has a usable count, since a missing count or one that
+    is no integer of at least 0 is a reason of the audit and never 0. None under schemas 1 and 2 (`faults` None): the
+    count is not read there. A count is a reason only above audit.collector_majflt_max, null until G2 by the rule of
+    audit.collector_majflt_note; until then it is recorded and printed and never a reason."""
+    if faults is None:
+        return None
+    largest, seq = max(faults, key=lambda item: item[0], default=(None, None))  # The first of equal counts.
+    return {"max": largest, "max_seq": seq, "sum": sum(count for count, _ in faults) if faults else None,
+            "cycles": len(faults)}
+
+
 def audit_session(directory, p, protocol_path, output=None):
     """Audit one session directory under protocol `p` (read from `protocol_path`); 0 accepted, 2 refused.
 
@@ -1790,7 +1807,9 @@ def audit_session(directory, p, protocol_path, output=None):
     (values.audit_bounds), what the audit admitted next to the register of exceptions (values.exceptions),
     the timing of the collector (values.timing) and, since package B9b, the flagged rows and the windowed occurrences
     by event type (values.marked_rows_by_type, event_occurrences_by_type and marked_rows_outside_events,
-    marked_rows_record), which the campaign sums for its early stop.
+    marked_rows_record), which the campaign sums for its early stop. Under schema 3 it reads the collector's major
+    faults of every cycle as well (the lead's answer to Q29): values.collector_majflt (majflt_record), also printed,
+    and a reason above audit.collector_majflt_max, which is null until G2.
     """
     directory = Path(directory).resolve()
     native = (directory / "session.json").exists()
@@ -1870,6 +1889,7 @@ def audit_session(directory, p, protocol_path, output=None):
     total_bytes = 0
     timing = {"lateness_s": [], "delta_ms": [], "full_ms": []}
     published = {"data_closed_ms": [], "queue_bytes": [], "queue_jobs": [], "queue_wait_ms": []}
+    faults = [] if bounds is not None else None  # Q29: (count, seq) of the collector's major faults, schema 3 only.
     first_lateness = MISSING
     for index, (path, side) in enumerate(sidecars):
         name, image = path.name, path.with_suffix(".vmicd")
@@ -1917,6 +1937,18 @@ def audit_session(directory, p, protocol_path, output=None):
                                                        for key in ("data_closed_ms", "queue_bytes", "queue_jobs"))):
             if present(value):
                 published[key].append(value)
+        # The lead's answer to Q29: the major faults of the collector's sampling thread during this cycle. Under schema
+        # 3 a missing count or one that is no integer of at least 0 is a reason, never 0; one above the bound is
+        # another (audit.collector_majflt_max, null until G2: recorded and printed only, majflt_record).
+        if faults is not None:
+            majflt = need(side, name, "capture.rusage.majflt")
+            if present(majflt) and (type(majflt) is not int or majflt < 0):
+                reasons.append(f"collector major fault count is not an integer of at least 0: {name}:"
+                               "capture.rusage.majflt")
+            elif present(majflt):
+                faults.append((majflt, side["seq"]))
+                if bounds["collector_majflt_max"] is not None and majflt > bounds["collector_majflt_max"]:
+                    reasons.append("collector major faults per cycle above the audit bound")
     # Question Q10 to the lead (2026-11-24): under schema 3 the eight memory columns come from the bins of at least
     # analysis.scale.min_bin_pages pages, the bins the normalizer scores; schemas 1 and 2 take every bin (None).
     min_bin_pages = p["analysis"]["scale"]["min_bin_pages"] if p.get("schema") == protocol_v5.SCHEMA else None
@@ -1979,6 +2011,7 @@ def audit_session(directory, p, protocol_path, output=None):
                                           "flagged_rows": len(flagged)},
                          "spacing_mode": spacing_mode(flagged),
                          "grid_phase_s": phase},
+              "collector_majflt": majflt_record(faults),
               **marked,
               "auditor_sha256": {str(f.relative_to(ROOT)): digest(f) for f in
                                   (Path(__file__), ROOT / "scripts/collection_logs.py",
@@ -2006,7 +2039,8 @@ def audit_session(directory, p, protocol_path, output=None):
               "command": " ".join(sys.argv), "n": len(rows), "values": values}
     write_json(output, report)
     print(json.dumps({"report": str(output), **{k: values[k] for k in
-                     ("accepted", "reasons", "snapshots", "windows", "score_coverage", "raw_bytes")}}, indent=2))
+                     ("accepted", "reasons", "snapshots", "windows", "score_coverage", "raw_bytes",
+                      "collector_majflt")}}, indent=2))
     return 0 if values["accepted"] else 2
 
 

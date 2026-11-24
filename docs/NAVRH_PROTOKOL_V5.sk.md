@@ -363,6 +363,12 @@ nie, opravuje sa systém, nie hranica. Do kvality riadku pribudne výsledok prec
 procesov v oboch smeroch a počty preskočených úloh; pri každej session sa zapíše posun
 mriežok oboch zberačov.
 
+Audit zapíše a vytlačí major faulty zberača na cyklus (`capture.rusage.majflt` každého
+sidecaru: najväčší počet, jeho seq, súčet a počet cyklov; sidecar bez počtu, ktorý je celé
+číslo aspoň 0, je dôvod, nikdy nie 0) a od G2 zamietne session s cyklom nad hranicou
+`audit.collector_majflt_max`, ktorá je do G2 `null` (zmena vedúceho 2026-11-24, odpoveď
+na otázku Q29).
+
 Každá kontrola má test, ktorý ju spustí na zlej session a dostane presne očakávaný dôvod
 (samotest kontrol). Bez platného záznamu samotestu pre aktuálny kód sa zber nespustí.
 
@@ -835,6 +841,7 @@ Q17 a Q28).
 | tolerancia neplatných riadkov na session | G2 | najmenšie číslo, pri ktorom je podľa miery na hranicu udalosti z G2 pravdepodobnosť prekročenia v jednej session pod 1 %; najviac 6 |
 | strop riadkov uzavretých pravidlom na session; hranica skorého zastavenia | G3b | 99. percentil Poissonovho rozdelenia pri miere z G2 a G3b spolu, na typ udalosti; pri hranici skorého zastavenia je to miera na výskyt typu a s 99. percentilom so strednou hodnotou miera × počet výskytov typu sa po každom audite porovná počet označených riadkov kampane, nie jednej session (kap. 7.5; vedúci 2026-11-24, Q24) |
 | zoznam povolených varovaní zberača | G2 | všetky vzory pozorované pri bezchybných behoch |
+| major faulty zberača na cyklus | G2 | najväčší počet na cyklus v bezchybných behoch G2 na oboch VM; pri nule 0 (vedúci 2026-11-24, Q29) |
 | strop súbežnosti profilov (`profiles.*.max_concurrent`) | G2 | dvojnásobok najväčšieho počtu súbežných relácií pri `rate` high v dlhom behu (kap. 10.3); do G2 platia predbežné hodnoty 500 a 250 (vedúci 2026-11-24, Q5) |
 
 Čísla v riadkoch G0 sú návrh autora podľa úsudku. Sú zapísané pred akýmikoľvek dátami
