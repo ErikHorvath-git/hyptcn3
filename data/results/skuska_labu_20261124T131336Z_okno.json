@@ -1,0 +1,1451 @@
+{
+ "schema": "hyptcn3/lab-trial/1",
+ "stage": "skuska",
+ "date": "2026-11-24T13:13:36+00:00",
+ "commit": "966ff9b14185afe92d2168517730dd0d490eda11",
+ "host": "Debian GNU/Linux 13 (trixie), kernel 7.2.9+deb13-amd64",
+ "guest": {
+  "vm": "a",
+  "domain": "hyptcn-lab-a",
+  "identity": {
+   "kernel": "6.1.0-42-cloud-amd64",
+   "boot_id": "e0c3824b-1191-423c-80b1-b542820c5f2a",
+   "machine_id": "2196641a5e5e486c9dd49e8c20b87fc8",
+   "stack_sha256": "876fb93eb045462209aac766765d5827d80560a16b29771e5a94a1cae2d81a2b",
+   "mismatch": []
+  }
+ },
+ "command": "scripts/lab_trial.py record --out-record /home/eh/projects/hyptcn3/data/results/skuska_labu_20261124T131336Z_okno.json /home/eh/hyptcn3-logs/v5/dokazy/B11/okno_VM/behy/02-deploy-a /home/eh/hyptcn3-logs/v5/dokazy/B11/okno_VM/behy/02-deploy-b /home/eh/hyptcn3-logs/v5/dokazy/B11/okno_VM/behy/03-long-eshop_low",
+ "n": 3,
+ "protocol": "/home/eh/hyptcn3-okno/config/collection-v5.json",
+ "protocol_sha256": "4587cbc5bd3a3b1624b437217e8a570f584624c42cb95ea40f82d22a1690f291",
+ "values": {
+  "runs": [
+   {
+    "dir": "/home/eh/hyptcn3-logs/v5/dokazy/B11/okno_VM/behy/02-deploy-a",
+    "schema": "hyptcn3/lab-trial-run/1",
+    "step": "deploy",
+    "command": "scripts/lab_trial.py deploy --protocol config/collection-v5.json --vm a --out /home/eh/hyptcn3-logs/v5/dokazy/B11/okno_VM/behy/02-deploy-a",
+    "protocol": "/home/eh/hyptcn3-okno/config/collection-v5.json",
+    "protocol_sha256": "4587cbc5bd3a3b1624b437217e8a570f584624c42cb95ea40f82d22a1690f291",
+    "protocol_name": "server-normal-v5",
+    "vm": "a",
+    "domain": "hyptcn-lab-a",
+    "target": "http://127.0.0.1:18080",
+    "commit": "966ff9b14185afe92d2168517730dd0d490eda11",
+    "measurement_dirty": [],
+    "qemu": {
+     "pid": 3992777,
+     "start_ticks": 303275633,
+     "host_boot": "eb635e03-638a-4d7c-ab67-9ee1a4d410cf"
+    },
+    "started_unix": 1795521815.3962216,
+    "judgment": {
+     "deploy_timeout_s": 1800,
+     "header_timeout_s": 60,
+     "tick_s": 1,
+     "drain_s": 300,
+     "stop_grace_s": 60,
+     "saturation_measure_s": 360,
+     "saturation_drain_s": 30,
+     "latency_p95_bound_ms": 1000,
+     "charged_share": 0.9,
+     "holder_share": 0.5,
+     "restart_window_s": 60,
+     "midpoint_decimals": 3,
+     "guest_sql_timeout_s": 180,
+     "note": "the executor's judgment (scripts/lab_trial.py), none of them a value of the protocol; charged_share is accepted by the lead (Q26)"
+    },
+    "lead": {
+     "step_ratio_max": 1.15,
+     "cap_factor_s": 240,
+     "proposed_cap_factor": 2,
+     "autovacuum_remainder_s": [
+      1,
+      4
+     ],
+     "note": "the lead's answers to Q5 and Q9 (2026-11-24), none of them a value of the protocol"
+    },
+    "completed": true,
+    "error": null,
+    "labctl": {
+     "command": [
+      "/home/eh/projects/hyptcn3/.venv/bin/python",
+      "/home/eh/hyptcn3-okno/scripts/labctl.py",
+      "deploy",
+      "--domain",
+      "hyptcn-lab-a",
+      "--vm",
+      "a",
+      "--port",
+      "18080"
+     ],
+     "rc": 0,
+     "swap_failed": false,
+     "libvirtd": null,
+     "qemu_swap": {
+      "cgroup": "/user.slice/user-1000.slice/user@1000.service/app.slice/hyptcn-libvirtd.service",
+      "cgroup_before": "/user.slice/user-1000.slice/user@1000.service/app.slice/hyptcn-libvirtd.service",
+      "domain": "hyptcn-lab-a",
+      "memory": {
+       "anon": 1186361344,
+       "cgroup": "/user.slice/user-1000.slice/user@1000.service/app.slice/hyptcn-libvirtd.service",
+       "charged": true,
+       "charged_share": 0.9,
+       "memory_current": 1969049600,
+       "qemu": [
+        {
+         "pid": 3992777,
+         "rss_anon_kb": 565100,
+         "vm_rss_kb": 591436
+        },
+        {
+         "pid": 3992930,
+         "rss_anon_kb": 538632,
+         "vm_rss_kb": 565000
+        }
+       ],
+       "rss_anon_kb": 1103732,
+       "share": 1.05
+      },
+      "memory_swap_max": "0",
+      "qemu_pid": 3992777,
+      "scope": null,
+      "swap_max_before": "0",
+      "temporary": false,
+      "vm_swap_kb": 0,
+      "way": "unit"
+     },
+     "state": {
+      "uri": "qemu:///session",
+      "domain": "hyptcn-lab-a",
+      "target": "http://127.0.0.1:18080",
+      "health": {
+       "status": "ok",
+       "service": "orders",
+       "database": true
+      },
+      "vm": "a"
+     },
+     "other_lines": 14,
+     "stderr": ""
+    },
+    "health": {
+     "ok": true,
+     "attempts": 1
+    },
+    "guest": {
+     "kernel": "6.1.0-42-cloud-amd64",
+     "boot_id": "cbe6f9b4-25e9-4be0-9755-5bd456b2ca0d",
+     "machine_id": "9e2a10882e8b4503badca552312df4e1",
+     "stack_sha256": "876fb93eb045462209aac766765d5827d80560a16b29771e5a94a1cae2d81a2b",
+     "mismatch": []
+    },
+    "qemu_memory": {
+     "domain": "hyptcn-lab-a",
+     "qemu_pid": 3992777,
+     "cgroup": "/user.slice/user-1000.slice/user@1000.service/app.slice/hyptcn-libvirtd.service",
+     "memory_swap_max": "0",
+     "vm_swap_kb": 0,
+     "rss_anon_kb": 601964,
+     "own": {
+      "cgroup": "/user.slice/user-1000.slice/user@1000.service/app.slice/hyptcn-libvirtd.service",
+      "memory_current": 2083221504,
+      "anon": 1224368128,
+      "swap_current": 0,
+      "swap_max": "0"
+     },
+     "charge": {
+      "cgroup": "/user.slice/user-1000.slice/user@1000.service/app.slice/hyptcn-libvirtd.service",
+      "memory_current": 2093707264,
+      "anon": 1234853888,
+      "qemu": [
+       {
+        "pid": 3992777,
+        "vm_rss_kb": 638540,
+        "rss_anon_kb": 612204
+       },
+       {
+        "pid": 3992930,
+        "vm_rss_kb": 565000,
+        "rss_anon_kb": 538632
+       }
+      ],
+      "rss_anon_kb": 1150836,
+      "share": 1.048,
+      "charged": true,
+      "charged_share": 0.9
+     },
+     "own_anon_share": 1.048,
+     "charged_to_own_cgroup": true,
+     "holders": [
+      {
+       "cgroup": "/user.slice/user-1000.slice/user@1000.service/app.slice/hyptcn-libvirtd.service",
+       "memory_current": 2093707264,
+       "anon": 1234853888,
+       "swap_current": 0,
+       "swap_max": "0"
+      },
+      {
+       "cgroup": "/user.slice/user-1000.slice/user@1000.service/tmux-spawn-6fc90164-b5b4-4328-a208-d59629861835.scope",
+       "memory_current": 6506360832,
+       "anon": 736817152,
+       "swap_current": 1702715392,
+       "swap_max": "max"
+      }
+     ],
+     "vm_swappiness": 1
+    },
+    "ended_unix": 1795521827.9112725,
+    "qemu_after": {
+     "pid": 3992777,
+     "start_ticks": 303275633,
+     "host_boot": "eb635e03-638a-4d7c-ab67-9ee1a4d410cf"
+    },
+    "problems": []
+   },
+   {
+    "dir": "/home/eh/hyptcn3-logs/v5/dokazy/B11/okno_VM/behy/02-deploy-b",
+    "schema": "hyptcn3/lab-trial-run/1",
+    "step": "deploy",
+    "command": "scripts/lab_trial.py deploy --protocol config/collection-v5.json --vm b --out /home/eh/hyptcn3-logs/v5/dokazy/B11/okno_VM/behy/02-deploy-b",
+    "protocol": "/home/eh/hyptcn3-okno/config/collection-v5.json",
+    "protocol_sha256": "4587cbc5bd3a3b1624b437217e8a570f584624c42cb95ea40f82d22a1690f291",
+    "protocol_name": "server-normal-v5",
+    "vm": "b",
+    "domain": "hyptcn-lab-b",
+    "target": "http://127.0.0.1:18081",
+    "commit": "966ff9b14185afe92d2168517730dd0d490eda11",
+    "measurement_dirty": [],
+    "qemu": {
+     "pid": 3992930,
+     "start_ticks": 303277526,
+     "host_boot": "eb635e03-638a-4d7c-ab67-9ee1a4d410cf"
+    },
+    "started_unix": 1795521828.26298,
+    "judgment": {
+     "deploy_timeout_s": 1800,
+     "header_timeout_s": 60,
+     "tick_s": 1,
+     "drain_s": 300,
+     "stop_grace_s": 60,
+     "saturation_measure_s": 360,
+     "saturation_drain_s": 30,
+     "latency_p95_bound_ms": 1000,
+     "charged_share": 0.9,
+     "holder_share": 0.5,
+     "restart_window_s": 60,
+     "midpoint_decimals": 3,
+     "guest_sql_timeout_s": 180,
+     "note": "the executor's judgment (scripts/lab_trial.py), none of them a value of the protocol; charged_share is accepted by the lead (Q26)"
+    },
+    "lead": {
+     "step_ratio_max": 1.15,
+     "cap_factor_s": 240,
+     "proposed_cap_factor": 2,
+     "autovacuum_remainder_s": [
+      1,
+      4
+     ],
+     "note": "the lead's answers to Q5 and Q9 (2026-11-24), none of them a value of the protocol"
+    },
+    "completed": true,
+    "error": null,
+    "labctl": {
+     "command": [
+      "/home/eh/projects/hyptcn3/.venv/bin/python",
+      "/home/eh/hyptcn3-okno/scripts/labctl.py",
+      "deploy",
+      "--domain",
+      "hyptcn-lab-b",
+      "--vm",
+      "b",
+      "--port",
+      "18081"
+     ],
+     "rc": 0,
+     "swap_failed": false,
+     "libvirtd": null,
+     "qemu_swap": {
+      "cgroup": "/user.slice/user-1000.slice/user@1000.service/app.slice/hyptcn-libvirtd.service",
+      "cgroup_before": "/user.slice/user-1000.slice/user@1000.service/app.slice/hyptcn-libvirtd.service",
+      "domain": "hyptcn-lab-b",
+      "memory": {
+       "anon": 1234853888,
+       "cgroup": "/user.slice/user-1000.slice/user@1000.service/app.slice/hyptcn-libvirtd.service",
+       "charged": true,
+       "charged_share": 0.9,
+       "memory_current": 2093572096,
+       "qemu": [
+        {
+         "pid": 3992777,
+         "rss_anon_kb": 612204,
+         "vm_rss_kb": 638540
+        },
+        {
+         "pid": 3992930,
+         "rss_anon_kb": 538632,
+         "vm_rss_kb": 565000
+        }
+       ],
+       "rss_anon_kb": 1150836,
+       "share": 1.048
+      },
+      "memory_swap_max": "0",
+      "qemu_pid": 3992930,
+      "scope": null,
+      "swap_max_before": "0",
+      "temporary": false,
+      "vm_swap_kb": 0,
+      "way": "unit"
+     },
+     "state": {
+      "uri": "qemu:///session",
+      "domain": "hyptcn-lab-b",
+      "target": "http://127.0.0.1:18081",
+      "health": {
+       "status": "ok",
+       "service": "orders",
+       "database": true
+      },
+      "vm": "b"
+     },
+     "other_lines": 14,
+     "stderr": ""
+    },
+    "health": {
+     "ok": true,
+     "attempts": 1
+    },
+    "guest": {
+     "kernel": "6.1.0-42-cloud-amd64",
+     "boot_id": "e0c3824b-1191-423c-80b1-b542820c5f2a",
+     "machine_id": "2196641a5e5e486c9dd49e8c20b87fc8",
+     "stack_sha256": "876fb93eb045462209aac766765d5827d80560a16b29771e5a94a1cae2d81a2b",
+     "mismatch": []
+    },
+    "qemu_memory": {
+     "domain": "hyptcn-lab-b",
+     "qemu_pid": 3992930,
+     "cgroup": "/user.slice/user-1000.slice/user@1000.service/app.slice/hyptcn-libvirtd.service",
+     "memory_swap_max": "0",
+     "vm_swap_kb": 0,
+     "rss_anon_kb": 736080,
+     "own": {
+      "cgroup": "/user.slice/user-1000.slice/user@1000.service/app.slice/hyptcn-libvirtd.service",
+      "memory_current": 2412769280,
+      "anon": 1458102272,
+      "swap_current": 0,
+      "swap_max": "0"
+     },
+     "charge": {
+      "cgroup": "/user.slice/user-1000.slice/user@1000.service/app.slice/hyptcn-libvirtd.service",
+      "memory_current": 2412769280,
+      "anon": 1458102272,
+      "qemu": [
+       {
+        "pid": 3992777,
+        "vm_rss_kb": 659084,
+        "rss_anon_kb": 632748
+       },
+       {
+        "pid": 3992930,
+        "vm_rss_kb": 762448,
+        "rss_anon_kb": 736080
+       }
+      ],
+      "rss_anon_kb": 1368828,
+      "share": 1.04,
+      "charged": true,
+      "charged_share": 0.9
+     },
+     "own_anon_share": 1.04,
+     "charged_to_own_cgroup": true,
+     "holders": [
+      {
+       "cgroup": "/user.slice/user-1000.slice/user@1000.service/app.slice/hyptcn-libvirtd.service",
+       "memory_current": 2412769280,
+       "anon": 1458102272,
+       "swap_current": 0,
+       "swap_max": "0"
+      },
+      {
+       "cgroup": "/user.slice/user-1000.slice/user@1000.service/tmux-spawn-6fc90164-b5b4-4328-a208-d59629861835.scope",
+       "memory_current": 6489993216,
+       "anon": 720097280,
+       "swap_current": 1702715392,
+       "swap_max": "max"
+      }
+     ],
+     "vm_swappiness": 1
+    },
+    "ended_unix": 1795521857.7771313,
+    "qemu_after": {
+     "pid": 3992930,
+     "start_ticks": 303277526,
+     "host_boot": "eb635e03-638a-4d7c-ab67-9ee1a4d410cf"
+    },
+    "problems": []
+   },
+   {
+    "dir": "/home/eh/hyptcn3-logs/v5/dokazy/B11/okno_VM/behy/03-long-eshop_low",
+    "schema": "hyptcn3/lab-trial-run/1",
+    "step": "long",
+    "command": "scripts/lab_trial.py long --protocol config/collection-v5.json --vm a --scenario eshop_low --rate 1.2 --minutes 60 --events 3 --postgres-debug1 --out /home/eh/hyptcn3-logs/v5/dokazy/B11/okno_VM/behy/03-long-eshop_low",
+    "protocol": "/home/eh/hyptcn3-okno/config/collection-v5.json",
+    "protocol_sha256": "4587cbc5bd3a3b1624b437217e8a570f584624c42cb95ea40f82d22a1690f291",
+    "protocol_name": "server-normal-v5",
+    "vm": "a",
+    "domain": "hyptcn-lab-a",
+    "target": "http://127.0.0.1:18080",
+    "commit": "966ff9b14185afe92d2168517730dd0d490eda11",
+    "measurement_dirty": [],
+    "qemu": {
+     "pid": 3992777,
+     "start_ticks": 303275633,
+     "host_boot": "eb635e03-638a-4d7c-ab67-9ee1a4d410cf"
+    },
+    "started_unix": 1795521911.4807732,
+    "judgment": {
+     "deploy_timeout_s": 1800,
+     "header_timeout_s": 60,
+     "tick_s": 1,
+     "drain_s": 300,
+     "stop_grace_s": 60,
+     "saturation_measure_s": 360,
+     "saturation_drain_s": 30,
+     "latency_p95_bound_ms": 1000,
+     "charged_share": 0.9,
+     "holder_share": 0.5,
+     "restart_window_s": 60,
+     "midpoint_decimals": 3,
+     "guest_sql_timeout_s": 180,
+     "note": "the executor's judgment (scripts/lab_trial.py), none of them a value of the protocol; charged_share is accepted by the lead (Q26)"
+    },
+    "lead": {
+     "step_ratio_max": 1.15,
+     "cap_factor_s": 240,
+     "proposed_cap_factor": 2,
+     "autovacuum_remainder_s": [
+      1,
+      4
+     ],
+     "note": "the lead's answers to Q5 and Q9 (2026-11-24), none of them a value of the protocol"
+    },
+    "completed": true,
+    "error": null,
+    "scenario": "eshop_low",
+    "profile": "eshop",
+    "intensity": "low",
+    "rate": 1.2,
+    "minutes": 60.0,
+    "events_planned": [
+     {
+      "type": "zla_konfiguracia_sluzby",
+      "class": "zla_konfiguracia",
+      "start_s": 430.453,
+      "duration_s": 134.807,
+      "start_phase_s": 0.453,
+      "stop_phase_s": 0.26
+     },
+     {
+      "type": "naprazdno",
+      "class": "naprazdno",
+      "start_s": 1235.008,
+      "duration_s": 136.743,
+      "start_phase_s": 0.008,
+      "stop_phase_s": 1.751
+     },
+     {
+      "type": "zamok_tabulky",
+      "class": "chyba_aplikacie",
+      "start_s": 3021.096,
+      "duration_s": 155.768,
+      "start_phase_s": 1.096,
+      "stop_phase_s": 1.864
+     }
+    ],
+    "postgres_debug1": {
+     "rule": "the step set (ALTER SYSTEM SET log_min_messages = 'debug1'; ALTER SYSTEM SET log_destination = 'stderr,syslog'; SELECT pg_reload_conf()) before the run and the step reset (ALTER SYSTEM RESET log_min_messages; ALTER SYSTEM RESET log_destination; SELECT pg_reload_conf()) after it, also when the run fails; SHOW log_min_messages and SHOW log_destination before the set, after it (must give debug1 and stderr,syslog) and after the reset (must give what they gave before the set); each through labctl exec as the user postgres",
+     "before": {
+      "command": "runuser -u postgres -- psql -XtA -c 'SHOW log_min_messages' -c 'SHOW log_destination'",
+      "rc": 0,
+      "output": [
+       "warning",
+       "stderr"
+      ],
+      "stderr": ""
+     },
+     "set": {
+      "command": "runuser -u postgres -- psql -XtA -c 'ALTER SYSTEM SET log_min_messages = '\"'\"'debug1'\"'\"'' -c 'ALTER SYSTEM SET log_destination = '\"'\"'stderr,syslog'\"'\"'' -c 'SELECT pg_reload_conf()'",
+      "rc": 0,
+      "output": [
+       "ALTER SYSTEM",
+       "ALTER SYSTEM",
+       "t"
+      ],
+      "stderr": ""
+     },
+     "during": {
+      "command": "runuser -u postgres -- psql -XtA -c 'SHOW log_min_messages' -c 'SHOW log_destination'",
+      "rc": 0,
+      "output": [
+       "debug1",
+       "stderr,syslog"
+      ],
+      "stderr": ""
+     },
+     "reset": {
+      "command": "runuser -u postgres -- psql -XtA -c 'ALTER SYSTEM RESET log_min_messages' -c 'ALTER SYSTEM RESET log_destination' -c 'SELECT pg_reload_conf()'",
+      "rc": 0,
+      "output": [
+       "ALTER SYSTEM",
+       "ALTER SYSTEM",
+       "t"
+      ],
+      "stderr": ""
+     },
+     "after": {
+      "command": "runuser -u postgres -- psql -XtA -c 'SHOW log_min_messages' -c 'SHOW log_destination'",
+      "rc": 0,
+      "output": [
+       "warning",
+       "stderr"
+      ],
+      "stderr": ""
+     }
+    },
+    "pre_segment": {
+     "closed_unix": 1795521916.07091,
+     "files": [
+      {
+       "bytes": 89371038,
+       "file": "03-long-eshop_low-pre-nginx-access.jsonl.gz",
+       "file_sha256": "862654617b5317f2ba7b70874d449443637780296abc123cff93419153f4692c",
+       "first_line": "{\"schema\":\"hyptcn3/nginx-access/1\",\"ts\":\"2026-11-23T08:33:08+00:00\",\"msec\":1795422788.724,\"rid\":\"health20261123083308-0001\",\"forwarded_rid\":\"health20261123083308-0001\",\"nginx_rid\":\"46f4905b48d1229fc91102e1e5b6af08\",\"method\":\"GET\",\"uri\":\"/healthz\",\"status\":200,\"bytes\":55,\"bytes_sent\":204,\"request_length\":167,\"request_time\":0.005,\"upstream_status\":\"200\",\"upstream_connect_time\":\"0.000\",\"upstream_header_time\":\"0.005\",\"upstream_response_time\":\"0.005\",\"connection\":283670,\"connection_requests\":1,\"remote\":\"192.168.1.1\",\"ua\":\"Python-urllib/3.13\"}\n",
+       "gz_bytes": 11567004,
+       "gz_sha256": "862654617b5317f2ba7b70874d449443637780296abc123cff93419153f4692c",
+       "last_line": "{\"schema\":\"hyptcn3/nginx-access/1\",\"ts\":\"2026-11-24T12:03:47+00:00\",\"msec\":1795521827.365,\"rid\":\"\",\"forwarded_rid\":\"83050aaddbd091ea83849e8657f0e045\",\"nginx_rid\":\"83050aaddbd091ea83849e8657f0e045\",\"method\":\"GET\",\"uri\":\"/healthz\",\"status\":200,\"bytes\":55,\"bytes_sent\":204,\"request_length\":126,\"request_time\":0.004,\"upstream_status\":\"200\",\"upstream_connect_time\":\"0.001\",\"upstream_header_time\":\"0.004\",\"upstream_response_time\":\"0.004\",\"connection\":4,\"connection_requests\":1,\"remote\":\"192.168.1.1\",\"ua\":\"Python-urllib/3.13\"}\n",
+       "lines": 163763,
+       "name": "03-long-eshop_low-pre-nginx-access.jsonl",
+       "sha256": "2dc37e7baa0bc63faf3301bc52b4b38a6a477ecfd96c6997291d08185314e8f3",
+       "terminated": true
+      },
+      {
+       "bytes": 160403,
+       "file": "03-long-eshop_low-pre-nginx-error.log.gz",
+       "file_sha256": "1b3fb385b2e4c73b0bb9d20034554661517f54c7a9617aee6cba6ca2ba1dd64a",
+       "first_line": "2026/11/23 09:18:48 [error] 54862#54862: *512286 upstream timed out (110: Connection timed out) while connecting to upstream, client: 192.168.1.1, server: _, request: \"POST /api/auth/login HTTP/1.1\", upstream: \"http://127.0.0.1:8082/api/auth/login\", host: \"127.0.0.1:18080\"\n",
+       "gz_bytes": 6295,
+       "gz_sha256": "1b3fb385b2e4c73b0bb9d20034554661517f54c7a9617aee6cba6ca2ba1dd64a",
+       "last_line": "2026/11/23 09:20:12 [error] 54862#54862: *539354 upstream timed out (110: Connection timed out) while connecting to upstream, client: 192.168.1.1, server: _, request: \"POST /api/auth/login HTTP/1.1\", upstream: \"http://127.0.0.1:8082/api/auth/login\", host: \"127.0.0.1:18080\"\n",
+       "lines": 581,
+       "name": "03-long-eshop_low-pre-nginx-error.log",
+       "sha256": "0ed58a10c5bfcb76979944a8ed6ea883b03460e1a8e664f50f4d37a54a6e208e",
+       "terminated": true
+      }
+     ],
+     "label": "03-long-eshop_low-pre",
+     "schema": "hyptcn3/guest-log-segment/1"
+    },
+    "run": {
+     "traffic": {
+      "generator": "scripts/host_traffic.py",
+      "load_model": "open loop: user sessions arrive as a non-homogeneous Poisson process with intensity rate x envelope(t), at most max_concurrent in progress",
+      "profile": "eshop",
+      "scenario": "eshop_low",
+      "intensity": "low",
+      "rate": 1.2,
+      "rate_source": "command line",
+      "seed_group": "skuska/long/eshop_low",
+      "seeds": {
+       "traffic": 16647260394215446337,
+       "traffic_arrivals": 7517036306049197662,
+       "traffic_choices": 11526906049301038158,
+       "traffic_sizes": 14528318996263764282
+      },
+      "target": "http://127.0.0.1:18080",
+      "dur_s": 3720,
+      "warmup_s": 120,
+      "summary_interval_s": 5,
+      "initial_phase": "warmup"
+     },
+     "error": null,
+     "health_attempts": 1,
+     "generator_command": [
+      "/home/eh/projects/hyptcn3/.venv/bin/python",
+      "/home/eh/hyptcn3-okno/scripts/host_traffic.py",
+      "--profile",
+      "eshop",
+      "--protocol",
+      "/home/eh/hyptcn3-logs/v5/dokazy/B11/okno_VM/behy/03-long-eshop_low/protocol.json",
+      "--scenario",
+      "eshop_low",
+      "--seeds",
+      "{\"traffic\": 16647260394215446337, \"traffic_arrivals\": 7517036306049197662, \"traffic_choices\": 11526906049301038158, \"traffic_sizes\": 14528318996263764282}",
+      "--rate",
+      "1.2",
+      "--target",
+      "http://127.0.0.1:18080",
+      "--dur",
+      "3720",
+      "--warmup-s",
+      "120",
+      "--session-id",
+      "03-long-eshop_low",
+      "--requests-log",
+      "/home/eh/hyptcn3-logs/v5/dokazy/B11/okno_VM/behy/03-long-eshop_low/traffic_requests.jsonl",
+      "--intervals-log",
+      "/home/eh/hyptcn3-logs/v5/dokazy/B11/okno_VM/behy/03-long-eshop_low/traffic_intervals.jsonl",
+      "--summary-interval-s",
+      "5",
+      "--initial-phase",
+      "warmup",
+      "--out",
+      "/home/eh/hyptcn3-logs/v5/dokazy/B11/okno_VM/behy/03-long-eshop_low/traffic.json"
+     ],
+     "run_id": "c0315a901cd3",
+     "start_unix": 1795521921.974731,
+     "signals": [
+      {
+       "signal": "SIGUSR1",
+       "unix": 1795522042.0845523
+      },
+      {
+       "signal": "SIGUSR2",
+       "unix": 1795525642.70847
+      }
+     ],
+     "stop": {
+      "pid": 3993784,
+      "stopped_by": "SIGTERM",
+      "rc": 1
+     },
+     "status": {
+      "final": true,
+      "phase": "post",
+      "requests": 14981,
+      "ok": 14412,
+      "errors": 569,
+      "intended_errors": 304,
+      "intended_errors_matched": 296,
+      "unexpected_results": 273,
+      "arrivals": 1577,
+      "admitted": 1577,
+      "dropped": 0,
+      "user_sessions_completed": 1577,
+      "logging_error": null,
+      "worker_errors": 0
+     }
+    },
+    "events": [
+     {
+      "type": "zla_konfiguracia_sluzby",
+      "class": "zla_konfiguracia",
+      "start_s": 430.453,
+      "duration_s": 134.807,
+      "start_phase_s": 0.453,
+      "stop_phase_s": 0.26,
+      "executed": true,
+      "host_start_unix": 1795522473.1605942,
+      "host_started_unix": 1795522473.910919,
+      "host_stop_unix": 1795522607.9318426,
+      "host_stopped_unix": 1795522609.6232817,
+      "effect_ok": true
+     },
+     {
+      "type": "naprazdno",
+      "class": "naprazdno",
+      "start_s": 1235.008,
+      "duration_s": 136.743,
+      "start_phase_s": 0.008,
+      "stop_phase_s": 1.751,
+      "executed": true,
+      "host_start_unix": 1795523277.6974251,
+      "host_started_unix": 1795523278.1285317,
+      "host_stop_unix": 1795523414.1416304,
+      "host_stopped_unix": 1795523414.5715232,
+      "effect_ok": true
+     },
+     {
+      "type": "zamok_tabulky",
+      "class": "chyba_aplikacie",
+      "start_s": 3021.096,
+      "duration_s": 155.768,
+      "start_phase_s": 1.096,
+      "stop_phase_s": 1.864,
+      "executed": true,
+      "host_start_unix": 1795525063.7613292,
+      "host_started_unix": 1795525064.1924925,
+      "host_stop_unix": 1795525219.211165,
+      "host_stopped_unix": 1795525223.659858,
+      "effect_ok": true
+     }
+    ],
+    "segment": {
+     "closed_unix": 1795525947.2654884,
+     "files": [
+      {
+       "bytes": 8092276,
+       "file": "03-long-eshop_low-nginx-access.jsonl.gz",
+       "file_sha256": "875f75d16268b32e31506bca7f37f244015ebad07a211a92671279d46175fd83",
+       "first_line": "{\"schema\":\"hyptcn3/nginx-access/1\",\"ts\":\"2026-11-24T12:05:21+00:00\",\"msec\":1795521921.848,\"rid\":\"health20261124120521-0001\",\"forwarded_rid\":\"health20261124120521-0001\",\"nginx_rid\":\"55ff19d9c9664c0387f28ca24be78078\",\"method\":\"GET\",\"uri\":\"/healthz\",\"status\":200,\"bytes\":55,\"bytes_sent\":204,\"request_length\":167,\"request_time\":0.005,\"upstream_status\":\"200\",\"upstream_connect_time\":\"0.000\",\"upstream_header_time\":\"0.005\",\"upstream_response_time\":\"0.005\",\"connection\":8,\"connection_requests\":1,\"remote\":\"192.168.1.1\",\"ua\":\"Python-urllib/3.13\"}\n",
+       "gz_bytes": 1035487,
+       "gz_sha256": "875f75d16268b32e31506bca7f37f244015ebad07a211a92671279d46175fd83",
+       "last_line": "{\"schema\":\"hyptcn3/nginx-access/1\",\"ts\":\"2026-11-24T13:09:37+00:00\",\"msec\":1795525777.893,\"rid\":\"c0315a901cd3-u1574-0014\",\"forwarded_rid\":\"c0315a901cd3-u1574-0014\",\"nginx_rid\":\"65f845f8ead81c9427935f79b25be899\",\"method\":\"GET\",\"uri\":\"/static/000.css\",\"status\":200,\"bytes\":111318,\"bytes_sent\":111555,\"request_length\":175,\"request_time\":0.000,\"upstream_status\":\"\",\"upstream_connect_time\":\"\",\"upstream_header_time\":\"\",\"upstream_response_time\":\"\",\"connection\":23623,\"connection_requests\":1,\"remote\":\"192.168.1.1\",\"ua\":\"hyptcn-host-traffic/4\"}\n",
+       "lines": 14993,
+       "name": "03-long-eshop_low-nginx-access.jsonl",
+       "sha256": "ca3cf81ae24802833e16df54f1b1be103fc6a831440e239774e2a8fb289a9243",
+       "terminated": true
+      },
+      {
+       "bytes": 75826,
+       "file": "03-long-eshop_low-nginx-error.log.gz",
+       "file_sha256": "320861e169219626ddb8b06c6cef6ebd6f7a2aea582549989955fec86a09d7b8",
+       "first_line": "2026/11/24 12:14:33 [error] 1092#1092: *4214 connect() failed (111: Connection refused) while connecting to upstream, client: 192.168.1.1, server: _, request: \"GET /api/catalog/17 HTTP/1.1\", upstream: \"http://127.0.0.1:8081/api/catalog/17\", host: \"127.0.0.1:18080\"\n",
+       "gz_bytes": 4324,
+       "gz_sha256": "320861e169219626ddb8b06c6cef6ebd6f7a2aea582549989955fec86a09d7b8",
+       "last_line": "2026/11/24 12:16:47 [error] 1093#1093: *5001 connect() failed (111: Connection refused) while connecting to upstream, client: 192.168.1.1, server: _, request: \"GET /api/catalog?q=Drive&page=1&size=20 HTTP/1.1\", upstream: \"http://127.0.0.1:8081/api/catalog?q=Drive&page=1&size=20\", host: \"127.0.0.1:18080\"\n",
+       "lines": 270,
+       "name": "03-long-eshop_low-nginx-error.log",
+       "sha256": "08d2249004ac99387da4bffe73967c59399c30f0db93ba3f2bea784029f6878f",
+       "terminated": true
+      }
+     ],
+     "label": "03-long-eshop_low",
+     "schema": "hyptcn3/guest-log-segment/1"
+    },
+    "journal": {
+     "files": [
+      {
+       "bytes": 1679977,
+       "file": "03-long-eshop_low-journal-journal.txt.gz",
+       "file_sha256": "f8f58d4b8f63d1309d0a300acf4f8ada2362e345c9f3f2b5ccf642a6338ca409",
+       "first_line": "2026-11-24T12:05:21.845945+0000 hyptcn-lab-a python3[1007]: 127.0.0.1 - - [24/Nov/2026 12:05:21] request rid=health20261124120521-0001 method=GET path=/healthz status=200\n",
+       "gz_bytes": 190405,
+       "gz_sha256": "f8f58d4b8f63d1309d0a300acf4f8ada2362e345c9f3f2b5ccf642a6338ca409",
+       "last_line": "2026-11-24T13:12:28.207839+0000 hyptcn-lab-a qemu-ga[374]: info: guest-exec-status called, pid: 10466\n",
+       "lines": 9728,
+       "name": "03-long-eshop_low-journal-journal.txt",
+       "sha256": "6f45b1235871ca46e7639985e755b51885d4b7864ffb64895f251323a702f468",
+       "terminated": true
+      }
+     ],
+     "label": "03-long-eshop_low-journal",
+     "schema": "hyptcn3/guest-journal-segment/1",
+     "since_unix": 1795521921.842287,
+     "until_unix": 1795525948.207976
+    },
+    "windows": [
+     [
+      1795522472.1605942,
+      1795522669.6232817
+     ],
+     [
+      1795523276.6974251,
+      1795523474.5715232
+     ],
+     [
+      1795525062.7613292,
+      1795525283.659858
+     ]
+    ],
+    "summary": {
+     "problems": [],
+     "problem_count": 0,
+     "clean": true,
+     "arrivals": {
+      "offered": 1577,
+      "admitted": 1577,
+      "dropped": 0,
+      "measure": {
+       "offered": 1545,
+       "admitted": 1545,
+       "dropped": 0
+      }
+     },
+     "drop_reasons": {},
+     "active_max": 88,
+     "phases": {
+      "warmup": {
+       "requests": 166,
+       "intervals": 25,
+       "duration_s": 120.133917,
+       "ok": 163,
+       "http_error": 3,
+       "timeout": 0,
+       "transport_error": 0
+      },
+      "measure": {
+       "requests": 14609,
+       "intervals": 721,
+       "duration_s": 3600.797787,
+       "ok": 14045,
+       "http_error": 564,
+       "timeout": 0,
+       "transport_error": 0
+      },
+      "post": {
+       "requests": 206,
+       "intervals": 60,
+       "duration_s": 299.910771,
+       "ok": 204,
+       "http_error": 2,
+       "timeout": 0,
+       "transport_error": 0
+      }
+     },
+     "measure": {
+      "requests": 14609,
+      "ok": 14045,
+      "errors": 564,
+      "phase_duration_s": 3600.797787,
+      "phase_request_rate_rps": 4.057,
+      "latency_ms": {
+       "n": 14609,
+       "p50": 2.607,
+       "p90": 8.162,
+       "p95": 10.871,
+       "p99": 28.943,
+       "max": 3015.848
+      },
+      "max_ok_completion_gap_s": 3.946442
+     }
+    },
+    "realism": {
+     "requirements": [
+      {
+       "name": "arrival_cv",
+       "value": 1.001728,
+       "bound": [
+        0.8,
+        1.2
+       ],
+       "ok": true,
+       "note": "1544 spacings of the measure phase's arrivals rescaled by the planned envelope (population standard deviation over the mean; unit Poisson spacings give 1)"
+      },
+      {
+       "name": "think_time",
+       "value": {
+        "mean": 7.03326,
+        "max": 70,
+        "n": 13064
+       },
+       "bound": {
+        "mean": 7,
+        "tolerance": 0.248886,
+        "max": 70
+       },
+       "ok": true,
+       "note": "13064 think times of the measure phase; the mean within 4 standard errors of the profile's mean"
+      },
+      {
+       "name": "order_share",
+       "value": 0.048589,
+       "bound": {
+        "share": 0.05,
+        "tolerance": 0.024405
+       },
+       "ok": true,
+       "note": "62 of 1276 user sessions ordered (intensity low); 269 touching a window left out"
+      },
+      {
+       "name": "object_concentration",
+       "value": 0.704686,
+       "bound": 0.5,
+       "ok": true,
+       "note": "the 155 most requested of 1545 objects got this share of 8750 requests (top 0.1 of the objects)"
+      },
+      {
+       "name": "success_rate",
+       "value": 0.979837,
+       "bound": {
+        "min": 0.88,
+        "below": 1
+       },
+       "ok": true,
+       "note": "12746 requests of the measure phase outside every window"
+      },
+      {
+       "name": "response_sizes",
+       "value": 4.508717,
+       "bound": 2,
+       "ok": true,
+       "note": "12489 2xx answers outside every window (0 empty ones left out): orders of magnitude between the smallest and the largest"
+      },
+      {
+       "name": "peak_to_mean",
+       "value": 2.775282,
+       "bound": 2,
+       "ok": true,
+       "note": "planned envelope over the measure phase [120.134, 3720] s"
+      }
+     ],
+     "offered_load": {
+      "offered": 1334,
+      "planned": 1338.180914,
+      "ratio": 0.996876,
+      "ok": true
+     }
+    },
+    "nginx_errors": {
+     "lines": 270,
+     "in_event_windows": 270,
+     "outside_count": 0,
+     "outside": []
+    },
+    "journal_errors": {
+     "loss": [],
+     "errors_in_event_windows": 40,
+     "errors_outside_count": 0,
+     "errors_outside": []
+    },
+    "periods": [
+     {
+      "name": "hyptcn-lab@ restart loop",
+      "source": "lab/hyptcn-lab@.service:16",
+      "kind": "restart",
+      "period_s": 3.25,
+      "random_s": 0,
+      "journal_line": "systemd's line 'Scheduled restart job' of each hyptcn-lab@ unit; spacings within one loop (restarts at most StartLimitIntervalSec apart)",
+      "lines": 5,
+      "spacings": {
+       "n": 4,
+       "min": 3.249687,
+       "median": 3.249899,
+       "mean": 3.250151,
+       "max": 3.250985
+      },
+      "why": null
+     },
+     {
+      "name": "nginx access log flush",
+      "source": "lab/nginx.conf:26",
+      "kind": "timer",
+      "period_s": 2,
+      "random_s": 0,
+      "journal_line": null,
+      "lines": null,
+      "spacings": null,
+      "why": "nginx writes its buffered access log without a line of its own; the access log's lines carry the times of the requests, not of the flushes"
+     },
+     {
+      "name": "hyptcn-lab-udrzba.timer",
+      "source": "lab/hyptcn-lab-udrzba.timer:7",
+      "kind": "timer",
+      "period_s": 600,
+      "random_s": [
+       0,
+       300
+      ],
+      "journal_line": "the run's own line {\"service\": \"udrzba\", ...} (lab/services.py udrzba): its time less its seconds is the start of the run",
+      "lines": 6,
+      "spacings": {
+       "n": 5,
+       "min": 477.986705,
+       "median": 512.003311,
+       "mean": 548.996642,
+       "max": 717.010979
+      },
+      "why": null
+     },
+     {
+      "name": "worker loop",
+      "source": "lab/services.py:576",
+      "kind": "loop",
+      "period_s": 1.0,
+      "random_s": [
+       -0.2,
+       0.2
+      ],
+      "journal_line": "the worker's line {\"service\": \"worker\", \"completed\": n} (lab/services.py worker): only a round that completed orders prints one, so a round lasts at most the smallest spacings",
+      "lines": 74,
+      "spacings": {
+       "n": 73,
+       "min": 0.839024,
+       "median": 32.204406,
+       "mean": 48.743383,
+       "max": 228.061447
+      },
+      "why": null
+     },
+     {
+      "name": "HTTP server poll",
+      "source": "lab/services.py:650",
+      "kind": "loop",
+      "period_s": 0.5,
+      "random_s": 0,
+      "journal_line": null,
+      "lines": null,
+      "spacings": null,
+      "why": "socketserver's poll timeout runs inside the services and logs nothing"
+     },
+     {
+      "name": "event stop health wait",
+      "source": "lab/udalosti.py:1075",
+      "kind": "loop",
+      "period_s": 1.0,
+      "random_s": 0,
+      "journal_line": null,
+      "lines": null,
+      "spacings": null,
+      "why": "runs in labctl event stop; its output goes back to the host (events.json), not into the journal"
+     },
+     {
+      "name": "control start and stop wait",
+      "source": "lab/udalosti.py:861",
+      "kind": "loop",
+      "period_s": 0.1,
+      "random_s": 0,
+      "journal_line": null,
+      "lines": null,
+      "spacings": null,
+      "why": "runs in labctl event start and stop of a control; its output goes back to the host (controls.json), not into the journal"
+     },
+     {
+      "name": "control memory writer loop",
+      "source": "lab/udalosti.py:116",
+      "kind": "loop",
+      "period_s": 5,
+      "random_s": 0,
+      "journal_line": null,
+      "lines": null,
+      "spacings": null,
+      "why": "the writer's rounds go into its output file in /run/hyptcn-udalosti, which the stop reads into the effect; it writes no journal line"
+     },
+     {
+      "name": "control process batch loop",
+      "source": "lab/udalosti.py:133",
+      "kind": "loop",
+      "period_s": 0.02,
+      "random_s": 0,
+      "journal_line": null,
+      "lines": null,
+      "spacings": null,
+      "why": "the batch's reports go into its output file in /run/hyptcn-udalosti, which the stop reads into the effect; its short processes write no journal line"
+     },
+     {
+      "name": "log segment reopen wait",
+      "source": "lab/guest_state.py:154",
+      "kind": "loop",
+      "period_s": 0.1,
+      "random_s": 0,
+      "journal_line": null,
+      "lines": null,
+      "spacings": null,
+      "why": "runs in labctl segment between runs; its output goes back to the host"
+     },
+     {
+      "name": "deployment health wait",
+      "source": "lab/install.sh:77",
+      "kind": "loop",
+      "period_s": 1.0,
+      "random_s": 0,
+      "journal_line": null,
+      "lines": null,
+      "spacings": null,
+      "why": "runs in lab/install.sh under labctl deploy; its output is the deploy step's (labctl_deploy.stdout)"
+     },
+     {
+      "name": "PostgreSQL autovacuum launcher",
+      "source": "lab/hyptcn-lab-postgresql.conf:13",
+      "kind": "system",
+      "period_s": 22.333333,
+      "random_s": 0,
+      "journal_line": "the line 'autovacuum: processing database' of each worker start, when PostgreSQL logs it into the journal",
+      "lines": 180,
+      "spacings": {
+       "n": 179,
+       "min": 22.23158,
+       "median": 22.337974,
+       "mean": 22.339752,
+       "max": 22.444465
+      },
+      "why": null
+     },
+     {
+      "name": "PostgreSQL checkpointer",
+      "source": "system: postgresql.conf checkpoint_timeout (default 5min)",
+      "kind": "system",
+      "period_s": 300,
+      "random_s": 0,
+      "journal_line": null,
+      "lines": null,
+      "spacings": null,
+      "why": "PostgreSQL on Debian logs its checkpoints into its own file (/var/log/postgresql, pg_ctlcluster), not into the journal"
+     },
+     {
+      "name": "PostgreSQL background and WAL writers",
+      "source": "system: postgresql.conf bgwriter_delay and wal_writer_delay (default 200ms)",
+      "kind": "system",
+      "period_s": 0.2,
+      "random_s": 0,
+      "journal_line": null,
+      "lines": null,
+      "spacings": null,
+      "why": "they log nothing when they wake"
+     },
+     {
+      "name": "systemd-journald sync",
+      "source": "system: journald.conf SyncIntervalSec (default 5min)",
+      "kind": "system",
+      "period_s": 300,
+      "random_s": 0,
+      "journal_line": null,
+      "lines": null,
+      "spacings": null,
+      "why": "journald logs no line for its sync"
+     },
+     {
+      "name": "kernel writeback",
+      "source": "system: vm.dirty_writeback_centisecs (default 500)",
+      "kind": "system",
+      "period_s": 5,
+      "random_s": 0,
+      "journal_line": null,
+      "lines": null,
+      "spacings": null,
+      "why": "the kernel's flusher threads log nothing"
+     },
+     {
+      "name": "systemd-timesyncd poll",
+      "source": "system: timesyncd.conf PollIntervalMinSec (default 32 s, growing to PollIntervalMaxSec 2048 s)",
+      "kind": "system",
+      "period_s": 32,
+      "random_s": 0,
+      "journal_line": null,
+      "lines": null,
+      "spacings": null,
+      "why": "timesyncd logs a change of its synchronization, not every poll"
+     }
+    ],
+    "autovacuum_property": {
+     "rule": "the median spacing of the worker starts modulo interval_s lies in [1, 4] s: at least 1 s from every multiple of the collection interval (the lead's answer to Q9, 2026-11-24)",
+     "interval_s": 5,
+     "bounds_s": [
+      1,
+      4
+     ],
+     "median_s": 22.337974,
+     "remainder_s": 2.337974,
+     "ok": true
+    },
+    "ended_unix": 1795525953.458255,
+    "qemu_after": {
+     "pid": 3992777,
+     "start_ticks": 303275633,
+     "host_boot": "eb635e03-638a-4d7c-ab67-9ee1a4d410cf"
+    },
+    "problems": [
+     "generator exit code 1 (1: a request without its expected result or no success; 3: a logging failure)"
+    ]
+   }
+  ],
+  "saturation": {},
+  "proposed_rate": {
+   "eshop_low": null,
+   "eshop_high": null,
+   "corp_low": null,
+   "corp_high": null
+  },
+  "proposed_max_concurrent": {
+   "rule": "per profile 2 x the most concurrent user sessions (active_max) of the measure phase of the long run of the profile's high scenario, the last one given (the lead's answer to Q5: max_concurrent is a value of G2, determined_at); a long run that reached its protocol's max_concurrent, or dropped a user session, gives a lower bound only",
+   "profiles": {
+    "eshop": {
+     "scenarios": [
+      "eshop_high"
+     ],
+     "run": null,
+     "rate": null,
+     "active_max": null,
+     "max_concurrent": null,
+     "protocol_max_concurrent": 500,
+     "why": "no long run of eshop_high"
+    },
+    "corp": {
+     "scenarios": [
+      "corp_high"
+     ],
+     "run": null,
+     "rate": null,
+     "active_max": null,
+     "max_concurrent": null,
+     "protocol_max_concurrent": 250,
+     "why": "no long run of corp_high"
+    }
+   }
+  },
+  "periods": [
+   {
+    "name": "hyptcn-lab@ restart loop",
+    "source": "lab/hyptcn-lab@.service:16",
+    "kind": "restart",
+    "period_s": 3.25,
+    "random_s": 0,
+    "journal_line": "systemd's line 'Scheduled restart job' of each hyptcn-lab@ unit; spacings within one loop (restarts at most StartLimitIntervalSec apart)",
+    "lines": 5,
+    "spacings": {
+     "n": 4,
+     "min": 3.249687,
+     "median": 3.249899,
+     "mean": 3.250151,
+     "max": 3.250985
+    },
+    "why": null
+   },
+   {
+    "name": "nginx access log flush",
+    "source": "lab/nginx.conf:26",
+    "kind": "timer",
+    "period_s": 2,
+    "random_s": 0,
+    "journal_line": null,
+    "lines": null,
+    "spacings": null,
+    "why": "nginx writes its buffered access log without a line of its own; the access log's lines carry the times of the requests, not of the flushes"
+   },
+   {
+    "name": "hyptcn-lab-udrzba.timer",
+    "source": "lab/hyptcn-lab-udrzba.timer:7",
+    "kind": "timer",
+    "period_s": 600,
+    "random_s": [
+     0,
+     300
+    ],
+    "journal_line": "the run's own line {\"service\": \"udrzba\", ...} (lab/services.py udrzba): its time less its seconds is the start of the run",
+    "lines": 6,
+    "spacings": {
+     "n": 5,
+     "min": 477.986705,
+     "median": 512.003311,
+     "mean": 548.996642,
+     "max": 717.010979
+    },
+    "why": null
+   },
+   {
+    "name": "worker loop",
+    "source": "lab/services.py:576",
+    "kind": "loop",
+    "period_s": 1.0,
+    "random_s": [
+     -0.2,
+     0.2
+    ],
+    "journal_line": "the worker's line {\"service\": \"worker\", \"completed\": n} (lab/services.py worker): only a round that completed orders prints one, so a round lasts at most the smallest spacings",
+    "lines": 74,
+    "spacings": {
+     "n": 73,
+     "min": 0.839024,
+     "median": 32.204406,
+     "mean": 48.743383,
+     "max": 228.061447
+    },
+    "why": null
+   },
+   {
+    "name": "HTTP server poll",
+    "source": "lab/services.py:650",
+    "kind": "loop",
+    "period_s": 0.5,
+    "random_s": 0,
+    "journal_line": null,
+    "lines": null,
+    "spacings": null,
+    "why": "socketserver's poll timeout runs inside the services and logs nothing"
+   },
+   {
+    "name": "event stop health wait",
+    "source": "lab/udalosti.py:1075",
+    "kind": "loop",
+    "period_s": 1.0,
+    "random_s": 0,
+    "journal_line": null,
+    "lines": null,
+    "spacings": null,
+    "why": "runs in labctl event stop; its output goes back to the host (events.json), not into the journal"
+   },
+   {
+    "name": "control start and stop wait",
+    "source": "lab/udalosti.py:861",
+    "kind": "loop",
+    "period_s": 0.1,
+    "random_s": 0,
+    "journal_line": null,
+    "lines": null,
+    "spacings": null,
+    "why": "runs in labctl event start and stop of a control; its output goes back to the host (controls.json), not into the journal"
+   },
+   {
+    "name": "control memory writer loop",
+    "source": "lab/udalosti.py:116",
+    "kind": "loop",
+    "period_s": 5,
+    "random_s": 0,
+    "journal_line": null,
+    "lines": null,
+    "spacings": null,
+    "why": "the writer's rounds go into its output file in /run/hyptcn-udalosti, which the stop reads into the effect; it writes no journal line"
+   },
+   {
+    "name": "control process batch loop",
+    "source": "lab/udalosti.py:133",
+    "kind": "loop",
+    "period_s": 0.02,
+    "random_s": 0,
+    "journal_line": null,
+    "lines": null,
+    "spacings": null,
+    "why": "the batch's reports go into its output file in /run/hyptcn-udalosti, which the stop reads into the effect; its short processes write no journal line"
+   },
+   {
+    "name": "log segment reopen wait",
+    "source": "lab/guest_state.py:154",
+    "kind": "loop",
+    "period_s": 0.1,
+    "random_s": 0,
+    "journal_line": null,
+    "lines": null,
+    "spacings": null,
+    "why": "runs in labctl segment between runs; its output goes back to the host"
+   },
+   {
+    "name": "deployment health wait",
+    "source": "lab/install.sh:77",
+    "kind": "loop",
+    "period_s": 1.0,
+    "random_s": 0,
+    "journal_line": null,
+    "lines": null,
+    "spacings": null,
+    "why": "runs in lab/install.sh under labctl deploy; its output is the deploy step's (labctl_deploy.stdout)"
+   },
+   {
+    "name": "PostgreSQL autovacuum launcher",
+    "source": "lab/hyptcn-lab-postgresql.conf:13",
+    "kind": "system",
+    "period_s": 22.333333,
+    "random_s": 0,
+    "journal_line": "the line 'autovacuum: processing database' of each worker start, when PostgreSQL logs it into the journal",
+    "lines": 180,
+    "spacings": {
+     "n": 179,
+     "min": 22.23158,
+     "median": 22.337974,
+     "mean": 22.339752,
+     "max": 22.444465
+    },
+    "why": null
+   },
+   {
+    "name": "PostgreSQL checkpointer",
+    "source": "system: postgresql.conf checkpoint_timeout (default 5min)",
+    "kind": "system",
+    "period_s": 300,
+    "random_s": 0,
+    "journal_line": null,
+    "lines": null,
+    "spacings": null,
+    "why": "PostgreSQL on Debian logs its checkpoints into its own file (/var/log/postgresql, pg_ctlcluster), not into the journal"
+   },
+   {
+    "name": "PostgreSQL background and WAL writers",
+    "source": "system: postgresql.conf bgwriter_delay and wal_writer_delay (default 200ms)",
+    "kind": "system",
+    "period_s": 0.2,
+    "random_s": 0,
+    "journal_line": null,
+    "lines": null,
+    "spacings": null,
+    "why": "they log nothing when they wake"
+   },
+   {
+    "name": "systemd-journald sync",
+    "source": "system: journald.conf SyncIntervalSec (default 5min)",
+    "kind": "system",
+    "period_s": 300,
+    "random_s": 0,
+    "journal_line": null,
+    "lines": null,
+    "spacings": null,
+    "why": "journald logs no line for its sync"
+   },
+   {
+    "name": "kernel writeback",
+    "source": "system: vm.dirty_writeback_centisecs (default 500)",
+    "kind": "system",
+    "period_s": 5,
+    "random_s": 0,
+    "journal_line": null,
+    "lines": null,
+    "spacings": null,
+    "why": "the kernel's flusher threads log nothing"
+   },
+   {
+    "name": "systemd-timesyncd poll",
+    "source": "system: timesyncd.conf PollIntervalMinSec (default 32 s, growing to PollIntervalMaxSec 2048 s)",
+    "kind": "system",
+    "period_s": 32,
+    "random_s": 0,
+    "journal_line": null,
+    "lines": null,
+    "spacings": null,
+    "why": "timesyncd logs a change of its synchronization, not every poll"
+   }
+  ],
+  "autovacuum_property": {
+   "rule": "the median spacing of the worker starts modulo interval_s lies in [1, 4] s: at least 1 s from every multiple of the collection interval (the lead's answer to Q9, 2026-11-24)",
+   "interval_s": 5,
+   "bounds_s": [
+    1,
+    4
+   ],
+   "median_s": 22.337974,
+   "remainder_s": 2.337974,
+   "ok": true
+  },
+  "judgment": {
+   "deploy_timeout_s": 1800,
+   "header_timeout_s": 60,
+   "tick_s": 1,
+   "drain_s": 300,
+   "stop_grace_s": 60,
+   "saturation_measure_s": 360,
+   "saturation_drain_s": 30,
+   "latency_p95_bound_ms": 1000,
+   "charged_share": 0.9,
+   "holder_share": 0.5,
+   "restart_window_s": 60,
+   "midpoint_decimals": 3,
+   "guest_sql_timeout_s": 180,
+   "note": "the executor's judgment (scripts/lab_trial.py), none of them a value of the protocol; charged_share is accepted by the lead (Q26)"
+  },
+  "lead": {
+   "step_ratio_max": 1.15,
+   "cap_factor_s": 240,
+   "proposed_cap_factor": 2,
+   "autovacuum_remainder_s": [
+    1,
+    4
+   ],
+   "note": "the lead's answers to Q5 and Q9 (2026-11-24), none of them a value of the protocol"
+  }
+ },
+ "problems": [
+  "03-long-eshop_low: generator exit code 1 (1: a request without its expected result or no success; 3: a logging failure)",
+  "no saturation run of profile eshop: no rate proposed for eshop_low",
+  "no scenario run of scenario eshop_low",
+  "no saturation run of profile eshop: no rate proposed for eshop_high",
+  "no scenario run of scenario eshop_high",
+  "no long run of scenario eshop_high",
+  "no saturation run of profile corp: no rate proposed for corp_low",
+  "no scenario run of scenario corp_low",
+  "no long run of scenario corp_low",
+  "no saturation run of profile corp: no rate proposed for corp_high",
+  "no scenario run of scenario corp_high",
+  "no long run of scenario corp_high",
+  "the VM's QEMU process changed between or during the runs (a restart of the VM)"
+ ],
+ "note": "Lab test on one VM after package B5 (docs/HARNESS_V5.sk.md chapter 5 point 11, RIADENIE point 4), stage skuska: evidence of no criterion of G0 or G2. No collector, no sudo, no session, nothing in data/collections. The proposed rates are proposals: G2 determines scenarios.*.rate."
+}
