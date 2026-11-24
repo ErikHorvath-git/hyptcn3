@@ -3,6 +3,7 @@
 
   .venv/bin/python scripts/campaign_report.py campaign data/campaigns/<id> --out NEW_DIR
   .venv/bin/python scripts/campaign_report.py sessions SESSION [SESSION ...] --out NEW_DIR
+  .venv/bin/python scripts/campaign_report.py envelope SESSION [SESSION ...] --protocol P --out NEW_FILE
 
 The report reads saved evidence only: session, end, audit and archive
 metadata, the request and interval logs, the host monitor, snapshot sidecars
@@ -12,6 +13,17 @@ from a file listed with its SHA-256 (sources.csv, summary.json); absent
 evidence becomes null with a stated reason (column `missing`; fields that do
 not apply to a session are explained in `not_applicable`), never an estimate.
 NEW_DIR must not exist. Exit 0 = report written, 2 = usage or data error.
+
+The mode envelope (the lead's answer to Q30, 2026-11-24; ENVELOPE_RULE) draws
+the traffic envelope of each session again from the protocol P and the traffic
+seed of its session.json, as scripts/host_traffic.py draws it, and compares it
+with the envelope in the header of both traffic logs. It reads session.json,
+the session's protocol.json (its SHA-256) and the first line of
+traffic_requests.jsonl and traffic_intervals.jsonl, no score. It prints one
+line per session and writes NEW_FILE, a new JSON record with the provenance
+header of check E of scripts/check_claims.sh. Exit 0 = every session matches,
+1 = a mismatch, 2 = usage error (nothing written) or a session with a data
+error (the record names every mismatch as well).
 
 A reporting tool, not part of capture, audit or archival (collection.py lists
 it in NOT_MEASUREMENT). Only the standard library and NumPy are used; plots
@@ -28,6 +40,8 @@ import json
 import math
 import os
 from pathlib import Path
+import platform
+import random
 import re
 import shlex
 import subprocess
@@ -39,6 +53,8 @@ import numpy as np
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 from scripts import host_monitor, traffic_log  # noqa: E402  (log schemas and monitor window statistics of the audit)
+# The mode envelope: the generator's envelope and its schemas, and the check of the profiles section it applies.
+from scripts import host_traffic, protocol_v5  # noqa: E402
 
 SCHEMA = "hyptcn3/campaign-report/1"
 SESSION_SCHEMA_1 = "hyptcn3/collection-session/1"
@@ -3799,6 +3815,433 @@ def write_report(out, report, inputs, command):
     return summary
 
 
+# ---------------------------------------------------------------- envelope mode (the lead's answer to Q30)
+
+ENVELOPE_SCHEMA = "hyptcn3/envelope-check/1"
+ENVELOPE_RESULTS = ("match", "mismatch", "data_error")
+# Where run_session and the generator put the files of a session (scripts/collection.py run_session copies the
+# protocol to protocol.json, traffic_command names both logs), and the schema of each log's header (the generator's).
+ENVELOPE_LOGS = (("traffic_requests.jsonl", host_traffic.V5_REQUEST_SCHEMA),
+                 ("traffic_intervals.jsonl", host_traffic.V5_INTERVAL_SCHEMA))
+ENVELOPE_GENERATOR = "scripts/host_traffic.py"  # Its key in session.json source_sha256 (collection.run_session).
+# Each field of a header bound to session.json, with the field of session.json it must equal.
+ENVELOPE_BINDINGS = (("session_id", "session_id"), ("profile", "traffic.profile"),
+                     ("config.profile", "traffic.profile"), ("scenario", "traffic.scenario"),
+                     ("config.scenario", "traffic.scenario"), ("seeds.traffic", "traffic.seeds.traffic"),
+                     ("config.seed", "traffic.seeds.traffic"), ("config.dur", "traffic.dur_s"),
+                     ("warmup_s", "traffic.warmup_s"), ("config.warmup_s", "traffic.warmup_s"))
+ENVELOPE_GUEST = ("none: the mode envelope reads the saved session.json and protocol.json of each session in values "
+                  "and the first line of its two traffic logs; no VM is contacted")
+ENVELOPE_RULE = (
+    "The lead's answer to question Q30 (2026-11-24) and point 3 of his comments on B10 (dokazy/B10/PRIPOMIENKY.md): "
+    "the audit does not redraw the envelope of the traffic (scripts/collection_logs.py says so in its rule); this "
+    "mode, outside the measurement code, redraws it over the sessions of G2, the sessions of both rehearsals and, "
+    "after an ending that closes a campaign and before the records are committed, every accepted session. Of each "
+    "session directory it reads session.json, the sha256 of its protocol.json and the first line of "
+    "traffic_requests.jsonl and of traffic_intervals.jsonl, the header the generator writes into both "
+    "(scripts/host_traffic.py SessionRecorder.header), no score; every file it reads is listed with its sha256. It "
+    "draws the envelope as the generator's v5 run draws it (prepare_v5): host_traffic.draw_envelope with "
+    "profiles[traffic.profile].arrivals of the protocol, random.Random(traffic.seeds.traffic of session.json), "
+    "traffic.dur_s and traffic.warmup_s as floats (collection.traffic_command passes them as --dur and --warmup-s) "
+    "and scenario_rule.min_peak_to_mean of the protocol, after the generator's refusals that decide whether it draws "
+    "at all, in its order and with its words. Each header must carry exactly that envelope (every knot equal as a "
+    "number, no tolerance; a boolean is no number) and the protocol's profiles[traffic.profile] as "
+    "profile_parameters, and agree with session.json on session_id, profile, scenario, the traffic seed "
+    "(seeds.traffic, config.seed), config.dur and warmup_s (also config.warmup_s). Also bound (the executor's "
+    "judgment, G2 preparation): the two headers agree with each other on all of these and on run_id; session.json "
+    "agrees with itself (scenario and seed equal those of its traffic block); and its span is the planned run of "
+    "the protocol, traffic.dur_s = warmup_s + cycles x interval_s and traffic.warmup_s = warmup_s "
+    "(collection._v5_traffic). A session is a data error, without a verdict, when a file is missing or unreadable, "
+    "the first line of a log is not its v5 header, a field of session.json the redraw or a binding reads is absent "
+    "or not of its type, the protocol is not the session's: its sha256 differs from that of the session's "
+    "protocol.json, from session.json protocol_sha256 or from the protocol_sha256 of a header (P1 of the G2 "
+    "preparation), or the generator that draws here is not the session's: the sha256 of scripts/host_traffic.py "
+    "differs from the one session.json source_sha256 recorded (the executor's judgment, G2 preparation: another "
+    "generator's envelope says nothing of this one's). Every other difference makes it a mismatch, each named, the "
+    "generator's refusal of the planned run among them (no header of that run can exist); a session with none is a "
+    "match (the executor's judgment, G2 preparation). Exit 0: every session matches; 1: at least one mismatch and "
+    "no data error; 2: a usage error, nothing written, or at least one data error, whose record still names every "
+    "mismatch (a mismatch in a run that ends 2 is a mismatch as in a run that ends 1; the executor's judgment, G2 "
+    "preparation). A mismatch is a deviation of the campaign, written in docs/ODCHYLKY_V5.sk.md beside the ending "
+    "record and naming that record, and a finding for the lead; the campaign code does not call this mode (the "
+    "lead's reading of Q30, point 3).")
+_ABSENT = object()  # A key a document does not have (as opposed to null).
+
+
+def _number(value):
+    """A finite int or float that is no boolean; an int too large for a float is none."""
+    if type(value) not in (int, float):
+        return False
+    try:
+        return math.isfinite(value)
+    except OverflowError:
+        return False
+
+
+def _equal(a, b):
+    """Two JSON values are equal: numbers by value without tolerance (120 equals 120.0, as the audit compares them), a
+    boolean only to a boolean, objects key by key, lists element by element."""
+    if isinstance(a, bool) or isinstance(b, bool):
+        return type(a) is type(b) and a == b
+    if isinstance(a, dict) or isinstance(b, dict):
+        return isinstance(a, dict) and isinstance(b, dict) and a.keys() == b.keys() and all(_equal(a[k], b[k])
+                                                                                            for k in a)
+    if isinstance(a, list) or isinstance(b, list):
+        return isinstance(a, list) and isinstance(b, list) and len(a) == len(b) and all(map(_equal, a, b))
+    return a == b
+
+
+def _get(doc, dotted):
+    """doc[k1][k2]... of the dotted path, _ABSENT where a level is not an object or lacks the key."""
+    for key in dotted.split("."):
+        if not isinstance(doc, dict) or key not in doc:
+            return _ABSENT
+        doc = doc[key]
+    return doc
+
+
+def _shown(value, limit=120):
+    """A value in a reason: its JSON (a float exactly, as the logs write it), cut to `limit` characters."""
+    if value is _ABSENT:
+        return "absent"
+    try:
+        text = json.dumps(value, ensure_ascii=False, sort_keys=True)
+    except (TypeError, ValueError):
+        text = repr(value)
+    return text if len(text) <= limit else text[:limit - 3] + "..."
+
+
+def _differences(found, expected, path=""):
+    """[(path, found, expected)] where two JSON values differ (_equal), down to the keys of objects and the elements
+    of lists of one length; _ABSENT for a key only one of them has."""
+    if isinstance(found, dict) and isinstance(expected, dict):
+        return [d for key in sorted(set(found) | set(expected), key=str)
+                for d in _differences(found.get(key, _ABSENT), expected.get(key, _ABSENT), f"{path}.{key}")]
+    if isinstance(found, list) and isinstance(expected, list) and len(found) == len(expected):
+        return [d for i, (x, y) in enumerate(zip(found, expected)) for d in _differences(x, y, f"{path}[{i}]")]
+    return [] if _equal(found, expected) else [(path, found, expected)]
+
+
+def _knot_differences(found, drawn):
+    """How the envelope of a header differs from the drawn one (Envelope.as_dict()); [] when it is that one. Named:
+    an envelope absent or no object, other keys, another number of knots, or the knots that differ (their number
+    and the first of them)."""
+    if not isinstance(found, dict):
+        return [f"envelope is {_shown(found, 40)}, not an object"]
+    out = []
+    if set(found) != set(drawn):
+        out.append(f"envelope has the keys {sorted(found)}, the drawn one {sorted(drawn)}")
+    for key in drawn:
+        if key not in found:
+            continue  # Named with the keys.
+        mine, theirs = found[key], drawn[key]
+        if not isinstance(mine, list):
+            out.append(f"envelope.{key} is {_shown(mine, 40)}, not a list")
+        elif len(mine) != len(theirs):
+            out.append(f"envelope.{key} has {len(mine)} knots, the drawn one {len(theirs)}")
+        else:
+            differ = [i for i, (x, y) in enumerate(zip(mine, theirs)) if not _equal(x, y)]
+            if differ:
+                i = differ[0]
+                out.append(f"envelope.{key}: {len(differ)} of {len(theirs)} knots differ from the drawn ones, the "
+                           f"first [{i}] is {_shown(mine[i])}, drawn {_shown(theirs[i])}")
+    return out
+
+
+def _first_line(path):
+    """(the first line without its newline, None when the file has none; sha256; bytes) of a file read whole in
+    chunks, so its hash covers all of it while only its first line is kept."""
+    sha, size, parts, first = hashlib.sha256(), 0, [], None
+    with open(path, "rb") as stream:
+        while chunk := stream.read(CHUNK):
+            sha.update(chunk)
+            size += len(chunk)
+            if first is None:
+                cut = chunk.find(b"\n")
+                if cut < 0:
+                    parts.append(chunk)
+                else:
+                    first, parts = b"".join(parts) + chunk[:cut], None
+    return first, sha.hexdigest(), size
+
+
+def envelope_protocol(path):
+    """(sha256, document) of the protocol of the mode envelope. A DataError, a usage error before any session is read,
+    when it is not a protocol the v5 generator reads, with the generator's words (host_traffic.prepare_v5: schema 3,
+    its profiles section, scenario_rule.min_peak_to_mean), or lacks a number of the planned run (warmup_s,
+    interval_s)."""
+    try:
+        raw = Path(path).read_bytes()
+        doc = json.loads(raw)
+    except (OSError, ValueError) as error:
+        raise DataError(f"cannot read protocol {path}: {error}") from None
+    if type(doc) is not dict or doc.get("schema") != host_traffic.PROTOCOL_SCHEMA:
+        raise DataError(f"protocol {path}: protocol schema is not {host_traffic.PROTOCOL_SCHEMA}: the v5 profiles are "
+                        "its profiles section")
+    problems = protocol_v5.profiles_problems(doc)
+    if problems:
+        raise DataError(f"protocol {path}: invalid profiles: {problems[0]}")
+    rule = doc.get("scenario_rule")
+    ratio = rule.get("min_peak_to_mean") if type(rule) is dict else None
+    if not _number(ratio) or ratio < 1:
+        raise DataError(f"protocol {path}: scenario_rule.min_peak_to_mean is not a number >= 1")
+    for key in ("warmup_s", "interval_s"):
+        if not _number(doc.get(key)) or doc[key] < 0:
+            raise DataError(f"protocol {path}: {key} is not a number >= 0 (the planned run is warmup_s + cycles x "
+                            "interval_s)")
+    return hashlib.sha256(raw).hexdigest(), doc
+
+
+def envelope_redraw(protocol, profile, scenario, seed, dur_s, warmup_s):
+    """(Envelope, draws) of the run session.json plans, drawn as scripts/host_traffic.py prepare_v5 draws it: --dur and
+    --warmup-s are the floats argparse makes of what collection.traffic_command passes (str of the traffic block's
+    dur_s and warmup_s), then the generator's refusals of the envelope's inputs, in its order and with its words, and
+    draw_envelope. A ValueError names the refusal: the generator would not have run, and wrote no header."""
+    dur, warmup = float(str(dur_s)), float(str(warmup_s))
+    if not math.isfinite(dur) or dur <= 0:
+        raise ValueError("--dur must be a number > 0: the envelope spans [0, dur]")
+    if not math.isfinite(warmup) or not 0 <= warmup < dur:
+        raise ValueError("--warmup-s must lie in [0, --dur)")
+    scenarios = protocol.get("scenarios")
+    if type(scenarios) is not dict or type(scenarios.get(scenario)) is not dict:
+        raise ValueError(f"unknown scenario: {scenario}")
+    if scenarios[scenario].get("profile") != profile:
+        raise ValueError(f"--profile {profile} differs from scenarios.{scenario}.profile "
+                         f"{scenarios[scenario].get('profile')}")
+    a = protocol["profiles"][profile]["arrivals"]
+    if a["ramp_s"] > warmup:
+        raise ValueError(f"the ramp of profile {profile} (arrivals.ramp_s {a['ramp_s']}) is longer than --warmup-s "
+                         f"{warmup}")
+    if dur - warmup < a["peak_s"][1]:
+        raise ValueError(f"[--warmup-s, --dur] is shorter than the longest peak (arrivals.peak_s {a['peak_s'][1]} s)")
+    return host_traffic.draw_envelope(a, random.Random(seed), dur, warmup,
+                                      protocol["scenario_rule"]["min_peak_to_mean"])
+
+
+def _session_fields(meta):
+    """The data errors of the fields of session.json the redraw and the bindings read (ENVELOPE_RULE)."""
+    integer = lambda value: type(value) is int  # noqa: E731  (no boolean)
+    checks = (("session_id", lambda v: isinstance(v, str), "a string"),
+              ("scenario", lambda v: isinstance(v, str), "a string"),
+              ("seed", integer, "an integer"),
+              ("cycles", lambda v: integer(v) and v > 0, "an integer > 0"),
+              ("protocol_sha256", lambda v: isinstance(v, str), "a string"),
+              ("traffic.profile", lambda v: isinstance(v, str) and v in host_traffic.PROFILES,
+               "a profile of the v5 generator (" + ", ".join(host_traffic.PROFILES) + ")"),
+              ("traffic.scenario", lambda v: isinstance(v, str), "a string"),
+              ("traffic.seeds.traffic", lambda v: integer(v) and v >= 0, "an integer >= 0"),
+              ("traffic.dur_s", _number, "a finite number"),
+              ("traffic.warmup_s", _number, "a finite number"))
+    out = []
+    for field, ok, what in checks:
+        value = _get(meta, field)
+        if value is _ABSENT:
+            out.append(f"session.json: {field} is absent")
+        elif not ok(value):
+            out.append(f"session.json: {field} is {_shown(value, 40)}, not {what}")
+    return out
+
+
+def envelope_session(directory, protocol_sha, protocol, generator_sha):
+    """The verdict of one session directory by ENVELOPE_RULE under the protocol `protocol` (its sha256 protocol_sha),
+    drawn by the generator whose scripts/host_traffic.py has the sha256 generator_sha: {session_id, path, result,
+    reasons, inputs, draws, knots, files}."""
+    path = Path(os.path.abspath(directory))
+    entry = {"session_id": None, "path": str(path), "result": None, "reasons": [], "inputs": None, "draws": None,
+             "knots": None, "files": []}
+    errors, headers, meta, copy = [], {}, None, None
+
+    def read(name, whole):
+        """(content or first line, sha256) of a file of the session, listed in entry["files"]; None when unreadable."""
+        try:
+            if whole:
+                raw = (path / name).read_bytes()
+                content, sha, size = raw, hashlib.sha256(raw).hexdigest(), len(raw)
+            else:
+                content, sha, size = _first_line(path / name)
+        except FileNotFoundError:
+            errors.append(f"{name}: missing")
+            return None
+        except OSError as error:
+            errors.append(f"{name}: unreadable ({type(error).__name__}: {error})")
+            return None
+        entry["files"].append({"name": name, "path": str(path / name), "bytes": size, "sha256": sha})
+        return content, sha
+
+    if not path.is_dir():
+        errors.append("not a directory")
+    else:
+        got = read("session.json", True)
+        if got is not None:
+            try:
+                meta = json.loads(got[0])
+            except ValueError as error:
+                errors.append(f"session.json: not JSON ({error})")
+            else:
+                if not isinstance(meta, dict):
+                    errors.append("session.json: not a JSON object")
+                    meta = None
+        copy = read("protocol.json", True)
+        for name, schema in ENVELOPE_LOGS:
+            got = read(name, False)
+            if got is None:
+                continue
+            try:
+                header = json.loads(got[0]) if got[0] is not None else None
+            except ValueError:
+                header = None
+            if got[0] is None:
+                errors.append(f"{name}: no complete first line")
+            elif not isinstance(header, dict) or header.get("type") != "header":
+                errors.append(f"{name}: its first line is not a header record")
+            elif header.get("schema") != schema:
+                errors.append(f"{name}: its header has the schema {_shown(header.get('schema'), 60)}, not {schema} "
+                              "(the logs of the v5 profiles)")
+            else:
+                headers[name] = header
+    if meta is not None:
+        if isinstance(meta.get("session_id"), str):
+            entry["session_id"] = meta["session_id"]
+        errors += _session_fields(meta)
+    # P1 of the G2 preparation: the protocol must be the one the session ran with, else a redraw from it says nothing.
+    if copy is not None and copy[1] != protocol_sha:
+        errors.append(f"protocol: its sha256 {protocol_sha} differs from that of the session's protocol.json "
+                      f"{copy[1]}")
+    if meta is not None and isinstance(meta.get("protocol_sha256"), str) and meta["protocol_sha256"] != protocol_sha:
+        errors.append(f"protocol: its sha256 {protocol_sha} differs from session.json protocol_sha256 "
+                      f"{meta['protocol_sha256']}")
+    for name, header in headers.items():
+        if _get(header, "protocol_sha256") != protocol_sha:
+            errors.append(f"protocol: its sha256 {protocol_sha} differs from the protocol_sha256 of the header of "
+                          f"{name}, {_shown(_get(header, 'protocol_sha256'), 80)}")
+    if meta is not None:  # ENVELOPE_RULE: the session's own generator draws (run_session records its sha256).
+        sources = meta.get("source_sha256")
+        recorded = sources.get(ENVELOPE_GENERATOR, _ABSENT) if isinstance(sources, dict) else _ABSENT
+        if recorded != generator_sha:
+            errors.append(f"generator: the sha256 of {ENVELOPE_GENERATOR} here is {generator_sha}, session.json "
+                          f"source_sha256 records {_shown(recorded, 80)} for it (run this mode from the session's "
+                          "commit)")
+    if errors:
+        entry.update(result="data_error", reasons=errors)
+        return entry
+    t = meta["traffic"]
+    profile, scenario, seed = t["profile"], t["scenario"], t["seeds"]["traffic"]
+    entry["inputs"] = {"profile": profile, "scenario": scenario, "seed": seed, "dur_s": t["dur_s"],
+                       "warmup_s": t["warmup_s"], "cycles": meta["cycles"]}
+    reasons = []
+    for field, own in (("scenario", "traffic.scenario"), ("seed", "traffic.seeds.traffic")):
+        if not _equal(meta[field], _get(meta, own)):
+            reasons.append(f"session.json: {field} is {_shown(meta[field])}, its {own} is {_shown(_get(meta, own))}")
+    planned = protocol["warmup_s"] + meta["cycles"] * protocol["interval_s"]
+    if not _equal(t["dur_s"], planned):
+        reasons.append(f"session.json: traffic.dur_s is {_shown(t['dur_s'])}, the planned run of the protocol "
+                       f"(warmup_s + cycles x interval_s) is {_shown(planned)}")
+    if not _equal(t["warmup_s"], protocol["warmup_s"]):
+        reasons.append(f"session.json: traffic.warmup_s is {_shown(t['warmup_s'])}, the protocol's warmup_s is "
+                       f"{_shown(protocol['warmup_s'])}")
+    drawn = None
+    try:
+        envelope, draws = envelope_redraw(protocol, profile, scenario, seed, t["dur_s"], t["warmup_s"])
+    except ValueError as error:
+        reasons.append(f"redraw: the generator refuses the run session.json plans ({error}), so no header of it can "
+                       "carry an envelope")
+    else:
+        drawn = envelope.as_dict()
+        entry.update(draws=draws, knots=len(envelope.t))
+    parameters = protocol["profiles"][profile]
+    for name, header in headers.items():
+        for field, own in ENVELOPE_BINDINGS:
+            found, value = _get(header, field), _get(meta, own)
+            if not _equal(found, value):
+                reasons.append(f"header of {name}: {field} is {_shown(found)}, session.json {own} is {_shown(value)}")
+        for where, found, expected in _differences(_get(header, "profile_parameters"), parameters):
+            reasons.append(f"header of {name}: profile_parameters{where} is {_shown(found)}, the protocol's "
+                           f"profiles.{profile}{where} is {_shown(expected)}")
+        if drawn is not None:
+            reasons += [f"header of {name}: {reason}" for reason in _knot_differences(_get(header, "envelope"), drawn)]
+    first, second = (headers[name] for name, _ in ENVELOPE_LOGS)
+    fields = [field for field, _ in ENVELOPE_BINDINGS] + ["profile_parameters", "envelope", "run_id"]
+    differ = [field for field in fields if not _equal(_get(first, field), _get(second, field))]
+    if differ:
+        reasons.append(f"the headers of {ENVELOPE_LOGS[0][0]} and {ENVELOPE_LOGS[1][0]} differ in: "
+                       + ", ".join(differ))
+    entry.update(result="mismatch" if reasons else "match", reasons=reasons)
+    return entry
+
+
+def envelope_line(entry):
+    """The line of one session on stdout: result, session id ("-" when session.json gives none), path, reasons."""
+    line = f"{entry['result']} {entry['session_id'] or '-'} {entry['path']}"
+    return line + (": " + "; ".join(one_line(r) for r in entry["reasons"]) if entry["reasons"] else "")
+
+
+def envelope(args, command):
+    """The mode envelope (ENVELOPE_RULE): refuses an --out that exists before it reads anything, then the protocol,
+    then each session in the order given; writes the new record and returns the exit code."""
+    out = Path(os.path.abspath(args.out))
+    if out.exists() or out.is_symlink():
+        print(f"campaign_report: --out already exists, nothing was read or written: {out}", file=sys.stderr)
+        return 2
+    dirs = [Path(os.path.abspath(d)) for d in args.session_dirs]
+    real = [Path(os.path.realpath(d)) for d in dirs]
+    twice = sorted({str(d) for d, r in zip(dirs, real) if real.count(r) > 1})
+    if twice:
+        print("campaign_report: a session directory is named more than once: " + ", ".join(twice), file=sys.stderr)
+        return 2
+    target = Path(os.path.realpath(out.parent))
+    for d, r in zip(dirs, real):
+        if target == r or target.is_relative_to(r):
+            print(f"campaign_report: refusing to write {out} inside the session directory {d}", file=sys.stderr)
+            return 2
+    try:
+        protocol_sha, protocol = envelope_protocol(args.protocol)
+    except DataError as error:
+        print(f"campaign_report: {error}", file=sys.stderr)
+        return 2
+    generator = os.path.abspath(host_traffic.__file__)  # The module that draws here: ENVELOPE_GENERATOR of this tree.
+    with open(generator, "rb") as stream:
+        generator_sha = hashlib.file_digest(stream, "sha256").hexdigest()
+    sessions = []
+    for d in dirs:
+        sessions.append(envelope_session(d, protocol_sha, protocol, generator_sha))
+        print(envelope_line(sessions[-1]), flush=True)
+    counts = {result: sum(s["result"] == result for s in sessions) for result in ENVELOPE_RESULTS}
+    code = 2 if counts["data_error"] else 1 if counts["mismatch"] else 0
+    identity = git_identity()
+    record = {"schema": ENVELOPE_SCHEMA, "commit": identity["commit"], "commit_dirty": identity["dirty"],
+              "date": datetime.now(timezone.utc).isoformat(timespec="seconds"), "host": platform.platform(),
+              "guest": ENVELOPE_GUEST, "command": command, "n": len(sessions),
+              "values": {"protocol": {"path": os.path.abspath(args.protocol), "sha256": protocol_sha},
+                         "generator": {"path": generator, "sha256": generator_sha},
+                         "exit_code": code, "counts": counts,
+                         "mismatch": [s["session_id"] or s["path"] for s in sessions if s["result"] == "mismatch"],
+                         "data_error": [s["session_id"] or s["path"] for s in sessions
+                                        if s["result"] == "data_error"],
+                         "sessions": sessions, "rule": ENVELOPE_RULE},
+              "note": "The traffic envelope of saved sessions drawn again from the protocol (the lead's answer to "
+                      "Q30); no score is read and nothing is detected."}
+    text = json.dumps(record, indent=1, ensure_ascii=False, allow_nan=False) + "\n"
+    try:
+        out.parent.mkdir(parents=True, exist_ok=True)
+        stream = open(out, "x", encoding="utf-8")
+    except FileExistsError:
+        print(f"campaign_report: --out appeared meanwhile, nothing was overwritten: {out}", file=sys.stderr)
+        return 2
+    except OSError as error:
+        print(f"campaign_report: cannot create {out}: {type(error).__name__}: {error}", file=sys.stderr)
+        return 2
+    try:
+        with stream:
+            stream.write(text)
+    except OSError as error:
+        out.unlink(missing_ok=True)
+        print(f"campaign_report: cannot write {out}: {type(error).__name__}: {error}", file=sys.stderr)
+        return 2
+    print(f"campaign_report: envelope: {len(sessions)} session(s), {counts['match']} match, {counts['mismatch']} "
+          f"mismatch, {counts['data_error']} data error; record {out}", file=sys.stderr)
+    return code
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     modes = parser.add_subparsers(dest="mode", required=True)
@@ -3813,7 +4256,18 @@ def main(argv=None):
     sessions = modes.add_parser("sessions", help="explicit session directories")
     sessions.add_argument("session_dirs", type=Path, nargs="+")
     sessions.add_argument("--out", type=Path, required=True, help="new output directory (must not exist)")
+    envelope_mode = modes.add_parser("envelope", help="the traffic envelope of session directories drawn again from "
+                                                      "the protocol (the lead's answer to Q30; ENVELOPE_RULE)")
+    envelope_mode.add_argument("session_dirs", type=Path, nargs="+")
+    envelope_mode.add_argument("--protocol", type=Path, required=True,
+                               help="the protocol file the sessions ran with (its sha256 is that of their "
+                                    "protocol.json)")
+    envelope_mode.add_argument("--out", type=Path, required=True, help="new JSON record (must not exist)")
     args = parser.parse_args(argv)
+    command = shlex.join([str(Path(sys.argv[0])) if argv is None else "scripts/campaign_report.py",
+                          *(sys.argv[1:] if argv is None else argv)])
+    if args.mode == "envelope":
+        return envelope(args, command)
     out = args.out.absolute()
     if out.exists() or out.is_symlink():
         print(f"campaign_report: output directory already exists: {out}", file=sys.stderr)
@@ -3825,8 +4279,6 @@ def main(argv=None):
             print(f"campaign_report: refusing to write the report inside an input directory: {root}",
                   file=sys.stderr)
             return 2
-    command = shlex.join([str(Path(sys.argv[0])) if argv is None else "scripts/campaign_report.py",
-                          *(sys.argv[1:] if argv is None else argv)])
     inputs = Inputs()
     try:
         if args.mode == "campaign":

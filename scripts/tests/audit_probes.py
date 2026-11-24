@@ -26,7 +26,10 @@ ROWS holds the table (skeleton 1.1): one row per risk of class P and one per row
              of the merged tree, design decision 5);
     fixed    (package, commit) of each package that fixed it, the oldest first; beside the skeleton's packages a
              later fix inside B10 is (LATER, commit, item), whose commit's subject names package B10 and the item it
-             fixes (the deferred item or the lead's answer; the verification of B10, F2);
+             fixes (the deferred item or the lead's answer; the verification of B10, F2). The commit has one parent
+             and adds a line of the row's test functions, case ids or reasons; the item is a deferred item of a
+             package of another fix of the row ("B3 S1", "V1 of B11") or the lead's answer ("Q29") (the
+             verification of B10, N1; test_audit_probes.py commit_problems() and problems() define both);
     before   the parent of the oldest commit of `fixed` (skeleton 6: of two packages the older);
     kind     refusal, or limit (row 9, a bound of a unit file) or status (row 11, the status nevyhodnotené): design
              decision 3;

@@ -860,6 +860,101 @@ def test_the_executors_choices_of_the_saturation_series_are_named_as_such():
     assert (lab_trial.STEP_RATIO_MAX, lab_trial.MIDPOINT_DECIMALS) == (1.15, 3)
 
 
+# ------------------------------------------------------------------ G2 preparation (P5): the QEMU of each VM
+
+QEMU_CHANGED = "VM {vm} (hyptcn-lab-{vm}): its QEMU process changed between or during its runs (a restart of the VM)"
+
+
+def qemu_process(pid):
+    """A QEMU process as collection.qemu_process names it."""
+    return {"pid": pid, "start_ticks": pid, "host_boot": "host-boot"}
+
+
+def fake_run(env, monkeypatch, name, step, vm, start, end):
+    """A run directory of `step` on VM `vm`, written by the tool's own create(), started() and finish() with no VM and
+    no lab command: its QEMU was `start` at its start and `end` at its end (collection.qemu_process faked, None for the
+    other VM's domain). A traffic step is a run of eshop_low without a fetched journal; record reads nothing else of
+    it."""
+    from scripts import collection, lab_trial
+    pv, raw, out = collection.for_vm(env.p, vm), V5.read_bytes(), env.runs / name
+    lab_trial.create(out, raw)
+    monkeypatch.setattr(collection, "qemu_process", lambda domain: start if domain == pv["domain"] else None)
+    result = lab_trial.started(step, [step, "--protocol", V5, "--vm", vm, "--out", out], V5, raw, pv)
+    if step != "deploy":
+        result.update(scenario="eshop_low", profile="eshop", intensity="low", rate=1.2, minutes=60)
+    result["completed"] = True
+    monkeypatch.setattr(collection, "qemu_process", lambda domain: end if domain == pv["domain"] else None)
+    assert lab_trial.finish(out, result, lambda r: []) == 0
+    return out
+
+
+def qemu_problems(env, *dirs):
+    """The problems of the record of `dirs` that say a QEMU process changed."""
+    target = env.tmp / "results/skuska_labu_20261124T200000Z.json"
+    target.parent.mkdir()
+    assert run("record", "--out-record", target, *dirs) == 0
+    return [x for x in json.loads(target.read_text())["problems"] if "QEMU process changed" in x]
+
+
+@pytest.mark.parametrize("deploy_start", ["running", "started"])
+def test_record_compares_the_qemu_of_each_vm_with_its_own_runs_only(env, monkeypatch, deploy_start):
+    """G2 preparation, P5 (the VM window of Q27): a record of the deploys and runs of both VMs, each VM on one QEMU
+    process, reports no change of QEMU; the processes of both VMs in one set made a false "QEMU changed". A deploy may
+    start its VM ("started": no QEMU at the deploy's start), so its start does not count, per VM as before."""
+    qa, qb = qemu_process(4242), qemu_process(4343)
+    dirs = [fake_run(env, monkeypatch, "deploy-a", "deploy", "a", qa if deploy_start == "running" else None, qa),
+            fake_run(env, monkeypatch, "deploy-b", "deploy", "b", qb if deploy_start == "running" else None, qb),
+            fake_run(env, monkeypatch, "long-a", "long", "a", qa, qa),
+            fake_run(env, monkeypatch, "scenario-b", "scenario", "b", qb, qb)]
+    assert qemu_problems(env, *dirs) == []
+
+
+@pytest.mark.parametrize("when", ["during", "between"])
+@pytest.mark.parametrize("vm", ["a", "b"])
+def test_a_qemu_that_changed_within_one_vm_is_the_problem_of_that_vm_only(env, monkeypatch, vm, when):
+    """G2 preparation, P5: a restart of one VM during one of its runs (a new QEMU at the run's end) or between two of
+    its runs (a new QEMU at the start of the later one) is one problem, which names that VM; the other VM, on one QEMU,
+    has none."""
+    first, new = {"a": qemu_process(4242), "b": qemu_process(4343)}, qemu_process(4444)
+    traffic = {x: (first[x], first[x]) for x in "ab"}
+    traffic[vm] = (first[vm], new) if when == "during" else (new, new)
+    dirs = [fake_run(env, monkeypatch, "deploy-a", "deploy", "a", first["a"], first["a"]),
+            fake_run(env, monkeypatch, "deploy-b", "deploy", "b", first["b"], first["b"]),
+            fake_run(env, monkeypatch, "long-a", "long", "a", *traffic["a"]),
+            fake_run(env, monkeypatch, "scenario-b", "scenario", "b", *traffic["b"])]
+    assert qemu_problems(env, *dirs) == [QEMU_CHANGED.format(vm=vm)]
+
+
+def test_a_restart_of_each_vm_is_one_problem_each_in_the_order_of_the_runs(env, monkeypatch):
+    """G2 preparation, P5: when the QEMU of both VMs changed, each VM has its own problem, in the order in which the
+    record's runs first name the VMs (the executor's judgment, G2 preparation), here VM b before VM a."""
+    qa, qb, qa_new, qb_new = (qemu_process(pid) for pid in (4242, 4343, 4444, 4545))
+    dirs = [fake_run(env, monkeypatch, "deploy-b", "deploy", "b", qb, qb),
+            fake_run(env, monkeypatch, "deploy-a", "deploy", "a", qa, qa),
+            fake_run(env, monkeypatch, "long-a", "long", "a", qa, qa_new),
+            fake_run(env, monkeypatch, "scenario-b", "scenario", "b", qb_new, qb_new)]
+    assert qemu_problems(env, *dirs) == [QEMU_CHANGED.format(vm="b"), QEMU_CHANGED.format(vm="a")]
+
+
+@pytest.mark.parametrize("steps, changed", [
+    ([("deploy", 1, 1), ("long", 1, 1), ("scenario", 1, 1)], False),
+    ([("deploy", None, 1), ("long", 1, 1)], False),
+    ([("deploy", 1, 2), ("long", 2, 2)], False),
+    ([("deploy", 1, 1), ("long", 1, 2)], True),
+    ([("deploy", 1, 1), ("long", 2, 2)], True),
+    ([("long", 1, 2)], True),
+], ids=["same_qemu", "deploy_starts_the_vm", "deploy_restarts_the_vm", "during_a_run", "between_runs",
+        "during_the_only_run"])
+def test_the_qemu_of_a_single_vm_is_judged_as_before(env, monkeypatch, steps, changed):
+    """G2 preparation, P5: the runs of one VM keep the rule of the tool's first version (82f26cc). The QEMU at the
+    start and the end of every run is one process, and a deploy's start does not count (it may start or restart the
+    VM). The same runs give a problem exactly when they gave one before; the problem now names the VM."""
+    process = {None: None, 1: qemu_process(4242), 2: qemu_process(4444)}
+    dirs = [fake_run(env, monkeypatch, f"{k}-{step}", step, "a", process[start], process[end])
+            for k, (step, start, end) in enumerate(steps)]
+    assert qemu_problems(env, *dirs) == ([QEMU_CHANGED.format(vm="a")] if changed else [])
+
+
 # ------------------------------------------------------------------ refused inputs
 
 @pytest.mark.parametrize("case", ["unknown_scenario", "run_directory_exists", "profile_mismatch", "no_rate",

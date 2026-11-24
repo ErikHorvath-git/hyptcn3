@@ -845,6 +845,39 @@ def test_the_helper_gives_the_same_traffic_when_run_again(tmp_path, p):
     assert [evidence.gzip.decompress(f.read_bytes()) for f in sorted((d / "guest").glob("*.gz"))] == segments
 
 
+@pytest.mark.parametrize("variant", [{}, {"flat": True}, {"rate_factor": 2}], ids=["clean", "flat", "twice_the_plan"])
+def test_under_a_rate_of_the_protocol_the_helper_keeps_the_plan_of_the_null_rate(tmp_path, p, variant):
+    """Item P3 of the G2 preparation (D [9] of B10): from G2 every scenario has a rate. Under a copy of p with a rate
+    for every scenario (3.7 user sessions a second, a number of this test only) v5_traffic states that rate with the
+    source protocol, and everything else of its logs is what the null rate of the file gives: every arrival, request,
+    marker and end record, and every interval with its planned count. The envelope's level is the null one scaled by
+    its rate over 3.7, and its level 1 lies after the logs end. So the log audit gives the problems of the null rate:
+    none, peak_to_mean alone for the flat envelope, the offered load alone for the plan of twice the offered user
+    sessions. A protocol rate 1 % below the null rate (the scale above 1) raises."""
+    def rated(rate):
+        doc = copy.deepcopy(p)
+        for scenario in doc["scenarios"].values():
+            scenario["rate"] = rate
+        return doc
+    null = session(tmp_path / "null", p, "steady", **variant)
+    at = session(tmp_path / "rated", rated(3.7), "steady", **variant)
+    a, b = records(null), records(at)
+    assert b[1:] == a[1:]
+    assert {key for key in a[0] if b[0][key] != a[0][key]} == {"rate", "rate_source", "envelope", "protocol_sha256"}
+    assert (a[0]["rate_source"], b[0]["rate_source"], b[0]["rate"]) == ("command line", "protocol", 3.7)
+    ivs = [[r for r in records(d, "traffic_intervals.jsonl") if r.get("type") == "interval"] for d in (null, at)]
+    assert [dict(iv, planned_sessions=None) for iv in ivs[1]] == [dict(iv, planned_sessions=None) for iv in ivs[0]]
+    assert [iv["planned_sessions"] for iv in ivs[1]] == pytest.approx([iv["planned_sessions"] for iv in ivs[0]],
+                                                                       abs=1e-6)
+    scale, envelope = a[0]["rate"] / 3.7, a[0]["envelope"]
+    assert b[0]["envelope"] == {"t_s": [*envelope["t_s"][:-1], round(b[-1]["end_mono"], 6), envelope["t_s"][-1]],
+                                "level": [*(scale * x for x in envelope["level"]), 1]}
+    expected = {"flat": ["traffic_realism:peak_to_mean"], "rate_factor": ["offered_load_differs_from_plan"]}
+    assert audit(at)["problems"] == audit(null)["problems"] == next((expected[k] for k in variant), [])
+    with pytest.raises(ValueError, match="^the protocol's rate is too low for this session's measure phase$"):
+        session(tmp_path / "too_low", rated(a[0]["rate"] * .99), "steady", **variant)
+
+
 # The bounds (features/audit_policy.py audit_bounds reads audit.traffic).
 
 @pytest.mark.parametrize("key, value", [

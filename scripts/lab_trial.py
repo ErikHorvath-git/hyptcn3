@@ -308,7 +308,7 @@ def failure(error):
 
 def finish(out, result, problems):
     result["ended_unix"] = time.time()
-    result["qemu_after"] = collection.qemu_process(result["domain"])  # record: the same QEMU in every run
+    result["qemu_after"] = collection.qemu_process(result["domain"])  # record: the same QEMU in every run of a VM
     result["problems"] = problems(result)
     write(out / "result.json", result)
     print(json.dumps({"result": str(out / "result.json"), "completed": result["completed"],
@@ -1337,11 +1337,18 @@ def record(a, argv):
     if any(doc["measurement_dirty"] for _, doc in runs):
         problems.append("measurement sources differed from the commit in: "
                         + ", ".join(d.name for d, doc in runs if doc["measurement_dirty"]))
-    # The QEMU at the start and the end of every run (a deploy may start the VM, so its start does not count).
-    qemus = {json.dumps(q, sort_keys=True) for _, doc in runs
-             for q in ([] if doc["step"] == "deploy" else [doc["qemu"]]) + [doc["qemu_after"]]}
-    if len(qemus) > 1:
-        problems.append("the VM's QEMU process changed between or during the runs (a restart of the VM)")
+    # The QEMU at the start and the end of every run, compared per VM (a deploy may start the VM, so its start does
+    # not count): a record may hold the runs of both VMs, as the one of the VM window of Q27 held both deploys. A run's
+    # QEMU is the process of its domain (collection.qemu_process), so the runs are grouped by their domain; the problem
+    # names the VM by the vm of its runs (one name: the record's one protocol has unique names and domains). One
+    # problem per VM, in the order in which the runs first name the VMs (the executor's judgment, G2 preparation).
+    qemus, names = defaultdict(set), defaultdict(set)
+    for _, doc in runs:
+        names[doc["domain"]].add(doc["vm"])
+        qemus[doc["domain"]].update(json.dumps(q, sort_keys=True) for q in
+                                    ([] if doc["step"] == "deploy" else [doc["qemu"]]) + [doc["qemu_after"]])
+    problems += [f"VM {', '.join(sorted(names[domain]))} ({domain}): its QEMU process changed between or during its "
+                 "runs (a restart of the VM)" for domain, found in qemus.items() if len(found) > 1]
     pooled = periods_of([d for d, _ in steps["long"]]) if steps["long"] else None
     for item in pooled or []:
         if item["name"] in ("hyptcn-lab-udrzba.timer", AUTOVACUUM) and not item["spacings"]:

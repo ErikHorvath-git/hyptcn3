@@ -294,8 +294,18 @@ def v5_traffic(d, p, *, scenario=None, sessions=None, spacings=SPACINGS, thinks=
     `spacings` (one fewer than sessions); their requests last 1 ms each and follow one another by the think times of
     `thinks`, each from the end of the request before (as the generator sends them; the log audit judges these
     realized think times since package B10, finding F6 of B5b), and every user session ends in the measure phase. The
-    envelope is 0 but for one triangle of level 1 (flat: level 1 throughout); the rate (when the scenario has none)
-    makes the offered load of the intervals outside every window equal the planned one, rate_factor times off.
+    envelope is 0 but for one triangle of level 1 (flat: level 1 throughout); the plan of the measure intervals
+    outside every window names rate_factor times the user sessions they were offered.
+    - Where the scenario has no rate (null until G2), the header's rate (source command line) makes it so.
+    - Under the protocol's rate (from G2) the header states that rate with the source protocol, and the plan stays the
+      one without it (G2 preparation, item P3: D [9] of B10): the same arrivals and every interval's planned count.
+      The envelope's level is scaled by the rate without it over the protocol's rate, and its level 1 then lies after
+      the logs end (from the end records' end_mono to D, where no interval and no arrival lies). Before item P3 the
+      helper took the protocol's rate times rate_factor, which traffic_config:rate refuses, kept a flat level 1, which
+      plans far more user sessions than were offered, and narrowed the triangle to the protocol's rate, which crowds
+      the arrivals of the measure phase together (above about 2.38 user sessions a second two of them in interval 2).
+    - A protocol rate below the rate without it (the scale would be above 1) is too low for the session's measure
+      phase: ValueError.
     scenario: another scenario of p for the session (session.json follows).
     """
     if "profiles" not in p:
@@ -343,11 +353,6 @@ def v5_traffic(d, p, *, scenario=None, sessions=None, spacings=SPACINGS, thinks=
         raise ValueError("the planned run of the protocol ends before the logs of build() do")
     # Peak-to-mean twice the bound: a triangle of width (measure length / bound); flat: level 1 everywhere.
     width = min(last - first, (stop - 1) / p["scenario_rule"]["min_peak_to_mean"])
-    rate = s["rate"]
-    if rate is not None and not flat:
-        width = 2 * len(sessions) / rate  # Its area holds the user sessions at the protocol's rate.
-        if width > last - first:
-            raise ValueError("the protocol's rate is too low for this session's measure phase")
     if flat:
         t_s, level = [0, round(span, 6)], [1, 1]
     else:
@@ -413,10 +418,20 @@ def v5_traffic(d, p, *, scenario=None, sessions=None, spacings=SPACINGS, thinks=
         return not any(a <= hi and lo <= b for a, b in windows)
     ivs = [r for r in log_i if r.get("type") == "interval"]
     kept = [iv for iv in ivs if iv["phase"] == "measure" and outside(iv["mono_start"], iv["mono_end"])]
+    offered = sum(1 for a in arrivals if any(iv["mono_start"] <= a["t_mono"] < iv["mono_end"] for iv in kept))
+    plan = offered / sum(area(t_s, level, iv["mono_start"], iv["mono_end"]) for iv in kept) * rate_factor
+    rate = s["rate"]
     if rate is None:
-        offered = sum(1 for a in arrivals if any(iv["mono_start"] <= a["t_mono"] < iv["mono_end"] for iv in kept))
-        rate = offered / sum(area(t_s, level, iv["mono_start"], iv["mono_end"]) for iv in kept)
-    rate = rate * rate_factor
+        rate = plan
+    else:  # The protocol's rate: the envelope's level carries the plan (see the docstring).
+        scale = plan / rate
+        if scale > 1:
+            raise ValueError("the protocol's rate is too low for this session's measure phase")
+        if scale < 1:  # Either envelope is constant on its last segment: a knot at the logs' end, then 1 at D.
+            at_end = round(end_mono, 6)
+            if level[-2] != level[-1] or not t_s[-2] < at_end < t_s[-1]:
+                raise ValueError("the envelope cannot reach its level 1 after the logs end")
+            t_s, level = [*t_s[:-1], at_end, t_s[-1]], [*(scale * x for x in level), 1]
     for iv in ivs:
         lo, hi = iv["mono_start"], iv["mono_end"]
         members = [r for r in requests if r["interval"] == iv["interval"]]

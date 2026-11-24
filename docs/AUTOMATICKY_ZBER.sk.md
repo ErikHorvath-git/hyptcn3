@@ -414,10 +414,50 @@ zastavení sa dokumentácia ani záznamy necommitujú: zmrazený strom
 Po ukončení, ktoré kampaň uzavrie, a pred commitom záznamov prepočíta nástroj
 mimo meracieho kódu obálku prevádzky každej prijatej session z protokolu a zo
 seedu hlavičky a porovná ju s obálkou hlavičky; audit ju neprepočítava (odpoveď
-vedúceho na otázku Q30, 2026-11-24; návrh, kap. 5.3). Nástroj číta iba logy
-prevádzky, žiadne skóre. Nezhoda ide ako odchýlka do
-[ODCHYLKY_V5.sk.md](ODCHYLKY_V5.sk.md) a vedúcemu ako nález. Nástroj príde
-s prípravou G2 a beží aj nad session G2 a oboch generálok.
+vedúceho na otázku Q30, 2026-11-24; návrh, kap. 5.3). Nástroj beží aj nad
+session G2 a oboch generálok a číta iba logy prevádzky, žiadne skóre. Kód
+kampane nástroj nevolá (vedúci k B10, bod 3); spustí ho operátor:
+
+```sh
+.venv/bin/python scripts/campaign_report.py envelope <session> [<session> ...] \
+  --protocol config/collection-v5.json --out data/results/obalka_<kampaň>_<čas UTC>.json
+```
+
+Pri kampani sú `<session>` adresáre jej prijatých session, teda riadkov
+`values.sessions` záznamu ukončenia so stavom `accepted` a `final: true`.
+`--protocol` je súbor, s ktorým session bežali: jeho sha256 sa rovná sha256
+`protocol.json` session aj `protocol_sha256` v `session.json` a v hlavičke
+oboch logov prevádzky. Nástroj nakreslí obálku znova tak ako generátor
+(`host_traffic.draw_envelope` s `arrivals` profilu z protokolu, so seedom
+`traffic.seeds.traffic` zo `session.json`, ktorý sa rovná seedu hlavičky,
+s `dur_s` a `warmup_s` plánovaného behu a so
+`scenario_rule.min_peak_to_mean`), a to kódom generátora, s ktorým session
+bežala: sha256 `scripts/host_traffic.py` sa rovná tomu, ktorý preň zapísal
+`source_sha256` v `session.json` (úsudok vykonávateľa, príprava G2). Obálku
+porovná s obálkou v hlavičke `traffic_requests.jsonl` aj
+`traffic_intervals.jsonl` presne, bez tolerancie. Porovná aj
+`profile_parameters` hlavičky s profilom protokolu a seed, `dur`, `warmup_s`,
+profil, scenár a meno session v hlavičke so `session.json` (pravidlo
+`ENVELOPE_RULE` v `scripts/campaign_report.py`). Na výstup vypíše jeden
+riadok na session: `match`, `mismatch` alebo `data_error`, s dôvodmi. Do
+nového súboru `--out` (nesmie existovať) zapíše záznam s hlavičkou
+proveniencie kontroly E a pri každej session jej výsledok, dôvody a sha256
+prečítaných súborov.
+
+Kód 0: každá session sa zhoduje. Kód 1: aspoň jedna nezhoda. Nezhoda obálky
+ide do denníka odchýlok pri zázname ukončenia a zápis ten záznam menuje; zápis
+v [ODCHYLKY_V5.sk.md](ODCHYLKY_V5.sk.md) uvedie meno a sha256 záznamu
+ukončenia, session s nezhodou, ich dôvody a záznam nástroja s jeho sha256
+(úsudok vykonávateľa, príprava G2). Nezhoda je aj nález pre vedúceho. Kód 2:
+chyba použitia (napríklad `--out` už existuje alebo súbor nie je protokol v5;
+nič sa nezapíše) alebo chyba dát aspoň jednej session (jej súbor chýba alebo
+sa nedá prečítať, alebo protokol či kód generátora nie je jej). Session
+s chybou dát nemá výsledok: príčinu treba odstrániť a nástroj spustiť znova;
+chybný súbor samotnej session je nález pre vedúceho. Nezhoda inej session
+v behu s kódom 2 je nezhodou ako pri kóde 1 (oboje úsudok vykonávateľa,
+príprava G2). Pri session G2, ktoré k žiadnej kampani nepatria, je nezhoda
+nález pre vedúceho a dôkaz ku kritériu `profiles_load` (prípadne
+`traffic_realism`), ako to navrhla otázka Q30 a vedúci prijal.
 
 Rovnaký príkaz pokračuje z existujúcich artefaktov, nezačína novú kampaň.
 Dokončené session sa nezbierajú znova. Prerušené kopírovanie a uvoľňovanie

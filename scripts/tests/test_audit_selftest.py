@@ -637,6 +637,47 @@ def test_the_rate_of_the_generator_is_judged_against_the_protocol_once_the_proto
     assert (audit.code, audit.values["reasons"]) == (2, ["logs: traffic_config:rate"])
 
 
+# Item P3 of the G2 preparation (D [9] of B10): the cases whose construction must follow the protocol's rate, with the
+# reasons they give under the null rate of G0.
+RATED_CASES = {
+    "logs:offered_load_differs_from_plan": ["logs: offered_load_differs_from_plan"],
+    "logs:traffic_realism:peak_to_mean": ["logs: traffic_realism:peak_to_mean"],
+    "logs:traffic:interval_sessions": ["logs: traffic:interval_sessions:2:admitted_sessions:0!=1",
+                                       "logs: traffic:interval_sessions:2:dropped_sessions:1!=0"]}
+
+
+@pytest.mark.parametrize("rate", [1., 3.7, 50.], ids=["one", "three_point_seven", "fifty"])
+def test_the_cases_of_the_planned_load_give_exactly_their_reasons_under_a_rate_of_the_protocol(small, tmp_path, rate):
+    """Item P3 of the G2 preparation (D [9] of B10, its probe rated.py): from G2 every scenario has a rate, and the
+    self-test builds its v5 cases at it. Under a copy of the small protocol with `rate` for every scenario the clean
+    session is accepted, and each case of RATED_CASES is refused with exactly its reasons, as under the null rate:
+    - the plan of twice the offered user sessions, without traffic_config:rate (before item P3 the helper doubled the
+      header's rate);
+    - the flat envelope, without offered_load_differs_from_plan (at the protocol's rate a flat level 1 plans far more
+      user sessions than the case offers);
+    - the counts of interval 2, which holds the first user session of the measure phase alone (before item P3 the
+      helper narrowed the triangle to the protocol's rate, and above about 2.38 user sessions a second a second one
+      arrived there).
+    Each header states the protocol's rate with the source protocol. The rates are numbers of this test only: 1 and 3.7
+    from the coordinator's brief, 50 the executor's judgment (G2 preparation), far above 2.38."""
+    from scripts import collection
+    from scripts.tests import audit_cases, boundary_sessions as bs
+    p, _, _ = small
+    doc = copy.deepcopy(p)
+    for scenario in doc["scenarios"].values():
+        scenario["rate"] = rate
+    path = bs.write_protocol(tmp_path / "protocol.json", doc)
+    rated = collection.protocol(path)
+    for case_id in (None, *RATED_CASES):
+        case = None if case_id is None else case_of(case_id)
+        audit = audit_cases.run_case(tmp_path / "cases", rated, path, case)
+        expected = [] if case is None else sorted(RATED_CASES[case_id])
+        assert (audit.code, audit.values["reasons"]) == (2 if expected else 0, expected), case_id
+        assert case is None or audit_cases.expected(case, rated) == expected
+        header = json.loads((Path(audit.values["session_dir"]) / "traffic_requests.jsonl").read_text().splitlines()[0])
+        assert (header["rate_source"], header["rate"]) == ("protocol", rate)
+
+
 def test_the_audit_records_the_summary_of_every_column_and_never_a_reason(small, recorded):
     """Design B6a 1.5 and its test 3: the clean session with the known matrix of audit_cases.py is accepted with no
     reason and the exceptions of the clean session, and values.columns holds the summary audit_cases.py writes for
