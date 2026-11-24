@@ -20,7 +20,7 @@ every record).
 The stage of the record is no option (tcn/pecat.py STAGE_RULE; design 5.1, question Q15): it is the stage of the run
 on its ledger. The command line runs on the ledger of record (data/results/kniha_pecati.json), stage final for a
 campaign and generalka for a rehearsal. Only the Python entry evaluate(..., ledger=L) takes another ledger, which the
-guards of the process then read (tcn.pecat vlastna_kniha): stage suchy, a G1 dry run or a test.
+guards of the process then read (tcn.pecat vlastna_kniha): stage suchy, a G1 dry run or a test (M_NULL_RULE).
 
 What runs (design 1.4) is pre-registered in the protocol of the corpus, and the command takes no choice of its own:
 M at every seed of analysis.seeds, Z0 to Z5 (analysis.methods, Z4 by both its variants), the descriptive methods of
@@ -412,12 +412,12 @@ def read_index(corpus):
     return path, doc, protocol, mode
 
 
-def analysis(protocol):
+def analysis(protocol, stage, mode):
     """The checked analysis plan of the protocol of the corpus (scripts/protocol_v5.py analysis_plan, with
     analysis.metrics and analysis.linkage of agent M), after every key the evaluation needs: the list of the
     attachments (ATTACHMENT_RULE: exactly ATTACHMENTS, scripts/protocol_v5.py attachments_problem, refused by name
-    first), the bounds m of G1 (a null one refused by name), the grids of G3a (tcn.metody grid), the keys of the
-    interventions, of the diagnostics and of the descriptive methods."""
+    first), the bounds m of G1 (null_bounds at the run's stage and plan mode), the grids of G3a (tcn.metody grid), the
+    keys of the interventions, of the diagnostics and of the descriptive methods."""
     from tcn import diagnostiky, opisne, zasahy
     section = protocol.get("analysis") if type(protocol.get("analysis")) is dict else {}
     problem = protocol_v5.attachments_problem(section.get("attachments"))
@@ -425,10 +425,10 @@ def analysis(protocol):
         raise ValueError(f"{problem}: the final evaluation writes exactly the attachments its protocol lists in "
                          "advance (ATTACHMENT_RULE); refused before the seal is consumed")
     plan = protocol_v5.analysis_plan(protocol)
-    for claim in protocol_v5.CLAIMS:
-        if plan[claim]["m"] is None:
-            raise ValueError(f"analysis.{claim}.m is null: the bound m is determined in G1 (determined_at), and the "
-                             "final evaluation decides no claim without it; refused before the seal is consumed")
+    # M_NULL_RULE (package C2 of the G1 preparation): a null bound m is refused by name but in a dry run of stage suchy
+    # on the corpus of a campaign, where the three bounds are null together and the claims are written undecided; the
+    # stage is that of a run on the ledger of this process (tcn.pecat stage, STAGE_RULE), as seal_state reads it.
+    null_bounds(plan, stage, mode)
     for method in protocol_v5.GRIDDED:
         metody.grid(protocol, method)
     zasahy.protocol_keys(protocol)
@@ -707,6 +707,194 @@ def check_inputs(records):
         traffic = Path(record["session"]).parent / "traffic_intervals.jsonl"
         if not traffic.is_file():
             raise ValueError(f"session {record['id']} has no {traffic.name}: {LOAD_RULE}")
+
+
+# ------------------------------------------------------------------ the bounds m of G1 (package C2, G1 preparation)
+
+# The sentence that comes with the outcome null of a claim whose bound m is null (the brief of package C2 of the G1
+# preparation, after the lead's answer to question Q34, 2026-11-24T21:25Z).
+M_NULL = "m null: určí G1 z týchto hodnôt"
+M_NULL_RULE = (
+    "the bounds m of G1 (proposal 10.9, determined_at G1; the lead's answers to questions Q33 and Q34, "
+    "2026-11-24T21:25Z; package C2 of the G1 preparation): analysis.k1.m, analysis.k2a.m and analysis.k2b.m are null "
+    "until G1 determines them from the dry runs of the null generator, so a null m is allowed in a run of stage suchy "
+    "(tcn/pecat.py STAGE_RULE: a ledger of its own, the G1 dry run) on the corpus of a campaign (plan mode campaign, "
+    "the corpus whose final evaluation the dry run runs) only, with all three null: K1, K2a and K2b then write their "
+    "values per boot and the interval of every compared method, the interval of tcn.tvrdenia rozhodni (the first draw "
+    "of the stream bootstrap of the comparison, which no m enters), p null (the test reads the values minus m) and the "
+    "outcome null with the sentence of M_NULL as its conclusion, and tcn/suchy_beh.py rozhodnutia decides them at an m "
+    "by tcn.tvrdenia vysledok, the decision of a run at that m; a null m is refused by name before the seal is "
+    "consumed at stages final and generalka, in a dry run of a rehearsal (the lead's rule of 2026-11-24T22:13Z: no "
+    "tool of G1 adds a path that computes K1 or K2 on the rows of a rehearsal), and when some of the three are null "
+    "and some filled (G1 determines them together)")
+
+
+def null_bounds(plan, stage, mode):
+    """M_NULL_RULE in step 0 (ORDER_RULE): the claims whose bound m is null in the checked analysis plan `plan` of a
+    run of stage `stage` in plan mode `mode` ([] when all three are filled); every case the rule refuses is refused by
+    name before the seal is consumed."""
+    null = [claim for claim in protocol_v5.CLAIMS if plan[claim]["m"] is None]
+    if not null:
+        return []
+    head = (f"analysis.{null[0]}.m is null: the bound m is determined in G1 (determined_at), and the final evaluation "
+            f"of stage {stage}")
+    if stage != pecat.DRY_STAGE:
+        raise ValueError(f"{head} decides no claim without it (M_NULL_RULE: only a dry run of stage "
+                         f"{pecat.DRY_STAGE} on the corpus of a campaign writes its claims undecided); refused before "
+                         "the seal is consumed")
+    if mode != "campaign":
+        raise ValueError(f"{head} in plan mode {mode} writes no claim without it (M_NULL_RULE: a dry run writes its "
+                         "claims undecided on the corpus of a campaign only, and no tool of G1 computes K1 or K2 on "
+                         "the rows of a rehearsal); refused before the seal is consumed")
+    if len(null) != len(protocol_v5.CLAIMS):
+        filled = next(claim for claim in protocol_v5.CLAIMS if claim not in null)
+        raise ValueError(f"{head} takes the three bounds of G1 null together, but analysis.{filled}.m is "
+                         f"{plan[filled]['m']!r} (M_NULL_RULE: G1 determines them together); refused before the seal "
+                         "is consumed")
+    return null
+
+
+# The values of the protocol of the corpus that the record carries in values.corpus.protocol_values (package C2 of the
+# G1 preparation, the lead's answer to Q32: the bounds of G1 name the grids of Z1, Z3 and Z5 and the column mask the run
+# used; tcn/suchy_beh.py reads them, and the horizon of the marginal change, from the record).
+RECORDED_VALUES = ("analysis.columns", *(f"analysis.methods.{method}.grid" for method in protocol_v5.GRIDDED),
+                   "analysis.horizon_s")
+
+
+def recorded_values(protocol):
+    """{path: value} of RECORDED_VALUES in the protocol of the corpus (checked in step 0)."""
+    return {path: metody.protocol_value(protocol, path) for path in RECORDED_VALUES}
+
+
+def undecided_claim(protocol, claim, values, *, mode):
+    """M_NULL_RULE: the record that tcn.tvrdenia rozhodni writes for the claim `claim` (k1, k2a, k2b) from its values
+    per boot {method: {boot: value}} against every method of analysis.<claim>.compare, when analysis.<claim>.m is
+    null: the same checks, the same boots (sorted), the stream and the interval of every method (tcn.tvrdenia
+    percentilovy_interval, the first draw of the stream bootstrap of "<claim>/<method>" in plan mode `mode`), so that
+    the interval is the one a run at any m writes; p and the test null (they read m), the outcome null, the conclusion
+    M_NULL and no wording. A filled m is refused by name: rozhodni decides it."""
+    from tcn import tvrdenia
+    plan = protocol_v5.analysis_plan(protocol)
+    if claim not in protocol_v5.CLAIMS:
+        raise ValueError(f"{claim!r} nie je potvrdzujuce tvrdenie ({', '.join(protocol_v5.CLAIMS)})")
+    if plan[claim]["m"] is not None:
+        raise ValueError(f"analysis.{claim}.m is {plan[claim]['m']!r}: a filled bound is decided by tcn.tvrdenia "
+                         "rozhodni (M_NULL_RULE)")
+    tvrdenia._rezim(protocol_v5, mode)
+    order = list(plan[claim]["compare"])
+    tvrdenia._metody(f"hodnoty tvrdenia {claim}", values, order, f"analysis.{claim}.compare")
+    boots = None
+    for z in order:
+        if type(values[z]) is not dict or not all(tvrdenia._cislo(v) for v in values[z].values()):
+            raise ValueError(f"hodnoty metody {z} nie su {{boot: konecne cislo}}")
+        mine = sorted(tvrdenia._booty(values[z]))
+        if boots is not None and mine != boots:
+            raise ValueError(f"metody tvrdenia {claim} maju rozne booty: {order[0]} {boots}, {z} {mine}")
+        boots = mine
+    if len(boots) < tvrdenia.NAJMENEJ_BOOTOV:
+        raise ValueError(f"{len(boots)} bootov, tvrdenie potrebuje aspon {tvrdenia.NAJMENEJ_BOOTOV} (usudok: jeden "
+                         "boot nema rozptyl)")
+    s = plan["statistics"]
+    methods = {}
+    for z in order:
+        unit = f"{claim}/{z}"
+        seed = protocol_v5.analysis_seed(protocol, "bootstrap", unit, mode=mode)
+        x = [float(values[z][b]) for b in boots]
+        low, high = tvrdenia.percentilovy_interval(x, vyberov=s["bootstrap"], uroven=s["level"],
+                                                   generator=np.random.default_rng(seed))
+        methods[z] = {"values": dict(zip(boots, x)), "mean": float(np.mean(x)), "interval": [low, high],
+                      "p_value": None, "test": None, "stream": {"purpose": "bootstrap", "unit": unit, "seed": seed}}
+    return {"schema": tvrdenia.SCHEMA, "claim": claim, "mode": mode, "statistic": plan[claim]["statistic"], "m": None,
+            "compare": order, "level": s["level"], "bootstrap": s["bootstrap"],
+            "exact_up_to_boots": s["exact_up_to_boots"], "interval_rule": tvrdenia.INTERVAL,
+            "test_rule": tvrdenia.TEST, "boots": boots, "methods": methods, "outcome": None,
+            "decisive_methods": None, "wording": None, "fill": None, "conclusion": M_NULL, "numpy": np.__version__,
+            "m_null_rule": M_NULL_RULE}
+
+
+def k1_claim(protocol, plan, model_losses, method_losses, boots, clean, *, mode, role):
+    """K1 of the run: tcn.tvrdenia k1 when analysis.k1.m is filled; when it is null (M_NULL_RULE) the same record
+    undecided: tcn.tvrdenia hodnoty_k1, undecided_claim and, in k1's order, the fields k1 adds (the role, the seeds,
+    the clean windows per boot, the unevaluated boots, the losses of M, and per method its loss and the I of every
+    seed)."""
+    from tcn import tvrdenia
+    if plan["k1"]["m"] is not None:
+        return tvrdenia.k1(protocol, model_losses, method_losses, boots, clean, rezim=mode, rola=role)
+    if type(role) is not str or not role:
+        raise ValueError("rola okien K1 je nazov roly (neprazdny text)")
+    h = tvrdenia.hodnoty_k1(protocol, model_losses, method_losses, boots, clean)
+    out = undecided_claim(protocol, "k1", {z: v["values"] for z, v in h["methods"].items()}, mode=mode)
+    for z, v in out["methods"].items():
+        v.update(loss=h["methods"][z]["loss"], per_seed=h["methods"][z]["per_seed"])
+    order = list(out)
+    at = order.index("boots") + 1
+    added = {"role": role, "seeds": h["seeds"], "windows": h["windows"], "unevaluated_boots": h["unevaluated_boots"],
+             "model": h["model"]}
+    return {**{key: out[key] for key in order[:at]}, **added, **{key: out[key] for key in order[at:]}}
+
+
+def k2_claims(protocol, plan, values, *, mode):
+    """K2a and K2b of the run: tcn.k2 k2 when their bounds are filled, or when no class of the interventions is
+    evaluated (k2 then decides nothing and reads no m); when they are null (M_NULL_RULE) each claim undecided by
+    undecided_claim, with the fields k2 adds (the status, the classes pooled, the classes and the compared labels)."""
+    from tcn import k2
+    if values.get("status") == UNEVALUATED or all(plan[claim]["m"] is not None for claim in k2.CLAIMS):
+        return k2.k2(protocol, values, mode=mode)
+    if values.get("schema") != k2.SCHEMA or values.get("mode") != mode:
+        raise ValueError(f"K2 decides on the values of k2_values() of mode {mode}")
+    return {claim: dict(undecided_claim(protocol, claim, values["values"][claim], mode=mode), status=EVALUATED,
+                        classes_pooled=list(values["pooled"]), classes=values["classes"],
+                        compared_labels=dict(values["compare"][claim])) for claim in k2.CLAIMS}
+
+
+# Proposal 10.2, the known answer of the structured generator: "K1 a K2 vyjdú „lepší“; model s premiešaným kontextom a
+# sieť s náhodnými váhami nie". The names of the two networks in _variants.
+STRUCTURE_CONTROLS = ("shuffled context", "random weights")
+CONTROL_CLAIMS_RULE = (
+    "the controls of the structured generator (proposal 10.2: K1 and K2 come out better, the model with shuffled "
+    "context and the network with random weights do not; the skeleton of G1, row C2): the networks shuffled context "
+    "and random weights of the diagnostics (_variants, SEED_RULE) judged by the formulas of K1, K2a and K2b, "
+    "descriptive (CONFIRMATORY_RULE): K1 I = 1 - loss(network) / loss(Z) per boot over the clean windows of "
+    "test_benign against every method of analysis.k1.compare (IMPROVEMENT_RULE, hodnoty_k1 of a network of one seed), "
+    "K2a and K2b D = share(network) - share(Z) per boot against every method of analysis.k2a.compare and "
+    "analysis.k2b.compare (the network's detection at its matched threshold, tcn/k2.py DIAGNOSTIC_DETECTION_RULE, "
+    "against the shares of Z of the values of K2, SHARE_RULE and POOL_RULE); every interval and outcome by "
+    "tcn.tvrdenia rozhodni at analysis.<claim>.m, or undecided by undecided_claim when m is null (M_NULL_RULE), on the "
+    "stream bootstrap of M's comparison <claim>/<method> (the executor's judgment, G1 preparation: the streams of the "
+    "protocol hold no unit of these networks, and a new one would change G0; the same resamples of the boots as M's "
+    "comparison), without the wording of analysis.wording, which states a conclusion of M; a claim with a boot "
+    "without value (IMPROVEMENT_RULE: a loss of Z of 0 there) or with no class of the interventions evaluated is "
+    "nevyhodnotené")
+
+
+def control_claims(networks, values, protocol, plan, mode):
+    """CONTROL_CLAIMS_RULE: {name: {label, claims {k1, k2a, k2b}}, rule} for every network of STRUCTURE_CONTROLS from
+    its row of diagnostic_values (`networks`: the rows of its models) and the values of K2 (tcn.k2 k2_values)."""
+    from tcn import tvrdenia
+    out = {}
+    for name in STRUCTURE_CONTROLS:
+        row = networks[name]
+        per = {"k1": {entry: row["improvement"][entry]["boots"] for entry in plan["k1"]["compare"]}}
+        detected = row["detection"]
+        for claim in ("k2a", "k2b"):
+            per[claim] = None if values["status"] == UNEVALUATED or detected.get("status") != EVALUATED else {
+                entry: {boot: detected["shares"][boot] - values["shares"][label][boot] for boot in values["boots"]}
+                for entry, label in values["compare"][claim].items()}
+        claims = {}
+        for claim, mine in per.items():
+            missing = [] if mine is None else sorted(
+                {boot for found in mine.values() for boot, x in found.items() if x is None})
+            if mine is None or missing:
+                claims[claim] = {"claim": claim, "outcome": None, "status": UNEVALUATED, "why": (
+                    "no class of the interventions is evaluated (tcn/k2.py POOL_RULE)" if mine is None else
+                    f"boot {missing[0]} has no value (IMPROVEMENT_RULE: the loss of a compared method is 0 there)")}
+                continue
+            found = (undecided_claim(protocol, claim, mine, mode=mode) if plan[claim]["m"] is None
+                     else tvrdenia.rozhodni(protocol, claim, mine, rezim=mode))
+            claims[claim] = dict({key: value for key, value in found.items() if key not in ("wording", "fill")},
+                                 conclusion=M_NULL if plan[claim]["m"] is None else None, status=EVALUATED)
+        out[name] = {"label": row["label"], "claims": claims}
+    return dict(out, rule=CONTROL_CLAIMS_RULE)
 
 
 # ------------------------------------------------------------------ sessions, windows and traffic
@@ -1417,9 +1605,14 @@ def refusals(corpus, models, *, campaign, replays, out):
     consumed. Returns the context of the evaluation."""
     from safeguard.training import validate_index
     path, doc, protocol, mode = read_index(corpus)
-    plan = analysis(protocol)
+    stage = pecat.stage(mode)  # STAGE_RULE on the ledger of this process: the stage the bounds m read (M_NULL_RULE).
+    plan = analysis(protocol, stage, mode)
     check_carriers(path, doc, protocol, mode)
     state = seal_state(path)
+    if state["stage"] != stage:
+        raise ValueError(f"the seal's state gives stage {state['stage']}, the ledger of this process {stage}: the "
+                         "bounds m were checked at the stage of the run (M_NULL_RULE); refused before the seal is "
+                         "consumed")
     check_outputs(out, replays, state["stage"])
     gated = gate(path, doc, state["stage"])
     checked_tree = tree(state["stage"])
@@ -1479,7 +1672,7 @@ def sealed_part(ctx, prepared, run, progress):
     attachments {name: arrays}, ATTACHMENT_RULE). progress["step"] names the step under way (FAILURE_RULE)."""
     from safeguard.runtime import UNSCORED_RULE as STRETCH_RULE
     from tcn import eval as ev
-    from tcn import k2, tvrdenia, zasahy
+    from tcn import k2, zasahy
     path, protocol, mode, plan, records = ctx["path"], ctx["protocol"], ctx["mode"], ctx["plan"], ctx["records"]
     ms, methods, fit, budget = prepared["models"], prepared["methods"], prepared["fit"], prepared["budget"]
     contract, k, n = ms[0].bundle.contract, plan["alarm_rule"]["k"], plan["alarm_rule"]["n"]
@@ -1506,18 +1699,19 @@ def sealed_part(ctx, prepared, run, progress):
     boots = np.array([tb_meta[ident]["boot"] for ident in tb.session])
     model_losses = {model.seed: model.losses(tb) for model in ms}
     method_losses = {entry: m.losses(tb) for entry, m in prepared["compare"].items()}
-    claim_k1 = tvrdenia.k1(protocol, model_losses, method_losses, boots.tolist(), tb_traffic.clean, rezim=mode,
-                           rola=EVENT_ROLE)
+    claim_k1 = k1_claim(protocol, plan, model_losses, method_losses, boots.tolist(), tb_traffic.clean, mode=mode,
+                        role=EVENT_ROLE)  # tcn.tvrdenia k1, undecided at a null m (M_NULL_RULE).
     progress["step"] = "3: the interventions and K2"
     carriers = {role: zasahy.Carriers(*sealed[role]) for role in SEALED}
     plans = {role: zasahy.plan(carriers[role], protocol=protocol, mode=mode, ranges=prepared["ranges"],
                                donors=carriers) for role in SEALED}
     values = k2.k2_values(protocol, plans, models={m.seed: m for m in ms}, methods=methods, calibration=calibration,
                           clean=cal_traffic.clean, budget=budget["budget"], mode=mode)
-    claims_k2 = k2.k2(protocol, values, mode=mode)
+    claims_k2 = k2_claims(protocol, plan, values, mode=mode)  # tcn.k2 k2, undecided at a null m (M_NULL_RULE).
     progress["step"] = "3: the diagnostics"
     detection = k2.detection(plans, protocol=protocol)
     diagnostics = diagnostic_values(dict(prepared, matched=matched), sealed, protocol, plan, detection, roles)
+    diagnostics["claims"] = control_claims(diagnostics["models"], values, protocol, plan, mode)
     progress["step"] = "3: the metrics of design 1.3 (tcn.eval)"
     levels = ev.metriky_protokolu(protocol)
     alfa = 1 - levels["alarm_rate_interval"]["level"]
@@ -1573,7 +1767,8 @@ def sealed_part(ctx, prepared, run, progress):
         "interventions": {"dev": prepared["dev_plan"].record(), **{role: plans[role].record() for role in SEALED}},
         "rules": {"load": LOAD_RULE, "seed": SEED_RULE, "table": TABLE_RULE, "campaign": CAMPAIGN_RULE,
                   "improvement": IMPROVEMENT_RULE, "confirmatory": CONFIRMATORY_RULE, "boots": BOOTS_RULE,
-                  "out": OUT_RULE, "attachments": ATTACHMENT_RULE},
+                  "out": OUT_RULE, "attachments": ATTACHMENT_RULE, "bounds": M_NULL_RULE,
+                  "controls": CONTROL_CLAIMS_RULE},
         OPISNE: {
             "metrics": metrics, "diagnostics": diagnostics, "matched_rates": matched_rates, "k2_values": k2_opisne,
             "descriptive_methods": {"methods": _by_label(prepared["fits"], descriptive, True),
@@ -1598,7 +1793,8 @@ def _common(ctx, run):
                        "plan_mode": ctx["mode"], "allocation_rule": doc.get("allocation_rule"),
                        "sessions": len(records),
                        "sealed_sessions": {role: len(ids) for role, ids in _sealed_ids(records).items()},
-                       "protocol_sha256": doc.get("protocol_sha256")},
+                       "protocol_sha256": doc.get("protocol_sha256"),
+                       "protocol_values": recorded_values(ctx["protocol"])},
             "seal": run.record(), "seal_note": SEAL_NOTE, "gate": ctx["gate"], "tree": ctx["tree"],
             "models": ctx["model_records"]}
 
@@ -1690,7 +1886,8 @@ def _hlavny(argv=None):
     values = record["values"]
     print(_dumps({"record": str(a.out), "stage": values["stage"], "mark": values["mark"]["mark"],
                   "plan_mode": values["plan_mode"], "sessions": record["n"],
-                  "claims": {claim: c["outcome"] or c["status"] for claim, c in values["conclusions"].items()}},
+                  "claims": {claim: c["outcome"] or (c["conclusion"] if c["status"] == EVALUATED else c["status"])
+                             for claim, c in values["conclusions"].items()}},  # M_NULL at a null m (M_NULL_RULE).
                  indent=1))
     return 0
 

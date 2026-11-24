@@ -50,15 +50,16 @@ def _sha(path):
     return hashlib.sha256(Path(path).read_bytes()).hexdigest()
 
 
-def _protocol(profile):
-    """The protocol of the test corpus (module docstring)."""
+def _protocol(profile, *, m=0.0):
+    """The protocol of the test corpus (module docstring); m the bound of the three claims (package C2 of the G1
+    preparation: None for the corpus of a dry run at a null m, tcn/finalne.py M_NULL_RULE)."""
     v5file = _v5_file()
     v5 = v5_sections(SCENARIOS, ROLES, group_sessions=2, window_rows=WINDOW)
     v5.update(roles=dict(ROLES), interleave=[["test_benign", "test_controls"]],
               scenarios={name: copy.deepcopy(v5file["scenarios"][name]) for name in SCENARIOS})
     a = fit_analysis(v5["analysis"], fpr=0.05, max_epochs=1, batch_size=64)
     for claim in protocol_v5.CLAIMS:
-        a[claim]["m"] = 0.0
+        a[claim]["m"] = m
     a["methods"]["Z1"]["grid"] = {"moving_average_rows": [2, 4], "cusum_shift": [0.5]}
     a["methods"]["Z3"]["grid"] = {"ewma_alpha": [0.5]}
     a["methods"]["Z5"]["grid"] = {"ridge_alpha": [1.0]}
@@ -132,15 +133,15 @@ def _ran(item, t0):
             "stop": {"ok": True, "health": 200}, "host_stopped_unix": start + item["duration_s"] + 1.0}
 
 
-def _corpus(root, mode):
-    """The corpus of the module docstring in plan mode `mode` under `root`: {index, protocol, protocol_path,
-    records}."""
+def _corpus(root, mode, *, m=0.0):
+    """The corpus of the module docstring in plan mode `mode` under `root`, its bounds m `m` (_protocol): {index,
+    protocol, protocol_path, records}."""
     root.mkdir(parents=True)
     profile = root / "profile"
     profile.mkdir()
     (profile / "symbols.txt").write_text("synthetic profile of the test\n")
     path = root / "protocol.json"
-    collection.write_json(path, _protocol(profile))
+    collection.write_json(path, _protocol(profile, m=m))
     p = collection.protocol(path)
     protocol_sha = _sha(path)
     order, audits = {}, []
@@ -265,6 +266,24 @@ def campaign_record(corpus, tmp_path_factory):
 def campaign_record_campaign(campaign_corpus, tmp_path_factory):
     """The record of the complete ending of the corpus in plan mode campaign (_campaign_record)."""
     return _campaign_record(campaign_corpus, tmp_path_factory.mktemp("campaign-campaign") / "campaign.json")
+
+
+@pytest.fixture(scope="module")
+def null_corpus(tmp_path_factory):
+    """Package C2 of the G1 preparation (tcn/finalne.py M_NULL_RULE): the corpus in plan mode campaign whose protocol
+    has the three bounds m null, as the protocol of a dry run of G1 before G1 determines them."""
+    return _corpus(tmp_path_factory.mktemp("finalne-null") / "corpus", "campaign", m=None)
+
+
+@pytest.fixture(scope="module")
+def null_models(null_corpus, tmp_path_factory):
+    return _train(null_corpus, tmp_path_factory.mktemp("models-null"))
+
+
+@pytest.fixture(scope="module")
+def null_campaign_record(null_corpus, tmp_path_factory):
+    """The record of the complete ending of the corpus of the null bounds (_campaign_record)."""
+    return _campaign_record(null_corpus, tmp_path_factory.mktemp("campaign-null") / "campaign.json")
 
 
 @pytest.fixture
@@ -616,20 +635,43 @@ def test_a_rehearsal_runs_the_final_command_end_to_end_into_one_record(corpus, m
         assert o[section], section
 
 
-def test_a_null_m_is_refused_before_the_seal_is_consumed(corpus, models, campaign_record, ledger, tmp_path, capsys):
-    """Design B7c 4, test 2: an index whose protocol has analysis.k2b.m null (the bound of G1) is refused by name,
-    and nothing is consumed, read, replayed or written."""
+NULL_M = {
+    "generalka": ("analysis.k2b.m is null: the bound m is determined in G1 (determined_at), and the final evaluation "
+                  "of stage generalka decides no claim without it (M_NULL_RULE: only a dry run of stage suchy on the "
+                  "corpus of a campaign writes its claims undecided); refused before the seal is consumed"),
+    "final": ("analysis.k2b.m is null: the bound m is determined in G1 (determined_at), and the final evaluation of "
+              "stage final decides no claim without it (M_NULL_RULE: only a dry run of stage suchy on the corpus of a "
+              "campaign writes its claims undecided); refused before the seal is consumed"),
+    "suchy_rehearsal": ("analysis.k2b.m is null: the bound m is determined in G1 (determined_at), and the final "
+                        "evaluation of stage suchy in plan mode rehearsal writes no claim without it (M_NULL_RULE: a "
+                        "dry run writes its claims undecided on the corpus of a campaign only, and no tool of G1 "
+                        "computes K1 or K2 on the rows of a rehearsal); refused before the seal is consumed"),
+    "suchy_some_filled": ("analysis.k2b.m is null: the bound m is determined in G1 (determined_at), and the final "
+                          "evaluation of stage suchy takes the three bounds of G1 null together, but analysis.k1.m is "
+                          "0.0 (M_NULL_RULE: G1 determines them together); refused before the seal is consumed")}
+
+
+@pytest.mark.parametrize("case", list(NULL_M))
+def test_a_null_m_is_refused_before_the_seal_is_consumed(case, corpus, campaign_corpus, campaign_record, ledger,
+                                                         request, tmp_path, capsys):
+    """Design B7c 4, test 2, and package C2 of the G1 preparation (tcn/finalne.py M_NULL_RULE; the lead's answer to
+    Q34, 2026-11-24T21:25Z: final and generalka refuse a null m, and a test holds that): an index whose protocol has
+    analysis.k2b.m null (the bound of G1) is refused by name at stage generalka (a rehearsal on the ledger of record)
+    and final (a campaign on it), in a dry run of stage suchy of a rehearsal (the lead's rule of 2026-11-24T22:13Z: no
+    path of G1 computes K1 or K2 on the rows of a rehearsal) and in a dry run of a campaign whose other bounds are
+    filled (G1 determines the three together); nothing is consumed, read, replayed or written."""
     from tcn import finalne
-    doc = json.loads(corpus["index"].read_text())
+    target = corpus if case in ("generalka", "suchy_rehearsal") else campaign_corpus
+    if case in ("generalka", "final"):
+        request.getfixturevalue("of_record")
+    doc = json.loads(target["index"].read_text())
     doc["protocol_config"]["analysis"]["k2b"]["m"] = None
     index = tmp_path / "corpus.json"
     index.write_text(json.dumps(doc))
     before = ledger.read_bytes()
-    argv = _argv(corpus, models, campaign_record, tmp_path, **{"--corpus": index})
+    argv = _argv(target, [tmp_path / "not-read"], campaign_record, tmp_path, **{"--corpus": index})
     assert finalne._hlavny(argv) == 2
-    assert capsys.readouterr().err == ("tcn.finalne: analysis.k2b.m is null: the bound m is determined in G1 "
-                                       "(determined_at), and the final evaluation decides no claim without it; "
-                                       "refused before the seal is consumed\n")
+    assert capsys.readouterr().err == f"tcn.finalne: {NULL_M[case]}\n"
     assert ledger.read_bytes() == before and sorted(p.name for p in tmp_path.iterdir()) == ["corpus.json"]
 
 
@@ -1117,3 +1159,129 @@ def test_the_descriptive_values_of_k2_and_the_rates_on_the_sealed_roles_are_part
     top, sealed = finalne.split_matched(matched, descriptive)
     assert top == per({"label": "any", "threshold": 1., "rates": {"calibration": {"alarms": 1}}}, confirmatory)
     assert sealed == per({"test_benign": {"alarms": 2}, "test_controls": {"alarms": 3}}, confirmatory)
+
+
+# ------------------------------------------------------------------ package C2 of the G1 preparation: the final command
+# at a null m (tcn/finalne.py M_NULL_RULE, CONTROL_CLAIMS_RULE) and the readers of tcn/suchy_beh.py on its record
+
+
+def test_a_dry_run_at_a_null_m_writes_its_claims_undecided_and_at_a_filled_m_decides_the_same(
+        null_corpus, null_models, null_campaign_record, ledger, gates_passed, tmp_path, tmp_path_factory,
+        monkeypatch):
+    """The lead's answers to Q33 and Q34 (2026-11-24T21:25Z) and the C2 row of the skeleton of G1: a final run with a
+    ledger of its own (stage suchy) on the corpus of a campaign whose protocol has the three bounds m null writes, for
+    K1, K2a and K2b, the values per boot and the interval of every compared method, p null and the outcome null with
+    the sentence of M_NULL, and the same for the model with shuffled context and the network with random weights under
+    opisné (CONTROL_CLAIMS_RULE). A second run of the same corpus and bundles at filled bounds (the test fills them in
+    the analysis plan the code reads, scripts.protocol_v5.analysis_plan: the protocol of the index keeps them null, so
+    that the bundles trained on it stay its own) decides; its intervals are the first run's, bit for bit, and its
+    outcomes are tcn/suchy_beh.py rozhodnutia and strukturovane of the first record at those bounds. Both runs close
+    completed in their ledgers, and the readers read the real record."""
+    import copy as copying
+    import torch
+    from tcn import finalne, pecat, suchy_beh
+    p = null_corpus["protocol"]
+
+    def run(name):
+        own = tmp_path_factory.mktemp(f"own-{name}") / "kniha_pecati.json"
+        pecat.zapis_korpus(null_corpus["index"], command="the test's campaign (package B9)", ledger=own)
+        out = tmp_path / name / "final.json"
+        out.parent.mkdir()
+        threads = torch.get_num_threads()
+        torch.set_num_threads(2)  # As _train and the command line of the other tests (--threads 2): a shared PC.
+        try:
+            record = finalne.evaluate(null_corpus["index"], null_models, campaign=null_campaign_record,
+                                      replays=tmp_path / name / "replays", out=out, ledger=own)
+        finally:
+            torch.set_num_threads(threads)
+        entry, = json.loads(own.read_text())["values"]["runs"]
+        assert (entry["stage"], entry["mode"], entry["closed"]["outcome"]) == ("suchy", "campaign", "completed")
+        assert json.loads(out.read_text()) == json.loads(finalne._dumps(record))
+        return record["values"], out
+    v, out = run("null")
+    assert (v["stage"], v["status"], v["plan_mode"]) == ("suchy", "complete", "campaign")
+    _parts(v, p["analysis"]["seeds"])
+    assert v["corpus"]["protocol_values"] == {
+        "analysis.columns": p["analysis"]["columns"], "analysis.horizon_s": p["analysis"]["horizon_s"],
+        **{f"analysis.methods.{z}.grid": p["analysis"]["methods"][z]["grid"] for z in ("Z1", "Z3", "Z5")}}
+    assert v["rules"]["bounds"] == finalne.M_NULL_RULE
+    for claim in protocol_v5.CLAIMS:
+        found = v["claims"][claim]
+        assert (found["m"], found["outcome"], found["wording"], found["conclusion"], found["decisive_methods"]) == (
+            None, None, None, finalne.M_NULL, None)
+        assert v["conclusions"][claim] == {"outcome": None, "status": "evaluated", "wording": None,
+                                           "conclusion": finalne.M_NULL}
+        assert list(found["methods"]) == p["analysis"][claim]["compare"] and len(found["boots"]) >= 2
+        for item in found["methods"].values():
+            assert (item["p_value"], item["test"]) == (None, None) and list(item["values"]) == found["boots"]
+            assert item["interval"][0] <= item["interval"][1]
+    assert v["claims"]["k1"]["role"] == "test_benign" and set(v["claims"]["k1"]["model"]) == {
+        "median_loss", "per_seed_loss"}
+    controls = v["opisné"]["diagnostics"]["claims"]
+    assert list(controls) == [*finalne.STRUCTURE_CONTROLS, "rule"] and controls["rule"] == finalne.CONTROL_CLAIMS_RULE
+    for name in finalne.STRUCTURE_CONTROLS:
+        for claim, found in controls[name]["claims"].items():
+            assert (found["status"], found["m"], found["outcome"], found["conclusion"]) == (
+                "evaluated", None, None, finalne.M_NULL), (name, claim)
+    # The bounds filled: the outcomes better, not_better and undecided by construction from the first intervals.
+    intervals = {claim: [item["interval"] for item in v["claims"][claim]["methods"].values()]
+                 for claim in protocol_v5.CLAIMS}
+    m = {"k1": min(low for low, _ in intervals["k1"]) - 1.0, "k2a": max(high for _, high in intervals["k2a"]) + 1.0,
+         "k2b": min(low for low, _ in intervals["k2b"])}
+    real = protocol_v5.analysis_plan
+
+    def filled(protocol):
+        plan = copying.deepcopy(real(protocol))
+        for claim, value in m.items():
+            plan[claim]["m"] = value
+        return plan
+    monkeypatch.setattr(protocol_v5, "analysis_plan", filled)
+    w, filled_out = run("filled")
+    monkeypatch.setattr(protocol_v5, "analysis_plan", real)
+    for claim in protocol_v5.CLAIMS:
+        found, before = w["claims"][claim], v["claims"][claim]
+        assert (found["m"], found["boots"]) == (m[claim], before["boots"])
+        for z, item in found["methods"].items():
+            assert (item["values"], item["mean"], item["interval"], item["stream"]) == (
+                before["methods"][z]["values"], before["methods"][z]["mean"], before["methods"][z]["interval"],
+                before["methods"][z]["stream"]), (claim, z)
+    assert {claim: w["conclusions"][claim]["outcome"] for claim in protocol_v5.CLAIMS} == {
+        "k1": "better", "k2a": "not_better", "k2b": "undecided"}
+    decided = suchy_beh.rozhodnutia({"null 0": out}, m)
+    assert {claim: decided["runs"]["null 0"][claim]["outcome"] for claim in protocol_v5.CLAIMS} == {
+        claim: w["conclusions"][claim]["outcome"] for claim in protocol_v5.CLAIMS}
+    assert suchy_beh.rozhodnutia({"filled": filled_out}, m)["runs"]["filled"] == {
+        claim: dict(decided["runs"]["null 0"][claim], record_m=m[claim], record_outcome=w["conclusions"][claim][
+            "outcome"]) for claim in protocol_v5.CLAIMS}
+    structured, again = suchy_beh.strukturovane(out, m), suchy_beh.strukturovane(filled_out)
+    assert again["m_origin"] == "record" and again["m"] == m
+    for name in finalne.STRUCTURE_CONTROLS:
+        for claim in protocol_v5.CLAIMS:
+            later = w["opisné"]["diagnostics"]["claims"][name]["claims"][claim]
+            assert later["m"] == m[claim] and later["outcome"] in protocol_v5.OUTCOMES
+            assert structured["controls"][name][claim]["outcome"] == again["controls"][name][claim]["outcome"] == \
+                later["outcome"]
+            assert structured["controls"][name][claim]["intervals"] == {
+                z: item["interval"] for z, item in controls[name]["claims"][claim]["methods"].items()}
+    # The readers on the real record: the bounds of twenty copies of the run are its point estimates, at most one per
+    # method; the readers of the known answers find nothing inserted (this corpus holds no change of a generator) and
+    # the geometry of a horizon of the test's protocol (20 s at 5 s per row: five rows from the first one).
+    bounds = suchy_beh.hranice_m({f"copy {i}": out for i in range(suchy_beh.MIN_RUNS)})
+    assert bounds["m"] == {claim: max(item["mean"] for item in v["claims"][claim]["methods"].values())
+                           for claim in protocol_v5.CLAIMS}
+    assert bounds["grids"] == {z: p["analysis"]["methods"][z]["grid"] for z in ("Z1", "Z3", "Z5")}
+    assert bounds["columns"] == p["analysis"]["columns"] and bounds["flag"]["rule"] == suchy_beh.SPREAD_RULE
+    assert suchy_beh.bez_jedneho({f"copy {i}": out for i in range(suchy_beh.MIN_RUNS)})["claims"]["k1"][
+        "counts"]["better"] in (0, suchy_beh.MIN_RUNS)
+    nothing = {"sessions": {}}
+    assert suchy_beh.neskorovane(out, nothing)["holds"] is None and suchy_beh.okrajova_zmena(out, nothing)[
+        "holds"] is None
+    first = next(r for r in null_corpus["records"] if r["role"] == "test_benign")
+    found = suchy_beh.okrajova_zmena(out, {"sessions": {first["id"]: {
+        "invalid_rows": [], "marginal_changes": [{"first_seq": 40, "rows": 4, "column": "mem_changed_ratio"}],
+        "unevaluated": []}}})
+    assert [(c["first_seq"], c["horizon_rows"], set(c["replays"])) for c in found["changes"]] == [
+        (40, p["analysis"]["horizon_s"] // p["interval_s"] + 1, {str(seed) for seed in p["analysis"]["seeds"]})]
+    assert found["z1"]["chosen"] == next(fit["chosen"] for fit in v["methods"].values() if fit["name"] == "Z1")
+    diagnostics = suchy_beh.diagnostiky(out)
+    assert set(diagnostics["diagnostics"]) == {"tree", "one_member"} and diagnostics["evaluated"] in (True, False)
