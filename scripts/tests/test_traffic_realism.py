@@ -536,6 +536,27 @@ def m_customer_held_twice(r, i, p):
     return [f"customer_held_twice:{_user(2)}"]
 
 
+def m_customer_held_twice_briefly(r, i, p):
+    # The verification of B10 (its mutant C9): an overlap under 1 s counts too. u0 holds its customer from its arrival
+    # at 0.01 s to the end of its request at 0.103 s; u1 arrives at 0.02 s holding zakaznik0001, given to u0 as well.
+    u0, u1 = _arrivals(r)[0], _arrivals(r)[1]
+    end = max(x["t_end_mono"] for x in _requests(r) if x["user_session"] == _user(0))
+    assert u0["customer"] is None and u1["customer"] == "zakaznik0001" and 0 < end - u1["t_mono"] < 1
+    u0["customer"] = "zakaznik0001"
+    return [f"customer_held_twice:{_user(1)}"]
+
+
+def m_customers_held_at_customers(r, i, p):
+    # The verification of B10 (its mutant C8): a drop for held customers with exactly as many user sessions in
+    # progress as lab/seed.py has customers is one, the fewest that can hold them all, below a cap above that.
+    from lab import seed
+    customers = seed.SIZES["customers"]
+    _headers(r, i, lambda h: h["profile_parameters"].update(max_concurrent=customers + 1))
+    last = _arrivals(r)[LAST]
+    last.update(admitted=False, drop_reason="all_customers_held", active=customers)
+    return _dropped_counts(r, i, last)
+
+
 def m_interval_offered(r, i, p):
     iv = _interval_of(i, _arrivals(r)[LAST]["t_mono"])
     iv.update(offered_sessions=2, admitted_sessions=2)  # One more than arrived in it, and in no other.

@@ -717,6 +717,9 @@ _V5_CASES = [
         max_concurrent=h["profile_parameters"]["max_concurrent"] + 1)), logs("traffic_config:profile_parameters")),
     ("traffic_config:warmup_s", headers(lambda h: h.update(warmup_s=h["warmup_s"] - 1)),
      logs("traffic_config:warmup_s")),
+    # The verification of B10 (its mutant C4): traffic.warmup_s of session.json is bound too, the header unchanged.
+    ("traffic_config:warmup_s:session", edit("session.json", lambda m: m["traffic"].update(
+        warmup_s=m["traffic"]["warmup_s"] - 1), seal=False), logs("traffic_config:warmup_s")),
     # The exit code must be the one the request log implies (0 or 1 by host_traffic.py's rule); 2 never is.
     ("child_exit:traffic", edit("end.json", lambda e: e.update(traffic_rc=2), seal=False),
      logs("child_exit:traffic:2")),
@@ -904,6 +907,18 @@ def _refused_start(record):
     record["effect"]["evidence"] = dict(record["effect"]["evidence"], failed=["the process tree runs"])
 
 
+def _started_nothing(record):
+    """mutate: the start of the negative started nothing while the return predicate held (its baseline true), so it is
+    no refused start (the verification of B10, its mutant C19): not executed, and the stop's effect and cleanup false
+    as _refused_start leaves them."""
+    record["start"].update(ok=False, error="the program did not start", started=False)
+    record.update(executed=False)
+    for key in ("effect", "cleanup"):
+        record[key] = dict(record[key], ok=False)
+        record["stop"][key] = dict(record[key])
+    record["effect"]["evidence"] = dict(record["effect"]["evidence"], failed=["the process tree runs"])
+
+
 def _without_controls_json(d, p, result):
     (d / "controls.json").unlink()
     evidence.seal(d)
@@ -943,6 +958,11 @@ _CONTROL_CASES = [
     # S1 of B8: a start refused by the return predicate is not executed and has no baseline, nothing more.
     ("control_not_executed:refused", _control(1, _refused_start),
      logs("control_not_executed:" + NEGATIVE_KIND, "control_without_baseline:" + NEGATIVE_KIND)),
+    # The verification of B10 (its mutant C19): a start that started nothing while its baseline held is no refused
+    # start, so the negative's effect and cleanup are judged as well.
+    ("control_not_executed:not_refused", _control(1, _started_nothing),
+     logs("control_not_executed:" + NEGATIVE_KIND, "negative_not_in_place:" + NEGATIVE_KIND,
+          "control_not_cleaned:" + NEGATIVE_KIND)),
     ("control_not_cleaned", _control(0, _failed("cleanup")), logs("control_not_cleaned:" + CONTROL_KIND)),
     ("control_script_differs", _control(0, lambda r: r["stop"].update(script_sha256="0" * 64)),
      logs("control_script_differs:" + CONTROL_KIND)),

@@ -413,6 +413,40 @@ def test_restore_raw_reproduces_compressed_members(bulky, tmp_path, capsys):
     assert (tmp_path / "again/c.vmicd").read_bytes() == originals["c.vmicd"]
 
 
+def _member_named_like_the_marker(src, monkeypatch):
+    (src / "raw" / arc.RESTORED).write_text("{}")
+    return f"archive has a raw/ member named {arc.RESTORED}, the name of the restore marker"
+
+
+def _session_json_no_object(src, monkeypatch):
+    (src / "session.json").write_text("[]")
+    return "archive member session.json is no JSON object; its session cannot be read"
+
+
+def _session_json_compressed(src, monkeypatch):
+    # The archiver compresses large raw images and logs only (COMPRESS_SUFFIXES, COMPRESS_MIN_BYTES): an archive
+    # stored under another rule holds session.json compressed.
+    monkeypatch.setattr(arc, "COMPRESS_SUFFIXES", arc.COMPRESS_SUFFIXES + (".json",))
+    monkeypatch.setattr(arc, "COMPRESS_MIN_BYTES", 1)
+    return "archive member session.json is stored compressed; its session cannot be read"
+
+
+@pytest.mark.parametrize("change", [_member_named_like_the_marker, _session_json_no_object,
+                                    pytest.param(_session_json_compressed, marks=needs_zstd)],
+                         ids=["member_named_like_the_marker", "session_json_no_object", "session_json_compressed"])
+def test_restore_raw_refuses_by_name_an_archive_whose_marker_it_cannot_write(session, tmp_path, monkeypatch, change):
+    """The lead's answer to Q19 (package B10; the verification of B10, its mutants R3, R5 and R4): restore_raw refuses
+    by name, before the target exists, an archive with a raw/ member named like the restore marker, one whose
+    session.json is no JSON object, and one whose session.json is stored compressed."""
+    src, dst = session
+    reason = change(src, monkeypatch)
+    arc.archive_session(src, dst, lambda: None, compress="zstd" if change is _session_json_compressed else None)
+    target = tmp_path / "restored"
+    with pytest.raises(ValueError, match="^" + re.escape(reason) + "$"):
+        arc.restore_raw(dst, target)
+    assert not target.exists()
+
+
 @pytest.mark.parametrize("target", ["/", "/home"])
 def test_system_disk_identity_requires_explicit_opt_in(tmp_path, monkeypatch, target):
     archive = tmp_path / "archive" if target == "/" else Path("/home/.hyptcn3-absent/archive")
