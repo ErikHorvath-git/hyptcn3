@@ -28,8 +28,11 @@ The parser's view. The extraction result keeps the parser's process identities o
 control is therefore matched by pid with effect.evidence.members, every other kind by the count of its object
 against the mean of the measured rows before the start: one module more (mod_total), one listening socket more
 (sock_listen), at least one new PID more (proc_new), and the writer's size: the changed bytes of the row
-(mem_changed_ratio times the guest memory of the layout) above the reference by at least the dose in MiB. Module
-names and ports are G2's ground truth (proposal 10.3: ps, lsmod and ss in the guest against the parser).
+(mem_changed_ratio times the memory of the bins it is a share of) above the reference by at least the dose in MiB.
+Under a protocol of schema 3 mem_changed_ratio counts only the bins of at least analysis.scale.min_bin_pages pages
+(features/snapshot.py counted_bin, the lead's answer to Q10), so their pages times the page size are that memory;
+under schemas 1 and 2 every bin of the layout (V1 of dokazy/B11/odlozene_B11.md, package B10). Module names and ports
+are G2's ground truth (proposal 10.3: ps, lsmod and ss in the guest against the parser).
 
 Polarity. ok is the outcome a faultless occurrence of its polarity gives, as with the guest's effect predicate
 (skeleton section 2): a control is seen and its columns reach their expected shift; a negative is seen in no row
@@ -66,8 +69,8 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 from features.coverage import scorable_windows  # noqa: E402
-from features.snapshot import MENA  # noqa: E402
-from scripts.protocol_v5 import CONTROL_ROLE  # noqa: E402
+from features.snapshot import MENA, counted_bin  # noqa: E402
+from scripts.protocol_v5 import CONTROL_ROLE, SCHEMA as SCHEMA_3  # noqa: E402
 
 SCHEMA = "hyptcn3/control-outcomes/1"
 # Skeleton B8 section 4 point 2: the mean of the 12 rows before the start (the lead's judgment, proposal 10.9).
@@ -230,7 +233,19 @@ def _patterns(quality_row):
     return out
 
 
-def _parser_saw(kind, polarity, dose, effect, rows, reference, matrix, quality, layout, seq):
+def _counted(protocol):
+    """The min_bin_pages of the bins mem_changed_ratio is a share of (module docstring): analysis.scale.min_bin_pages
+    under schema 3, None (every bin) under schemas 1 and 2; a schema-3 protocol without it is refused by name."""
+    if protocol.get("schema") != SCHEMA_3:
+        return None
+    try:
+        return protocol["analysis"]["scale"]["min_bin_pages"]
+    except (KeyError, TypeError):
+        raise ValueError("protocol schema 3 without analysis.scale.min_bin_pages: the bins of mem_changed_ratio "
+                         "cannot be told (features/snapshot.py counted_bin)") from None
+
+
+def _parser_saw(kind, polarity, dose, effect, rows, reference, matrix, quality, layout, seq, protocol):
     out = {"ok": None, "rows": [seq[i] for i in rows], "showing": [], "object": None, "why": None}
     if effect["ok"] is not True:
         out["why"] = "the guest's effect predicate did not hold"
@@ -253,11 +268,16 @@ def _parser_saw(kind, polarity, dose, effect, rows, reference, matrix, quality, 
             out["why"] = "no measured row among the rows before the start"
             return out
         if kind == WRITER_KIND:
-            memory = sum(pages for _, pages in layout["bins"]) * layout["page_size"]
+            min_bin_pages = _counted(protocol)
+            counted = [pages for _, pages in layout["bins"] if counted_bin(pages, min_bin_pages)]
+            if not counted:  # The extractor refuses such a snapshot; a result of one is refused here as well.
+                raise ValueError(f"{kind}: no bin of the layout has at least min_bin_pages {min_bin_pages} pages, so "
+                                 "mem_changed_ratio is a share of no memory (features/snapshot.py counted_bin)")
+            memory = sum(counted) * layout["page_size"]
             ratio = MENA.index("mem_changed_ratio")
             base = _mean(matrix, reference, "mem_changed_ratio") * memory
-            out["object"] = {"column": "mem_changed_ratio", "memory_bytes": memory, "reference_bytes": base,
-                             "dose_bytes": dose * MIB}
+            out["object"] = {"column": "mem_changed_ratio", "memory_bytes": memory, "min_bin_pages": min_bin_pages,
+                             "bins": len(counted), "reference_bytes": base, "dose_bytes": dose * MIB}
 
             def shows(i):
                 return matrix[i, ratio] * memory - base >= dose * MIB
@@ -324,7 +344,8 @@ def outcomes(record, result, protocol, *, role, archive=None, final_evaluation=F
                    "horizon_end_unix": start + horizon_s,
                    "before": [seq[i] for i in before], "inside": [seq[i] for i in inside],
                    "horizon": [seq[i] for i in horizon], "scored": [seq[i] for i in horizon if seq[i] in scored]},
-        "parser_saw": _parser_saw(kind, polarity, dose, effect, rows, reference, matrix, quality, layout, seq),
+        "parser_saw": _parser_saw(kind, polarity, dose, effect, rows, reference, matrix, quality, layout, seq,
+                                  protocol),
         "column_moved": _column_moved(polarity, expected, rows, reference, matrix, seq),
         "sensor_scored": any(seq[i] in scored for i in horizon),
         "seal": seal,

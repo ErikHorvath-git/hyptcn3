@@ -190,6 +190,38 @@ def test_expectation_down(fall, reached):
     assert (column["shift"], column["direction"], column["reached"]) == (-1 if fall else 1, "down", reached)
 
 
+def test_the_writer_is_judged_on_the_memory_of_the_bins_mem_changed_ratio_counts():
+    """V1 of dokazy/B11/odlozene_B11.md (package B10): under schema 3 mem_changed_ratio is a share of the bins of at
+    least analysis.scale.min_bin_pages pages (1024: the lead's answer to Q10), so the writer's changed bytes are that
+    share times their memory, not the memory of every bin. The layout here has a bin of 1 page and one of 64 pages
+    beside its 32 bins of 4096 (as the hyptcn-lab layout has): a row one page short of the dose of 64 MiB over the
+    32 bins does not show it, a row one page above it does; under schema 2 every bin counts, and the row one page
+    short shows it (65 / 131072 of the dose more, about 8 pages)."""
+    from scripts.controls import outcomes
+    kind, page, mib, size = "kontrola_zapisovac_pamate", 4096, 1 << 20, 16 << 20
+    counted = BINS * 4096 * page  # 512 MiB in the 32 bins of 4096 pages; the bins of 1 and 64 pages lie below 1024.
+    found = {}
+    for label, short, schema in (("one_page_below", 1, 3), ("one_page_above", -1, 3), ("schema_2", 1, 2)):
+        result, doc = session(kind), protocol()
+        layout = result["layout"]  # Two more physical regions: one page in bin 32 and 64 pages in bin 33.
+        layout["regions"] = [{"gpa": 0, "bytes": BINS * size}, {"gpa": BINS * size, "bytes": page},
+                             {"gpa": (BINS + 1) * size, "bytes": 64 * page}]
+        layout["memsize"] = (BINS * 4096 + 65) * page
+        layout["bins"] = [*layout["bins"], [BINS, 1], [BINS + 1, 64]]
+        result["biny"] = list(range(BINS + 2))
+        result["perbin"] = [[*row, row[0], row[0]] for row in result["perbin"]]
+        assert layout["page_size"] == page and doc["analysis"]["scale"]["min_bin_pages"] == 1024
+        for seq in INSIDE:
+            result["matica"][seq][MENA.index("mem_changed_ratio")] = (
+                LEVEL["mem_changed_ratio"] + (DOSE[kind] * mib - short * page) / counted)
+        if schema == 2:
+            doc["schema"] = "hyptcn3/collection-protocol/2"
+        saw = outcomes(occurrence(kind), result, doc, role="pilot")["parser_saw"]
+        found[label] = (saw["ok"], saw["showing"], saw["object"]["memory_bytes"], saw["object"].get("min_bin_pages"))
+    assert found == {"one_page_below": (False, [], counted, 1024), "one_page_above": (True, INSIDE, counted, 1024),
+                     "schema_2": (True, INSIDE, counted + 65 * page, None)}
+
+
 @pytest.mark.parametrize("kind,record,change,why,moved,moved_why", [
     ("kontrola_pocuvajuci_soket", {"effect": {"ok": False, "evidence": {}}}, {},
      "the guest's effect predicate did not hold", True, None),
