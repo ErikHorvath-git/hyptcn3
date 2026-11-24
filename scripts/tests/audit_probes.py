@@ -22,7 +22,8 @@ ROWS holds the table (skeleton 1.1): one row per risk of class P and one per row
     risks    (area, risk id) of the record;
     probe    what the probe found (SKELETON's column "Sonda", and the record's own probe where it ran one);
     tests    pytest node ids that repeat the probe on today's code; each passes today (test_audit_probes.py) and fails
-             on the commit `before` (the record dokazy/B10/pred_po/, design decision 5);
+             on the commit `before` (the records dokazy/B10/pred_po/ of agent A's tree and dokazy/B10/pred_po_zlucene/
+             of the merged tree, design decision 5);
     fixed    (package, commit) of each package that fixed it, the oldest first;
     before   the parent of the oldest commit of `fixed` (skeleton 6: of two packages the older);
     kind     refusal, or limit (row 9, a bound of a unit file) or status (row 11, the status nevyhodnotené): design
@@ -35,7 +36,9 @@ ROWS holds the table (skeleton 1.1): one row per risk of class P and one per row
 A risk of class P sits in exactly one row, and so does every risk SKELETON names.
 
 The test of the table is scripts/tests/test_audit_probes.py. The test ids and the line numbers are facts of the tree at
-the commit of B10's agent A (base 966ff9b); a merge that moves a line or renames a test changes this table with it.
+the merge of B10: agent A wrote them at base 966ff9b, and the merge moved the lines that agent C's commits shift and
+added agent D's tests of the numeric cap to row 4. A merge that moves a line or renames a test changes this table
+with it.
 Only a table: no number here is a measurement.
 """
 from collections import namedtuple
@@ -177,20 +180,24 @@ ROWS = (
          "lab/tests/test_udalosti_effect.py::test_predicate_is_true_with_the_effect_and_false_without"
          "[zataz_pamate-none-14]"),
         (("B3", "0b3c276"), ("B5a", "2a95852")), "c39accb", "refusal",
-        (("event_not_executed", "scripts/collection_logs.py:583"),
-         ("event_without_effect", "scripts/collection_logs.py:586")),
+        (("event_not_executed", "scripts/collection_logs.py:605"),
+         ("event_without_effect", "scripts/collection_logs.py:608")),
         ()),
     Row(3, (("capture", "R6"),),
         "a collector warning did not reject the session (the verifier's probe: two WARN lines accepted)",
         ("scripts/tests/test_collection_logs.py::test_collector_warning_is_judged_by_the_allowed_patterns[null]",
          CASE + "[logs:collector_warning_unlisted]"),
         (("B3", "0b3c276"),), "c39accb", "refusal",
-        (("collector_warning_unlisted", "scripts/collection_logs.py:566"),),
+        (("collector_warning_unlisted", "scripts/collection_logs.py:588"),),
         ()),
     Row(4, (("capture", "R3"),),
         "rows closed by a parser rule were accepted without a limit, a test with a numeric cap (the verifier's probe: "
         "10 rows closed by rule prev accepted)",
-        (SELFTEST + "test_cap_of_rule_closed_rows_once_it_is_set[above]",),
+        (SELFTEST + "test_cap_of_rule_closed_rows_once_it_is_set[above]",
+         SELFTEST + "test_the_self_test_builds_the_case_of_the_cap_once_the_cap_is_a_number[zero]",
+         SELFTEST + "test_the_self_test_builds_the_case_of_the_cap_once_the_cap_is_a_number[three]",
+         SELFTEST + "test_the_self_test_builds_the_case_of_the_cap_once_the_cap_is_a_number[four]",
+         SELFTEST + "test_the_self_test_builds_the_case_of_the_cap_once_the_cap_is_a_number[every_row]"),
         (("B3", "0b3c276"),), "c39accb", "refusal",
         (("rows closed by a parser rule above the cap", "features/acceptance.py:250"),),
         ("audit.rule_closed_rows_max is null in config/collection-v5.json until G3b (proposal 10.9), so under the G0 "
@@ -207,7 +214,7 @@ ROWS = (
          ("QEMU memory was swapped before start: qemu_swap_kb is ", "scripts/collection.py:1181"),
          ("QEMU swap was not disabled before start", "scripts/collection.py:1838"),
          ("QEMU memory was swapped before start", "scripts/collection.py:1842"),
-         ("qemu_swap", "scripts/collection_logs.py:536")),
+         ("qemu_swap", "scripts/collection_logs.py:558")),
         ("the probe of 500 collector major faults per cycle is still accepted: the audit never reads the sidecar's "
          "capture.rusage, and proposal 6.2 gates QEMU swap only, while capture R4's protocol control asked for "
          "collector majflt 0 (a finding of B10 for the lead)",)),
@@ -219,8 +226,8 @@ ROWS = (
          "scripts/tests/test_protocol_v5.py::test_selfcheck_passes_the_file_and_fails_each_deliberate_error"
          "[phases_at_tenth_edges]"),
         (("B4", "9e7e43c"), ("B4b", "fd021b1")), "8ae9f39", "refusal",
-        (("role {role}: {what} per tenth of the interval differ by more than 1", "scripts/protocol_v5.py:2161"),
-         ("{what} phases fail the Kolmogorov-Smirnov test against the uniform law at ", "scripts/protocol_v5.py:2165")),
+        (("role {role}: {what} per tenth of the interval differ by more than 1", "scripts/protocol_v5.py:2189"),
+         ("{what} phases fail the Kolmogorov-Smirnov test against the uniform law at ", "scripts/protocol_v5.py:2193")),
         ()),
     Row(7, (("lab", "LAB-11"),),
         "one seed for two purposes (the record ran no probe of the code: the auditor compared the plans of v4 and v5 "
@@ -228,7 +235,7 @@ ROWS = (
         ("scripts/tests/test_protocol_v5.py::test_selfcheck_passes_the_file_and_fails_each_deliberate_error"
          "[common_seed]",),
         (("B4", "9e7e43c"),), "8ae9f39", "refusal",
-        (("purposes {a} and {b} share a seed", "scripts/protocol_v5.py:2213"),),
+        (("purposes {a} and {b} share a seed", "scripts/protocol_v5.py:2241"),),
         ()),
     Row(8, (("lab", "LAB-12"),),
         "the delivered load was not compared with the scenario (the record ran no probe)",
@@ -236,7 +243,7 @@ ROWS = (
          "[offered_load_differs_from_plan]",
          CASE + "[logs:offered_load_differs_from_plan]"),
         (("B5b", "e64e619"),), "11319ee", "refusal",
-        (("offered_load_differs_from_plan", "scripts/collection_logs.py:693"),),
+        (("offered_load_differs_from_plan", "scripts/collection_logs.py:730"),),
         ()),
     Row(9, (("lab", "LAB-02"),),
         "a loop of restarts without end (the record ran no probe of the code: the verifier computed the gaps by "
@@ -258,12 +265,12 @@ ROWS = (
          "tcn/tests/test_pecat.py::test_replay_of_a_sealed_archive_is_refused[safeguard.runtime.replay_archive]"),
         (("B7c", "576aa4b"),), "062178d", "refusal",
         (("a second final run is refused: the seal of its sealed archives was consumed by the final run ",
-          "tcn/pecat.py:991"),
-         ("the seal of the corpus cannot be consumed on the ledger ", "tcn/finalne.py:512"),
-         ("the final evaluation of stage final needs git and a committed tree of code: ", "tcn/finalne.py:678"),
+          "tcn/pecat.py:1010"),
+         ("the seal of the corpus cannot be consumed on the ledger ", "tcn/finalne.py:518"),
+         ("the final evaluation of stage final needs git and a committed tree of code: ", "tcn/finalne.py:684"),
          ("sealed role {rola} (design B7c 1.1): only the final command evaluates it ", "tcn/eval.py:1795"),
          ("{purpose}: refused, {what} is sealed (sha256 {sha}; session {entry.get('session')} of role ",
-          "tcn/pecat.py:676")),
+          "tcn/pecat.py:688")),
         ("an index of protocol schema 1 or 2 keeps the mark beside the index (tcn/eval.py --final), so the record's "
          "copy of such an index still passes there; protocol v5 is schema 3, sealed by tcn/pecat.py",)),
     Row(11, (("evaluation", "R7"),),
@@ -307,7 +314,7 @@ ROWS = (
         (("incomplete model inputs under ", "features/acceptance.py:245"),
          ("pilot is not accepted for this protocol: ", "scripts/campaign.py:654"),
          ("invalid_rows.max is unreachable under the score coverage gate", "scripts/collection.py:195"),
-         ("score coverage gate outside the interval bound to invalid_rows.max", "scripts/protocol_v5.py:1849")),
+         ("score coverage gate outside the interval bound to invalid_rows.max", "scripts/protocol_v5.py:1877")),
         ()),
     Row(15, (("process", "R9"),),
         "a failed campaign left no record (the record ran no probe)",

@@ -10,9 +10,10 @@ The table is scripts/tests/audit_probes.py. Its checks:
     reason_problems()  each exact reason stands verbatim on its line of the file (design decision 3);
 and every test id of the table exists and passes in one run of its own (design decision 4). Each check has its good
 input (the table as it is) and, where the design names the failure, one bad input with exactly its problem. That every
-test of the table fails on its commit `before` is the record dokazy/B10/pred_po/ (design decision 5), not a test here.
-The table, a module of package B10, is imported inside the tests (_table), so this file collects on the code before
-B10 and fails there test by test. Only a table and its checks: no number here is a measurement.
+test of the table fails on its commit `before` is the record dokazy/B10/pred_po/, and dokazy/B10/pred_po_zlucene/ for
+the merged tree (design decision 5), not a test here. The table, a module of package B10, is imported inside the tests
+(_table), so this file collects on the code before B10 and fails there test by test. Only a table and its checks: no
+number here is a measurement.
 """
 from collections import Counter
 import json

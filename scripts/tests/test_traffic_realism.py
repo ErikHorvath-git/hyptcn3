@@ -247,7 +247,8 @@ OTHER_SIDE = {
     # Eight spacings of 0.25 and one of 4: CV 1.77, above 1.2.
     "arrival_cv:above": ("steady", {"spacings": (.25,) * (len(evidence.ESHOP) - 2) + (4.,)}),
     # Every drawn think 20 s: the mean 19.1 s lies far from the profile's 7 s, and every think is below its 70 s.
-    "think_time:mean": ("steady", {"thinks": (20.,)}),
+    # The requests follow by their think times (F6 of B5b), so the measure phase is 200 s of 200 cycles.
+    "think_time:mean": ("steady", {"thinks": (20.,), "measure_s": 200, "snapshots": 200}),
     # Four more deliberate 404s (on the most requested object, so the concentration holds): 34 of 39 answered 2xx,
     # 0.872, below success_min 0.88.
     "success_rate:below_min": ("steady", {"sessions": tuple([*steps, GONE] if i < 4 else steps
