@@ -980,8 +980,13 @@ def main(argv=None):
     if args.command in ("up", "create", "clone"):
         lab.clone(args.source)
     if args.command == "clone":
-        # Not started here: the first boot must already see the new identity.
-        print(f"Defined {lab.domain}; next: labctl.py up --domain {lab.domain} --vm {lab.vm} --port {lab.port}")
+        # Not started here: the first boot must already see the new identity. The hint names only commands this
+        # parser accepts (finding S7 of the B8 verification, package B10): up requires --protocol since F5 of B5b and
+        # is refused under schema 3, so protocol v5 starts and deploys the new VM in two steps.
+        where = f"--domain {lab.domain} --vm {lab.vm} --port {lab.port}"
+        print(f"Defined {lab.domain}; next: labctl.py start {where}, then labctl.py deploy {where} (protocol v5); "
+              f"under a protocol of schema 1 or 2 labctl.py up {where} --protocol PROTOCOL does both and starts the "
+              "old traffic unit")
     if args.command in ("up", "start", "create"):
         lab.start()
         lab.swap_step()

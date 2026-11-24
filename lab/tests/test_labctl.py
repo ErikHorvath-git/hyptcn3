@@ -317,6 +317,33 @@ def test_every_start_of_the_vm_disables_qemu_swap_before_anything_else(monkeypat
     assert lines and all(json.loads(line) == {"qemu_swap": {"memory_swap_max": "0"}} for line in lines)
 
 
+def test_the_hint_of_clone_names_commands_that_run(monkeypatch, capsys):
+    """Finding S7 of the B8 verification (package B10): labctl clone prints the next steps of the new VM, and every
+    command it names is one this parser accepts. Under protocol v5 these are start and deploy; up needs --protocol of
+    schema 1 or 2 (finding F5 of B5b) and refuses schema 3 before any step. The steps of the VM are fakes."""
+    steps = []
+    for name in ("clone", "start", "swap_step", "deploy", "health", "traffic"):
+        monkeypatch.setattr(labctl.Lab, name, lambda self, *a, step=name: steps.append(step))
+    where = ["--domain", "hyptcn-lab-c", "--vm", "c", "--port", "18089"]
+    assert labctl.main(["clone", *where]) == 0 and steps == ["clone"]
+    hint = capsys.readouterr().out
+    commands = [found.split() for found in re.findall(r"labctl\.py ([a-z-]+(?: --[a-z-]+ [^\s,;()]+)*)", hint)]
+    done = {}
+    for argv in commands:  # PROTOCOL stands for the protocol the lab serves: here one of schema 2.
+        steps.clear()
+        assert labctl.main([SCHEMA_2[1] if word == "PROTOCOL" else word for word in argv]) == 0, argv
+        done[argv[0]] = list(steps)
+    assert done == {"start": ["start", "swap_step"], "deploy": ["deploy", "health"],
+                    "up": ["clone", "start", "swap_step", "deploy", "health", "traffic"]}
+    assert [argv[0] for argv in commands] == ["start", "deploy", "up"] and all(argv[1:7] == where for argv in commands)
+    up = next(argv for argv in commands if argv[0] == "up")
+    steps.clear()
+    with pytest.raises(RuntimeError, match=re.escape(labctl.OLD_GENERATOR_UNDER_V5)):
+        labctl.main([str(Path(labctl.REPO) / "config/collection-v5.json") if word == "PROTOCOL" else word
+                     for word in up])
+    assert steps == []  # Under schema 3 up refuses before any step.
+
+
 @pytest.mark.parametrize("effect,stored", [
     ({"ok": True, "predicate": "p", "evidence": {"MainPID": "2"}}, {"ok": True, "predicate": "p",
                                                                     "evidence": {"MainPID": "2"}}),
