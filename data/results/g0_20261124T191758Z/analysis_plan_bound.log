@@ -1,0 +1,6 @@
+# commit ecbc04a32efdaca018695278acc1a992b53eb7ee
+# row 12 of scripts/tests/audit_probes.py: (('model', 'M9'), ('evaluation', 'R8'))
+# command python3 -m pytest -q -p no:cacheprovider safeguard/tests/test_training.py::test_analysis_parameters_are_refused_by_name[fpr_outside_diagnostic] tcn/tests/test_odovzdanie_korpusu.py::test_parameter_analyzy_z_prikazoveho_riadka_iba_s_diagnostikou tcn/tests/test_porovnanie.py::test_fit_pod_schemou_3_odmietne_parameter_analyzy[fpr]
+...                                                                      [100%]
+3 passed in 6.20s
+exit 0

@@ -1,0 +1,475 @@
+{
+ "schema": "hyptcn3/g0-copy/1",
+ "commit": "ecbc04a32efdaca018695278acc1a992b53eb7ee",
+ "date": "2026-11-24T20:49:16+00:00",
+ "host": "debian",
+ "guest": "none: a machine record of B10's before and after, made without a VM",
+ "command": "dokazy/G0/g0_doplnok.sh: a copy of /home/eh/hyptcn3-logs/v5/dokazy/B10/pred_po_zlucene/pred_runs.json",
+ "n": 57,
+ "source": "/home/eh/hyptcn3-logs/v5/dokazy/B10/pred_po_zlucene/pred_runs.json",
+ "source_sha256": "9da9b0e6baac61e8fde23791c2e14ecedfd73931ffa49c7881c32f1a4a97181a",
+ "source_made_by": "dokazy/B10/pred_po/pred_po.py --tree <merge clone of B10 at e5f7954>, whose code equals ecbc04a's (git diff e5f7954 ecbc04a: only docs/PRIRUCKA.md and the self-test record)",
+ "values": {
+  "scripts/tests/test_audit_selftest.py::test_bad_session_is_refused_with_exactly_its_reasons[lateness]": {
+   "before": "c39accb",
+   "exit": 4,
+   "outcome": "none",
+   "message": "",
+   "collected_of_its_function": [
+    "scripts/tests/test_audit_selftest.py::test_bad_session_is_refused_with_exactly_its_reasons[audit_cases_missing]"
+   ],
+   "imports": {
+    "scripts.tests.test_audit_selftest": "imports",
+    "scripts.tests.audit_cases": "ModuleNotFoundError: No module named 'scripts.protocol_v5'"
+   }
+  },
+  "scripts/tests/test_audit_selftest.py::test_bad_session_is_refused_with_exactly_its_reasons[logs:event_not_executed]": {
+   "before": "c39accb",
+   "exit": 4,
+   "outcome": "none",
+   "message": "",
+   "collected_of_its_function": [
+    "scripts/tests/test_audit_selftest.py::test_bad_session_is_refused_with_exactly_its_reasons[audit_cases_missing]"
+   ],
+   "imports": {
+    "scripts.tests.test_audit_selftest": "imports",
+    "scripts.tests.audit_cases": "ModuleNotFoundError: No module named 'scripts.protocol_v5'"
+   }
+  },
+  "scripts/tests/test_audit_selftest.py::test_bad_session_is_refused_with_exactly_its_reasons[logs:event_without_effect]": {
+   "before": "c39accb",
+   "exit": 4,
+   "outcome": "none",
+   "message": "",
+   "collected_of_its_function": [
+    "scripts/tests/test_audit_selftest.py::test_bad_session_is_refused_with_exactly_its_reasons[audit_cases_missing]"
+   ],
+   "imports": {
+    "scripts.tests.test_audit_selftest": "imports",
+    "scripts.tests.audit_cases": "ModuleNotFoundError: No module named 'scripts.protocol_v5'"
+   }
+  },
+  "scripts/tests/test_effect_contract.py::test_event_record_without_a_true_ok_is_refused_for_exactly_that[ok_false]": {
+   "before": "c39accb",
+   "exit": 1,
+   "outcome": "failure",
+   "message": "assert not True"
+  },
+  "lab/tests/test_udalosti_effect.py::test_predicate_is_true_with_the_effect_and_false_without[zamok_tabulky-none-9]": {
+   "before": "c39accb",
+   "exit": 1,
+   "outcome": "error",
+   "message": "failed on setup with \"AttributeError: <module 'udalosti' from '/tmp/claude-1000/-home-eh-projects-hyptcn3/9a8a89c1-0c71-4e83-9fec-bd4ea2021d22/scratchpad/b10/c_praca/m/pp/pred_c39accb/lab/udalosti.py'> has no attribute 'http'\""
+  },
+  "lab/tests/test_udalosti_effect.py::test_predicate_is_true_with_the_effect_and_false_without[udrzba_zaloha-none-11]": {
+   "before": "c39accb",
+   "exit": 1,
+   "outcome": "error",
+   "message": "failed on setup with \"AttributeError: <module 'udalosti' from '/tmp/claude-1000/-home-eh-projects-hyptcn3/9a8a89c1-0c71-4e83-9fec-bd4ea2021d22/scratchpad/b10/c_praca/m/pp/pred_c39accb/lab/udalosti.py'> has no attribute 'http'\""
+  },
+  "lab/tests/test_udalosti_effect.py::test_predicate_is_true_with_the_effect_and_false_without[zataz_pamate-none-14]": {
+   "before": "c39accb",
+   "exit": 1,
+   "outcome": "error",
+   "message": "failed on setup with \"AttributeError: <module 'udalosti' from '/tmp/claude-1000/-home-eh-projects-hyptcn3/9a8a89c1-0c71-4e83-9fec-bd4ea2021d22/scratchpad/b10/c_praca/m/pp/pred_c39accb/lab/udalosti.py'> has no attribute 'http'\""
+  },
+  "scripts/tests/test_collection_logs.py::test_collector_warning_is_judged_by_the_allowed_patterns[null]": {
+   "before": "c39accb",
+   "exit": 1,
+   "outcome": "failure",
+   "message": "AssertionError: assert [] == ['collector_w...oda 5.000 s)']\n  \n  Right contains one more item: 'collector_warning_unlisted:planovac: cyklus 7 trval 5.200 s (perioda 5.000 s)'\n  Use -v to get more diff"
+  },
+  "scripts/tests/test_audit_selftest.py::test_bad_session_is_refused_with_exactly_its_reasons[logs:collector_warning_unlisted]": {
+   "before": "c39accb",
+   "exit": 4,
+   "outcome": "none",
+   "message": "",
+   "collected_of_its_function": [
+    "scripts/tests/test_audit_selftest.py::test_bad_session_is_refused_with_exactly_its_reasons[audit_cases_missing]"
+   ],
+   "imports": {
+    "scripts.tests.test_audit_selftest": "imports",
+    "scripts.tests.audit_cases": "ModuleNotFoundError: No module named 'scripts.protocol_v5'"
+   }
+  },
+  "scripts/tests/test_audit_selftest.py::test_cap_of_rule_closed_rows_once_it_is_set[above]": {
+   "before": "c39accb",
+   "exit": 1,
+   "outcome": "error",
+   "message": "failed on setup with \"ImportError: cannot import name 'audit_policy' from 'features' (/tmp/claude-1000/-home-eh-projects-hyptcn3/9a8a89c1-0c71-4e83-9fec-bd4ea2021d22/scratchpad/b10/c_praca/m/pp/pred_c39accb/features/__init__.py)\""
+  },
+  "scripts/tests/test_audit_selftest.py::test_the_self_test_builds_the_case_of_the_cap_once_the_cap_is_a_number[zero]": {
+   "before": "c39accb",
+   "exit": 1,
+   "outcome": "error",
+   "message": "failed on setup with \"ImportError: cannot import name 'audit_policy' from 'features' (/tmp/claude-1000/-home-eh-projects-hyptcn3/9a8a89c1-0c71-4e83-9fec-bd4ea2021d22/scratchpad/b10/c_praca/m/pp/pred_c39accb/features/__init__.py)\""
+  },
+  "scripts/tests/test_audit_selftest.py::test_the_self_test_builds_the_case_of_the_cap_once_the_cap_is_a_number[three]": {
+   "before": "c39accb",
+   "exit": 1,
+   "outcome": "error",
+   "message": "failed on setup with \"ImportError: cannot import name 'audit_policy' from 'features' (/tmp/claude-1000/-home-eh-projects-hyptcn3/9a8a89c1-0c71-4e83-9fec-bd4ea2021d22/scratchpad/b10/c_praca/m/pp/pred_c39accb/features/__init__.py)\""
+  },
+  "scripts/tests/test_audit_selftest.py::test_the_self_test_builds_the_case_of_the_cap_once_the_cap_is_a_number[four]": {
+   "before": "c39accb",
+   "exit": 1,
+   "outcome": "error",
+   "message": "failed on setup with \"ImportError: cannot import name 'audit_policy' from 'features' (/tmp/claude-1000/-home-eh-projects-hyptcn3/9a8a89c1-0c71-4e83-9fec-bd4ea2021d22/scratchpad/b10/c_praca/m/pp/pred_c39accb/features/__init__.py)\""
+  },
+  "scripts/tests/test_audit_selftest.py::test_the_self_test_builds_the_case_of_the_cap_once_the_cap_is_a_number[every_row]": {
+   "before": "c39accb",
+   "exit": 1,
+   "outcome": "error",
+   "message": "failed on setup with \"ImportError: cannot import name 'audit_policy' from 'features' (/tmp/claude-1000/-home-eh-projects-hyptcn3/9a8a89c1-0c71-4e83-9fec-bd4ea2021d22/scratchpad/b10/c_praca/m/pp/pred_c39accb/features/__init__.py)\""
+  },
+  "scripts/tests/test_audit_selftest.py::test_bad_session_is_refused_with_exactly_its_reasons[logs:qemu_swap]": {
+   "before": "c39accb",
+   "exit": 4,
+   "outcome": "none",
+   "message": "",
+   "collected_of_its_function": [
+    "scripts/tests/test_audit_selftest.py::test_bad_session_is_refused_with_exactly_its_reasons[audit_cases_missing]"
+   ],
+   "imports": {
+    "scripts.tests.test_audit_selftest": "imports",
+    "scripts.tests.audit_cases": "ModuleNotFoundError: No module named 'scripts.protocol_v5'"
+   }
+  },
+  "scripts/tests/test_audit_selftest.py::test_bad_session_is_refused_with_exactly_its_reasons[logs:qemu_swap:absent]": {
+   "before": "c39accb",
+   "exit": 4,
+   "outcome": "none",
+   "message": "",
+   "collected_of_its_function": [
+    "scripts/tests/test_audit_selftest.py::test_bad_session_is_refused_with_exactly_its_reasons[audit_cases_missing]"
+   ],
+   "imports": {
+    "scripts.tests.test_audit_selftest": "imports",
+    "scripts.tests.audit_cases": "ModuleNotFoundError: No module named 'scripts.protocol_v5'"
+   }
+  },
+  "scripts/tests/test_audit_selftest.py::test_bad_session_is_refused_with_exactly_its_reasons[qemu_swap]": {
+   "before": "c39accb",
+   "exit": 4,
+   "outcome": "none",
+   "message": "",
+   "collected_of_its_function": [
+    "scripts/tests/test_audit_selftest.py::test_bad_session_is_refused_with_exactly_its_reasons[audit_cases_missing]"
+   ],
+   "imports": {
+    "scripts.tests.test_audit_selftest": "imports",
+    "scripts.tests.audit_cases": "ModuleNotFoundError: No module named 'scripts.protocol_v5'"
+   }
+  },
+  "scripts/tests/test_audit_selftest.py::test_bad_session_is_refused_with_exactly_its_reasons[qemu_swapped]": {
+   "before": "c39accb",
+   "exit": 4,
+   "outcome": "none",
+   "message": "",
+   "collected_of_its_function": [
+    "scripts/tests/test_audit_selftest.py::test_bad_session_is_refused_with_exactly_its_reasons[audit_cases_missing]"
+   ],
+   "imports": {
+    "scripts.tests.test_audit_selftest": "imports",
+    "scripts.tests.audit_cases": "ModuleNotFoundError: No module named 'scripts.protocol_v5'"
+   }
+  },
+  "scripts/tests/test_audit_selftest.py::test_run_session_refuses_qemu_swap_that_is_not_forbidden[max]": {
+   "before": "c39accb",
+   "exit": 1,
+   "outcome": "error",
+   "message": "failed on setup with \"ImportError: cannot import name 'audit_policy' from 'features' (/tmp/claude-1000/-home-eh-projects-hyptcn3/9a8a89c1-0c71-4e83-9fec-bd4ea2021d22/scratchpad/b10/c_praca/m/pp/pred_c39accb/features/__init__.py)\""
+  },
+  "scripts/tests/test_audit_selftest.py::test_run_session_refuses_qemu_memory_that_was_swapped_before_start[8592]": {
+   "before": "c39accb",
+   "exit": 1,
+   "outcome": "error",
+   "message": "failed on setup with \"ImportError: cannot import name 'audit_policy' from 'features' (/tmp/claude-1000/-home-eh-projects-hyptcn3/9a8a89c1-0c71-4e83-9fec-bd4ea2021d22/scratchpad/b10/c_praca/m/pp/pred_c39accb/features/__init__.py)\""
+  },
+  "scripts/tests/test_collector_majflt.py::test_a_bound_refuses_one_cycle_above_it_and_accepts_a_cycle_at_it[zero]": {
+   "before": "c39accb",
+   "exit": 1,
+   "outcome": "error",
+   "message": "failed on setup with \"ImportError: cannot import name 'audit_policy' from 'features' (/tmp/claude-1000/-home-eh-projects-hyptcn3/9a8a89c1-0c71-4e83-9fec-bd4ea2021d22/scratchpad/b10/c_praca/m/pp/pred_c39accb/features/__init__.py)\""
+  },
+  "scripts/tests/test_audit_selftest.py::test_every_reason_of_the_audit_and_the_verdict_has_a_case": {
+   "before": "c39accb",
+   "exit": 1,
+   "outcome": "failure",
+   "message": "ModuleNotFoundError: No module named 'scripts.protocol_v5'"
+  },
+  "scripts/tests/test_audit_cases_logs.py::test_cases_cover_every_problem_key_of_the_log_audit": {
+   "before": "c39accb",
+   "exit": 4,
+   "outcome": "error",
+   "message": "collection failure",
+   "collected_of_its_function": [
+    "ERROR: found no collectors for /tmp/claude-1000/-home-eh-projects-hyptcn3/9a8a89c1-0c71-4e83-9fec-bd4ea2021d22/scratchpad/b10/c_praca/m/pp/pred_c39accb/scripts/tests/test_audit_cases_logs.py::test_cases_cover_every_problem_key_of_the_log_audit"
+   ],
+   "imports": {
+    "scripts.tests.test_audit_cases_logs": "ModuleNotFoundError: No module named 'scripts.protocol_v5'"
+   }
+  },
+  "scripts/tests/test_audit_selftest.py::test_require_selftest_refuses_without_a_valid_record[absent]": {
+   "before": "c39accb",
+   "exit": 1,
+   "outcome": "error",
+   "message": "failed on setup with \"ImportError: cannot import name 'audit_policy' from 'features' (/tmp/claude-1000/-home-eh-projects-hyptcn3/9a8a89c1-0c71-4e83-9fec-bd4ea2021d22/scratchpad/b10/c_praca/m/pp/pred_c39accb/features/__init__.py)\""
+  },
+  "scripts/tests/test_audit_selftest.py::test_bad_session_is_refused_with_exactly_its_reasons[timestamp_gap]": {
+   "before": "c39accb",
+   "exit": 4,
+   "outcome": "none",
+   "message": "",
+   "collected_of_its_function": [
+    "scripts/tests/test_audit_selftest.py::test_bad_session_is_refused_with_exactly_its_reasons[audit_cases_missing]"
+   ],
+   "imports": {
+    "scripts.tests.test_audit_selftest": "imports",
+    "scripts.tests.audit_cases": "ModuleNotFoundError: No module named 'scripts.protocol_v5'"
+   }
+  },
+  "scripts/tests/test_audit_selftest.py::test_bad_session_is_refused_with_exactly_its_reasons[missing_key:frame3.json:capture.queue_wait_ms]": {
+   "before": "c39accb",
+   "exit": 4,
+   "outcome": "none",
+   "message": "",
+   "collected_of_its_function": [
+    "scripts/tests/test_audit_selftest.py::test_bad_session_is_refused_with_exactly_its_reasons[audit_cases_missing]"
+   ],
+   "imports": {
+    "scripts.tests.test_audit_selftest": "imports",
+    "scripts.tests.audit_cases": "ModuleNotFoundError: No module named 'scripts.protocol_v5'"
+   }
+  },
+  "scripts/tests/test_protocol_v5.py::test_selfcheck_passes_the_file_and_fails_each_deliberate_error[locked_to_grid]": {
+   "before": "8ae9f39",
+   "exit": 1,
+   "outcome": "failure",
+   "message": "ImportError: cannot import name 'protocol_v5' from 'scripts' (unknown location)"
+  },
+  "scripts/tests/test_protocol_v5.py::test_selfcheck_passes_the_file_and_fails_each_deliberate_error[phases_at_tenth_edges]": {
+   "before": "8ae9f39",
+   "exit": 1,
+   "outcome": "failure",
+   "message": "ImportError: cannot import name 'protocol_v5' from 'scripts' (unknown location)"
+  },
+  "scripts/tests/test_protocol_v5.py::test_selfcheck_passes_the_file_and_fails_each_deliberate_error[common_seed]": {
+   "before": "8ae9f39",
+   "exit": 1,
+   "outcome": "failure",
+   "message": "ImportError: cannot import name 'protocol_v5' from 'scripts' (unknown location)"
+  },
+  "scripts/tests/test_traffic_realism.py::test_a_log_that_breaks_one_requirement_is_refused_with_its_name[offered_load_differs_from_plan]": {
+   "before": "11319ee",
+   "exit": 1,
+   "outcome": "failure",
+   "message": "ImportError: cannot import name 'CONTROL_RECORD_CLASS' from 'scripts.protocol_v5' (/tmp/claude-1000/-home-eh-projects-hyptcn3/9a8a89c1-0c71-4e83-9fec-bd4ea2021d22/scratchpad/b10/c_praca/m/pp/pred_11319ee/scripts/protocol_v5.py)"
+  },
+  "scripts/tests/test_audit_selftest.py::test_bad_session_is_refused_with_exactly_its_reasons[logs:offered_load_differs_from_plan]": {
+   "before": "11319ee",
+   "exit": 4,
+   "outcome": "none",
+   "message": "",
+   "collected_of_its_function": [
+    "scripts/tests/test_audit_selftest.py::test_bad_session_is_refused_with_exactly_its_reasons[audit_cases_missing]"
+   ],
+   "imports": {
+    "scripts.tests.test_audit_selftest": "imports",
+    "scripts.tests.audit_cases": "ImportError: cannot import name 'CONTROL_RECORD_CLASS' from 'scripts.protocol_v5' (/tmp/claude-1000/-home-eh-projects-hyptcn3/9a8a89c1-0c71-4e83-9fec-bd4ea2021d22/scratchpad/b10/c_praca/m/pp/pred_11319ee/scripts/protocol_v5.py)"
+   }
+  },
+  "lab/tests/test_periods.py::test_entries_are_complete_and_process_creating_ones_are_bounded_or_random": {
+   "before": "8bdc2ae",
+   "exit": 1,
+   "outcome": "failure",
+   "message": "FileNotFoundError: [Errno 2] No such file or directory: '/tmp/claude-1000/-home-eh-projects-hyptcn3/9a8a89c1-0c71-4e83-9fec-bd4ea2021d22/scratchpad/b10/c_praca/m/pp/pred_8bdc2ae/lab/periods.json'"
+  },
+  "lab/tests/test_periods.py::test_bounds_and_random_delays_of_the_register_are_those_of_the_source": {
+   "before": "8bdc2ae",
+   "exit": 1,
+   "outcome": "failure",
+   "message": "TypeError: 'NoneType' object is not subscriptable"
+  },
+  "tcn/tests/test_pecat.py::test_a_second_final_run_is_refused[copy_of_the_index]": {
+   "before": "062178d",
+   "exit": 1,
+   "outcome": "error",
+   "message": "failed on setup with \"ImportError: cannot import name 'pecat' from 'tcn' (/tmp/claude-1000/-home-eh-projects-hyptcn3/9a8a89c1-0c71-4e83-9fec-bd4ea2021d22/scratchpad/b10/c_praca/m/pp/pred_062178d/tcn/__init__.py)\""
+  },
+  "tcn/tests/test_finalne.py::test_a_second_run_is_refused[copy_elsewhere]": {
+   "before": "062178d",
+   "exit": 1,
+   "outcome": "error",
+   "message": "failed on setup with \"ValueError: missing protocol key: status\""
+  },
+  "tcn/tests/test_finalne.py::test_a_refusal_before_the_seal_consumes_nothing[dirty_tree]": {
+   "before": "062178d",
+   "exit": 1,
+   "outcome": "error",
+   "message": "failed on setup with \"ValueError: missing protocol key: status\""
+  },
+  "tcn/tests/test_eval_v5.py::test_a_sealed_role_is_evaluated_by_the_final_command_or_in_a_rehearsal[campaign-False-False-sealed role test_benign]": {
+   "before": "062178d",
+   "exit": 1,
+   "outcome": "failure",
+   "message": "ImportError: cannot import name 'REHEARSAL_MARK' from 'tcn.eval' (/tmp/claude-1000/-home-eh-projects-hyptcn3/9a8a89c1-0c71-4e83-9fec-bd4ea2021d22/scratchpad/b10/c_praca/m/pp/pred_062178d/tcn/eval.py)"
+  },
+  "tcn/tests/test_pecat.py::test_replay_of_a_sealed_archive_is_refused[safeguard.runtime.replay_archive]": {
+   "before": "062178d",
+   "exit": 1,
+   "outcome": "error",
+   "message": "failed on setup with \"ImportError: cannot import name 'pecat' from 'tcn' (/tmp/claude-1000/-home-eh-projects-hyptcn3/9a8a89c1-0c71-4e83-9fec-bd4ea2021d22/scratchpad/b10/c_praca/m/pp/pred_062178d/tcn/__init__.py)\""
+  },
+  "tcn/tests/test_eval_v5.py::test_an_occurrence_is_evaluable_at_half_of_its_first_60_s_scored[7-False]": {
+   "before": "062178d",
+   "exit": 1,
+   "outcome": "failure",
+   "message": "ImportError: cannot import name 'metriky_v5' from 'tcn.eval' (/tmp/claude-1000/-home-eh-projects-hyptcn3/9a8a89c1-0c71-4e83-9fec-bd4ea2021d22/scratchpad/b10/c_praca/m/pp/pred_062178d/tcn/eval.py)"
+  },
+  "tcn/tests/test_eval_v5.py::test_an_unscored_stretch_is_nevyhodnotene_in_the_output": {
+   "before": "062178d",
+   "exit": 1,
+   "outcome": "failure",
+   "message": "ImportError: cannot import name 'metriky_v5' from 'tcn.eval' (/tmp/claude-1000/-home-eh-projects-hyptcn3/9a8a89c1-0c71-4e83-9fec-bd4ea2021d22/scratchpad/b10/c_praca/m/pp/pred_062178d/tcn/eval.py)"
+  },
+  "safeguard/tests/test_training.py::test_analysis_parameters_are_refused_by_name[fpr_outside_diagnostic]": {
+   "before": "f99b924",
+   "exit": 1,
+   "outcome": "failure",
+   "message": "ImportError: cannot import name 'training_parameters' from 'safeguard.training' (/tmp/claude-1000/-home-eh-projects-hyptcn3/9a8a89c1-0c71-4e83-9fec-bd4ea2021d22/scratchpad/b10/c_praca/m/pp/pred_f99b924/safeguard/training.py)"
+  },
+  "tcn/tests/test_odovzdanie_korpusu.py::test_parameter_analyzy_z_prikazoveho_riadka_iba_s_diagnostikou": {
+   "before": "f99b924",
+   "exit": 1,
+   "outcome": "error",
+   "message": "failed on setup with \"ValueError: missing protocol key: status\""
+  },
+  "tcn/tests/test_porovnanie.py::test_fit_pod_schemou_3_odmietne_parameter_analyzy[fpr]": {
+   "before": "f99b924",
+   "exit": 1,
+   "outcome": "failure",
+   "message": "AssertionError: Regex pattern did not match.\n Regex: '^analysis\\\\ parameter\\\\ fpr\\\\ is\\\\ given\\\\ \\\\(0\\\\.05\\\\)\\\\ under\\\\ protocol\\\\ schema\\\\ 3,\\\\ whose\\\\ analysis\\\\ plan\\\\ fixes\\\\ analysis\\\\.fpr\\\\ =\\\\ 0\\\\.01;\\\\ a\\\\ given\\\\ analysis\\\\ parameter\\\\ is\\\\ applied\\\\ only\\\\ to\\\\ a\\\\ diagnostic\\\\ bundle\\\\ \\\\(\\\\-\\\\-diagnostic\\\\)$'\n Input: 'production training requires a complete non-diagnostic corpus'"
+  },
+  "tcn/tests/test_odovzdanie_korpusu.py::test_ostra_kontrola_indexu_prijme_predponu_skupin": {
+   "before": "48e198c",
+   "exit": 4,
+   "outcome": "error",
+   "message": "collection failure",
+   "collected_of_its_function": [
+    "ERROR: found no collectors for /tmp/claude-1000/-home-eh-projects-hyptcn3/9a8a89c1-0c71-4e83-9fec-bd4ea2021d22/scratchpad/b10/c_praca/m/pp/pred_48e198c/tcn/tests/test_odovzdanie_korpusu.py::test_ostra_kontrola_indexu_prijme_predponu_skupin"
+   ],
+   "imports": {
+    "tcn.tests.test_odovzdanie_korpusu": "ImportError: cannot import name 'FIT_ROLES' from 'safeguard.training' (/tmp/claude-1000/-home-eh-projects-hyptcn3/9a8a89c1-0c71-4e83-9fec-bd4ea2021d22/scratchpad/b10/c_praca/m/pp/pred_48e198c/safeguard/training.py)"
+   }
+  },
+  "tcn/tests/test_odovzdanie_korpusu.py::test_ostra_kontrola_indexu_odmietne_skupinu_bez_predpony": {
+   "before": "48e198c",
+   "exit": 4,
+   "outcome": "error",
+   "message": "collection failure",
+   "collected_of_its_function": [
+    "ERROR: found no collectors for /tmp/claude-1000/-home-eh-projects-hyptcn3/9a8a89c1-0c71-4e83-9fec-bd4ea2021d22/scratchpad/b10/c_praca/m/pp/pred_48e198c/tcn/tests/test_odovzdanie_korpusu.py::test_ostra_kontrola_indexu_odmietne_skupinu_bez_predpony"
+   ],
+   "imports": {
+    "tcn.tests.test_odovzdanie_korpusu": "ImportError: cannot import name 'FIT_ROLES' from 'safeguard.training' (/tmp/claude-1000/-home-eh-projects-hyptcn3/9a8a89c1-0c71-4e83-9fec-bd4ea2021d22/scratchpad/b10/c_praca/m/pp/pred_48e198c/safeguard/training.py)"
+   }
+  },
+  "tcn/tests/test_odovzdanie_korpusu.py::test_trening_prijme_tolerovany_riadok": {
+   "before": "48e198c",
+   "exit": 4,
+   "outcome": "error",
+   "message": "collection failure",
+   "collected_of_its_function": [
+    "ERROR: found no collectors for /tmp/claude-1000/-home-eh-projects-hyptcn3/9a8a89c1-0c71-4e83-9fec-bd4ea2021d22/scratchpad/b10/c_praca/m/pp/pred_48e198c/tcn/tests/test_odovzdanie_korpusu.py::test_trening_prijme_tolerovany_riadok"
+   ],
+   "imports": {
+    "tcn.tests.test_odovzdanie_korpusu": "ImportError: cannot import name 'FIT_ROLES' from 'safeguard.training' (/tmp/claude-1000/-home-eh-projects-hyptcn3/9a8a89c1-0c71-4e83-9fec-bd4ea2021d22/scratchpad/b10/c_praca/m/pp/pred_48e198c/safeguard/training.py)"
+   }
+  },
+  "tcn/tests/test_odovzdanie_korpusu.py::test_kazda_metoda_prijme_tolerovany_riadok": {
+   "before": "48e198c",
+   "exit": 4,
+   "outcome": "error",
+   "message": "collection failure",
+   "collected_of_its_function": [
+    "ERROR: found no collectors for /tmp/claude-1000/-home-eh-projects-hyptcn3/9a8a89c1-0c71-4e83-9fec-bd4ea2021d22/scratchpad/b10/c_praca/m/pp/pred_48e198c/tcn/tests/test_odovzdanie_korpusu.py::test_kazda_metoda_prijme_tolerovany_riadok"
+   ],
+   "imports": {
+    "tcn.tests.test_odovzdanie_korpusu": "ImportError: cannot import name 'FIT_ROLES' from 'safeguard.training' (/tmp/claude-1000/-home-eh-projects-hyptcn3/9a8a89c1-0c71-4e83-9fec-bd4ea2021d22/scratchpad/b10/c_praca/m/pp/pred_48e198c/safeguard/training.py)"
+   }
+  },
+  "tcn/tests/test_odovzdanie_korpusu.py::test_prehratie_s_tolerovanym_riadkom_konci_nulou": {
+   "before": "48e198c",
+   "exit": 4,
+   "outcome": "error",
+   "message": "collection failure",
+   "collected_of_its_function": [
+    "ERROR: found no collectors for /tmp/claude-1000/-home-eh-projects-hyptcn3/9a8a89c1-0c71-4e83-9fec-bd4ea2021d22/scratchpad/b10/c_praca/m/pp/pred_48e198c/tcn/tests/test_odovzdanie_korpusu.py::test_prehratie_s_tolerovanym_riadkom_konci_nulou"
+   ],
+   "imports": {
+    "tcn.tests.test_odovzdanie_korpusu": "ImportError: cannot import name 'FIT_ROLES' from 'safeguard.training' (/tmp/claude-1000/-home-eh-projects-hyptcn3/9a8a89c1-0c71-4e83-9fec-bd4ea2021d22/scratchpad/b10/c_praca/m/pp/pred_48e198c/safeguard/training.py)"
+   }
+  },
+  "tcn/tests/test_odovzdanie_korpusu.py::test_trening_a_metody_odmietnu_riadok_mimo_pravidla[nad_pocet-prva-train]": {
+   "before": "48e198c",
+   "exit": 4,
+   "outcome": "error",
+   "message": "collection failure",
+   "collected_of_its_function": [
+    "ERROR: found no collectors for /tmp/claude-1000/-home-eh-projects-hyptcn3/9a8a89c1-0c71-4e83-9fec-bd4ea2021d22/scratchpad/b10/c_praca/m/pp/pred_48e198c/tcn/tests/test_odovzdanie_korpusu.py::test_trening_a_metody_odmietnu_riadok_mimo_pravidla"
+   ],
+   "imports": {
+    "tcn.tests.test_odovzdanie_korpusu": "ImportError: cannot import name 'FIT_ROLES' from 'safeguard.training' (/tmp/claude-1000/-home-eh-projects-hyptcn3/9a8a89c1-0c71-4e83-9fec-bd4ea2021d22/scratchpad/b10/c_praca/m/pp/pred_48e198c/safeguard/training.py)"
+   }
+  },
+  "scripts/tests/test_pilot_gate.py::test_pilot_cell_audit_decision[V4-one_row]": {
+   "before": "432dd2e",
+   "exit": 1,
+   "outcome": "failure",
+   "message": "AssertionError: assert (0, True, []) == (2, False, ['...l-inputs-v1'])\n  \n  At index 0 diff: 0 != 2\n  Use -v to get more diff"
+  },
+  "scripts/tests/test_pilot_gate.py::test_pilot_gate_follows_the_audit[V4-one_row-honest]": {
+   "before": "432dd2e",
+   "exit": 1,
+   "outcome": "failure",
+   "message": "AssertionError: Regex pattern did not match.\n Regex: '^pilot\\\\ is\\\\ not\\\\ accepted\\\\ for\\\\ this\\\\ protocol:\\\\ unaccepted\\\\ audit:\\\\ the\\\\ record\\\\ does\\\\ not\\\\ state\\\\ a\\\\ clean\\\\ acceptance$'\n Input: 'accepted pilot with current extractor and frozen protocol required'"
+  },
+  "scripts/tests/test_protocol_v5.py::test_selfcheck_passes_the_file_and_fails_each_deliberate_error[gate_085]": {
+   "before": "432dd2e",
+   "exit": 1,
+   "outcome": "failure",
+   "message": "ImportError: cannot import name 'protocol_v5' from 'scripts' (unknown location)"
+  },
+  "scripts/tests/test_campaign_v5.py::test_finish_corpus_without_the_record_of_the_complete_ending_fails": {
+   "before": "bae0ee8",
+   "exit": 1,
+   "outcome": "error",
+   "message": "failed on setup with \"ValueError: missing protocol key: status\""
+  },
+  "scripts/tests/test_campaign_endings.py::test_the_record_of_a_closing_ending_carries_the_entry_of_the_measurement_log": {
+   "before": "bae0ee8",
+   "exit": 1,
+   "outcome": "failure",
+   "message": "ValueError: missing protocol key: status"
+  },
+  "scripts/tests/test_campaign_endings.py::test_a_hash_that_changes_during_a_run_makes_the_campaign_invalid[measurement]": {
+   "before": "bae0ee8",
+   "exit": 1,
+   "outcome": "failure",
+   "message": "ValueError: missing protocol key: status"
+  },
+  "scripts/tests/test_campaign.py::test_finish_corpus_keeps_the_error_text_of_the_production_check": {
+   "before": "ac95f01",
+   "exit": 1,
+   "outcome": "failure",
+   "message": "ValueError: missing protocol key: status"
+  },
+  "scripts/tests/test_campaign_v5.py::test_a_small_campaign_runs_from_initialize_to_finish_corpus": {
+   "before": "ac95f01",
+   "exit": 1,
+   "outcome": "error",
+   "message": "failed on setup with \"ValueError: missing protocol key: status\""
+  }
+ }
+}

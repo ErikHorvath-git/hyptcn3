@@ -1,0 +1,5 @@
+# probe sonda_432dd2e.py at 432dd2e (432dd2e Protocol v5, package B1: tests for nine mutants that survived verification), extra files {}
+# /home/eh/projects/hyptcn3/.venv/bin/python -B /home/eh/hyptcn3-logs/v5/dokazy/B10/pred_po/sondy/sonda_432dd2e.py <scratch>/sonda_tmp/432dd2e
+# 2026-11-24T17:28:07Z
+{"collection.protocol": "refused: invalid_rows.max is unreachable under the score coverage gate", "input": "config/collection-v4.json under schema 3, min_score_coverage 0.85, invalid_rows.max 3, cycles 720", "probe": "the loader on a gate the worst session of the rule cannot reach (case gate_085)", "row": 14}
+exit 0

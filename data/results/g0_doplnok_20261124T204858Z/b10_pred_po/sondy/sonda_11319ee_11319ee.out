@@ -1,0 +1,6 @@
+# probe sonda_11319ee.py at 11319ee (11319ee Protocol v5, package B5a: self-test record of the audit checks), extra files {}
+# /home/eh/projects/hyptcn3/.venv/bin/python -B /home/eh/hyptcn3-logs/v5/dokazy/B10/pred_po/sondy/sonda_11319ee.py <scratch>/sonda_tmp/11319ee
+# 2026-11-24T17:27:57Z
+{"accepted": true, "measured_catalog_requests": 1, "measured_requests": 3, "probe": "the fixture as built (control)", "problems": [], "row": "-", "scenario": {"burst": 0, "catalog_share": 0.5, "initial_phase": "warmup", "profile": "lab", "seed": 1, "summary_interval_s": 1, "target": "http://lab", "workers": 1, "write_share": 0.2}}
+{"accepted": true, "measured_catalog_requests": 1, "measured_requests": 3, "probe": "the delivered load against the scenario (LAB-12)", "problems": [], "row": 8, "scenario": {"burst": 4, "catalog_share": 1.0, "initial_phase": "warmup", "profile": "lab", "seed": 1, "summary_interval_s": 1, "target": "http://lab", "workers": 64, "write_share": 0.0}}
+exit 0

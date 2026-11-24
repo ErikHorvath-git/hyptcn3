@@ -1,0 +1,6 @@
+# commit ecbc04a32efdaca018695278acc1a992b53eb7ee
+# date 2026-11-24T20:02:24Z
+# host debian
+# command python3 -c 'from scripts.audit_selftest import require_selftest; d = require_selftest("config/collection-v5.json"); print({k: d[k] for k in ("date", "commit", "n", "passed", "protocol_sha256", "measurement_sha256", "cases_sha256")})'
+{'date': '2026-11-24T19:16:24+00:00', 'commit': '0f3ef0306e8b2bfbd0d0c8e8eb8f473a7e5d80cf', 'n': 238, 'passed': True, 'protocol_sha256': '8fe3eea1e2c273c0f614246a0ff12d05a3483840a16f436fbe3d31e64ef8f47d', 'measurement_sha256': '30f03520b6b235d36fda59dd7992221c2494bd5d0c530c3e35e1c62cf0afc56c', 'cases_sha256': 'a02f7f0e0eac69b4060eb5801d56001628906b5e149291779f3ee421d8bdcfa2'}
+exit 0

@@ -1,0 +1,64 @@
+{
+ "schema": "hyptcn3/gate-record/1",
+ "date": "2026-11-24T20:50:10+00:00",
+ "commit": "ecbc04a32efdaca018695278acc1a992b53eb7ee",
+ "host": "debian",
+ "guest": "pozri dokazy jednotlivych kriterii",
+ "command": "bash data/results/g0_20261124T191758Z/g0_dokazy.sh; bash data/results/g0_doplnok_20261124T204858Z/g0_doplnok.sh (the copies of the two scripts that made the evidence directories, both on ecbc04a); criteria and verification from dokazy/G0/kriteria.py and dokazy/G0/overenie.py",
+ "n": 7,
+ "values": {
+  "stage": "G0",
+  "protocol": "config/collection-v5.json",
+  "protocol_sha256": "9165995c1674de9030129d82b4d6948d1d526d8b5b316aa97c05841c94e877f7",
+  "protocol_hash_rule": "sha256 of the UTF-8 of json.dumps(sort_keys=True, separators=(',', ':'), ensure_ascii=False) of the protocol without the paths that determined_at assigns to stages after G0",
+  "measurement_sha256": "30f03520b6b235d36fda59dd7992221c2494bd5d0c530c3e35e1c62cf0afc56c",
+  "harness_sha256": "569d6d329f72bed83f41fdabfc0934be76a9029dd6411c091cc229f21ea57bcb",
+  "criteria": {
+   "tests": {
+    "passed": true,
+    "evidence": "data/results/g0_20261124T191758Z/pytest.log; data/results/g0_20261124T191758Z/check_claims.log"
+   },
+   "protocol_selfcheck": {
+    "passed": true,
+    "evidence": "data/results/g0_20261124T191758Z/selfcheck_campaign.log; data/results/g0_20261124T191758Z/selfcheck_rehearsal.log; data/results/g0_doplnok_20261124T204858Z/selfcheck_errors.log",
+    "known_limitation": "Známe obmedzenie (rozhodnutie vedúceho 2026-11-24, dokazy/B10/PRIPOMIENKY.md, bod 1): session roly test_controls s udalosťou, ktorá podľa plánu nevznikne, zhodí protocol_v5.replacement chybou KeyError 'n', takže tri kontroly hlásia „cannot check“ namiesto dôvodu; session je zamietnutá aj tak a dôvod pomenuje kontrola udalostí."
+   },
+   "audit_selftest": {
+    "passed": true,
+    "evidence": "data/results/g0_20261124T191758Z/audit_selftest_require.log; data/results/audit_selftest_20261124T191624Z.json"
+   },
+   "corpus_to_training": {
+    "passed": true,
+    "evidence": "data/results/g0_20261124T191758Z/corpus_to_training.log"
+   },
+   "analysis_plan_bound": {
+    "passed": true,
+    "evidence": "data/results/g0_20261124T191758Z/analysis_plan_bound.log; data/results/g0_20261124T191758Z/selfcheck_campaign.log; data/results/g0_20261124T191758Z/selfcheck_rehearsal.log; data/results/g0_doplnok_20261124T204858Z/analysis_plan_bound_all.log"
+   },
+   "test_sealed": {
+    "passed": true,
+    "evidence": "data/results/g0_20261124T191758Z/test_sealed.log"
+   },
+   "audit_probes_reproduced": {
+    "passed": true,
+    "evidence": "data/results/g0_20261124T191758Z/audit_probes.log; data/results/g0_doplnok_20261124T204858Z/b10_pred_po/MANIFEST.log; data/results/g0_20261124T191758Z/audit_probes_pred_po_SUHRN.md; data/results/g0_doplnok_20261124T204858Z/b10_pred_po/pred.xml; data/results/g0_doplnok_20261124T204858Z/b10_pred_po/po.xml; data/results/g0_doplnok_20261124T204858Z/b10_pred_po/pred.log; data/results/g0_doplnok_20261124T204858Z/b10_pred_po/po.log; data/results/g0_doplnok_20261124T204858Z/b10_pred_po/ids.json; data/results/g0_doplnok_20261124T204858Z/b10_pred_po/pred_runs.json; data/results/g0_doplnok_20261124T204858Z/b10_pred_po/pred_later.json; data/results/g0_doplnok_20261124T204858Z/b10_pred_po/SUHRN.md; data/results/g0_doplnok_20261124T204858Z/b10_pred_po/sondy"
+   }
+  },
+  "verification": {
+   "independent": true,
+   "by": "claude-opus-5-5, a new agent without the executor's context (docs/HARNESS_V5.sk.md, chapter 1); its answer is in data/results/overenie_G0_20261124T205001Z.json (values; the answer's sha256 ea5e51443b5cfd2c00b8f6118f8aafabddc25114f1084eda6abaaae253254d9e)",
+   "verdicts": {
+    "tests": "confirmed",
+    "protocol_selfcheck": "confirmed",
+    "audit_selftest": "confirmed",
+    "corpus_to_training": "confirmed",
+    "analysis_plan_bound": "confirmed",
+    "test_sealed": "confirmed",
+    "audit_probes_reproduced": "confirmed"
+   }
+  },
+  "passed": true,
+  "problems": []
+ },
+ "note": "Zaznam stupna pripravenosti protokolu v5; nie je to meranie. Platnost pocita scripts/gates.py status."
+}

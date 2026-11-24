@@ -1,0 +1,15 @@
+# commit ecbc04a32efdaca018695278acc1a992b53eb7ee
+# row 10 of scripts/tests/audit_probes.py: (('model', 'M5'), ('evaluation', 'R2'), ('process', 'R8'))
+# command python3 -m pytest -q -p no:cacheprovider tcn/tests/test_pecat.py::test_a_second_final_run_is_refused[copy_of_the_index] tcn/tests/test_finalne.py::test_a_second_run_is_refused[copy_elsewhere] tcn/tests/test_finalne.py::test_a_refusal_before_the_seal_consumes_nothing[dirty_tree] tcn/tests/test_eval_v5.py::test_a_sealed_role_is_evaluated_by_the_final_command_or_in_a_rehearsal[campaign-False-False-sealed role test_benign] tcn/tests/test_pecat.py::test_replay_of_a_sealed_archive_is_refused[safeguard.runtime.replay_archive]
+.....                                                                    [100%]
+5 passed in 3.65s
+exit 0
+# command python3 -m pytest -q -p no:cacheprovider tcn/tests/test_pecat.py
+........................................................................ [ 96%]
+...                                                                      [100%]
+75 passed in 4.95s
+exit 0
+# command python3 -m pytest -q -p no:cacheprovider tcn/tests/test_finalne.py
+..............................                                           [100%]
+30 passed in 134.72s (0:02:14)
+exit 0

@@ -1,0 +1,11 @@
+# commit ecbc04a32efdaca018695278acc1a992b53eb7ee
+# date 2026-11-24T19:39:05Z
+# host debian
+# command bash scripts/check_claims.sh
+check_claims.sh: uplatnene vynimky (pole EXEMPT, pozri HONESTY.md kap. 3):
+  vmicollect/README.md: 1043.2 - vymysleny priklad JSON sidecaru v dokumentacii zo starsej vetvy (HONESTY kap. 3), nie meranie
+  vmicollect/README.md: 2,8 TB - ilustracny radovy odhad v dokumentacii zo starsej vetvy (HONESTY kap. 3), nie meranie; nahradit nameranym objemom
+  vmicollect/src/retention.c: 2.8 TB - ten isty radovy odhad v hlavicke zdrojaku zo starsej vetvy (HONESTY kap. 3)
+  vmicollect/src/writer_delta.c: 2.8 TB - ten isty radovy odhad v hlavicke zdrojaku zo starsej vetvy (HONESTY kap. 3)
+check_claims.sh: ciste (268 suborov)
+exit 0
