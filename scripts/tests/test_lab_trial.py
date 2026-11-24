@@ -833,6 +833,32 @@ def test_the_cap_of_a_profile_is_a_value_of_g2_and_preliminary_until_then(tmp_pa
             if gates.stage_binding(before, stage) == gates.stage_binding(after, stage)] == ["G0", "G1"]
 
 
+def test_the_executors_choices_of_the_saturation_series_are_named_as_such():
+    """V2 of dokazy/B11/odlozene_B11.md (package B10): the lead's answer to Q5 asks a bisection until neighbouring
+    steps are closer than 15 %; the geometric midpoint, its three decimals and the reading of 15 % as failed / served
+    below 1.15 are the executor's (package B11), and the rule that a dropped user session or a step without a peak
+    invalidates the step is finding F1 of the B5c verification. scenario_rule.basis of the file, proposal 10.3 and the
+    tool's rule (SATURATION_RULE) name each as such, and the tool's numbers are the ones named."""
+    from scripts import lab_trial
+    assert ("ends the series with an error (finding F1 of the B5c verification)" in lab_trial.SATURATION_RULE
+            and "rounded to 3 decimals (the executor's judgment, package B11)" in lab_trial.SATURATION_RULE
+            and "(the executor's reading of the lead's 15 %, package B11)" in lab_trial.SATURATION_RULE)
+    basis = json.loads(V5.read_text())["scenario_rule"]["basis"]
+    assert ("is invalid (finding F1 of the B5c verification)" in basis
+            and "bisected (the lead's answer to Q5) at the geometric midpoint, rounded to three decimals (the "
+                "executor's judgment, package B11)" in basis
+            and "less than 1.15 times the served one (the executor's reading, package B11, of the lead's \"until "
+                "neighbouring steps are closer than 15 %\")" in basis)
+    text = (V5.parents[1] / "docs/NAVRH_PROTOKOL_V5.sk.md").read_text(encoding="utf-8")
+    section = " ".join(text[text.index("### 10.3 "):text.index("### 10.4 ")].split())
+    assert ("rad skončí chybou (nález F1 overenia B5c)" in section
+            and "v geometrickom strede, zaokrúhlenom na tri desatinné miesta (úsudok vykonávateľa, balík B11)"
+            in section
+            and "1,15-násobok obslúženého (čítanie vykonávateľa, balík B11: vedúci píše „kým susedné kroky nie sú "
+                "bližšie než 15 %“)" in section)
+    assert (lab_trial.STEP_RATIO_MAX, lab_trial.MIDPOINT_DECIMALS) == (1.15, 3)
+
+
 # ------------------------------------------------------------------ refused inputs
 
 @pytest.mark.parametrize("case", ["unknown_scenario", "run_directory_exists", "profile_mismatch", "no_rate",

@@ -754,9 +754,11 @@ kladný.
   nasýtení meria pre každý profil diagnostický rad krokov, nie session, na kópii protokolu, v ktorej
   `max_concurrent` neviaže (aspoň 4 × 60 × najvyššia skúšaná rýchlosť). Krok zlyhá na serveri, keď požiadavka
   špičky nemá očakávaný výsledok alebo p95 latencie špičky je aspoň 1000 ms (úsudok nástroja skúšky labu);
-  zahodená relácia alebo krok bez špičky krok zneplatní a rad skončí chybou. Po prvom zlyhanom kroku sa hranica
-  dohľadá delením intervalu v geometrickom strede (tri desatinné miesta), kým zlyhaný krok nie je menej než
-  1,15-násobok obslúženého. Priepustnosť je najvyšší obslúžený krok a `rate` je jej `peak_share`. Poradie: pred
+  zahodená relácia alebo krok bez špičky krok zneplatní a rad skončí chybou (nález F1 overenia B5c). Po prvom
+  zlyhanom kroku sa hranica dohľadá delením intervalu (odpoveď vedúceho na Q5) v geometrickom strede, zaokrúhlenom
+  na tri desatinné miesta (úsudok vykonávateľa, balík B11), kým zlyhaný krok nie je menej než 1,15-násobok
+  obslúženého (čítanie vykonávateľa, balík B11: vedúci píše „kým susedné kroky nie sú bližšie než 15 %“).
+  Priepustnosť je najvyšší obslúžený krok a `rate` je jej `peak_share`. Poradie: pred
   behmi pri `rate` high sa nastaví predbežný strop, ktorý neviaže (cesta stupňa G2, záznamy G0 a G1 ostávajú
   platné, nový záznam samotestu auditu), potom dlhý beh pri `rate` high, a `max_concurrent` profilu je potom
   dvojnásobok najväčšieho počtu súbežných relácií v jeho meranej fáze (`determined_at` G2). `rate` high musí

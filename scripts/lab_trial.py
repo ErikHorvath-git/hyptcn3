@@ -91,8 +91,8 @@ MIDPOINT_DECIMALS = 3  # Judgment: the rate of a bisection step, user sessions p
 GUEST_SQL_TIMEOUT_S = 180  # Judgment: one labctl exec of psql in the guest; labctl's own guest command bound is 120 s.
 
 # The lead's answer to Q5 (2026-11-24) for the saturation series of G2, which this tool runs ahead of G2:
-STEP_RATIO_MAX = 1.15  # The lead's judgment: bisection until neighbouring steps are closer than 15 %, read as the
-# failed rate over the served rate below it.
+STEP_RATIO_MAX = 1.15  # The lead's judgment: bisection until neighbouring steps are closer than 15 %; reading it
+# as the failed rate over the served rate below 1.15 is the executor's (package B11; V2 of its deferred list).
 CAP_FACTOR_S = 240  # Judgment, 4 x 60 s: the series runs on a copy whose max_concurrent is at least this times its
 # highest rate (a user session lasts about a minute, 4 is the margin; the executor's point 1, accepted by the lead).
 PROPOSED_CAP_FACTOR = 2  # Judgment: max_concurrent for collection is twice the most concurrent user sessions at rate
@@ -665,9 +665,11 @@ SATURATION_RULE = (
     "the server's throughput at saturation (the lead's answer to Q5, 2026-11-24): a diagnostic series, no session, on "
     "the series copy of the protocol; a step fails on the server when a request of its peak intervals lacks its "
     "expected result or their p95 latency is at least the bound; a step without a peak or with a user session dropped "
-    "in it is invalid and ends the series with an error; the steps of --rates run in increasing order up to the first "
-    "failed one, then the geometric midpoint of the highest served and the lowest failed rate, rounded to "
-    f"{MIDPOINT_DECIMALS} decimals, until the failed rate is less than {STEP_RATIO_MAX} times the served one; the "
+    "in it is invalid and ends the series with an error (finding F1 of the B5c verification); the steps of --rates "
+    "run in increasing order up to the first failed one, then the bisection (the lead's answer to Q5) at the "
+    f"geometric midpoint of the highest served and the lowest failed rate, rounded to {MIDPOINT_DECIMALS} decimals "
+    "(the executor's judgment, package B11), until the failed rate is less than "
+    f"{STEP_RATIO_MAX} times the served one (the executor's reading of the lead's 15 %, package B11); the "
     "throughput is the highest served rate, and proposed_rate is scenario_rule.peak_share of it")
 
 
