@@ -320,22 +320,26 @@ def test_document_list_replies_200_with_the_creation_time_as_a_json_number(lab):
 
 # The guard (package B5c): no SQL value of the lab that psycopg2 reads may be numeric, which psycopg2 returns as
 # decimal.Decimal and json.dumps refuses. Numeric are: extract() since PostgreSQL 14, avg() of integers, sum() of
-# bigint, round(), trunc(), div(), ceil() and floor() of numeric, the statistical aggregates, a decimal literal and the
-# type numeric (decimal) itself. The guard does not know the types of the arguments, so every such call, literal or
-# type name must be cast to a float or an integer type, itself or an expression around it (also sum() of integer,
-# which is bigint: the cast costs nothing and keeps the rule simple).
-NUMERIC_CALL = re.compile(r"(?i)\b(extract|avg|sum|round|trunc|div|ceil|ceiling|floor|stddev\w*|variance|var_pop"
-                          r"|var_samp|percentile_cont|percentile_disc)\s*\(")
+# bigint, round(), trunc(), div(), ceil() and floor() of numeric, to_number(), the statistical aggregates, a decimal
+# literal or one with an exponent (1e3 is numeric too), and the type numeric (decimal) itself. The guard does not know
+# the types of the columns or the arguments, so every such call, literal or type name must be cast to a float or an
+# integer type, itself or an expression around it, by :: or by CAST(... AS type) (also sum() of integer, which is
+# bigint: the cast costs nothing and keeps the rule simple). Statements are read in any case of their keywords
+# (finding F3 of the B5c verification, package B10).
+NUMERIC_CALL = re.compile(r"(?i)\b(extract|avg|sum|round|trunc|div|ceil|ceiling|floor|to_number|stddev\w*|variance"
+                          r"|var_pop|var_samp|percentile_cont|percentile_disc)\s*\(")
 NUMERIC_TYPE = re.compile(r"(?i)\b(numeric|decimal)\b")
-NUMERIC_LITERAL = re.compile(r"(?<![\w.])(\d+\.\d*|\.\d+)(?![\w.])")
-NUMBER_CAST = re.compile(r"(?i)\s*::\s*(double precision|float8|float4|real|bigint|int8|integer|int4|smallint|int2"
-                         r"|int)\b")
-SQL_START = re.compile(r"\s*\(?\s*(SELECT|INSERT|UPDATE|DELETE|WITH)\b")
+NUMERIC_LITERAL = re.compile(r"(?<![\w.])((?:\d+\.\d*|\.\d+)(?:[eE][+-]?\d+)?|\d+[eE][+-]?\d+)(?![\w.])")
+NUMBER_TYPES = r"(double precision|float8|float4|real|bigint|int8|integer|int4|smallint|int2|int)\b"
+NUMBER_CAST = re.compile(r"(?i)\s*::\s*" + NUMBER_TYPES)
+CAST_CALL = re.compile(r"(?i)\bCAST\s*$")  # CAST( ... AS type): what precedes its parenthesis,
+CAST_TO_NUMBER = re.compile(r"(?is).*\bAS\s+" + NUMBER_TYPES + r"\s*$")  # and how its content ends.
+SQL_START = re.compile(r"(?i)\s*\(?\s*(SELECT|INSERT|UPDATE|DELETE|WITH)\b")
 
 
 def uncast_numeric(sql):
     """The parts of `sql` whose value PostgreSQL may type numeric with no cast to a float or an integer type right
-    after them or after a parenthesis around them (quoted literals left out)."""
+    after them, after a parenthesis around them or by a CAST(... AS type) around them (quoted literals left out)."""
     text = re.sub(r"'(?:[^']|'')*'", "''", sql)
     pairs, opened = [], []
     for i, char in enumerate(text):
@@ -349,13 +353,17 @@ def uncast_numeric(sql):
 
     def cast(end):
         return NUMBER_CAST.match(text, end) is not None
-    return sorted(text[a:b] for a, b in parts if not cast(b) and not any(o < a and b <= c and cast(c + 1)
-                                                                         for o, c in pairs))
+
+    def cast_as(opening, closing):
+        return CAST_CALL.search(text[:opening]) is not None and CAST_TO_NUMBER.match(text[opening + 1:closing])
+    return sorted(text[a:b] for a, b in parts if not cast(b) and not any(
+        o < a and b <= c and (cast(c + 1) or cast_as(o, c)) for o, c in pairs))
 
 
 def psycopg2_statements():
     """{file: [statement]} of every lab module that imports psycopg2 (today lab/services.py; guest_state.py and
-    udalosti.py run psql and parse its text): every string constant that starts a statement, docstrings left out."""
+    udalosti.py run psql and parse its text): every string constant that starts a statement, in any case of its
+    keywords, docstrings left out."""
     found = {}
     for path in sorted(LAB.glob("*.py")):
         tree = ast.parse(path.read_text())
@@ -393,6 +401,26 @@ def test_no_sql_value_the_lab_reads_through_psycopg2_can_be_numeric():
     assert HEARTBEAT_AGE in statements["services.py"]  # The inline statements are read too.
     schema = "\n".join(line.split("--", 1)[0] for line in (LAB / "schema.sql").read_text().splitlines())
     assert NUMERIC_TYPE.findall(schema) == []  # No column is numeric.
+
+
+@pytest.mark.parametrize("sql, uncast", [
+    ("select id, extract(epoch from created_at) from documents", ["extract(epoch from created_at)"]),
+    ("SELECT to_number(code, '9999') FROM x", ["to_number(code, '')"]),
+    ("SELECT 1e3, 2.5E-2, .5e1 FROM x", [".5e1", "1e3", "2.5E-2"]),
+    ("SELECT CAST(extract(epoch FROM created_at) AS double precision), CAST(sum(q) AS bigint) FROM x", []),
+    ("SELECT cast(to_number(code, '9') as integer), 1e3::float8 FROM x", []),
+    ("SELECT CAST(quantity AS numeric), CAST(extract(epoch FROM t) AS text) FROM x",
+     ["extract(epoch FROM t)", "numeric"]),
+], ids=["lowercase", "to_number", "exponent", "cast_as", "cast_as_lowercase", "cast_as_other_type"])
+def test_the_guard_reads_every_case_to_number_exponents_and_cast_as(tmp_path, monkeypatch, sql, uncast):
+    """Finding F3 of the B5c verification (package B10): the guard reads a statement whatever the case of its keywords,
+    to_number() and literals with an exponent are numeric, and CAST(... AS a float or an integer type) casts what it
+    holds (to text or to numeric it does not). A module of the lab (here one in tmp_path) that imports psycopg2 is read
+    with its lowercase statements."""
+    assert uncast_numeric(sql) == uncast
+    (tmp_path / "module.py").write_text(f"import psycopg2\nQUERY = {sql.lower()!r}\n")
+    monkeypatch.setattr(sys.modules[__name__], "LAB", tmp_path)
+    assert psycopg2_statements() == {"module.py": [sql.lower()]}
 
 
 @pytest.mark.parametrize("size,status", [(1024, 201), (1025, 413)])
