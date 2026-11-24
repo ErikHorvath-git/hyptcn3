@@ -259,6 +259,35 @@ def test_listed_invalid_row_with_a_cause_outside_the_rule_stays_out_of_the_corpu
         dataset.build(audits, tolerant, "protocol-test")
 
 
+@pytest.mark.parametrize("forged", ["flag", "flag_and_verdict", "flag_verdict_and_facts"])
+def test_a_record_forged_to_accept_a_gap_of_1_75_s_is_refused_by_the_build(tmp_path, forged):
+    """B2 deferred point 9, finding S10 of B3 (package B10; the verifier's probe p9_gap.py): one gap of 1.75 s between
+    two row times (max_gap_s 1.5 s, the interval 1 s) and the audit refuses the session for its timestamp gap. Its
+    record forged to a clean acceptance, also with the stored verdict, and also with stored facts of a gap of 1 s, is
+    refused by the build, which decides the timing rules from the row times of the archive."""
+    from scripts import collection
+    from scripts.tests import boundary_sessions as bs
+    path = bs.write_protocol(tmp_path / "protocol.json", bs.family("S2G", bs.profile_dir(tmp_path / "profile")))
+    p = collection.protocol(path)
+    session = bs.build_session(tmp_path / "sessions", p, path, bs.places(p, "train")[0], session_id="train-0",
+                               base=bs.time_base(p, "train", 0))
+    k = p["full_every"] // 2
+    times = session.result["casy"][:k] + [t + .75 for t in session.result["casy"][k:]]
+    assert max(b - a for a, b in zip(times, times[1:])) == pytest.approx(1.75) and p["max_gap_s"] == 1.5
+    audit = bs.audit(session, p, result=dict(session.result, casy=times))
+    assert (audit.code, audit.values["reasons"]) == (2, ["timestamp gap"])
+    report = json.loads(audit.path.read_text())
+    report["values"].update(accepted=True, reasons=[])
+    if forged != "flag":
+        report["values"]["acceptance"].update(accepted=True, codes=[], reasons=[])
+    if forged == "flag_verdict_and_facts":
+        report["values"]["acceptance"]["facts"].update(smallest_gap_s=1., largest_gap_s=1.,
+                                                       span_s=float(p["cycles"] - 1))
+    audit.path.write_text(json.dumps(report))
+    with pytest.raises(ValueError, match="^accepted audit of a session the protocol rejects: timestamp gap$"):
+        dataset.build([audit.path], p, dataset.sha(path))
+
+
 @pytest.mark.parametrize("case", ["repeated", "rewritten", "reclaimed", "reclaimed_rewritten", "detached"])
 def test_log_audit_is_repeated_where_the_session_keeps_its_logs(tmp_path, case):
     """B2 deferred point 6: on a session that keeps its logs the corpus build runs the log audit again, so a record

@@ -4,13 +4,13 @@
   python3 scripts/audit_selftest.py --protocol P [--out PATH]
 
 Under protocol P it builds, in a temporary directory, the clean session and every bad session of
-scripts/tests/audit_cases.py (CASES) and audits each with the real scripts/collection.py audit_session. Only
-collection.retazec, the feature extraction from guest RAM, is replaced by the synthetic extraction result of the
-session; the record says so. The record (data/results/audit_selftest_<UTC stamp>.json unless --out names
-another file; never overwritten) binds the protocol file, the measurement code (as scripts/gates.py) and the case
-files by SHA-256. Exit 0 when the clean session is accepted, every case is refused (code 2) with exactly its
-expected reasons and the clean session with a known matrix is accepted and records the summary of every column that
-audit_cases.py writes (summary, package B6a), else 2.
+scripts/tests/audit_cases.py (cases(P): CASES and the case of a bound P sets, package B10) and audits each with the
+real scripts/collection.py audit_session. Only collection.retazec, the feature extraction from guest RAM, is replaced
+by the synthetic extraction result of the session; the record says so. The record
+(data/results/audit_selftest_<UTC stamp>.json unless --out names another file; never overwritten) binds the protocol
+file, the measurement code (as scripts/gates.py) and the case files by SHA-256. Exit 0 when the clean session is
+accepted, every case is refused (code 2) with exactly its expected reasons and the clean session with a known matrix
+is accepted and records the summary of every column that audit_cases.py writes (summary, package B6a), else 2.
 
 require_selftest() is what scripts/collection.py run asks before every capture: no session is collected without
 a passed record for the current code and protocol.
@@ -58,10 +58,11 @@ def cases_sha256():
     return hashlib.sha256(json.dumps(files, sort_keys=True).encode()).hexdigest()
 
 
-def cases():
-    """The cases of the self-test: RAM side and log audit (scripts/tests/audit_cases.py CASES)."""
+def cases(p):
+    """The cases of the self-test under the protocol p: RAM side and log audit (scripts/tests/audit_cases.py
+    cases(p): CASES, and the case of a bound the protocol sets to a number, finding S1 of B3)."""
     from scripts.tests import audit_cases
-    return audit_cases.CASES
+    return audit_cases.cases(p)
 
 
 def commit():
@@ -77,7 +78,7 @@ def run(protocol_path, work):
     clean = audit_cases.run_case(work, p, protocol_path)
     shutil.rmtree(Path(work) / "clean")
     out = []
-    for case in cases():
+    for case in cases(p):
         reasons = audit_cases.expected(case, p)
         entry = {"id": case.id, "check": case.check, "expected": reasons}
         try:
@@ -92,7 +93,7 @@ def run(protocol_path, work):
     summary = audit_cases.summary_case(work, p, protocol_path)
     shutil.rmtree(Path(work) / audit_cases.SUMMARY_ID, ignore_errors=True)
     clean_entry = {"code": clean.code, "reasons": clean.values["reasons"]}
-    return {"clean": clean_entry, "cases": out, "summary": summary, "unreachable": dict(audit_cases.UNREACHABLE),
+    return {"clean": clean_entry, "cases": out, "summary": summary, "unreachable": audit_cases.unreachable(p),
             "passed": clean.code == 0 and clean.values["reasons"] == [] and all(c["passed"] for c in out)
             and summary["passed"]}
 
@@ -132,7 +133,7 @@ def require_selftest(protocol_path, directory=None):
 
     `directory` holds the records (default data/results, files audit_selftest_*.json). A record for another
     protocol file, older measurement code or other case files does not count; the newest of those that remain
-    must state passed and list exactly the ids of the current cases, in order.
+    must state passed and list exactly the ids of the current cases under that protocol (cases(p)), in order.
     """
     current = (digest(protocol_path), measurement_sha256(), cases_sha256())
     found = []
@@ -149,7 +150,8 @@ def require_selftest(protocol_path, directory=None):
     doc = max(found, key=lambda item: item[:2])[2]
     listed = doc.get("cases")
     ids = [case.get("id") for case in listed if type(case) is dict] if type(listed) is list else None
-    if doc.get("passed") is not True or ids != [case.id for case in cases()]:
+    from scripts import collection
+    if doc.get("passed") is not True or ids != [case.id for case in cases(collection.protocol(Path(protocol_path)))]:
         raise ValueError(REFUSED)
     return doc
 
