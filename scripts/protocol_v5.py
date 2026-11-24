@@ -61,10 +61,10 @@ analysis.interventions states the order variants of class C, the column groups o
 (its quantiles of role train and the length of its moving average), the evaluable minimum and the rule of the volume
 class; analysis.diagnostics the bounds of the descriptive diagnostics of proposal 8.5; the stream injections places
 the interventions, per carrier role and class and once for the interventions inserted into dev (INJECTION_UNITS), and
-the plan draws it no more than z0_alarms or bootstrap. Question Q13 to the lead, provisional by the executor's
-proposal: Z4 enters K2a by each of its variants (VARIANTS), each a comparison of its own. F3 of the verification of
-B7a: the value domain of every grid parameter is one constant (GRID_DOMAINS, grid_problem) for this check and
-tcn/metody.py.
+the plan draws it no more than z0_alarms or bootstrap. The lead's answer to question Q13 (2026-11-24): Z4 enters K2a
+by each of its variants (VARIANTS), each a comparison of its own, and "better" needs M to beat both. F3 of the
+verification of B7a: the value domain of every grid parameter is one constant (GRID_DOMAINS, grid_problem) for this
+check and tcn/metody.py.
 
 Package B7c (the lead's skeleton dokazy/B7/kostra/KOSTRA.md, addendum 2 of 2026-11-22T20:55Z points 2 and 4, design
 B7c 1.2): analysis.metrics holds the metrics as the thesis defines them, beside the proposal's, which tcn/eval.py
@@ -84,6 +84,11 @@ the confirmation of B4b); where the counts allow it, every dose of class B lies 
 negative of it (S3 of the B8 verification), which changes the doses of the campaign's plan and nothing else; and
 analysis.interventions.boots must be the count of the carrier boots of the campaign plan (F3 of the verification of
 B7c; the check analysis).
+
+Package B11 (agent E; the lead's answers to questions Q17 and Q28, 2026-11-24): analysis.attachments lists in advance
+the attachments of the final record, exactly ATTACHMENTS (series, losses, copies), each with the text of what it holds,
+and a note (G0); attachments_problem is the one check of the loader, the self-check and tcn/finalne.py, which writes
+them.
 """
 from collections import Counter
 import copy
@@ -154,10 +159,10 @@ GRID_DOMAINS = {
     "ridge_alpha": {"integer": False, "low": 0, "low_allowed": False, "high": None, "high_allowed": None,
                     "text": "positive numbers"},
 }
-# Question Q13 to the lead, provisional by the executor's proposal (design B7b 1.4): a method with variants enters a
-# confirmatory claim by each variant, "<method>:<variant>", each a comparison of its own with its own stream bootstrap,
-# so that "better" needs M to beat every variant; Z4 has the variants of tcn/metody.py Z4_VARIANTS (skeleton B7
-# section 2: the offered load and the residual on it). COMPARISONS are the names a claim may compare.
+# The lead's answer to question Q13 (2026-11-24; design B7b 1.4): a method with variants enters a confirmatory claim by
+# each variant, "<method>:<variant>", each a comparison of its own with its own stream bootstrap, so that "better" needs
+# M to beat every variant; Z4 has the variants of tcn/metody.py Z4_VARIANTS (skeleton B7 section 2: the offered load
+# and the residual on it). COMPARISONS are the names a claim may compare.
 VARIANTS = {"Z4": ("load", "residual")}
 COMPARISONS = tuple(name for method in METHODS if method != "M"
                     for name in ([f"{method}:{v}" for v in VARIANTS[method]] if method in VARIANTS else [method]))
@@ -198,6 +203,11 @@ CLASSIFIER_MAJORITY = ("session", "occurrence")
 LINKAGE = {"VO1": "O8 a O1 (E1)", "VO2": "O2, O3 a test z bodu 2 (E2)",
            "VO3": "časť vlastníka so vzorkami, mimo protokolu (E3, D16)", "VO4": "K1, K2 a bod 1 (E4)",
            "VO5": "O7 (E5)", "VO6": "O6 a bod 2 (E2)"}
+# Package B11 (the lead's answers to questions Q17 and Q28, 2026-11-24): the attachments of the final record, listed
+# in advance in analysis.attachments (G0), one constant for this check and tcn/finalne.py, which writes them: the
+# series of score, threshold and alarms per row of the sessions of the test roles (Q17), the losses per window of the
+# predictors (Q28) and the series of the copies of the interventions (Q28).
+ATTACHMENTS = ("series", "losses", "copies")
 # The confirmatory claims (proposal 4.1) and their three outcomes (proposal 8.4: lepší, nie lepší, nerozhodnuté), the
 # keys of analysis.wording; the wording of each outcome holds as many blanks "…" (U+2026) as the table of chapter 8.4,
 # the places the claim's values fill (tcn/tvrdenia.py).
@@ -310,7 +320,9 @@ ANALYSIS = _fixed(
                          C=_fixed(*_LENGTHS, "orders"), D=_fixed(*_LENGTHS, "groups")),
     diagnostics=_fixed("tree_depth", "min_positive_episodes", "contexts", "alarm_rules", "note"),
     evaluable=_fixed("first_s", "scored_share"),
-    metrics=_fixed("note", **_METRIC), linkage=_fixed(*LINKAGE, "note"))
+    metrics=_fixed("note", **_METRIC), linkage=_fixed(*LINKAGE, "note"),
+    # Package B11 (Q17, Q28): the attachments of the final record, each with its text, and a note (G0).
+    attachments=_fixed(*ATTACHMENTS, "note"))
 # The traffic profiles of the generator (package B5b, design B5b 1.1; scripts/host_traffic.py PROFILES implements
 # exactly these): the keys every profile has, and those of each profile. arrivals is the envelope family of the
 # open loop, think_s the think time before every request but the first, client_errors the deliberate client errors.
@@ -714,8 +726,8 @@ def _floors(value, names):
 def _ok_qualification(a):
     """Design B6a 1.1: the bounds of the qualification (G0), the scale rule (G0) and the classes of the columns
     (null until G3a; a differenced column is a level column, and so is a rule_differenced one, which the rule channel
-    judges by its change since the session's first measured row: question Q8 to the lead, its revised proposal,
-    provisional until the lead answers, package B6b)."""
+    judges by its change since the session's first measured row: question Q8, its revised proposal accepted by the
+    lead 2026-11-24, package B6b)."""
     from features.archive import BEHAVIOR_NAMES  # Here: the generator imports this module and needs no feature code.
     from features.qualification import CLASSES, LOCAL_SCALED
     q, s, columns = a["qualification"], a["scale"], a["columns"]
@@ -917,6 +929,25 @@ def _ok_linkage(a):
     return all(_text(linkage[question]) for question in LINKAGE) and type(linkage["note"]) is str
 
 
+def attachments_problem(value):
+    """The problem of analysis.attachments (package B11, the lead's answers to questions Q17 and Q28) as a text, or
+    None: exactly the attachments of ATTACHMENTS and a note, each attachment stating what it holds (a text) and the
+    note a string. The loader (through the value check of the analysis section), the self-check and tcn/finalne.py,
+    which writes exactly these attachments and refuses a protocol with another list before the seal, use it."""
+    path = "analysis.attachments"
+    keys = [*ATTACHMENTS, "note"]
+    if type(value) is not dict or set(value) != set(keys):
+        found = sorted(value) if type(value) is dict else value
+        return (f"{path} must be an object of exactly the keys {', '.join(sorted(keys))} (the attachments of the final "
+                f"record are listed in advance: ATTACHMENTS), not {json.dumps(found, ensure_ascii=False)}")
+    for name in ATTACHMENTS:
+        if not _text(value[name]):
+            return f"{path}.{name} must state what the attachment holds (a text)"
+    if type(value["note"]) is not str:
+        return f"{path}.note must be a string"
+    return None
+
+
 def _ok_analysis(p):
     a = p["analysis"]
     arch, stop, rule = a["architecture"], a["stopping"], a["alarm_rule"]
@@ -947,6 +978,8 @@ def _ok_analysis(p):
     if not (_ok_interventions(p) and _ok_diagnostics(p)):
         return False
     if metrics_problem(a["metrics"]) is not None or not _ok_linkage(a):
+        return False
+    if attachments_problem(a["attachments"]) is not None:  # Package B11 (Q17, Q28).
         return False
     ev = a["evaluable"]
     # The first seconds that make an occurrence evaluable lie within the horizon (merge of B7b: tcn/zasahy.py places
@@ -1751,10 +1784,10 @@ def planned_rows(p, mode):
 def reset_seed(p):
     """The seed of lab/guest_state.py reset --seed at the start of every group of both modes: streams.seeded_level.seed,
     the one seeded level of the guest's database (proposal 5.4: every group starts with the database restored to its
-    seeded level; chapter 12: a fixed seeded state; question Q18 to the lead, provisional by its proposal: the level
-    lab/install.sh seeds, seed 0). The fix of package B9a (F4 of its verification) replaced the per-group stream
-    guest_reset of B9a by this one value. ValueError for another schema, and for a protocol whose seeded level the
-    loader would refuse (`invalid streams.seeded_level`)."""
+    seeded level; chapter 12: a fixed seeded state; question Q18, accepted by the lead 2026-11-24: one level for every
+    group of both modes, the level lab/install.sh seeds, seed 0). The fix of package B9a (F4 of its verification)
+    replaced the per-group stream guest_reset of B9a by this one value. ValueError for another schema, and for a
+    protocol whose seeded level the loader would refuse (`invalid streams.seeded_level`)."""
     if type(p) is not dict or p.get("schema") != SCHEMA:
         raise ValueError("the seed of the guest's reset requires protocol schema 3")
     try:
@@ -2238,9 +2271,8 @@ def _nulls(value, path=""):
 
 # Proposal 4.1: K1 against Z3 and Z5, K2a against the threshold methods Z1, Z2 and Z4, K2b against Z3 and Z5. A
 # result "better" must beat every method of its list, so a method left out would lighten the claim (the lead's
-# must_fix 4 on B4). Package B7b (question Q13 to the lead, provisional by the executor's proposal): Z4 enters K2a by
-# both its variants (VARIANTS), each a comparison of its own; if the lead answers otherwise, only this list and
-# analysis.k2a.compare change.
+# must_fix 4 on B4). Package B7b and the lead's answer to question Q13 (2026-11-24): Z4 enters K2a by both its
+# variants (VARIANTS), each a comparison of its own, and "better" needs M to beat both.
 CONFIRMATORY = {"k1": ["Z3", "Z5"], "k2a": ["Z1", "Z2", "Z4:load", "Z4:residual"], "k2b": ["Z3", "Z5"]}
 
 
@@ -2259,9 +2291,10 @@ def not_applicable(doc):
 
 def check_analysis(doc, schedule=None, *, stage="G0"):
     """The analysis plan is complete and compares K1, K2a and K2b with the methods of proposal 4.1; its linkage table
-    is the lead's word for word (LINKAGE, package B7c); its count of carrier boots is the campaign plan's (package
-    B9a); null only at a path of determined_at or where it means none (not_applicable); with stage Gk every path of
-    a stage up to Gk holds a value."""
+    is the lead's word for word (LINKAGE, package B7c); every attachment of the final record it lists states what it
+    holds (ATTACHMENTS, package B11); its count of carrier boots is the campaign plan's (package B9a); null only at a
+    path of determined_at or where it means none (not_applicable); with stage Gk every path of a stage up to Gk holds
+    a value."""
     if stage not in STAGES:
         raise ValueError("unknown stage: " + str(stage))
     reasons = []
@@ -2281,6 +2314,13 @@ def check_analysis(doc, schedule=None, *, stage="G0"):
             reasons.append(f"analysis.linkage.{question} is {json.dumps(linkage[question], ensure_ascii=False)}, "
                            "the lead's table (skeleton B7, addendum 2 point 4) says "
                            f"{json.dumps(text, ensure_ascii=False)}")
+    # Package B11 (the lead's answers to questions Q17 and Q28): every attachment of ATTACHMENTS the file names states
+    # what it holds; a missing or an unknown one is the reason of the checks keys and loader (layout_problems).
+    attachments = (analysis if type(analysis) is dict else {}).get("attachments")
+    for name in ATTACHMENTS:
+        if type(attachments) is dict and name in attachments and not _text(attachments[name]):
+            reasons.append(f"analysis.attachments.{name} is {json.dumps(attachments[name], ensure_ascii=False)}: "
+                           "every attachment of the final record states what it holds, a text (ATTACHMENTS)")
     # Package B9a (F3 of the verification of B7c): analysis.interventions.boots is the number of boots of the carrier
     # roles of the campaign plan, one per group of test_benign and of test_controls (plan() makes roles[role] groups
     # of every role in mode campaign); tcn/k2.py refuses another number only in the final evaluation, after the seal

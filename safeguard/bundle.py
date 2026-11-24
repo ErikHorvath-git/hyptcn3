@@ -117,6 +117,14 @@ class Bundle:
         return self.contract["window_rows"] + int(self.anchored)
 
     @property
+    def min_bin_pages(self):
+        """The bins the eight memory columns of a live frame come from (question Q10 to the lead, 2026-11-24): the
+        normalization rule's min_bin_pages, the bins it scores (analysis.scale.min_bin_pages, features/snapshot.py
+        counted_bin), as the audit extracted the bundle's archives; None under legacy_schema_2 (every bin).
+        safeguard/runtime.py run_directory passes it to every extraction."""
+        return self.normalizer.rule.min_bin_pages
+
+    @property
     def rule_channel(self):
         """The rule channel for the runtime (safeguard/runtime.py RuleChannel): columns, the quantity each is judged
         by, ranges, k and n."""

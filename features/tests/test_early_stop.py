@@ -139,6 +139,16 @@ def test_the_bound_is_the_99th_percentile_of_the_poisson_distribution(mean, boun
     assert cdf(bound, mean) >= 0.99 and (bound == 0 or cdf(bound - 1, mean) < 0.99)
 
 
+def test_the_bound_is_the_count_whose_cumulative_probability_is_exactly_0_99():
+    """N2 of the confirmation of B9b (the surviving mutant cdf >= EARLY_STOP_LEVEL -> cdf > EARLY_STOP_LEVEL): the
+    bound is the smallest b with P(X <= b) >= 0.99, so at a mean of -ln 0.99, where P(X <= 0) = exp(ln 0.99) is 0.99
+    to the last bit, the bound is 0, not 1."""
+    from features.audit_policy import poisson_quantile
+    mean = -math.log(0.99)
+    assert math.exp(-mean) == 0.99  # The premise of the case: the probability of no marked row is 0.99 exactly.
+    assert poisson_quantile(mean) == 0
+
+
 def test_the_bound_takes_a_large_mean_and_refuses_what_is_no_mean():
     """A mean of thousands (a high rate over many occurrences) does not underflow: the bound lies above the mean,
     within 3 standard deviations; a mean below 0 or one that is no finite number is refused by name."""
@@ -210,18 +220,81 @@ def test_a_null_rate_does_not_stop_and_a_set_rate_needs_its_count():
 
 
 def test_the_rule_texts_state_the_reading_of_q24_and_the_model_as_a_model():
-    """F5 of the verification of B9b: EARLY_STOP_RULE and MARKED_ROWS_RULE state the campaign's count (Q24), its two
-    restart points as the executor's judgment, and the false-stop rates of the executor's model as a model."""
+    """F5 of the verification of B9b: EARLY_STOP_RULE and MARKED_ROWS_RULE state the campaign's count (Q24), its
+    restart point, and the false-stop rates of the executor's model as a model. Package B11: Q24 is accepted by the
+    lead 2026-11-24, whose text counts on across the continuation (no longer the executor's judgment that a
+    continuation counts only its own sessions), and the rule names EARLY_STOP_MODEL, which the G3b record carries."""
     from features.acceptance import MARKED_ROWS_RULE
     from features.audit_policy import EARLY_STOP_RULE
     for text in ("Q24", "campaign's count", "both VMs", "restart point", "latest recorded ending with an early-stop "
-                 "trigger", "a continuation counts only its own sessions", "the executor's judgment",
+                 "trigger", "a continuation counts on", "the paused campaign it continues",
+                 "accepted by the lead 2026-11-24", "s náhradami aj s pokračovaním", "RESUME_RULE",
                  "not a measurement", "at most 1 % per type", "0.12 to 0.28", "0.01 to 3", "0.23 to 0.88",
-                 "36 occurrences per type and six types", "Poisson(rate_T x n_T)"):
+                 "36 occurrences per type and six types", "Poisson(rate_T x n_T)", "EARLY_STOP_MODEL",
+                 "stage G3b"):
         assert text in EARLY_STOP_RULE, text
+    for text in ("a continuation counts only its own sessions", "the executor's judgment", "decided by its proposal"):
+        assert text not in EARLY_STOP_RULE, text
     for text in ("Q24", "event_window", "host_start_unix - 1 s", "host_stopped_unix", "event_grace_s",
-                 "restores the lab", "no occurrence", "event_occurrences_by_type", "the campaign sums"):
+                 "restores the lab", "no occurrence", "event_occurrences_by_type", "the campaign sums",
+                 "accepted by the lead 2026-11-24", "the paused campaign it continues"):
         assert text in MARKED_ROWS_RULE, text
+    assert "decided by its proposal" not in MARKED_ROWS_RULE
+
+
+MODEL_RATES = (0.01, 0.05, 0.1, 0.3, 1.0, 3.0)  # The rates of the executor's model (skore_zastavenie_model.py).
+
+
+def exact_model(rate, occurrences, types):
+    """The executor's exact model of Q24 at one rate per occurrence (dokazy/B9/navrh/skore_zastavenie_model.py,
+    recomputed here): (false stop of one type and of the campaign when the campaign's count of a type is compared
+    with poisson_quantile(rate x n) after each of its n = 1 .. occurrences occurrences, false stop of the campaign when
+    the count of one session is compared with poisson_quantile(rate) at each occurrence). The counts per occurrence are
+    Poisson(rate) and independent; a path that crossed the bound once is a false stop."""
+    import numpy as np
+    from features.audit_policy import poisson_quantile
+    pmf = lambda k, mean: math.exp(-mean + k * math.log(mean) - math.lgamma(k + 1))
+    top = poisson_quantile(rate * occurrences) + 1  # Above it every count is a stop at every n, so it is cut.
+    step = np.array([pmf(k, rate) for k in range(top + 1)])
+    alive = np.zeros(top + 1)
+    alive[0] = 1.0
+    for n in range(1, occurrences + 1):
+        alive = np.convolve(alive, step)[:top + 1]
+        alive[poisson_quantile(rate * n) + 1:] = 0.0
+    per_type = 1 - alive.sum()
+    one = 1 - math.fsum(pmf(k, rate) for k in range(poisson_quantile(rate) + 1))
+    return per_type, 1 - (1 - per_type) ** types, 1 - (1 - one) ** (occurrences * types)
+
+
+def test_the_numbers_of_the_model_follow_from_the_exact_model_at_the_plans_premise():
+    """The lead's answer to Q24 (package B11): EARLY_STOP_MODEL states the numbers of the executor's model, which the
+    record of stage G3b carries for the owner. Its premise is the campaign plan of config/collection-v5.json (36
+    occurrences of each of its 6 event types, the level 0.99); recomputed at the model's rates, the false stops are
+    0.021 to 0.054 per type and 0.121 to 0.283 per campaign, against 0.230 to 0.885 for the count of one session, and
+    the constant states each range rounded to two decimals, the same numbers EARLY_STOP_RULE names in its text. It is
+    a model and says so."""
+    from collections import Counter
+    from features.audit_policy import EARLY_STOP_LEVEL, EARLY_STOP_MODEL, EARLY_STOP_RULE
+    from scripts import protocol_v5
+    plan = protocol_v5.plan(json.loads(V5.read_text()), "campaign")
+    counts = Counter(event["type"] for row in plan["sessions"] for event in row.get("events", []))
+    premise = EARLY_STOP_MODEL["premise"]
+    assert set(counts) == set(json.loads(V5.read_text())["events"]["types"])
+    assert set(counts.values()) == {premise["occurrences_per_type"]} and len(counts) == premise["types"]
+    assert (premise["rates_per_occurrence"], premise["level"], EARLY_STOP_LEVEL) == ([0.01, 3], 0.99, 0.99)
+    found = [exact_model(rate, premise["occurrences_per_type"], premise["types"]) for rate in MODEL_RATES]
+    per_type, per_campaign, per_session = zip(*found)
+    assert [round(x, 3) for x in per_campaign] == [0.121, 0.142, 0.187, 0.21, 0.254, 0.283]
+    assert [round(x, 3) for x in per_session] == [0.885, 0.23, 0.637, 0.541, 0.547, 0.561]
+    span = lambda values: [round(min(values), 2), round(max(values), 2)]
+    assert EARLY_STOP_MODEL["false_stops_per_type"] == span(per_type) == [0.02, 0.05]
+    assert EARLY_STOP_MODEL["false_stops_per_campaign"] == span(per_campaign) == [0.12, 0.28]
+    assert EARLY_STOP_MODEL["per_session_reading"] == span(per_session) == [0.23, 0.88]
+    assert EARLY_STOP_MODEL["per_comparison_max"] == round(1 - EARLY_STOP_LEVEL, 2) == 0.01
+    for low, high in (EARLY_STOP_MODEL["false_stops_per_campaign"], EARLY_STOP_MODEL["per_session_reading"]):
+        assert f"{low} to {high}" in EARLY_STOP_RULE
+    assert "not a measurement" in EARLY_STOP_MODEL["kind"] and EARLY_STOP_MODEL["source"].strip()
+    assert "judgment" in premise["rates_note"]
 
 
 # ------------------------------------------------------------------ the count of one session

@@ -15,10 +15,11 @@ mechanics only, no number is a detection result (HONESTY P4). The names of packa
 so this file collects on the code before it.
 
 Package B7b (agent F, design dokazy/B7/navrh/NAVRH_B7b.md 1.1 and 4): the deferred findings of the verification of
-B7a. F1 and F2 (question Q12, provisional): the clean traffic without the full-snapshot band, the placeable traffic
-with it and the controls, the rate per observed hour of clean traffic; F3: the grids refused as the protocol refuses
-them; F6: fit on the roles train and dev only, the budget at exactly analysis.seeds; F5: one test for each mutant
-that survived (M01 in the budget's cases, M02, M03, M05, M14, M16; M04 is tcn/tests/test_tvrdenia.py's).
+B7a. F1 and F2 (question Q12, accepted by the lead 2026-11-24): the clean traffic without the full-snapshot band,
+the placeable traffic with it and the controls, the rate per observed hour of clean traffic; F3: the grids refused
+as the protocol refuses them; F6: fit on the roles train and dev only, the budget at exactly analysis.seeds; F5: one
+test for each mutant that survived (M01 in the budget's cases, M02, M03, M05, M14, M16; M04 is
+tcn/tests/test_tvrdenia.py's).
 """
 import copy
 import json
@@ -509,8 +510,9 @@ def test_the_budget_is_the_median_over_the_seeds_rounded_up(counts, expected):
 
 
 @pytest.mark.parametrize("end, anchored, clean, placeable", [
-    # Package B7b (F1 of the verification of B7a, question Q12, provisional): the band of the full snapshot at row 50,
-    # 60 s before it to 8 rows after, [t(38), t(58)), is no part of clean traffic; it bounds only the placeable windows.
+    # Package B7b (F1 of the verification of B7a, question Q12, accepted by the lead 2026-11-24): the band of the
+    # full snapshot at row 50, 60 s before it to 8 rows after, [t(38), t(58)), is no part of clean traffic; it bounds
+    # only the placeable windows.
     (37, False, True, True), (38, False, True, False), (49, False, True, False),
     (58, False, True, False), (64, False, True, False), (65, False, True, True),
     # The event 100-110 with 20 s of reverberation: neither clean nor placeable.
@@ -928,8 +930,9 @@ def test_the_descriptive_methods_run_in_the_matched_rate(name):
 
 
 def test_a_v5_session_without_events_is_clean_traffic_in_every_scored_window():
-    """F1 and F2 of the verification of B7a (question Q12, provisional): a session of the v5 shape of the real file
-    (720 rows of 5 s, full snapshots at rows 0 and 360, window 32, full_snapshot_guard.before_s 60) without any event.
+    """F1 and F2 of the verification of B7a (question Q12, accepted by the lead 2026-11-24): a session of the v5
+    shape of the real file (720 rows of 5 s, full snapshots at rows 0 and 360, window 32, full_snapshot_guard.before_s
+    60) without any event.
     Each of its 656 scored windows is clean traffic (proposal 4.2); the band of the full snapshots leaves 582 of them
     placeable (74 fewer: the 31 windows after each snapshot and the 12 before the second). The observed clean time is
     its 720 rows, one hour; the scored clean time its 656 windows."""

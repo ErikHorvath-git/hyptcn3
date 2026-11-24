@@ -93,7 +93,7 @@ def test_pamat_zo_sidecaru_rucne_spocitana(tmp_path):
         {"pages_total": 100, "pages_changed": 30, "zero_ratio": 0.25,
          "entropy_mean": 6.0, "has_changed": 1},
     ]}}))
-    v = pamat_zo_sidecaru(str(sc))
+    v = pamat_zo_sidecaru(str(sc), min_bin_pages=None)
     assert v[0] == pytest.approx(40 / 200)
     assert v[1] == pytest.approx(1.0)
     assert v[2] == pytest.approx(0.30)
@@ -112,7 +112,127 @@ def test_vypnuta_entropia_je_chyba_nie_nula(tmp_path):
         {"pages_total": 10, "pages_changed": 1, "zero_ratio": 0.0,
          "has_changed": 1}]}}))
     with pytest.raises(FeatureError, match="entropia"):
-        pamat_zo_sidecaru(str(sc))
+        pamat_zo_sidecaru(str(sc), min_bin_pages=None)
+
+
+# ------------------------------- Q10: biny pamatovej casti (veduci 2026-11-24)
+
+
+def _sidecar_biny(tmp_path, bins, *, entropy=True, name="s.json"):
+    """A sidecar with only the block pamat_zo_sidecaru reads: bins as (pages_total, pages_changed, zero_ratio,
+    entropy_mean), has_changed from pages_changed."""
+    path = tmp_path / name
+    path.write_text(json.dumps({"features": {"entropy": entropy, "bins": [
+        {"pages_total": total, "pages_changed": changed, "zero_ratio": zero, "entropy_mean": mean,
+         "has_changed": int(changed > 0)} for total, changed, zero, mean in bins]}}))
+    return str(path)
+
+
+# The hyptcn-lab shape (data/results/collection_pilot_7_20261026_audit.json values.layout: bins of 4096 pages, then
+# the bin of one page, MMIO APIC at 0xFEE00000, and the bin of 64), with one bin of exactly 1024 pages for the
+# boundary. Only the one page of the one-page bin changed, entropy 7.9.
+APIC = [(4096, 0, .5, 0.), (4096, 0, .25, 0.), (1024, 0, 1., 0.), (1, 1, 0., 7.9), (64, 0, 1., 0.)]
+
+
+def test_one_changed_page_of_a_one_page_bin_never_gives_mem_changed_max_one(tmp_path):
+    """The lead's answer to question Q10 (2026-11-24, option a; finding F4 of the B6b verification): under
+    min_bin_pages 1024 all eight memory columns come from the bins of at least 1024 pages, so the change of the
+    one-page bin leaves every column of change at 0 (mem_changed_max is never 1.0) and mem_zero_ratio is that of the
+    three large bins, (2048 + 1024 + 1024) / 9216. One changed page of a 4096-page bin then gives mem_changed_max
+    1/4096 and mem_bins_active 1/3 (the bin of exactly 1024 pages counts). With min_bin_pages None (every bin,
+    schemas 1 and 2) the same sidecar keeps today's values, mem_changed_max 1.0 among them."""
+    only_apic = _sidecar_biny(tmp_path, APIC)
+    assert pamat_zo_sidecaru(only_apic, min_bin_pages=1024) == [0., 0., 0., 0., 0., 0., 0., 4096 / 9216]
+    assert pamat_zo_sidecaru(only_apic, min_bin_pages=None) == [1 / 9281, 1 / 5, 1., 1., 0., 7.9, 7.9, 4160 / 9281]
+    one_more = _sidecar_biny(tmp_path, [(4096, 1, .5, 5.)] + APIC[1:], name="t.json")
+    assert pamat_zo_sidecaru(one_more, min_bin_pages=1024) == [
+        1 / 9216, 1 / 3, 1 / 4096, 1 / 4096, 0., 5., 5., 4096 / 9216]
+
+
+def test_a_snapshot_without_a_bin_of_min_bin_pages_pages_is_an_error_that_names_it(tmp_path):
+    """No silent fallback (question Q10): when no bin has at least min_bin_pages pages the memory part cannot be
+    computed, and the error names min_bin_pages; the checks of the sidecar come first (disabled entropy stays that
+    error). min_bin_pages is None or an integer of at least 1, and any other value is an error, not a default."""
+    small = _sidecar_biny(tmp_path, APIC[3:])  # The bins of 1 and of 64 pages.
+    with pytest.raises(FeatureError, match="ziaden z 2 binov nema aspon min_bin_pages 1024 stranok"):
+        pamat_zo_sidecaru(small, min_bin_pages=1024)
+    assert pamat_zo_sidecaru(small, min_bin_pages=64) == [0., 0., 0., 0., 0., 0., 0., 1.]
+    with pytest.raises(FeatureError, match="entropia"):
+        pamat_zo_sidecaru(_sidecar_biny(tmp_path, APIC[3:], entropy=False, name="e.json"), min_bin_pages=1024)
+    for wrong in (0, True, 1024., "1024"):
+        with pytest.raises(FeatureError, match="^min_bin_pages je None"):
+            pamat_zo_sidecaru(small, min_bin_pages=wrong)
+
+
+def test_min_bin_pages_is_a_keyword_without_a_default():
+    """RIADENIE.md section 6 point 2 (no silent default) and question Q10: every function of the extraction chain
+    takes min_bin_pages by keyword only and has no default for it, so each caller names its bins (the v5 paths the
+    protocol's or the bundle's value, every legacy path None)."""
+    import inspect
+    from features import snapshot
+    for function in (snapshot.pamat_zo_sidecaru, snapshot.vektor_snimky, snapshot.retazec, snapshot._retazec_cyklus):
+        parameter = inspect.signature(function).parameters["min_bin_pages"]
+        assert (parameter.kind, parameter.default) == (inspect.Parameter.KEYWORD_ONLY, inspect.Parameter.empty)
+
+
+@pytest.mark.parametrize("min_bin_pages", [1024, None])
+def test_one_snapshot_gives_min_bin_pages_to_its_memory_part(monkeypatch, min_bin_pages):
+    """vektor_snimky, which the chain (retazec) and the live path (safeguard/features.py frame_from_snapshot) call for
+    each row, computes the memory part with the min_bin_pages it is given (pamat_zo_sidecaru), first of all."""
+    from features import snapshot
+
+    class Seen(Exception):
+        pass
+
+    def memory(path, *, min_bin_pages):
+        raise Seen(path, min_bin_pages)
+    monkeypatch.setattr(snapshot, "_chain_parts", lambda _snapshot, until_seq: [{"full": False, "path": "/x/7.vmicd"}])
+    monkeypatch.setattr(snapshot, "pamat_zo_sidecaru", memory)
+    with pytest.raises(Seen) as seen:
+        snapshot.vektor_snimky("/x", "unused", 7, min_bin_pages=min_bin_pages)
+    assert seen.value.args == ("/x/7.json", min_bin_pages)
+
+
+def test_the_chain_gives_min_bin_pages_to_the_extraction_of_every_row(monkeypatch, tmp_path):
+    """retazec, which the audit calls with the protocol's analysis.scale.min_bin_pages (scripts/collection.py), gives
+    that value to the extraction of every row (vektor_snimky, and through it pamat_zo_sidecaru)."""
+    import guestparse.image
+    from features import snapshot
+    from features.quality import LEGACY_POLICY
+    heads = []
+    for seq in (1, 2, 3):
+        heads.append({"seq": seq, "full": False, "chain_id": "c", "path": str(tmp_path / ("%d.vmicd" % seq))})
+        (tmp_path / ("%d.json" % seq)).write_text(json.dumps({
+            "schema": "vmicollect/1", "seq": seq, "timestamp_unix": seq * 5.,
+            "vm": {"memsize": 16384, "num_vcpus": 2}, "stats": {"read_errors": 0, "filled_zero": 0},
+            "output": {"full": False, "chain_id": "c", "pages_total": 4, "pages_changed": 1, "page_size": 4096},
+            "features": {"schema": "hyptcn3/perbin/1", "entropy": True, "bin_bytes": 8192, "page_size": 4096,
+                         "bins_total": 2, "regions": [{"gpa": 0, "bytes": 16384}], "bins": [
+                             {"bin": 0, "gpa": 0, "pages_total": 2, "pages_changed": 1, "changed_ratio": .5,
+                              "zero_ratio": .5, "entropy_mean": 2., "has_changed": 1},
+                             {"bin": 1, "gpa": 8192, "pages_total": 2, "pages_changed": 0, "changed_ratio": 0.,
+                              "zero_ratio": 1., "entropy_mean": 0., "has_changed": 0}]}}))
+    seen = []
+
+    def extract(_raw, _profile, seq, predch, _cursor, predch_krizove, *, min_bin_pages):
+        seen.append((seq, min_bin_pages))
+        return [0.] * len(MENA), {"pids": frozenset(), "mod_total": 0, "quality": _stav()["quality"],
+                                  "krizove_kluce": frozenset()}, []
+
+    class Cursor:
+        def __init__(self, _directory):
+            pass
+
+        def close(self):
+            pass
+    monkeypatch.setattr(snapshot, "_vsetky_hlavicky", lambda _: heads)
+    monkeypatch.setattr(guestparse.image, "ChainCursor", Cursor)
+    monkeypatch.setattr(snapshot, "vektor_snimky", extract)
+    snapshot.retazec(str(tmp_path), "unused", 7.5, quality_policy=LEGACY_POLICY, min_bin_pages=1024)
+    assert seen == [(1, 1024), (2, 1024), (3, 1024)]
+    with pytest.raises(FeatureError, match="^min_bin_pages je None"):  # Refused before any row is read.
+        snapshot.retazec(str(tmp_path), "unused", 7.5, quality_policy=LEGACY_POLICY, min_bin_pages="1024")
+    assert len(seen) == 3
 
 
 # ------------------------------------------------- 2. mala snimka v repe
@@ -144,7 +264,7 @@ def test_mini_bez_sidecaru_skonci_chybou():
     inou cestou, ale skonci chybou, ktora povie preco.
     """
     with pytest.raises(FeatureError) as exc:
-        vektor_snimky(MINI, PROFIL)
+        vektor_snimky(MINI, PROFIL, min_bin_pages=None)
     assert "features" in str(exc.value)
 
 
@@ -347,14 +467,14 @@ def test_chain_threads_cross_view_keys_independent_of_model_validity(monkeypatch
                               "changed_ratio": 0., "zero_ratio": 1., "entropy_mean": 0., "has_changed": 0}]}}))
     calls = []
 
-    def extract(_raw, _profile, seq, predch, _cursor, predch_krizove):
+    def extract(_raw, _profile, seq, predch, _cursor, predch_krizove, *, min_bin_pages):
         calls.append((seq, predch, predch_krizove))
         quality = _stav(inconclusive=("process_cross_view", "text_integrity"))["quality"]
         quality["model_valid"] = False      # legacy-invalid: predch is never passed on
         return [0.] * len(MENA), {"pids": frozenset(), "mod_total": 0, "quality": quality,
                                   "krizove_kluce": frozenset({"k%d" % seq})}, []
     monkeypatch.setattr(snapshot, "vektor_snimky", extract)
-    snapshot._retazec_cyklus(str(tmp_path), "unused", 7.5, LEGACY_POLICY, heads, None)
+    snapshot._retazec_cyklus(str(tmp_path), "unused", 7.5, LEGACY_POLICY, heads, None, min_bin_pages=None)
     assert calls == [(1, None, None), (2, None, frozenset({"k1"})),
                      (3, None, frozenset({"k2"})), (5, None, None)]
 
@@ -378,7 +498,7 @@ def _najdi_retazec():
         if len(heads) < 2:
             continue
         try:
-            pamat_zo_sidecaru(sidecar_cesta(heads[0]["path"]))
+            pamat_zo_sidecaru(sidecar_cesta(heads[0]["path"]), min_bin_pages=None)
         except FeatureError:
             continue
         return d
@@ -399,7 +519,7 @@ def realny():
 
 @pytest.fixture(scope="module")
 def vysledok(realny):
-    return retazec(realny, PROFIL)
+    return retazec(realny, PROFIL, min_bin_pages=None)
 
 
 def test_realny_tvar_matice(vysledok):
@@ -490,7 +610,7 @@ def test_proc_new_a_gone_sedia_na_rucny_rozdiel(realny, vysledok):
 
 def test_determinizmus(realny, vysledok):
     """Ten isty retazec dva razy musi dat tie iste cisla, bit po bite."""
-    znova = retazec(realny, PROFIL)
+    znova = retazec(realny, PROFIL, min_bin_pages=None)
     assert znova["matica"] == vysledok["matica"]
     assert znova["snimky"] == vysledok["snimky"]
 

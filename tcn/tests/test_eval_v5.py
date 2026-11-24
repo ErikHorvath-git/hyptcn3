@@ -283,9 +283,9 @@ def test_the_contexts_of_a_control_and_of_an_event_that_did_not_run():
 
 
 def test_the_clean_rows_of_a_replay_are_those_of_tcn_metody_traffic():
-    """Question Q12 (provisional): the clean rows of eval's CONTEXT_RULE are tcn/metody.py OBSERVED_RULE's clean rows
-    on the same session with two events and a control (a window set of the wrapper and the replay of the same
-    frames)."""
+    """Question Q12 (accepted by the lead 2026-11-24): the clean rows of eval's CONTEXT_RULE are tcn/metody.py
+    OBSERVED_RULE's clean rows on the same session with two events and a control (a window set of the wrapper and
+    the replay of the same frames)."""
     from tcn.eval import row_contexts
     from tcn.metody import Okna, traffic
     norm = normalizer(("mem_changed_ratio", "proc_user"))

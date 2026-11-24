@@ -103,8 +103,9 @@ def main(argv=None):
                 predch = None
             sidecar = json.loads((Path(a.snapshots) / (sid + ".json")).read_text())
             chain_id = str(sidecar["output"]["chain_id"])
+            # Kazdy bin (min_bin_pages None vyslovne), ako starsi model, ktory tento detektor nacita.
             vektor, predch, _ = vektor_snimky(a.snapshots, a.profile, seq,
-                                              predch)
+                                              predch, min_bin_pages=None)
             window = okno.push(seq, cas_snimky, vektor, valid_state(predch))
             if okno.reset:
                 retazce.clear()

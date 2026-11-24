@@ -24,7 +24,8 @@ Dlzka je MENA - dvadsatdva priznakov plus dve polia o tom, co riadok vobec je:
 `ma_predchodcu` a `je_plna`. Poradie je dane poradim v MENA a uklada sa spolu
 s datami, aby sa dalo overit.
 
-  Pamat (agregat z bloku "features" v sidecari, ktory pocita C modul):
+  Pamat (agregat z bloku "features" v sidecari, ktory pocita C modul; "biny"
+  su biny, ktore cez counted_bin prejdu minimom min_bin_pages - nizsie):
      1  mem_changed_ratio   sucet pages_changed / sucet pages_total
      2  mem_bins_active     podiel binov s has_changed = 1
      3  mem_changed_max     najvyssi changed_ratio cez biny
@@ -33,6 +34,18 @@ s datami, aby sa dalo overit.
      6  mem_entropy_mean    priemer entropy_mean, vazeny poctom zmenenych stranok
      7  mem_entropy_max     najvyssi entropy_mean cez biny so zmenou
      8  mem_zero_ratio      sucet nulovych stranok / sucet pages_total
+
+  Ktore biny (otazka Q10, odpoved veduceho 2026-11-24, moznost a; nalez F4
+  overenia B6b): pod protokolom schemy 3 sa vsetkych osem pamatovych priznakov,
+  mem_bins_active vratane, pocita iba z binov s aspon
+  analysis.scale.min_bin_pages strankami - z tych istych binov, ktore vstupuju
+  do skore (counted_bin je jeden predikat pre extraktor aj pre
+  safeguard/features.py NormalizationRule.split_bins, hranica >=). Jedna
+  zmenena stranka binu s jednou strankou (MMIO APIC na 0xFEE00000) tak nikdy
+  neda mem_changed_max 1,0. min_bin_pages nema predvolenu hodnotu: audit ho
+  berie z protokolu, zivy beh z balika (safeguard/bundle.py
+  Bundle.min_bin_pages) a kazda starsia cesta poda None vyslovne; None znamena
+  kazdy bin (protokoly schemy 1 a 2, archivy spred tejto zmeny).
 
   Objekty hosta (z guestparse nad tou istou snimkou):
      9  proc_total    10 proc_user    11 proc_kernel   12 proc_new
@@ -223,13 +236,43 @@ def sidecar_cesta(vmicd_path):
     return vmicd_path + ".json"
 
 
-def pamat_zo_sidecaru(cesta):
+def _min_bin_pages(min_bin_pages):
+    """min_bin_pages je None (kazdy bin) alebo cele cislo >= 1; ina hodnota je chyba, nie nahradna hodnota."""
+    if min_bin_pages is not None and (type(min_bin_pages) is not int or min_bin_pages < 1):
+        raise FeatureError(
+            "min_bin_pages je None (kazdy bin: protokol schemy 1 alebo 2) alebo cele cislo >= 1 "
+            "(analysis.scale.min_bin_pages protokolu schemy 3), nie %r" % (min_bin_pages,))
+    return min_bin_pages
+
+
+def counted_bin(pages_total, min_bin_pages):
+    """
+    Ci bin s `pages_total` strankami vstupuje do pamatovych priznakov a do
+    skore: ma aspon min_bin_pages stranok, alebo minimum nie je (None, kazdy
+    bin). Jeden predikat s jednou hranicou (>=) pre extraktor
+    (pamat_zo_sidecaru) aj pre normalizer (safeguard/features.py
+    NormalizationRule.split_bins): odpoved veduceho na otazku Q10, 2026-11-24.
+    """
+    _min_bin_pages(min_bin_pages)
+    return min_bin_pages is None or pages_total >= min_bin_pages
+
+
+def pamat_zo_sidecaru(cesta, *, min_bin_pages):
     """
     Osem pamatovych priznakov z bloku "features" v sidecari snimky.
 
     Kazdy dovod, preco to nejde, je chyba s vysvetlenim - nie nahradna
     hodnota. Vektor s tichou vypnou by vyzeral spravne a nebol by.
+
+    `min_bin_pages` nema predvolenu hodnotu (bez tichej predvolenej hodnoty,
+    RIADENIE.md kap. 6 bod 2): pod protokolom schemy 3 je to
+    analysis.scale.min_bin_pages a vsetkych osem priznakov sa pocita iba z binov
+    s aspon tolkymi strankami (counted_bin; otazka Q10, 2026-11-24); None znamena
+    kazdy bin sidecaru (protokoly schemy 1 a 2 a starsie nastroje, ktore ho
+    podavaju vyslovne). Kontroly sidecaru idu pred vyberom binov; ked po vybere
+    ziaden bin neostane, je to chyba, ktora menuje min_bin_pages.
     """
+    _min_bin_pages(min_bin_pages)
     if not os.path.exists(cesta):
         raise FeatureError(
             "snimka nema vedla seba sidecar '%s'. Pamatova cast vektora sa "
@@ -243,14 +286,21 @@ def pamat_zo_sidecaru(cesta):
             "sidecar '%s' nema blok 'features' so zoznamom 'bins'. Zber musel "
             "bezat s per-bin vektorom zapnutym ([features] v konfiguracii "
             "vmicollect)." % cesta)
-    bins = blok["bins"]
-    if not bins:
+    vsetky = blok["bins"]
+    if not vsetky:
         raise FeatureError("sidecar '%s': zoznam 'bins' je prazdny" % cesta)
     if blok.get("entropy") is False:
         raise FeatureError(
             "sidecar '%s': entropia bola pri zbere vypnuta, priznaky "
             "mem_entropy_mean a mem_entropy_max sa z neho ziskat nedaju"
             % cesta)
+    # Otazka Q10 (2026-11-24): iba biny, ktore vstupuju do skore. Vzorce nizsie sa nemenia.
+    bins = [b for b in vsetky if counted_bin(b["pages_total"], min_bin_pages)]
+    if not bins:
+        raise FeatureError(
+            "sidecar '%s': ziaden z %d binov nema aspon min_bin_pages %d stranok; pamatova cast vektora sa "
+            "pocita iba z takych binov (analysis.scale.min_bin_pages, otazka Q10)"
+            % (cesta, len(vsetky), min_bin_pages))
 
     pages_total = sum(b["pages_total"] for b in bins)
     pages_changed = sum(b["pages_changed"] for b in bins)
@@ -417,7 +467,7 @@ def objekty_z_pohladu(view):
 
 
 def vektor_snimky(snapshot, profil, seq=None, predch=None, cursor=None,
-                  predch_krizove=_Z_PREDCHODCU):
+                  predch_krizove=_Z_PREDCHODCU, *, min_bin_pages):
     """
     Vektor jednej snimky retazca. Vracia (vektor, stav, poznamky).
 
@@ -429,12 +479,14 @@ def vektor_snimky(snapshot, profil, seq=None, predch=None, cursor=None,
     `predch_krizove` su `krizove_kluce` bezprostredne predchadzajucej snimky
     (None = ziadna); bez neho sa beru z `predch`. Volajuci ho podava zvlast,
     lebo potvrdenie rozdielu nezavisi od platnosti vstupov predchodcu.
+    `min_bin_pages` (bez predvolenej hodnoty) urcuje biny pamatovej casti:
+    pamat_zo_sidecaru; None = kazdy bin.
     """
     heads = _chain_parts(snapshot, until_seq=seq)
     # 'full' je z hlavicky .vmicd suboru tejto snimky, nie z poradia v
     # retazci: pri output.delta_full_every je plna snimka aj uprostred.
     je_plna = 1 if heads[-1]["full"] else 0
-    pamat = pamat_zo_sidecaru(sidecar_cesta(heads[-1]["path"]))
+    pamat = pamat_zo_sidecaru(sidecar_cesta(heads[-1]["path"]), min_bin_pages=min_bin_pages)
     from .contract import validate_sidecar
     with open(sidecar_cesta(heads[-1]["path"]), encoding="utf-8") as fh:
         side = json.load(fh)
@@ -522,13 +574,17 @@ def _vsetky_hlavicky(snapshot):
 # ------------------------------------------------------------ cely retazec
 
 
-def retazec(snapshot, profil, max_medzera_s=7.5, *, quality_policy=LEGACY_POLICY):
+def retazec(snapshot, profil, max_medzera_s=7.5, *, quality_policy=LEGACY_POLICY, min_bin_pages):
     """
     Cely retazec snimok: matica (cas x dlzka MENA) a mena priznakov.
 
     Riadky su v poradi seq, teda v case. Ku kazdemu riadku sa vracia aj id
     snimky, jej cas a trvanie spracovania - trvanie je udaj do kapitoly o
     real-time a nema zmysel ho merat zvlast inym behom.
+
+    `min_bin_pages` (bez predvolenej hodnoty) ide do kazdeho riadka
+    (vektor_snimky, pamat_zo_sidecaru): audit protokolu schemy 3 poda
+    analysis.scale.min_bin_pages, starsie cesty None (kazdy bin).
     """
     # Kolektor pri dlhsom behu rozdeli retazec: kazda nova PLNA snimka
     # zacina novy retazec (chain_id), seq pokracuje. Features sa musia
@@ -536,19 +592,21 @@ def retazec(snapshot, profil, max_medzera_s=7.5, *, quality_policy=LEGACY_POLICY
     # potichu prisli o vsetko okrem posledneho useku.
     if quality_policy not in (LEGACY_POLICY, BEHAVIOR_POLICY):
         raise ValueError("unsupported feature quality policy")
+    _min_bin_pages(min_bin_pages)
     heads = _vsetky_hlavicky(snapshot)
     # Jeden kurzor na sedenie: kazda cast retazca sa indexuje raz, nie znova
     # pri kazdej dalsej snimke (vysledok je rovnaky ako open_image do seq).
     from guestparse.image import ChainCursor
     cursor = ChainCursor(snapshot) if os.path.isdir(snapshot) else None
     try:
-        return _retazec_cyklus(snapshot, profil, max_medzera_s, quality_policy, heads, cursor)
+        return _retazec_cyklus(snapshot, profil, max_medzera_s, quality_policy, heads, cursor,
+                               min_bin_pages=min_bin_pages)
     finally:
         if cursor is not None:
             cursor.close()
 
 
-def _retazec_cyklus(snapshot, profil, max_medzera_s, quality_policy, heads, cursor):
+def _retazec_cyklus(snapshot, profil, max_medzera_s, quality_policy, heads, cursor, *, min_bin_pages):
     matica, snimky, poznamky, trvania = [], [], [], []
     seqs, casy, quality, perbin, chains = [], [], [], [], []
     biny, layout = None, None
@@ -572,7 +630,8 @@ def _retazec_cyklus(snapshot, profil, max_medzera_s, quality_policy, heads, curs
                 or not 0 < now - previous[1] <= max_medzera_s):
             predch = krizove = None
         t0 = time.monotonic()
-        vektor, stav, pozn = vektor_snimky(snapshot, profil, h["seq"], predch, cursor, krizove)
+        vektor, stav, pozn = vektor_snimky(snapshot, profil, h["seq"], predch, cursor, krizove,
+                                           min_bin_pages=min_bin_pages)
         trvania.append(time.monotonic() - t0)
         matica.append(vektor)
         snimky.append(os.path.basename(h["path"])[:-len(".vmicd")])

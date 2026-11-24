@@ -75,6 +75,28 @@ STOP_TIMEOUT_S, STOP_PAUSE_S = 180, 2
 TEMPORARY = ("way 2 moved the QEMU process, not its memory: the pages it touched before the move stay charged to the "
              "cgroup it ran in before, whose swap policy still applies to them (finding F4 of B5a); a group starts "
              "through way 1: the VM shut off and the session daemon in its unit")
+# The lead's instruction on F4 of B5a (2026-11-24) and his answer to Q26: QEMU is born in the daemon's unit, and the
+# unit is charged with its memory when the anon line of its memory.stat holds at least CHARGED_SHARE of the RssAnon of
+# the QEMU processes in its cgroup.procs (charge). One daemon starts both VMs, so the sum covers every QEMU in the
+# unit; libvirtd, virtlogd and passt only add to anon. memory.current and VmRSS are recorded beside it: memory.current
+# also counts the page cache of the disk images, and RssFile pages may be charged elsewhere, so neither equals RSS.
+CHARGED_SHARE = .9  # Judgment of the lab test (scripts/lab_trial.py, 2026-11-23), accepted by the lead (Q26).
+QEMU_BINARY = b"/usr/bin/qemu-system"  # How a QEMU process's cmdline starts (qemu_pid, charge).
+# Every virsh call of labctl starts no daemon of its own (the lead's instruction on F4): a missing session daemon is
+# an error, never a daemon born outside the unit. scripts/collection.py user_command sets the same under sudo.
+VIRSH_ENV = {"LIBVIRT_AUTOSTART": "0"}
+# The one-time migration of F4: the daemon outside the unit is replaced only while no domain runs.
+MIGRATION = ("stop every lab VM (labctl stop), then start them with labctl start: with no domain running the start "
+             "replaces the session daemon by hyptcn-libvirtd.service, and every QEMU it starts is born there")
+
+
+class NotCharged(RuntimeError):
+    """QEMU's swap state is read, but its memory is not where the swap ban of its cgroup holds (finding F4 of B5a): the
+    record of the swap step goes with the error, so the step prints it whole."""
+
+    def __init__(self, message, record):
+        super().__init__(message)
+        self.record = record
 
 
 def run(args, **kw):
@@ -90,7 +112,7 @@ def qemu_pid(domain):
             argv = (entry / "cmdline").read_bytes()
         except OSError:
             continue
-        if argv.startswith(b"/usr/bin/qemu-system") and marker in argv:
+        if argv.startswith(QEMU_BINARY) and marker in argv:
             found.append(int(entry.name))
     if len(found) > 1:
         raise RuntimeError(f"several QEMU processes run domain {domain}: {sorted(found)}")
@@ -116,6 +138,52 @@ def vm_swap_kb(pid):
         return int(re.search(r"^VmSwap:\s+(\d+) kB$", (PROC / str(pid) / "status").read_text(), re.M)[1])
     except (OSError, TypeError):
         return None
+
+
+def charge(cgroup):
+    """What the cgroup v2 path `cgroup` is charged with (the lead's instruction on F4 of B5a, his answer to Q26):
+    memory.current and the anon line of memory.stat in bytes, and every QEMU process of its cgroup.procs (cmdline
+    /usr/bin/qemu-system...) with VmRSS and RssAnon in kB. share is anon over the sum of RssAnon, 3 decimals; charged
+    is share >= CHARGED_SHARE, compared unrounded. A file that cannot be read, no QEMU in cgroup.procs or a sum of 0
+    gives an error and charged false, never true. A process that has exited since cgroup.procs was read (its /proc
+    entry is gone) is no longer charged there and is left out; any other unreadable process is an error, since a QEMU
+    left out of the sum would raise the share."""
+    base = CGROUPS / (cgroup or "").lstrip("/")
+    record = {"cgroup": cgroup, "memory_current": None, "anon": None, "qemu": [], "rss_anon_kb": None, "share": None,
+              "charged": False, "charged_share": CHARGED_SHARE}
+    try:
+        if not cgroup:
+            raise ValueError("no cgroup v2 path")
+        record["memory_current"] = int((base / "memory.current").read_text().strip())
+        anon = re.search(r"^anon (\d+)$", (base / "memory.stat").read_text(), re.M)
+        if anon is None:
+            raise ValueError(f"memory.stat of {cgroup} has no anon line")
+        record["anon"] = int(anon[1])
+        for pid in sorted(int(x) for x in (base / "cgroup.procs").read_text().split()):
+            entry = PROC / str(pid)
+            try:
+                argv = (entry / "cmdline").read_bytes()
+                status = (entry / "status").read_text() if argv.startswith(QEMU_BINARY) else None
+            except OSError:
+                if entry.exists():
+                    raise
+                continue
+            if status is None:
+                continue
+            rss, anon_kb = (re.search(rf"^{key}:\s+(\d+) kB$", status, re.M) for key in ("VmRSS", "RssAnon"))
+            if rss is None or anon_kb is None:
+                raise ValueError(f"/proc/{pid}/status has no VmRSS or RssAnon")
+            record["qemu"].append({"pid": pid, "vm_rss_kb": int(rss[1]), "rss_anon_kb": int(anon_kb[1])})
+        if not record["qemu"]:
+            raise ValueError(f"no QEMU process in the cgroup.procs of {cgroup}")
+        record["rss_anon_kb"] = sum(q["rss_anon_kb"] for q in record["qemu"])
+        if not record["rss_anon_kb"]:
+            raise ValueError(f"the QEMU processes of {cgroup} have RssAnon 0 kB")
+        share = record["anon"] / (record["rss_anon_kb"] << 10)
+        record.update(share=round(share, 3), charged=share >= CHARGED_SHARE)
+    except (OSError, ValueError) as error:
+        record.update(charged=False, error=str(error)[:300])
+    return record
 
 
 def kb_text(kb):
@@ -264,6 +332,8 @@ class Lab:
             raise ValueError("Invalid host forward port")
         self.uri, self.domain, self.vm, self.port = uri, domain, vm, port
         self.swap_error = None  # Why qemu_swap_off() failed in this command (swap_step); main() ends with it.
+        self.started = False  # This command ran virsh start (start): its QEMU must be born in the daemon's unit.
+        self.daemon_record = None  # The last record of daemon_step in this command.
 
     # Without a VM name (one lab VM) the original names stay; a named VM of a
     # multi-VM protocol has its own state file, traffic unit and status file.
@@ -280,7 +350,8 @@ class Lab:
         return REPO / "data/lab" / ("traffic.json" if self.vm is None else f"traffic-{self.vm}.json")
 
     def virsh(self, *args, timeout=30):
-        return run(["virsh", "-c", self.uri, *args], capture_output=True, timeout=timeout).stdout.strip()
+        return run(["virsh", "-c", self.uri, *args], capture_output=True, timeout=timeout,
+                   env={**os.environ, **VIRSH_ENV}).stdout.strip()
 
     def agent(self, command, arguments=None):
         """One guest-agent command with AGENT_TIMEOUT_S (virsh defaults to 5 s).
@@ -428,6 +499,7 @@ class Lab:
         raise TimeoutError("Guest agent is unavailable after boot")
 
     def clone(self, source):
+        self.daemon_first()  # virsh starts no daemon of its own (VIRSH_ENV); up and create clone before they start.
         if self.domain in self.virsh("list", "--all", "--name").splitlines():
             self.owned()
             return
@@ -529,7 +601,9 @@ class Lab:
         """Shut the VM down and wait until it is shut off and its QEMU process has exited (package B9: each group
         starts with a new QEMU process, proposal 5.4; the start that follows is way 1). A VM already shut off stays
         so. Prints and returns {domain, state_before, qemu_pid_before, state, seconds}; RuntimeError when the domain
-        is not shut off, or its QEMU still runs, STOP_TIMEOUT_S after virsh shutdown."""
+        is not shut off, or its QEMU still runs, STOP_TIMEOUT_S after virsh shutdown. The session daemon is made sure
+        of before the first virsh call (daemon_first)."""
+        self.daemon_first()
         self.owned()
         before, pid, started = self.virsh("domstate", self.domain), qemu_pid(self.domain), time.monotonic()
         if before != "shut off":
@@ -549,14 +623,20 @@ class Lab:
         return record
 
     def start(self):
-        """Start the VM when it is shut off, through way 1 (daemon_step right before virsh start): the new QEMU process
-        inherits the daemon unit's cgroup (package B9: a group starts with stop, then start). A running VM keeps its
-        QEMU. main() runs the swap step after every start; its record, printed last, names the QEMU's pid, cgroup and
-        way (qemu_swap_off), which the campaign records."""
+        """Start the VM when it is shut off, through way 1: the new QEMU process inherits the daemon unit's cgroup
+        (package B9: a group starts with stop, then start). A running VM keeps its QEMU. The session daemon is made sure
+        of before the first virsh call (daemon_first: with none running the unit starts there); otherwise daemon_step
+        runs right before virsh start, so it runs at most once. main() runs the swap step after every start; its
+        record, printed last, names the QEMU's pid, cgroup, way and memory (qemu_swap_off), which the campaign
+        records; a QEMU this command started must be born in the unit and charged there."""
+        ensured = self.daemon_first()
         self.owned()
         if self.virsh("domstate", self.domain) == "shut off":
-            self.daemon_step()  # Way 1 of the swap ban: the daemon that starts this QEMU runs in a unit without swap.
+            if not ensured:
+                # Way 1 of the swap ban: the daemon that starts this QEMU runs in a unit without swap.
+                self.daemon_step()
             self.virsh("start", self.domain)
+            self.started = True
         self.wait()
         # passt provides DHCP and forwards only the local development port.
         self.guest("if [ ! -f /var/lib/hyptcn-lab-network-v3 ]; then "
@@ -571,6 +651,37 @@ class Lab:
             if root < 0.9 * (DISK_GIB << 30):
                 raise RuntimeError(f"Guest root file system has {root} B, expected about {DISK_GIB} GiB")
 
+    def daemon_first(self):
+        """Before the first virsh call of start and stop (the lead's instruction on F4 of B5a), and of clone, which up
+        and create run before they start: with no session daemon running, daemon_step starts the unit, so the virsh
+        calls that follow (LIBVIRT_AUTOSTART=0) find the daemon there, and after a reboot of the host the VMs it
+        restores from their managed save are born there too. True when it ran daemon_step; a running daemon is left to
+        daemon_step right before virsh start."""
+        try:
+            running = session_daemon()[0] is not None
+        except RuntimeError:  # No XDG_RUNTIME_DIR: daemon_step records why.
+            running = False
+        if not running:
+            self.daemon_step()
+        return not running
+
+    def daemon(self):
+        """labctl daemon: the check before a launch (dokazy/B9/odlozene_B9a.md) and the first step of the migration of
+        F4. daemon_step prints the record: a daemon in its unit is left as it is, without one the unit is started, and
+        a daemon outside the unit is replaced while no domain runs. RuntimeError when no daemon runs in the unit after
+        it: a daemon outside the unit while a domain runs names the migration (MIGRATION); a failed unit names its
+        error."""
+        record = self.daemon_step()
+        if record["qemu_way"] == "unit":
+            return record
+        if record["found"] == "outside" and record.get("running_domains"):
+            raise RuntimeError(f"the session daemon {record['daemon_pid']} runs outside {DAEMON_SERVICE} (in "
+                               f"{record['cgroup']}) while {', '.join(record['running_domains'])} run: it is not "
+                               f"replaced while a domain runs (finding F4 of B5a); {MIGRATION}")
+        raise RuntimeError(f"no session daemon runs in {DAEMON_SERVICE} with memory.swap.max 0 (found "
+                           f"{record['found']}, memory.swap.max {record['memory_swap_max']!r}"
+                           + (f"): {record['error']}" if "error" in record else ")"))
+
     def daemon_step(self):
         """Way 1 of the swap ban, before every virsh start of a lab VM (KOSTRA B5, addendum 20:50Z): the session
         daemon of libvirt runs in DAEMON_SERVICE (MemorySwapMax=0, KillMode=process), so the QEMU it starts
@@ -580,8 +691,9 @@ class Lab:
         replaced (SIGTERM to its exact pid, its exit awaited, then the unit) only while no domain runs, at the start
         of a group; while one runs it stays, and the new QEMU goes through way 2 (qemu_swap_off). The record of what
         was found and done is printed (qemu_way: "unit" when the daemon now runs in the unit without swap, else
-        "scope"). A failure is recorded, not raised: way 2 and the check follow after the start, and only both ways
-        failing ends the command with the owner's command."""
+        "scope"). A failure is recorded, not raised: way 2 and the check follow after the start, where both ways
+        failing ends the command with the owner's command, and a QEMU this command started outside the unit ends it
+        with the migration (qemu_swap_off, finding F4 of B5a)."""
         record = {"unit": DAEMON_SERVICE, "found": None, "daemon_pid_before": None, "cgroup_before": None, "done": []}
         try:
             pid, cgroup, _ = session_daemon()
@@ -594,7 +706,8 @@ class Lab:
             else:
                 record["found"] = "outside"
                 record["running_domains"] = run(["virsh", "-c", SESSION_URI, "list", "--state-running", "--name"],
-                                                capture_output=True, timeout=UNIT_TIMEOUT_S).stdout.split()
+                                                capture_output=True, timeout=UNIT_TIMEOUT_S,
+                                                env={**os.environ, **VIRSH_ENV}).stdout.split()
                 if not record["running_domains"]:
                     os.kill(pid, signal.SIGTERM)
                     record["done"].append(f"SIGTERM {pid}")
@@ -610,6 +723,7 @@ class Lab:
         way = "unit" if "error" not in record and in_user_unit(cgroup, DAEMON_SERVICE) and value == "0" else "scope"
         record.update(daemon_pid=pid, cgroup=cgroup, memory_swap_max=value, qemu_way=way)
         print(json.dumps({"libvirtd": record}, sort_keys=True), flush=True)
+        self.daemon_record = record
         return record
 
     def qemu_swap_off(self):
@@ -626,7 +740,14 @@ class Lab:
 
         The record names the QEMU's pid and cgroup and the way that holds it (package B9): "unit" in the daemon's
         unit (way 1), "scope" in a hyptcn-qemu scope, moved now or by an earlier start (way 2). Way 2 is temporary
-        (finding F4 of B5a): temporary is true and the note says why."""
+        (finding F4 of B5a): temporary is true and the note says why.
+
+        The record also names what its cgroup is charged with (memory: charge; the lead's instruction on F4 and his
+        answer to Q26). Two cases end in NotCharged, a RuntimeError naming F4 that carries the whole record, so labctl
+        start exits 1 and the campaign's group start fails at its step: way 1 whose unit is not charged with the
+        memory of its QEMU processes (the numbers named), and a QEMU this command started (start) outside the unit,
+        which way 2 still moves into its scope first. Way 2 for a running QEMU this command did not start stays as
+        before: temporary, no error."""
         pid = qemu_pid(self.domain)
         if pid is None:
             raise RuntimeError(f"QEMU process of domain {self.domain} not found")
@@ -662,17 +783,37 @@ class Lab:
                                f"{cgroup}: pages swapped out before its cgroup forbade swap stay in swap until QEMU "
                                "touches them; a VM started again begins without them")
         way = "unit" if in_user_unit(cgroup, DAEMON_SERVICE) else "scope"
-        return {**record, "scope": scope, "cgroup": cgroup, "memory_swap_max": value, "vm_swap_kb": kb, "way": way,
-                "temporary": way == "scope", **({"note": TEMPORARY} if way == "scope" else {})}
+        memory = charge(cgroup)
+        out = {**record, "scope": scope, "cgroup": cgroup, "memory_swap_max": value, "vm_swap_kb": kb, "way": way,
+               "temporary": way == "scope", **({"note": TEMPORARY} if way == "scope" else {}), "memory": memory}
+        if way == "unit" and not memory["charged"]:
+            vm_rss = ", ".join(f"{q['pid']} {q['vm_rss_kb']} kB" for q in memory["qemu"]) or "none read"
+            raise NotCharged(
+                f"QEMU {pid} ({self.domain}) runs in {DAEMON_SERVICE}, but the unit is not charged with the memory of "
+                f"its QEMU processes (finding F4 of B5a): memory.stat anon {memory['anon']} B is {memory['share']} of "
+                f"their RssAnon {memory['rss_anon_kb']} kB, at least {CHARGED_SHARE} required (judgment, the lead's "
+                f"answer to Q26); memory.current {memory['memory_current']} B, VmRSS {vm_rss}"
+                + (f"; {memory['error']}" if "error" in memory else ""), out)
+        if self.started and way != "unit":
+            daemon = self.daemon_record or {}
+            found = f"daemon found {daemon.get('found')}" + (f", {daemon['error']}" if daemon.get("error") else "")
+            raise NotCharged(
+                f"QEMU {pid} ({self.domain}) was started by this command outside {DAEMON_SERVICE} ({found}); way 2 "
+                f"moved the process into {scope or cgroup}, not its memory (finding F4 of B5a): {MIGRATION}", out)
+        return out
 
     def swap_step(self):
         """qemu_swap_off() as a step right after every start of the VM: its record is printed. A failure ends the
         command with an error (main), but only after the command's other steps: a lab deployed with swap is still
         usable outside a collection (the lab test on the VM), and run_session refuses to collect from a QEMU whose
         memory.swap.max is not 0 or whose VmSwap is not 0 kB, so the failure stays loud without blocking what needs
-        no collection."""
+        no collection. A QEMU whose memory is not charged where its swap ban holds (NotCharged, finding F4 of B5a)
+        is such a failure too; its record is printed whole, with the error."""
         try:
             record = self.qemu_swap_off()
+        except NotCharged as error:
+            self.swap_error = str(error)
+            record = {**error.record, "error": self.swap_error}
         except RuntimeError as error:
             self.swap_error = str(error)
             record = {"domain": self.domain, "memory_swap_max": None, "error": self.swap_error}
@@ -780,7 +921,7 @@ def main(argv=None):
     parser.add_argument("command", choices=["up", "create", "clone", "start", "deploy", "status", "stop", "reboot",
                                             "traffic-start", "traffic-stop", "exec", "logs", "state", "levels",
                                             "reset", "pretouch", "clock", "sync-clock", "segment", "journal",
-                                            "event"])
+                                            "event", "daemon"])
     parser.add_argument("--domain", default="hyptcn-lab")
     parser.add_argument("--vm", help="VM name of a multi-VM protocol (own state file, traffic unit and port); "
                                      "clone: the new disk gets a fresh machine-id and hostname before its first boot")
@@ -861,6 +1002,8 @@ def main(argv=None):
         loaded = subprocess.check_output(["systemctl", "--user", "show", unit, "-p", "LoadState", "--value"], text=True).strip()
         if loaded != "not-found":
             subprocess.run(["systemctl", "--user", "stop", unit], check=True)
+    if args.command == "daemon":  # The session daemon in its unit (Lab.daemon; the lead's instruction on F4 of B5a).
+        lab.daemon()
     if args.command == "reboot":
         lab.reboot()
     if args.command == "stop":  # Waits until the VM is shut off (package B9; Lab.stop).

@@ -186,10 +186,11 @@ MARKED_ROWS_RULE = (
     "without events (the controls of role test_controls are no events); beside the rows, the windowed occurrences of "
     "each type are counted (event_occurrences_by_type); every event type of the protocol is in both counts, 0 when "
     "none, and a type the protocol does not name is counted under its own name. The early stop does not judge one "
-    "session: the campaign sums both counts over its audited sessions and compares the sum per type with a bound at "
+    "session: the campaign sums both counts over its audited sessions (a continuation with those of the paused "
+    "campaign it continues) and compares the sum per type with a bound at "
     "its rate per occurrence (scripts/campaign.py early_stop_check, features/audit_policy.py EARLY_STOP_RULE: Q24, "
-    "decided by its proposal). The window is that of the log audit by F8; that a row counts under every type whose "
-    "window holds it is the executor's judgment (windows of one session do not overlap: min_gap_s)")
+    "accepted by the lead 2026-11-24). The window is that of the log audit by F8; that a row counts under every type "
+    "whose window holds it is the executor's judgment (windows of one session do not overlap: min_gap_s)")
 
 
 def marked_rows_by_type(flagged, times, windows, types):

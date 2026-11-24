@@ -348,8 +348,9 @@ def cmd_session(args):
     """
     from .snapshot import retazec
 
+    # Kazdy bin (min_bin_pages None vyslovne): tento prikaz nema protokol; archiv protokolu v5 robi audit zberu.
     res = retazec(args.snapshot, args.profile, args.max_medzera_s,
-                  quality_policy=args.quality_policy)
+                  quality_policy=args.quality_policy, min_bin_pages=None)
     mena, matica = res["mena"], res["matica"]
 
     if args.out:

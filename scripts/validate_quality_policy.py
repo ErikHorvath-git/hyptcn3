@@ -53,7 +53,8 @@ def main():
     records = []
     stable = [i for i in range(18) if MENA[i] not in ("proc_new", "proc_gone", "mod_delta")]
     for seq in sorted(set(args.seq)):
-        frame, previous = frame_from_snapshot(raw, session / "profile", seq, previous)
+        # Every bin (min_bin_pages None, explicitly), as the archive it is compared with was extracted.
+        frame, previous = frame_from_snapshot(raw, session / "profile", seq, previous, min_bin_pages=None)
         i = old_seq.index(seq)
         np.testing.assert_array_equal(frame.vector[stable], old_matrix[i, stable])
         np.testing.assert_array_equal(frame.perbin, old_local[i])

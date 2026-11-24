@@ -125,6 +125,7 @@ class Bundle:
     """A score oracle with the interface of safeguard.bundle.Bundle (as safeguard/tests/test_runtime.py FakeBundle):
     every window of WINDOW rows scores 2, above the threshold 1; the contract is that of the archive's first frame."""
     threshold, k, n, anchored = 1.0, 1, 1, False
+    min_bin_pages = None  # Package B11 (question Q10): the bins run_directory extracts from, every bin.
 
     def __init__(self, archive, interval_s=INTERVAL):
         from safeguard.features import feature_contract, frames_from_archive
@@ -1063,7 +1064,7 @@ def test_record_stage_is_suchy_for_a_corpus_whose_seal_the_ledger_of_record_does
 
 
 def test_record_stage_of_an_ending_record_does_not_ask_the_ledger_at_head(tmp_path, sealed, of_record, monkeypatch):
-    """Question Q21 (package B9b, decided by its proposal until the lead answers): the ending record of a campaign
+    """Question Q21 (package B9b, accepted by the lead 2026-11-24): the ending record of a campaign
     passes at_head False, since its runner writes it before the ledger is committed. A record of plan mode campaign
     is then final when the ledger of record in the working tree holds the archive of every session of the sealed
     roles, the ledger at HEAD never asked; its basis says so and names the ledger's sha256 and that tcn.finalne checks

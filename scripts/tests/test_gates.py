@@ -268,3 +268,48 @@ def test_the_self_check_before_a_record_reads_schema_3_only(world, tmp_path):
                     "[1, 2]\n"):
         other.write_text(content)
         assert state["selfcheck"](other, "G0") == []
+
+
+# Package B11 (agent G): the lead's answer to Q24 (2026-11-24), the numbers of the model of the early stop in the record
+# of stage G3b, for the owner's decision; no criterion.
+
+def test_a_g3b_record_carries_the_numbers_of_the_early_stop_model_and_no_new_criterion(world, capsys):
+    """Every record of stage G3b carries values.owner_information: features/audit_policy.py EARLY_STOP_MODEL (0.12 to
+    0.28 false stops per healthy campaign, a model and not a measurement) with its source and note, and no other stage
+    carries it. The owner sees it before deciding: the first G3b record, with owner_decision not yet passed, is
+    written with passed false and the stage stays open; the record with owner_decision passed follows and passes. The
+    criteria of G3b are those of the stage (no new criterion), and the command that writes the record prints the
+    numbers beside its result."""
+    from features.audit_policy import EARLY_STOP_MODEL
+    protocol, results, _ = world
+    for minutes, stage in enumerate(("G0", "G1", "G2", "G3a")):
+        assert write(world, stage, minutes)[1] == []
+    first, why = write(world, "G3b", 4, criteria=passed("G3b", owner_decision={"passed": False, "evidence": "open"}))
+    record = json.loads(first.read_text())
+    information = record["values"]["owner_information"]
+    assert information["early_stop_model"] == EARLY_STOP_MODEL
+    assert information["early_stop_model"]["false_stops_per_campaign"] == [0.12, 0.28]
+    assert information["source"] == "features/audit_policy.py EARLY_STOP_MODEL" and "Q24" in information["note"]
+    assert "no criterion" in information["note"] and "not a measurement" in EARLY_STOP_MODEL["kind"]
+    assert why == record["values"]["problems"] == ["criterion not passed: owner_decision"]
+    assert record["values"]["passed"] is False and "G3b" not in valid(world)
+    final, why = write(world, "G3b", 5)
+    assert why == [] and valid(world) == ["G0", "G1", "G2", "G3a", "G3b"]
+    assert json.loads(final.read_text())["values"]["owner_information"] == information
+    for path in sorted(results.glob("gate_*.json")):
+        values = json.loads(path.read_text())["values"]
+        assert ("owner_information" in values) == (values["stage"] == "G3b"), path.name
+    assert gates.CRITERIA["G3b"] == ("candidate_commit_untouched", "chain_end_to_end", "replacement_limit",
+                                     "no_unexplained_periodicity", "audit_bounds_hold", "owner_decision")
+    criteria, verification = results.parent / "criteria.json", results.parent / "verification.json"
+    criteria.write_text(json.dumps(passed("G3b", owner_decision={"passed": False, "evidence": "open"})))
+    verification.write_text(json.dumps(verified("G3b")))
+    capsys.readouterr()
+    assert gates.main(["record", "G3b", "--protocol", str(protocol), "--results", str(results), "--criteria",
+                       str(criteria), "--verification", str(verification), "--command", "command"]) == 2
+    printed = json.loads(capsys.readouterr().out)
+    assert printed["owner_information"] == information and printed["problems"] == [
+        "criterion not passed: owner_decision"]
+    assert gates.main(["record", "G0", "--protocol", str(protocol), "--results", str(results), "--criteria",
+                       str(criteria), "--verification", str(verification), "--command", "command"]) == 2
+    assert "owner_information" not in json.loads(capsys.readouterr().out)

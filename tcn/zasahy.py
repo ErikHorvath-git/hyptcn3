@@ -32,6 +32,13 @@ The merge of B7b: the classes, the orders of C, the carrier roles, the insertion
 scripts/protocol_v5.py's constants (INTERVENTION_CLASSES, ORDERS, CARRIERS, DEV_INSERTION, MIN_BLOCK_ROWS), one for the
 protocol's check and this module; the stream injections is protocol_v5.analysis_seed's, which refuses a unit outside
 protocol_v5.INJECTION_UNITS; the session arrays of a window set come through tcn.metody.Okna.session_arrays.
+
+Package B11 (agent E; the lead's answer to question Q14, 2026-11-24, valid from G1 on and never tuned): the validity
+predicate is the lead's new deviation (VALIDITY_RULE): every value of the block and of its edges is judged, and a value
+fails only outside the train quantiles and outside the range the same quantity of the same input had at the same rows
+before the intervention; a violation records both ranges; the moving average is the mean of the sorted window; and the
+counts of a plan give every status by class and length (by_length), whose share of the volume class G3a reports
+(tcn/k2.py VOLUME_FINDING_RULE).
 """
 import math
 
@@ -124,16 +131,21 @@ DONOR_RULE = (
     "and position (one block of four groups, proposal 7.3); the rows of its segment are each the last row of a "
     "placeable window of one run of the donor")
 VALIDITY_RULE = (
-    "the validity predicate (skeleton section 5, the lead's judgment; from the features only): every value an "
-    "intervention changes of a TCN input, of its first difference (the row minus the row before it) or of its moving "
-    "average (the mean of the last analysis.interventions.validity.moving_average_rows rows), at a row of the block or"
-    " after it up to the last row whose moving average reads a row of the block, lies within [the quantile lo, the "
-    "quantile hi] (analysis.interventions.validity.quantiles) of the same quantity at the last rows of the windows of "
-    "role train (numpy, linear); every column is every TCN input, the bins are no columns (judgment); a value the "
-    "intervention leaves as it was is the benign session's and is not judged (judgment); this is a reading of skeleton "
-    "section 5, not its literal rule, which would judge every value at those rows (question Q14 to the lead, open); an "
-    "intervention that fails goes to the volume class (analysis.interventions.volume_class), reported apart and never "
-    "a success of its class; a placed intervention has every window of its horizon (PLACEMENT_RULE), so it is "
+    "the validity predicate, a new deviation (the lead's answer to question Q14, 2026-11-24: valid from G1 on and "
+    "never tuned; proposal 7.4; from the features only): an intervention is invalid when after it some value of the "
+    "block or of its edges, of a TCN input, of its first difference (the row minus the row before it) or of its moving "
+    "average (the mean of the last analysis.interventions.validity.moving_average_rows rows), lies outside [the "
+    "quantile lo, the quantile hi] (analysis.interventions.validity.quantiles) of the same quantity at the last rows "
+    "of the windows of role train (numpy, linear) and also outside the range that the same quantity of the same input "
+    "had at the same rows before the intervention (judgment: that range is its minimum to its maximum over those rows "
+    "of the session); the rows are those of the block and after it up to the last row whose moving average reads a row "
+    "of the block; every value at those rows is judged, not only the changed ones, and a value the intervention leaves "
+    "in place lies in its own range, so it never fails; the moving average is the mean of the sorted rows of its "
+    "window, in train and in the copies alike (judgment: a permutation of the rows of a window keeps its mean bit for "
+    "bit, so class C makes no new deviation from rounding); every column is every TCN input, the bins are no columns "
+    "(judgment); an intervention that fails goes to the volume class (analysis.interventions.volume_class), reported "
+    "apart and never a success of its class, and G3a reports the share of the volume class by class and length "
+    "(tcn/k2.py VOLUME_FINDING_RULE); a placed intervention has every window of its horizon (PLACEMENT_RULE), so it is "
     "evaluable (proposal 6.4: analysis.evaluable) exactly when it is valid")
 
 
@@ -363,8 +375,10 @@ class Ranges:
 
 def _quantities(values, ends, rows):
     """value, difference and moving average (over `rows` rows) of the global inputs `values` (T, G) at the rows
-    `ends`; the moving average by one mean over each window of rows (identical inputs give identical values)."""
-    means = sliding_window_view(values, rows, axis=0)[ends - rows + 1].mean(axis=-1)
+    `ends`; the moving average is the mean of each window of rows sorted first (VALIDITY_RULE, judgment: the sum of
+    numpy depends on the order of its terms in the last bit, so a window whose rows a block of class C only permutes
+    keeps its mean bit for bit; identical inputs give identical values)."""
+    means = np.sort(sliding_window_view(values, rows, axis=0)[ends - rows + 1], axis=-1).mean(axis=-1)
     return {"value": values[ends], "difference": values[ends] - values[ends - 1], "moving_average": means}
 
 
@@ -394,8 +408,12 @@ def train_ranges(train, protocol):
 def violations(ranges, original, copy, block, length):
     """VALIDITY_RULE on one copy: `original` and `copy` are the global inputs (rows, G) of the same rows of a session,
     the block at row `block` of them with `length` rows, at least moving_average_rows rows before it and every row up
-    to the last one a moving average reads the block. [{quantity, input, row (from the block's first), value, range}]
-    in the order of QUANTITIES, rows and inputs; [] when the copy is valid."""
+    to the last one a moving average reads the block. Every value of every quantity at the judged rows (the block's
+    first row to the last one whose moving average reads the block) is judged: it violates the predicate when it lies
+    outside the train range of its quantity and input (range: the quantiles lo and hi) and outside the range of the
+    same quantity of the same input at the judged rows of the original (before: its minimum and maximum there), the
+    lead's new deviation (question Q14). [{quantity, input, row (from the block's first), value, range, before}] in the
+    order of QUANTITIES, rows and inputs; [] when the copy is valid."""
     rows = ranges.rows
     original, copy = np.asarray(original, dtype=np.float64), np.asarray(copy, dtype=np.float64)
     if original.shape != copy.shape or original.ndim != 2 or original.shape[1] != len(ranges.input_names):
@@ -408,11 +426,13 @@ def violations(ranges, original, copy, block, length):
     found = []
     for q in QUANTITIES:
         lo, hi = ranges.bounds[q]
-        bad = (after[q] != before[q]) & ((after[q] < lo) | (after[q] > hi))
+        own_lo, own_hi = before[q].min(axis=0), before[q].max(axis=0)
+        bad = ((after[q] < lo) | (after[q] > hi)) & ((after[q] < own_lo) | (after[q] > own_hi))
         for row, column in zip(*np.nonzero(bad)):
             found.append({"quantity": q, "input": ranges.input_names[column], "row": int(row),
                           "value": float(after[q][row, column]),
-                          "range": [float(lo[column]), float(hi[column])]})
+                          "range": [float(lo[column]), float(hi[column])],
+                          "before": [float(own_lo[column]), float(own_hi[column])]})
     return found
 
 
@@ -639,15 +659,23 @@ def _apply(carriers, s, start, last, length, order, group, donor, ranges, horizo
     return {"session": session, "windows": mine, "horizon": in_horizon, "record": record}
 
 
+def _count_statuses(items):
+    """planned and the count of each status of STATUSES among `items`."""
+    return {"planned": len(items), **{status: sum(item["status"] == status for item in items) for status in STATUSES}}
+
+
 def _counts(interventions, keys, groups):
-    """Per class: planned, each status, and the planned count of each length and variant (DEAL_RULE)."""
+    """Per class: planned, each status, the planned count of each length and variant (DEAL_RULE), and by_length the
+    planned count and each status per length (the share of the volume class by class and length that G3a reports,
+    the lead's answer to Q14; tcn/k2.py VOLUME_FINDING_RULE), so the plan of dev shows it too."""
     out = {}
     for cls in CLASSES:
         mine = [item for item in interventions if item["class"] == cls]
         variant, names = ("order", keys["classes"]["C"]["orders"]) if cls == "C" else ("group", groups)
-        out[cls] = {"planned": len(mine), **{status: sum(item["status"] == status for item in mine)
-                                             for status in STATUSES},
-                    "lengths": {str(n): sum(item["length"] == n for item in mine)
-                                for n in keys["classes"][cls]["lengths"]},
-                    "variants": {name: sum(item[variant] == name for item in mine) for name in names}}
+        lengths = keys["classes"][cls]["lengths"]
+        out[cls] = {**_count_statuses(mine),
+                    "lengths": {str(n): sum(item["length"] == n for item in mine) for n in lengths},
+                    "variants": {name: sum(item[variant] == name for item in mine) for name in names},
+                    "by_length": {str(n): _count_statuses([item for item in mine if item["length"] == n])
+                                  for n in lengths}}
     return out

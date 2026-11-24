@@ -17,7 +17,7 @@ Names package B4 adds are imported inside the tests, so this file collects on th
 B7a add one deliberate error for each key of the analysis plan they add or change (B7a: also the streams of the
 analysis, which the plan never draws). Package B7b (agent F) adds one for each key of design B7b 1.4: the orders of
 C, the groups of D, the validity predicate, the evaluable minimum and the volume class, the diagnostics, the stream
-injections, the two variants of Z4 in K2a (question Q13, provisional) and the domains of the grids (F3 of the
+injections, the two variants of Z4 in K2a (Q13, accepted by the lead 2026-11-24) and the domains of the grids (F3 of the
 verification of B7a). Package B7c (agent M) adds one for each key of design B7c 1.2: the metrics of the thesis with the
 bounds of O2 and O3, and the linkage table, which the self-check compares word for word. Package B9a (agent P, design
 B9a 1.1) adds one for S3 and S5 of the B4 verification; the four cases of S1 of the verification of B4b, which the
@@ -210,7 +210,7 @@ def method_without_grid(doc):
 
 def k2a_without_z4(doc):
     """The lead's must_fix 4 on B4: K2a is decided against Z1, Z2 and Z4 (proposal 4.1). Package B7b (question Q13,
-    provisional): against both variants of Z4, so one variant left out fails."""
+    accepted by the lead 2026-11-24): against both variants of Z4, so one variant left out fails."""
     doc["analysis"]["k2a"]["compare"].remove("Z4:residual")
     return {"analysis": ['analysis.k2a.compare is ["Z1", "Z2", "Z4:load"], proposal 4.1 names ["Z1", "Z2", '
                          '"Z4:load", "Z4:residual"]']}
@@ -339,8 +339,8 @@ def contexts_not_increasing(doc):
 
 
 def k2a_with_z4_unsplit(doc):
-    """Question Q13 (provisional): Z4 enters K2a by each variant, so a bare Z4 names no comparison; the analysis check
-    names the comparisons of proposal 4.1 with the two variants."""
+    """Question Q13 (accepted by the lead 2026-11-24): Z4 enters K2a by each variant, so a bare Z4 names no
+    comparison; the analysis check names the comparisons of proposal 4.1 with the two variants."""
     doc["analysis"]["k2a"]["compare"] = ["Z1", "Z2", "Z4"]
     return {"loader": ["protocol(): invalid analysis"],
             "analysis": ['analysis.k2a.compare is ["Z1", "Z2", "Z4"], proposal 4.1 names ["Z1", "Z2", "Z4:load", '
@@ -404,6 +404,15 @@ def linkage_not_a_text(doc):
     return {"loader": ["protocol(): invalid analysis"],
             "analysis": ['analysis.linkage.VO5 is ["O7"], the lead\'s table (skeleton B7, addendum 2 point 4) says '
                          '"O7 (E5)"']}
+
+
+def attachment_blank(doc):
+    """Package B11 (the lead's answers to questions Q17 and Q28): every attachment of the final record states what it
+    holds; a blank one is refused by the loader and named by the self-check."""
+    doc["analysis"]["attachments"]["losses"] = " "
+    return {"loader": ["protocol(): invalid analysis"],
+            "analysis": ['analysis.attachments.losses is " ": every attachment of the final record states what it '
+                         'holds, a text (ATTACHMENTS)']}
 
 
 def streams_without_injections(doc):
@@ -1288,6 +1297,8 @@ FILE_CASES = {f.__name__: f for f in (unknown_key, missing_key, gate_085, max_7,
                                       # Package B7c: the metrics of the thesis and the linkage table.
                                       garwood_level_of_95, event_test_two_sided, o2_bound_by_garwood,
                                       linkage_reworded, linkage_not_a_text,
+                                      # Package B11: the attachments of the final record (Q17, Q28).
+                                      attachment_blank,
                                       # Package B9a: F3 of the verification of B7c, the boots of K2; the fix of
                                       # B9a: the one seeded level of the guest (F4 of its verification).
                                       boots_apart_from_the_carriers, seeded_level_of_19_digits,
@@ -1679,7 +1690,8 @@ def _classes(**classes):
     (_at("column_mask", None), "unknown protocol key: analysis.column_mask"),
     (lambda a: a.update(columns={k: v for k, v in _classes().items() if k != "proc_memfd"}), "invalid analysis"),
     (lambda a: a.update(columns=_classes(mod_total="rule channel")), "invalid analysis"),
-    # Package B6b: the class rule_differenced of question Q8 (its proposal, provisional), for a level column only.
+    # Package B6b: the class rule_differenced of question Q8 (its proposal, accepted by the lead 2026-11-24), for a
+    # level column only.
     (lambda a: a.update(columns=_classes(sock_listen="rule_differenced")), None),
     (lambda a: a.update(columns=_classes(mem_changed_ratio="rule_differenced")), "invalid analysis"),
 ], ids=["columns_of_g3a", "no_kernel", "channels", "kernel", "blocks", "dropout", "weight_norm", "learning_rate",
@@ -1779,7 +1791,8 @@ def test_the_plan_draws_no_stream_of_the_analysis_and_their_seeds_follow_the_rul
     z0_alarms per role and bootstrap per comparison of a confirmatory claim."""
     from scripts import protocol_v5
     doc = json.loads(V5.read_text())
-    # Package B7b: bootstrap per variant of Z4 in K2a (question Q13, provisional) and the stream injections.
+    # Package B7b: bootstrap per variant of Z4 in K2a (question Q13, accepted by the lead 2026-11-24) and the stream
+    # injections.
     units = {"z0_alarms": list(ROLES),
              "bootstrap": ["k1/Z3", "k1/Z5", "k2a/Z1", "k2a/Z2", "k2a/Z4:load", "k2a/Z4:residual", "k2b/Z3",
                            "k2b/Z5"],
@@ -1917,8 +1930,8 @@ def test_the_keys_of_b7b_are_those_the_skeleton_names():
     """The values of design B7b 1.4 in the real file: C reversed and random; D the four groups memory, processes,
     modules and sockets over every input of the neural channel; the predicate at the quantiles 0.001 and 0.999 of
     train with a moving average of 6 rows; the evaluable minimum 8, analysis.min_occurrences; the diagnostics of
-    proposal 8.5; K2a against Z1, Z2 and both variants of Z4 (question Q13, provisional), and the variants are those of
-    tcn/metody.py's Z4."""
+    proposal 8.5; K2a against Z1, Z2 and both variants of Z4 (question Q13, accepted by the lead 2026-11-24), and the
+    variants are those of tcn/metody.py's Z4."""
     from features.archive import BEHAVIOR_NAMES
     from features.windows import BIN_PRIZNAKY
     from scripts import protocol_v5
@@ -2021,12 +2034,80 @@ def test_the_keys_of_b7c_are_those_the_skeleton_and_the_design_name():
     assert protocol_v5.analysis_plan(json.loads(V5.read_text()))["linkage"] == a["linkage"]
 
 
+# Package B11 (agent E; the lead's answers to questions Q17 and Q28, 2026-11-24): the attachments of the final record,
+# listed in advance in analysis.attachments. The loader refuses a missing, an unknown and a blank one, and
+# attachments_problem names each, for tcn/finalne.py, which raises its text before the seal.
+
+@pytest.mark.parametrize("change, reason", [
+    (_at("attachments.series", "the scores of every row"), None),
+    (_at("attachments.note", ""), None),
+    (_at("attachments"), "missing protocol key: analysis.attachments"),
+    (_at("attachments.copies"), "missing protocol key: analysis.attachments.copies"),
+    (_at("attachments.figures", "the figures of the thesis"), "unknown protocol key: analysis.attachments.figures"),
+    (_at("attachments.series", " "), "invalid analysis"),
+    (_at("attachments.losses", ["M", "Z3"]), "invalid analysis"),
+    (_at("attachments.note", None), "invalid analysis"),
+    (_at("attachments", ["series", "losses", "copies"]), "invalid analysis"),
+], ids=["another_text", "empty_note", "no_attachments", "no_copies", "unknown_attachment", "blank_series",
+        "losses_not_a_text", "note_not_a_string", "attachments_a_list"])
+def test_the_loader_knows_the_attachments_of_the_final_record(change, reason):
+    """analysis.attachments holds exactly the attachments of ATTACHMENTS (series, losses, copies), each a text of what
+    it holds, and a note, a string: the layout names a missing and an unknown attachment, the value check refuses a
+    blank one, one that is no text and a note that is no string."""
+    from scripts import protocol_v5
+    doc = json.loads(V5.read_text())
+    change(doc["analysis"])
+    if reason is None:
+        protocol_v5.check_layout(doc)
+    else:
+        with pytest.raises(ValueError) as refused:
+            protocol_v5.check_layout(doc)
+        assert str(refused.value) == reason
+
+
+@pytest.mark.parametrize("change, reason", [
+    (_at("copies"), "analysis.attachments must be an object of exactly the keys copies, losses, note, series (the "
+                    "attachments of the final record are listed in advance: ATTACHMENTS), not [\"losses\", \"note\", "
+                    "\"series\"]"),
+    (_at("figures", "the figures"), "analysis.attachments must be an object of exactly the keys copies, losses, note, "
+                                    "series (the attachments of the final record are listed in advance: ATTACHMENTS), "
+                                    "not [\"copies\", \"figures\", \"losses\", \"note\", \"series\"]"),
+    (_at("series", " "), "analysis.attachments.series must state what the attachment holds (a text)"),
+    (_at("copies", 3), "analysis.attachments.copies must state what the attachment holds (a text)"),
+    (_at("note", None), "analysis.attachments.note must be a string"),
+], ids=["no_copies", "unknown_attachment", "blank_series", "copies_a_number", "note_not_a_string"])
+def test_attachments_problem_names_each_rule(change, reason):
+    """tcn/finalne.py raises the text of attachments_problem before the seal (one check for the protocol and the
+    final command); the section missing altogether is named as well."""
+    from scripts import protocol_v5
+    attachments = json.loads(V5.read_text())["analysis"]["attachments"]
+    assert protocol_v5.attachments_problem(attachments) is None
+    change(attachments)
+    assert protocol_v5.attachments_problem(attachments) == reason
+    assert protocol_v5.attachments_problem(None) == (
+        "analysis.attachments must be an object of exactly the keys copies, losses, note, series (the attachments of "
+        "the final record are listed in advance: ATTACHMENTS), not null")
+
+
+def test_the_attachments_of_the_file_are_those_of_the_lead():
+    """The real file lists the three attachments of the lead's answers, the series of Q17 and the losses and the
+    copies of Q28, each naming its question, and the analysis plan carries them; ATTACHMENTS is that list in that
+    order, the one tcn/finalne.py writes."""
+    from scripts import protocol_v5
+    a = json.loads(V5.read_text())["analysis"]
+    assert list(a["attachments"]) == [*protocol_v5.ATTACHMENTS, "note"] == ["series", "losses", "copies", "note"]
+    assert all(question in a["attachments"][name] for name, question in (("series", "Q17"), ("losses", "Q28"),
+                                                                           ("copies", "Q28")))
+    assert all(question in a["attachments"]["note"] for question in ("Q17", "Q28", "11.3"))
+    assert protocol_v5.analysis_plan(json.loads(V5.read_text()))["attachments"] == a["attachments"]
+
+
 # Package B9a (design B9a 1.1, agent P): the seeded level of the guest at the start of a group (since the fix of B9a,
 # F4 of its verification: one level for every group of both modes), and the control deal at other rehearsal sizes (N1
 # of the confirmation of B4b).
 
 def test_every_group_of_both_modes_starts_from_the_level_lab_install_sh_seeds(monkeypatch):
-    """The fix of package B9a (F4 of its verification; question Q18 to the lead, provisional by its proposal):
+    """The fix of package B9a (F4 of its verification; question Q18, accepted by the lead 2026-11-24):
     reset_seed(p) is streams.seeded_level.seed, one seeded level for every group of both modes, the level that
     lab/install.sh seeds on its line python3 guest_state.py reset --seed 0. It is no random stream: guest_reset is in
     neither PURPOSES nor streams.purposes nor the rule of the streams. The bound of its value check is the guest's:

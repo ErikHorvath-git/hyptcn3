@@ -62,7 +62,8 @@ def main():
                          "translation_check": view.translation_check()}
         finally:
             image.close()
-        frame, _ = frame_from_snapshot(raw, profile, seq)
+        # Every bin (min_bin_pages None, explicitly), as the archive it is compared with was extracted.
+        frame, _ = frame_from_snapshot(raw, profile, seq, min_bin_pages=None)
         index = old_seq.index(seq)
         np.testing.assert_array_equal(frame.vector[:8], old_matrix[index, :8])
         np.testing.assert_array_equal(frame.perbin, old_local[index])

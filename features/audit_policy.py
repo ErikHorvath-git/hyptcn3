@@ -27,7 +27,9 @@ skoré zastavenie) holds the rule of the early stop of a campaign (proposal 7.5)
 for every event type of events.types (features/acceptance.py MARKED_ROWS_RULE), each null until G3b (proposal 10.9),
 and whether a session rejected for periodicity stops the campaign. early_stop(values, protocol, totals) applies it
 after every audit to the values of that audit and to the campaign's count since its restart point (EARLY_STOP_RULE;
-scripts/campaign.py early_stop_check sums the count), and poisson_quantile gives its bound.
+scripts/campaign.py early_stop_check sums the count), and poisson_quantile gives its bound. EARLY_STOP_MODEL holds the
+false-stop rates of the executor's model of the rule, a model and not a measurement, which every record of stage G3b
+carries for the owner's decision (the lead's answer to Q24; scripts/gates.py write_record).
 
 Every place of the audit code that admits a condition which would otherwise reject a session calls tolerate() with
 the condition's id. TOLERATED lists the ids; the register of a schema-3 protocol names exactly these, each with its
@@ -52,7 +54,7 @@ EARLY_STOP_KEYS = ("marked_rows_rate_per_type", "periodicity_stops", "note")
 EARLY_STOP_LEVEL = 0.99  # Proposal 10.9: the bound of the early stop is the 99th percentile of a Poisson distribution.
 EARLY_STOP_RULE = (
     "the early stop of a campaign (proposal 7.5 and 10.9; the lead's skeleton B9 row skoré zastavenie and its section "
-    "5; design B9b 1.3 and its fix, F5 of the verification of B9b, question Q24 decided by its proposal; "
+    "5; design B9b 1.3 and its fix, F5 of the verification of B9b, question Q24, accepted by the lead 2026-11-24; "
     "features/audit_policy.py early_stop): after every audit of a completed capture the campaign stops when the audit "
     "rejected the session with the code periodicity and audit.early_stop.periodicity_stops holds (one such session "
     "suffices, the lead's judgment: periodicity is the sign of a systematic cause, and more sessions would fill the "
@@ -66,13 +68,42 @@ EARLY_STOP_RULE = (
     "the runner's state. Q24 reads the count of proposal 7.5 as the campaign's, not one session's: the audit of a "
     "session already judges one session (the tolerance of invalid rows, the cap of rule-closed rows), and the early "
     "stop follows a systematic shift of the whole campaign. The count starts at the start of the campaign and starts "
-    "again after the campaign's latest recorded ending with an early-stop trigger, and a continuation counts only its "
-    "own sessions: both restart points follow a written human analysis, the executor's judgment (Q24). In a model of "
+    "again after the campaign's latest recorded ending with an early-stop trigger, which a written analysis answers "
+    "before the campaign runs again (scripts/campaign.py RESUME_RULE); a continuation counts on: until its own first "
+    "ending with an early-stop trigger its count also holds the audited sessions of the paused campaign it continues "
+    "since that campaign's restart point (the accepted text of Q24, 's náhradami aj s pokračovaním', package B11). In "
+    "a model of "
     "Poisson counts at one rate per type, not a measurement (the executor's model of Q24, 36 occurrences per type and "
     "six types as in the campaign plan): one comparison stops falsely at most 1 % per type; checked after every "
     "occurrence, 0.12 to 0.28 of healthy campaigns stop falsely at rates of 0.01 to 3 per occurrence, where the count "
-    "of one session against one bound per type would stop 0.23 to 0.88 of them. A protocol of schema 1 or 2 has no "
+    "of one session against one bound per type would stop 0.23 to 0.88 of them (EARLY_STOP_MODEL, which every record "
+    "of stage G3b carries for the owner's decision: the lead's answer to Q24). A protocol of schema 1 or 2 has no "
     "audit section and no early stop")
+# The lead's answer to Q24 (2026-11-24): the numbers of the model of the early stop, which every record of stage G3b
+# carries for the owner's decision (scripts/gates.py write_record, values.owner_information); no criterion. Each range
+# is the smallest and the largest value over the rates 0.01, 0.05, 0.1, 0.3, 1 and 3 per occurrence of the exact model,
+# rounded to two decimals (features/tests/test_early_stop.py recomputes them).
+EARLY_STOP_MODEL = {
+    "kind": "a model of Poisson counts at one rate of marked rows per occurrence and event type, not a measurement",
+    "premise": {"occurrences_per_type": 36, "types": 6, "rates_per_occurrence": [0.01, 3], "level": EARLY_STOP_LEVEL,
+                "rates_note": "the range of rates the executor's model examined (judgment: the real rates are set at "
+                              "G3b from G2 and G3b together, proposal 10.9)",
+                "plan": "the campaign plan of config/collection-v5.json without replacements (protocol_v5.plan, mode "
+                        "campaign: 36 occurrences of each of its 6 event types)",
+                "checked": "after every audit, so after every occurrence of each type"},
+    "per_comparison_max": 0.01,
+    "false_stops_per_type": [0.02, 0.05],
+    "false_stops_per_campaign": [0.12, 0.28],
+    "per_session_reading": [0.23, 0.88],
+    "caveats": ["replacements add occurrences beyond the 36 per type of the plan, and every one more comparison",
+                "overdispersion of the marked rows per occurrence against the Poisson model raises the false-stop "
+                "rates (G3b checks the dispersion, dokazy/B9/odlozene_B9b.md)",
+                "every restart after an early stop starts a new count, the premise again",
+                "the count of a continuation runs on from the paused campaign, so a pause and its continuation keep "
+                "one count (package B11)"],
+    "source": "the executor's exact model of Q24 (dokazy/B9/navrh/skore_zastavenie_model.py and its .txt), confirmed "
+              "by the verifier's Monte Carlo of 40000 campaigns with poisson_quantile (dokazy/B9/overenie_B9b, F5)",
+}
 TRAFFIC_KEYS = ("offered_load_tolerance", "arrival_cv", "top_objects_share", "top_objects_min_requests", "success_min",
                 "response_size_orders", "think_mean_tolerance_se", "order_share_tolerance_se", "background", "note")
 BACKGROUND_KEYS = ("logins_min", "reports_min", "document_max_to_median", "note")

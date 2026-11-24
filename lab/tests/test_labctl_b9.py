@@ -19,6 +19,7 @@ import pytest
 from scripts import labctl
 from lab.tests.test_labctl import (DAEMON_UNIT, MANAGER, SESSION, daemon, host, nothing_real,  # noqa: F401
                                    qemu)
+from lab.tests import test_labctl as fakes  # Package B11: the charge of a cgroup (read inside the tests).
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import guest_state  # noqa: E402
@@ -105,6 +106,7 @@ def test_a_reset_without_its_seed_or_a_seed_elsewhere_is_a_usage_error(monkeypat
 
 def test_stop_waits_until_the_vm_is_shut_off_and_its_qemu_has_exited(host, monkeypatch, capsys):
     """The state shut off is not enough while the QEMU process still runs: the next start must start a new one."""
+    daemon(host, 711993, DAEMON_UNIT)  # Package B11: stop makes sure of the daemon first; it runs, so nothing is done.
     qemu(host, 4242, DAEMON_UNIT, "0")
     domain = Domain(host, monkeypatch, down_after=2)
     record = labctl.Lab().stop()
@@ -116,6 +118,7 @@ def test_stop_waits_until_the_vm_is_shut_off_and_its_qemu_has_exited(host, monke
 
 
 def test_a_vm_shut_off_already_stays_so(host, monkeypatch):
+    daemon(host, 711993, DAEMON_UNIT)  # Package B11: stop makes sure of the daemon first; it runs, so nothing is done.
     domain = Domain(host, monkeypatch, state="shut off")
     record = labctl.Lab().stop()
     assert domain.calls == ["domstate"] and host.sleeps == []
@@ -124,6 +127,7 @@ def test_a_vm_shut_off_already_stays_so(host, monkeypatch):
 
 def test_a_vm_that_does_not_shut_off_fails_after_the_bound(host, monkeypatch):
     """STOP_TIMEOUT_S of waiting, one read every STOP_PAUSE_S; the campaign then rejects before the measured phase."""
+    daemon(host, 711993, DAEMON_UNIT)  # Package B11: stop makes sure of the daemon first; it runs, so nothing is done.
     qemu(host, 4242, DAEMON_UNIT, "0")
     Domain(host, monkeypatch, down_after=None)
     monkeypatch.setattr(labctl, "time", SimpleNamespace(monotonic=lambda: sum(host.sleeps), sleep=time.sleep))
@@ -139,7 +143,9 @@ def test_stop_and_start_give_a_new_qemu_whose_pid_cgroup_and_way_are_reported(ho
     """Way 1: the daemon runs in its unit, the new QEMU inherits the unit's cgroup without swap and stays there. Way 2:
     the daemon runs outside its unit while the other VM runs (it is not replaced then), so the new QEMU starts in the
     login session's scope and is moved into a scope of its own: temporary, its pages stay charged where it started
-    (finding F4 of B5a). The group's old QEMU ran in a scope of an earlier move."""
+    (finding F4 of B5a). The group's old QEMU ran in a scope of an earlier move. Package B11 (the lead's instruction
+    on F4, his answer to Q26): way 1's unit is charged with the new QEMU's memory, and way 2 for a QEMU this command
+    started ends labctl start with an error that names the migration."""
     host.allowed = {"busctl", "virsh", "systemctl", "systemd-run"}
     daemon(host, 711993, daemon_cgroup)
     host.running = ["hyptcn-lab-b"]
@@ -148,7 +154,14 @@ def test_stop_and_start_give_a_new_qemu_whose_pid_cgroup_and_way_are_reported(ho
     labctl.main(["stop"])
     stop = json.loads(capsys.readouterr().out)["stop"]
     assert (stop["qemu_pid_before"], stop["state"]) == (4242, "shut off")
-    labctl.main(["start"])
+    if daemon_cgroup == DAEMON_UNIT:
+        labctl.main(["start"])
+    else:
+        with pytest.raises(RuntimeError, match=r"^QEMU swap is not disabled: QEMU 4343 \(hyptcn-lab\) was started by "
+                                               r"this command outside hyptcn-libvirtd\.service \(daemon found outside\)"
+                                               r".*stop every lab VM \(labctl stop\), then start them with labctl "
+                                               "start"):
+            labctl.main(["start"])
     lines = [json.loads(line) for line in capsys.readouterr().out.splitlines()]
     assert [list(line) for line in lines] == [["libvirtd"], ["qemu_swap"]]
     record = lines[-1]["qemu_swap"]
@@ -157,7 +170,13 @@ def test_stop_and_start_give_a_new_qemu_whose_pid_cgroup_and_way_are_reported(ho
         assert (record["cgroup"], record["way"], record["temporary"], record["scope"]) == (DAEMON_UNIT, "unit", False,
                                                                                            None)
         assert "note" not in record and lines[0]["libvirtd"]["qemu_way"] == "unit"
+        assert record["memory"] == fakes.memory(DAEMON_UNIT, [(4343, fakes.RSS_ANON_KB)],
+                                              fakes.DAEMON_ANON_KB + fakes.RSS_ANON_KB)
+        assert record["memory"]["charged"] is True and "error" not in record
     else:
+        scope = f"{MANAGER}/app.slice/hyptcn-qemu-hyptcn-lab-4343.scope"
         assert (record["cgroup_before"], record["cgroup"], record["way"], record["temporary"], record["note"]) == (
-            SESSION, f"{MANAGER}/app.slice/hyptcn-qemu-hyptcn-lab-4343.scope", "scope", True, labctl.TEMPORARY)
+            SESSION, scope, "scope", True, labctl.TEMPORARY)
         assert lines[0]["libvirtd"]["qemu_way"] == "scope"
+        assert record["memory"] == fakes.memory(scope, [(4343, fakes.RSS_ANON_KB)], 0)
+        assert "F4 of B5a" in record["error"]

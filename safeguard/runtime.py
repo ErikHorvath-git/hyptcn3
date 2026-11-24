@@ -95,8 +95,10 @@ class RuleChannel:
     {columns, quantity {column: "value" | "since_session_start"}, ranges {column: [low, high]}, k, n}. Every measured
     row is judged, from the first row after a barrier: the neural warmup does not hold it back. A column of quantity
     since_session_start is judged by its value minus that of the session's first measured row (question Q8, the
-    lead's revised proposal), which the channel keeps for the session across resets; the history is cleared where the
-    neural channel's is (barriers, discontinuities, input errors)."""
+    revised proposal accepted by the lead 2026-11-24), which the channel keeps for the session across resets; the
+    history is cleared where the neural channel's is (barriers, discontinuities, input errors). The session's first
+    measured row here is the first one this detector sees, so a state already present in it is never seen
+    (SESSION_START_LIMITATION of safeguard/features.py, which the manifest states)."""
 
     def __init__(self, spec):
         if type(spec) is not dict or {"columns", "quantity", "ranges", "k", "n"} - set(spec):
@@ -420,6 +422,10 @@ def run_directory(bundle, snapshots, profile, output_dir, *, follow=False,
     for a campaign (by the session_id of the session.json of the directory or of its parent) are refused by name
     (tcn.pecat.Zapecatene, a ValueError) outside the final run that consumed its archive, before anything is written;
     the decision is in configuration.json and status.json (a rehearsal's session carries the rehearsal mark).
+
+    Every frame is extracted from the bins the bundle scores (question Q10 to the lead, 2026-11-24): its eight memory
+    columns come from the bins of at least bundle.min_bin_pages pages (None under legacy_schema_2: every bin), as the
+    audit extracted the archives the bundle was trained on.
     """
     if idle_timeout is not None and (not math.isfinite(idle_timeout) or idle_timeout <= 0):
         raise ValueError("idle_timeout must be finite and positive")
@@ -428,6 +434,7 @@ def run_directory(bundle, snapshots, profile, output_dir, *, follow=False,
         raise ValueError("snapshot directory does not exist: " + str(directory))
     from tcn import pecat
     seal = pecat.kontrola_snimok(directory, purpose="safeguard.runtime.run_directory")
+    min_bin_pages = bundle.min_bin_pages  # After the seal: a refused directory never reads its bundle.
     output = Path(output_dir)
     output.mkdir(parents=True, exist_ok=False)
     (output / "evidence").mkdir()
@@ -536,7 +543,8 @@ def run_directory(bundle, snapshots, profile, output_dir, *, follow=False,
                     try:
                         frame, state = frame_from_snapshot(
                             directory, profile, seq, previous=previous,
-                            session_id=directory.name, max_gap_s=detector.max_gap_s)
+                            session_id=directory.name, max_gap_s=detector.max_gap_s,
+                            min_bin_pages=min_bin_pages)
                         extracted = time.monotonic()
                         row = detector.process(frame)
                         row["detector_processing_ms"] = row["processing_ms"]

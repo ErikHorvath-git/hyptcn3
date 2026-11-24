@@ -30,14 +30,19 @@ tcn/k2.py), the diagnostics (tcn/diagnostiky.py) and the metrics of design 1.3 (
 THE RECORD (CONFIRMATORY_RULE, proposal 9.1: only K1 and K2 are confirmatory). The top level of its values holds the
 metadata of the run and the claims of K1, K2a and K2b with the values they rest on (the budget, the matched thresholds
 and fits of M and Z0 to Z5, the interventions, the values of K2 of M and Z0 to Z5); every other result is under
-values["opisné"]. A record of stage final or generalka lies under data/results (OUT_RULE).
+values["opisné"]. A record of stage final or generalka lies under data/results (OUT_RULE). Package B11 (agent E; the
+lead's answers to questions Q17 and Q28, 2026-11-24): the record carries the attachments its protocol lists in
+advance (analysis.attachments: series, losses, copies; ATTACHMENT_RULE), each a file <record stem>.<name>.npz beside
+it that values.attachments names by its path, sha256 and bytes; a figure drawn from them is not a new reading of a test
+role, and a failed record names none.
 
 ORDER (ORDER_RULE, design 5.4). 0: every refusal that reads no data of a session, before anything is computed (among
 them the carrier boots of a campaign, BOOTS_RULE, the seal's state on the ledger, the outputs and the gate records of
 the run's stage, GATE_RULE). 1: everything that reads only
 the roles without a seal (the fits, the budget, the matched thresholds, the summary of every training, the
 diagnostics of calibration and the retrained networks). 2: tcn.pecat spotrebuj consumes the seal. 3: inside the run,
-the sealed sessions, their controls and replays, and every value on the sealed roles. 4: one record.
+the sealed sessions, their controls and replays, and every value on the sealed roles. 4: the attachments, then one
+record.
 
 THE CODE OF AGENTS S AND M (design 1.1 to 1.3): tcn/pecat.py (stav, spotrebuj and its run, kontrola, vlastna_kniha,
 REHEARSAL_MARK), safeguard.cli replay_directory (the replays, with the unscored stretches of safeguard.runtime
@@ -85,25 +90,26 @@ OPISNE = "opisné"  # Proposal 9.1: every result but those of K1 and K2 is writt
 
 ORDER_RULE = (
     "design B7c 5.4, the order of the merge over that of 1.4: 0 every refusal that reads no data of a session, before "
-    "anything is computed (the analysis plan with the bounds m of G1, in plan mode campaign the carrier boots of the "
-    "index against analysis.interventions.boots, BOOTS_RULE, the seal's state on the ledger by tcn.pecat stav, so "
-    "that a seal that cannot be consumed is refused here, the outputs, OUT_RULE, the gate records of the run's stage, "
-    "GATE_RULE, at stage final a committed tree of code, the campaign record, the bundles, the sharp check of the "
-    "index of safeguard/training.py validate_index, which opens no archive, and the files of every session); "
-    "1 everything that reads only the roles without a seal: the sessions of train, dev and calibration, the budget "
-    "from M's clean calibration traffic (tcn.metody BUDGET_RULE), the fits of Z0 to Z5 (Z1 selected by the "
-    "interventions inserted into dev at the budget) and of the descriptive methods, the matched threshold of every "
-    "method and seed of M on calibration (tcn.metody matched_rate over calibration alone), the summary of every "
-    "training on dev and calibration (TRAINING_RULE), and of the diagnostics the boot left out of calibration and the "
-    "fits of the networks (the context truncation, the retrained networks, SEED_RULE); 2 tcn.pecat spotrebuj "
-    "consumes the seal, immediately before the first sealed archive is checked or opened; 3 inside the run: every "
-    "sealed session after tcn.pecat kontrola, the outcomes of its controls (CONTROLS_RULE), its replays for every seed "
-    "of M (REPLAY_RULE), the rates of the matched thresholds on the sealed roles (tcn.metody rate at each threshold, "
-    "the rates matched_rate gives), Z0's random alarms, K1, the interventions and K2, the diagnostics on the sealed "
-    "roles and the metrics of design 1.3 (METRICS_RULE); 4 one record, after which the run closes completed in the "
-    "ledger; a step that fails before 2 consumes nothing and writes no record, one that fails after it writes the "
-    "record of FAILURE_RULE and closes the run failed; the inputs and the seeds are those of design 1.4, so the order "
-    "changes no number")
+    "anything is computed (the analysis plan with the bounds m of G1 and the list of its attachments, ATTACHMENT_RULE, "
+    "in plan mode campaign the carrier boots of the index against analysis.interventions.boots, BOOTS_RULE, the seal's "
+    "state on the ledger by tcn.pecat stav, so that a seal that cannot be consumed is refused here, the outputs with "
+    "the paths of the attachments, OUT_RULE, the gate records of the run's stage, GATE_RULE, at stage final a "
+    "committed tree of code, the campaign record, the bundles, the sharp check of the index of safeguard/training.py "
+    "validate_index, which opens no archive, and the files of every session); 1 everything that reads only the roles "
+    "without a seal: the sessions of train, dev and calibration, the budget from M's clean calibration traffic "
+    "(tcn.metody BUDGET_RULE), the fits of Z0 to Z5 (Z1 selected by the interventions inserted into dev at the budget) "
+    "and of the descriptive methods, the matched threshold of every method and seed of M on calibration (tcn.metody "
+    "matched_rate over calibration alone), the summary of every training on dev and calibration (TRAINING_RULE), and "
+    "of the diagnostics the boot left out of calibration and the fits of the networks (the context truncation, the "
+    "retrained networks, SEED_RULE); 2 tcn.pecat spotrebuj consumes the seal, immediately before the first sealed "
+    "archive is checked or opened; 3 inside the run: every sealed session after tcn.pecat kontrola, the outcomes of "
+    "its controls (CONTROLS_RULE), its replays for every seed of M (REPLAY_RULE), the rates of the matched thresholds "
+    "on the sealed roles (tcn.metody rate at each threshold, the rates matched_rate gives), Z0's random alarms, K1, "
+    "the interventions and K2, the diagnostics on the sealed roles, the metrics of design 1.3 (METRICS_RULE) and the "
+    "arrays of the attachments (ATTACHMENT_RULE); 4 the attachments, each a new file, and one record, after which the "
+    "run closes completed in the ledger; a step that fails before 2 consumes nothing and writes no record, one that "
+    "fails after it writes the record of FAILURE_RULE and closes the run failed; the inputs and the seeds are those of "
+    "design 1.4, so the order changes no number")
 SEAL_NOTE = ("the ledger protects against mistakes, not intent; its time stamp is the push of the repository to the "
              "remote (proposal 10.6, design B7c 1.1); the run closes in the ledger after this record is written, so "
              "closed is null in the record's seal (tcn.pecat stav gives the closure)")
@@ -123,7 +129,9 @@ OUT_RULE = (
     "proposal 10 and FAILURE_RULE: every stage has its record in data/results, so the record of a run of stage final "
     "or generalka (a run on the ledger of record, tcn/pecat.py STAGE_RULE) lies under data/results, and another --out "
     "is refused before the seal is consumed; the replays lie outside data/results (REPLAY_RULE); a dry run (stage "
-    "suchy) writes its record where it is told")
+    "suchy) writes its record where it is told; the attachments lie beside the record, <record stem>.<name>.npz, and "
+    "an existing one, or one that is the directory of the replays, is refused before the seal is consumed "
+    "(ATTACHMENT_RULE)")
 BOOTS_RULE = (
     "the boots of K2 (design B7c 5.4, finding F3 of its verification): in plan mode campaign the carrier roles of the "
     "index (its sessions of test_benign and test_controls, one boot per group) hold analysis.interventions.boots "
@@ -132,21 +140,22 @@ BOOTS_RULE = (
 CONFIRMATORY_RULE = (
     "proposal 9.1 ('Potvrdzujúce sú iba K1 a K2. Všetko ostatné sa zapisuje pod kľúč „opisné“.'): the top level of the "
     "values holds the metadata of the run (its stage, mark, status and seal, the gate records, the tree, the corpus, "
-    "the campaign record, the bundles of M, the replays and the rules) and the confirmatory part, the claims and "
-    "conclusions of K1, K2a and K2b and the values they rest on: the budget, the matched thresholds and the fits of M "
-    "and Z0 to Z5, the interventions and the values of K2 of M and Z0 to Z5; every other result is under opisné: "
-    "the metrics of design 1.3 (O2 to O4 and the thesis block, the outcomes of the controls), the diagnostics, every "
-    "value of the descriptive methods (their fits, matched rates and values of K2), the losses of the predictors, the "
-    "tables by boot, VM and profile, the summaries of the trainings, the unscored time, Z0's random alarms, the "
-    "linkage table and the wording of the rule channel (RULE_CHANNEL_RULE); a failed record has opisné as well, empty")
+    "the campaign record, the bundles of M, the replays, the attachments and the rules) and the confirmatory part, the "
+    "claims and conclusions of K1, K2a and K2b and the values they rest on: the budget, the matched thresholds and the "
+    "fits of M and Z0 to Z5, the interventions and the values of K2 of M and Z0 to Z5; every other result is under "
+    "opisné: the metrics of design 1.3 (O2 to O4 and the thesis block, the outcomes of the controls), the diagnostics, "
+    "every value of the descriptive methods (their fits, matched rates and values of K2), the losses of the "
+    "predictors, the tables by boot, VM and profile, the summaries of the trainings, the unscored time, Z0's random "
+    "alarms, the linkage table and the wording of the rule channel (RULE_CHANNEL_RULE); a failed record has opisné as "
+    "well, empty")
 RULE_CHANNEL_RULE = (
-    "proposal 8.2 and question Q6 (provisional by its proposal): the wording that the bundles of M carry "
-    "(analysis_wording.rule_channel_only, safeguard/training.py RULE_CHANNEL_ONLY), its ellipsis filled with the "
-    "increment of the neural channel over the rule channel on the planned controls of polarity control of "
-    "test_controls (tcn.eval INCREMENT_RULE, the total group of O4): the median over the seeds of M (judgment: M "
-    "enters every claim by that median, D14), each seed's counts beside it, nevyhodnotené when the increment of a seed "
-    "is; all detection is carried by the rule channel (all_detection_by_rule_channel) when that increment is 0 while "
-    "the rule channel detects a planned control")
+    "proposal 8.2 and question Q6 (the wording accepted by the lead 2026-11-24 as written in advance): the wording "
+    "that the bundles of M carry (analysis_wording.rule_channel_only, safeguard/training.py RULE_CHANNEL_ONLY), its "
+    "ellipsis filled with the increment of the neural channel over the rule channel on the planned controls of "
+    "polarity control of test_controls (tcn.eval INCREMENT_RULE, the total group of O4): the median over the seeds of "
+    "M (judgment: M enters every claim by that median, D14), each seed's counts beside it, nevyhodnotené when the "
+    "increment of a seed is; all detection is carried by the rule channel (all_detection_by_rule_channel) when that "
+    "increment is 0 while the rule channel detects a planned control")
 REPLAY_RULE = (
     "one replay per seed of M and sealed session, inside the run, by safeguard.cli replay_directory (safeguard replay "
     "--archive of the loaded bundle: tcn.pecat kontrola first, configuration.json with archive_sha256 and the seal's "
@@ -201,17 +210,135 @@ CAMPAIGN_RULE = (
     "before anything is computed")
 ENDING_SCHEMA = "hyptcn3/campaign-ending/1"  # scripts/campaign.py ENDING_SCHEMA: the record of a campaign's ending.
 TRAINING_RULE = (
-    "design B7c 1.3 (question Q11 to the lead, provisional by the executor's proposal) and 5.4: before the seal, for "
-    "every seed of M, on each of the fit roles dev and calibration, tcn.eval training_summary: the loss against the "
-    "methods of analysis.k1.compare and the score by context and by scenario, in the record that names the bundle "
+    "design B7c 1.3 (question Q11, accepted by the lead 2026-11-24: package B7) and 5.4: before the seal, for every "
+    "seed of M, on each of the fit roles dev and calibration, tcn.eval training_summary: the loss against the methods "
+    "of analysis.k1.compare and the score by context and by scenario, in the record that names the bundle "
     "(values.models)")
 FAILURE_RULE = (
     "a step that fails after the seal is consumed (ORDER_RULE 2) leaves this record: status failed, the step under "
     "way, the error and the seal, so that the one final run of the corpus is in data/results even when it gives no "
-    "number, and the run closes failed in the ledger; the replays written before it stay where they are; a step that "
-    "fails before the seal is consumed consumes nothing and writes no record")
+    "number, and the run closes failed in the ledger; the replays written before it stay where they are, and the "
+    "attachments it wrote are removed, so that a failed record names none and none lies beside it (ATTACHMENT_RULE); a "
+    "step that fails before the seal is consumed consumes nothing and writes no record")
 IMPROVEMENT_RULE = ("descriptive: I = 1 - loss(method) / loss(Z) per boot over the clean windows of test_benign, as "
                     "tcn/tvrdenia.py hodnoty_k1 for one seed, and their mean")
+# Package B11 (agent E; proposal 10.8, the lead's answers to questions Q17 and Q28, 2026-11-24): the attachments of the
+# record, the list of scripts/protocol_v5.py (analysis.attachments, checked by attachments_problem).
+ATTACHMENTS = protocol_v5.ATTACHMENTS
+ATTACHMENT_FORMAT = (
+    "numpy .npz written by numpy.savez_compressed (the executor's format): arrays of float64 (exact), int64, bool and "
+    "fixed-width unicode text, none of objects, so that numpy.load(path, allow_pickle=False) reads every array")
+ATTACHMENT_RULE = (
+    "the attachments of the record (package B11; proposal 10.8, the lead's answers to questions Q17 and Q28, "
+    "2026-11-24): exactly those of the protocol's list analysis.attachments (scripts/protocol_v5.py ATTACHMENTS and "
+    "attachments_problem, refused by name before the seal is consumed), each one file <record stem>.<name>.npz beside "
+    "the record (ATTACHMENT_FORMAT), whose path must not exist before the seal is consumed (OUT_RULE); their arrays "
+    "are computed inside the run from the values of the record (ORDER_RULE 3), each file is written new just before "
+    "the record (ORDER_RULE 4), and values.attachments names it by its path, sha256, bytes, format, contents and rule; "
+    "a figure drawn from an attachment is not a new reading of a test role (Q17), and the attachments are metadata "
+    "beside the replays that decide nothing (CONFIRMATORY_RULE); a run that fails removes the attachments it wrote, so "
+    "that a failed record names none and none lies beside it (FAILURE_RULE); not attached (judgment): the random "
+    "variant of Z0, drawn per window set from the stream z0_alarms (its record gives the seeds and the mean rates), "
+    "and the networks of the diagnostics, which are no methods of the comparison")
+SERIES_RULE = (
+    "the attachment series (the lead's answer to question Q17): every row of every session of test_benign and "
+    "test_controls, in the order of those roles and of their window sets, by its seq and time; for every method and "
+    "seed of the evaluation (M at every seed of analysis.seeds, Z0 to Z5 with both variants of Z4, the descriptive "
+    "methods at their seeds: the labels of values.matched and of opisné.descriptive_methods.matched) its matched "
+    "threshold (one number, matched.<label>.threshold) and per row the score of the window that ends at the row (NaN "
+    "where none ends), whether it exceeds the threshold, whether the alarm k of n is up and whether an alarm begins "
+    "there (tcn/metody.py alarm_states, ALARM_RULE), with whether that window is clean (CLEAN_RULE), so that the "
+    "alarms that begin in the clean windows of a role are the alarms of its matched rate; M also by the rows of its "
+    "replays at the bundle threshold (safeguard replay, events.jsonl, read after the check of its sha256 in the "
+    "replay's record: the score, the alarm of each channel, the alarm, alarm_event, the channels up and the sources "
+    "that rise); and every event and control of those sessions (events.json, the controls of controls.json) with its "
+    "type or kind, its polarity, whether it ran and its four host times")
+LOSSES_RULE = (
+    "the attachment losses (the lead's answer to question Q28): the rows of the attachment series; for every "
+    "predictor of the evaluation (kind predictor: M at every seed, Z3, Z5, the GRU and LSTM predictors at their seeds; "
+    "the labels of opisné.losses) the loss of the window that ends at each row (tcn/metody.py LOSS_FORMULA; NaN where "
+    "none ends), with whether that window is clean (CLEAN_RULE): K1 and opisné.losses take the clean windows of "
+    "test_benign")
+COPIES_RULE = (
+    "the attachment copies (the lead's answer to question Q28): every placed intervention of the plans of test_benign "
+    "and test_controls that K2 detects (tcn/zasahy.py, in the order of those roles and of their copies) with its id, "
+    "role, class, length, order or group, boot, session, start and status, and every row of its copy by its seq and "
+    "time with whether it lies in the block and whether the window that ends there lies in the horizon of the "
+    "intervention (tcn/k2.py DETECTION_RULE); for every method and seed of K2 (the labels of k2_values.thresholds) "
+    "its matched threshold and per row the score of the window that ends there (NaN where none ends), whether it "
+    "exceeds, whether the alarm k of n is up and whether an alarm begins there, so that a label detects an "
+    "intervention when an alarm begins in its horizon")
+HOST_TIMES = ("host_start_unix", "host_started_unix", "host_stop_unix", "host_stopped_unix")
+_SESSIONS = {
+    "session_id": "(N,) text: the id of every session of test_benign and test_controls, in the order of the rows",
+    "session_role": "(N,) text: its role",
+    "session_boot": "(N,) text: its boot (the group of the corpus index)",
+    "session_vm": "(N,) text: its VM ('' when the corpus index names none)",
+    "session_scenario": "(N,) text: its scenario",
+    "session_profile": "(N,) text: the protocol profile of its scenario",
+    "session_first_row": "(N,) int64: the index of its first row",
+    "session_rows": "(N,) int64: its rows, one per frame of its feature archive",
+    "row_session": "(R,) int64: the session of each row, an index of session_id",
+    "row_seq": "(R,) int64: the seq of the row",
+    "row_time": "(R,) float64: the time of the row (the timestamp of its frame, unix seconds)",
+    "row_window": "(R,) bool: a window of the evaluation ends at the row",
+    "row_clean": "(R,) bool: that window is clean traffic (tcn/metody.py CLEAN_RULE); false where none ends"}
+_STATES = {
+    "label": "(L,) text: the label of every method and seed",
+    "label_name": "(L,) text: the name of its method",
+    "threshold": "(L,) float64: the matched threshold of every label",
+    "score": "(L, R) float64: the score of the window that ends at the row, NaN where none ends",
+    "exceed": "(L, R) bool: the score lies above the threshold",
+    "up": "(L, R) bool: the alarm k of n is up (tcn/metody.py ALARM_RULE)",
+    "edge": "(L, R) bool: an alarm begins at the row"}
+CONTENTS = {
+    "series": {
+        **_SESSIONS, **_STATES,
+        "replay_seed": "(S,) int64: the seeds of M in the order of analysis.seeds",
+        "replay_threshold": "(S,) float64: the threshold of the bundle of every seed, at which its replay alarms",
+        "replay_score": "(S, R) float64: the score of the row of the replay, NaN where it has none",
+        "replay_alarm": "(S, R) bool: alarm of the row, the union of the channels up",
+        "replay_alarm_event": "(S, R) bool: alarm_event of the row, some channel rises there",
+        "replay_model_alarm": "(S, R) bool: model_alarm of the row, the neural channel up",
+        "replay_rule_alarm": "(S, R) bool: rule_alarm of the row, the rule channel up",
+        "replay_integrity_alarm": "(S, R) bool: integrity_alarm of the row, a finding of the integrity checks",
+        "channels": "(3,) text: the channels of safeguard.runtime CHANNELS",
+        "replay_channel": "(S, R, 3) bool: the channels up at the row (its channel)",
+        "sources": "(3,) text: the sources of safeguard.runtime SOURCES",
+        "replay_sources": "(S, R, 3) bool: the sources that rise at the row (its alarm_sources)",
+        "occurrence_session": "(E,) int64: the session of every event and control, an index of session_id",
+        "occurrence_what": "(E,) text: event or control",
+        "occurrence_type": "(E,) text: the type of the event or the kind of the control",
+        "occurrence_polarity": "(E,) text: the polarity of a control (control or negative), '' for an event",
+        "occurrence_executed": "(E,) bool: it ran (executed true in its record)",
+        **{f"occurrence_{key}": f"(E,) float64: {key} of its record, NaN where it has none" for key in HOST_TIMES}},
+    "losses": {
+        **_SESSIONS,
+        "label": "(P,) text: the label of every predictor and seed",
+        "label_name": "(P,) text: the name of its method",
+        "loss": "(P, R) float64: the loss of the window that ends at the row (tcn/metody.py LOSS_FORMULA), NaN where "
+                "none ends"},
+    "copies": {
+        "intervention_id": "(I,) text: the id of every placed intervention of K2, in the order of its rows",
+        "intervention_role": "(I,) text: its carrier role",
+        "intervention_class": "(I,) text: its class, C or D",
+        "intervention_length": "(I,) int64: the rows of its block",
+        "intervention_variant": "(I,) text: its order (class C) or its group (class D)",
+        "intervention_boot": "(I,) text: its boot",
+        "intervention_session": "(I,) text: the session it is a copy of",
+        "intervention_status": "(I,) text: evaluable or volume (tcn/zasahy.py VALIDITY_RULE)",
+        "intervention_start_seq": "(I,) int64: the seq of the first row of its block",
+        "intervention_start_time": "(I,) float64: the time of the first row of its block",
+        "intervention_first_row": "(I,) int64: the index of the first row of its copy",
+        "intervention_rows": "(I,) int64: the rows of its copy",
+        "row_intervention": "(R,) int64: the intervention of each row, an index of intervention_id",
+        "row_seq": "(R,) int64: the seq of the row",
+        "row_time": "(R,) float64: the time of the row",
+        "row_block": "(R,) bool: the row lies in the block",
+        "row_window": "(R,) bool: a window of the copy ends at the row",
+        "row_horizon": "(R,) bool: that window lies in the horizon of the intervention (tcn/k2.py DETECTION_RULE)",
+        **_STATES}}
+ATTACHMENT_RULES = {"series": SERIES_RULE, "losses": LOSSES_RULE, "copies": COPIES_RULE}
 
 
 # ------------------------------------------------------------------ small helpers
@@ -281,10 +408,16 @@ def read_index(corpus):
 
 def analysis(protocol):
     """The checked analysis plan of the protocol of the corpus (scripts/protocol_v5.py analysis_plan, with
-    analysis.metrics and analysis.linkage of agent M), after every key the evaluation needs: the bounds m of G1 (a null
-    one refused by name), the grids of G3a (tcn.metody grid), the keys of the interventions, of the diagnostics and
-    of the descriptive methods."""
+    analysis.metrics and analysis.linkage of agent M), after every key the evaluation needs: the list of the
+    attachments (ATTACHMENT_RULE: exactly ATTACHMENTS, scripts/protocol_v5.py attachments_problem, refused by name
+    first), the bounds m of G1 (a null one refused by name), the grids of G3a (tcn.metody grid), the keys of the
+    interventions, of the diagnostics and of the descriptive methods."""
     from tcn import diagnostiky, opisne, zasahy
+    section = protocol.get("analysis") if type(protocol.get("analysis")) is dict else {}
+    problem = protocol_v5.attachments_problem(section.get("attachments"))
+    if problem is not None:
+        raise ValueError(f"{problem}: the final evaluation writes exactly the attachments its protocol lists in "
+                         "advance (ATTACHMENT_RULE); refused before the seal is consumed")
     plan = protocol_v5.analysis_plan(protocol)
     for claim in protocol_v5.CLAIMS:
         if plan[claim]["m"] is None:
@@ -299,8 +432,16 @@ def analysis(protocol):
     return plan
 
 
+def attachment_paths(out):
+    """{name: <record stem>.<name>.npz beside the record `out`} for every attachment of ATTACHMENTS
+    (ATTACHMENT_RULE)."""
+    out = Path(out)
+    return {name: out.with_name(f"{out.stem}.{name}.npz") for name in ATTACHMENTS}
+
+
 def check_outputs(out, replays, stage):
-    """The record and the directory of the replays are new, their parent directories exist, the replays lie outside
+    """The record, the directory of the replays and every attachment beside the record (ATTACHMENT_RULE) are new,
+    their parent directories exist, no attachment is the directory of the replays, the replays lie outside
     data/results, which git tracks (REPLAY_RULE), and the record of a run of stage final or generalka lies under it
     (OUT_RULE)."""
     for path, option in ((Path(out), "--out"), (Path(replays), "--replays")):
@@ -308,6 +449,12 @@ def check_outputs(out, replays, stage):
             raise FileExistsError(f"{option} {path} exists; the final evaluation writes a new one")
         if not path.parent.is_dir():
             raise ValueError(f"{option} {path}: its directory {path.parent} does not exist")
+    for name, path in attachment_paths(out).items():
+        if path.exists() or path.is_symlink():
+            raise FileExistsError(f"--out {out}: its attachment {name} {path} exists; the final evaluation writes a "
+                                  "new one (ATTACHMENT_RULE)")
+        if path.resolve() == Path(replays).resolve():
+            raise ValueError(f"--replays {replays} is the attachment {name} of --out {out} (ATTACHMENT_RULE)")
     results = Path(RESULTS).resolve()
     if results == Path(replays).resolve() or results in Path(replays).resolve().parents:
         raise ValueError(f"--replays {replays} lies in {results}: the replays stay outside the tracked results")
@@ -966,6 +1113,246 @@ def diagnostic_values(prepared, sealed, protocol, plan, detection, roles):
     return out
 
 
+# ------------------------------------------------------------------ the attachments (package B11, ATTACHMENT_RULE)
+
+
+def _text(values):
+    """An array of fixed-width unicode text (no objects: ATTACHMENT_FORMAT)."""
+    return np.array([str(value) for value in values], dtype=str)
+
+
+class _Grid:
+    """The rows of an attachment (ATTACHMENT_RULE): every row of every session of the window sets `sets`, in their
+    order, by seq and time; rows(w) is the row of every window of the window set w (the first row of its session plus
+    the position of its last row)."""
+
+    def __init__(self, sets):
+        self.sets, self.sessions, self._first = list(sets), [], {}
+        seqs, times = [], []
+        start = 0
+        for windows in self.sets:
+            for s in range(len(windows.session_ids)):
+                arrays = windows.session_arrays(s)
+                self._first[id(windows), s] = start
+                self.sessions.append((windows, s))
+                seqs.append(np.asarray(arrays["seq"], dtype=np.int64))
+                times.append(np.asarray(arrays["timestamp"], dtype=np.float64))
+                start += len(seqs[-1])
+        self.lengths = np.array([len(seq) for seq in seqs], dtype=np.int64)
+        self.starts = np.array([self._first[id(w), s] for w, s in self.sessions], dtype=np.int64)
+        self.seq = np.concatenate(seqs) if seqs else np.zeros(0, dtype=np.int64)
+        self.time = np.concatenate(times) if times else np.zeros(0, dtype=np.float64)
+        self.owner = np.repeat(np.arange(len(seqs), dtype=np.int64), self.lengths)
+        self.size = start
+
+    def rows(self, windows):
+        base = np.array([self._first[id(windows), s] for s in range(len(windows.session_ids))], dtype=np.int64)
+        return base[windows.window_session] + windows.index[:, 1]
+
+
+def _states(grid, labelled, thresholds, *, k, n):
+    """The arrays of the labels `labelled` [(label, method)] on the window sets of `grid` at `thresholds` {label:
+    threshold}: label, label_name, threshold, score (NaN where no window ends), exceed, up and edge (tcn.metody
+    alarm_states)."""
+    labels = [label for label, _ in labelled]
+    score = np.full((len(labels), grid.size), np.nan)
+    states = {key: np.zeros((len(labels), grid.size), dtype=bool) for key in ("exceed", "up", "edge")}
+    for i, (label, method) in enumerate(labelled):
+        for windows in grid.sets:
+            rows, values = grid.rows(windows), method.scores(windows)
+            found = metody.alarm_states(values, windows, thresholds[label], k=k, n=n)
+            score[i, rows] = values
+            for key, mask in states.items():
+                mask[i, rows] = found[key]
+    return {"label": _text(labels), "label_name": _text(method.name for _, method in labelled),
+            "threshold": np.array([thresholds[label] for label in labels], dtype=np.float64), "score": score,
+            **states}
+
+
+def _session_table(grid, sealed, meta):
+    """The sessions and the rows of the attachments series and losses (CONTENTS): meta {session id: {role, boot,
+    vm, scenario, profile}}; the clean windows are those of the Traffic of each role (sealed)."""
+    window, clean = np.zeros(grid.size, dtype=bool), np.zeros(grid.size, dtype=bool)
+    for role in SEALED:
+        windows, traffic = sealed[role][0], sealed[role][1]
+        rows = grid.rows(windows)
+        window[rows] = True
+        clean[rows] = traffic.clean
+    ids = [windows.session_ids[s] for windows, s in grid.sessions]
+
+    def column(key):
+        return _text("" if meta[ident][key] is None else meta[ident][key] for ident in ids)
+    return {"session_id": _text(ids), "session_role": column("role"), "session_boot": column("boot"),
+            "session_vm": column("vm"), "session_scenario": column("scenario"), "session_profile": column("profile"),
+            "session_first_row": grid.starts.copy(), "session_rows": grid.lengths.copy(), "row_session": grid.owner,
+            "row_seq": grid.seq, "row_time": grid.time, "row_window": window, "row_clean": clean}
+
+
+def _replay_rows(grid, replays, models):
+    """The rows of the replays of M (SERIES_RULE): the events.jsonl of every seed and session of `grid`, read after
+    its sha256 is checked against the replay's record (replays {session: {seed: record}}, replay_sealed), one row per
+    frame, each at the row of its seq."""
+    from safeguard.runtime import CHANNELS, SOURCES
+    flags = ("alarm", "alarm_event", "model_alarm", "rule_alarm", "integrity_alarm")
+    score = np.full((len(models), grid.size), np.nan)
+    marks = {key: np.zeros((len(models), grid.size), dtype=bool) for key in flags}
+    channel = np.zeros((len(models), grid.size, len(CHANNELS)), dtype=bool)
+    sources = np.zeros((len(models), grid.size, len(SOURCES)), dtype=bool)
+    for j, model in enumerate(models):
+        for i, (windows, s) in enumerate(grid.sessions):
+            ident = windows.session_ids[s]
+            item = replays[ident][str(model.seed)]
+            path = Path(item["directory"]) / "events.jsonl"
+            if _digest(path) != item["files_sha256"]["events.jsonl"]:
+                raise ValueError(f"the events.jsonl of the replay of session {ident} by seed {model.seed} is not the "
+                                 "one its replay wrote (files_sha256; SERIES_RULE)")
+            rows = [json.loads(line) for line in path.read_text().splitlines() if line.strip()]
+            first, count = int(grid.starts[i]), int(grid.lengths[i])
+            if [row.get("seq") for row in rows] != grid.seq[first:first + count].tolist():
+                raise ValueError(f"the replay of session {ident} by seed {model.seed} has not one row per frame of the "
+                                 "session in the order of seq (REPLAY_RULE, SERIES_RULE)")
+            for r, row in enumerate(rows):
+                at = first + r
+                if row.get("score") is not None:
+                    score[j, at] = float(row["score"])
+                for key in flags:
+                    marks[key][j, at] = row.get(key) is True
+                channel[j, at] = [name in (row.get("channel") or ()) for name in CHANNELS]
+                sources[j, at] = [name in (row.get("alarm_sources") or ()) for name in SOURCES]
+    return {"replay_seed": np.array([model.seed for model in models], dtype=np.int64),
+            "replay_threshold": np.array([model.threshold for model in models], dtype=np.float64),
+            "replay_score": score, **{f"replay_{key}": mask for key, mask in marks.items()},
+            "channels": _text(CHANNELS), "replay_channel": channel, "sources": _text(SOURCES),
+            "replay_sources": sources}
+
+
+def _occurrences(grid, occurrences):
+    """Every event and control of the sessions of `grid` (SERIES_RULE): occurrences {session: {events, controls}},
+    the records of its events.json and of the controls of its controls.json (None outside test_controls)."""
+    found = []
+    for i, (windows, s) in enumerate(grid.sessions):
+        mine = occurrences[windows.session_ids[s]]
+        found += [(i, "event", record) for record in mine["events"]]
+        found += [(i, "control", record) for record in mine["controls"] or ()]
+
+    def text(record, key):
+        value = record.get(key) if type(record) is dict else None
+        return "" if value is None else str(value)
+
+    def time(record, key):
+        value = record.get(key) if type(record) is dict else None
+        return float(value) if type(value) in (int, float) and np.isfinite(value) else np.nan
+    return {"occurrence_session": np.array([i for i, _, _ in found], dtype=np.int64),
+            "occurrence_what": _text(what for _, what, _ in found),
+            "occurrence_type": _text(text(record, "type" if what == "event" else "kind") for _, what, record in found),
+            "occurrence_polarity": _text(text(record, "polarity") if what == "control" else ""
+                                         for _, what, record in found),
+            "occurrence_executed": np.array([type(record) is dict and record.get("executed") is True
+                                             for _, _, record in found], dtype=bool),
+            **{f"occurrence_{key}": np.array([time(record, key) for _, _, record in found], dtype=np.float64)
+               for key in HOST_TIMES}}
+
+
+def series_arrays(sealed, labelled, thresholds, replays, models, occurrences, meta, *, k, n):
+    """SERIES_RULE: the arrays of the attachment series over the window sets of the sealed roles (sealed {role:
+    (window set, Traffic, meta)}), every method and seed `labelled` [(label, method)] at its matched threshold
+    (thresholds {label: threshold}), the replays of M (replay_sealed records) and the events and controls of every
+    session."""
+    grid = _Grid([sealed[role][0] for role in SEALED])
+    return {**_session_table(grid, sealed, meta), **_states(grid, labelled, thresholds, k=k, n=n),
+            **_replay_rows(grid, replays, models), **_occurrences(grid, occurrences)}
+
+
+def losses_arrays(sealed, predictors, meta):
+    """LOSSES_RULE: the arrays of the attachment losses of the predictors `predictors` over the window sets of the
+    sealed roles."""
+    grid = _Grid([sealed[role][0] for role in SEALED])
+    loss = np.full((len(predictors), grid.size), np.nan)
+    for i, method in enumerate(predictors):
+        for windows in grid.sets:
+            loss[i, grid.rows(windows)] = method.losses(windows)
+    return {**_session_table(grid, sealed, meta), "label": _text(method.label for method in predictors),
+            "label_name": _text(method.name for method in predictors), "loss": loss}
+
+
+def copies_arrays(plans, labelled, thresholds, *, k, n):
+    """COPIES_RULE: the arrays of the attachment copies of the plans of K2 (plans {role: tcn.zasahy plan}) for every
+    method and seed of K2 `labelled` [(label, method)] at its matched threshold of K2 (thresholds {label:
+    threshold})."""
+    mine = [plans[role] for role in SEALED if plans[role].copies is not None]
+    grid = _Grid([plan.copies for plan in mine])
+    items = []
+    for plan in mine:
+        by_id = {item["id"]: item for item in plan.interventions}
+        items += [by_id[ident] for ident in plan.copies.session_ids]
+    block = np.zeros(grid.size, dtype=bool)
+    for i, item in enumerate(items):
+        first, count = int(grid.starts[i]), int(grid.lengths[i])
+        seq = grid.seq[first:first + count]
+        inside = (seq >= item["start"]["seq"]) & (seq < item["start"]["seq"] + item["length"])
+        if int(inside.sum()) != item["length"]:
+            raise ValueError(f"the copy of intervention {item['id']} does not hold its block of {item['length']} rows "
+                             "of consecutive seq (COPIES_RULE)")
+        block[first:first + count] = inside
+    window, horizon = np.zeros(grid.size, dtype=bool), np.zeros(grid.size, dtype=bool)
+    for plan in mine:
+        rows = grid.rows(plan.copies)
+        window[rows] = True
+        for ident, windows in plan.horizons.items():
+            horizon[rows[windows]] = True
+    return {"intervention_id": _text(item["id"] for item in items),
+            "intervention_role": _text(item["role"] for item in items),
+            "intervention_class": _text(item["class"] for item in items),
+            "intervention_length": np.array([item["length"] for item in items], dtype=np.int64),
+            "intervention_variant": _text(item["order"] if item["class"] == "C" else item["group"] for item in items),
+            "intervention_boot": _text(item["boot"] for item in items),
+            "intervention_session": _text(item["session"] for item in items),
+            "intervention_status": _text(item["status"] for item in items),
+            "intervention_start_seq": np.array([item["start"]["seq"] for item in items], dtype=np.int64),
+            "intervention_start_time": np.array([item["start"]["time"] for item in items], dtype=np.float64),
+            "intervention_first_row": grid.starts.copy(), "intervention_rows": grid.lengths.copy(),
+            "row_intervention": grid.owner, "row_seq": grid.seq, "row_time": grid.time, "row_block": block,
+            "row_window": window, "row_horizon": horizon, **_states(grid, labelled, thresholds, k=k, n=n)}
+
+
+def write_attachments(out, attached, written):
+    """ATTACHMENT_RULE: every attachment of `attached` {name: its arrays, exactly the arrays of CONTENTS[name]} into
+    its new file beside the record `out` (attachment_paths; created, never overwritten), each path appended to
+    `written` as soon as it exists (a failure removes them, FAILURE_RULE); returns values.attachments {name: {path,
+    sha256, bytes, format, contents, rule}}."""
+    found = {}
+    for name, path in attachment_paths(out).items():
+        arrays = attached[name]
+        if set(arrays) != set(CONTENTS[name]) or any(np.asarray(a).dtype.kind == "O" for a in arrays.values()):
+            raise ValueError(f"the attachment {name} holds exactly the arrays of its contents, none of objects "
+                             "(ATTACHMENT_FORMAT)")
+        with path.open("xb") as stream:
+            written.append(path)
+            np.savez_compressed(stream, **{key: arrays[key] for key in CONTENTS[name]})
+        found[name] = {"path": str(path.resolve()), "sha256": _digest(path), "bytes": path.stat().st_size,
+                       "format": ATTACHMENT_FORMAT, "contents": CONTENTS[name], "rule": ATTACHMENT_RULES[name]}
+    return found
+
+
+def _remove(paths):
+    """The attachments a failed run wrote (FAILURE_RULE); an error here leaves the run's own error to report."""
+    for path in paths:
+        try:
+            Path(path).unlink(missing_ok=True)
+        except OSError:
+            pass
+
+
+def _with_attachments(values, attachments):
+    """The values of a complete record with attachments after replays (ATTACHMENT_RULE: metadata beside them)."""
+    out = {}
+    for key, value in values.items():
+        out[key] = value
+        if key == "replays":
+            out["attachments"] = attachments
+    return out
+
+
 # ------------------------------------------------------------------ the whole evaluation
 
 
@@ -1031,8 +1418,8 @@ def unsealed_part(ctx, progress):
 
 
 def sealed_part(ctx, prepared, run, progress):
-    """Step 3 (ORDER_RULE) inside the run `run` of tcn.pecat spotrebuj: the values of the record. progress["step"]
-    names the step under way (FAILURE_RULE)."""
+    """Step 3 (ORDER_RULE) inside the run `run` of tcn.pecat spotrebuj: (the values of the record, the arrays of its
+    attachments {name: arrays}, ATTACHMENT_RULE). progress["step"] names the step under way (FAILURE_RULE)."""
     from safeguard.runtime import UNSCORED_RULE as STRETCH_RULE
     from tcn import eval as ev
     from tcn import k2, tvrdenia, zasahy
@@ -1049,6 +1436,8 @@ def sealed_part(ctx, prepared, run, progress):
     directories, replay_records, unscored = replay_sealed(sealed_sessions, ms, ctx["replays"])
     sealed = {role: window_set(role, [s for s in sealed_sessions if s["record"]["role"] == role], ms[0], protocol)
               for role in SEALED}
+    # The events and controls of every sealed session, for the attachment series (SERIES_RULE).
+    occurrences = {s["record"]["id"]: {"events": s["events"], "controls": s["controls"]} for s in sealed_sessions}
     del sealed_sessions
     roles = {role: (sealed[role][0], sealed[role][1]) for role in SEALED}
     progress["step"] = "3: the matched rates on the sealed roles"
@@ -1097,13 +1486,24 @@ def sealed_part(ctx, prepared, run, progress):
     losses = {m.label: dict(loss_summary(m.losses(tb), boots, tb_traffic.clean),
                             improvement={entry: improvement(m.losses(tb), z, boots, tb_traffic.clean)
                                          for entry, z in method_losses.items()}) for m in predictors}
+    progress["step"] = "3: the arrays of the attachments (ATTACHMENT_RULE)"
+    meta = {r["id"]: {"role": r["role"], "boot": r["group"], "vm": r.get("vm"), "scenario": r["scenario"],
+                      "profile": protocol["scenarios"][r["scenario"]]["profile"]} for r in records}
+    everyone = {m.label: m for m in [*ms, *methods]}
+    attached = {
+        "series": series_arrays(sealed, list(everyone.items()),
+                                {label: found["threshold"] for label, found in matched.items()}, replay_records, ms,
+                                occurrences, meta, k=k, n=n),
+        "losses": losses_arrays(sealed, predictors, meta),
+        "copies": copies_arrays(plans, [(label, everyone[label]) for label in values["thresholds"]],
+                                {label: found["threshold"] for label, found in values["thresholds"].items()}, k=k, n=n)}
     progress["step"] = "4: the record"
     claims = {"k1": claim_k1, **claims_k2}
     descriptive = prepared["descriptive"]
     k2_confirmatory, k2_descriptive = split_k2(values, descriptive)
     wording = rule_channel_only([m.bundle.manifest for m in ms],
                                 {seed: found["v5"]["o4"] for seed, found in metrics["o4"].items()})
-    return {
+    complete = {
         **_common(ctx, run), "status": "complete",
         "replays": {"directory": str(ctx["replays"].resolve()), "rule": REPLAY_RULE, "sessions": replay_records},
         "budget": budget, "methods": _by_label(prepared["fits"], descriptive, False),
@@ -1115,7 +1515,7 @@ def sealed_part(ctx, prepared, run, progress):
         "interventions": {"dev": prepared["dev_plan"].record(), **{role: plans[role].record() for role in SEALED}},
         "rules": {"load": LOAD_RULE, "seed": SEED_RULE, "table": TABLE_RULE, "campaign": CAMPAIGN_RULE,
                   "improvement": IMPROVEMENT_RULE, "confirmatory": CONFIRMATORY_RULE, "boots": BOOTS_RULE,
-                  "out": OUT_RULE},
+                  "out": OUT_RULE, "attachments": ATTACHMENT_RULE},
         OPISNE: {
             "metrics": metrics, "diagnostics": diagnostics,
             "descriptive_methods": {"methods": _by_label(prepared["fits"], descriptive, True),
@@ -1124,6 +1524,7 @@ def sealed_part(ctx, prepared, run, progress):
             "unscored": {"sessions": unscored, "rule": UNSCORED_RULE, "stretch_rule": STRETCH_RULE},
             "z0_random": z0, "linkage": plan["linkage"], "rule_channel_only": wording},
     }
+    return complete, attached
 
 
 def _sealed_ids(records):
@@ -1168,7 +1569,8 @@ def evaluate(corpus, models, *, campaign, replays, out, ledger=None, argv=()):
     returns the record. ledger: None for the ledger of this process (tcn.pecat KNIHA: the ledger of record unless
     vlastna_kniha switched it), else a ledger the guards then read for the whole run (tcn.pecat vlastna_kniha: a G1
     dry run or a test, stage suchy). A failure before the seal is consumed writes nothing; one after it writes the
-    record of FAILURE_RULE, closes the run failed and raises again."""
+    record of FAILURE_RULE, closes the run failed and raises again. The attachments (ATTACHMENT_RULE) are written
+    beside the record just before it; a run that fails removes those it wrote, so its record names none."""
     if ledger is not None and Path(ledger).resolve() != Path(pecat.KNIHA).resolve():
         switched = pecat.vlastna_kniha(ledger)
     else:
@@ -1182,9 +1584,13 @@ def evaluate(corpus, models, *, campaign, replays, out, ledger=None, argv=()):
         progress["step"] = "2: the seal"
         run = pecat.spotrebuj(ctx["path"], out=out, command=ctx["command"])
         with run:
+            written = []
             try:
-                values = sealed_part(ctx, prepared, run, progress)
+                values, attached = sealed_part(ctx, prepared, run, progress)
+                progress["step"] = "4: the attachments"
+                values = _with_attachments(values, write_attachments(out, attached, written))
             except BaseException as error:
+                _remove(written)
                 failed = dict(_common(ctx, run), status="failed", failed_step=progress["step"],
                               error=f"{type(error).__name__}: {error}", rule=FAILURE_RULE,
                               replays={"directory": str(ctx["replays"].resolve()), "rule": REPLAY_RULE},
@@ -1192,7 +1598,11 @@ def evaluate(corpus, models, *, campaign, replays, out, ledger=None, argv=()):
                 _write_record(out, _record(ctx, run, failed))
                 raise
             record = _record(ctx, run, values)
-            _write_record(out, record)
+            try:
+                _write_record(out, record)
+            except BaseException:
+                _remove(written)  # No attachment lies beside no record (ATTACHMENT_RULE).
+                raise
     return record
 
 

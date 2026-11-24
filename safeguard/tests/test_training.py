@@ -438,11 +438,13 @@ def test_normalization_rule_is_named_or_refused(schema, diagnostic, expected):
 
 def test_rule_channel_ranges_come_from_the_measured_rows_of_train_and_calibration():
     """Contract 1.3: the range of a rule column's raw value and of a rule_differenced column's change since the
-    session's first measured row (question Q8 to the lead, its revised proposal) over the measured rows of train and
-    calibration (dev never; an invalid row, a full snapshot and a row without a predecessor never), with k of n of
-    the neural channel. The one builder is safeguard.features.rule_channel since the merge with agent N."""
+    session's first measured row (question Q8, its revised proposal accepted by the lead 2026-11-24) over the measured
+    rows of train and calibration (dev never; an invalid row, a full snapshot and a row without a predecessor never),
+    with k of n of the neural channel. The one builder is safeguard.features.rule_channel since the merge with agent N.
+    The lead's answer to Q8 (package B11): with a column of class rule_differenced the rule channel states its
+    limitation (SESSION_START_LIMITATION), without one its limitation is None."""
     from types import SimpleNamespace
-    from safeguard.features import rule_channel
+    from safeguard.features import SESSION_START_LIMITATION, rule_channel
     value, level = GLOBAL_NAMES.index("sock_listen"), GLOBAL_NAMES.index("mod_total")
 
     def session(rows):
@@ -465,6 +467,13 @@ def test_rule_channel_ranges_come_from_the_measured_rows_of_train_and_calibratio
                                                                     ["train", "calibration"])
     assert out["ranges"] == {"sock_listen": {"quantity": "value", "min": 1.0, "max": 3.0, "rows": 5},
                              "mod_total": {"quantity": "since_session_start", "min": 0.0, "max": 3.0, "rows": 5}}
+    assert out["limitation"] == SESSION_START_LIMITATION
+    assert SESSION_START_LIMITATION.startswith("A column of class rule_differenced is judged by its change since the "
+                                               "session's first measured row, so a state already present in that row "
+                                               "is never seen by this rule; in a live run that row is the first "
+                                               "measured row after the detector starts")
+    values_only = dict(classes, mod_total="rule")
+    assert rule_channel(sessions, values_only, k=3, n=5)["limitation"] is None
     excluded = {role: [session([(2, 10, False, False, True)])] for role in ("train", "calibration")}  # No measured row.
     with refused("rule channel: column mod_total has no measured row in train and calibration"):
         rule_channel(excluded, classes, k=3, n=5)
@@ -601,8 +610,10 @@ def test_manifest_carries_the_sensitivity_table_of_the_median_calibration_window
 def test_manifest_records_classes_mask_scale_rule_ranges_wording_and_sources(trained):
     """Design B6b 1.4 and section 5: under schema 2 the manifest names legacy_schema_2 for the parameters (with the
     arguments given) and for the normalization (every column neural and in the mask, the pooled scale), an empty rule
-    channel with the alarm rule, the wording of question Q6 with its source mark, both learning curves, and the source
-    hash of scripts/protocol_v5.py."""
+    channel with the alarm rule, the wording of question Q6 with its source mark (the lead's, 2026-11-24), both
+    learning curves, and the source hash of scripts/protocol_v5.py. Package B11: with no column of class
+    rule_differenced the rule channel has no limitation and the manifest only its two limitations, and the bundle
+    extracts from every bin (Bundle.min_bin_pages None, question Q10)."""
     from safeguard.training import LEGACY_SCALE, RULE_CHANNEL_ONLY
     _, output, _ = trained
     manifest = json.loads((output / "manifest.json").read_text())
@@ -614,11 +625,34 @@ def test_manifest_records_classes_mask_scale_rule_ranges_wording_and_sources(tra
     assert {key: manifest["rule_channel"][key] for key in ("columns", "ranges", "k", "n")} == {
         "columns": [], "ranges": {}, "k": 3, "n": 5}
     wording = manifest["analysis_wording"]["rule_channel_only"]
-    assert wording == RULE_CHANNEL_ONLY and wording["source"] == "NAVRH kap. 8.2, zložené vykonávateľom; Q6"
+    assert wording == RULE_CHANNEL_ONLY and wording["source"] == (
+        "NAVRH kap. 8.2, zložené vykonávateľom, potvrdené vedúcim 2026-11-24")
     assert wording["text"].startswith("Všetku detekciu nesie pravidlový kanál: deklarované pravidlá s rozsahom z "
                                       "`train` a `calibration`; nikdy sa neuvádzajú ako neurónová detekcia.")
+    assert manifest["rule_channel"]["limitation"] is None
+    assert manifest["limitations"] == [
+        "No attack detection or held-out false-alarm metric is inferred from training.",
+        "Classifier labels describe collection workload settings; they are not per-process ground truth."]
+    assert load_bundle(output, allow_diagnostic=True).min_bin_pages is None
     training = manifest["training"]
     assert [h["epoch"] for h in training["history"]] == [1] == [h["epoch"] for h in training["classifier_history"]]
     assert set(training["history"][0]) == {"epoch", "train_prediction_loss", "dev_prediction_loss"}
     root = Path(__file__).resolve().parents[2]
     assert manifest["provenance"]["source_sha256"]["scripts/protocol_v5.py"] == digest(root / "scripts/protocol_v5.py")
+
+
+def test_the_wording_of_the_rule_channel_is_proposal_8_2_word_for_word_with_the_leads_source():
+    """Question Q6, the lead's answer (2026-11-24): the pre-written wording is accepted, its source mark is exactly the
+    lead's string, and chapter 8.2 of the proposal holds the same wording word for word (whitespace collapsed, since
+    the Markdown wraps its lines), with that source sentence and the mark of the change (closes F1 of the B6b
+    verification, 'not verbatim'). The status keeps its key with the confirmed text."""
+    from safeguard.training import RULE_CHANNEL_ONLY
+    text = (Path(__file__).resolve().parents[2] / "docs/NAVRH_PROTOKOL_V5.sk.md").read_text(encoding="utf-8")
+    chapter = " ".join(text[text.index("### 8.2 "):text.index("### 8.3 ")].split())
+    start = chapter.index("„Všetku detekciu nesie pravidlový kanál:")
+    assert chapter[start + 1:chapter.index("“", start)] == " ".join(RULE_CHANNEL_ONLY["text"].split())
+    assert RULE_CHANNEL_ONLY["source"] == "NAVRH kap. 8.2, zložené vykonávateľom, potvrdené vedúcim 2026-11-24"
+    assert RULE_CHANNEL_ONLY["source"] in chapter
+    assert "(zmena vedúceho 2026-11-24, odpoveď na otázku Q6)" in chapter
+    assert set(RULE_CHANNEL_ONLY) == {"text", "source", "status"}
+    assert RULE_CHANNEL_ONLY["status"].startswith("pre-written: confirmed by the lead 2026-11-24 (question Q6")

@@ -60,7 +60,7 @@ po kanaloch detektora (rule, neural, kernel_integrity) a za ich zjednotenie (uni
               "nezachytené, senzor neskóroval" zvlast
   classifier  presnost a makro-F1 nad oknami, vacsinova trieda na session a na vyskyt (balik bez tried ho nema)
   unscored    neskorovany cas po session, kontextoch, typoch a kontrolach ako "nevyhodnotené", nikdy ako ticho
-Cista prevadzka je pravidlo tcn/metody.py (otazka Q12, docasne podla navrhu vykonavatela; CONTEXT_RULE),
+Cista prevadzka je pravidlo tcn/metody.py (otazka Q12, prijate veducim 2026-11-24; CONTEXT_RULE),
 dozvuk je analysis.reverberation_s, horizont analysis.horizon_s, hodnotitelny vyskyt analysis.evaluable a cisla
 metrik analysis.metrics (scripts/protocol_v5.py metrics_problem). Roly su dev, calibration, test_benign a
 test_controls; zapecatenu rolu (test_benign, test_controls) vyhodnoti iba finalny prikaz (final_evaluation=True)
@@ -73,8 +73,8 @@ planu a knihy procesu, sprisneneho nalezom N2 B7c (balik B9b, tcn.pecat record_s
 generalka iba ked kniha zaznamu drzi archiv kazdej relacie zapecatenych roli indexu (pri final aj kniha na HEAD),
 inak suchy, s dovodom v stage_basis; O4 dava v kazdej skupine prirastok neuronoveho kanala nad pravidlovym
 (INCREMENT_RULE) a miera textu prace aj Garwoodov interval za skorovanu hodinu. Pri kazdom treningu (otazka Q11,
-docasne podla navrhu vykonavatela) training_summary dava stratu modelu voci Z3 a Z5 a suhrn skore po kontexte a
-scenari a training_record zaznam, ktory menuje balik.
+prijate veducim 2026-11-24) training_summary dava stratu modelu voci Z3 a Z5 a suhrn skore po kontexte a scenari a
+training_record zaznam, ktory menuje balik.
 `malver` sa nemeni (D16).
 
 DETEKCIA MALVERU (dataset 3)
@@ -617,7 +617,7 @@ PREDPOKLADY_UDALOSTI = [
 ]
 # Schema 3 (balik B7c): kategorie riadkov su CONTEXT_RULE s dozvukom analysis.reverberation_s, nie pravidlo vyssie.
 PREDPOKLADY_UDALOSTI_V5 = [
-    "kategoria riadku podla CONTEXT_RULE (tcn/metody.py CLEAN_RULE, otazka Q12 docasne podla navrhu vykonavatela): "
+    "kategoria riadku podla CONTEXT_RULE (tcn/metody.py CLEAN_RULE, otazka Q12, prijate veducim 2026-11-24): "
     "rozpatie riadku od riadku o required_rows - 1 skor po riadok; udalost, ked rozpatie zasahuje [host start, host "
     "stop hotovy], dozvuk analysis.reverberation_s po nej, kontrola s dozvukom ako udalost (kategoria kontrola), "
     "inak cista prevadzka",
@@ -952,8 +952,8 @@ OUTPUTS = (*CHANNELS, UNION)  # Every metric of the block v5 is given for each c
 ROLY_V5 = ("dev", "calibration", "test_benign", "test_controls")  # The roles far and udalosti take under schema 3.
 SEALED_ROLES = ("test_benign", "test_controls")  # Design B7c 1.1: the roles of the seal.
 CONTEXTS = ("clean", "event", "reverberation", "control")
-# Question Q11 (provisional): the summary of a training reads a held-out fit role (features/dataset.py FIT_ROLES but
-# train, which the predictor is fitted on; judgment); never a sealed role.
+# Question Q11 (accepted by the lead 2026-11-24: package B7): the summary of a training reads a held-out fit role
+# (features/dataset.py FIT_ROLES but train, which the predictor is fitted on; judgment); never a sealed role.
 TRAINING_ROLES = tuple(role for role in FIT_ROLES if role != "train")
 # Proposal 6.4: what is not evaluated (tcn/metody.py UNEVALUATED, one string; a test pins it), and the three results
 # of a control's channel (O4): detected, not detected, and its own result when the sensor scored no row.
@@ -971,15 +971,15 @@ EDGE_RULE = (
     "when the row has its input (neural: a score; rule: rule.state judged; kernel_integrity: integrity.conclusive), "
     "the union when one of them does, and a rate of a channel that judged no row of its set is nevyhodnotené")
 CONTEXT_RULE = (
-    "the context of a replay row (question Q12 to the lead, provisional by the executor's proposal: tcn/metody.py "
-    "CLEAN_RULE and OBSERVED_RULE applied to the rows of the replay): the span of a row runs from the row L - 1 rows "
-    "before it (the replay's first row when fewer; L the required_rows of the replay, window_rows and the anchor "
-    "when anchored) to the row; the row is excluded when its span meets the closed interval [host_start_unix, "
-    "host_stopped_unix + analysis.reverberation_s] of an event that did not run (executed false: such an event and its "
-    "windows enter no metric, NAVRH_PROTOKOL_V3 kap. 5); else it is in the event whose [host_start_unix, "
-    "host_stopped_unix] its span meets (context event, with the event's type); else in a control when its span meets "
-    "the closed interval [host_start_unix, host_stopped_unix + reverberation_s] of a control (controls.json, either "
-    "polarity, as tcn/metody.py CLEAN_RULE); else in the reverberation of an event when it meets [host_start_unix, "
+    "the context of a replay row (question Q12, accepted by the lead 2026-11-24: tcn/metody.py CLEAN_RULE and "
+    "OBSERVED_RULE applied to the rows of the replay): the span of a row runs from the row L - 1 rows before it (the "
+    "replay's first row when fewer; L the required_rows of the replay, window_rows and the anchor when anchored) to "
+    "the row; the row is excluded when its span meets the closed interval [host_start_unix, host_stopped_unix + "
+    "analysis.reverberation_s] of an event that did not run (executed false: such an event and its windows enter no "
+    "metric, NAVRH_PROTOKOL_V3 kap. 5); else it is in the event whose [host_start_unix, host_stopped_unix] its span "
+    "meets (context event, with the event's type); else in a control when its span meets the closed interval "
+    "[host_start_unix, host_stopped_unix + reverberation_s] of a control (controls.json, either polarity, as "
+    "tcn/metody.py CLEAN_RULE); else in the reverberation of an event when it meets [host_start_unix, "
     "host_stopped_unix + reverberation_s]; else it is clean traffic (proposal 4.2: the time outside the events and "
     "their reverberation); the observed time is one interval_s per row, the scored time one per row with a score "
     "(tcn/metody.py OBSERVED_RULE); a window of a window set takes the span of its frames (training_summary)")
@@ -1044,12 +1044,12 @@ O4_RULE = (
     "is the share of a channel nevyhodnotené at every occurrence of its group; for a negative a detection is a false "
     "alarm; every group gives the increment of the neural channel over the rule channel (INCREMENT_RULE)")
 INCREMENT_RULE = (
-    "the sensitivity increment of the neural channel over the rule channel (proposal 8.2; question Q6, provisional by "
-    "its proposal): in every group of O4 the planned occurrences the neural channel detects (zachytené) and the rule "
-    "channel does not, over the planned occurrences, which is share(rule or neural) - share(rule), with the counts "
-    "(planned, rule, rule_or_neural, neural_not_rule); a channel that judged no row of an occurrence detects nothing "
-    "there (nevyhodnotené is no detection); nevyhodnotené when the group is or when the neural channel judged no row "
-    "of its occurrences; for a negative control a detection is a false alarm")
+    "the sensitivity increment of the neural channel over the rule channel (proposal 8.2; question Q6, its wording "
+    "accepted by the lead 2026-11-24): in every group of O4 the planned occurrences the neural channel detects "
+    "(zachytené) and the rule channel does not, over the planned occurrences, which is share(rule or neural) - "
+    "share(rule), with the counts (planned, rule, rule_or_neural, neural_not_rule); a channel that judged no row of an "
+    "occurrence detects nothing there (nevyhodnotené is no detection); nevyhodnotené when the group is or when the "
+    "neural channel judged no row of its occurrences; for a negative control a detection is a false alarm")
 CLASSIFIER_RULE = (
     "the activity classifier (analysis.metrics.classifier, proposal 4.2 row O6): the class of a scored row is the "
     "activity the bundle predicts there; the scored rows of clean traffic carry the scenario of their session (the "
@@ -1838,18 +1838,18 @@ def nacitaj_v5(korpus, rola, prehratia, *, final_evaluation=False):
     return d["index"], d["protokol"], d["v5"], d["balik"], d["balik_sha"]
 
 
-# ------------------------------------------------- per training (question Q11, provisional)
+# ------------------------------------------------- per training (question Q11, accepted by the lead 2026-11-24)
 
 
 TRAINING_RULE = (
-    "per training (proposal 8.6; question Q11 to the lead, provisional by the executor's proposal: package B7): on the "
-    "window set of one fit role (dev or calibration; never a sealed role, which only the final command reads) the "
-    "loss of the bundle M (LOSS_FORMULA of tcn/metody.py MetodaM) against the methods of analysis.k1.compare (Z3, Z5, "
-    "fitted on train and dev), the mean per context of CONTEXT_RULE (a window by the span of its frames) and over "
-    "every window, with I = 1 - loss(M) / loss(Z) of the means (descriptive: K1 is decided per boot on test_benign); "
-    "the score of M (SCORE_FORMULA) summarized by context and by scenario: the windows, the mean, the median, the "
-    "quantiles 0.95 and 0.99 (numpy, linear; judgment: the tail the threshold at fpr 0.01 lies in), the maximum and "
-    "the share above the bundle's threshold")
+    "per training (proposal 8.6; question Q11, accepted by the lead 2026-11-24: package B7): on the window set of one "
+    "fit role (dev or calibration; never a sealed role, which only the final command reads) the loss of the bundle M "
+    "(LOSS_FORMULA of tcn/metody.py MetodaM) against the methods of analysis.k1.compare (Z3, Z5, fitted on train and "
+    "dev), the mean per context of CONTEXT_RULE (a window by the span of its frames) and over every window, with I = 1 "
+    "- loss(M) / loss(Z) of the means (descriptive: K1 is decided per boot on test_benign); the score of M "
+    "(SCORE_FORMULA) summarized by context and by scenario: the windows, the mean, the median, the quantiles 0.95 and "
+    "0.99 (numpy, linear; judgment: the tail the threshold at fpr 0.01 lies in), the maximum and the share above the "
+    "bundle's threshold")
 
 
 def _suhrn_skore(x, prah):

@@ -31,6 +31,7 @@ class FakeBundle:
     threshold, k, n = 1.0, 1, 1
     manifest = {"calibration": {"diagnostic": True}}
     anchored = False  # Package B6b: no differenced input, a window is window_rows frames.
+    min_bin_pages = None  # Question Q10 (package B11): the bins of the extraction, every bin as legacy_schema_2.
 
     @property
     def rule_channel(self):  # Package B6b: a rule channel without a column.
@@ -270,6 +271,27 @@ def test_finite_directory_exclusive_output_status_and_evidence(monkeypatch, tmp_
     assert json.loads((output / "status.json").read_text()) == summary
     with pytest.raises(FileExistsError):
         runtime.run_directory(FakeBundle(), raw, "profile", output, preserve=False)
+
+
+@pytest.mark.parametrize("min_bin_pages", [1024, None])
+def test_the_live_run_extracts_every_frame_from_the_bins_of_its_bundle(monkeypatch, tmp_path, min_bin_pages):
+    """Question Q10 to the lead (2026-11-24), the live path: run_directory gives every extraction the bundle's
+    min_bin_pages (safeguard/bundle.py Bundle.min_bin_pages: 1024 under analysis.scale, None under legacy_schema_2),
+    so a live frame's memory columns come from the bins the bundle scores, as the audit extracted its archives."""
+    raw = tmp_path / "raw"
+    raw.mkdir()
+    for seq in range(3):
+        sidecar(raw, seq)
+    seen = []
+
+    def extract(directory, profile, seq, previous=None, session_id=None, **kwargs):
+        seen.append(kwargs["min_bin_pages"])
+        return frame(seq), {"previous_seq": seq}
+    monkeypatch.setattr(runtime, "frame_from_snapshot", extract)
+    model = FakeBundle(window=2)
+    model.min_bin_pages = min_bin_pages
+    summary = runtime.run_directory(model, raw, "profile", tmp_path / "out", preserve=False)
+    assert summary["ok"] and summary["processed"] == 3 and seen == [min_bin_pages] * 3
 
 
 def test_duplicate_sequences_are_errors_and_not_scored_twice(monkeypatch, tmp_path):

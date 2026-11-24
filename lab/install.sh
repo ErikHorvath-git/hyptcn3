@@ -11,6 +11,18 @@ if ! command -v nginx >/dev/null || ! command -v psql >/dev/null || ! python3 -c
 fi
 id hyptcnlab >/dev/null 2>&1 || useradd --system --home-dir /nonexistent --shell /usr/sbin/nologin hyptcnlab
 systemctl enable --now postgresql nginx
+# PostgreSQL keeps its defaults except autovacuum_naptime 67 s (proposal chapter 12, lead's answer to Q9, 2026-11-24).
+# The deployed file is the setting, linked like the maintenance units below, so the guest manifest covers it; the
+# restart applies it before the lab's units start again, and a server without it ends the deployment.
+ln -sfn /opt/hyptcn-lab/hyptcn-lab-postgresql.conf /etc/postgresql/15/main/conf.d/hyptcn-lab.conf
+systemctl restart postgresql@15-main
+naptime=$(runuser -u postgres -- psql -XtAc 'SHOW autovacuum_naptime')
+autovacuum=$(runuser -u postgres -- psql -XtAc 'SHOW autovacuum')
+if [ "$naptime" != 67s ] || [ "$autovacuum" != on ]; then
+    echo "PostgreSQL runs with autovacuum_naptime $naptime and autovacuum $autovacuum, not 67s and on" \
+         "(lab/hyptcn-lab-postgresql.conf)" >&2
+    exit 1
+fi
 if ! runuser -u postgres -- psql -tAc "SELECT 1 FROM pg_roles WHERE rolname='hyptcnlab'" | grep -qx 1; then
     runuser -u postgres -- createuser hyptcnlab
 fi

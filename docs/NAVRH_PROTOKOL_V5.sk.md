@@ -141,7 +141,7 @@ posledných skóre nad prahom (`safeguard/training.py:228-260`, `safeguard/runti
 | Šesť scenárov je šesť stálych úrovní jedného API | od 1,46 do 48,27 požiadavky za sekundu; súčty jedného scenára sa medzi session líšia najviac o 3,2 % (záznam kampane v6) | profily s premenlivou záťažou |
 | Uzavretá slučka generátora | pomalý server zníži ponúkanú záťaž (`scripts/host_traffic.py:420-442`) | otvorená slučka so stropom súbežnosti |
 | Slučka pádov ostáva v udalosti `zla_konfiguracia_sluzby` | `RestartSec=3`; v kampani udalostí boli postihnuté riadky v 9 z 11 medzier 13 snímok od seba, čo zodpovedá perióde asi 3,25 s (odvodené, v hosťovi nemerané) | každú slučku, ktorá vytvára procesy, ohraničiť |
-| Perióda 60 s v PostgreSQL | v kampani v6 boli všetky medzery medzi nepotvrdenými riadkami násobkom 12 snímok | register periód vrátane nastavení databázy |
+| Perióda 60 s v PostgreSQL | v kampani v6 boli všetky medzery medzi nepotvrdenými riadkami násobkom 12 snímok | register periód vrátane nastavení databázy; `autovacuum_naptime` 67 s namiesto predvolených 60 s, lebo pri 60 s a troch databázach štartuje pracovník autovacuum každých 20 s, presne 4 intervaly zberu, a pri 67 s každých 22,33 s, 2,33 s od násobku (vedúci 2026-11-24, Q9) |
 | Stopa spúšťača udalostí | každý štart a stop ide cez agenta hosťa: shell, `python3`, šesť volaní `systemctl` | udalosť naprázdno ako negatívna kontrola |
 | Prvá záťaž pamäte natrvalo posunie vstup modelu | v kampani udalostí klesol `mem_zero_ratio` v jednej session z 0,587 na 0,370 a nevrátil sa (záznam kampane) | definovaný počiatočný stav pamäte skupiny |
 | Typ udalosti je zviazaný s počtom udalostí | balíček typov aj rozvrh berú ten istý seed (`scripts/collection.py:313-353`) | nezávislé prúdy náhody podľa účelu |
@@ -206,7 +206,7 @@ Len tieto dve majú pravidlo rozhodnutia. Každé má tri možné výsledky: **l
 | | Tvrdenie | Meranie | Dáta |
 |---|---|---|---|
 | K1 | Sieť predpovedá ďalší riadok lepšie než metódy bez učenia a lineárna metóda | zlepšenie straty modelu voči každej zo základných metód Z3 a Z5, po bootoch | `test_benign` |
-| K2 | Sieť zachytí časové a medzipríznakové zásahy, ktoré prahové metódy nezachytia | rozdiel podielu zachytených zásahov tried C a D pri zhodnej miere alarmov, po bootoch; K2a voči prahovým metódam Z1, Z2, Z4, K2b voči Z3 a Z5 | zásahy do odložených session rolí `test_benign` a `test_controls` |
+| K2 | Sieť zachytí časové a medzipríznakové zásahy, ktoré prahové metódy nezachytia | rozdiel podielu zachytených zásahov tried C a D pri zhodnej miere alarmov, po bootoch; K2a voči prahovým metódam Z1, Z2 a obom variantom Z4 (`Z4:load`, `Z4:residual`) ako samostatným porovnaniam, „lepší“ žiada prekonať oba (vedúci 2026-11-24, Q13), K2b voči Z3 a Z5 | zásahy do odložených session rolí `test_benign` a `test_controls` |
 
 ### 4.2 Opisné výsledky
 
@@ -271,6 +271,9 @@ Viacstupňové dávky v profile `corp` dodávajú benígne deje s časovou štru
 - Každá skupina štartuje z definovaného stavu: nový proces QEMU a databáza obnovená na
   seedovanú úroveň. Pred prvou session prebehne zaznamenaný krok, ktorý sa dotkne rovnakého
   množstva pamäte ako najväčšia udalosť.
+- Seedovaná úroveň databázy je jedna pre všetky skupiny oboch režimov: úroveň, ktorú nasadí
+  `lab/install.sh`, seed 0 (`streams.seeded_level`) (zmena vedúceho 2026-11-24, odpoveď na
+  otázku Q18).
 - Na začiatku každej session sa zapíšu hodnoty úrovňových príznakov.
 
 ### 5.5 Benígne prevádzkové udalosti
@@ -295,6 +298,12 @@ Viacstupňové dávky v profile `corp` dodávajú benígne deje s časovou štru
 - Každá slučka, ktorá vytvára procesy, je ohraničená (`StartLimitBurst`) alebo má náhodné
   oneskorenie, bez ohľadu na pomer k intervalu zberu. Známa slučka s periódou asi 3,25 s by
   testom malých celočíselných pomerov prešla.
+- Výnimkou z prvej odrážky, zapísanou v registri periód, je spúšťač autovacuum PostgreSQL
+  v hosťovi: je mimo nášho kódu, nie je ohraničený a nemá náhodné oneskorenie (odpoveď vedúceho
+  na otázku Q3). Jeho `autovacuum_naptime` je 67 s namiesto predvolených 60 s, takže pri troch
+  databázach štartuje pracovník každých 22,33 s, 2,33 s od najbližšieho násobku intervalu
+  zberu, a fáza voči mriežke sa posúva o 0,47 intervalu na štart (zmena vedúceho 2026-11-24,
+  odpoveď na otázku Q9).
 - Register periodických dejov v hosťovi aj na hostiteľovi so zdrojovým riadkom je súčasť
   protokolu; skutočné periódy sa zmerajú v G2 zo žurnálu hosťa.
 - Hlavnou kontrolou je **autokorelácia označených riadkov** v každej session: opakujúci sa
@@ -434,9 +443,15 @@ session, ktorá zachováva rozdelenie každého stĺpca:
 
 Dĺžky bloku 6, 12, 24 a 48 riadkov; najkratšia je zámerne pod rozlíšením pravidla 3 z 5
 a očakáva sa, že zachytená nebude. Šesť zásahov každej triedy na boot v 20 odložených bootoch.
-Každý zásah prejde **predikátom platnosti** počítaným iba z príznakov: každý stĺpec, jeho
-prvá diferencia a kĺzavý priemer ležia v kvantiloch roly `train`. Zásah, ktorý neprejde, sa
-preradí do objemovej triedy, nevyhadzuje sa.
+Každý zásah prejde **predikátom platnosti** počítaným iba z príznakov. Zásah je neplatný, keď
+po ňom niektorá hodnota bloku alebo jeho hrán (stĺpec, prvá diferencia, kĺzavý priemer) leží
+mimo kvantilov roly `train` (`analysis.interventions.validity.quantiles`) a zároveň mimo
+rozsahu, ktorý tá istá veličina mala v tých istých riadkoch pred zásahom. Posudzujú sa všetky
+hodnoty bloku, nie iba zmenené; hodnota, ktorú zásah nechal na mieste, druhú podmienku nikdy
+nesplní. Predikát platí od G1 a potom sa neladí. G3a vykáže podiel objemovej triedy po triede
+a dĺžke; podiel nad polovicou pri niektorej dĺžke je nález pre vedúceho (zmena vedúceho
+2026-11-24, odpoveď na otázku Q14). Zásah, ktorý neprejde, sa preradí do objemovej triedy,
+nevyhadzuje sa.
 
 Tieto zásahy merajú, či model využíva štruktúru. Nie sú modelom útoku.
 
@@ -466,8 +481,19 @@ vrátane dávok, pri ktorých sa nezachytenie očakáva.
   a počíta sa zo všetkých. Ak nestačí ani to, protokol nie je pripravený.
 - Vyčerpaný limit kampaň **pozastaví na rozbor**. Jedno pokračovanie s tým istým limitom je
   dovolené, ak je príčina mimo meracieho kódu a labu; inak je kampaň neplatná.
+- Zlyhaný štart skupiny nie je session a limit náhrad nezaťažuje (zmena vedúceho 2026-11-24,
+  odpoveď na otázku Q22).
 - Skoré zastavenie: počet označených riadkov pri niektorom type udalosti nad hranicou
   z kap. 10.9, alebo periodicita označených riadkov.
+- Porovnáva sa počet kampane: označené riadky pri type T vo všetkých auditovaných session oboch
+  VM od začiatku kampane alebo od jej posledného skorého zastavenia, prijatých aj zamietnutých,
+  s náhradami aj s pokračovaním. Hranica je 99. percentil Poissonovho rozdelenia so strednou
+  hodnotou miera_T × počet výskytov T v tých istých session (kap. 10.9) a počíta sa po každom
+  audite (zmena vedúceho 2026-11-24, odpoveď na otázku Q24).
+- Obnova po skorom zastavení nespotrebuje jedno pokračovanie po vyčerpanom limite náhrad. Smie sa
+  obnoviť, keď písomný rozbor nenájde príčinu v meracom kóde ani v labe a hashe sú nezmenené;
+  každé zastavenie aj obnova idú do záznamu ukončenia ako odchýlka (zmena vedúceho 2026-11-24,
+  odpoveď na otázku Q24).
 
 ---
 
@@ -481,10 +507,29 @@ Hranice sú zapísané v G0.
 | Kontrola | Pravidlo | Náprava |
 |---|---|---|
 | rozptyl | konštantný: nulový rozptyl; takmer konštantný: menej než 1 % riadkov mimo modu | pravidlový kanál |
-| totožnosť | jednoduchý model z jedného riadku nesmie v rámci profilu a pozície uhádnuť skupinu, VM ani poradie session nad AUC 0,75 na `train` a `dev` | úrovňový stĺpec sa nahradí prvou diferenciou; iný stĺpec vypadne |
+| totožnosť | od každého riadka sa odčíta aditívny efekt scenára a pozície, odhadnutý najmenšími štvorcami z priemerov session (vrstvy odpadajú); jednoduchý model z jedného takto upraveného riadka potom nesmie nad AUC 0,75 uhádnuť VM (VM proti VM), poradie session (prvá proti druhej polovici v čase) ani skupinu (každá skupina so všetkými svojimi session proti ostatným) (vedúci 2026-11-24, Q7) | úrovňový stĺpec sa nahradí prvou diferenciou a posúdi znova celou kvalifikáciou; konštantná alebo takmer konštantná prvá diferencia ide do pravidlového kanála, ktorý posudzuje zmenu stĺpca od prvého meraného riadka session s rozsahom z `train` a `calibration` (trieda `rule_differenced`; obmedzenie: stav prítomný už v prvom riadku toto pravidlo nevidí, v živom behu je prvým riadkom prvý riadok po štarte detektora) (vedúci 2026-11-24, Q8); iný stĺpec vypadne |
 | duplicity | presná lineárna kombinácia iných stĺpcov | vypadne |
 | záťaž | R² regresie stĺpca na ponúkanej záťaži toho istého intervalu | iba sa vykazuje |
 | odozva | stĺpec reaguje na svoju kontrolu očakávanou veľkosťou | iba sa vykazuje |
+
+**Pravidlo totožnosti (zmena vedúceho 2026-11-24, odpoveď na otázku Q7; nález F2 overenia B6a).**
+Doslovné znenie „v rámci profilu a pozície“ meralo rozptyl medzi session, nie identitu: vo vrstve
+mala každá skupina najviac jednu session a vrstva miešala obe intenzity profilu. Preto vrstvy
+odpadajú a porovnania idú po odčítaní efektu scenára a pozície cez všetky session. Dôvod vedúceho:
+sústavný posun medzi VM alebo v čase je to, čo sa medzi tréningom a testom prenesie ako chyba;
+náhodná úroveň jednej session je bežná premenlivosť, ktorú prediktor vidí v kontexte okna. Hranica
+AUC 0,75 a náprava ostávajú. Upravené hodnoty sa zaokrúhlia na násobok milióntiny dolnej hranice
+mierky stĺpca, aby zvyšky výpočtu v pohyblivej čiarke nerozbili presné zhody, a z rovnakých skóre
+sa menuje prvé v poradí VM, poradie, skupiny podľa mena (oboje úsudok vykonávateľa, balík B11).
+
+**Dáta (zmena vedúceho 2026-11-24, odpoveď na otázku Q7).** V G3a všetky roly generálky
+(30 session; v generálke nie je nič zapečatené), pri opakovaní na kampani `train` a `dev`. Tie isté
+riadky platia pre všetky kontroly tabuľky (čítanie odpovede vykonávateľom, balík B11).
+
+**Riadky kontrol (zmena vedúceho 2026-11-24, odpoveď na otázku Q25).** Z kvalifikácie sa vynechajú
+riadky každej kontroly aj jej párovej negatívnej, od `host_start_unix` po max(`host_stop_unix`,
+`host_start_unix` + `controls.horizon_s`); udalosti ostávajú, lebo sú bežnou prevádzkou. Záznam
+uvedie počet vynechaných riadkov po session.
 
 Maska stĺpcov a pravidlo mierky sú **dáta protokolu**: zmrazený tréning ich použije na
 štatistiky roly `train` kampane a zapíše do manifestu. Kontroly sa na dátach kampane zopakujú
@@ -498,7 +543,7 @@ Pre počty objektov jadra neexistuje prirodzená mierka: buď je jedna jednotka 
 | Kanál | Vstupy | Povaha |
 |---|---|---|
 | kontroly integrity | existujú, nie sú vstupom modelu | pravidlá |
-| pravidlový | stĺpce triedy konštantný a takmer konštantný | deklarované pravidlá s rozsahom z `train` a `calibration`; nikdy sa neuvádzajú ako neurónová detekcia |
+| pravidlový | stĺpce triedy konštantný a takmer konštantný; úrovňový stĺpec s konštantnou alebo takmer konštantnou prvou diferenciou (trieda `rule_differenced`), posudzovaný zmenou od prvého meraného riadka session: stav prítomný už v prvom riadku toto pravidlo nevidí, v živom behu je prvým riadkom prvý riadok po štarte detektora (vedúci 2026-11-24, Q8) | deklarované pravidlá s rozsahom z `train` a `calibration`; nikdy sa neuvádzajú ako neurónová detekcia |
 | neurónový | ostatné stĺpce a biny | TCN |
 
 - Výsledky O2 a O4 sa uvádzajú po kanáloch aj za ich zjednotenie; navyše prírastok citlivosti
@@ -507,8 +552,17 @@ Pre počty objektov jadra neexistuje prirodzená mierka: buď je jedna jednotka 
   stĺpec tesne nad hranicou „takmer konštantný“ nedostal obrovskú váhu.
 - Biny: do skóre vstupuje iba bin s aspoň 1024 stránkami; mierka sa počíta na bin; vedľa
   maxima sa ako citlivostná analýza uvedie priemer troch najhorších binov a prah na
-  `mem_changed_max`.
-- Vopred zapísané znenie pre prípad, že všetku detekciu nesie pravidlový kanál.
+  `mem_changed_max`. Z tých istých binov s aspoň 1024 stránkami sa počíta aj všetkých osem
+  globálnych pamäťových stĺpcov vrátane `mem_bins_active`, takže jedna zmenená stránka binu
+  s jednou stránkou nedá `mem_changed_max` 1,0 (zmena vedúceho 2026-11-24, odpoveď na otázku
+  Q10; nález F4 overenia B6b).
+- Vopred zapísané znenie pre prípad, že všetku detekciu nesie pravidlový kanál (zmena vedúceho
+  2026-11-24, odpoveď na otázku Q6): „Všetku detekciu nesie pravidlový kanál: deklarované
+  pravidlá s rozsahom z `train` a `calibration`; nikdy sa neuvádzajú ako neurónová detekcia.
+  Výsledky O2 a O4 sa uvádzajú po kanáloch aj za ich zjednotenie; prírastok citlivosti
+  neurónového kanála nad pravidlovým je …“ Zdroj: NAVRH kap. 8.2, zložené vykonávateľom,
+  potvrdené vedúcim 2026-11-24. Manifest nesie znenie aj zdroj v poli
+  `analysis_wording.rule_channel_only`; výpustku doplní finálne vyhodnotenie číslom.
 - Hlava klasifikátora sa oddelí od tréningu prediktora (dnes majú spoločné orezanie
   gradientu).
 
@@ -531,6 +585,10 @@ alarmov** znamená: prah každej metódy sa nastaví tak, aby mala na čistej pr
 | Z4 | prah na ponúkanej záťaži; regresia príznakov na záťaži | či model nie je merač záťaže |
 | Z5 | lineárna autoregresia (ridge) na tom istom okne | lineárna štruktúra |
 | M | TCN, päť seedov | skúmaný model |
+
+Z4 má dva varianty, prah na ponúkanej záťaži (`Z4:load`) a rezíduum regresie príznakov na
+záťaži (`Z4:residual`). V K2a je každý samostatným porovnaním s vlastným prúdom `bootstrap`
+a „lepší“ žiada prekonať oba (zmena vedúceho 2026-11-24, odpoveď na otázku Q13).
 
 Opisné metódy jadra (rozhodnutie vedúceho 2026-11-22 z pokynu vlastníka nemeniť, čo text práce už sľubuje;
 doplnok kostry B7): z-skóre, izolačný les, prediktor GRU a prediktor LSTM v tom istom obale ako Z0 až Z5
@@ -692,6 +750,22 @@ kladný.
 - Najhorší prípad času: záťaž pamäte cez plnú snímku, kým sa session druhej VM audituje
   a archivuje; oba režimy vzájomného posunu zberačov.
 - Zhoda živého detektora (`safeguard watch` popri zbere) s prehratím archívu.
+- Nasýtenie servera a strop súbežnosti (zmena vedúceho 2026-11-24, odpoveď na otázku Q5): priepustnosť pri
+  nasýtení meria pre každý profil diagnostický rad krokov, nie session, na kópii protokolu, v ktorej
+  `max_concurrent` neviaže (aspoň 4 × 60 × najvyššia skúšaná rýchlosť). Krok zlyhá na serveri, keď požiadavka
+  špičky nemá očakávaný výsledok alebo p95 latencie špičky je aspoň 1000 ms (úsudok nástroja skúšky labu);
+  zahodená relácia alebo krok bez špičky krok zneplatní a rad skončí chybou. Po prvom zlyhanom kroku sa hranica
+  dohľadá delením intervalu v geometrickom strede (tri desatinné miesta), kým zlyhaný krok nie je menej než
+  1,15-násobok obslúženého. Priepustnosť je najvyšší obslúžený krok a `rate` je jej `peak_share`. Poradie: pred
+  behmi pri `rate` high sa nastaví predbežný strop, ktorý neviaže (cesta stupňa G2, záznamy G0 a G1 ostávajú
+  platné, nový záznam samotestu auditu), potom dlhý beh pri `rate` high, a `max_concurrent` profilu je potom
+  dvojnásobok najväčšieho počtu súbežných relácií v jeho meranej fáze (`determined_at` G2). `rate` high musí
+  prejsť aj hranicami času cyklu (`audit.cycle_ms_max`) a veľkosťou session proti odhadu disku (D12); ak neprejde,
+  je to nález pre vedúceho a `peak_share` 0,8 sa sám nemení.
+- Takt autovacuum (zmena vedúceho 2026-11-24, odpoveď na otázku Q9): nameraný rozstup štartov pracovníka
+  autovacuum sa od najbližšieho násobku intervalu zberu líši o 1 až 4 s (pri 67 s a troch databázach je to
+  22,33 s, teda 2,33 s). Zmena počtu databáz rozstup mení, preto sa meria zo žurnálu hosťa pri dočasnom
+  `log_min_messages = debug1` (`scripts/lab_trial.py long --postgres-debug1`).
 
 **Kritérium:** každý bod splnený a hranice z kap. 6.2 dodržané.
 
@@ -712,6 +786,12 @@ Jedna, na commite, ktorý kandiduje na zmrazenie, bez zásahu do kódu. Rovnaký
 - Dodá mieru zamietnutí pre limit náhrad a hodnoty pre vzorce z kap. 10.9.
 - **Kritérium:** limit náhrad v medziach kap. 7.5; žiadna nevysvetlená periodicita; reťaz
   prešla bez zásahu; rozhodnutie vlastníka. Zmena kódu po G3b znamená novú G3b.
+- Záznam G3b uvádza čísla modelu skorého zastavenia (0,12 až 0,28 falošného zastavenia zdravej
+  kampane pri mierach 0,01 až 3 na výskyt; model, nie meranie), aby ich vlastník videl pri
+  rozhodnutí; nie sú kritériom. Prvý záznam G3b sa preto zapíše s ešte nesplneným rozhodnutím
+  vlastníka, takže stupeň ostane otvorený, a nesie tieto čísla. Vlastník rozhodne nad ním
+  a záznam so splneným rozhodnutím nasleduje ako najnovší (zmena vedúceho 2026-11-24, odpoveď
+  na otázku Q24; poradie dvoch záznamov je výklad balíka B11).
 
 ### 10.6 G4 Zmrazenie a predregistrácia
 
@@ -729,6 +809,13 @@ Jeden príkaz vyhodnotí všetky vopred zapísané modely a metódy na tých ist
 a zapíše jednu knihu. Správa obsahuje tabuľky po bootoch a VM, neskórovaný čas, zamietnuté
 a nahradené session po príčinách, odchýlky a zapísané znenia záverov.
 
+Záznam nesie vopred zapísané prílohy (`analysis.attachments`): rad skóre, prahu a alarmov po
+riadkoch pre každú session testovacích rolí, každú metódu a každý seed, s časmi udalostí
+a kontrol; straty prediktorov po oknách (M, Z3, Z5, GRU, LSTM); rady kópií so zásahmi.
+Obrázok nakreslený z prílohy nie je nové čítanie testovacej roly; potreba niečoho navyše je
+odchýlka (kap. 11.3) a rozhoduje o nej vlastník (zmena vedúceho 2026-11-24, odpoveď na otázky
+Q17 a Q28).
+
 ### 10.9 Čo sa kedy určí
 
 | Hodnota | Kedy | Pravidlo |
@@ -738,13 +825,15 @@ a nahradené session po príčinách, odchýlky a zapísané znenia záverov.
 | zoznam a veľkosti zásahov a kontrol, horizont 180 s, dozvuk 300 s, hodnotiteľný výskyt | G0 | kap. 6.4, 7.4 |
 | veľkosti rolí a rozvrh | G0 | kap. 7.2, 9.2 |
 | `fpr` 0,01 a pravidlo 3 z 5 | G0 | prevzaté; citlivosť na pravidlo sa vykáže (kap. 8.5) |
+| zoznam príloh finálneho záznamu | G0 | vopred v `analysis.attachments`: rad skóre, prahu a alarmov, straty prediktorov, rady kópií so zásahmi (vedúci 2026-11-24, Q17, Q28) |
 | hranice m pre K1 a K2 | G1 | 95. percentil na dátach bez štruktúry, aspoň 20 seedov |
 | mriežky metód, maska stĺpcov | G3a | podľa pravidiel zapísaných v G0 |
 | očakávané počty v registri výnimiek | G3a | najväčší počet na prijatú session posledného behu G3a; G3b ich porovná s pozorovanými (vedúci 2026-11-22, odpoveď na otázku Q2) |
 | limit náhrad | G3b | kap. 7.5 |
 | tolerancia neplatných riadkov na session | G2 | najmenšie číslo, pri ktorom je podľa miery na hranicu udalosti z G2 pravdepodobnosť prekročenia v jednej session pod 1 %; najviac 6 |
-| strop riadkov uzavretých pravidlom na session; hranica skorého zastavenia | G3b | 99. percentil Poissonovho rozdelenia pri miere z G2 a G3b spolu, na typ udalosti |
+| strop riadkov uzavretých pravidlom na session; hranica skorého zastavenia | G3b | 99. percentil Poissonovho rozdelenia pri miere z G2 a G3b spolu, na typ udalosti; pri hranici skorého zastavenia je to miera na výskyt typu a s 99. percentilom so strednou hodnotou miera × počet výskytov typu sa po každom audite porovná počet označených riadkov kampane, nie jednej session (kap. 7.5; vedúci 2026-11-24, Q24) |
 | zoznam povolených varovaní zberača | G2 | všetky vzory pozorované pri bezchybných behoch |
+| strop súbežnosti profilov (`profiles.*.max_concurrent`) | G2 | dvojnásobok najväčšieho počtu súbežných relácií pri `rate` high v dlhom behu (kap. 10.3); do G2 platia predbežné hodnoty 500 a 250 (vedúci 2026-11-24, Q5) |
 
 Čísla v riadkoch G0 sú návrh autora podľa úsudku. Sú zapísané pred akýmikoľvek dátami
 a vlastník ich môže zmeniť iba pred G1.
@@ -754,7 +843,10 @@ a vlastník ich môže zmeniť iba pred G1.
 ## 11. Výskumná disciplína
 
 1. **Stupeň v každom zázname** (`suchy`, `skuska`, `generalka`, `final`). Kontrola tvrdení
-   pustí do textu práce iba čísla zo záznamov `final`.
+   pustí do textu práce iba čísla zo záznamov `final`. Záznam ukončenia kampane berie stupeň
+   z knihy pečatí v pracovnom strome, lebo kniha sa commitne až po kampani; knihu na HEAD preverí
+   finálne vyhodnotenie (`tcn.finalne`), keď záznam číta (zmena vedúceho 2026-11-24, odpoveď na
+   otázku Q21).
 2. **Predregistrácia** pred prvou session kampane.
 3. **Denník odchýlok** a denník opakovaní prieskumnej generálky (iba pridávanie).
 4. **Register výnimiek** v protokole: každá tolerovaná podmienka má príčinu, rozhodnutie
@@ -806,7 +898,7 @@ môže ktorékoľvek zmeniť do začiatku stupňa G1.
 | poradie rolí | chronologické | vynucuje ho kontrola korpusu a zodpovedá nasadeniu |
 | stav databázy na začiatku skupiny | pevný seedovaný stav | posun vstupov v predchádzajúcej iterácii (kap. 2.2) |
 | náhrada session | tie isté typy udalostí, nové fázy a trvania | deterministická príčina sa nemá opakovať |
-| nastavenia PostgreSQL | ostávajú predvolené a zapíšu sa do registra periód | perióda 60 s dala v kampani v6 iba nepotvrdené riadky, žiadny neplatný; zmena bez preukázanej škody odporuje zásade 7 |
+| nastavenia PostgreSQL | predvolené okrem `autovacuum_naptime` = 67 s (`lab/hyptcn-lab-postgresql.conf`); autovacuum ostáva zapnutý, mení sa iba jeho takt; zapíšu sa do registra periód s nameraným rozstupom pred zmenou a po nej, výnimka z kap. 5.6 ostáva zapísaná (vedúci 2026-11-24, Q9) | skúška labu 2026-11-23: pri 60 s a troch databázach spustil spúšťač autovacuum pracovníka každých 20,006 s (200 rozstupov, 19,89 až 20,14 s), presne 4 intervaly zberu, a fáza voči mriežke sa za hodinu posunie iba o 0,22 intervalu, takže pracovník by sa v jednej session objavoval v každej štvrtej snímke a v inej nikdy; pri 67 s je rozstup 22,33 s, 2,33 s od násobku, a fáza sa posúva o 0,47 intervalu na štart; príčina sa odstraňuje pri zdroji (zásada 7, D11) (vedúci 2026-11-24, Q9) |
 | činnosť správcu v profile `corp` | skript a časovač v hosťovi, nie ssh | či je v obraze hosťa sshd, repozitár neukazuje |
 | dozvuk | 300 s, mimo čistej prevádzky, vykazuje sa zvlášť | tak je definovaný uložený výsledok predchádzajúcej iterácie |
 | seedy a rozvrh | nové | rozvrh v4 sa pri rozbore porúch prezeral |
@@ -830,7 +922,7 @@ v dokumente s konštantami v kóde.
 
 | Hrozba | Ošetrenie |
 |---|---|
-| model sa učí identitu session, bootu alebo VM | kap. 8.1; delenie po bootoch |
+| model sa učí identitu skupiny (bootu), VM alebo času: sústavný posun, ktorý sa medzi tréningom a testom prenesie ako chyba; náhodná úroveň jednej session je bežná premenlivosť, ktorú prediktor vidí v kontexte okna (vedúci 2026-11-24, Q7) | kap. 8.1 po odčítaní efektu scenára a pozície; delenie po bootoch |
 | model je merač záťaže | metóda Z4 |
 | model je prah na jednom stĺpci | Z1, Z2, K2a, kanály, diagnostiky |
 | sieť sa nič nenaučila | K1, sieť s náhodnými váhami, krivka učenia |

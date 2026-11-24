@@ -1917,8 +1917,11 @@ def audit_session(directory, p, protocol_path, output=None):
                                                        for key in ("data_closed_ms", "queue_bytes", "queue_jobs"))):
             if present(value):
                 published[key].append(value)
+    # Question Q10 to the lead (2026-11-24): under schema 3 the eight memory columns come from the bins of at least
+    # analysis.scale.min_bin_pages pages, the bins the normalizer scores; schemas 1 and 2 take every bin (None).
+    min_bin_pages = p["analysis"]["scale"]["min_bin_pages"] if p.get("schema") == protocol_v5.SCHEMA else None
     result = retazec(str(raw), str(directory / "profile" if native else ROOT / p["profile"]),
-                    p["max_gap_s"], quality_policy=protocol_policy(p))
+                    p["max_gap_s"], quality_policy=protocol_policy(p), min_bin_pages=min_bin_pages)
     counts = Counter()
     rows, windows, verdict, quality = analyze_windows(result, p, directory.name, role, cycles, counts)
     reasons.extend(verdict["reasons"])

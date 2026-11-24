@@ -13,7 +13,7 @@ sessions (collection.Events) and the event windows of the log audit.
   deploy      --protocol P --vm a --out DIR
   saturation  --protocol P --vm a --profile eshop|corp --scenario S --rates R1,R2,... --out DIR
   scenario    --protocol P --vm a --scenario S --rate R --minutes 10 --out DIR
-  long        --protocol P --vm a --scenario S --rate R --minutes 60 --events N --out DIR
+  long        --protocol P --vm a --scenario S --rate R --minutes 60 --events N [--postgres-debug1] --out DIR
   periods     --run DIR [DIR ...]
   record      --out-record data/results/skuska_labu_<UTC>.json DIR [DIR ...]
 
@@ -21,17 +21,21 @@ deploy: labctl deploy (its JSON lines and exit code are kept; a failed swap step
 health check, the guest's identity and where the VM's QEMU stands (memory.swap.max, VmSwap and the cgroups its
 memory is charged to). A traffic run (a step of saturation, scenario, long) starts the generator with the
 protocol's warmup, sends SIGUSR1 at the end of the warmup and SIGUSR2 at --dur, both from the generator's own
-origin (the header of its request log), and SIGTERM after a drain. saturation runs its rates in order and stops
-after the first step whose peak was not served (saturation_rule). scenario and long compute the summary and the
-realism requirements of their logs; long also runs N events of its own draw (draw_events) through labctl event,
-fetches the guest journal and the nginx logs of the run, and measures the periods (periods). Every number that
-is the executor's judgment is marked so below and stated in each result.
+origin (the header of its request log), and SIGTERM after a drain. saturation is the series of the lead's answer
+to Q5 (SATURATION_RULE): on a copy of the protocol whose max_concurrent does not bind, its rates in order up to the
+first step that fails on the server, then bisection to a bracket narrower than STEP_RATIO_MAX. scenario and long
+compute the summary and the realism requirements of their logs; long also runs N events of its own draw
+(draw_events) through labctl event, fetches the guest journal and the nginx logs of the run, measures the periods
+(periods) and judges the spacing of the autovacuum launcher (autovacuum_property, the lead's answer to Q9); with
+--postgres-debug1 PostgreSQL logs at debug1 for that run only (DEBUG1_RULE). record also proposes max_concurrent per
+profile (MAX_CONCURRENT_RULE). Every number that is the executor's judgment is marked so below and stated in each
+result, every number of the lead's answers as well (lead()).
 
 Exit codes: 0 the step ran and wrote its result, 1 it could not complete (its result says why), 2 the input was
 refused (nothing written).
 """
 import argparse
-from collections import defaultdict
+from collections import Counter, defaultdict
 from datetime import datetime, timezone
 import gzip
 import hashlib
@@ -78,9 +82,25 @@ SATURATION_DRAIN_S = 30  # Judgment: a step is judged in its measure phase; the 
 LATENCY_P95_BOUND_MS = 1000  # Judgment: a served peak answers 95 % of its requests within 1 s; near saturation the
 # latency grows steeply, so the rate found depends little on this bound.
 PEAK_TOLERANCE = 1e-6  # An interval of the peak has the planned level 1 over all of it (bounds rounded to 1 us).
-CHARGED_SHARE = .9  # Judgment: QEMU's memory is charged to its own cgroup when that holds this share of its RssAnon.
+# Judgment of the lab test, accepted by the lead in his answer to Q26: labctl's check of where QEMU's memory is
+# charged (scripts/labctl.py charge) and this record share it.
+CHARGED_SHARE = labctl.CHARGED_SHARE
 HOLDER_SHARE = .5  # Judgment: a leaf cgroup of the user slice holding this share of QEMU's RssAnon is a holder.
 RESTART_WINDOW_S = 60  # lab/hyptcn-lab@.service StartLimitIntervalSec: restarts further apart are separate loops.
+MIDPOINT_DECIMALS = 3  # Judgment: the rate of a bisection step, user sessions per second at envelope level 1.
+GUEST_SQL_TIMEOUT_S = 180  # Judgment: one labctl exec of psql in the guest; labctl's own guest command bound is 120 s.
+
+# The lead's answer to Q5 (2026-11-24) for the saturation series of G2, which this tool runs ahead of G2:
+STEP_RATIO_MAX = 1.15  # The lead's judgment: bisection until neighbouring steps are closer than 15 %, read as the
+# failed rate over the served rate below it.
+CAP_FACTOR_S = 240  # Judgment, 4 x 60 s: the series runs on a copy whose max_concurrent is at least this times its
+# highest rate (a user session lasts about a minute, 4 is the margin; the executor's point 1, accepted by the lead).
+PROPOSED_CAP_FACTOR = 2  # Judgment: max_concurrent for collection is twice the most concurrent user sessions at rate
+# high in the long run (the executor's point 2, accepted by the lead; a value of G2, determined_at).
+# The lead's answer to Q9 (2026-11-24), his judgment: the measured spacing of the autovacuum launcher's worker starts
+# lies 1 to 4 s from a multiple of interval_s (2.33 s at 22.33 s). Read as the remainder of the median spacing modulo
+# interval_s in [1, 4] s, which is at least 1 s from every multiple.
+AUTOVACUUM_REMAINDER_S = (1, 4)
 
 
 class Refused(ValueError):
@@ -92,7 +112,16 @@ def judgment():
             "drain_s": DRAIN_S, "stop_grace_s": STOP_GRACE_S, "saturation_measure_s": SATURATION_MEASURE_S,
             "saturation_drain_s": SATURATION_DRAIN_S, "latency_p95_bound_ms": LATENCY_P95_BOUND_MS,
             "charged_share": CHARGED_SHARE, "holder_share": HOLDER_SHARE, "restart_window_s": RESTART_WINDOW_S,
-            "note": "the executor's judgment (scripts/lab_trial.py), none of them a value of the protocol"}
+            "midpoint_decimals": MIDPOINT_DECIMALS, "guest_sql_timeout_s": GUEST_SQL_TIMEOUT_S,
+            "note": "the executor's judgment (scripts/lab_trial.py), none of them a value of the protocol; "
+                    "charged_share is accepted by the lead (Q26)"}
+
+
+def lead():
+    """The lead's numbers of his answers to Q5 and Q9 (2026-11-24) that this tool applies, stated in every result."""
+    return {"step_ratio_max": STEP_RATIO_MAX, "cap_factor_s": CAP_FACTOR_S, "proposed_cap_factor": PROPOSED_CAP_FACTOR,
+            "autovacuum_remainder_s": list(AUTOVACUUM_REMAINDER_S),
+            "note": "the lead's answers to Q5 and Q9 (2026-11-24), none of them a value of the protocol"}
 
 
 def commit():
@@ -265,7 +294,7 @@ def started(step, argv, protocol_path, raw, pv):
             "protocol_name": pv["name"], "vm": pv["vm"], "domain": pv["domain"], "target": pv["target"],
             "commit": commit(), "measurement_dirty": collection.measurement_dirty(),
             "qemu": collection.qemu_process(pv["domain"]), "started_unix": time.time(), "judgment": judgment(),
-            "completed": False, "error": None}
+            "lead": lead(), "completed": False, "error": None}
 
 
 def create(out, raw):
@@ -374,12 +403,26 @@ def traffic_run(pv, run, t, drain_s, events=None):
     return out
 
 
+def measure_phase(run):
+    """(the reasons of the drops, the most concurrent user sessions) of the run's measure phase: {drop_reason: count}
+    of its dropped arrival records (NO_DROP_REASON for one that names none), and the largest active_max of its
+    intervals (None without one)."""
+    records, _ = traffic_log.read_jsonl(run / REQUESTS)
+    intervals, _ = traffic_log.read_jsonl(run / INTERVALS)
+    reasons = Counter(r.get("drop_reason") or NO_DROP_REASON for r in records
+                      if r.get("type") == "arrival" and r.get("phase") == "measure" and r.get("admitted") is False)
+    active = [iv["active_max"] for iv in intervals if iv.get("type") == "interval" and iv.get("phase") == "measure"]
+    return dict(sorted(reasons.items())), max(active, default=None)
+
+
 def traffic_summary(run):
-    """scripts/traffic_log.py summarize of the run's logs, its problems and the measure phase."""
+    """scripts/traffic_log.py summarize of the run's logs, its problems and the measure phase, with the reasons of
+    its drops and its most concurrent user sessions (measure_phase)."""
     s = traffic_log.summarize(run / REQUESTS, run / INTERVALS, session_id=run.name)
     m = s["measure"]
+    reasons, active_max = measure_phase(run)
     return {"problems": s["problems"][:20], "problem_count": len(s["problems"]), "clean": s["clean"],
-            "arrivals": s.get("arrivals"), "phases": s["phases"],
+            "arrivals": s.get("arrivals"), "drop_reasons": reasons, "active_max": active_max, "phases": s["phases"],
             "measure": {key: m.get(key) for key in ("requests", "ok", "errors", "phase_duration_s",
                                                     "phase_request_rate_rps", "latency_ms",
                                                     "max_ok_completion_gap_s")}}
@@ -438,10 +481,11 @@ def cgroup_memory(path):
 
 def qemu_memory(domain):
     """Where the VM's QEMU stands after labctl deploy (finding F4 of the B5a verification): its cgroup and
-    memory.swap.max there, VmSwap, RssAnon, and the anonymous memory charged to its own cgroup and to every leaf
-    cgroup of its user's slice that holds at least HOLDER_SHARE of the RssAnon: a process moved into a scope keeps
-    its pages charged where they were faulted. Reads /proc and /sys/fs/cgroup only (scripts/labctl.py PROC and
-    CGROUPS), no root."""
+    memory.swap.max there, VmSwap, RssAnon, what its own cgroup is charged with (scripts/labctl.py charge, the check
+    labctl's start makes: anon over the RssAnon of every QEMU process in the cgroup, at least CHARGED_SHARE; the
+    lead's answer to Q26), and every leaf cgroup of its user's slice that holds at least HOLDER_SHARE of its RssAnon:
+    a process moved into a scope keeps its pages charged where they were faulted. Reads /proc and /sys/fs/cgroup only
+    (scripts/labctl.py PROC and CGROUPS), no root."""
     try:
         pid = labctl.qemu_pid(domain)
     except RuntimeError as error:
@@ -460,16 +504,15 @@ def qemu_memory(domain):
         found = cgroup_memory("/" + leaf.relative_to(labctl.CGROUPS).as_posix())
         if rss_bytes and found["anon"] is not None and found["anon"] >= HOLDER_SHARE * rss_bytes:
             holders.append(found)
-    share = own["anon"] / rss_bytes if own and own["anon"] is not None and rss_bytes else None
+    charge = labctl.charge(cgroup)
     try:
         swappiness = int((labctl.PROC / "sys/vm/swappiness").read_text())
     except (OSError, ValueError):
         swappiness = None
     return {"domain": domain, "qemu_pid": pid, "cgroup": cgroup, "memory_swap_max": swap,
             "vm_swap_kb": labctl.vm_swap_kb(pid), "rss_anon_kb": int(rss[1]) if rss else None, "own": own,
-            "own_anon_share": None if share is None else round(share, 3),
-            "charged_to_own_cgroup": None if share is None else share >= CHARGED_SHARE, "holders": holders,
-            "vm_swappiness": swappiness}
+            "charge": charge, "own_anon_share": charge["share"], "charged_to_own_cgroup": charge["charged"],
+            "holders": holders, "vm_swappiness": swappiness}
 
 
 def deploy(a, argv):
@@ -523,9 +566,10 @@ def deploy_problems(r):
     memory = r.get("qemu_memory") or {}
     if memory and memory.get("charged_to_own_cgroup") is not True:
         holders = ", ".join(f"{h['cgroup']} (swap_max {h['swap_max']})" for h in memory.get("holders", []))
+        charge = memory.get("charge") or {}  # The RssAnon of every QEMU process in the cgroup (labctl.charge).
         out.append(f"QEMU's memory is not charged to its own cgroup {memory.get('cgroup')}: it holds "
-                   f"{memory.get('own_anon_share')} of RssAnon {memory.get('rss_anon_kb')} kB; holders "
-                   + (holders or "none"))
+                   f"{memory.get('own_anon_share')} of RssAnon {charge.get('rss_anon_kb')} kB"
+                   + (f" ({charge['error']})" if charge.get("error") else "") + "; holders " + (holders or "none"))
     return out
 
 
@@ -537,11 +581,29 @@ def expected(r):
     return r.get("outcome") == "ok" if r.get("intended_status") is None else r.get("status") == r["intended_status"]
 
 
+NO_DROP_REASON = "no drop_reason"  # A dropped arrival record that names no reason (a generator before package B5c).
+
+
+def drop_reasons(records, intervals, ids):
+    """{drop_reason: count} of the arrivals dropped in the intervals `ids`: the generator names the reason of each
+    (package B5c: max_concurrent or all_customers_held; NO_DROP_REASON for one that names none). The arrivals in time
+    order fill the intervals in their order, each with as many as it offered, as the log audit assigns them
+    (scripts/traffic_log.py)."""
+    queue = sorted((r for r in records if r.get("type") == "arrival"), key=lambda r: r["t_mono"])
+    found, position = Counter(), 0
+    for iv in (iv for iv in intervals if iv.get("type") == "interval"):
+        block = queue[position:position + iv["offered_sessions"]]
+        position += iv["offered_sessions"]
+        if iv["interval"] in ids:
+            found.update(a.get("drop_reason") or NO_DROP_REASON for a in block if a.get("admitted") is False)
+    return dict(sorted(found.items()))
+
+
 def peak_of(run):
     """The peak of one step's logs: the intervals of the measure phase whose planned level (the header's envelope)
-    is 1 over all of them, with the user sessions offered, admitted and dropped there (the interval log), the
-    requests that started in them, how many lacked their expected result, their p95 latency (exact nearest rank),
-    and the delivered user sessions and requests per second of the peak."""
+    is 1 over all of them, with the user sessions offered, admitted and dropped there (the interval log) and the
+    reasons of the drops (drop_reasons), the requests that started in them, how many lacked their expected result,
+    their p95 latency (exact nearest rank), and the delivered user sessions and requests per second of the peak."""
     records, _ = traffic_log.read_jsonl(run / REQUESTS)
     intervals, _ = traffic_log.read_jsonl(run / INTERVALS)
     envelope = traffic_log.Envelope(next(r for r in records if r.get("type") == "header")["envelope"])
@@ -555,6 +617,7 @@ def peak_of(run):
     return {"intervals": len(peaks), "seconds": round(seconds, 6),
             "offered": sum(iv["offered_sessions"] for iv in peaks), "admitted": admitted,
             "dropped": sum(iv["dropped_sessions"] for iv in peaks),
+            "drop_reasons": drop_reasons(records, intervals, ids),
             "active_max": max((iv["active_max"] for iv in peaks), default=None), "requests": len(requests),
             "unexpected": sum(not expected(r) for r in requests),
             "p95_ms": traffic_log.percentile(sorted(r["duration_ms"] for r in requests), .95),
@@ -562,16 +625,31 @@ def peak_of(run):
             "requests_per_s": round(len(requests) / seconds, 6) if seconds else None}
 
 
-def step_reasons(peak):
-    """Why a step's peak was not served, [] when it was: every request with its expected result, no user session
-    dropped and the p95 latency below LATENCY_P95_BOUND_MS (judgment)."""
-    reasons = []
+def named_drops(dropped, reasons):
+    return f"{dropped} user sessions dropped (drop_reason: " + (
+        ", ".join(f"{reason} {n}" for reason, n in reasons.items()) or "no dropped arrival record") + ")"
+
+
+def step_errors(peak):
+    """Why a step cannot be judged, [] when it can (the lead's answer to Q5): no interval of the measure phase wholly
+    at envelope level 1, no request in the peak, or a user session dropped there, named by its drop_reason (package
+    B5c, finding F1: the lab_trial half). A drop is a limit of the generator (its max_concurrent, its customers), not
+    of the server, so the series ends at such a step with an error, never with a saturation."""
+    errors = []
     if not peak["intervals"]:
-        reasons.append("no interval of the measure phase lies wholly at envelope level 1")
+        errors.append("no interval of the measure phase lies wholly at envelope level 1")
     elif not peak["requests"]:
-        reasons.append("no request started in the peak")
+        errors.append("no request started in the peak")
     if peak["dropped"]:
-        reasons.append(f"{peak['dropped']} user sessions dropped over max_concurrent")
+        errors.append(named_drops(peak["dropped"], peak["drop_reasons"]) + " in the peak: a limit of the generator, "
+                      "not of the server")
+    return errors
+
+
+def step_reasons(peak):
+    """Why a judged step failed on the server, [] when its peak was served (the lead's answer to Q5): a request of the
+    peak intervals without its expected result, or a p95 latency of at least LATENCY_P95_BOUND_MS (judgment)."""
+    reasons = []
     if peak["unexpected"]:
         reasons.append(f"{peak['unexpected']} requests without their expected result")
     if peak["p95_ms"] is not None and peak["p95_ms"] >= LATENCY_P95_BOUND_MS:
@@ -579,27 +657,62 @@ def step_reasons(peak):
     return reasons
 
 
-SATURATION_RULE = ("the highest offered rate whose peak was served (every request of the peak intervals with its "
-                   "expected result, no user session dropped, p95 latency below the bound) below the first step "
-                   "whose peak was not; the steps run in increasing order and stop after the first failure")
+SERIES_RULE = ("the steps run on a copy of the protocol whose profiles.<profile>.max_concurrent is max(the "
+               f"protocol's, ceil({CAP_FACTOR_S} x the highest rate of --rates)), so the generator's ceiling does "
+               "not bind (the lead's answer to Q5); the series directory keeps the given file, every step directory "
+               "the copy")
+SATURATION_RULE = (
+    "the server's throughput at saturation (the lead's answer to Q5, 2026-11-24): a diagnostic series, no session, on "
+    "the series copy of the protocol; a step fails on the server when a request of its peak intervals lacks its "
+    "expected result or their p95 latency is at least the bound; a step without a peak or with a user session dropped "
+    "in it is invalid and ends the series with an error; the steps of --rates run in increasing order up to the first "
+    "failed one, then the geometric midpoint of the highest served and the lowest failed rate, rounded to "
+    f"{MIDPOINT_DECIMALS} decimals, until the failed rate is less than {STEP_RATIO_MAX} times the served one; the "
+    "throughput is the highest served rate, and proposed_rate is scenario_rule.peak_share of it")
+
+
+def bracket(steps):
+    """(served, failed) of the judged steps: the lowest failed one and the highest served one below it (None: none)."""
+    judged = [s for s in steps if "reasons" in s]
+    failed = min((s for s in judged if s["reasons"]), key=lambda s: s["rate"], default=None)
+    served = max((s for s in judged if not s["reasons"] and (failed is None or s["rate"] < failed["rate"])),
+                 key=lambda s: s["rate"], default=None)
+    return served, failed
+
+
+def midpoint(low, high):
+    """The rate of the next bisection step: the geometric midpoint of the served and the failed rate (the criterion
+    STEP_RATIO_MAX is relative), rounded to MIDPOINT_DECIMALS (judgment)."""
+    return round(math.sqrt(low * high), MIDPOINT_DECIMALS)
 
 
 def saturation_rule(steps, peak_share):
-    """The saturation of the judged steps (in run order) and the rates proposed from it (scenario_rule.peak_share of
-    it per intensity): SATURATION_RULE."""
-    served, failed = None, None
-    for step in steps:
-        if step["reasons"]:
-            failed = step
-            break
-        served = step
+    """The saturation of the judged steps and the rates proposed from it (scenario_rule.peak_share of it per
+    intensity): SATURATION_RULE. bracket is [served, failed] and ratio failed / served while both exist."""
+    served, failed = bracket(steps)
     rate = served["rate"] if served else None
-    return {"rule": SATURATION_RULE, "latency_p95_bound_ms": LATENCY_P95_BOUND_MS, "rate": rate,
-            "first_failure": None if failed is None else {"rate": failed["rate"], "reasons": failed["reasons"]},
+    return {"rule": SATURATION_RULE, "latency_p95_bound_ms": LATENCY_P95_BOUND_MS, "step_ratio_max": STEP_RATIO_MAX,
+            "rate": rate, "failure": None if failed is None else {"rate": failed["rate"], "reasons": failed["reasons"]},
+            "bracket": [rate, failed["rate"]] if served and failed else None,
+            "ratio": round(failed["rate"] / rate, 6) if served and failed else None,
             "delivered_sessions_per_s": served["peak"]["sessions_per_s"] if served else None,
             "requests_per_s": served["peak"]["requests_per_s"] if served else None,
             "proposed_rate": {name: None if rate is None else round(share * rate, 6)
                               for name, share in peak_share.items()}}
+
+
+def series_protocol(raw, profile, rates):
+    """(bytes, record) of the copy of the protocol the steps of a saturation series run on: SERIES_RULE. The copy is
+    the given file itself when its cap is high enough already; the record names the cap before and after and the
+    sha256 of both files."""
+    doc = json.loads(raw)
+    before = doc["profiles"][profile]["max_concurrent"]
+    after = max(before, math.ceil(CAP_FACTOR_S * max(rates)))
+    if after != before:
+        doc["profiles"][profile]["max_concurrent"] = after
+    copy = raw if after == before else (json.dumps(doc, indent=2) + "\n").encode()
+    return copy, {"rule": SERIES_RULE, "path": f"profiles.{profile}.max_concurrent", "before": before, "after": after,
+                  "sha256_before": hashlib.sha256(raw).hexdigest(), "sha256_after": hashlib.sha256(copy).hexdigest()}
 
 
 def saturation(a, argv):
@@ -612,52 +725,84 @@ def saturation(a, argv):
         raise Refused(f"--profile {a.profile} differs from scenarios.{a.scenario}.profile {s['profile']}")
     rates = rates_of(a.rates)
     out = new_dir(a.out)
-    blocks = [traffic_block(pv, a.scenario, a.profile, rate, "saturation", k, SATURATION_MEASURE_S)
-              for k, rate in enumerate(rates)]
-    for k, t in enumerate(blocks):
-        precheck(a.protocol, out / f"step-{k + 1:02d}", t)
+    for k, rate in enumerate(rates):
+        precheck(a.protocol, out / f"step-{k + 1:02d}",
+                 traffic_block(pv, a.scenario, a.profile, rate, "saturation", k, SATURATION_MEASURE_S))
+    copy, series = series_protocol(raw, a.profile, rates)
     quiet(pv)
     create(out, raw)
     result = started("saturation", argv, a.protocol, raw, pv)
-    result.update(profile=a.profile, scenario=a.scenario, intensity=s["intensity"], rates=rates, steps=[])
-    for k, t in enumerate(blocks):
+    result.update(profile=a.profile, scenario=a.scenario, intensity=s["intensity"], rates=rates,
+                  series_protocol=series, steps=[])
+
+    def step(rate, kind):
+        """One step of the series: 'served', 'failed' or 'error' (its run, its logs or step_errors)."""
+        k = len(result["steps"])
         run = out / f"step-{k + 1:02d}"
-        step = {"step": run.name, "rate": t["rate"]}
-        result["steps"].append(step)
+        entry = {"step": run.name, "kind": kind, "rate": rate}
+        result["steps"].append(entry)
+        t = traffic_block(pv, a.scenario, a.profile, rate, "saturation", k, SATURATION_MEASURE_S)
         try:
-            create(run, raw)
-            step["run"] = traffic_run(pv, run, t, SATURATION_DRAIN_S)
-            if step["run"]["error"]:
+            if kind == "bisection":  # The initial steps were checked before anything was written.
+                precheck(a.protocol, run, t)
+            create(run, copy)
+            entry["run"] = traffic_run(pv, run, t, SATURATION_DRAIN_S)
+            if entry["run"]["error"]:
+                return "error"
+            entry["log_problems"] = traffic_summary(run)["problems"][:10]
+            entry["peak"] = peak_of(run)
+            entry["errors"] = step_errors(entry["peak"])
+            if entry["errors"]:
+                return "error"
+            entry["reasons"] = step_reasons(entry["peak"])
+        except (OSError, ValueError, KeyError, StopIteration) as error:  # Refused is a ValueError.
+            entry["error"] = failure(error)
+            return "error"
+        progress("saturation-step", rate=rate, kind=kind, served=not entry["reasons"])
+        return "failed" if entry["reasons"] else "served"
+
+    outcome = None
+    for rate in rates:
+        outcome = step(rate, "initial")
+        if outcome != "served":
+            break
+    if outcome == "failed":  # Bisection of the bracket; every step lies strictly inside it, so it narrows.
+        while True:
+            served, failed = bracket(result["steps"])
+            if served is None or failed["rate"] / served["rate"] < STEP_RATIO_MAX:
                 break
-            step["log_problems"] = traffic_summary(run)["problems"][:10]
-            step["peak"] = peak_of(run)
-            step["reasons"] = step_reasons(step["peak"])
-        except (OSError, ValueError, KeyError, StopIteration) as error:
-            step["error"] = failure(error)
-            break
-        progress("saturation-step", rate=t["rate"], served=not step["reasons"])
-        if step["reasons"]:
-            break
-    judged = [step for step in result["steps"] if "reasons" in step]
-    result["saturation"] = saturation_rule(judged, p["scenario_rule"]["peak_share"])
-    failed = [step for step in result["steps"] if step.get("error") or step.get("run", {}).get("error")]
-    result["error"] = (failed[0].get("error") or failed[0]["run"]["error"]) if failed else None
-    result["completed"] = not failed
+            rate = midpoint(served["rate"], failed["rate"])
+            if not served["rate"] < rate < failed["rate"]:
+                result["bisection_stop"] = (f"no rate of {MIDPOINT_DECIMALS} decimals lies between "
+                                            f"{served['rate']:g} and {failed['rate']:g}")
+                break
+            if step(rate, "bisection") == "error":
+                break
+    result["saturation"] = saturation_rule(result["steps"], p["scenario_rule"]["peak_share"])
+    bad = [e for e in result["steps"] if e.get("error") or e.get("errors") or (e.get("run") or {}).get("error")]
+    result["error"] = (f"{bad[0]['step']} (rate {bad[0]['rate']:g}): " + (
+        bad[0].get("error") or "; ".join(bad[0].get("errors") or []) or bad[0]["run"]["error"])) if bad else None
+    result["completed"] = not bad
     return finish(out, result, saturation_problems)
 
 
 def saturation_problems(r):
+    """What the series leaves open: an invalid step (the error), the lowest rate failing (nothing to bisect), every
+    step served (a lower bound), and a bracket still at least STEP_RATIO_MAX wide."""
     sat, judged, out = r["saturation"], [s for s in r["steps"] if "reasons" in s], []
-    if r["error"]:  # The series ended without a failed peak: what it found is a lower bound.
+    if r["error"]:  # The series ended at an invalid step: what it found is a lower bound.
         out.append(f"saturation did not complete: {r['error']}" + (
             f"; the steps before it put the saturation at {sat['rate']:g} or above"
-            if sat["rate"] is not None and sat["first_failure"] is None else ""))
+            if sat["rate"] is not None and sat["failure"] is None else ""))
     if judged and sat["rate"] is None:
         out.append(f"no step served its peak: the lowest rate {judged[0]['rate']:g} fails ("
-                   + "; ".join(judged[0]["reasons"]) + ")")
-    if judged and sat["first_failure"] is None and not r["error"]:
+                   + "; ".join(judged[0]["reasons"]) + "), so there is no bracket to bisect")
+    if judged and sat["failure"] is None and not r["error"]:
         out.append(f"every step served its peak: the throughput lies above the highest rate {judged[-1]['rate']:g}; "
                    "the proposed rates are lower bounds")
+    if sat["ratio"] is not None and sat["ratio"] >= STEP_RATIO_MAX:
+        out.append(f"the bracket [{sat['bracket'][0]:g}, {sat['bracket'][1]:g}] is still {sat['ratio']:g} wide, not "
+                   f"below {STEP_RATIO_MAX:g}" + (f" ({r['bisection_stop']})" if r.get("bisection_stop") else ""))
     for s in r["steps"]:
         if s.get("log_problems"):
             out.append(f"{s['step']} (rate {s['rate']:g}): traffic log problems: " + ", ".join(s["log_problems"][:3]))
@@ -680,8 +825,8 @@ def traffic_problems(r):
     if summary.get("problems"):
         out.append("traffic log problems: " + ", ".join(summary["problems"][:3]))
     dropped = ((summary.get("arrivals") or {}).get("measure") or {}).get("dropped")
-    if dropped:
-        out.append(f"{dropped} user sessions of the measure phase dropped over max_concurrent")
+    if dropped:  # Named by their drop_reason (package B5c, finding F1: the lab_trial half).
+        out.append(named_drops(dropped, summary.get("drop_reasons") or {}) + " in the measure phase")
     realism = r.get("realism") or {}
     if "error" in realism:
         out.append("realism not computed: " + realism["error"])
@@ -779,6 +924,104 @@ def event_summary(r):
     return {**{key: r.get(key) for key in keys}, "effect_ok": (r.get("effect") or {}).get("ok")}
 
 
+# lab_trial long --postgres-debug1 (the lead's answers to Q9 and Q27): for one run PostgreSQL in the guest logs every
+# worker start of the autovacuum launcher into the journal, as entry 4 of docs/ODCHYLKY_V5.sk.md did by hand, so the
+# spacing after the change to 67 s is measured the same way; after the run both settings go back. ALTER SYSTEM writes
+# postgresql.auto.conf, which is no deployed file: the guest's lab/ files stay as deployed.
+DEBUG1_SET = ("ALTER SYSTEM SET log_min_messages = 'debug1'", "ALTER SYSTEM SET log_destination = 'stderr,syslog'",
+              "SELECT pg_reload_conf()")
+DEBUG1_RESET = ("ALTER SYSTEM RESET log_min_messages", "ALTER SYSTEM RESET log_destination", "SELECT pg_reload_conf()")
+DEBUG1_SHOW = ("SHOW log_min_messages", "SHOW log_destination")
+DEBUG1_DURING = ["debug1", "stderr,syslog"]  # What DEBUG1_SHOW gives after the set step.
+DEBUG1_RULE = ("the step set (" + "; ".join(DEBUG1_SET) + ") before the run and the step reset ("
+               + "; ".join(DEBUG1_RESET) + ") after it, also when the run fails; " + " and ".join(DEBUG1_SHOW)
+               + " before the set, after it (must give " + " and ".join(DEBUG1_DURING) + ") and after the reset (must "
+               "give what they gave before the set); each through labctl exec as the user postgres")
+
+
+def psql(statements):
+    """The guest command that runs `statements` in order with psql as the user postgres, one -c each."""
+    return shlex.join(["runuser", "-u", "postgres", "--", "psql", "-XtA",
+                       *(part for statement in statements for part in ("-c", statement))])
+
+
+def guest_sql(pv, statements):
+    """One labctl exec of psql (psql) in the guest: {command, rc, output lines, stderr}. Never raises: a command that
+    cannot run has rc None and its error."""
+    command = psql(statements)
+    step = {"command": command, "rc": None, "output": None, "stderr": None}
+    try:
+        reply = subprocess.run(collection.user_command([sys.executable, LABCTL, "exec", *collection.labctl_args(pv),
+                                                        "--guest-command", command]),
+                               cwd=ROOT, capture_output=True, text=True, timeout=GUEST_SQL_TIMEOUT_S)
+        step.update(rc=reply.returncode, output=reply.stdout.splitlines(), stderr=reply.stderr.strip()[-500:])
+    except (OSError, subprocess.SubprocessError) as error:
+        step["error"] = failure(error)
+    return step
+
+
+def debug1_on(pv, record):
+    """The steps before the run (DEBUG1_RULE): show, set, show again. ValueError when the set step failed or debug1
+    logging is not on after it, so the run does not start; debug1_off follows either way."""
+    record["before"] = guest_sql(pv, DEBUG1_SHOW)
+    record["set"] = guest_sql(pv, DEBUG1_SET)
+    record["during"] = guest_sql(pv, DEBUG1_SHOW)
+    if record["set"]["rc"] != 0 or record["during"]["output"] != DEBUG1_DURING:
+        raise ValueError(f"PostgreSQL debug1 logging is not on: the set step ended with rc {record['set']['rc']}, and "
+                         f"{' and '.join(DEBUG1_SHOW)} give {record['during']['output']}")
+
+
+def debug1_off(pv, record):
+    """The steps after the run (DEBUG1_RULE): reset, then show."""
+    record["reset"] = guest_sql(pv, DEBUG1_RESET)
+    record["after"] = guest_sql(pv, DEBUG1_SHOW)
+
+
+def debug1_problems(record):
+    """What does not hold of DEBUG1_RULE in the record of a run."""
+    out = [f"step {name} ended with rc {record[name]['rc']}" + (f": {record[name]['error']}"
+                                                                 if record[name].get("error") else "")
+           for name in ("before", "set", "during", "reset", "after") if name in record and record[name]["rc"] != 0]
+    if "during" in record and record["during"]["output"] != DEBUG1_DURING:
+        out.append(f"after the set step {' and '.join(DEBUG1_SHOW)} give {record['during']['output']}, not "
+                   + " and ".join(DEBUG1_DURING))
+    before, after = ((record.get(name) or {}).get("output") for name in ("before", "after"))
+    if after != before:
+        out.append(f"after the reset step {' and '.join(DEBUG1_SHOW)} give {after}, not what they gave before the run "
+                   f"{before}")
+    return out
+
+
+AUTOVACUUM = "PostgreSQL autovacuum launcher"  # Its entry of lab/periods.json.
+AUTOVACUUM_RULE = (f"the median spacing of the worker starts modulo interval_s lies in [{AUTOVACUUM_REMAINDER_S[0]}, "
+                   f"{AUTOVACUUM_REMAINDER_S[1]}] s: at least {AUTOVACUUM_REMAINDER_S[0]} s from every multiple of the "
+                   "collection interval (the lead's answer to Q9, 2026-11-24)")
+
+
+def autovacuum_property(periods, interval_s):
+    """The property of the lead's answer to Q9 on the measured spacing of the autovacuum launcher's worker starts
+    (`periods` as periods_of gives them): AUTOVACUUM_RULE, with the median, its remainder modulo interval_s and ok;
+    ok is None, with why, when the spacing was not measured."""
+    item = next((e for e in periods if e["name"] == AUTOVACUUM), None)
+    out = {"rule": AUTOVACUUM_RULE, "interval_s": interval_s, "bounds_s": list(AUTOVACUUM_REMAINDER_S),
+           "median_s": None, "remainder_s": None, "ok": None}
+    if item is None or not item["spacings"]:
+        return {**out, "why": f"spacing not measured: {item['why']}" if item else f"no register entry {AUTOVACUUM}"}
+    median = item["spacings"]["median"]
+    remainder = round(median % interval_s, 6)
+    low, high = AUTOVACUUM_REMAINDER_S
+    return {**out, "median_s": median, "remainder_s": remainder, "ok": low <= remainder <= high}
+
+
+def autovacuum_problems(found):
+    """The problem of a measured spacing that does not have the property of Q9; none when it was not measured."""
+    if not found or found["ok"] is not False:
+        return []
+    return [f"{AUTOVACUUM}: the median spacing {found['median_s']:g} s of the worker starts lies "
+            f"{found['remainder_s']:g} s past a multiple of interval_s {found['interval_s']:g} s, outside "
+            f"[{found['bounds_s'][0]:g}, {found['bounds_s'][1]:g}] s (the lead's answer to Q9)"]
+
+
 def long_run(a, argv):
     raw, p = load(a.protocol)
     pv = for_vm(p, a.vm)
@@ -799,13 +1042,22 @@ def long_run(a, argv):
     result.update(scenario=a.scenario, profile=s["profile"], intensity=s["intensity"], rate=t["rate"],
                   minutes=a.minutes, events_planned=events)
     runner = collection.Events(pv, events, progress)
+    debug1 = {"rule": DEBUG1_RULE} if a.postgres_debug1 else None
+    if debug1 is not None:
+        result["postgres_debug1"] = debug1
     try:
-        result["pre_segment"] = collection.lab_json(pv, "segment", "--label", out.name + "-pre", "--dest", guest)
-        since = time.time()
         try:
-            result["run"] = traffic_run(pv, out, t, DRAIN_S, runner)
+            if debug1 is not None:
+                debug1_on(pv, debug1)
+            result["pre_segment"] = collection.lab_json(pv, "segment", "--label", out.name + "-pre", "--dest", guest)
+            since = time.time()
+            try:
+                result["run"] = traffic_run(pv, out, t, DRAIN_S, runner)
+            finally:
+                runner.close(out / "events.json")
         finally:
-            runner.close(out / "events.json")
+            if debug1 is not None:  # Also when the set step or the run failed: back to what was there before.
+                debug1_off(pv, debug1)
         result["events"] = [event_summary(r) for r in runner.records]
         windows = [(r["host_start_unix"] - 1, r["host_stopped_unix"] + p["events"]["grace_s"])
                    for r in runner.records if "host_start_unix" in r and "host_stopped_unix" in r]
@@ -818,6 +1070,7 @@ def long_run(a, argv):
         result["nginx_errors"] = nginx_errors(segment_file(guest, segment, "-nginx-error.log"), windows)
         result["journal_errors"] = journal_errors(segment_file(guest, journal, "-journal.txt"), windows)
         result["periods"] = periods_of([out])
+        result["autovacuum_property"] = autovacuum_property(result["periods"], p["interval_s"])
         result["error"] = result["run"]["error"]
         result["completed"] = result["error"] is None
     except (OSError, ValueError, KeyError, StopIteration, subprocess.SubprocessError) as error:
@@ -827,6 +1080,10 @@ def long_run(a, argv):
 
 def long_problems(r):
     out = traffic_problems(r)
+    debug1 = r.get("postgres_debug1")
+    if debug1 is not None:
+        out += [f"PostgreSQL debug1 logging (--postgres-debug1): {problem}" for problem in debug1_problems(debug1)]
+    out += autovacuum_problems(r.get("autovacuum_property"))
     for e in r.get("events", []):
         if e["executed"] is not True or e["effect_ok"] is not True:
             out.append(f"event {e['type']} at {e['start_s']:g} s: executed {e['executed']}, effect ok {e['effect_ok']}")
@@ -903,8 +1160,9 @@ JOURNAL = {
     "PostgreSQL autovacuum launcher": (
         "the line 'autovacuum: processing database' of each worker start, when PostgreSQL logs it into the journal",
         _matching(AUTOVACUUM_LINE),
-        "at its defaults PostgreSQL on Debian logs into its own file (/var/log/postgresql, pg_ctlcluster), not into "
-        "the journal, and a worker's start only at log_min_messages debug1: no line marks a worker start"),
+        "at its default logging PostgreSQL on Debian logs into its own file (/var/log/postgresql, pg_ctlcluster), not "
+        "into the journal, and a worker's start only at log_min_messages debug1 (lab_trial long --postgres-debug1 sets "
+        "both for one run): no line marks a worker start"),
 }
 # The entries whose processes leave no line in the guest journal, and why.
 NOT_IN_JOURNAL = {
@@ -959,16 +1217,71 @@ def periods_of(dirs):
     return out
 
 
+def run_interval(dirs):
+    """(interval_s, why) of the run directories: the interval_s of the protocol.json every long step writes; None and
+    why when one of them has none or they differ."""
+    found = set()
+    for d in dirs:
+        try:
+            found.add(json.loads((Path(d) / "protocol.json").read_text())["interval_s"])
+        except (OSError, ValueError, KeyError, TypeError) as error:
+            return None, f"no interval_s from {Path(d) / 'protocol.json'} ({type(error).__name__})"
+    if len(found) != 1:
+        return None, "the run directories' protocols differ in interval_s: " + ", ".join(map(str, sorted(found)))
+    return found.pop(), None
+
+
 def periods(a, argv):
     for d in a.run:
         if not sorted((Path(d) / "guest").glob("*-journal.txt.gz")):
             raise Refused(f"no fetched guest journal in {d} (guest/*-journal.txt.gz, which the long step fetches)")
-    print(json.dumps({"schema": PERIODS_SCHEMA, "runs": [str(d) for d in a.run], "periods": periods_of(a.run)},
-                     indent=1))
+    found = periods_of(a.run)
+    interval, why = run_interval(a.run)
+    prop = autovacuum_property(found, interval) if why is None else {
+        "rule": AUTOVACUUM_RULE, "interval_s": None, "bounds_s": list(AUTOVACUUM_REMAINDER_S), "median_s": None,
+        "remainder_s": None, "ok": None, "why": why}
+    print(json.dumps({"schema": PERIODS_SCHEMA, "runs": [str(d) for d in a.run], "periods": found,
+                      "autovacuum_property": prop}, indent=1))
     return 0
 
 
 # ------------------------------------------------------------------ record
+
+MAX_CONCURRENT_RULE = (
+    f"per profile {PROPOSED_CAP_FACTOR} x the most concurrent user sessions (active_max) of the measure phase of the "
+    "long run of the profile's high scenario, the last one given (the lead's answer to Q5: max_concurrent is a value "
+    "of G2, determined_at); a long run that reached its protocol's max_concurrent, or dropped a user session, gives a "
+    "lower bound only")
+
+
+def proposed_max_concurrent(p, longs, problems):
+    """MAX_CONCURRENT_RULE over the long runs `longs` ([(dir, result)]) of the record, the protocol `p`; a run that
+    did not measure gives null with why, a bound cap a problem."""
+    out = {"rule": MAX_CONCURRENT_RULE, "profiles": {}}
+    for profile in p["profiles"]:
+        high = [name for name, s in p["scenarios"].items() if s["profile"] == profile and s["intensity"] == "high"]
+        found = [(d, doc) for d, doc in longs if doc["scenario"] in high]
+        entry = {"scenarios": high, "run": None, "rate": None, "active_max": None, "max_concurrent": None,
+                 "protocol_max_concurrent": p["profiles"][profile]["max_concurrent"]}
+        if not found:
+            out["profiles"][profile] = {**entry, "why": "no long run of " + " or ".join(high)}
+            continue
+        d, doc = found[-1]
+        summary = doc.get("summary") or {}
+        active = summary.get("active_max")
+        dropped = ((summary.get("arrivals") or {}).get("measure") or {}).get("dropped")
+        entry.update(run=d.name, rate=doc.get("rate"), active_max=active,
+                     max_concurrent=None if active is None else PROPOSED_CAP_FACTOR * active)
+        if active is None:
+            entry["why"] = f"{d.name} measured no active_max in its measure phase"
+        elif dropped or active >= entry["protocol_max_concurrent"]:
+            problems.append(f"{d.name}: the long run reached max_concurrent {entry['protocol_max_concurrent']} "
+                            f"(active_max {active}, {dropped or 0} user sessions of the measure phase dropped): "
+                            f"{entry['max_concurrent']} for profile {profile} is a lower bound; G2 runs it with a cap "
+                            "that does not bind (proposal 10.3)")
+        out["profiles"][profile] = entry
+    return out
+
 
 def read_result(d):
     try:
@@ -1029,8 +1342,11 @@ def record(a, argv):
         problems.append("the VM's QEMU process changed between or during the runs (a restart of the VM)")
     pooled = periods_of([d for d, _ in steps["long"]]) if steps["long"] else None
     for item in pooled or []:
-        if item["name"] in ("hyptcn-lab-udrzba.timer", "PostgreSQL autovacuum launcher") and not item["spacings"]:
+        if item["name"] in ("hyptcn-lab-udrzba.timer", AUTOVACUUM) and not item["spacings"]:
             problems.append(f"{item['name']}: spacing not measured: {item['why']}")
+    autovacuum = autovacuum_property(pooled, p["interval_s"]) if pooled else None
+    problems += autovacuum_problems(autovacuum)
+    caps = proposed_max_concurrent(p, steps["long"], problems)
     guest = {"vm": runs[0][1]["vm"], "domain": runs[0][1]["domain"],
              "identity": steps["deploy"][-1][1].get("guest") if steps["deploy"] else None}
     # n: the run directories assembled (each one step of the lab test).
@@ -1039,7 +1355,8 @@ def record(a, argv):
            "command": shlex.join(["scripts/lab_trial.py", *map(str, argv)]), "n": len(runs),
            "protocol": runs[0][1]["protocol"], "protocol_sha256": protocols[0],
            "values": {"runs": [{"dir": str(d), **doc} for d, doc in runs], "saturation": saturation,
-                      "proposed_rate": proposed, "periods": pooled, "judgment": judgment()},
+                      "proposed_rate": proposed, "proposed_max_concurrent": caps, "periods": pooled,
+                      "autovacuum_property": autovacuum, "judgment": judgment(), "lead": lead()},
            "problems": problems, "note": NOTE}
     write(target, doc)
     print(json.dumps({"record": str(target), "runs": len(runs), "problems": len(problems)}), flush=True)
@@ -1069,7 +1386,8 @@ def main(argv=None):
         q.add_argument("--out", type=Path, required=True, help="the run directory: new, outside data/collections")
         return q
     vm_step("deploy", "labctl deploy, the health check, the guest's identity and the QEMU's swap state")
-    q = vm_step("saturation", "a step test over increasing rates; stops after the first step whose peak fails")
+    q = vm_step("saturation", "the saturation series (Q5): increasing rates up to the first step that fails on the "
+                              "server, then bisection, on a copy of the protocol whose max_concurrent does not bind")
     q.add_argument("--profile", required=True)
     q.add_argument("--scenario", required=True, help="a scenario of the profile: its mix is run")
     q.add_argument("--rates", required=True, help="comma-separated, increasing: user sessions per second at envelope "
@@ -1083,6 +1401,9 @@ def main(argv=None):
         q.add_argument("--minutes", type=float, required=True, help="the measured part, after the protocol's warmup")
         if name == "long":
             q.add_argument("--events", type=int, required=True, help="events of the run, a count of events.per_session")
+            q.add_argument("--postgres-debug1", action="store_true",
+                           help="PostgreSQL in the guest logs at debug1 into the journal for this run only, so the "
+                                "worker starts of autovacuum are measured; reset after it (DEBUG1_RULE, recorded)")
     q = sub.add_parser("periods", help="the real periods of lab/periods.json from the journals of long runs")
     q.add_argument("--run", type=Path, nargs="+", required=True)
     q = sub.add_parser("record", help="one record of stage skuska from run directories")

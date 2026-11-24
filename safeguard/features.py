@@ -17,7 +17,7 @@ from features.archive import BEHAVIOR_NAMES
 from features.contract import validate_sidecar
 from features.perbin import Memslots
 from features.qualification import CLASSES, LOCAL_SCALED
-from features.snapshot import MENA, SCHEMA, _vsetky_hlavicky, sidecar_cesta, vektor_snimky
+from features.snapshot import MENA, SCHEMA, _vsetky_hlavicky, counted_bin, sidecar_cesta, vektor_snimky
 from features.windows import BIN_PRIZNAKY, perbin_zo_sidecaru
 from features.quality import BEHAVIOR_POLICY
 
@@ -48,12 +48,19 @@ DIFFERENCE_POLICY = (
     "measured row before it in the same session (valid, no full snapshot, with a predecessor), across an excluded row "
     "too, as features/qualification.py takes it; a scoring window with a differenced column needs that row before its "
     "first row (WindowBuffer anchored), at a session's start one measured row more than window_rows")
-# Question Q8 to the lead, its revised proposal (2026-11-23T07:51Z, provisional until the lead answers): the rule
-# channel judges a column of class rule_differenced by its change since the session's first measured row, so a boot
-# with another constant level changes nothing while a persistent step stays outside the range for every row after it.
+# Question Q8, its revised proposal (2026-11-23T07:51Z), accepted by the lead 2026-11-24: the rule channel judges a
+# column of class rule_differenced by its change since the session's first measured row, so a boot with another
+# constant level changes nothing while a persistent step stays outside the range for every row after it.
 SESSION_START_POLICY = (
     "a column of class rule_differenced is judged by its change since the session's first measured row: its value "
     "minus the value of the first measured row of the same session (0 in that row)")
+# The lead's answer to question Q8 (2026-11-24): the manifest states what this rule cannot see. rule_channel() gives it
+# as the rule channel's limitation when a column of class rule_differenced exists, and safeguard/training.py adds it
+# to the manifest's limitations.
+SESSION_START_LIMITATION = (
+    "A column of class rule_differenced is judged by its change since the session's first measured row, so a state "
+    "already present in that row is never seen by this rule; in a live run that row is the first measured row after "
+    "the detector starts (the lead's answer to question Q8, 2026-11-24).")
 MEASURED_ROWS = (
     "valid, no full snapshot and with a predecessor, in the order of seq (as the normalizer's rows of train and "
     "features/qualification.py); a change since the session's first measured row is taken over those rows of one "
@@ -263,8 +270,11 @@ def frames_from_archive(data, session_id):
     return result
 
 
-def frame_from_snapshot(raw_dir, profile, seq, previous=None, session_id=None, *, max_gap_s=7.5):
-    """Extract one raw frame using the same semantic parser as archive creation."""
+def frame_from_snapshot(raw_dir, profile, seq, previous=None, session_id=None, *, max_gap_s=7.5, min_bin_pages):
+    """Extract one raw frame using the same semantic parser as archive creation. min_bin_pages has no default
+    (question Q10 to the lead, 2026-11-24): the bins the eight memory columns come from (features/snapshot.py
+    pamat_zo_sidecaru), the live run's from its bundle (safeguard/bundle.py Bundle.min_bin_pages) as the audit's from
+    the protocol; None means every bin (schemas 1 and 2), and a legacy caller passes it explicitly."""
     _, gap = _temporal(1, max_gap_s)
     seq = _integer(seq, "sequence")
     raw_dir = str(raw_dir)
@@ -299,7 +309,7 @@ def frame_from_snapshot(raw_dir, profile, seq, previous=None, session_id=None, *
             if not adjacent or not previous["quality"]["behavior_valid"]:
                 previous = None
     vector, state, notes = vektor_snimky(raw_dir, str(profile), seq, previous,
-                                         predch_krizove=cross_view)
+                                         predch_krizove=cross_view, min_bin_pages=min_bin_pages)
     ids, local = perbin_zo_sidecaru(sidepath)
     quality = deepcopy(state["quality"])
     quality.update(read_errors=side["stats"]["read_errors"],
@@ -528,9 +538,11 @@ class NormalizationRule:
 
     def split_bins(self, bins):
         """(scored, unscored) of a layout's bins [(bin, pages), ...] in their order: a bin of fewer than min_bin_pages
-        pages is neither fitted nor scored; without a minimum (legacy_schema_2) every bin is scored."""
+        pages is neither fitted nor scored; without a minimum (legacy_schema_2) every bin is scored. The predicate is
+        features/snapshot.py counted_bin, the one the extractor's eight memory columns take (question Q10 to the
+        lead, 2026-11-24), with the same boundary."""
         bins = tuple((int(b), int(pages)) for b, pages in bins)
-        scored = tuple(b for b in bins if self.min_bin_pages is None or b[1] >= self.min_bin_pages)
+        scored = tuple(b for b in bins if counted_bin(b[1], self.min_bin_pages))
         return scored, tuple(b for b in bins if b not in scored)
 
     def to_dict(self):
@@ -779,7 +791,8 @@ def rule_channel(sessions, classes, *, k, n):
     (MEASURED_ROWS) of the sessions of RULE_RANGE_ROLES: the value (class rule) or the change since the session's
     first measured row (class rule_differenced, SESSION_START_POLICY). `sessions` maps each role to [(record, frames)]
     (another role is not read), `classes` the 20 columns of GLOBAL_NAMES to their classes; k and n are the alarm rule
-    of the neural channel (RULE_CHANNEL_RULE)."""
+    of the neural channel (RULE_CHANNEL_RULE). `limitation` is SESSION_START_LIMITATION when a column of class
+    rule_differenced exists, otherwise None (the lead's answer to question Q8)."""
     if type(k) is not int or type(n) is not int or not 1 <= k <= n:
         raise ValueError("rule channel: k and n are integers with 1 <= k <= n")
     ranges = {}
@@ -796,5 +809,7 @@ def rule_channel(sessions, classes, *, k, n):
             raise ValueError(f"rule channel: column {name} has no measured row in " + " and ".join(RULE_RANGE_ROLES))
         ranges[name] = {"quantity": quantity, "min": float(min(values)), "max": float(max(values)),
                         "rows": len(values)}
+    differenced = any(classes[name] == "rule_differenced" for name in GLOBAL_NAMES)
     return {"columns": list(ranges), "ranges": ranges, "k": k, "n": n, "roles": list(RULE_RANGE_ROLES),
-            "rows": MEASURED_ROWS, "rule": RULE_CHANNEL_RULE}
+            "rows": MEASURED_ROWS, "rule": RULE_CHANNEL_RULE,
+            "limitation": SESSION_START_LIMITATION if differenced else None}

@@ -221,7 +221,7 @@ def test_archive_roundtrip_preserves_frames_and_requires_quality(tmp_path):
 def test_live_extraction_resets_predecessor_on_gap_and_preserves_checks(monkeypatch, tmp_path, cross_view_complete):
     calls, keys = [], []
     frame = sample(1)
-    def extract(raw, profile, seq, previous, predch_krizove=None):
+    def extract(raw, profile, seq, previous, predch_krizove=None, *, min_bin_pages):
         calls.append(previous)
         keys.append(predch_krizove)
         row = sample(seq, predecessor=previous is not None)
@@ -249,9 +249,9 @@ def test_live_extraction_resets_predecessor_on_gap_and_preserves_checks(monkeypa
         (tmp_path / f"{head['seq']}.json").write_text(json.dumps(side))
     monkeypatch.setattr(features, "_vsetky_hlavicky", lambda _: heads)
     monkeypatch.setattr(features, "vektor_snimky", extract)
-    one, state = features.frame_from_snapshot(tmp_path, "unused", 1)
-    two, state = features.frame_from_snapshot(tmp_path, "unused", 2, state)
-    four, state = features.frame_from_snapshot(tmp_path, "unused", 4, state)
+    one, state = features.frame_from_snapshot(tmp_path, "unused", 1, min_bin_pages=None)
+    two, state = features.frame_from_snapshot(tmp_path, "unused", 2, state, min_bin_pages=None)
+    four, state = features.frame_from_snapshot(tmp_path, "unused", 4, state, min_bin_pages=None)
     assert calls[0] is None and calls[1] is not None and calls[2] is None
     assert keys == [None, frozenset({"k1"}), None]
     assert not one.has_predecessor and two.has_predecessor and not four.has_predecessor
@@ -259,7 +259,7 @@ def test_live_extraction_resets_predecessor_on_gap_and_preserves_checks(monkeypa
     assert four.quality["inconclusive"] == (["text_integrity"] if cross_view_complete
                                            else ["text_integrity", "process_cross_view"])
     with pytest.raises(ValueError, match="non-increasing"):
-        features.frame_from_snapshot(tmp_path, "unused", 4, state)
+        features.frame_from_snapshot(tmp_path, "unused", 4, state, min_bin_pages=None)
 
 
 def _live_sidecars(tmp_path, seqs):
@@ -285,7 +285,7 @@ def _live_sidecars(tmp_path, seqs):
 
 def test_live_extraction_confirms_cross_view_after_invalid_predecessor(monkeypatch, tmp_path):
     calls = []
-    def extract(raw, profile, seq, previous, predch_krizove=None):
+    def extract(raw, profile, seq, previous, predch_krizove=None, *, min_bin_pages):
         calls.append((previous, predch_krizove))
         row = sample(seq, predecessor=previous is not None, valid=seq != 1)
         state = {"pids": {1}, "mod_total": 1, "quality": deepcopy(row.quality),
@@ -294,11 +294,33 @@ def test_live_extraction_confirms_cross_view_after_invalid_predecessor(monkeypat
     heads = _live_sidecars(tmp_path, (1, 2))
     monkeypatch.setattr(features, "_vsetky_hlavicky", lambda _: heads)
     monkeypatch.setattr(features, "vektor_snimky", extract)
-    _, state = features.frame_from_snapshot(tmp_path, "unused", 1)
-    features.frame_from_snapshot(tmp_path, "unused", 2, state)
+    _, state = features.frame_from_snapshot(tmp_path, "unused", 1, min_bin_pages=None)
+    features.frame_from_snapshot(tmp_path, "unused", 2, state, min_bin_pages=None)
     # The invalid predecessor drops out of the model inputs, not out of the
     # cross-view confirmation.
     assert calls == [(None, None), (None, frozenset({"hidden"}))]
+
+
+def test_live_extraction_takes_the_bins_of_its_caller_and_has_no_default(monkeypatch, tmp_path):
+    """Question Q10 to the lead (2026-11-24), the live path: frame_from_snapshot gives the extraction
+    (features/snapshot.py vektor_snimky) the min_bin_pages its caller passes, the bundle's in safeguard/runtime.py
+    run_directory, and None (every bin) only when the caller says None; the keyword has no default."""
+    import inspect
+    parameter = inspect.signature(features.frame_from_snapshot).parameters["min_bin_pages"]
+    assert (parameter.kind, parameter.default) == (inspect.Parameter.KEYWORD_ONLY, inspect.Parameter.empty)
+    seen = []
+
+    def extract(raw, profile, seq, previous, predch_krizove=None, *, min_bin_pages):
+        seen.append((seq, min_bin_pages))
+        row = sample(seq, predecessor=previous is not None)
+        return row.vector, {"pids": {1}, "mod_total": 1, "quality": deepcopy(row.quality), "layout": row.layout,
+                            "krizove_kluce": frozenset()}, []
+    heads = _live_sidecars(tmp_path, (1, 2))
+    monkeypatch.setattr(features, "_vsetky_hlavicky", lambda _: heads)
+    monkeypatch.setattr(features, "vektor_snimky", extract)
+    _, state = features.frame_from_snapshot(tmp_path, "unused", 1, min_bin_pages=1024)
+    features.frame_from_snapshot(tmp_path, "unused", 2, state, min_bin_pages=None)
+    assert seen == [(1, 1024), (2, None)]
 
 
 @pytest.mark.parametrize("field,value", [("read_errors", 1), ("filled_zero", 1),

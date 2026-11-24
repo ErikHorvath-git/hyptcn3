@@ -132,31 +132,63 @@ def host(tmp_path, monkeypatch):
     return host
 
 
-def cgroup(host, pid, path, swap):
-    (host.proc / str(pid) / "cgroup").write_text(f"0::{path}\n")
+# Package B11 (the lead's instruction on F4 of B5a, his answer to Q26): what a fake cgroup is charged with. A process
+# faults its pages in the cgroup it runs in; a process moved later brings none (busctl in the host fixture).
+RSS_ANON_KB, RSS_FILE_KB = 800000, 30000  # A fake QEMU's RssAnon, and the file pages its VmRSS adds.
+DAEMON_ANON_KB = 20000  # A fake libvirtd's anonymous memory: it only adds to its cgroup's anon.
+PAGE_CACHE = 64 << 20  # Bytes of page cache (the disk images) every fake cgroup's memory.current counts besides anon.
+
+
+def cgroup(host, pid, path, swap, anon_kb=0):
+    """Process `pid` in the cgroup `path`: its /proc/<pid>/cgroup and the cgroup's cgroup.procs (it leaves the
+    cgroup.procs of the one it ran in), memory.swap.max `swap` (None: no file), and `anon_kb` more kB of anonymous
+    memory charged there (memory.stat anon; memory.current adds PAGE_CACHE)."""
+    entry = host.proc / str(pid) / "cgroup"
+    if entry.exists():
+        procs = host.cgroups / entry.read_text().split("::", 1)[1].strip().lstrip("/") / "cgroup.procs"
+        procs.write_text("".join(f"{p}\n" for p in procs.read_text().split() if p != str(pid)))
+    entry.write_text(f"0::{path}\n")
     directory = host.cgroups / path.lstrip("/")
     directory.mkdir(parents=True, exist_ok=True)
     if swap is not None:
         (directory / "memory.swap.max").write_text(swap + "\n")
+    procs, stat = directory / "cgroup.procs", directory / "memory.stat"
+    procs.write_text((procs.read_text() if procs.exists() else "") + f"{pid}\n")
+    anon = (int(re.search(r"^anon (\d+)$", stat.read_text(), re.M)[1]) if stat.exists() else 0) + (anon_kb << 10)
+    stat.write_text(f"anon {anon}\nfile {PAGE_CACHE}\n")
+    (directory / "memory.current").write_text(f"{anon + PAGE_CACHE}\n")
 
 
-def qemu(host, pid, path, swap, domain="hyptcn-lab", swap_kb=0):
-    """A fake QEMU of `domain` in the cgroup `path` with VmSwap `swap_kb` (None: no status file)."""
+def qemu(host, pid, path, swap, domain="hyptcn-lab", swap_kb=0, rss_anon_kb=RSS_ANON_KB):
+    """A fake QEMU of `domain` born in the cgroup `path` with VmSwap `swap_kb` (None: no status file) and RssAnon
+    `rss_anon_kb`, all of it charged there."""
     (host.proc / str(pid)).mkdir(parents=True)
     (host.proc / str(pid) / "cmdline").write_bytes(
         b"/usr/bin/qemu-system-x86_64\0-name\0guest=" + domain.encode() + b",debug-threads=on\0")
     if swap_kb is not None:
-        (host.proc / str(pid) / "status").write_text(f"Name:\tqemu-system-x86\nVmSwap:\t{swap_kb:8d} kB\n")
-    cgroup(host, pid, path, swap)
+        (host.proc / str(pid) / "status").write_text(
+            f"Name:\tqemu-system-x86\nVmRSS:\t{rss_anon_kb + RSS_FILE_KB:8d} kB\nRssAnon:\t{rss_anon_kb:8d} kB\n"
+            f"VmSwap:\t{swap_kb:8d} kB\n")
+    cgroup(host, pid, path, swap, rss_anon_kb)
 
 
 def daemon(host, pid, path, swap="0", exe="/usr/sbin/libvirtd", uid=UID):
-    """A fake libvirtd (its exe and uid) in the cgroup `path`, and the pid file that names it."""
+    """A fake libvirtd (its exe, cmdline and uid) in the cgroup `path`, and the pid file that names it."""
     (host.proc / str(pid)).mkdir(parents=True, exist_ok=True)
     (host.proc / str(pid) / "exe").symlink_to(exe)
+    (host.proc / str(pid) / "cmdline").write_bytes(exe.encode() + b"\0--timeout=120\0")
     (host.proc / str(pid) / "status").write_text(f"Name:\tlibvirtd\nUid:\t{uid}\t{uid}\t{uid}\t{uid}\n")
-    cgroup(host, pid, path, swap)
+    cgroup(host, pid, path, swap, DAEMON_ANON_KB)
     (host.runtime / "libvirt/libvirtd.pid").write_text(str(pid))
+
+
+def memory(path, qemus, anon_kb):
+    """The record of labctl.charge for the fake cgroup `path` charged with `anon_kb` kB, holding the QEMU processes
+    `qemus` ((pid, RssAnon in kB) each)."""
+    rss = sum(kb for _, kb in qemus)
+    return {"cgroup": path, "memory_current": (anon_kb << 10) + PAGE_CACHE, "anon": anon_kb << 10,
+            "qemu": [{"pid": pid, "vm_rss_kb": kb + RSS_FILE_KB, "rss_anon_kb": kb} for pid, kb in qemus],
+            "rss_anon_kb": rss, "share": round(anon_kb / rss, 3), "charged": anon_kb >= .9 * rss, "charged_share": .9}
 
 
 @pytest.mark.parametrize("place", [DAEMON_UNIT, f"{MANAGER}/app.slice/{SCOPE}"], ids=["daemon_unit", "qemu_scope"])
@@ -168,8 +200,10 @@ def test_qemu_with_swap_already_off_is_left_where_it_is(host, place):
     # Package B9: the way that holds QEMU, and way 2 (a scope of an earlier move) is temporary (finding F4 of B5a).
     way = ({"way": "unit", "temporary": False} if place == DAEMON_UNIT else
            {"way": "scope", "temporary": True, "note": labctl.TEMPORARY})
+    # Package B11: and what its cgroup is charged with (the lead's answer to Q26), here all of its RssAnon.
     assert record == {"domain": "hyptcn-lab", "qemu_pid": 4242, "cgroup_before": place, "swap_max_before": "0",
-                      "scope": None, "cgroup": place, "memory_swap_max": "0", "vm_swap_kb": 0, **way}
+                      "scope": None, "cgroup": place, "memory_swap_max": "0", "vm_swap_kb": 0, **way,
+                      "memory": memory(place, [(4242, RSS_ANON_KB)], RSS_ANON_KB)}
     assert host.calls == []
 
 
@@ -181,9 +215,14 @@ def test_qemu_is_moved_unless_a_cgroup_labctl_made_forbids_swap(host, before, sw
     qemu(host, 4242, before, swap)
     record = labctl.Lab().qemu_swap_off()
     assert [call[:3] + call[8:9] for call in host.calls] == [["busctl", "--user", "call", SCOPE]]
+    # Package B11: the moved process brought none of its pages into the scope (finding F4 of B5a); not an error for a
+    # QEMU this command did not start.
+    moved = memory(f"{MANAGER}/app.slice/{SCOPE}", [(4242, RSS_ANON_KB)], 0)
+    assert (moved["share"], moved["charged"]) == (0, False)
     assert record == {"domain": "hyptcn-lab", "qemu_pid": 4242, "cgroup_before": before, "swap_max_before": swap,
                       "scope": SCOPE, "cgroup": f"{MANAGER}/app.slice/{SCOPE}", "memory_swap_max": "0", "vm_swap_kb": 0,
-                      "way": "scope", "temporary": True, "note": labctl.TEMPORARY}  # Package B9, F4 of B5a.
+                      "way": "scope", "temporary": True, "note": labctl.TEMPORARY,  # Package B9, F4 of B5a.
+                      "memory": moved}
 
 
 @pytest.mark.parametrize("before, swap, swap_kb, text", [
@@ -348,8 +387,12 @@ def test_a_failed_swap_step_ends_the_command_with_the_owner_command_after_its_ot
 
 # Way 1: the session daemon of libvirt in hyptcn-libvirtd.service before every virsh start.
 
-def test_the_daemon_step_comes_right_before_every_virsh_start_and_only_then(monkeypatch):
-    """Lab.start(): only a shut-off domain is started, and the daemon is made sure of right before."""
+@pytest.mark.parametrize("daemon_runs", [True, False], ids=["a_daemon_runs", "no_daemon"])
+def test_the_daemon_step_comes_right_before_every_virsh_start_and_only_then(monkeypatch, daemon_runs):
+    """Lab.start(): only a shut-off domain is started, and the daemon is made sure of right before. Package B11 (the
+    lead's instruction on F4 of B5a): with no daemon running, before the first virsh call instead, and only once."""
+    monkeypatch.setattr(labctl, "session_daemon",
+                        lambda: (711993, DAEMON_UNIT, "0") if daemon_runs else (None, None, None))
     for state, before_wait in (("shut off", ["domstate", "libvirtd", "start"]), ("running", ["domstate"])):
         steps = []
         monkeypatch.setattr(labctl.Lab, "owned", lambda self: steps.append("owned"))
@@ -359,7 +402,10 @@ def test_the_daemon_step_comes_right_before_every_virsh_start_and_only_then(monk
         monkeypatch.setattr(labctl.Lab, "wait", lambda self: steps.append("wait"))
         monkeypatch.setattr(labctl.Lab, "guest", lambda self, *a, **k: steps.append("guest") or "")
         labctl.Lab().start()
-        assert steps == ["owned", *before_wait, "wait", "guest"], state
+        if daemon_runs:
+            assert steps == ["owned", *before_wait, "wait", "guest"], state
+        else:
+            assert steps == ["libvirtd", "owned", *(s for s in before_wait if s != "libvirtd"), "wait", "guest"], state
 
 
 def test_a_daemon_in_its_unit_is_left_as_it_is(host, capsys):

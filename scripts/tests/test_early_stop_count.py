@@ -1,5 +1,6 @@
 """The campaign's count of the early stop (protocol v5, package B9b, the fix round of agent Z: F5 of the verification of
-B9b, question Q24 decided by its proposal; scripts/campaign.py EARLY_STOP_RULE).
+B9b, question Q24, accepted by the lead 2026-11-24; scripts/campaign.py EARLY_STOP_RULE). Package B11 (agent G): the
+count of a continuation runs on from the paused campaign it continues (the accepted text of Q24).
 
 After every audit of a completed capture the runner writes marked/<session id>.json, sums the files of every VM since
 the count's restart point and asks features/audit_policy.py early_stop (early_stop_check, marked_totals,
@@ -52,9 +53,11 @@ def audit(directory, session, marked=None, occurrences=None, codes=()):
     return {"acceptance": {"codes": list(codes)}, "marked_rows_by_type": counts, "event_occurrences_by_type": seen}, report
 
 
-def check(directory, vm, session, p, marked=None, occurrences=None, codes=()):
+def check(directory, vm, session, p, marked=None, occurrences=None, codes=(), continues=None):
+    """early_stop_check after an audit of `session` (audit); continues: the record of the paused campaign a
+    continuation continues (campaign.json continues), None for a campaign that continues none (package B11)."""
     values, report = audit(directory, session, marked, occurrences, codes)
-    return camp.early_stop_check(directory, vm, {"session_id": session}, values, p, report)
+    return camp.early_stop_check(directory, vm, {"session_id": session}, values, p, report, continues=continues)
 
 
 def ending(directory, kind, date, *, early):
@@ -109,9 +112,9 @@ def test_a_re_audit_replaces_its_own_file(directory):
 
 
 def test_the_count_starts_again_after_the_latest_ending_with_an_early_stop_trigger(directory):
-    """Q24, the executor's judgment: the count starts again after the campaign's latest recorded ending whose record
-    holds an early-stop trigger (its date in endings/); an ending without one does not restart it, and the files of
-    the sessions audited before the restart point no longer count."""
+    """Q24, accepted by the lead 2026-11-24: the count starts again after the campaign's latest recorded ending whose
+    record holds an early-stop trigger (its date in endings/); an ending without one does not restart it, and the
+    files of the sessions audited before the restart point no longer count."""
     p = protocol(**{TYPE: RATE})
     assert check(directory, "a", "kampan_01_a", p, 1, 1) is None
     assert check(directory, "b", "kampan_02_b", p, 1, 1) is None
@@ -135,16 +138,72 @@ def test_the_count_starts_again_after_the_latest_ending_with_an_early_stop_trigg
                                        f"{later} of the ending stopped of ")
 
 
-def test_a_continuation_counts_only_its_own_sessions(directory, tmp_path):
-    """Q24 and the coordinator's word on it (the executor's judgment): a continuation (init --continue) has a campaign
-    directory of its own, and its count holds only its own audited sessions, never the paused campaign's files."""
-    p = protocol(**{TYPE: RATE})
-    assert check(directory, "a", "kampan_01_a", p, 1, 1) is None
+def continuation_of(directory, tmp_path):
+    """A continuation's directory (with events/ for its states) and its record of the paused campaign `directory`
+    (campaign.json continues: the campaign, its directory and the sha256 of its campaign.json), as take_over writes
+    it."""
+    write_new(directory / "campaign.json", {"schema": "hyptcn3/collection-campaign/1", "id": directory.name})
     continuation = tmp_path / "campaigns" / "pokracovanie"
     (continuation / "events").mkdir(parents=True)
-    assert check(continuation, "a", "pokracovanie_01_a", p, 1, 1) is None  # 1 of 1 alone, not 2 of 2 with the other.
-    totals, counted, _ = camp.marked_totals(continuation, p, None)
-    assert (totals[TYPE], counted) == ({"marked": 1, "occurrences": 1}, ["pokracovanie_01_a"])
+    return continuation, {"campaign": directory.name, "directory": str(directory),
+                          "campaign_sha256": digest(directory / "campaign.json")}
+
+
+def test_a_continuation_counts_on_from_the_paused_campaign_until_its_own_early_stop(directory, tmp_path):
+    """Q24, accepted by the lead 2026-11-24, whose text counts every audited session "s náhradami aj s pokračovaním"
+    (package B11; before it the coordinator's word that a continuation counts only its own sessions): until its own
+    first ending with an early-stop trigger, a continuation's count also holds the files of the paused campaign it
+    continues, audited after that campaign's restart point. At the rate 0.1 one marked row in the paused campaign and
+    one in the continuation are 2 in 2 occurrences at the bound 2, no stop, and are printed with the paused campaign
+    named; a third stops (3 of 3, above 2), and the stop names the paused campaign. After the continuation's own
+    early-stop ending only its files audited after it count, and the paused campaign's no longer do."""
+    p = protocol(**{TYPE: RATE})
+    assert check(directory, "a", "kampan_01_a", p, 1, 1) is None  # The paused campaign's audit: 1 of 1, bound 1.
+    continuation, continues = continuation_of(directory, tmp_path)
+    assert check(continuation, "a", "pokracovanie_01_a", p, 1, 1, continues=continues) is None  # 2 of 2, bound 2.
+    shown = state(continuation, "a")
+    assert shown["marked_rows_counts"][TYPE] == {"marked": 2, "occurrences": 2, "rate": RATE, "bound": 2}
+    assert (shown["marked_rows_since"], shown["marked_rows_sessions"], shown["marked_rows_continued"]) == (
+        None, 2, "kampan")
+    assert "(with those of the paused campaign kampan)" in shown["message"]
+    stop = check(continuation, "b", "pokracovanie_02_b", p, 1, 1, continues=continues)  # 3 of 3, above 2.
+    assert {k: v for k, v in stop.items() if k != "rule"} == {
+        "cause": "marked_rows", "type": TYPE, "count": 3, "bound": 2, "occurrences": 3, "rate": RATE, "since": None,
+        "sessions": 3, "continued": "kampan"}
+    assert ("over 3 audited sessions since the start of the campaign (with those of the paused campaign kampan, which "
+            "this continuation continues), above the bound 2") in camp.early_stop_cause(stop)
+    moment = datetime.fromisoformat(camp.now())
+    ending(continuation, "stopped", (moment + timedelta(seconds=1)).isoformat(), early=True)
+    values, report = audit(continuation, "pokracovanie_03_a", 1, 1)
+    write_new(continuation / "marked" / "pokracovanie_03_a.json", {
+        "schema": camp.MARKED_SCHEMA, "vm": "a", "session": "pokracovanie_03_a",
+        "audited_at": (moment + timedelta(seconds=3)).isoformat(), "marked_rows_by_type": values[
+            "marked_rows_by_type"], "event_occurrences_by_type": values["event_occurrences_by_type"],
+        "audit": str(report), "audit_sha256": digest(report)})
+    assert check(continuation, "a", "pokracovanie_04_a", p, 0, 0, continues=continues) is None
+    shown = state(continuation, "a")
+    assert shown["marked_rows_counts"][TYPE]["marked"] == shown["marked_rows_counts"][TYPE]["occurrences"] == 1
+    assert (shown["marked_rows_since"], shown["marked_rows_sessions"], shown["marked_rows_continued"]) == (
+        (moment + timedelta(seconds=1)).isoformat(), 1, None)
+
+
+@pytest.mark.parametrize("case", ["gone", "changed"])
+def test_a_paused_campaign_that_cannot_be_counted_is_an_error_by_name(directory, tmp_path, case):
+    """EARLY_STOP_RULE (package B11): a continuation counts on from the paused campaign only where and as the
+    continuation froze it; a directory without that campaign.json, or with another sha256 of it, cannot be counted, so
+    the early stop cannot be decided: an error by name, never a count of 0."""
+    p = protocol(**{TYPE: RATE})
+    continuation, continues = continuation_of(directory, tmp_path)
+    if case == "gone":
+        (directory / "campaign.json").unlink()
+    else:
+        (directory / "campaign.json").write_text("{}")
+    with pytest.raises(ValueError) as error:
+        check(continuation, "a", "pokracovanie_01_a", p, 0, 0, continues=continues)
+    assert str(error.value) == (
+        "the early stop after the audit of pokracovanie_01_a cannot be decided: the paused campaign kampan that this "
+        f"campaign continues is not at {directory} as the continuation froze it (its campaign.json missing or with "
+        "another sha256), so its count of the early stop cannot be told (scripts/campaign.py EARLY_STOP_RULE)")
 
 
 def test_a_null_rate_prints_the_count_and_does_not_stop(directory):

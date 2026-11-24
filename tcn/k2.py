@@ -22,7 +22,8 @@ the test and the three outcomes tcn/tvrdenia.py's rozhodni, unchanged.
     k2_values(protocol, plans, *, models, methods, calibration, clean, budget, mode)
                                 the shares per boot of every method, M as the median of its seeds, and D per boot
                                 against every method of analysis.k2a.compare and analysis.k2b.compare (K2_RULE), with
-                                the table by class and length and the volume class (descriptive)
+                                the table by class and length, the volume class and the finding of the volume class
+                                (descriptive; volume_finding, VOLUME_FINDING_RULE: the lead's answer to Q14)
     k2(protocol, values, *, mode)
                                 K2a and K2b by tcn.tvrdenia.rozhodni
     z1_criterion(plan, calibration, clean, budget, *, protocol)
@@ -91,6 +92,16 @@ CRITERION_RULE = (
     "threshold (DETECTION_RULE), detected and evaluable over planned, pooled over the whole role and over both classes "
     "whenever one class of dev is evaluated (SHARE_RULE, POOL_RULE); with no class of dev evaluated Z1 has no "
     "criterion; these interventions never enter K2")
+# The lead's answer to question Q14 (2026-11-24): G3a reports the share of the volume class by class and length, and
+# a share above one half at some length is a finding for the lead (the lead's number, VOLUME_FINDING_RULE).
+VOLUME_FINDING_SHARE = 0.5
+VOLUME_FINDING_RULE = (
+    "the report of the volume class (the lead's answer to question Q14, 2026-11-24): every row of the table by class "
+    "and length of the carrier roles holds volume_share, its interventions of the volume class (tcn/zasahy.py "
+    "VALIDITY_RULE) over its planned ones (None when it has none); a row whose share lies above "
+    f"{VOLUME_FINDING_SHARE} (the lead's number: above one half at some length) is a cell of volume_finding, a finding "
+    "for the lead that G3a reports (the final command in mode rehearsal); it is descriptive, decides nothing and never "
+    "changes the predicate, which is valid from G1 on and never tuned")
 
 
 # ------------------------------------------------------------------ thresholds and detections
@@ -295,15 +306,27 @@ def k2_values(protocol, plans, *, models, methods, calibration, clean, budget, m
         record.update(shares=shares, model={"labels": [model_labels[seed] for seed in seeds], "median": median},
                       values={claim: {entry: {boot: median[boot] - shares[label][boot] for boot in boots}
                                       for entry, label in compare[claim].items()} for claim in CLAIMS})
-    record.update(table=_table(interventions, detected, labels, model_labels, seeds, keys, status),
-                  volume=_volume(interventions, detected, labels, keys))
+    table = _table(interventions, detected, labels, model_labels, seeds, keys, status)
+    record.update(table=table, volume=_volume(interventions, detected, labels, keys),
+                  volume_finding=volume_finding(table))
     return record
 
 
+def volume_finding(table):
+    """VOLUME_FINDING_RULE over the rows of _table: {bound, cells [{class, length, volume, planned, share}] of every
+    row whose volume_share lies above the bound, in the order of the table, finding (whether there is a cell),
+    rule}."""
+    cells = [{"class": row["class"], "length": row["length"], "volume": row["volume"], "planned": row["planned"],
+              "share": row["volume_share"]} for row in table
+             if row["volume_share"] is not None and row["volume_share"] > VOLUME_FINDING_SHARE]
+    return {"bound": VOLUME_FINDING_SHARE, "cells": cells, "finding": bool(cells), "rule": VOLUME_FINDING_RULE}
+
+
 def _table(interventions, detected, labels, model_labels, seeds, keys, status):
-    """The descriptive table by class and length: the counts, the share of every method (detected and evaluable over
-    planned) and M's median over its seeds; a cell with fewer than min_evaluable evaluable is nevyhodnotené, and every
-    cell carries the status of its class (class_status: a class below the minimum stays pooled in K2, POOL_RULE)."""
+    """The descriptive table by class and length: the counts, the share of the volume class (VOLUME_FINDING_RULE),
+    the share of every method (detected and evaluable over planned) and M's median over its seeds; a cell with fewer
+    than min_evaluable evaluable is nevyhodnotené, and every cell carries the status of its class (class_status: a
+    class below the minimum stays pooled in K2, POOL_RULE)."""
     rows = []
     for cls in CLASSES:
         for length in keys["classes"][cls]["lengths"]:
@@ -311,6 +334,7 @@ def _table(interventions, detected, labels, model_labels, seeds, keys, status):
             count = Counter(item["status"] for item in mine)
             row = {"class": cls, "length": length, "planned": len(mine), "evaluable": count["evaluable"],
                    "volume": count["volume"], "not_placed": count["not_placed"],
+                   "volume_share": count["volume"] / len(mine) if mine else None,
                    "status": EVALUATED if count["evaluable"] >= keys["min_evaluable"] else UNEVALUATED,
                    "class_status": status[cls]["status"]}
             if mine:

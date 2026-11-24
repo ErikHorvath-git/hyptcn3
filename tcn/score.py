@@ -138,7 +138,8 @@ def beh(adresar, profil, dlzka=DLZKA_OKNA, cakaj=0.0, perioda=0.5, vypis=print):
             t0 = time.monotonic()
             if okno.discontinuity(seq, cas_snimky):
                 predch = None
-            vektor, predch, pozn = vektor_snimky(adresar, profil, seq, predch)
+            # Kazdy bin (min_bin_pages None vyslovne): starsi model tohto prikazu sa ucil na takych vektoroch.
+            vektor, predch, pozn = vektor_snimky(adresar, profil, seq, predch, min_bin_pages=None)
             t_vektor = time.monotonic() - t0
 
             window = okno.push(seq, cas_snimky, vektor, valid_state(predch))
@@ -247,7 +248,8 @@ def beh_predikcia(adresar, profil, dlzka, model, norm, cakaj=0.0, perioda=0.5,
             t0 = time.monotonic()
             if okno.discontinuity(seq, cas_snimky):
                 predch = None
-            vektor, predch, pozn = vektor_snimky(adresar, profil, seq, predch)
+            # Kazdy bin (min_bin_pages None vyslovne): starsi model tohto prikazu sa ucil na takych vektoroch.
+            vektor, predch, pozn = vektor_snimky(adresar, profil, seq, predch, min_bin_pages=None)
             t_vektor = time.monotonic() - t0
 
             window = okno.push(seq, cas_snimky, vektor, valid_state(predch))

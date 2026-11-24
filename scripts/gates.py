@@ -17,6 +17,12 @@ record runs the self-check of a schema-3 protocol for the stage first (scripts/p
 of a stage up to it is null, and every other check) and writes nothing unless every check passed; it is no
 criterion, it enforces the rule of the file that each record binds by its hash (lead's remarks on B4, part 1,
 section 2). Records of schemas 1 and 2 are written as before.
+A record of stage G3b also carries values.owner_information: the numbers of the model of the early stop
+(features/audit_policy.py EARLY_STOP_MODEL; the lead's answer to Q24, 2026-11-24), for the owner's decision and no
+criterion (OWNER_INFORMATION). The owner sees them before deciding: write_record writes a record whose criteria do not
+all pass (it is recorded with passed false and its problems, and the stage stays open), so the first G3b record is
+written with owner_decision not yet passed and carries the numbers; the owner decides on it, and the record with
+owner_decision passed follows as the newest.
 The tool keeps the chain honest. What a criterion means is written in
 docs/NAVRH_PROTOKOL_V5.sk.md (chapter 10) and docs/HARNESS_V5.sk.md; the evidence is produced
 by the commands named there, never typed in by hand.
@@ -58,6 +64,20 @@ VERDICTS = ("confirmed", "refuted", "unverifiable")
 BYTES_RULE = "sha256 of the file bytes"
 STAGE_RULE = ("sha256 of the UTF-8 of json.dumps(sort_keys=True, separators=(',', ':'), ensure_ascii=False) of the "
               "protocol without the paths that determined_at assigns to stages after {stage}")
+# The lead's answer to Q24 (2026-11-24): what a record of a stage carries for the owner beside its criteria, by stage;
+# information only, never a criterion (problems does not read it).
+OWNER_INFORMATION = {"G3b": ("early_stop_model", "features/audit_policy.py EARLY_STOP_MODEL")}
+OWNER_NOTE = ("the lead's answer to Q24 (2026-11-24): the numbers of the model of the early stop, a model and not a "
+              "measurement, for the owner's decision (criterion owner_decision); information, no criterion")
+
+
+def owner_information(stage):
+    """values.owner_information of a record of `stage` (OWNER_INFORMATION), None for a stage that carries none."""
+    if stage not in OWNER_INFORMATION:
+        return None
+    from features.audit_policy import EARLY_STOP_MODEL  # Inside the function: only a record of G3b reads it.
+    key, source = OWNER_INFORMATION[stage]
+    return {key: EARLY_STOP_MODEL, "source": source, "note": OWNER_NOTE}
 
 
 def sha256(path):
@@ -229,6 +249,9 @@ def write_record(results, protocol, stage, criteria, verification, command, now=
     values = {"stage": stage, "protocol": str(protocol), "protocol_sha256": protocol_sha, "protocol_hash_rule": rule,
               "measurement_sha256": measurement_sha256(), "harness_sha256": sha256(__file__),
               "criteria": criteria, "verification": verification}
+    information = owner_information(stage)
+    if information is not None:  # Q24: the numbers the owner sees when deciding (G3b); no criterion.
+        values["owner_information"] = information
     record = {"schema": SCHEMA, "date": now.isoformat(timespec="seconds"), "commit": commit(),
               "host": socket.gethostname(), "guest": "pozri dokazy jednotlivych kriterii", "command": command,
               "n": len(CRITERIA[stage]), "values": values,
@@ -267,7 +290,10 @@ def main(argv=None):
             return 0
         path, why = write_record(a.results, a.protocol, a.stage, json.loads(a.criteria.read_text()),
                                  json.loads(a.verification.read_text()), a.command)
-        print(json.dumps({"record": str(path), "passed": not why, "problems": why}, indent=1, ensure_ascii=False))
+        information = json.loads(path.read_text())["values"].get("owner_information")  # Q24: shown to the owner.
+        print(json.dumps({"record": str(path), "passed": not why, "problems": why,
+                          **({"owner_information": information} if information is not None else {})},
+                         indent=1, ensure_ascii=False))
         return 0 if not why else 2
     except ValueError as error:
         print("gates: " + str(error), file=sys.stderr)

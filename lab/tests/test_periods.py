@@ -145,10 +145,13 @@ def test_entries_are_complete_and_process_creating_ones_are_bounded_or_random():
     names = [e["name"] for e in doc["periods"]]
     assert len(names) == len(set(names))
     for entry in doc["periods"]:
-        # "exception": only a process outside the lab's code, with the decision that admits it (proposal 5.6).
-        assert set(entry) - {"exception"} == {"name", "source", "kind", "period_s", "random_s", "bounded",
-                                               "creates_processes", "active", "note"}, entry["name"]
-        assert "exception" not in entry or entry["kind"] == "system" and "Q3" in entry["exception"], entry["name"]
+        # "exception": only a process outside the lab's code, with the decision that admits it (proposal 5.6);
+        # "measured": the real spacings before and after a change (package B11, lead's answer to Q9), only there.
+        assert set(entry) - {"exception", "measured"} == {"name", "source", "kind", "period_s", "random_s", "bounded",
+                                                          "creates_processes", "active", "note"}, entry["name"]
+        assert "exception" not in entry or entry["kind"] == "system" and "Q3" in entry["exception"] and (
+            "Q9" in entry["exception"]), entry["name"]
+        assert "measured" not in entry or entry["name"] == "PostgreSQL autovacuum launcher", entry["name"]
         assert entry["kind"] in (*DISCOVERED, "system"), entry["name"]
         assert entry["period_s"] is None or entry["period_s"] > 0, entry["name"]
         random_s = entry["random_s"]
@@ -184,12 +187,16 @@ def test_bounds_and_random_delays_of_the_register_are_those_of_the_source():
     mean = (low + high) / 2
     assert (low, high) == (.8, 1.2) and worker["period_s"] == mean
     assert worker["random_s"] == [round(low - mean, 6), round(high - mean, 6)]
-    # Autovacuum stays at PostgreSQL's default (lead's answer to Q3): no lab file changes it, the register lists it
-    # as the one admitted exception, and the deployment does not touch PostgreSQL's configuration.
-    assert not (LAB / "hyptcn-lab-postgresql.conf").exists() and "autovacuum" not in (LAB / "install.sh").read_text()
+    # Autovacuum stays on (lead's answer to Q3), its takt is autovacuum_naptime 67 s (lead's answer to Q9, package
+    # B11): one lab file sets only that, the deployment applies and checks it (the tests of package B11 below), and the
+    # register lists the launcher as the one admitted exception, at the line of its setting.
+    assert settings() == {"autovacuum_naptime": "67s"}
+    assert "hyptcn-lab-postgresql.conf" in (LAB / "install.sh").read_text()
     autovacuum = next(e for e in register()["periods"] if e["name"] == "PostgreSQL autovacuum launcher")
     assert autovacuum["active"] is True and autovacuum["bounded"] is None and autovacuum["random_s"] == 0
     assert [e["name"] for e in register()["periods"] if "exception" in e] == ["PostgreSQL autovacuum launcher"]
+    name, line = autovacuum["source"][4:].rsplit(":", 1)
+    assert (LAB / name).read_text().splitlines()[int(line) - 1] == "autovacuum_naptime = 67s"
 
 
 @pytest.mark.parametrize("name,text,kind,line", [
@@ -218,3 +225,111 @@ def test_a_register_line_that_moved_fails(tmp_path):
     entry["source"] = entry["source"].rsplit(":", 1)[0] + ":1"
     unregistered, stale = compare(LAB, doc)
     assert stale == [(entry["kind"], "lab/services.py:1")] and len(unregistered) == 1
+
+
+# Package B11: autovacuum_naptime 67 s (the lead's answer to Q9). Names of the package are read inside the tests.
+
+POSTGRESQL = LAB / "hyptcn-lab-postgresql.conf"
+# The databases that accept connections in the guest, each processed once per autovacuum_naptime: the lab's own and
+# the two of PostgreSQL's initdb that allow connections (template0 does not).
+DATABASES = ("hyptcn_lab", "postgres", "template1")
+RECORD = LAB.parent / "data/results/skuska_labu_20261123T092454Z_cast1.json"  # The lab test of 2026-11-23.
+
+
+def settings():
+    """{name: value} of the settings of lab/hyptcn-lab-postgresql.conf (lines that are not comments)."""
+    lines = [line.split("#", 1)[0].strip() for line in POSTGRESQL.read_text().splitlines()]
+    return dict(map(str.strip, line.split("=", 1)) for line in lines if line)
+
+
+def autovacuum():
+    return next(e for e in register()["periods"] if e["name"] == "PostgreSQL autovacuum launcher")
+
+
+def remainder(spacing):
+    from scripts import lab_trial
+    interval = json.loads((LAB.parent / "config/collection-v5.json").read_text())["interval_s"]
+    low, high = lab_trial.AUTOVACUUM_REMAINDER_S
+    r = round(spacing % interval, 6)
+    return r, low <= r <= high
+
+
+def test_the_lab_sets_only_autovacuum_naptime_and_its_register_entry_follows_from_it():
+    """One setting, 67 s, autovacuum on as by default; the nominal spacing is 67 s over the three databases."""
+    assert settings() == {"autovacuum_naptime": "67s"} and "autovacuum = off" not in POSTGRESQL.read_text()
+    entry = autovacuum()
+    naptime = int(settings()["autovacuum_naptime"].removesuffix("s"))
+    assert entry["period_s"] == round(naptime / len(DATABASES), 6) == 22.333333
+    assert all(name in entry["note"] for name in DATABASES)
+    assert "Q3" in entry["exception"] and "Q9" in entry["exception"]
+
+
+@pytest.mark.parametrize("databases, holds", [*((n, True) for n in range(1, 7)), (7, False)])
+def test_the_spacing_of_67_s_holds_the_property_of_q9_up_to_six_databases(databases, holds):
+    """The lead's answer to Q9: the spacing lies 1 to 4 s from a multiple of interval_s; a change of the number of
+    databases changes it, so it is measured: 67 s holds the property for 1 to 6 databases, not for 7 (4.571 s)."""
+    assert remainder(67 / databases)[1] is holds and remainder(67 / 7)[0] == 4.571429
+
+
+@pytest.mark.parametrize("variant, code, error", [
+    (("67s", "on"), 0, ""),
+    (("1min", "on"), 1, "PostgreSQL runs with autovacuum_naptime 1min and autovacuum on, not 67s and on "
+                        "(lab/hyptcn-lab-postgresql.conf)\n"),
+    (("67s", "off"), 1, "PostgreSQL runs with autovacuum_naptime 67s and autovacuum off, not 67s and on "
+                        "(lab/hyptcn-lab-postgresql.conf)\n"),
+], ids=["applied", "conf_d_not_read", "autovacuum_off"])
+def test_the_deployment_links_the_setting_restarts_postgresql_and_ends_unless_show_gives_it(tmp_path, variant, code,
+                                                                                            error):
+    """lab/install.sh: the deployed file linked into Debian's conf.d (the guest manifest covers it, as the maintenance
+    units), PostgreSQL restarted before the lab's units, and SHOW checked; the block runs here in bash with ln,
+    systemctl and runuser as shell functions that only record, so nothing on this host is touched."""
+    import subprocess
+    script = (LAB / "install.sh").read_text().splitlines()
+    link = "ln -sfn /opt/hyptcn-lab/hyptcn-lab-postgresql.conf /etc/postgresql/15/main/conf.d/hyptcn-lab.conf"
+    first = script.index(link)
+    last = next(i for i in range(first, len(script)) if script[i] == "fi")
+    units = "systemctl restart hyptcn-lab@auth hyptcn-lab@catalog hyptcn-lab@orders hyptcn-lab@docs hyptcn-lab@worker"
+    assert first < script.index(units)  # Before the lab's units start again.
+    # The block runs no command but the faked ones and shell builtins (a new command there must be faked first).
+    assert {line.split()[0] for line in script[first:last + 1]} == {
+        "ln", "systemctl", "naptime=$(runuser", "autovacuum=$(runuser", "if", "echo",
+        '"(lab/hyptcn-lab-postgresql.conf)"', "exit", "fi"}
+    fakes = ('ln() { echo "ln $*" >> "$CALLS"; }\n'
+             'systemctl() { echo "systemctl $*" >> "$CALLS"; }\n'
+             'runuser() { echo "runuser $*" >> "$CALLS"; case "$*" in *autovacuum_naptime*) echo "$NAPTIME";; '
+             '*autovacuum*) echo "$AUTOVACUUM";; esac; }\n')
+    calls = tmp_path / "calls"
+    block = "set -euo pipefail\n" + fakes + "\n".join(script[first:last + 1]) + "\necho done >> \"$CALLS\"\n"
+    reply = subprocess.run(["bash", "-c", block], capture_output=True, text=True, timeout=30,
+                           env={"PATH": "/usr/bin:/bin", "CALLS": str(calls), "NAPTIME": variant[0],
+                                "AUTOVACUUM": variant[1]})
+    assert (reply.returncode, reply.stderr) == (code, error)
+    assert calls.read_text().splitlines() == [
+        link, "systemctl restart postgresql@15-main", "runuser -u postgres -- psql -XtAc SHOW autovacuum_naptime",
+        "runuser -u postgres -- psql -XtAc SHOW autovacuum", *(["done"] if code == 0 else [])]
+
+
+def test_the_measured_spacing_before_the_change_is_the_lab_tests_and_misses_the_property():
+    """measured.before: the spacings of the lab test of 2026-11-23 (its record of stage skuska) at 60 s, 20.0156 s,
+    0.016 s past a multiple of 5 s: outside the property, which is why the takt changed."""
+    before = autovacuum()["measured"]["before"]
+    record = json.loads(RECORD.read_text())
+    assert (record["stage"], before["stage"], before["record"]) == ("skuska", "skuska", str(RECORD.relative_to(
+        LAB.parent)))
+    found = next(e for e in record["values"]["periods"] if e["name"] == "PostgreSQL autovacuum launcher")
+    assert before["spacings"] == found["spacings"] and before["run"] in record["command"]
+    assert remainder(before["spacings"]["median"]) == (before["remainder_s"], False)
+    assert before["remainder_s"] == .015616
+    assert before["databases"] == len(DATABASES) and "60s" in before["setting"]
+
+
+def test_the_measured_spacing_after_the_change_is_pending_or_holds_the_property():
+    """measured.after: null with the text of what measures it (the window on the VM of the lead's answer to Q27,
+    before the G0 record), or a measurement whose median holds the property."""
+    measured = autovacuum()["measured"]
+    after = measured["after"]
+    if after is None:
+        pending = measured["pending"]
+        assert pending.strip() and "Q27" in pending and "--postgres-debug1" in pending
+    else:
+        assert "pending" not in measured and "67s" in after["setting"] and remainder(after["spacings"]["median"])[1]

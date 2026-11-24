@@ -88,6 +88,9 @@ def fake_clone(tmp_path, monkeypatch, lab, source_size=3 << 30):
                            "</devices></domain>"}[args[0]]
     monkeypatch.setattr(labctl, "run", run)
     monkeypatch.setattr(lab, "virsh", virsh)
+    # Package B11: clone makes sure of the session daemon before its first virsh call; one runs in its unit here.
+    monkeypatch.setattr(labctl, "session_daemon", lambda: (5151, "/user.slice/user@1000.service/hyptcn-libvirtd.service",
+                                                           "0"))
     monkeypatch.setattr(labctl.subprocess, "check_output",
                         lambda args, **kw: json.dumps({"virtual-size": source_size}))
     lab.clone("hyptcn-guest")

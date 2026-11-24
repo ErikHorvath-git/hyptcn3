@@ -17,7 +17,9 @@ generalka, and the test of the gates stage final, whose seal the ledger at HEAD 
 its refusal is tcn/tests/test_pecat.py's). The gate records are taken as valid (scripts.gates.require, its calls
 recorded) except in the test of their refusal. The metrics are agent M's tcn/eval.py as it is. The names of package
 B7c are imported inside the tests, so this file collects on the code before it. Only mechanics on synthetic rows: no
-number here is a result of detection (HONESTY P4).
+number here is a result of detection (HONESTY P4). Package B11 (agent E; the lead's answers to questions Q17 and Q28):
+both end-to-end runs check the attachments of their record against its numbers, an existing attachment is refused
+before the seal, and a failed run leaves none.
 """
 import copy
 import hashlib
@@ -310,10 +312,11 @@ def results(tmp_path_factory, monkeypatch):
 
 
 # Proposal 9.1 (tcn/finalne.py CONFIRMATORY_RULE): the top level of the values of a complete record and of a failed one,
-# and the descriptive part (opisné).
+# and the descriptive part (opisné). Package B11 (ATTACHMENT_RULE): a complete record names its attachments, a failed
+# one none.
 TOP = {"schema", "stage", "mark", "plan_mode", "corpus_index", "corpus_index_sha256", "rehearsal", "order_rule",
-       "campaign", "corpus", "seal", "seal_note", "gate", "tree", "models", "status", "replays", "rules", "budget",
-       "methods", "matched", "claims", "conclusions", "k2_values", "interventions", "opisné"}
+       "campaign", "corpus", "seal", "seal_note", "gate", "tree", "models", "status", "replays", "attachments", "rules",
+       "budget", "methods", "matched", "claims", "conclusions", "k2_values", "interventions", "opisné"}
 FAILED = {"schema", "stage", "mark", "plan_mode", "corpus_index", "corpus_index_sha256", "rehearsal", "order_rule",
           "campaign", "corpus", "seal", "seal_note", "gate", "tree", "models", "status", "failed_step", "error", "rule",
           "replays", "opisné"}
@@ -346,6 +349,100 @@ def _parts(v, seeds):
     assert wording["wording"] == RULE_CHANNEL_ONLY and "…" not in wording["text"]
     assert wording["text"].startswith(RULE_CHANNEL_ONLY["text"][:-1]) and set(wording["increment"]["per_seed"]) == {
         str(seed) for seed in seeds}
+
+
+def _attachments(v, out, corpus):
+    """Package B11 (the lead's answers to questions Q17 and Q28, tcn/finalne.py ATTACHMENT_RULE): values.attachments
+    names exactly the attachments of the protocol, each the file <record stem>.<name>.npz beside the record whose
+    sha256 and bytes the record holds, read with allow_pickle=False and holding exactly the arrays of its contents; and
+    their contents are the record's numbers: the series holds every sealed session, one row per frame, every method
+    and seed at its matched threshold, whose alarms in the clean windows of each role are those of its matched rate,
+    M's replay rows as its events.jsonl holds them, and the host times of every event and control; the losses give
+    the mean loss over the clean windows of test_benign of every predictor (opisné.losses); the copies give the
+    detection of every intervention by every label of K2 (k2_values.detected)."""
+    from tcn import finalne
+    p, o = corpus["protocol"], v["opisné"]
+    listed = [name for name in p["analysis"]["attachments"] if name != "note"]
+    assert list(v["attachments"]) == listed == list(protocol_v5.ATTACHMENTS) == ["series", "losses", "copies"]
+    found = {}
+    for name, item in v["attachments"].items():
+        path = Path(item["path"])
+        assert path == Path(out).resolve().with_name(f"{Path(out).stem}.{name}.npz")
+        assert (item["sha256"], item["bytes"]) == (_sha(path), path.stat().st_size)
+        assert (item["format"], item["contents"], item["rule"]) == (
+            finalne.ATTACHMENT_FORMAT, finalne.CONTENTS[name], finalne.ATTACHMENT_RULES[name])
+        with np.load(path, allow_pickle=False) as data:
+            found[name] = {key: data[key] for key in data.files}
+        assert set(found[name]) == set(item["contents"])
+    series, losses, copies = (found[name] for name in ("series", "losses", "copies"))
+    by_id = {r["id"]: r for r in corpus["records"]}
+    sealed = [r["id"] for r in corpus["records"] if r["role"] in SEALED]
+    ids = series["session_id"].tolist()
+    assert sorted(ids) == sorted(sealed) and losses["session_id"].tolist() == ids
+    assert series["session_role"].tolist() == [by_id[ident]["role"] for ident in ids] == sorted(
+        series["session_role"].tolist(), key=SEALED.index)
+    assert series["session_boot"].tolist() == [by_id[ident]["group"] for ident in ids]
+    assert series["session_rows"].tolist() == [CYCLES] * len(ids) and len(series["row_seq"]) == CYCLES * len(ids)
+    assert series["row_seq"].tolist() == [seq for _ in ids for seq in range(CYCLES)]
+    # Every method and seed at its matched threshold; its alarms in the clean windows of a role are its matched rate's.
+    matched = {**v["matched"], **o["descriptive_methods"]["matched"]}
+    labels = series["label"].tolist()
+    assert labels == list(matched) and series["threshold"].tolist() == [matched[x]["threshold"] for x in labels]
+    roles = {role: np.isin(series["row_session"], [i for i, ident in enumerate(ids) if by_id[ident]["role"] == role])
+             for role in SEALED}
+    for i, label in enumerate(labels):
+        assert np.array_equal(np.isnan(series["score"][i]), ~series["row_window"])
+        assert np.array_equal(series["exceed"][i], series["score"][i] > series["threshold"][i])
+        assert not (series["edge"][i] & ~series["up"][i]).any()
+        for role, mine in roles.items():
+            rate = matched[label]["rates"][role]
+            assert (int((series["edge"][i] & series["row_clean"] & mine).sum()),
+                    int((series["row_clean"] & mine).sum())) == (rate["alarms"], rate["windows"]), (label, role)
+    # M's replay rows, as the events.jsonl of its replay holds them.
+    assert series["replay_seed"].tolist() == [m["seed"] for m in v["models"]]
+    assert series["replay_threshold"].tolist() == [m["threshold"] for m in v["models"]]
+    first = ids.index(next(ident for ident in ids if by_id[ident]["role"] == "test_benign"))
+    rows = slice(int(series["session_first_row"][first]), int(series["session_first_row"][first]) + CYCLES)
+    directory = Path(v["replays"]["sessions"][ids[first]]["0"]["directory"])
+    replay = [json.loads(line) for line in (directory / "events.jsonl").read_text().splitlines()]
+    assert [None if np.isnan(x) else x for x in series["replay_score"][0, rows].tolist()] == [r["score"]
+                                                                                              for r in replay]
+    sources = series["sources"].tolist()
+    assert [[sources[j] for j in np.flatnonzero(x)] for x in series["replay_sources"][0, rows]] == [
+        r["alarm_sources"] for r in replay]
+    assert series["replay_alarm"][0, rows].tolist() == [r["alarm"] for r in replay]
+    # The events and the controls with their host times.
+    expected = []
+    for i, ident in enumerate(ids):
+        record = by_id[ident]
+        expected += [(i, "event", e["type"], "", e["host_start_unix"], e["host_stopped_unix"])
+                     for e in json.loads(Path(record["events"]).read_text())["events"]]
+        if record["role"] == "test_controls":
+            expected += [(i, "control", c["kind"], c["polarity"], c["host_start_unix"], c["host_stopped_unix"])
+                         for c in json.loads(Path(record["controls"]).read_text())["controls"] if c.get("kind")]
+    assert list(zip(series["occurrence_session"].tolist(), series["occurrence_what"].tolist(),
+                    series["occurrence_type"].tolist(), series["occurrence_polarity"].tolist(),
+                    series["occurrence_host_start_unix"].tolist(),
+                    series["occurrence_host_stopped_unix"].tolist())) == expected
+    assert any(what == "control" for _, what, *_ in expected) and any(what == "event" for _, what, *_ in expected)
+    # The losses of every predictor: opisné.losses over the clean windows of test_benign.
+    assert losses["label"].tolist() == list(o["losses"])
+    clean = losses["row_clean"] & roles["test_benign"]
+    for i, label in enumerate(losses["label"].tolist()):
+        assert float(np.mean(losses["loss"][i][clean])) == o["losses"][label]["mean"]
+    # The copies: every placed intervention of K2, and its detection by every label of K2.
+    placed = [item for role in SEALED for item in v["interventions"][role]["interventions"] if item["placed"]]
+    assert copies["intervention_id"].tolist() == [item["id"] for item in placed]
+    k2 = {**v["k2_values"]["thresholds"], **o["descriptive_methods"]["k2_values"]["thresholds"]}
+    detected = {**v["k2_values"]["detected"], **o["descriptive_methods"]["k2_values"]["detected"]}
+    assert copies["label"].tolist() == list(k2) and copies["threshold"].tolist() == [k2[x]["threshold"] for x in k2]
+    for c, item in enumerate(placed):
+        mine = copies["row_intervention"] == c
+        assert int((copies["row_block"] & mine).sum()) == item["length"]
+        for i, label in enumerate(copies["label"].tolist()):
+            hit = bool((copies["edge"][i] & copies["row_horizon"] & mine).any())
+            assert hit == detected[label][item["id"]], (label, item["id"])
+    return found
 
 
 def _argv(corpus, models, campaign, tmp, **change):
@@ -385,8 +482,11 @@ def test_a_rehearsal_runs_the_final_command_end_to_end_into_one_record(corpus, m
     v, p = record["values"], corpus["protocol"]
     o = v["opisné"]
     assert sorted(path.name for path in tmp_path.iterdir()) == ["replays"]
-    assert sorted(path.name for path in results.iterdir()) == ["record.json"]
+    # Package B11 (ATTACHMENT_RULE): the record and its attachments, nothing else.
+    assert sorted(path.name for path in results.iterdir()) == sorted(
+        ["record.json", *(f"record.{name}.npz" for name in protocol_v5.ATTACHMENTS)])
     _parts(v, p["analysis"]["seeds"])
+    _attachments(v, results / "record.json", corpus)
     # The provenance fields of scripts/check_claims.sh (check E), the stage and the mark of the run (proposal 11.1).
     assert {"commit", "date", "host", "guest", "command", "n", "values"} <= set(record)
     mark = {"stage": "generalka", "rehearsal": True, "mark": pecat.REHEARSAL_MARK}
@@ -655,6 +755,41 @@ def test_a_failure_after_the_consumption_leaves_its_record(corpus, models, campa
     assert (entry["stage"], entry["closed"]["outcome"], entry["closed"]["error"]) == (
         "suchy", "failed", "ValueError: the test's failure of the outcomes of a control")
     assert pecat.KNIHA == ledger and ledger.read_bytes() == before and pecat.otvoreny() is None
+    # Package B11 (ATTACHMENT_RULE): a failed record names no attachment, and none lies beside it.
+    assert not any(path.exists() for path in finalne.attachment_paths(tmp_path / "record.json").values())
+
+
+def test_a_failure_while_the_attachments_are_written_leaves_none(corpus, models, campaign_record, ledger,
+                                                                gates_passed, tmp_path, tmp_path_factory,
+                                                                monkeypatch):
+    """Package B11 (tcn/finalne.py ATTACHMENT_RULE and FAILURE_RULE): a dry run on a ledger of its own (stage suchy)
+    writes its attachments beside its own record, outside data/results, as <record stem>.<name>.npz in the order of
+    the protocol's list; when the second fails (the test's error in numpy.savez_compressed), the run removes the
+    attachments it wrote, writes its failed record at step 4, which names none, and closes failed; only the record
+    lies in its directory."""
+    from tcn import finalne, pecat
+    real, seen = np.savez_compressed, []
+
+    def fails_second(stream, **arrays):
+        seen.append(Path(stream.name))
+        if len(seen) == 2:
+            raise OSError("the test's failure of the attachment losses")
+        return real(stream, **arrays)
+    monkeypatch.setattr(np, "savez_compressed", fails_second)
+    own = tmp_path_factory.mktemp("own-attachments") / "kniha_pecati.json"
+    pecat.zaloz(command="a dry run's own ledger", ledger=own)
+    out = tmp_path / "dry" / "record.json"
+    out.parent.mkdir()
+    with pytest.raises(OSError, match="^the test's failure of the attachment losses$"):
+        finalne.evaluate(corpus["index"], models, campaign=campaign_record, replays=tmp_path / "replays", out=out,
+                         ledger=own)
+    assert seen == [out.with_name(f"record.{name}.npz") for name in ("series", "losses")]
+    v = json.loads(out.read_text())["values"]
+    assert (v["status"], v["failed_step"], v["error"], v["stage"]) == (
+        "failed", "4: the attachments", "OSError: the test's failure of the attachment losses", "suchy")
+    assert set(v) == FAILED and sorted(path.name for path in out.parent.iterdir()) == ["record.json"]
+    entry, = json.loads(own.read_text())["values"]["runs"]
+    assert (entry["stage"], entry["closed"]["outcome"]) == ("suchy", "failed") and pecat.otvoreny() is None
 
 
 @pytest.mark.parametrize("option", ["--stage", "--ledger"])
@@ -703,6 +838,7 @@ def test_a_campaign_runs_the_final_command_end_to_end_at_stage_final(campaign_co
                 for r in sorted(campaign_corpus["records"], key=lambda r: r["id"]) if r["role"] in SEALED]
     assert v["seal"]["sessions"] == entry["sessions"] == sessions  # Agent S's F8: the run records its sessions.
     _parts(v, p["analysis"]["seeds"])
+    _attachments(v, out, campaign_corpus)  # Package B11 (ATTACHMENT_RULE).
     for claim in protocol_v5.CLAIMS:
         found = v["conclusions"][claim]
         assert found["outcome"] in protocol_v5.OUTCOMES, (claim, found)
@@ -730,7 +866,7 @@ def test_a_campaign_runs_the_final_command_end_to_end_at_stage_final(campaign_co
 
 
 REFUSALS = ["carrier_boots", "out_outside_results_final", "out_outside_results_generalka", "replays_in_results",
-            "dirty_tree", "campaign_record_of_another_corpus"]
+            "dirty_tree", "campaign_record_of_another_corpus", "attachment_exists", "replays_at_an_attachment"]
 
 
 @pytest.mark.parametrize("case", REFUSALS)
@@ -739,9 +875,10 @@ def test_a_refusal_before_the_seal_consumes_nothing(case, corpus, campaign_corpu
     """Refusals of step 0 (ORDER_RULE), before the seal is consumed and without a session read: BOOTS_RULE (finding F3:
     in plan mode campaign the carrier boots of the index against analysis.interventions.boots), OUT_RULE (finding F7:
     the record of a run of stage final or generalka under data/results), REPLAY_RULE (the replays outside it),
-    CLEAN_TREE_RULE at stage final and CAMPAIGN_RULE (a campaign record of another corpus); the last three pin rules
-    the merge already had (the mutants F6, F5 and F7 of the verification). The ledger keeps its bytes and nothing is
-    written."""
+    CLEAN_TREE_RULE at stage final and CAMPAIGN_RULE (a campaign record of another corpus); the three before the last
+    pin rules the merge already had (the mutants F6, F5 and F7 of the verification); package B11 (ATTACHMENT_RULE): an
+    attachment of the record that exists already, and replays at the path of an attachment. The ledger keeps its bytes
+    and nothing is written."""
     from tcn import finalne, pecat
     target = corpus if case == "out_outside_results_generalka" else campaign_corpus
     index, out, replays, campaign = target["index"], results / "record.json", tmp_path / "replays", campaign_record
@@ -771,6 +908,14 @@ def test_a_refusal_before_the_seal_consumes_nothing(case, corpus, campaign_corpu
         from tcn import eval as ev
         monkeypatch.setattr(ev, "_git_stav", lambda: ("0" * 40, ["tcn/finalne.py"]))
         reason = "the final evaluation of stage final needs git and a committed tree of code: changed tcn/finalne.py"
+    elif case == "attachment_exists":
+        existing = results / "record.series.npz"
+        existing.write_bytes(b"an earlier attachment")
+        reason = (f"--out {out}: its attachment series {existing} exists; the final evaluation writes a new one "
+                  "(ATTACHMENT_RULE)")
+    elif case == "replays_at_an_attachment":
+        replays = results / "record.losses.npz"
+        reason = f"--replays {replays} is the attachment losses of --out {out} (ATTACHMENT_RULE)"
     else:
         doc = json.loads(campaign.read_text())
         doc["values"]["accepted_sessions"] -= 1
@@ -785,6 +930,8 @@ def test_a_refusal_before_the_seal_consumes_nothing(case, corpus, campaign_corpu
     assert capsys.readouterr().err == f"tcn.finalne: {reason}\n"
     assert ledger.read_bytes() == before and pecat.otvoreny() is None
     assert not out.exists() and not replays.exists()
+    if case == "attachment_exists":  # Package B11: the earlier file is never overwritten.
+        assert existing.read_bytes() == b"an earlier attachment"
 
 
 @pytest.mark.parametrize("case", ["neural_adds", "rule_carries_all"])

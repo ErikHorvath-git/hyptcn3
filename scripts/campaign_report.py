@@ -173,7 +173,8 @@ DEFINITIONS = {
                "changed measurement or lab hash; stopped: early stop, an error or an operator's stop). A runner of a "
                "campaign of protocol schema 3 (campaign.json mode) paused or invalid without any ending record of "
                "the campaign is a consistency problem (those two states always write one)."),
-    "group_start_failures": ("Package B9b, question Q22 (decided by its proposal until the lead answers): a failed "
+    "group_start_failures": ("Package B9b, question Q22 (accepted by the lead 2026-11-24: a failed start of a group "
+                             "is no session and does not charge the limit of replacements): a failed "
                              "start of a group (labctl stop, start, reset or pretouch) is no rejection of a session, "
                              "since no session was measured, so it is counted apart from the rejections by cause: "
                              "nothing is replaced and the limit is not charged, and a resumed run starts the group "

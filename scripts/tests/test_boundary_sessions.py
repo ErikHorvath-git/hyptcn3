@@ -162,6 +162,24 @@ def test_clean_session_is_accepted_with_the_oracle_windows(families, name):
     assert len(run.calls) == 1 and run.calls[0]["args"][0] == str(session.directory / "raw")
 
 
+def test_the_audit_extracts_the_memory_columns_from_the_bins_of_its_protocol(families, tmp_path):
+    """Question Q10 to the lead (2026-11-24), the audit's path: under schema 3 the audit gives the extraction
+    (collection.retazec) analysis.scale.min_bin_pages of its protocol, 1024 as config/collection-v5.json has it and
+    512 in a copy that says 512, so the archive's eight memory columns come from the bins the normalizer scores; under
+    schema 2 (V4) it gives None, every bin, by name."""
+    p, _, run = audited(families, "S3", "bins-s3")
+    assert p["analysis"]["scale"]["min_bin_pages"] == 1024
+    assert run.code == 0 and run.calls[0]["kwargs"]["min_bin_pages"] == "1024"
+    _, _, run = audited(families, "V4", "bins-v4")
+    assert run.code == 0 and run.calls[0]["kwargs"]["min_bin_pages"] == "None"
+    doc = bs.family("S3", bs.profile_dir(tmp_path / "profile"))
+    doc["analysis"]["scale"]["min_bin_pages"] = 512
+    path = bs.write_protocol(tmp_path / "S3-512.json", doc)
+    other = ({"S3": (collection.protocol(path), path)}, families[1])
+    _, _, run = audited(other, "S3", "bins-s3-512")
+    assert run.code == 0 and run.calls[0]["kwargs"]["min_bin_pages"] == "512"
+
+
 PLACEMENTS = {
     "mid_chain": lambda n, w, f: [f // 2],
     "three_isolated": lambda n, w, f: bs.isolated_seqs(3, w, f),

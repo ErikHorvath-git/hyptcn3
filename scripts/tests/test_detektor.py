@@ -17,7 +17,7 @@ def run_detector(monkeypatch, tmp_path, sequences, full=()):
             "output": {"chain_id": 700 if seq < 2 else 900}}))
     monkeypatch.setattr(detektor, "nacitaj_prediktor", lambda _: (None, None, {"dlzka_okna": 3}))
     monkeypatch.setattr(detektor, "chyba_predikcie_okna", lambda *_: (2., [], []))
-    monkeypatch.setattr(snapshot, "vektor_snimky", lambda _a, _b, seq, *_:
+    monkeypatch.setattr(snapshot, "vektor_snimky", lambda _a, _b, seq, *_, **__:
                         ([1.] * (len(snapshot.MENA) - 1) + [float(seq in full)], {}, []))
     out = tmp_path / "output.jsonl"
     rc = detektor.main(["--snapshots", str(tmp_path), "--profile", "unused", "--model", "unused",

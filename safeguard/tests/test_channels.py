@@ -173,7 +173,7 @@ def test_the_columns_of_the_rule_channel_are_no_input_of_the_tcn():
     from safeguard.features import FeatureNormalizer
     from safeguard.model import Predictor, architecture
     rows, sessions = corpus()
-    proposed = qualify(rows, sessions, json.loads(V5.read_text()))["proposed_columns"]
+    proposed = qualify(rows, sessions, json.loads(V5.read_text()), mode="campaign")["proposed_columns"]
     found = rule({name: cls for name, cls in proposed.items() if cls != "neural"})
     out = ("mem_changed_ratio", "proc_kernel", "mod_total", "sock_listen", "proc_wx")
     assert (found.rule_names, found.tcn_names, found.anchored) == (
@@ -204,12 +204,12 @@ def test_a_one_unit_change_of_a_rule_column_alarms_the_rule_channel_and_never_th
     higher in rows 30 to 35: each of them exceeds, the alarm of the channel rule rises at the third (3 of 5, the
     history of the rule channel filled since the full snapshot at row 20) and stays while 3 of the last 5 rows
     exceed, rows 32 to 37. sock_listen is of class rule_differenced, which the rule channel judges by its change since
-    the session's first measured row (question Q8 to the lead, its revised proposal; the range of that change over
-    train and calibration [0, 0]): one more listening socket from row 30 on stays +1 to the end, so the alarm rises
-    at row 32 and stays; a boot whose sock_listen is one higher in every row changes nothing and raises none. In each
-    case the neural score of every row is exactly that of the session without the change (the rule columns are no
-    input of the TCN): with the threshold at the highest score of that session the neural channel never alarms, and
-    no alarm is a model_anomaly."""
+    the session's first measured row (question Q8, its revised proposal accepted by the lead 2026-11-24; the range of
+    that change over train and calibration [0, 0]): one more listening socket from row 30 on stays +1 to the end, so
+    the alarm rises at row 32 and stays; a boot whose sock_listen is one higher in every row changes nothing and
+    raises none. In each case the neural score of every row is exactly that of the session without the change (the
+    rule columns are no input of the TCN): with the threshold at the highest score of that session the neural channel
+    never alarms, and no alarm is a model_anomaly."""
     model = bundle(rule())
     clean = [row["score"] for row in replay(model, TEST)]
     model.manifest["calibration"]["threshold"] = max(score for score in clean if score is not None)
@@ -224,6 +224,23 @@ def test_a_one_unit_change_of_a_rule_column_alarms_the_rule_channel_and_never_th
     assert [(row["seq"], row["alarm_sources"]) for row in rows if row["alarm_event"]] == (
         [(alarmed[0], ["rule_anomaly"])] if alarmed else [])
     assert [row["channel"] for row in rows] == [["rule"] if row["seq"] in alarmed else [] for row in rows]
+
+
+def test_a_detector_started_after_a_persistent_step_never_sees_it():
+    """The limitation of the lead's answer to question Q8 (2026-11-24), which the manifest states
+    (SESSION_START_LIMITATION; the bundle's rule channel carries it, sock_listen being rule_differenced): the rule
+    channel judges sock_listen by its change since the first measured row of the session that this detector sees.
+    Fed the session from its start, one more listening socket from row 30 on alarms at row 32 and stays (as the case
+    rule_differenced_persistent_step); fed only the rows from row 30 on, as a detector started after the step, its
+    first measured row already holds the step, so every row is judged, none exceeds and none alarms."""
+    from safeguard.features import SESSION_START_LIMITATION
+    model = bundle(rule())
+    assert model.manifest["rule_channel"]["limitation"] == SESSION_START_LIMITATION
+    stepped = session("test-1", seed=4, changes=[(seq, "sock_listen", 1) for seq in range(30, ROWS)])
+    assert [row["seq"] for row in replay(model, stepped) if row["rule_alarm"]] == list(range(32, ROWS))
+    late = replay(model, stepped[30:])
+    assert [(row["seq"], row["rule"]["state"]) for row in late] == [(seq, "judged") for seq in range(30, ROWS)]
+    assert not any(row["rule"]["exceeded"] or row["rule_alarm"] for row in late)
 
 
 @pytest.mark.parametrize("anchored", [False, True], ids=["legacy_schema_2", "analysis"])
@@ -271,6 +288,23 @@ def test_a_bin_under_1024_pages_never_changes_the_score_and_each_scored_bin_has_
     reason = "no bin of the layout has at least min_bin_pages 1024 pages: rule analysis.columns scores no bin"
     with pytest.raises(ValueError, match="^" + re.escape(reason) + "$"):
         FeatureNormalizer.fit(fit_rows([session("small", seed=5, layout=SMALL)]), rule())
+
+
+def test_one_predicate_with_one_boundary_decides_the_bins_of_the_extractor_and_of_the_normalizer(tmp_path):
+    """The lead's answer to question Q10 (2026-11-24): the eight memory columns come from the bins that enter the
+    score, by one predicate (features/snapshot.py counted_bin) with one boundary, >=: a bin of exactly
+    min_bin_pages 1024 pages counts and one of 1023 does not, in the extractor's memory columns and in the normalizer's
+    scored bins (NormalizationRule.split_bins) alike; without a minimum (None) every bin counts. Each bin has one
+    changed page, so the memory columns show which bins counted."""
+    from features.snapshot import counted_bin, pamat_zo_sidecaru
+    assert (counted_bin(1024, 1024), counted_bin(1023, 1024), counted_bin(1, None)) == (True, False, True)
+    assert rule().split_bins([(0, 1024), (1, 1023)]) == (((0, 1024),), ((1, 1023),))
+    side = tmp_path / "s.json"
+    side.write_text(json.dumps({"features": {"entropy": True, "bins": [
+        {"pages_total": pages, "pages_changed": 1, "zero_ratio": 0., "entropy_mean": 4., "has_changed": 1}
+        for pages in (1024, 1023)]}}))
+    assert pamat_zo_sidecaru(str(side), min_bin_pages=1024)[:4] == [1 / 1024, 1., 1 / 1024, 1 / 1024]
+    assert pamat_zo_sidecaru(str(side), min_bin_pages=None)[:4] == [2 / 2047, 1., 1 / 1023, 1 / 1023]
 
 
 @pytest.mark.parametrize("anchored, scale", [(False, "deviation"), (True, 1.)], ids=["legacy_schema_2", "analysis"])
@@ -454,6 +488,12 @@ def test_a_bundle_trained_under_a_rule_with_every_class_scores_the_anchored_wind
         True, plan.WINDOW + 1, {role: 6 * (plan.WINDOWS - 1) for role in plan.FIT})
     assert {name: spec["quantity"] for name, spec in manifest["rule_channel"]["ranges"].items()} == {
         "mod_total": "value", "sock_listen": "since_session_start", "proc_wx": "value", "proc_memfd": "value"}
+    # Package B11: sock_listen is rule_differenced, so the manifest states the lead's limitation of question Q8, and
+    # the bundle extracts a live frame from the bins it scores (question Q10).
+    from safeguard.features import SESSION_START_LIMITATION
+    assert manifest["rule_channel"]["limitation"] == SESSION_START_LIMITATION
+    assert manifest["limitations"][2:] == [SESSION_START_LIMITATION]
+    assert bundle.min_bin_pages == 1024 == manifest["normalizer"]["rule"]["min_bin_pages"]
     table = manifest["sensitivity"]
     assert [row["name"] for row in table["columns"]] == tcn
     where = table["window"]

@@ -97,9 +97,16 @@ neurónové). Vstupom TCN sú stĺpce triedy `neural` (hodnota) a `differenced`
 (prvá diferencia proti poslednému meranému riadku tej istej session, aj cez
 vylúčený riadok, ako ju berie kvalifikácia); stĺpce `rule` a `rule_differenced`
 idú do pravidlového kanála (pri `rule_differenced` sa posudzuje zmena od prvého
-meraného riadka session, otázka Q8) a `dropped` nikam. Mierka stĺpca je aspoň jeho dolná
-hranica (pri počtoch jedna jednotka). Bin s menej ako `min_bin_pages` stránkami sa
-nefituje ani neskóruje; každý ďalší bin má pri `per_bin` vlastnú mierku. Entropia
+meraného riadka session, otázka Q8, prijaté vedúcim 2026-11-24) a `dropped` nikam.
+Mierka stĺpca je aspoň jeho dolná hranica (pri počtoch jedna jednotka). Bin s menej
+ako `min_bin_pages` stránkami sa nefituje ani neskóruje; z tých istých binov s aspoň
+`min_bin_pages` stránkami počíta extraktor aj všetkých osem globálnych pamäťových
+stĺpcov vrátane `mem_bins_active` (jeden predikát `features.snapshot.counted_bin` pre
+extraktor aj normalizér, odpoveď vedúceho na otázku Q10 z 2026-11-24): audit
+s hodnotou z protokolu, živý beh s hodnotou z balíka (`Bundle.min_bin_pages`), pod
+schémou 1 a 2 z každého binu. Jedna zmenená stránka binu s jednou stránkou tak nikdy
+nedá `mem_changed_max` 1,0. Hodnota nemá predvolenú hodnotu a sidecar bez takého
+binu je chyba extrakcie. Každý ďalší bin má pri `per_bin` vlastnú mierku. Entropia
 sa fituje iba tam, kde `has_changed=1`; pri transformácii má nemeraná entropia
 hodnotu nula a maska sa nemení. Pravidlo ide s parametrami do manifestu a pri
 prehrávaní ani živom skórovaní sa nič znovu nefituje. Okno s diferencovaným
@@ -138,7 +145,9 @@ skóre, až keď je celá história dostupná. Pravidlový kanál posúdi každ�
 riadok: hodnota stĺpca triedy `rule` alebo zmena stĺpca triedy `rule_differenced`
 od prvého meraného riadka session mimo rozsahu z `train` a `calibration` je
 prekročenie (iná stála úroveň v novom boote teda nie je prekročenie, trvalý krok
-áno) a alarm
+áno; stav prítomný už v prvom meranom riadku session toto pravidlo nevidí a v živom
+behu je prvým riadkom prvý riadok po štarte detektora, čo manifest uvádza medzi
+obmedzeniami, odpoveď vedúceho na otázku Q8 z 2026-11-24) a alarm
 je to isté pravidlo `k` z `n` s vlastnou históriou a tými istými resetmi (zdroj
 `rule_anomaly`); nikdy sa neuvádza ako neurónová detekcia. Každý riadok nesie
 `channel`: kanály (`rule`, `neural`, `kernel_integrity`), ktorých alarm je na ňom
@@ -151,7 +160,11 @@ prah neladí podľa jeho výsledku.
 Nový adresár modelu obsahuje `manifest.json`, `predictor.pt` a `classifier.pt`.
 Manifest ukladá poradie príznakov, biny, geometriu, okno, normalizáciu s jej
 pravidlom, architektúru, triedy, vzorce skórovania, kalibráciu, rozsahy
-pravidlového kanála, hashe váh a provenienciu.
+pravidlového kanála (pri stĺpci `rule_differenced` aj s obmedzením z otázky Q8,
+ktoré je potom aj v `limitations`), vopred zapísané znenie pre prípad, že všetku
+detekciu nesie pravidlový kanál (`analysis_wording.rule_channel_only`, doslovne
+z kap. 8.2 návrhu, so zdrojom potvrdeným vedúcim 2026-11-24, otázka Q6), hashe váh
+a provenienciu.
 Načítanie overí kompatibilitu a kontrolné súčty. Hashe chránia pred zmenou
 súborov oproti manifestu; neoverujú pôvod balíka od neznámeho autora.
 

@@ -136,8 +136,8 @@ Pred `campaign.py init` sa preto VM vypne a znova spustí, čím vznikne nový
 proces QEMU:
 
 ```sh
-.venv/bin/python scripts/labctl.py stop     # potom čakať na `virsh -c qemu:///session domstate hyptcn-lab` = shut off
-.venv/bin/python scripts/labctl.py start
+.venv/bin/python scripts/labctl.py stop     # počká, kým je VM vypnutá a jej proces QEMU skončil (B9)
+.venv/bin/python scripts/labctl.py start    # QEMU vznikne v jednotke démona (oddiel nižšie)
 .venv/bin/python scripts/labctl.py status
 ```
 
@@ -155,6 +155,41 @@ netreba. Je to skutočné HTTP cez sieťový adaptér VM; požiadavky nespracúv
 hostiteľská náhrada služieb. Nastavenie vychádza z
 [libvirt Domain XML](https://libvirt.org/formatdomain.html#userspace-connection-using-slirp).
 Toto laboratórium nie je izolované prostredie na spúšťanie malvéru.
+
+### Démon libvirt v jednotke a pamäť QEMU
+
+Pokyn vedúceho k nálezu F4 z B5a a jeho odpoveď na Q26 (2026-11-24). VM labu bežia pod
+`qemu:///session`, kde libvirt cgroup nespravuje: proces QEMU zdedí cgroup démona, ktorý ho spustil,
+a jeho stránky sa účtujú tam, kde vznikli. Presun bežiaceho QEMU do vlastného scope (cesta 2) presunie
+proces, nie jeho pamäť. `labctl` preto drží démona relácie v prechodnej jednotke používateľa
+`hyptcn-libvirtd.service` (`systemd-run --user --unit hyptcn-libvirtd -p MemorySwapMax=0
+-p KillMode=process /usr/sbin/libvirtd --timeout=120`) a QEMU vzniká v nej (cesta 1).
+`KillMode=process` nechá pri zastavení démona bežiace QEMU nažive. Démon sa po 120 s bez domény
+ukončí, preto ho `labctl start` a `labctl stop` zabezpečia pred prvým volaním `virsh`. Žiadne volanie
+`virsh` v `labctl` démona samo nespúšťa (`LIBVIRT_AUTOSTART=0`), takže démon mimo jednotky nevznikne
+potichu. Démon mimo jednotky sa nahradí iba vtedy, keď nebeží žiadna doména.
+
+- **Migrácia, raz:** obe VM vypnúť (`labctl stop` každej s jej `--domain`, `--vm` a `--port`), potom
+  `labctl daemon` a `labctl start` každej VM. `labctl daemon` vypíše záznam démona (`libvirtd`), jednotku
+  spustí, ak žiadny démon nebeží, démona mimo jednotky bez bežiacej domény nahradí a démona mimo
+  jednotky, kým beží doména, odmietne s týmto postupom (kód 1). Je to aj kontrola pred spustením kampane.
+- **Záznam štartu:** posledný riadok `labctl start` (`qemu_swap`) nesie pid, cgroup a cestu QEMU
+  (`way`: `unit` v jednotke démona, `scope` po presune, dočasne) a `memory`: `memory.current` a `anon`
+  z `memory.stat` jeho cgroup, `VmRSS` a `RssAnon` každého QEMU v jej `cgroup.procs`, podiel `share`
+  = `anon` / súčet `RssAnon` a `charged` = `share` aspoň 0,9 (úsudok skúšky labu, prijatý vedúcim
+  v Q26). Doslovná rovnosť s RSS nenastane: oba QEMU, `libvirtd`, `virtlogd` a `passt` ležia v jednej
+  jednotke a `memory.current` počíta aj page cache obrazov diskov.
+- **Zlyhanie:** `labctl start` skončí kódom 1 s nálezom F4, keď QEMU leží v jednotke, ale jej pamäť
+  nie (`charged` false), alebo keď tento príkaz spustil QEMU mimo jednotky (ten najprv presunie do
+  scope, ako doteraz). Štart skupiny v kampani tým zlyhá na kroku `start`. Bežiaci QEMU, ktorý `labctl`
+  nespustil, ide cestou 2 ako dočasný a bez chyby.
+- **Po reštarte hostiteľa:** démon nebeží. Prvý `labctl start`, `labctl stop` alebo `labctl daemon`
+  ho spustí v jednotke a VM, ktoré libvirt pri vypnutí uložil, sa obnovia už v nej. Iné príkazy, ktoré
+  volajú `virsh` (napríklad `labctl status`), bez démona zlyhajú.
+
+Skúška zákazu swapu bez roota je v `dokazy/B5/skuska_swapu.md` (cesta 1 s izolovaným démonom, cesta 2
+na skutočnej VM). Prevzatie na skutočných VM (QEMU v jednotke, `memory.swap.max` 0, `charged`) robí
+okno na VM pred záznamom G0 (odpoveď vedúceho na Q27).
 
 ## Premávka a ovládanie
 
@@ -241,6 +276,18 @@ počas kampane. Revízia 2026-10-21 zistila, že posledné tri časovače ešte 
 nerotuje (sú mimo `/var/log/nginx/`). Identita hosťa obsahuje zoznam
 aktívnych časovačov, takže znovu zapnutý časovač (najneskôr po reštarte
 skupiny) zmení prostredie a kampaň zastaví pred ďalšou session.
+
+PostgreSQL v hosťovi beží s predvolenými nastaveniami okrem `autovacuum_naptime` = 67 s
+(`lab/hyptcn-lab-postgresql.conf`; návrh, kap. 12, odpoveď vedúceho na Q9, 2026-11-24).
+`install.sh` súbor nalinkuje do `/etc/postgresql/15/main/conf.d/`, reštartuje `postgresql@15-main`
+a nasadenie odmietne, ak `SHOW autovacuum_naptime` nedá `67s` alebo `SHOW autovacuum` nedá `on`. Dôvod:
+pri predvolených 60 s a troch databázach spúšťal spúšťač autovacuum pracovníka každých 20,006 s,
+presne štyri intervaly zberu, s takmer stálou fázou voči snímkam
+([záznam skúšky labu](../data/results/skuska_labu_20261123T092454Z_cast1.json)); pri 67 s je rozstup
+22,33 s a fáza sa posúva. Štart pracovníka zapíše žurnál iba pri `log_min_messages = debug1`:
+`scripts/lab_trial.py long --postgres-debug1` to na jeden beh nastaví (`ALTER SYSTEM SET`, aj
+`log_destination = 'stderr,syslog'`) a po ňom vráti (`ALTER SYSTEM RESET`); výsledok behu menuje oba
+kroky. Register periód (`lab/periods.json`) nesie nameraný rozstup pred zmenou aj po nej.
 
 Incident 2026-10-20: adresár logov mal najprv práva `0750`. Pracovné procesy
 nginx (`www-data`) preto po uzavretí segmentu nemohli log znovu otvoriť

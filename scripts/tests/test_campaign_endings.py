@@ -460,9 +460,9 @@ def test_an_operator_stop_names_its_reason_and_the_resume_ends_complete(tmp_path
         "ending": "stopped", "cause": v["cause"], "record": pointer["record"], "sha256": pointer["sha256"]}
     assert digest(c.RESULTS / c.latest_ending(directory)["record"]) == c.latest_ending(directory)["sha256"]
     assert {r["state"] for r in w["sessions"]} == {"accepted"} and len(w["unscored"]["sessions"]) == len(index["sessions"])
-    # Question Q21 (decided by its proposal): the ledger of record in the working tree holds every accepted session of
-    # the sealed roles (the harness's KNIHA and ZAZNAM are one file), so the complete record is final; the ledger at
-    # HEAD is not asked, tcn.finalne checks it when it reads the record.
+    # Question Q21 (accepted by the lead 2026-11-24): the ledger of record in the working tree holds every accepted
+    # session of the sealed roles (the harness's KNIHA and ZAZNAM are one file), so the complete record is final; the
+    # ledger at HEAD is not asked, tcn.finalne checks it when it reads the record.
     basis = w["stage"]["basis"]
     assert complete["stage"] == w["stage"]["stage"] == "final" and basis["sealed"] == 12, basis
     assert (basis["of_record"], basis["at_head"], basis["seal_in_git"], basis["missing"]) == (True, False, None, [])
@@ -515,7 +515,9 @@ def test_the_one_continuation_needs_a_paused_campaign_and_names_every_refusal(tm
     ending still pending and a changed paused record are refused by name, before anything is frozen (skeleton test 3
     has the missing cause and the changed measurement code, agent T). The continuation names the paused record, its
     cause and the paused campaign's rejections, its records carry them on (the continuation as a deviation, the
-    rejections in rejected_sessions), and a continuation is never continued."""
+    rejections in rejected_sessions), and a continuation is never continued. Package B11 (the lead's answer to Q24):
+    the records of the continuation carry the deviations of the paused record as well, each tagged with the paused
+    campaign and that record."""
     h = harness(tmp_path, monkeypatch)
     protocol = h.protocol("kampan-protocol", limit=0)
     rehearsal = ended_rehearsal(h, protocol)
@@ -570,15 +572,18 @@ def test_the_one_continuation_needs_a_paused_campaign_and_names_every_refusal(tm
         c.execute(continuation, vm=first["vm"])
     (ending, stopped), = records(continuation)
     v = stopped["values"]
-    assert ending == "stopped" and [x["event"] for x in v["deviations"]] == ["continuation", "operator_stop"]
-    assert v["deviations"][0]["cause"] == "the gap came from the host's backup job, now disabled"
+    assert ending == "stopped" and [(x["event"], x.get("campaign")) for x in v["deviations"]] == [
+        ("pause", "kampan"), ("continuation", None), ("operator_stop", None)]
+    paused = read_json(c.RESULTS / pointer["record"])["values"]["deviations"]
+    assert v["deviations"][0] == {**paused[0], "campaign": "kampan", "carried_from": pointer["record"]}
+    assert v["deviations"][1]["cause"] == "the gap came from the host's backup job, now disabled"
     assert v["rejected_sessions"] == record["rejected_sessions"]
     assert (v["continues"]["campaign"], v["continues"]["paused_record"]) == ("kampan", record["paused_record"])
 
 
 def test_a_campaign_on_a_ledger_of_its_own_is_recorded_suchy(tmp_path, monkeypatch):
-    """Question Q21 (decided by its proposal until the lead answers; finding N2 of B7c): the ending record asks no ledger
-    at HEAD, so a test or the G1 dry run that keeps a ledger of its own (tcn.pecat vlastna_kniha) must still be suchy:
+    """Question Q21 (accepted by the lead 2026-11-24; finding N2 of B7c): the ending record asks no ledger at HEAD,
+    so a test or the G1 dry run that keeps a ledger of its own (tcn.pecat vlastna_kniha) must still be suchy:
     a campaign run to its end there seals its accepted sessions of the sealed roles into that ledger, and its complete
     record is suchy, its basis naming the ledger that is not the ledger of record."""
     from tcn import pecat
@@ -597,8 +602,9 @@ def test_a_campaign_on_a_ledger_of_its_own_is_recorded_suchy(tmp_path, monkeypat
 
 
 def test_a_resumed_run_starts_the_failed_group_again_and_the_campaign_completes(tmp_path, monkeypatch):
-    """GROUP_START_RULE and question Q22 (decided by its proposal until the lead answers): a failed start of a group
-    (labctl reset of VM a's first group fails once) is no rejection of a session: its record names the step and the
+    """GROUP_START_RULE and question Q22 (accepted by the lead 2026-11-24: a failed start of a group is no session and
+    does not charge the limit of replacements): a failed start of a group (labctl reset of VM a's first group fails
+    once) is no rejection of a session: its record names the step and the
     cause group_start, the runner stops by name and the stopped record lists the failure. A resumed run starts the
     group again from its beginning (stop, start, reset, pretouch) and captures its sessions as planned, as attempt 1:
     nothing is replaced and the limit (0) is not charged; the campaign completes, and its complete record lists the
@@ -828,7 +834,10 @@ def test_an_early_stop_asks_for_a_written_cause_before_the_campaign_runs_again(t
     --cause TEXT, or a launch with it (its systemd-run faked; no VM named), writes
     deviations/<UTC>_resume-after-early-stop[_<vm>].json, which answers the stopped record by name and sha256, so that
     the plain runs of both VMs go on; the campaign completes, and its complete record names the early stop (its kind,
-    cause, record and sha256) and the written cause among its deviations."""
+    cause, record and sha256) and the written cause among its deviations. Package B11 (the lead's answer to Q24: every
+    stop and every resume is a deviation): the stopped record's deviations are exactly its own early stop, with the
+    session and the decision; the written cause states its condition, the frozen maps found unchanged and that it
+    uses no continuation."""
     h = harness(tmp_path, monkeypatch)
     directory = campaign_of(h, limit=1)
     first = h.plan_rows(directory)[0]
@@ -841,6 +850,11 @@ def test_an_early_stop_asks_for_a_written_cause_before_the_campaign_runs_again(t
     pointer = c.latest_ending(directory)
     assert ending == "stopped" and pointer["cause"].startswith(
         f"early stop after the audit of {first['session_id']}: a session rejected for periodicity")
+    own, = stopped["values"]["deviations"]
+    assert {k: own[k] for k in ("event", "vm", "session", "cause")} == {
+        "event": "early_stop", "vm": first["vm"], "session": first["session_id"], "cause": pointer["cause"]}
+    assert own["decision"] == {"cause": "periodicity", "type": None, "count": 3, "bound": 3, "occurrences": None,
+                               "rate": None, "since": None, "sessions": 1}
     said = (f"campaign kampan stopped early ({pointer['cause']}; record {pointer['record']}): an early stop is a stop "
             "and a question (HARNESS chapter 7); {} it again with --cause TEXT, the written analysis of its cause")
     for vm in VMS:
@@ -874,6 +888,10 @@ def test_an_early_stop_asks_for_a_written_cause_before_the_campaign_runs_again(t
     assert (doc["answers"]["record"], doc["answers"]["sha256"]) == (pointer["record"], pointer["sha256"])
     assert shlex.split(doc["command"])[1:3] == ["scripts/campaign.py", by]
     assert shlex.split(doc["command"])[-2:] == ["--cause", cause]
+    assert doc["condition"] == c.RESUME_CONDITION and "no cause in the measurement code or the lab" in doc["condition"]
+    assert doc["frozen"] == {"unchanged": True, "maps": ["measurement_files_sha256", "lab_sha256"],
+                             "measurement_sha256": h.manifest(directory)["measurement_sha256"]}
+    assert doc["continuation"].startswith("none")
     h.run(directory)  # Plain runs of both VMs: one answer serves both.
     (_, _), (last, complete) = records(directory)
     events = {x["event"]: x for x in complete["values"]["deviations"]}
@@ -883,6 +901,7 @@ def test_an_early_stop_asks_for_a_written_cause_before_the_campaign_runs_again(t
     resumed = events["resume_after_early_stop"]
     assert (resumed["cause"], resumed["vm"], resumed["deviation"], resumed["answers"]["record"]) == (
         cause, vm, answer.name, pointer["record"])
+    assert resumed["condition"] == c.RESUME_CONDITION and "early_stop" not in events  # Its own record holds it.
 
 
 def test_an_unclean_end_is_a_deviation_of_every_later_record(tmp_path, monkeypatch):
@@ -1057,3 +1076,218 @@ def test_a_written_cause_answers_only_its_own_early_stop(tmp_path, monkeypatch):
                 if x["event"] == "resume_after_early_stop"]
     assert complete["ending"] == "complete" and earlier == [one["record"], two["record"]]
     assert answered == [(one["record"], causes[0]), (two["record"], causes[1])]
+
+
+# ---------------------------------------------------------------- package B11 (agent G): the lead's answer to Q24, N1
+
+CONTINUE = ["init", "--mode", "campaign", "--name", "pokracovanie", "--archive-on-system-disk", "--archive-compression",
+            "none"]  # init --continue of a paused campaign, beside its protocol, archive, rehearsal and cause.
+
+
+def continue_campaign(h, protocol, directory, cause):
+    """init --continue of the paused campaign `directory` (CONTINUATION_RULE), as the operator runs it; the
+    continuation's directory."""
+    argv = [*CONTINUE, "--protocol", str(protocol), "--archive-root", str(h.archive), "--estimate-from",
+            str(h.root / "rehearsals" / "kampan-generalka"), "--continue", str(directory), "--cause", cause]
+    with contextlib.redirect_stdout(io.StringIO()):
+        c.main(argv)
+    h.campaigns.append(h.base / "pokracovanie")
+    return h.base / "pokracovanie"
+
+
+def test_a_resume_after_an_early_stop_uses_no_continuation(tmp_path, monkeypatch):
+    """RESUME_RULE and CONTINUATION_RULE (the lead's answer to Q24, 2026-11-24): a resume after an early stop does not
+    use up the one continuation after an exhausted limit (proposal 7.5). Limit 1: the first session of the plan is
+    rejected for periodicity and replaced, and the early stop stops the campaign; run --cause resumes it; the
+    replacement is rejected again, which the exhausted limit refuses (the count of replacements ran on across the
+    resume), so the campaign pauses. The paused record lists the early stop (an earlier ending), the resume and the
+    pause; init --continue is admitted, and the continuation's records carry those deviations, each tagged with the
+    paused campaign and its record."""
+    h = harness(tmp_path, monkeypatch)
+    directory = campaign_of(h, limit=1)
+    first = h.plan_rows(directory)[0]
+    for attempt, code in ((1, PERIODICITY), (2, None)):
+        key = ("kampan", first["group"], first["scenario"], attempt)
+        h.reject.add(key)
+        if code:
+            h.codes[key] = code
+    with contextlib.redirect_stdout(io.StringIO()):
+        assert c.execute(directory, vm=first["vm"]) == 0
+        stopped = c.latest_ending(directory)
+        assert stopped["ending"] == "stopped" and "early stop after the audit of" in stopped["cause"]
+        assert c.execute(directory, vm=first["vm"], cause="the periodic rows came from a host timer, now off "
+                                                          "(synthetic cause of the test)") == 0
+    (_, early), (ending, paused) = records(directory)
+    assert ending == "paused" and [x["event"] for x in early["values"]["deviations"]] == ["early_stop"]
+    v = paused["values"]
+    assert v["limit"] == {"applied": True, "max_per_campaign": 1, "used": 1}
+    assert [(r["session"], r["replacement"]) for r in v["rejected_sessions"]] == [
+        (first["session_id"], first["session_id"] + "-r1"), (first["session_id"] + "-r1", None)]
+    assert [x["event"] for x in v["deviations"]] == ["earlier_ending", "resume_after_early_stop", "pause"]
+    assert v["deviations"][0]["record"] == stopped["record"] and v["deviations"][1]["answers"]["record"] == (
+        stopped["record"])
+    continuation = continue_campaign(h, h.root / "kampan-protocol.json", directory, "the second rejection came from a "
+                                     "full archive disk, now emptied (synthetic cause of the test)")
+    assert h.manifest(continuation)["continues"]["paused_record"]["record"] == c.latest_ending(directory)["record"]
+    stop_during_the_first_capture(h, monkeypatch, continuation, first["vm"], "a test")
+    with contextlib.redirect_stdout(io.StringIO()):
+        c.execute(continuation, vm=first["vm"])
+    (_, record), = records(continuation)
+    carried = [x for x in record["values"]["deviations"] if x.get("campaign") == "kampan"]
+    pointer = c.latest_ending(directory)
+    assert carried == [{**x, "campaign": "kampan", "carried_from": pointer["record"]} for x in v["deviations"]]
+    assert [x["event"] for x in record["values"]["deviations"] if x.get("campaign") is None] == [
+        "continuation", "operator_stop"]
+
+
+@pytest.mark.parametrize("by", ["run_with_cause", "plain_run", "launch"])
+def test_an_early_stop_is_never_resumed_after_a_change_of_the_frozen_code(tmp_path, monkeypatch, by):
+    """RESUME_RULE and INVALID_RULE (the lead's answer to Q24: a resume needs the frozen hashes unchanged): after an
+    early stop the lab changes (a frozen file of lab/ with another sha256). run --cause, a plain run and a launch each
+    end the campaign as invalid through the real verify_frozen: answer_early_stop compares the frozen maps first and,
+    with a change, writes no resume and refuses nothing. The invalid record names the changed file, the campaign holds
+    the ending invalid, and no resume-after-early-stop deviation exists."""
+    h = harness(tmp_path, monkeypatch)
+    directory = campaign_of(h, limit=1)
+    first = h.plan_rows(directory)[0]
+    key = (first["group"], first["scenario"], 1)
+    h.reject.add(key)
+    h.codes[key] = PERIODICITY
+    with contextlib.redirect_stdout(io.StringIO()):
+        assert c.execute(directory, vm=first["vm"]) == 0
+    assert c.early_stop_record(directory) is not None
+    monkeypatch.setattr(c, "verify_frozen", REAL_VERIFY)
+    lab = collection.lab_sha256()
+    monkeypatch.setattr(collection, "lab_sha256", lambda: {**lab, "lab/udalosti.py": "0" * 64})
+    cause = "the periodic rows came from the lab itself (synthetic cause of the test)"
+    with pytest.raises(c.CampaignInvalid, match="lab/udalosti.py\\) changed during the campaign"), \
+            contextlib.redirect_stdout(io.StringIO()):
+        if by == "launch":
+            c.launch(directory, cause=cause)
+        else:
+            c.execute(directory, vm=first["vm"], cause=cause if by == "run_with_cause" else None)
+    assert list((directory / "deviations").glob("*resume-after-early-stop*")) == []
+    (_, _), (ending, invalid) = records(directory)
+    assert (ending, c.held_ending(directory)) == ("invalid", "invalid")
+    said = invalid["values"]["cause"]
+    assert said.startswith("launch: " if by == "launch" else "error: ") and "lab/udalosti.py" in said
+    assert [x["event"] for x in invalid["values"]["deviations"]] == ["earlier_ending", "invalidation"]
+
+
+def test_a_runner_held_inside_refuse_ended_captures_nothing_after_a_pause(tmp_path, monkeypatch):
+    """N1 of the confirmation of B9b (the verifier's probe sondy/potvrdenie/test_p1b_window.py): VM b's runner is held
+    inside refuse_ended, after refuse_held and before its first capture, while VM a's first session is rejected over
+    the limit 0 and the campaign's paused record is written. The run counts the recorded endings right after settle,
+    before refuse_held, and reads held_ending before every capture, so VM b's runner stops before its first capture as
+    part of the pause: nothing is captured after the paused record, VM b's state is paused with the record named, and
+    no second record is written. VM b's runner may capture in this test (the harness's main thread is its thread), so
+    a capture would show."""
+    h = harness(tmp_path, monkeypatch)
+    directory = campaign_of(h, limit=0)
+    first_a = next(r for r in h.plan_rows(directory) if r["vm"] == "a")
+    h.reject.add((first_a["group"], first_a["scenario"], 1))
+    monkeypatch.setattr(collection, "Interrupts", NoSignals)
+    main = threading.main_thread()
+    monkeypatch.setattr(threading, "main_thread", lambda: threading.current_thread())
+    at_hook, go, outcome = threading.Event(), threading.Event(), []
+    real_refuse_ended = c.refuse_ended
+
+    def refuse_ended(*args, **kwargs):
+        if threading.current_thread() is not main and not at_hook.is_set():
+            at_hook.set()
+            assert go.wait(THREAD_S)
+        return real_refuse_ended(*args, **kwargs)
+    monkeypatch.setattr(c, "refuse_ended", refuse_ended)
+
+    def run_b():
+        try:
+            with contextlib.redirect_stdout(io.StringIO()):
+                outcome.append(c.execute(directory, vm="b"))
+        except BaseException as error:  # noqa: BLE001 - reported by the test
+            outcome.append(error)
+    held = threading.Thread(target=run_b, daemon=True)
+    held.start()
+    try:
+        assert at_hook.wait(THREAD_S)
+        assert h.status(directory, "b").get("status") != "running"  # Held before its state says running.
+        h.step(directory, "a")  # VM a's first session is rejected over the limit 0: the pause, recorded at once.
+        (ending, _), = records(directory)
+        assert ending == "paused"
+        captured = len(h.of(directory))
+    finally:
+        go.set()
+        held.join(THREAD_S)
+    assert not held.is_alive() and outcome == [0], outcome
+    assert h.of(directory)[captured:] == [] and [ending for ending, _ in records(directory)] == ["paused"]
+    state = h.status(directory, "b")
+    assert (state["status"], state["stage"], state.get("ending_record")) == (
+        "paused", "between-sessions", c.latest_ending(directory)["record"])
+    assert "after this run started: this runner stopped before its next capture" in state["message"]
+
+
+def test_the_count_of_the_early_stop_runs_on_across_the_continuation(tmp_path, monkeypatch):
+    """EARLY_STOP_RULE (the accepted text of Q24, 's náhradami aj s pokračovaním'; package B11): the rate 0.05 per
+    occurrence at an event type gives the bound 1 at one occurrence and at two. The paused campaign's first session
+    holds one marked row at that type in its one occurrence (1 of 1, no stop) and is rejected over the limit 0: the
+    pause. The continuation's first session holds one more (1 of 1 alone, no stop), but its count runs on from the
+    paused campaign: 2 marked rows in 2 occurrences over 2 audited sessions, above the bound 1, so the continuation
+    stops early, and its stopped record names the paused campaign in the cause and in the early stop's decision."""
+    edit = lambda doc: doc["audit"]["early_stop"]["marked_rows_rate_per_type"].update({"restart_databazy": 0.05})
+    h = harness(tmp_path, monkeypatch)
+    protocol = h.protocol("kampan-protocol", limit=0, edit=edit)
+    directory = h.init(protocol, "campaign", "kampan", estimate_from=ended_rehearsal(h, protocol, "kampan-generalka"))
+    first = h.plan_rows(directory)[0]
+    h.reject.add(("kampan", first["group"], first["scenario"], 1))
+    for name in ("kampan", "pokracovanie"):
+        h.marked[name, first["group"], first["scenario"], 1] = {"restart_databazy": 1}
+    assert h.step(directory, first["vm"])
+    assert c.latest_ending(directory)["ending"] == "paused"
+    continuation = continue_campaign(h, protocol, directory, "the rejection came from the host's backup job, now "
+                                                             "disabled (synthetic cause of the test)")
+    with contextlib.redirect_stdout(io.StringIO()):
+        assert c.execute(continuation, vm=first["vm"]) == 0
+    (ending, stopped), = records(continuation)
+    sid = next(r for r in h.plan_rows(continuation) if r["vm"] == first["vm"])["session_id"]
+    assert ending == "stopped" and stopped["values"]["cause"] == (
+        f"early stop after the audit of {sid}: 2 marked rows at the events of type restart_databazy in its 2 "
+        "occurrences over 2 audited sessions since the start of the campaign (with those of the paused campaign "
+        "kampan, which this continuation continues), above the bound 1, the 99th percentile of the Poisson "
+        "distribution at the rate 0.05 per occurrence of audit.early_stop.marked_rows_rate_per_type times its "
+        "occurrences")
+    early, = (x for x in stopped["values"]["deviations"] if x["event"] == "early_stop")
+    assert {k: early["decision"][k] for k in ("count", "occurrences", "bound", "sessions", "since", "continued")} == {
+        "count": 2, "occurrences": 2, "bound": 1, "sessions": 2, "since": None, "continued": "kampan"}
+    assert len(h.of(continuation)) == 1  # Nothing is captured after the session that stopped it.
+
+
+def test_a_continuation_carries_the_deviations_of_the_paused_record_or_names_it(tmp_path, monkeypatch):
+    """ENDING_RULE and CONTINUATION_RULE (package B11): the deviations of the paused record a continuation continues
+    are carried into its records, read after the sha256 check of the record's name and each tagged with the paused
+    campaign and that record, in the time order of all deviations; a paused record that is missing, changed or holds
+    no list of deviations is named as one deviation instead, and the record of the ending is written all the same."""
+    monkeypatch.setattr(c, "RESULTS", tmp_path / "results")
+    c.RESULTS.mkdir()
+    paused = c.RESULTS / "kampan_kampan_paused_20261124T000000000000Z.json"
+    deviations = [{"event": "earlier_ending", "ending": "stopped", "date": "2026-11-24T00:00:01+00:00",
+                   "record": "kampan_kampan_stopped_20261124T000001000000Z.json"},
+                  {"event": "pause", "date": "2026-11-24T00:00:03+00:00", "vm": "a", "cause": "a test's pause"}]
+    write_new(paused, {"values": {"ending": "paused", "deviations": deviations}})
+    continues = {"campaign": "kampan", "cause": "a test's cause", "paused_record": {
+        "record": paused.name, "sha256": digest(paused), "date": "2026-11-24T00:00:03+00:00"}}
+    campaign = {"date": "2026-11-24T00:00:05+00:00", "continues": continues, "sessions": []}
+    found = c.deviation_events(tmp_path, campaign, [], {"ok": True})
+    assert [(x["event"], x.get("campaign"), x.get("carried_from")) for x in found] == [
+        ("earlier_ending", "kampan", paused.name), ("pause", "kampan", paused.name), ("continuation", None, None)]
+    assert found[0]["record"] == deviations[0]["record"]  # The tag never hides a key of the carried deviation.
+    for broken in ("changed", "no_list", "missing"):
+        if broken == "changed":
+            paused.write_text(paused.read_text() + " ")
+        elif broken == "no_list":
+            write_new(paused, {"values": {"deviations": "none"}}, replace=True)
+            continues["paused_record"]["sha256"] = digest(paused)
+        else:
+            paused.unlink()
+        unread, continuation = c.deviation_events(tmp_path, campaign, [], {"ok": True})
+        assert (unread["event"], unread["campaign"], unread["record"], continuation["event"]) == (
+            "paused_record_unread", "kampan", paused.name, "continuation"), broken
+        assert unread["cause"].startswith("the deviations of the paused record of campaign kampan cannot be carried: ")

@@ -776,10 +776,10 @@ def assert_ending(h, directory, kind, *, expected=None, which=-1):
 
     Its identity: kampan_<campaign id>_<ending>_<UTC stamp>.json (the ending by its kind or by its Slovak name, a space
     of which may be an underscore), schema hyptcn3/campaign-ending/1, the provenance header of check E, the Slovak name
-    of its ending (the skeleton's) in it. Its stage (finding N2 of B7c, tcn.pecat record_stage; question Q21, decided
-    by its proposal: the ending record asks no ledger at HEAD): with accepted sessions of the sealed roles, which the
-    ledger of record holds (the harness's KNIHA and ZAZNAM are one file), generalka for a rehearsal and final for a
-    campaign; else suchy with its basis.
+    of its ending (the skeleton's) in it. Its stage (finding N2 of B7c, tcn.pecat record_stage; question Q21, accepted
+    by the lead 2026-11-24: the ending record asks no ledger at HEAD): with accepted sessions of the sealed roles,
+    which the ledger of record holds (the harness's KNIHA and ZAZNAM are one file), generalka for a rehearsal and
+    final for a campaign; else suchy with its basis.
     Its values: the keys of 1.1; one row per planned session and attempt with its state, cause and replacement (a
     continuation: its own attempts, the sessions it took over accepted); the planned and accepted sessions; the
     rejected sessions {session, cause, replacement}, the counts by cause and the replacements used (a continuation: at

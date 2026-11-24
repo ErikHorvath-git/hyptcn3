@@ -20,7 +20,9 @@ reads the analysis plan of the file itself (decision_protocol, tcn.tvrdenia.rozh
 tcn/diagnostiky.py take the detection of tcn.k2.detection. The fixes of the verification of B7b: K2 and Z1's criterion
 pool both classes whenever one is evaluated (F1, tcn.k2 POOL_RULE); every placed intervention has its whole horizon
 (F6); a test for each mutant that survived the verifier's round (F5: the jump back after a block, a detected
-intervention of the volume class, the boots of the campaign, a reset inside a placeable stretch).
+intervention of the volume class, the boots of the campaign, a reset inside a placeable stretch). Package B11 (agent E,
+the lead's answer to question Q14): the validity predicate judges a new deviation only, the moving average does not
+depend on the order of the rows, and the share of the volume class by class and length with its finding for the lead.
 """
 import copy
 import json
@@ -69,7 +71,7 @@ def protocol(*changes):
     """config/collection-v5.json, a schema-3 protocol (the merge of B7b: scripts/protocol_v5.py analysis_seed draws the
     stream injections from its checked analysis plan), with TEST_VALUES and then `changes` ((dotted path, value or
     DELETE)); the descriptive methods that draw from a seed take the seeds of analysis.seeds, as the plan's check wants.
-    K2a compares Z1, Z2, Z4:load and Z4:residual, as the file does (question Q13, provisional)."""
+    K2a compares Z1, Z2, Z4:load and Z4:residual, as the file does (question Q13, accepted by the lead 2026-11-24)."""
     doc = json.loads((ROOT / "config/collection-v5.json").read_text())
     for path, value in TEST_VALUES + changes:
         *parents, last = path.split(".")
@@ -544,9 +546,11 @@ def _backwards(c):
     (_backwards, 3, ("difference", "mem_bins_active", 3)),            # the jump back after the block (mutant V6)
 ])
 def test_the_validity_predicate_on_both_sides(change, length, reason):
-    """VALIDITY_RULE: the first violation names the quantity, the input and the row from the block's first row; a
-    value the intervention leaves as it was is not judged; the rows after the block whose difference or moving average
-    reads it are judged (the jump back at the first row after a block, F5 of the verification of B7b)."""
+    """VALIDITY_RULE: the first violation names the quantity, the input and the row from the block's first row, and
+    its value lies outside the train range and outside the range the same quantity had at the judged rows before the
+    intervention (the lead's new deviation, question Q14: every value of the block and its edges is judged); the rows
+    after the block whose difference or moving average reads it are judged (the jump back at the first row after a
+    block, F5 of the verification of B7b)."""
     from tcn.zasahy import violations
     ranges = ranges_of(series)
     original = series(0, 24)
@@ -559,6 +563,65 @@ def test_the_validity_predicate_on_both_sides(change, length, reason):
     assert (found[0]["quantity"], found[0]["input"], found[0]["row"]) == reason
     lo, hi = found[0]["range"]
     assert not lo <= found[0]["value"] <= hi
+    low, high = found[0]["before"]  # Package B11 (Q14): the range of the block itself before the intervention.
+    assert not low <= found[0]["value"] <= high
+
+
+def flat_first(s, rows=80):
+    """series() with its first column (mem_changed_ratio) flat at 0 in every row: its train range is [0, 0] for every
+    quantity."""
+    columns = series(s, rows)
+    columns[:, 0] = 0.
+    return columns
+
+
+def test_only_a_new_deviation_makes_an_intervention_invalid():
+    """The lead's answer to question Q14 (VALIDITY_RULE; the map's cases a to d): on a train whose first column is
+    flat at 0, (a) a block that holds 5.0 at its first row, reversed by C, makes no new deviation (5.0 lies in the
+    block's own range); (b) a swap that brings 4.0 where the block held 5.0 makes none either; (c) a swap that brings
+    5.0 into a flat block is invalid at that value, with the train range and the block's own range [0, 0] in its
+    record; (d) the copy that changes nothing is valid although the original lies outside the train range. Every
+    violation lies outside both ranges."""
+    from tcn.zasahy import violations
+    ranges = ranges_of(flat_first)
+    original = flat_first(0, 24)
+    held = original.copy()
+    held[8, 0] = 5.
+    reversed_block = held.copy()
+    reversed_block[8:11, 0] = held[8:11, 0][::-1]
+    assert violations(ranges, held, reversed_block, 8, 3) == []  # (a)
+    inside = original.copy()
+    inside[9, 0] = 5.
+    swapped = inside.copy()
+    swapped[8:11, 0] = [0., 4., 0.]
+    assert violations(ranges, inside, swapped, 8, 3) == []  # (b)
+    brought = original.copy()
+    brought[9, 0] = 5.
+    found = violations(ranges, original, brought, 8, 3)  # (c)
+    assert (found[0]["quantity"], found[0]["input"], found[0]["row"], found[0]["value"]) == (
+        "value", "mem_changed_ratio", 1, 5.)
+    assert (found[0]["range"], found[0]["before"]) == ([0., 0.], [0., 0.])
+    assert all(not item["range"][0] <= item["value"] <= item["range"][1]
+               and not item["before"][0] <= item["value"] <= item["before"][1] for item in found)
+    outside = original.copy()
+    outside[8:14, 0] = [3., 5., -2., 4., 1., 6.]
+    assert violations(ranges, outside, outside.copy(), 8, 3) == []  # (d)
+
+
+def test_a_reversed_block_makes_no_new_deviation_from_rounding():
+    """VALIDITY_RULE (judgment of package B11): the moving average is the mean of the sorted window. A block of 0.1,
+    0.4 and 0.2 among zeros, reversed by C: every window of the copy holds the values of a window of the original, so
+    its mean is one the block had before; numpy's mean of the window of rows 7 to 10 in the copy's order is one bit
+    above the original's (0.17500000000000002 against 0.175), and that alone would be a new deviation of the moving
+    average above the train range of the alternating column."""
+    from tcn.zasahy import violations
+    ranges = ranges_of(series)
+    original = np.zeros((24, 2))
+    original[8:11, 0] = [.1, .4, .2]
+    copy_ = original.copy()
+    copy_[8:11, 0] = original[8:11, 0][::-1]
+    assert np.mean(copy_[7:11, 0]) > np.mean(original[7:11, 0])  # The plain mean depends on the order.
+    assert violations(ranges, original, copy_, 8, 3) == []
 
 
 def test_an_invalid_intervention_goes_to_the_volume_class_and_a_class_below_the_minimum_is_unevaluated():
@@ -757,6 +820,45 @@ def test_a_detected_intervention_of_the_volume_class_is_no_success():
     assert set(moved) <= set(volume["ids"]) and volume["detected"]["M:seed 0"] == volume["count"]
     for row in values["table"]:
         assert row["shares"]["M:seed 0"] == pytest.approx(row["evaluable"] / row["planned"])
+
+
+def test_the_share_of_the_volume_class_by_class_and_length_and_its_finding():
+    """The lead's answer to question Q14 (tcn/k2.py VOLUME_FINDING_RULE): the counts of a plan give every status per
+    length (by_length), summing to the counts of its class; every row of the table by class and length holds its share
+    of the volume class, volume over planned; volume_finding names exactly the cells above one half (the lead's number,
+    VOLUME_FINDING_SHARE): none on the generator, none when the 18 interventions of class C of 6 rows are half in the
+    volume class, and that cell alone when one more is."""
+    from tcn import k2
+    roles = generated()
+    found = plans(roles)
+    for plan in found.values():
+        counts = plan.record()["counts"]
+        for cls in ("C", "D"):
+            by = counts[cls]["by_length"]
+            assert {length: cell["planned"] for length, cell in by.items()} == counts[cls]["lengths"]
+            assert all(sum(cell[key] for cell in by.values()) == counts[cls][key]
+                       for key in ("planned", "evaluable", "volume", "not_placed"))
+    model, methods = stubs(found)
+    calibration = roles["calibration"].windows
+
+    def values():
+        return k2.k2_values(protocol(), found, models={0: model}, methods=methods, calibration=calibration,
+                            clean=np.ones(len(calibration), dtype=bool), budget=0, mode="campaign")
+    first = values()
+    assert all(row["volume_share"] == row["volume"] / row["planned"] for row in first["table"])
+    assert first["volume_finding"] == {"bound": 0.5, "cells": [], "finding": False, "rule": k2.VOLUME_FINDING_RULE}
+    assert k2.VOLUME_FINDING_SHARE == 0.5
+    cell = [item for role in ("test_benign", "test_controls") for item in found[role].interventions
+            if (item["class"], item["length"]) == ("C", 6)]
+    assert len(cell) == 18 and all(item["placed"] for item in cell)
+    for volume in (9, 10):
+        for i, item in enumerate(cell):
+            item["status"] = "volume" if i < volume else "evaluable"
+        again = values()
+        row = next(row for row in again["table"] if (row["class"], row["length"]) == ("C", 6))
+        assert (row["volume"], row["planned"], row["volume_share"]) == (volume, 18, volume / 18)
+        expected = [{"class": "C", "length": 6, "volume": 10, "planned": 18, "share": 10 / 18}] if volume > 9 else []
+        assert (again["volume_finding"]["cells"], again["volume_finding"]["finding"]) == (expected, bool(expected))
 
 
 def test_k2_of_the_campaign_takes_exactly_the_boots_of_the_protocol():

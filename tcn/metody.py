@@ -15,7 +15,10 @@ Binding texts: the lead's skeleton dokazy/B7/kostra/KOSTRA.md sections 2 and 3 w
     traffic(...) -> Traffic     the traffic of a window set: its clean windows (CLEAN_RULE), its placeable windows
                                 (PLACEABLE_RULE) and its observed time (OBSERVED_RULE); clean_windows(...) and
                                 placeable_windows(...) give the two masks alone
-    alarm_edges, alarm_count    the alarm rule (ALARM_RULE)
+    alarm_edges, alarm_count, alarm_states
+                                the alarm rule (ALARM_RULE); alarm_states gives whether a window exceeds, whether the
+                                alarm is up and whether it begins there (package B11, the attachments of the final
+                                record)
     model_budget, budget        the budget (BUDGET_RULE)
     matched_threshold, rate     the threshold of a method at the budget (THRESHOLD_RULE), its alarms per observed
                                 hour of clean traffic on a role (RATE_RULE)
@@ -45,10 +48,10 @@ scripts/protocol_v5.py GRID_PARAMETERS (each holds what GRID_VALUES says), and t
 *_SELECTION. A detector's losses() is None.
 
 Package B7b (agent F; design dokazy/B7/navrh/NAVRH_B7b.md 1.1 and 4, the deferred findings of the verification of
-B7a). F1, F2 (question Q12 to the lead, provisional by the executor's proposal): clean traffic is the time outside the
-events and their reverberation (proposal 4.2, as tcn/eval.py), and it gives the budget, the thresholds, the rates and
-K1; the full-snapshot band bounds only the placeable traffic, where the interventions lie; the rate is per observed
-hour of clean traffic, the scored share and the rate per scored clean hour beside it. F3: the value domains of the
+B7a). F1, F2 (question Q12, accepted by the lead 2026-11-24): clean traffic is the time outside the events and their
+reverberation (proposal 4.2, as tcn/eval.py), and it gives the budget, the thresholds, the rates and K1; the
+full-snapshot band bounds only the placeable traffic, where the interventions lie; the rate is per observed hour of
+clean traffic, the scored share and the rate per scored clean hour beside it. F3: the value domains of the
 grids are scripts/protocol_v5.py GRID_DOMAINS (grid_problem), one constant for this module and the protocol's check.
 F6: fit takes the window sets of roles train and dev only, and writes the roles into its record; model_budget takes
 M at exactly the seeds of analysis.seeds. Q13: Z4_VARIANTS are scripts/protocol_v5.py VARIANTS["Z4"], each a
@@ -90,9 +93,9 @@ CLEAN_RULE = (
     "its session (the event and its reverberation, joined as tcn/eval.py kategorie_udalosti joins them) nor of a "
     "control of its session (controls.json, either polarity; only role test_controls holds controls; judgment: an "
     "occurrence placed on the VM is no clean traffic and has the reverberation of an event); proposal 4.2: clean "
-    "traffic is the time outside the events and their reverberation (question Q12 to the lead, provisional by the "
-    "executor's proposal: the full-snapshot band is no part of it and bounds only PLACEABLE_RULE); judgment: one "
-    "overlap rule over every frame the window's inputs depend on")
+    "traffic is the time outside the events and their reverberation (question Q12, accepted by the lead 2026-11-24: "
+    "the full-snapshot band is no part of it and bounds only PLACEABLE_RULE); judgment: one overlap rule over every "
+    "frame the window's inputs depend on")
 PLACEABLE_RULE = (
     "a window is placeable when it is clean (CLEAN_RULE) and its span meets no full-snapshot band [T - "
     "full_snapshot_guard.before_s, T + window_rows * interval_s) of a full snapshot of its session at T "
@@ -172,8 +175,8 @@ Z4_RULE = (
     "the train windows (least squares with an intercept) and scores a window by the largest |residual_c| / v_c at its "
     "last row, v_c the standard deviation of the train residuals of input c, at least its floor in normalized units "
     "as in Z1; neither has a free parameter and the skeleton names both, so both are reported (judgment) and each is a "
-    "comparison of its own in K2a, Z4:load and Z4:residual (question Q13 to the lead, provisional by the executor's "
-    "proposal)")
+    "comparison of its own in K2a, Z4:load and Z4:residual, and 'better' needs M to beat both (question Q13, "
+    "accepted by the lead 2026-11-24)")
 Z5_RULE = (
     "linear autoregression (ridge) on the same window (proposal 8.3), the linear counterpart of M's two branches: the "
     "global inputs of the window's last row from those of the rows before it (all of them, flattened, with an "
@@ -625,8 +628,9 @@ def _traffic(value, windows):
     return value
 
 
-def _edges(exceed, windows, k, n):
-    """The edges of ALARM_RULE for each row of `exceed` (thresholds x windows)."""
+def _states(exceed, windows, k, n):
+    """(up, edge) of ALARM_RULE for each row of `exceed` (thresholds x windows): whether the alarm is up at a window
+    and whether it begins there."""
     count = exceed.shape[1]
     total = np.zeros((exceed.shape[0], count + 1), dtype=np.int32)
     np.cumsum(exceed, axis=1, dtype=np.int32, out=total[:, 1:])
@@ -636,16 +640,34 @@ def _edges(exceed, windows, k, n):
     before = np.zeros_like(up)
     before[:, 1:] = up[:, :-1]
     before[:, windows.resets] = False
-    return up & ~before
+    return up, up & ~before
 
 
-def alarm_edges(scores, windows, threshold, *, k, n):
-    """The windows where an alarm begins (ALARM_RULE) at `threshold`."""
+def _edges(exceed, windows, k, n):
+    """The edges of ALARM_RULE for each row of `exceed` (thresholds x windows)."""
+    return _states(exceed, windows, k, n)[1]
+
+
+def _at_threshold(scores, windows, threshold, k, n):
     _check_rule(k, n)
     values = _scores(scores, _okna(windows, "windows"))
     if not _number(threshold):
         raise ValueError("the threshold is a finite number")
-    return _edges((values > threshold)[None, :], windows, k, n)[0]
+    return values > threshold
+
+
+def alarm_edges(scores, windows, threshold, *, k, n):
+    """The windows where an alarm begins (ALARM_RULE) at `threshold`."""
+    return _edges(_at_threshold(scores, windows, threshold, k, n)[None, :], windows, k, n)[0]
+
+
+def alarm_states(scores, windows, threshold, *, k, n):
+    """ALARM_RULE at `threshold`, one boolean per window (package B11: the series of the attachments of the final
+    record, tcn/finalne.py ATTACHMENT_RULE): {exceed: the score lies above the threshold, up: the alarm is up, edge:
+    an alarm begins there, as alarm_edges}."""
+    exceed = _at_threshold(scores, windows, threshold, k, n)
+    up, edge = _states(exceed[None, :], windows, k, n)
+    return {"exceed": exceed, "up": up[0], "edge": edge[0]}
 
 
 def alarm_count(scores, windows, threshold, *, k, n, clean):

@@ -6,7 +6,7 @@ synteticke so znamou odpovedou; ziadny archiv ani rola sa necita. Mena balika B7
 aby subor zbieral aj na kode pred nim.
 
 Balik B7b (agent F, navrh NAVRH_B7b 1.4 a 4): uplne vymenovanie aj pri 16 bootoch (F5 overenia B7a, mutant M04) a
-K2a voci obom variantom Z4 ako dvom porovnaniam (otazka Q13, docasne podla navrhu vykonavatela).
+K2a voci obom variantom Z4 ako dvom porovnaniam (otazka Q13, prijate veducim 2026-11-24).
 """
 
 from fractions import Fraction
@@ -332,7 +332,7 @@ def test_pri_16_bootoch_test_vymenuje_vsetky_vektory():
     (NULA, "not_better", ["Z4:residual"]),
 ], ids=["better_against_both_variants", "not_better_against_one"])
 def test_k2a_porovnava_oba_varianty_z4_kazdy_svojim_prudom(z4_residual, vysledok, rozhodujuce):
-    """Otazka Q13 (docasne podla navrhu vykonavatela): analysis.k2a.compare su Z1, Z2, Z4:load a Z4:residual, kazde
+    """Otazka Q13 (prijate veducim 2026-11-24): analysis.k2a.compare su Z1, Z2, Z4:load a Z4:residual, kazde
     porovnanie s vlastnym prudom bootstrap (k2a/<porovnanie>). "Lepsi" vyzaduje dolnu hranicu nad m voci obom
     variantom Z4; variant, ktoreho horna hranica je pod m, da "nie lepsi" sam."""
     from scripts import protocol_v5

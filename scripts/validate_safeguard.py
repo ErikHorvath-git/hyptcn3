@@ -42,8 +42,10 @@ def main(argv=None):
     a.out.mkdir(parents=True, exist_ok=False)
     torch.set_num_threads(4)
     print("Extracting saved real RAM; no live collector is started.", flush=True)
+    # Every bin (min_bin_pages None, explicitly): the synthetic bundle below is of protocol schema 2, whose rule
+    # scores every bin, so the raw replay through run_directory (Bundle.min_bin_pages None) extracts alike.
     extracted = retazec(str(a.raw.resolve()), str(a.profile.resolve()),
-                       quality_policy="behavioral-inputs-v1")
+                       quality_policy="behavioral-inputs-v1", min_bin_pages=None)
     archive = save(a.out / "real-features.npz", extracted)
     print("Training synthetic diagnostic models with matching memory geometry.", flush=True)
     demo = smoke(a.out / "synthetic", layout=extracted["layout"])

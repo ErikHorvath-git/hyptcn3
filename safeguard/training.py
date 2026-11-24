@@ -24,7 +24,9 @@ streams, so they are not run again). The manifest records the stop of each model
 
 The manifest also carries (skeleton B6 sections 2, 4 and 5; design 1.3 to 1.5): the classes of the columns and the
 mask, the scale rule and the normalizer, the ranges of the rule channel, the sensitivity table, and the pre-written
-wording for the case that the rule channel carries all detection (question Q6 to the lead, provisional).
+wording for the case that the rule channel carries all detection (question Q6, confirmed by the lead 2026-11-24).
+Under a rule with a column of class rule_differenced its limitations also state what that rule cannot see
+(SESSION_START_LIMITATION of safeguard/features.py, the lead's answer to question Q8).
 
 The normalizer, the score and the rule channel are those of safeguard/features.py, model.py and bundle.py (design B6b
 1.1 to 1.3): the rule of the protocol (NormalizationRule.from_protocol), the TCN inputs of its classes neural and
@@ -685,15 +687,17 @@ def _sensitivity(bundle, dataset, scores, threshold, columns, scales, units):
 
 
 # The pre-written wording for the case that the rule channel carries all detection (skeleton B6 section 4): the
-# proposal of question Q6 to the lead (OTAZKY_VEDUCEMU.md), composed only of verbatim parts of proposal 8.2; the
-# evaluation (B7) fills the ellipsis with the number. Until the lead answers it is marked as a proposal.
+# executor's proposal of question Q6 (OTAZKY_VEDUCEMU.md), composed only of verbatim parts of proposal 8.2, which the
+# lead accepted as pre-written on 2026-11-24; source is the lead's mark, and proposal 8.2 holds the same wording word
+# for word (safeguard/tests/test_training.py checks both). The final evaluation fills the ellipsis with the number.
 RULE_CHANNEL_ONLY = {
     "text": "Všetku detekciu nesie pravidlový kanál: deklarované pravidlá s rozsahom z `train` a `calibration`; nikdy "
             "sa neuvádzajú ako neurónová detekcia. Výsledky O2 a O4 sa uvádzajú po kanáloch aj za ich zjednotenie; "
             "prírastok citlivosti neurónového kanála nad pravidlovým je …",
-    "source": "NAVRH kap. 8.2, zložené vykonávateľom; Q6",
-    "status": "proposal: question Q6 to the lead is not answered (OTAZKY_VEDUCEMU.md); the evaluation (B7) fills the "
-              "ellipsis with the number",
+    "source": "NAVRH kap. 8.2, zložené vykonávateľom, potvrdené vedúcim 2026-11-24",
+    "status": "pre-written: confirmed by the lead 2026-11-24 (question Q6, OTAZKY_VEDUCEMU.md), word for word in "
+              "proposal 8.2; the final evaluation fills the ellipsis with the number (tcn/finalne.py "
+              "rule_channel_only)",
 }
 
 
@@ -774,6 +778,7 @@ def train_bundle(corpus_path, output_dir, *, window_rows=32, max_gap_s=7.5, epoc
                        "collector_sha256": first_meta["collector_sha256"],
                        "profile_sha256": first_meta.get("profile_sha256", {}),
                        "extractor_sha256": first_audit["values"]["extractor_sha256"]}
+        channel = rule_channel(sessions, rule.classes, k=parameters["k"], n=parameters["n"])
         manifest = {"schema": SCHEMA, "diagnostic": diagnostic,
                     "created_utc": datetime.now(timezone.utc).isoformat(),
                     "feature_contract": contract, "normalizer": normalizer.to_dict(),
@@ -785,7 +790,7 @@ def train_bundle(corpus_path, output_dir, *, window_rows=32, max_gap_s=7.5, epoc
                     "parameters": parameters,
                     "normalization": {"rule": rule.name, "columns": dict(rule.classes), "tcn_columns": tcn,
                                       "scale": scale_rule(normalizer)},
-                    "rule_channel": rule_channel(sessions, rule.classes, k=parameters["k"], n=parameters["n"]),
+                    "rule_channel": channel,
                     "analysis_wording": {"rule_channel_only": dict(RULE_CHANNEL_ONLY)},
                     "training": {"seed": seed, "epochs": parameters["stopping"]["max_epochs"],
                                  "batch_size": parameters["batch_size"],
@@ -803,7 +808,9 @@ def train_bundle(corpus_path, output_dir, *, window_rows=32, max_gap_s=7.5, epoc
                                    "protocol_sha256": index["protocol_sha256"], "protocol": protocol,
                                    "source_sha256": source_hashes, "sessions": records},
                     "limitations": ["No attack detection or held-out false-alarm metric is inferred from training.",
-                                    "Classifier labels describe collection workload settings; they are not per-process ground truth."]}
+                                    "Classifier labels describe collection workload settings; they are not per-process ground truth.",
+                                    # Question Q8 (the lead, 2026-11-24): only under a column of class rule_differenced.
+                                    *([channel["limitation"]] if channel["limitation"] is not None else [])]}
         units = protocol["analysis"]["scale"]["floor"] if parameters["rule"] == PLAN_RULE else {}
         output_dir.parent.mkdir(parents=True, exist_ok=True)
         lock = output_dir.with_name(output_dir.name + ".lock")

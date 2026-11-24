@@ -50,7 +50,10 @@ The guarded entry points (GUARD_RULE) call kontrola before anything is read or w
 tcn/opisne.py given a window set that holds a sealed archive, scripts/controls.py outcomes of a session of role
 test_controls, the TCN-gui (TCN-gui/analyza.py resolve_input, before it opens an input: analyze, tcn_gui.py with
 its button and --png, TCN-gui/porovnanie.py compare) and the legacy activity classifier tcn/klasifikator.py before it
-loads each archive of an index. The raw snapshots of a session enter a detector through kontrola_snimok
+loads each archive of an index. Package B11 adds the qualification of the feature columns (features/qualification.py
+from_index, purpose features/qualification.py), before it opens the archive of a session of a sealed role, which only
+the index of a rehearsal gives it; GUARD_RULE is one of RULES, which the ledger stores, so its text stays as it was
+and does not name it. The raw snapshots of a session enter a detector through kontrola_snimok
 (SNAPSHOT_RULE): safeguard replay --snapshots and watch, safeguard.runtime.run_directory (also under the TCN-gui and
 safeguard run), scripts/validate_safeguard.py and the legacy standalone detector scripts/detektor.py. A guard
 refuses by name with Zapecatene, a ValueError, so every caller that reports a ValueError reports the refusal. Unguarded, by design or for the lead:
@@ -194,18 +197,18 @@ RULES = {"identity": IDENTITY_RULE, "sealed": SEALED_RULE, "guard": GUARD_RULE, 
 # that take their stage by it (record_stage), not into the ledger: RULES is what the ledger keeps.
 RECORD_STAGE_RULE = (
     "the stage of a record of the data of a plan (proposal 11.1; finding N2 of the confirmation of B7c, package B9b): "
-    "STAGE_RULE tightened by the sessions the record covers (tcn/pecat.py record_stage): final (plan mode campaign) "
-    "or generalka (plan mode rehearsal) only when the ledger is the ledger of record, the record covers at least one "
+    "STAGE_RULE tightened by the sessions the record covers (tcn/pecat.py record_stage): final (plan mode campaign) or "
+    "generalka (plan mode rehearsal) only when the ledger is the ledger of record, the record covers at least one "
     "session of the sealed roles, the ledger holds the archive (features_sha256) of every such session for that "
     "session, role and plan mode, and, for final, the ledger at HEAD holds every one of those archives as well "
     "(TIMESTAMP_RULE: seal_in_git true); otherwise suchy, and the basis names the first condition that failed; so a "
     "synthetic corpus whose archives the ledger of record does not hold is recorded suchy, never final (the risk of "
     "question Q15); the records of tcn.eval of protocol schema 3 (far, udalosti) take their stage by it over the "
-    "sessions of their corpus index, the ending record of a campaign (scripts/campaign.py) over its accepted "
-    "sessions; the ending record does not ask the ledger at HEAD (at_head false, question Q21 decided by its "
-    "proposal until the lead answers): the runner writes it before the ledger is committed, so it is final when the "
-    "ledger of record in the working tree holds every accepted session of the sealed roles, its basis names that "
-    "ledger's sha256, and tcn.finalne checks the ledger at HEAD (seal_in_git) when it reads the record")
+    "sessions of their corpus index, the ending record of a campaign (scripts/campaign.py) over its accepted sessions; "
+    "the ending record does not ask the ledger at HEAD (at_head false, question Q21, accepted by the lead 2026-11-24): "
+    "the runner writes it before the ledger is committed, so it is final when the ledger of record in the working tree "
+    "holds every accepted session of the sealed roles, its basis names that ledger's sha256, and tcn.finalne checks "
+    "the ledger at HEAD (seal_in_git) when it reads the record")
 HEAD_BY_FINALNE = ("not asked (question Q21): the ledger at HEAD is checked by tcn.finalne (seal_in_git) when it reads "
                    "the record")
 NOTE = ("Kniha pečatí testovacích rolí protokolu v5 (balík B7c); nie je to meranie. guest je null: kniha neopisuje "
@@ -332,8 +335,8 @@ def record_stage(mode, sessions, *, ledger=None, at_head=True):
     or git is unavailable), why (null at final or generalka)}. A plan mode that is none and a session without its id or
     role are refused by name (ValueError).
 
-    at_head False (the ending record of a campaign, scripts/campaign.py ENDING_RULE; question Q21 to the lead, decided
-    by its proposal until he answers): the ledger at HEAD is not asked, since the runner writes the record before the
+    at_head False (the ending record of a campaign, scripts/campaign.py ENDING_RULE; question Q21, accepted by the
+    lead 2026-11-24): the ledger at HEAD is not asked, since the runner writes the record before the
     ledger is committed; a record of plan mode campaign is then final when the ledger of record in the working tree
     holds every session of the sealed roles, and the basis adds at_head false, ledger_sha256 (the bytes of that ledger)
     and head (tcn.finalne checks the ledger at HEAD, seal_in_git, when it reads the record). The records of tcn.eval
