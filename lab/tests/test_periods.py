@@ -373,3 +373,22 @@ def test_the_measured_spacing_after_the_change_is_pending_or_holds_the_property(
         assert pending.strip() and "Q27" in pending and "--postgres-debug1" in pending
     else:
         assert "pending" not in measured and "67s" in after["setting"] and remainder(after["spacings"]["median"])[1]
+
+
+def test_the_measured_spacing_after_the_change_is_the_record_of_the_window():
+    """measured.after (the lead's answer to Q27; finding F6 of the B10 verification), read the way the before test
+    reads its record: the record measured.after.record names, of stage skuska, at measured.after.path, holds the same
+    spacings of the window's long run at 67 s, and its property of Q9 the same remainder, 2.338 s past a multiple of
+    5 s. A missing record fails the test."""
+    after = autovacuum()["measured"]["after"]
+    record = json.loads((LAB.parent / after["record"]).read_text())
+    periods = record
+    for key in after["path"].split("."):
+        periods = periods[key]
+    found = next(e for e in periods if e["name"] == "PostgreSQL autovacuum launcher")
+    assert (record["stage"], after["stage"], after["path"]) == ("skuska", "skuska", "values.periods")
+    assert after["spacings"] == found["spacings"] and after["run"] in record["command"]
+    assert remainder(after["spacings"]["median"]) == (after["remainder_s"], True)
+    assert (after["remainder_s"], True) == (record["values"]["autovacuum_property"]["remainder_s"],
+                                            record["values"]["autovacuum_property"]["ok"])
+    assert after["databases"] == len(DATABASES) and "67s" in after["setting"]
