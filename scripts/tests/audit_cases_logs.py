@@ -698,6 +698,17 @@ _V5_CASES = [
      logs("traffic_config:rate")),
     ("traffic_config:seeds", headers(lambda h: h["seeds"].update(traffic=h["seeds"]["traffic"] + 1)),
      logs("traffic_config:seeds")),
+    # Finding F3 of the B5b verification (package B10): every seed, the rate and config.dur of the header are those of
+    # the traffic block of session.json, and its dur_s is the protocol's planned run (warmup_s and cycles intervals).
+    ("traffic_config:seeds:arrivals", headers(lambda h: h["seeds"].update(
+        traffic_arrivals=h["seeds"]["traffic_arrivals"] + 1)), logs("traffic_config:seeds")),
+    ("traffic_config:rate:session", edit("session.json", lambda m: m["traffic"].update(rate=2 * m["traffic"]["rate"]),
+                                         seal=False), logs("traffic_config:rate")),
+    ("traffic_config:dur", headers(lambda h: h["config"].update(dur=h["config"]["dur"] + 5)),
+     logs("traffic_config:dur")),
+    ("traffic_config:dur:planned", steps(  # Header and session.json alike, but not the planned run.
+        edit("session.json", lambda m: m["traffic"].update(dur_s=m["traffic"]["dur_s"] + 5), seal=False),
+        headers(lambda h: h["config"].update(dur=h["config"]["dur"] + 5))), logs("traffic_config:dur")),
     ("traffic_config:protocol_sha256", headers(lambda h: h.update(protocol_sha256="0" * 64)),
      logs("traffic_config:protocol_sha256")),
     ("traffic_config:profile_parameters", headers(lambda h: h["profile_parameters"].update(
@@ -730,7 +741,8 @@ _V5_CASES = [
      logs("traffic:rate_invalid", "traffic_config:rate")),
     ("traffic:rate_source_invalid", both_headers(lambda h: h.update(rate_source="guess")),
      logs("traffic:rate_source_invalid", "traffic_config:rate")),
-    ("traffic:seeds_invalid", both_headers(lambda h: h["seeds"].pop("traffic_sizes")), logs("traffic:seeds_invalid")),
+    ("traffic:seeds_invalid", both_headers(lambda h: h["seeds"].pop("traffic_sizes")),  # F3 of B5b: not session.json's.
+     logs("traffic:seeds_invalid", "traffic_config:seeds")),
     ("traffic:warmup_invalid", both_headers(lambda h: h.update(warmup_s=h["envelope"]["t_s"][-1])),  # Not before D.
      logs("traffic:warmup_invalid", "traffic_config:warmup_s")),
     ("traffic:profile_unknown", both_headers(lambda h: h.update(profile="lab")),

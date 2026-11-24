@@ -375,25 +375,33 @@ def audit_logs(directory, *, snapshot_times=(), archived_raw=False):
         if v5:
             # The generator's header against the protocol and session.json (design B5b 1.3 and 1.4): the scenario
             # with its profile, intensity and rate (from the protocol, or from the command line where the protocol
-            # has none), the session's traffic seed, the protocol it read, the profile's parameters verbatim, the
-            # warmup, and the target, summary interval and initial phase of every collection run.
+            # has none), the session's traffic seeds, the protocol it read, the profile's parameters verbatim, the
+            # warmup, the span of its envelope, and the target, summary interval and initial phase of every
+            # collection run. Finding F3 of the B5b verification (package B10): every seed of the header, the rate
+            # with its source and config.dur equal the traffic block of session.json, from which run_session made
+            # the command line (collection.traffic_command), and that block's dur_s is the planned run of the
+            # protocol, warmup_s and cycles intervals (collection._v5_traffic).
             s = protocol["scenarios"].get(meta["scenario"], {})
             config, run, seeds, rate = header["config"], meta["traffic"], header.get("seeds"), s.get("rate")
-            parameters = header.get("profile_parameters")
+            parameters, cycles = header.get("profile_parameters"), meta.get("cycles")
+            planned_s = (protocol["warmup_s"] + cycles * protocol["interval_s"]
+                         if type(cycles) is int and cycles > 0 else None)
             fields = {
                 "profile": header.get("profile") == s.get("profile"),
                 "scenario": header.get("scenario") == meta["scenario"],
                 "intensity": header.get("intensity") == s.get("intensity"),
-                "rate": (header.get("rate_source") == "protocol" and header.get("rate") == rate) if rate is not None
-                else (header.get("rate_source") == "command line" and type(header.get("rate")) in (int, float)
-                      and header["rate"] > 0),
-                "seeds": type(seeds) is dict and type(seeds.get("traffic")) is int
+                "rate": header.get("rate_source") == run.get("rate_source") and header.get("rate") == run.get("rate")
+                and ((header.get("rate_source") == "protocol" and header.get("rate") == rate) if rate is not None
+                     else (header.get("rate_source") == "command line" and type(header.get("rate")) in (int, float)
+                           and header["rate"] > 0)),
+                "seeds": type(seeds) is dict and seeds == run.get("seeds") and type(seeds.get("traffic")) is int
                 and seeds["traffic"] == meta["seed"],
+                "dur": planned_s is not None and config.get("dur") == run.get("dur_s") == planned_s,
                 "protocol_sha256": type(header.get("protocol_sha256")) is str
                 and header["protocol_sha256"] == meta.get("protocol_sha256"),
                 "profile_parameters": type(parameters) is dict
                 and parameters == protocol["profiles"].get(s.get("profile")),
-                "warmup_s": header.get("warmup_s") == protocol["warmup_s"],
+                "warmup_s": header.get("warmup_s") == protocol["warmup_s"] == run.get("warmup_s"),
                 "target": config.get("target") == run["target"],
                 "summary_interval_s": config.get("summary_interval_s") == run["summary_interval_s"],
                 "initial_phase": config.get("initial_phase") == "warmup"}

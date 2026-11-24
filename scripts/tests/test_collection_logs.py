@@ -330,7 +330,11 @@ def v5_traffic(d, p, *, scenario=None, sessions=None, spacings=SPACINGS, thinks=
     if last - first < .1:
         raise ValueError("no room for the user sessions of the measure phase")
     warmup = p["warmup_s"]
-    span = max(end_mono, warmup) + 1  # D: the envelope spans [0, D]; warmup_s < D.
+    # D: the envelope spans [0, D], the planned run of the protocol (collection._v5_traffic: warmup_s and cycles
+    # intervals), which the log audit binds since package B10 (finding F3 of B5b); warmup_s < D.
+    span = warmup + meta["cycles"] * p["interval_s"]
+    if span <= max(end_mono, warmup):
+        raise ValueError("the planned run of the protocol ends before the logs of build() do")
     # Peak-to-mean twice the bound: a triangle of width (measure length / bound); flat: level 1 everywhere.
     width = min(last - first, (stop - 1) / p["scenario_rule"]["min_peak_to_mean"])
     rate = s["rate"]
@@ -452,7 +456,7 @@ def v5_traffic(d, p, *, scenario=None, sessions=None, spacings=SPACINGS, thinks=
                        "intensity": s["intensity"], "rate": rate, "rate_source": v5["rate_source"], "seeds": seeds,
                        "seed": meta["seed"], "target": meta["traffic"]["target"],
                        "summary_interval_s": meta["traffic"]["summary_interval_s"], "warmup_s": warmup,
-                       "dur": config["dur"], "load_model": LOAD_MODEL}
+                       "dur_s": config["dur"], "load_model": LOAD_MODEL}
     write(d / "session.json", meta)
 
     # nginx and the services for the new requests (build() wrote those of the legacy ones).

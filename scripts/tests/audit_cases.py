@@ -300,8 +300,10 @@ ALSO_MISSING = {
     "raw/capture.json:values.collector_sha256": ["logs: collector:unreadable:KeyError: 'collector_sha256'"],
 }
 # What a missing key takes away from the v5 traffic checks as well (package B5b): the generator's header names the
-# protocol hash session.json states.
-V5_ALSO_MISSING = {"session.json:protocol_sha256": ["logs: traffic_config:protocol_sha256"]}
+# protocol hash session.json states; and since package B10 (finding F3 of B5b) the span of its envelope is the planned
+# run of the session's cycles.
+V5_ALSO_MISSING = {"session.json:protocol_sha256": ["logs: traffic_config:protocol_sha256"],
+                   "session.json:cycles": ["logs: traffic_config:dur"]}
 
 
 def _missing(name, dotted):
