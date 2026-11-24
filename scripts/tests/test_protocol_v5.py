@@ -1575,6 +1575,22 @@ def test_the_loader_knows_every_key_and_value_of_the_controls_section(change, re
         assert str(refused.value) == reason
 
 
+def test_the_expected_shifts_of_the_controls_are_values_of_g0():
+    """The lead's answer to question Q20 (2026-11-24; finding S6 of the B8 verification, package B10): the expected
+    shifts controls.kinds.*.expect are values of G0, the owner's judgment that he may change only before G1, and G2
+    does not determine them, so no note of a kind says "until G2", every one names them a value of G0, the section's
+    note states the rule once, and no stage of determined_at names a key of controls.kinds."""
+    doc = json.loads(V5.read_text())
+    c = doc["controls"]
+    notes = {kind: k["note"] for kind, k in c["kinds"].items()}
+    assert [kind for kind, note in notes.items() if "until G2" in note] == []
+    assert all("value" in note and "of G0 (controls.note)" in note or "a value of G0, controls.note" in note
+               for note in notes.values()), notes
+    assert ("controls.kinds.*.expect) are values of G0 (the lead's answer to question Q20" in c["note"]
+            and "change only before G1" in c["note"] and "checks them on the lab with controls.baseline" in c["note"])
+    assert not [path for paths in doc["determined_at"].values() for path in paths if path.startswith("controls.kinds")]
+
+
 def test_the_nulls_by_design_are_the_doses_of_class_a_and_the_seeds_of_a_method_that_draws_nothing():
     """A null dose means "none" only for a kind of class A, and null seeds only for a descriptive method that draws
     nothing (UNSEEDED, merge of B7a); elsewhere a null outside determined_at fails as before."""

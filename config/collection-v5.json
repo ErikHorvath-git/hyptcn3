@@ -276,7 +276,7 @@
             "direction": "up"
           }
         },
-        "note": "Skeleton B8 section 1: one process with a touched W+X page and an open memfd (the pilot's positive control of protocol v4); its paired negative is the same program with the page RW and a file in /tmp instead of the memfd. The occurrence adds one process with each pattern; the expected shift of each column is half of that, 0.5, which tells one more from none (judgment until G2)."
+        "note": "Skeleton B8 section 1: one process with a touched W+X page and an open memfd (the pilot's positive control of protocol v4); its paired negative is the same program with the page RW and a file in /tmp instead of the memfd. The occurrence adds one process with each pattern; the expected shift of each column is half of that, 0.5, which tells one more from none (judgment; a value of G0, controls.note)."
       },
       "kontrola_modul_jadra": {
         "class": "A",
@@ -296,7 +296,7 @@
           "crc8",
           "ts_kmp"
         ],
-        "note": "Skeleton B8 section 1: modprobe of the first candidate present in the guest kernel's package, not loaded and without dependent modules, none of which creates a device or a network interface (lab/udalosti.py MODULE_CANDIDATES holds the same names); its paired negative runs modprobe -n of it; the stop is modprobe -r. The candidates are the lead's judgment until the lab test on the VM confirms them (skeleton section 6). The occurrence adds one module; the expected shift of mod_total is half of it, 0.5 (judgment until G2). mod_delta is no column: the load falls into the row of the start, so every row wholly inside the occurrence has 0 (design B8, addendum)."
+        "note": "Skeleton B8 section 1: modprobe of the first candidate present in the guest kernel's package, not loaded and without dependent modules, none of which creates a device or a network interface (lab/udalosti.py MODULE_CANDIDATES holds the same names); its paired negative runs modprobe -n of it; the stop is modprobe -r. The candidates are the lead's judgment until the lab test on the VM confirms them (skeleton section 6). The occurrence adds one module; the expected shift of mod_total is half of it, 0.5 (judgment; a value of G0, controls.note). mod_delta is no column: the load falls into the row of the start, so every row wholly inside the occurrence has 0 (design B8, addendum)."
       },
       "kontrola_pocuvajuci_soket": {
         "class": "A",
@@ -311,7 +311,7 @@
             "direction": "up"
           }
         },
-        "note": "Skeleton B8 section 1: a process listens on a TCP port outside the ports of the lab (lab/udalosti.py CONTROL_PORT, loopback); its paired negative is the same process with the socket bound and not listening. The occurrence adds one listening socket; the expected shift of sock_listen is half of it, 0.5 (judgment until G2)."
+        "note": "Skeleton B8 section 1: a process listens on a TCP port outside the ports of the lab (lab/udalosti.py CONTROL_PORT, loopback); its paired negative is the same process with the socket bound and not listening. The occurrence adds one listening socket; the expected shift of sock_listen is half of it, 0.5 (judgment; a value of G0, controls.note)."
       },
       "kontrola_zapisovac_pamate": {
         "class": "B",
@@ -356,7 +356,7 @@
             "direction": "up"
           }
         },
-        "note": "Skeleton B8 section 1: a process holds N MiB, the dose (16, 64 or 256 MiB), and rewrites them with random bytes once per collection interval; its paired negative is the same process that writes them once and then waits. 2, 2 and 3 occurrences per dose among the kind's controls and the same among its negatives (per_dose); the doses and the counts are the lead's judgment. The lowest dose is chosen so that it is expected not to be caught (proposal 7.4, last paragraph; skeleton B8 section 1), and the protocol says so here, before any data. The expected shifts per dose are judgment until G2: of mem_changed_ratio half of the dose's share of the guest's 2048 MiB (every row of the control sees the dose changed again), of mem_changed_max and of mem_entropy_mean (bits per byte; random bytes have the highest entropy) the author's guess of how the writer's pages fill the bins and outweigh the other changed pages."
+        "note": "Skeleton B8 section 1: a process holds N MiB, the dose (16, 64 or 256 MiB), and rewrites them with random bytes once per collection interval; its paired negative is the same process that writes them once and then waits. 2, 2 and 3 occurrences per dose among the kind's controls and the same among its negatives (per_dose); the doses and the counts are the lead's judgment. The lowest dose is chosen so that it is expected not to be caught (proposal 7.4, last paragraph; skeleton B8 section 1), and the protocol says so here, before any data. The expected shifts per dose are judgment and values of G0 (controls.note): of mem_changed_ratio half of the dose's share of the guest's 2048 MiB (every row of the control sees the dose changed again), of mem_changed_max and of mem_entropy_mean (bits per byte; random bytes have the highest entropy) the author's guess of how the writer's pages fill the bins and outweigh the other changed pages."
       },
       "kontrola_davka_procesov": {
         "class": "B",
@@ -401,7 +401,7 @@
             "direction": "up"
           }
         },
-        "note": "Skeleton B8 section 1: a parent starts K short processes a second, the dose (2, 10 or 50 a second); its paired negative is the same parent with one long child. 2, 2 and 3 occurrences per dose among the kind's controls and the same among its negatives (per_dose); the doses and the counts are the lead's judgment. The lowest dose is chosen so that it is expected not to be caught (proposal 7.4, last paragraph; skeleton B8 section 1), and the protocol says so here, before any data. The expected shifts per dose are judgment until G2: a short process lives 2 s (lab/udalosti.py BATCH_CHILD_S), so every row of the control sees about 2K processes the row before did not and misses about 2K of its own; the expected shift of proc_new and of proc_gone is half of that, K; of proc_total K + 2, about half way between the negative's three processes and the control's 2K children with its two."
+        "note": "Skeleton B8 section 1: a parent starts K short processes a second, the dose (2, 10 or 50 a second); its paired negative is the same parent with one long child. 2, 2 and 3 occurrences per dose among the kind's controls and the same among its negatives (per_dose); the doses and the counts are the lead's judgment. The lowest dose is chosen so that it is expected not to be caught (proposal 7.4, last paragraph; skeleton B8 section 1), and the protocol says so here, before any data. The expected shifts per dose are judgment and values of G0 (controls.note): a short process lives 2 s (lab/udalosti.py BATCH_CHILD_S), so every row of the control sees about 2K processes the row before did not and misses about 2K of its own; the expected shift of proc_new and of proc_gone is half of that, K; of proc_total K + 2, about half way between the negative's three processes and the control's 2K children with its two."
       }
     },
     "per_kind": 7,
@@ -414,7 +414,7 @@
     ],
     "horizon_s": 180,
     "baseline": null,
-    "note": "Controls on the VM, classes A (edge) and B (volume), proposal 7.4: 7 controls and 7 paired negatives per kind, at least 60 s each, horizon 180 s from the start (skeleton B8 section 1, the lead's number), only in role test_controls with three slots per session; 70 controls fill 70 of the 72 slots and the plan records the two empty ones (skeleton section 6). Durations as the events (B8 skeleton). Package B8: every kind states its class, its doses and its occurrences per dose (per_dose; null for class A, which has no dose), the feature columns it should move (features/snapshot.py MENA) with the expected shift of each over the occurrence against the mean of the 12 rows before its start (skeleton section 4; a number, or for class B one per dose), and the module kind its candidates. baseline is the tolerance of the level part of the return predicate (skeleton section 3): null until G2, then for processes and MemAvailable_kb the band [low, high] of their change since the start of the session, the 1st to the 99th percentile in a long lab trial without events. The numbers are the author's judgment by proposal 10.9."
+    "note": "Controls on the VM, classes A (edge) and B (volume), proposal 7.4: 7 controls and 7 paired negatives per kind, at least 60 s each, horizon 180 s from the start (skeleton B8 section 1, the lead's number), only in role test_controls with three slots per session; 70 controls fill 70 of the 72 slots and the plan records the two empty ones (skeleton section 6). Durations as the events (B8 skeleton). Package B8: every kind states its class, its doses and its occurrences per dose (per_dose; null for class A, which has no dose), the feature columns it should move (features/snapshot.py MENA) with the expected shift of each over the occurrence against the mean of the 12 rows before its start (skeleton section 4; a number, or for class B one per dose), and the module kind its candidates. baseline is the tolerance of the level part of the return predicate (skeleton section 3): null until G2, then for processes and MemAvailable_kb the band [low, high] of their change since the start of the session, the 1st to the 99th percentile in a long lab trial without events. The numbers are the author's judgment by proposal 10.9. The expected shifts (controls.kinds.*.expect) are values of G0 (the lead's answer to question Q20, 2026-11-24; finding S6 of the B8 verification): judgment by proposal 10.9, which the owner may change only before G1, and not in determined_at; G2 checks them on the lab with controls.baseline, and a kind that misses its expected shift is a finding for the lead and a change of the protocol before G3, not a new value set in silence."
   },
   "streams": {
     "purposes": [
