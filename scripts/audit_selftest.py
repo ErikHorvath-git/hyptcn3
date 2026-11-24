@@ -60,7 +60,8 @@ def cases_sha256():
 
 def cases(p):
     """The cases of the self-test under the protocol p: RAM side and log audit (scripts/tests/audit_cases.py
-    cases(p): CASES, and the case of a bound the protocol sets to a number, finding S1 of B3)."""
+    cases(p): CASES, and the case of each bound the protocol sets to a number: the cap of rule-closed rows, finding S1
+    of B3, and the bound of the collector's major faults per cycle, the lead's answer to Q29)."""
     from scripts.tests import audit_cases
     return audit_cases.cases(p)
 

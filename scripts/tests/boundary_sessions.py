@@ -157,11 +157,14 @@ def clustered_seqs(count, window_rows, full_every):
 def clean_sidecar(side, domain=DOMAIN, vmid=QEMU["pid"]):
     """The sidecar `side` (changed in place and returned) with every field the audit reads beyond the feature
     contract, clean: the VM `domain` with the QEMU pid `vmid`, no missed slot and no lateness, no wait for queue
-    memory, and a snapshot the writer thread published from an empty queue with memory locking on
-    (collection.COLLECTOR_MLOCK). The cycle time (capture.total_ms) is the caller's."""
+    memory, no major fault of the collector's thread during the cycle (capture.rusage.majflt 0, as vmicollect writes
+    it; the audit reads it under schema 3 since the lead's answer to Q29), and a snapshot the writer thread published
+    from an empty queue with memory locking on (collection.COLLECTOR_MLOCK). The cycle time (capture.total_ms) is the
+    caller's."""
     side.setdefault("vm", {}).update(domain=domain, vmid=vmid)
     side.setdefault("sched", {}).update(lateness_s=0., skipped_before=0)
     side.setdefault("capture", {}).update(queue_wait_ms=0.)
+    side["capture"].setdefault("rusage", {}).update(majflt=0)
     side.setdefault("output", {}).update(mlock=True, queue_jobs=0, queue_bytes=0, data_closed_ms=.2)
     return side
 
@@ -258,7 +261,9 @@ def audit_sections(interval_s, min_spacing_rows=2):
     The bounds of proposal 6.2 for an interval of 5 s scaled to `interval_s`: the cycle starts at most a tenth of
     the interval late, a delta cycle takes at most 30 % of it and a full one 70 %. Periodicity: 3 equal spacings in
     a row between the starts of bursts, each of at least `min_spacing_rows` rows (the author's judgment in G0). No
-    collector warning is allowed and the cap of rule-closed rows is not set, as until G2 and G3b. The bounds of the
+    collector warning is allowed and the cap of rule-closed rows is not set, as until G2 and G3b; nor is the bound of
+    the collector's major faults per cycle, whose null and note are those of config/collection-v5.json (the lead's
+    answer to Q29, collector_majflt_bounds: null until G2). The bounds of the
     traffic's realism (package B5b) are those of config/collection-v5.json (traffic_bounds), and so is the rule of the
     early stop (package B9b, early_stop_bounds: a rate per event type of the file, null until G3b). Every TOLERATED
     id is registered (REGISTER), with no expected count.
@@ -268,8 +273,8 @@ def audit_sections(interval_s, min_spacing_rows=2):
                       "cycle_ms_max": {"delta": round(300 * interval_s, 6), "full": round(700 * interval_s, 6)},
                       "periodicity": {"equal_spacings": 3, "min_spacing_rows": min_spacing_rows,
                                       "note": "author's judgment in G0 (proposal 10.9), not a mechanism"},
-                      "warnings_allowed": None, "rule_closed_rows_max": None, "traffic": traffic_bounds(),
-                      "early_stop": early_stop_bounds()},
+                      "warnings_allowed": None, "rule_closed_rows_max": None, **collector_majflt_bounds(),
+                      "traffic": traffic_bounds(), "early_stop": early_stop_bounds()},
             "exceptions": {name: {"cause": REGISTER[name][0], "decision": REGISTER[name][1], "expected": None}
                            for name in audit_policy.TOLERATED}}
 
@@ -278,6 +283,14 @@ def traffic_bounds():
     """audit.traffic of config/collection-v5.json (package B5b), a copy: the bounds of the realism requirements of
     proposal 5.7 and of the offered-load check of proposal 5.3; they do not depend on the grid."""
     return copy.deepcopy(_v5_file()["audit"]["traffic"])
+
+
+def collector_majflt_bounds():
+    """audit.collector_majflt_max and audit.collector_majflt_note of config/collection-v5.json (the lead's answer to
+    Q29), a copy: the bound of the collector's major faults per cycle, null until G2, and the note with its rule; they
+    do not depend on the grid."""
+    audit = _v5_file()["audit"]
+    return {key: copy.deepcopy(audit[key]) for key in ("collector_majflt_max", "collector_majflt_note")}
 
 
 def early_stop_bounds(types=None):

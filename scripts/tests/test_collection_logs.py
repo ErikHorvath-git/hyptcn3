@@ -723,9 +723,12 @@ def test_collector_warning_is_judged_by_the_allowed_patterns(session, schema, al
         bounds = json.loads((logs.ROOT / "config/collection-v5.json").read_text())["audit"]
         # Package B9b: and the early stop of the v5 file; this protocol has no events section, so no type to bound.
         early_stop = dict(bounds["early_stop"], marked_rows_rate_per_type={})
+        # Q29: and the bound of the collector's major faults per cycle with its note (null until G2).
         doc["audit"] = {"lateness_max_s": .5, "cycle_ms_max": {"delta": 1500, "full": 3500},
                         "periodicity": {"equal_spacings": 3, "min_spacing_rows": 2, "note": "test"},
-                        "warnings_allowed": allowed, "rule_closed_rows_max": None, "traffic": bounds["traffic"],
+                        "warnings_allowed": allowed, "rule_closed_rows_max": None,
+                        "collector_majflt_max": bounds["collector_majflt_max"],
+                        "collector_majflt_note": bounds["collector_majflt_note"], "traffic": bounds["traffic"],
                         "early_stop": early_stop}
     write(session / "protocol.json", doc)
     meta = logs.read_json(session / "session.json")

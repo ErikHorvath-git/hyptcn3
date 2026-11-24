@@ -415,9 +415,14 @@ def test_selftest_protocol_carries_the_bounds_of_g0_and_the_whole_register():
     p = collection.protocol(SELFTEST_PROTOCOL)
     assert (p["schema"], p["interval_s"], p["max_gap_s"], p["window_rows"], p["full_every"], p["cycles"]) == (
         "hyptcn3/collection-protocol/3", 5, 7.5, 32, 360, 720)
-    assert {k: v for k, v in p["audit"].items() if k not in ("periodicity", "traffic", "early_stop")} == {
+    assert {k: v for k, v in p["audit"].items()
+            if k not in ("periodicity", "traffic", "early_stop", "collector_majflt_note")} == {
         "lateness_max_s": .5, "cycle_ms_max": {"delta": 1500, "full": 3500}, "warnings_allowed": None,
-        "rule_closed_rows_max": None}
+        "rule_closed_rows_max": None, "collector_majflt_max": None}
+    # The lead's answer to Q29: the bound of the collector's major faults per cycle is null until G2, its note holds
+    # the rule (scripts/tests/test_collector_majflt.py reads it in full).
+    assert all(text in p["audit"]["collector_majflt_note"]
+               for text in ("Q29", "G2", "both VMs", "at zero the bound is 0"))
     # Package B9b and its fix (Q24): the rule of the early stop, one rate per event type of the file, each null until
     # G3b, and the stop for periodicity of the lead's skeleton B9 (row skoré zastavenie).
     early_stop = p["audit"]["early_stop"]

@@ -452,6 +452,8 @@
     },
     "warnings_allowed": null,
     "rule_closed_rows_max": null,
+    "collector_majflt_max": null,
+    "collector_majflt_note": "The bound of the collector's major faults per cycle (the lead's answer to question Q29, 2026-11-24; risk capture R4 of the code audit data/results/audit_kodu_v5_20261120.json, whose protocol control asked for collector majflt 0). The count is capture.rusage.majflt of every sidecar, the major faults of the collector's sampling thread during that cycle (getrusage RUSAGE_THREAD, vmicollect/src/collector.c). The audit of every session of schema 3 records and prints the largest count of one cycle, its seq, the sum and the cycles counted (scripts/collection.py majflt_record, values.collector_majflt); a sidecar whose count is missing or no integer of at least 0 is a reason, never 0. collector_majflt_max is null until G2 (determined_at, proposal 10.9): until then the counts are recorded and printed and never a reason. The rule, written before the data: the largest count per cycle observed in the error-free runs of G2 on both VMs; at zero the bound is 0. From G2 on the audit rejects a session with a cycle above the bound, and the audit self-test builds the case of one cycle at the bound + 1 (scripts/tests/audit_cases.py cases).",
     "early_stop": {
       "marked_rows_rate_per_type": {
         "naprazdno": null,
@@ -934,6 +936,7 @@
       "min_score_coverage",
       "scenarios.*.rate",
       "audit.warnings_allowed",
+      "audit.collector_majflt_max",
       "controls.baseline",
       "profiles.*.max_concurrent"
     ],

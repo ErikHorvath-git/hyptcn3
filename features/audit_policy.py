@@ -5,6 +5,7 @@ A protocol of schema 3 states both in sections of its own:
     "audit": {"lateness_max_s": 0.5, "cycle_ms_max": {"delta": 1500, "full": 3500},
               "periodicity": {"equal_spacings": 3, "min_spacing_rows": 2, "note": "author's judgment, G0"},
               "warnings_allowed": null, "rule_closed_rows_max": null,
+              "collector_majflt_max": null, "collector_majflt_note": "...",
               "early_stop": {"marked_rows_rate_per_type": {"<event type>": null, ...}, "periodicity_stops": true,
                              "note": "..."},
               "traffic": {"offered_load_tolerance": 0.2, "arrival_cv": [0.8, 1.2], "top_objects_share": 0.1,
@@ -18,7 +19,11 @@ A protocol of schema 3 states both in sections of its own:
 audit_bounds() is the only reader of "audit" and register() the only reader of "exceptions". Protocols of schema 1
 and 2 have neither (None); the checks that need a bound are then not applied and the audit record says so. A value
 that a later stage determines (proposal 10.9) is null until then: warnings_allowed null allows no collector warning,
-rule_closed_rows_max null leaves that count unevaluated (printed next to the others, never a reason). "traffic"
+rule_closed_rows_max null leaves that count unevaluated (printed next to the others, never a reason), and so does
+collector_majflt_max null (the lead's answer to question Q29, 2026-11-24): the major faults of the collector per cycle,
+capture.rusage.majflt of every sidecar, are recorded and printed by the audit of a schema-3 session
+(scripts/collection.py majflt_record) and a reason only above a number, which G2 sets by the rule of
+collector_majflt_note (null or an integer of at least 0, and a note that says something). "traffic"
 holds the bounds of the realism requirements of proposal 5.7 and of the offered-load check of proposal 5.3
 (scripts/traffic_log.py realism; package B5b), all determined in G0 (proposal 10.9).
 
@@ -43,8 +48,8 @@ from pathlib import Path
 import re
 
 SCHEMA_3 = "hyptcn3/collection-protocol/3"
-AUDIT_KEYS = ("lateness_max_s", "cycle_ms_max", "periodicity", "warnings_allowed", "rule_closed_rows_max", "traffic",
-              "early_stop")
+AUDIT_KEYS = ("lateness_max_s", "cycle_ms_max", "periodicity", "warnings_allowed", "rule_closed_rows_max",
+              "collector_majflt_max", "collector_majflt_note", "traffic", "early_stop")
 CYCLE_KEYS = ("delta", "full")
 PERIODICITY_KEYS = ("equal_spacings", "min_spacing_rows", "note")
 # Package B9b (design B9b 1.3) and its fix (F5 of its verification, question Q24): the keys of audit.early_stop.
@@ -172,6 +177,12 @@ def audit_bounds(protocol):
     cap = a["rule_closed_rows_max"]
     if cap is not None and (type(cap) is not int or cap < 0):
         raise ValueError("invalid audit bounds: rule_closed_rows_max")
+    # Q29: the bound of the collector's major faults per cycle, null until G2 or a count (a bool is no count).
+    faults = a["collector_majflt_max"]
+    if faults is not None and (type(faults) is not int or faults < 0):
+        raise ValueError("invalid audit bounds: collector_majflt_max")
+    if not _text(a["collector_majflt_note"]):
+        raise ValueError("invalid audit bounds: collector_majflt_note")
     _traffic_bounds(a["traffic"])
     _early_stop_bounds(a["early_stop"], protocol)
     return a
