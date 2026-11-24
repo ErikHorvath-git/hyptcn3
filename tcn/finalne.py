@@ -156,7 +156,9 @@ RULE_CHANNEL_RULE = (
     "polarity control of test_controls (tcn.eval INCREMENT_RULE, the total group of O4): the median over the seeds of "
     "M (judgment: M enters every claim by that median, D14), each seed's counts beside it, nevyhodnotené when the "
     "increment of a seed is; all detection is carried by the rule channel (all_detection_by_rule_channel) when that "
-    "increment is 0 while the rule channel detects a planned control")
+    "increment is 0 while the rule channel detects a planned control; the sentence is the conclusion of that case "
+    "only, so the record holds its text only when the flag is true, and otherwise text null with the reason (why), "
+    "the increment and its counts kept (finding N3 of the B7c confirmation, package B10)")
 REPLAY_RULE = (
     "one replay per seed of M and sealed session, inside the run, by safeguard.cli replay_directory (safeguard replay "
     "--archive of the loaded bundle: tcn.pecat kontrola first, configuration.json with archive_sha256 and the seal's "
@@ -1037,7 +1039,8 @@ def rule_channel_only(manifests, o4):
     """RULE_CHANNEL_RULE: the wording of the bundles (one text with its ellipsis, wording_of) filled with the median
     over the seeds of the increment of the neural channel over the rule channel in the total of the planned controls
     (o4: {seed: the O4 block of tcn.eval for test_controls}), the counts of every seed, and whether all detection is
-    carried by the rule channel."""
+    carried by the rule channel; the filled text only when it is, else text null with the reason why (finding N3 of
+    the B7c confirmation)."""
     first = wording_of(manifests)
     per_seed = {}
     for seed, block in o4.items():
@@ -1047,10 +1050,19 @@ def rule_channel_only(manifests, o4):
     shares = [item["share"] for item in per_seed.values()]
     value = None if not shares or any(x is None for x in shares) else float(np.median(shares))
     rule_detects = any(item.get("rule", 0) > 0 for item in per_seed.values())
-    return {"text": first["text"].replace("…", UNEVALUATED if value is None else f"{value:.4g}"),
+    flag = None if value is None else (value == 0 and rule_detects)
+    if flag is True:
+        why = None
+    elif flag is None:
+        why = ("the increment of a seed is nevyhodnotené, so whether all detection is carried by the rule channel is "
+               "not decided")
+    elif value > 0:
+        why = f"the neural channel adds detections over the rule channel (median increment {value:.4g})"
+    else:
+        why = "the rule channel detects no planned control, so it carries no detection"
+    return {"text": first["text"].replace("…", f"{value:.4g}") if flag is True else None, "why": why,
             "wording": first, "increment": {"median": value, "per_seed": per_seed},
-            "all_detection_by_rule_channel": None if value is None else (value == 0 and rule_detects),
-            "rule": RULE_CHANNEL_RULE}
+            "all_detection_by_rule_channel": flag, "rule": RULE_CHANNEL_RULE}
 
 
 # ------------------------------------------------------------------ the diagnostics

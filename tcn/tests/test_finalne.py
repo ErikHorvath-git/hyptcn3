@@ -346,9 +346,14 @@ def _parts(v, seeds):
     assert all(_names(row.get("shares", {})) <= set(CONFIRMATORY) for row in v["k2_values"]["table"])
     assert all(_names(row.get("shares", {})) <= set(DESCRIPTIVE) for row in descriptive["k2_values"]["table"])
     wording = o["rule_channel_only"]
-    assert wording["wording"] == RULE_CHANNEL_ONLY and "…" not in wording["text"]
-    assert wording["text"].startswith(RULE_CHANNEL_ONLY["text"][:-1]) and set(wording["increment"]["per_seed"]) == {
+    assert wording["wording"] == RULE_CHANNEL_ONLY and set(wording["increment"]["per_seed"]) == {
         str(seed) for seed in seeds}
+    # Finding N3 of the B7c confirmation (package B10): the sentence only when all detection is the rule channel's.
+    if wording["all_detection_by_rule_channel"] is True:
+        assert "…" not in wording["text"] and wording["text"].startswith(RULE_CHANNEL_ONLY["text"][:-1])
+        assert wording["why"] is None
+    else:
+        assert wording["text"] is None and type(wording["why"]) is str and wording["why"]
 
 
 def _attachments(v, out, corpus):
@@ -970,25 +975,35 @@ def test_bundles_of_another_wording_of_the_rule_channel_are_refused_before_the_s
         f"(safeguard/training.py RULE_CHANNEL_ONLY): {why}; refused before the seal is consumed (RULE_CHANNEL_RULE)\n")
 
 
-@pytest.mark.parametrize("case", ["neural_adds", "rule_carries_all"])
+@pytest.mark.parametrize("case", ["neural_adds", "rule_carries_all", "no_detection", "not_computed"])
 def test_the_wording_of_the_rule_channel_is_filled_with_the_increment(case):
     """Finding F6 (proposal 8.2, question Q6): the wording the bundles carry (safeguard/training.py RULE_CHANNEL_ONLY)
     with its ellipsis filled by the median over the seeds of the increment of the neural channel over the rule
     channel in the total of the planned controls, and the flag of all detection carried by the rule channel: false
     when the neural channel adds detections (median 0.25), true when the increment is 0 while the rule channel
-    detects."""
+    detects, false when no channel detects, nevyhodnotené (None) when the O4 of a seed is not computed. Finding N3 of
+    the B7c confirmation (package B10): the sentence is the conclusion of the case of the flag true only, so the
+    record holds the filled text then, and otherwise null with the reason; the increment and its counts stay."""
     from safeguard.training import RULE_CHANNEL_ONLY
     from tcn import finalne
-    increments = {"neural_adds": [0.125, 0.25, 0.25, 0.375, 0.5], "rule_carries_all": [0.0] * 5}[case]
+    increments = {"neural_adds": [0.125, 0.25, 0.25, 0.375, 0.5]}.get(case, [0.0] * 5)
+    rule = 0 if case == "no_detection" else 2
     o4 = {seed: {"computed": True, "control": {"total": {"neural_over_rule": {
-        "planned": 8, "rule": 2, "rule_or_neural": 2 + round(8 * x), "neural_not_rule": round(8 * x), "share": x,
-        "status": "evaluated"}}}} for seed, x in enumerate(increments)}
+        "planned": 8, "rule": rule, "rule_or_neural": rule + round(8 * x), "neural_not_rule": round(8 * x),
+        "share": x, "status": "evaluated"}}}} for seed, x in enumerate(increments)}
+    if case == "not_computed":
+        o4[3] = {"computed": False}
     manifests = [{"analysis_wording": {"rule_channel_only": dict(RULE_CHANNEL_ONLY)}} for _ in increments]
     found = finalne.rule_channel_only(manifests, o4)
-    value = {"neural_adds": 0.25, "rule_carries_all": 0.0}[case]
-    assert found["text"] == RULE_CHANNEL_ONLY["text"].replace("…", {"neural_adds": "0.25", "rule_carries_all": "0"}[
-        case])
-    assert (found["increment"]["median"], found["all_detection_by_rule_channel"]) == (
-        value, case == "rule_carries_all")
+    value, flag, why = {
+        "neural_adds": (0.25, False, "the neural channel adds detections over the rule channel (median increment "
+                                     "0.25)"),
+        "rule_carries_all": (0.0, True, None),
+        "no_detection": (0.0, False, "the rule channel detects no planned control, so it carries no detection"),
+        "not_computed": (None, None, "the increment of a seed is nevyhodnotené, so whether all detection is carried "
+                                     "by the rule channel is not decided")}[case]
+    assert found["text"] == (RULE_CHANNEL_ONLY["text"].replace("…", "0") if case == "rule_carries_all" else None)
+    assert found["why"] == why
+    assert (found["increment"]["median"], found["all_detection_by_rule_channel"]) == (value, flag)
     assert found["wording"] == RULE_CHANNEL_ONLY and found["increment"]["per_seed"]["1"]["neural_not_rule"] == round(
         8 * increments[1])
