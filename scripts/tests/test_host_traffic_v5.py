@@ -502,6 +502,22 @@ def test_a_user_session_holds_the_customer_it_drew_or_the_next_free_one_else_it_
     assert all(steps[0][n] == steps[1][n] for n in common)
 
 
+def test_the_log_audit_admits_the_drops_of_held_customers_and_the_customers_of_the_real_run(tmp_path, monkeypatch):
+    """Finding F1 of the B5c verification (package B10): the cross-checks of a /2 log pair (scripts/traffic_log.py
+    summarize, the log audit's) read the drop reason and the customer of every arrival. On the real generator's run
+    with ten customers (few_customers_run) every drop is one of all_customers_held, below the cap, and every customer
+    is held by one user session at a time, so the pair has no problem; before B10 each such drop was refused as
+    arrival_cap (a drop meant max_concurrent user sessions in progress)."""
+    from scripts import host_traffic as ht, traffic_log
+    _, req, _ = few_customers_run(tmp_path, monkeypatch)
+    arrivals = of_type(req, "arrival")
+    assert {a["drop_reason"] for a in arrivals} == {None, "all_customers_held"} and any(a["customer"] for a in arrivals)
+    found = traffic_log.summarize(tmp_path / "requests.jsonl", tmp_path / "intervals.jsonl",
+                                  schema=traffic_log.REQUEST_SCHEMA_2)
+    assert found["problems"] == []
+    assert traffic_log.DROP_REASONS == (ht.DROP_MAX_CONCURRENT, ht.DROP_CUSTOMERS)
+
+
 # ------------------------------------------------------------------ the state machines (item 2)
 
 def drive(profile, params, intensity, sessions, answer=None, statuses=None):

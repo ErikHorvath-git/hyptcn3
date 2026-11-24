@@ -374,12 +374,46 @@ def m_cap(r, i, p):
 
 def m_dropped(r, i, p):
     last = _arrivals(r)[LAST]
-    last.update(admitted=False, active=p["profiles"]["eshop"]["max_concurrent"])  # Dropped at the cap, but counted
-    index = _interval_of(i, last["t_mono"])["interval"]  # as admitted, and its requests were sent.
+    last.update(admitted=False, active=p["profiles"]["eshop"]["max_concurrent"],  # Dropped at the cap, but counted
+                drop_reason="max_concurrent")  # as admitted, and its requests were sent.
+    index = _interval_of(i, last["t_mono"])["interval"]
     return [f"interval_sessions:{index}:admitted_sessions:1!=0", f"interval_sessions:{index}:dropped_sessions:0!=1",
             *(f"request_user_session_dropped:{rid}" for rid in _requests_of(r, LAST)),
             f"requests:end_arrivals_mismatch:admitted:{LAST + 1}!={LAST}",
             f"requests:end_arrivals_mismatch:dropped:0!=1"]
+
+
+# Finding F1 of the B5c verification (package B10): the drop reason and the customer of an arrival are read.
+
+def m_drop_reason(r, i, p):
+    _arrivals(r)[4]["drop_reason"] = "max_concurrent"  # Admitted, with the reason of a drop.
+    return [f"arrival_drop_reason:{_user(4)}"]
+
+
+def m_customers_held(r, i, p):
+    last = _arrivals(r)[LAST]  # All customers held while fewer user sessions than customers are in progress.
+    last.update(admitted=False, drop_reason="all_customers_held")
+    return [f"arrival_customers:{_user(LAST)}", *_dropped_counts(r, i, last)]
+
+
+def _dropped_counts(r, i, last):
+    index = _interval_of(i, last["t_mono"])["interval"]
+    return [f"interval_sessions:{index}:admitted_sessions:1!=0", f"interval_sessions:{index}:dropped_sessions:0!=1",
+            *(f"request_user_session_dropped:{rid}" for rid in _requests_of(r, LAST)),
+            f"requests:end_arrivals_mismatch:admitted:{LAST + 1}!={LAST}",
+            f"requests:end_arrivals_mismatch:dropped:0!=1"]
+
+
+def m_customer_unknown(r, i, p):
+    _arrivals(r)[4]["customer"] = "zakaznik9999"  # lab/seed.py has 2000 customers.
+    return [f"arrival_customer:{_user(4)}"]
+
+
+def m_customer_held_twice(r, i, p):
+    # u1 of build() orders and holds zakaznik0001 until its order ends at 1.5 s; u2 arrives in that time.
+    assert _arrivals(r)[1]["customer"] == "zakaznik0001" and _arrivals(r)[2]["customer"] is None
+    _arrivals(r)[2]["customer"] = "zakaznik0001"
+    return [f"customer_held_twice:{_user(2)}"]
 
 
 def m_interval_offered(r, i, p):

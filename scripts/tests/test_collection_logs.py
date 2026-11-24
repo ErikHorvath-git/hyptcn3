@@ -381,7 +381,7 @@ def v5_traffic(d, p, *, scenario=None, sessions=None, spacings=SPACINGS, thinks=
         users.append((at, mine))
     users.sort(key=lambda user: user[0])
     ends = [max(r["t_end_mono"] for r in mine) for _, mine in users]
-    arrivals = []
+    arrivals, buyers = [], 0
     for n, (at, mine) in enumerate(users):
         uid = f"{sample.RUN}-u{n}"
         for r in mine:
@@ -389,8 +389,14 @@ def v5_traffic(d, p, *, scenario=None, sessions=None, spacings=SPACINGS, thinks=
         active = sum(1 for m in range(n) if ends[m] > at)
         if active >= params["max_concurrent"]:
             raise ValueError("the user sessions of this traffic need a larger max_concurrent")
+        # Package B5c: an eshop user session that orders holds a customer of its own (scripts/host_traffic.py
+        # Customers; the log audit checks it since package B10, finding F1 of B5c), every other one none.
+        orders = profile == "eshop" and any(r["method"] == "POST" and r["route"] == "/api/orders"
+                                            and r.get("intended_status") is None for r in mine)
+        buyers += orders
         arrivals.append({"type": "arrival", "user_session": uid, "t_mono": at, "t_utc": utc(at, base),
-                         "phase": phase(at), "admitted": True, "active": active})
+                         "phase": phase(at), "admitted": True, "active": active,
+                         "customer": f"zakaznik{buyers:04d}" if orders else None, "drop_reason": None})
     requests = sorted((r for _, mine in users for r in mine), key=lambda r: r["t_start_mono"])
 
     # The rate: the offered load of the measure intervals outside every window equals the plan (rate_factor off).

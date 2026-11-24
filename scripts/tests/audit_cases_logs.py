@@ -739,6 +739,11 @@ _V5_CASES = [
      logs("traffic:profile_parameters_invalid:max_concurrent", "traffic_config:profile_parameters")),
     ("traffic:arrival_cap", traffic_rows(lambda r, i: _arrivals(r)[4].update(  # Admitted at the cap.
         active=r[0]["profile_parameters"]["max_concurrent"])), logs("traffic:arrival_cap:" + U4)),
+    # Finding F1 of the B5c verification (package B10): the drop reason and the customer of an arrival are read.
+    ("traffic:arrival_drop_reason", traffic_rows(lambda r, i: _arrivals(r)[4].update(drop_reason="max_concurrent")),
+     logs("traffic:arrival_drop_reason:" + U4)),
+    ("traffic:arrival_customer", traffic_rows(lambda r, i: _arrivals(r)[4].update(customer="zakaznik9999")),
+     logs("traffic:arrival_customer:" + U4)),
     ("traffic:user_session_id", traffic_rows(lambda r, i: [x.update(user_session="u4") for x in r
                                                            if x.get("user_session") == U4]),
      logs("traffic:user_session_id:u4")),

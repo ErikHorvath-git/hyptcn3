@@ -44,7 +44,12 @@ V5_HEADER_KEYS = ("load_model", "profile", "scenario", "intensity", "rate", "rat
                   "profile_parameters", "warmup_s", "envelope")
 SEED_PURPOSES = ("traffic", "traffic_arrivals", "traffic_choices", "traffic_sizes")  # Design B5b 1.2 and 1.3.
 RATE_SOURCES = ("protocol", "command line")
-ARRIVAL_KEYS = ("user_session", "t_mono", "t_utc", "phase", "admitted", "active")
+ARRIVAL_KEYS = ("user_session", "t_mono", "t_utc", "phase", "admitted", "active", "customer", "drop_reason")
+# Package B5c (finding F2 of B5b): the named reasons of a dropped arrival (scripts/host_traffic.py DROP_MAX_CONCURRENT,
+# DROP_CUSTOMERS) and the user name of a customer of lab/seed.py (host_traffic customer_name); the audit reads both
+# (finding F1 of the B5c verification, package B10).
+DROP_REASONS = ("max_concurrent", "all_customers_held")
+CUSTOMER_NAME = re.compile(r"zakaznik(\d{4,})")
 V5_REQUEST_KEYS = ("user_session", "step", "object", "intended_status", "think_s")
 V5_INTERVAL_KEYS = ("offered_sessions", "admitted_sessions", "dropped_sessions", "planned_sessions", "active_max")
 V5_END_KEYS = ("arrivals", "admitted", "dropped", "user_sessions_completed", "user_sessions_in_progress_at_stop")
@@ -289,7 +294,17 @@ def _v5_problems(problems, header_r, header_i, requests, reqs, ivs, end_r):
     and was admitted, think_s null exactly for the first request of its user session, an intended status among
     the profile's client error statuses. The end record of the request log counts the arrivals, the admitted and
     the dropped ones, and completed + in progress at stop = admitted.
+
+    The customers and the drops (finding F1 of the B5c verification, package B10): an arrival names its customer and
+    its drop reason (both keys, null where none); exactly a dropped one has a reason of DROP_REASONS; max_concurrent
+    with exactly max_concurrent in progress (arrival_cap), all_customers_held only under profile eshop and below the
+    cap with at least as many user sessions in progress as lab/seed.py has customers, the fewest that can hold them
+    all (arrival_customers); a customer is one of lab/seed.py's, of an admitted user session only (arrival_customer);
+    and no customer is held by two user sessions at once, each from its arrival to the end of its last request
+    (customer_held_twice: the later one).
     """
+    from lab import seed  # The customers of the lab (lab/seed.py SIZES), as scripts/host_traffic.py Lab reads them.
+    customers = seed.SIZES["customers"]
     head = header_r or {}
     for key in V5_HEADER_KEYS:
         if header_r is not None and key not in header_r:
@@ -325,14 +340,17 @@ def _v5_problems(problems, header_r, header_i, requests, reqs, ivs, end_r):
         problems.add("profile_parameters_invalid", "client_errors")
         statuses = None
 
-    # Arrival records.
+    # Arrival records. A drop for held customers is judged under a known profile (an unknown one is its own problem).
+    known, eshop = head.get("profile") in V5_PROFILES, head.get("profile") == "eshop"
     pattern = re.compile(re.escape(str(head.get("run_id"))) + r"-u\d+")
     arrivals, sessions, latest = [], {}, None
     for record in (r for r in requests if r.get("type") == "arrival"):
         uid = record.get("user_session")
         if (any(key not in record for key in ARRIVAL_KEYS) or type(uid) is not str
                 or type(record["admitted"]) is not bool or type(record["active"]) is not int or record["active"] < 0
-                or not _finite(record["t_mono"]) or record["phase"] not in PHASES):
+                or not _finite(record["t_mono"]) or record["phase"] not in PHASES
+                or type(record["customer"]) not in (str, type(None))
+                or type(record["drop_reason"]) not in (str, type(None))):
             problems.add("arrival_malformed", uid if type(uid) is str else None)
             continue
         if not pattern.fullmatch(uid):
@@ -343,8 +361,17 @@ def _v5_problems(problems, header_r, header_i, requests, reqs, ivs, end_r):
         if latest is not None and record["t_mono"] < latest:
             problems.add("arrival_order", uid)
         latest = record["t_mono"] if latest is None else max(latest, record["t_mono"])
-        if cap is not None and (record["active"] >= cap if record["admitted"] else record["active"] != cap):
+        reason = record["drop_reason"]
+        if record["admitted"] is (reason is not None) or reason not in (None, *DROP_REASONS):
+            problems.add("arrival_drop_reason", uid)
+        elif reason == DROP_REASONS[1]:  # Judged by the profile and the cap, once both are known.
+            if known and cap is not None and not (eshop and customers <= record["active"] < cap):
+                problems.add("arrival_customers", uid)
+        elif cap is not None and (record["active"] >= cap if record["admitted"] else record["active"] != cap):
             problems.add("arrival_cap", uid)
+        name = CUSTOMER_NAME.fullmatch(record["customer"]) if record["customer"] is not None else None
+        if record["customer"] is not None and not (record["admitted"] and name and 1 <= int(name[1]) <= customers):
+            problems.add("arrival_customer", uid)
         arrivals.append(record)
 
     # Interval records: the arrivals in time order fill the intervals in their order, each with as many as it
@@ -413,6 +440,20 @@ def _v5_problems(problems, header_r, header_i, requests, reqs, ivs, end_r):
                 problems.add("think_s_first", r.get("rid"))
             elif i > 0 and r["think_s"] is None:
                 problems.add("think_s_missing", r.get("rid"))
+    # One customer per user session in progress (finding F1 of B5c): each holds its customer from its arrival to the
+    # end of its last request; a user session whose arrival lies before the end of the one that held it before shares
+    # that customer's cart.
+    held = defaultdict(list)
+    for uid, a in sessions.items():
+        if a["admitted"] and a["customer"] is not None:
+            ends = [r["t_end_mono"] for r in by_session.get(uid, ()) if _finite(r.get("t_end_mono"))]
+            held[a["customer"]].append((a["t_mono"], max([a["t_mono"], *ends]), uid))
+    for spans in held.values():
+        latest = None  # The latest end of the user sessions that held the customer before.
+        for start, end, uid in sorted(spans):
+            if latest is not None and start < latest - TIME_EPS:
+                problems.add("customer_held_twice", uid)
+            latest = end if latest is None else max(latest, end)
 
     offered = sum(1 for r in requests if r.get("type") == "arrival")
     admitted = sum(a["admitted"] for a in arrivals)
@@ -861,10 +902,10 @@ def main(argv=None):
     real.add_argument("--scenario", required=True)
     real.add_argument("--windows", default="[]", help="JSON list of [start, end] unix times of event windows")
     args = parser.parse_args(argv)
+    root = str(Path(__file__).resolve().parents[1])
+    if root not in sys.path:  # features/audit_policy.py and lab/seed.py when run as a script
+        sys.path.insert(0, root)
     if args.command == "realism":
-        root = str(Path(__file__).resolve().parents[1])
-        if root not in sys.path:  # features/audit_policy.py when run as a script
-            sys.path.insert(0, root)
         try:
             result = realism(args.requests, args.intervals, json.loads(args.protocol.read_text()), args.scenario,
                              windows=[tuple(w) for w in json.loads(args.windows)])
