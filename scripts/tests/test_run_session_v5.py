@@ -56,10 +56,14 @@ def loaded(tmp_path, doc, vm="a"):
 
 
 def args(path, **changes):
-    """The namespace of `collection.py run` for a diagnostic run of eshop_low on VM a."""
+    """The namespace of `collection.py run` for a diagnostic run of eshop_low on VM a. A session of another role
+    names its plan and attempt (package B9): mode campaign and attempt 1 unless `changes` give them."""
     values = dict(protocol=path, role="diagnostic", scenario="eshop_low", group="trial-1", vm="a", seed=7,
                   pilot_report=None, session_id=None, campaign_id=None, replaces=None, expected_boot_id=None,
-                  expected_qemu=None, group_attempt=1, collections_dir=None, cycles=None, rate=None, events=None)
+                  expected_qemu=None, group_attempt=1, collections_dir=None, cycles=None, rate=None, events=None,
+                  mode=None, attempt=None)
+    if changes.get("role", "diagnostic") != "diagnostic":
+        values.update(mode="campaign", attempt=1)
     values.update(changes)
     return SimpleNamespace(**values)
 

@@ -242,7 +242,8 @@ def _root_run(p, path, tmp_path, monkeypatch, identity, memory):
     monkeypatch.setattr(collection, "guest_identity", lambda pv: copy.deepcopy(identity))
     monkeypatch.setattr(collection, "qemu_process", lambda domain: {"pid": 4242, "start_ticks": 1, "host_boot": "b"})
     monkeypatch.setattr(collection, "host_memory", lambda qemu: dict(memory))
-    a = SimpleNamespace(protocol=path, role="train", scenario="steady", group="st-train-1", seed=1)
+    a = SimpleNamespace(protocol=path, role="train", scenario="steady", group="st-train-1", seed=1, mode="campaign",
+                        attempt=1)  # Package B9: a session of a planned role names its plan and attempt.
     with pytest.raises(ValueError) as caught:
         collection.run_session(a, p)
     assert [f for f in (tmp_path / "collections").iterdir() if not f.name.startswith(".lock")] == []

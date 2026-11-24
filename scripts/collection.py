@@ -200,7 +200,9 @@ def check_replacement(p):
 
     Without the key nothing is ever replaced. The only rule: at most max_per_campaign
     such sessions of a campaign are captured again, each as the same assignment
-    (VM, role, group, scenario, seed) in the same group boot. "covers" names the
+    (VM, role, group, scenario, seed) in the same group boot; under schema 3 as the
+    next attempt of protocol_v5.replacement (new times and traffic seed, package B9,
+    collection.py run --attempt). "covers" names the
     causes the rule applies to; without it only audit rejections, as before:
       audit_rejected      the capture completed and its audit rejected it
       capture_incomplete  the measured phase started but the capture did not complete
@@ -838,6 +840,15 @@ V5_LOAD_MODEL = ("open loop: user sessions arrive as a non-homogeneous Poisson p
                  "envelope(t), at most max_concurrent in progress")
 V5_NO_PILOT = "protocol schema 3 has no pilot"
 DIAGNOSTIC_EVENT_KEYS = ("type", "start_s", "duration_s")  # One event of --events (design B5b section 4).
+# --mode and --attempt of `run` (package B9): required for a session of a planned role under schema 3, refused for a
+# diagnostic run and under schemas 1 and 2.
+ATTEMPTS = "1 for the planned session, 2 or later for a replacement (protocol_v5.replacement)"
+PLANNED_ONLY = " is only allowed for a session of a planned role under protocol schema 3"
+# The readiness records a session of a planned role needs, by the mode of its plan (skeleton B9 row "stupne",
+# proposal 10.4): the stage given to gates.require, which checks every stage before it; the last stage checked; and
+# the words the refusal names the session with.
+SESSION_GATES = {"campaign": ("G5", "G4", "a session of a planned role"),
+                 "rehearsal": ("G3a", "G2", "a session of the rehearsal")}
 
 
 def traffic_purposes():
@@ -913,18 +924,22 @@ def v5_run(a, p):
     planned role v5_planned().
 
     v5 has no pilot, so --role pilot ends with a named reason: a trial session runs as --role diagnostic. A scenario
-    of schema 3 is {profile, intensity, rate}. A session of a planned role runs at the protocol's rate (refused while
-    it is null, until G2) with the seeds and events of its planned session, found by role, group, scenario, seed,
-    cycles and VM (attempt 1; a replacement attempt is package B9's); the readiness records of G0 to G4 must be valid
-    instead of an accepted pilot (gates.require of G5), and --rate, --events, --cycles and --pilot-report are
-    refused. A diagnostic run takes the protocol's rate or, where it is null, --rate (exactly one of them), its
-    events from --events (diagnostic_events) or none, its length from --cycles or pilot_cycles as before and its
-    seeds from --seed (diagnostic_seeds); it is written under data/diagnostics and never becomes corpus.
+    of schema 3 is {profile, intensity, rate}. A session of a planned role names its plan and its attempt (package
+    B9, both required, no default): --mode campaign|rehearsal and --attempt N. It runs at the protocol's rate
+    (refused while it is null, until G2) with the seeds and events of attempt N of its planned session: the planned
+    session of protocol_v5.plan(p, mode), found by role, group, scenario, cycles and VM, is attempt 1, and attempt
+    N >= 2 is protocol_v5.replacement of it; --seed must be that attempt's seed. The readiness records the mode needs
+    must be valid instead of an accepted pilot (SESSION_GATES: G0 to G4 for the campaign, G0 to G2 for the
+    rehearsal), and --rate, --events, --cycles and --pilot-report are refused. A diagnostic run takes the protocol's
+    rate or, where it is null, --rate (exactly one of them), its events from --events (diagnostic_events) or none,
+    its length from --cycles or pilot_cycles as before and its seeds from --seed (diagnostic_seeds); it refuses
+    --mode and --attempt (it has no planned session), is written under data/diagnostics and never becomes corpus.
 
     Returns {"cycles", "events", "traffic"}: the session's length, its events as session.json records them, and the
     traffic block of session.json, from which traffic_command() makes the generator's command line (design B5b
     1.3); dur_s, the span of the generator's envelope, is the planned run: warmup_s and cycles intervals. A session
-    of role test_controls has "controls" too: its planned controls as session.json records them (package B8).
+    of role test_controls has "controls" too: its planned controls as session.json records them (package B8). A
+    session of a planned role has "plan_mode" and "attempt" too, which session.json records (package B9).
     """
     run = v5_arguments(a, p)
     return run if a.role == "diagnostic" else v5_planned(a, p)
@@ -950,12 +965,25 @@ def v5_arguments(a, p):
     if getattr(a, "pilot_report", None):
         raise ValueError(V5_NO_PILOT + ": --pilot-report is not read")
     rate, given = p["scenarios"][a.scenario]["rate"], getattr(a, "rate", None)
+    mode, attempt = getattr(a, "mode", None), getattr(a, "attempt", None)
     if a.role != "diagnostic":
         for value, flag in ((given, "--rate"), (getattr(a, "events", None), "--events"),
                             (getattr(a, "cycles", None), "--cycles")):
             if value is not None:
                 raise ValueError(flag + " is only allowed for diagnostic runs")
+        # Package B9: the plan and the attempt of the session, both named on the command line (no default).
+        for value, flag, what in ((mode, "--mode", "campaign or rehearsal, the plan the session belongs to"),
+                                  (attempt, "--attempt", ATTEMPTS)):
+            if value is None:
+                raise ValueError(f"a session of a planned role needs {flag} ({what})")
+        if mode not in protocol_v5.MODES:
+            raise ValueError("invalid --mode: " + " or ".join(protocol_v5.MODES))
+        if type(attempt) is not int or attempt < 1:
+            raise ValueError("invalid --attempt: " + ATTEMPTS)
         return None
+    for value, flag in ((mode, "--mode"), (attempt, "--attempt")):
+        if value is not None:
+            raise ValueError(flag + PLANNED_ONLY)
     if rate is None and given is None:
         raise ValueError(f"scenario {a.scenario} has no rate (null until G2): a diagnostic run passes --rate")
     if rate is not None and given is not None:
@@ -972,33 +1000,45 @@ def v5_arguments(a, p):
 
 
 def v5_planned(a, p):
-    """The part of v5_run for a session of a planned role: the protocol's rate, the planned session's seeds and
-    events (a session of test_controls: its controls as well, package B8), and the readiness records up to G4."""
+    """The part of v5_run for a session of a planned role: the protocol's rate, the seeds and events of attempt
+    --attempt of its planned session in the plan of --mode (a session of test_controls: its controls as well,
+    package B8), and the readiness records that mode needs (SESSION_GATES).
+
+    Attempt 1 is the planned session itself, attempt N >= 2 protocol_v5.replacement of it (package B9: the same VM,
+    role, group, position, scenario and types or kinds, new times and traffic seeds); the same checks hold for both:
+    --seed is the attempt's seed, the attempt has a seed for every traffic purpose, and its events and controls are
+    taken as it states them."""
     rate = p["scenarios"][a.scenario]["rate"]
     if rate is None:
         raise ValueError(f"scenario {a.scenario} has no rate (null until G2): a session of a planned role runs at the "
                          "protocol's rate")
-    cycles = p["cycles"]
-    assignment = {"role": a.role, "group": a.group, "scenario": a.scenario, "seed": a.seed, "cycles": cycles,
+    cycles, mode, attempt = p["cycles"], a.mode, a.attempt
+    assignment = {"role": a.role, "group": a.group, "scenario": a.scenario, "cycles": cycles,
                   **({"vm": p["vm"]} if p.get("vm") else {})}
-    planned = [x for x in plan(p)["sessions"] if {k: x.get(k) for k in assignment} == assignment]
-    if not planned:
-        raise ValueError("assignment/seed not present in frozen collection plan")
-    missing = [purpose for purpose in traffic_purposes() if purpose not in planned[0]["seeds"]]
+    planned = [x for x in protocol_v5.plan(p, mode=mode)["sessions"]
+               if {k: x.get(k) for k in assignment} == assignment]
+    session = None
+    if planned:
+        session = planned[0] if attempt == 1 else protocol_v5.replacement(p, planned[0], attempt, mode=mode)
+    if session is None or session["seed"] != a.seed:
+        raise ValueError("assignment/seed not present in frozen collection plan"
+                         + ("" if attempt == 1 else f" as attempt {attempt} of a planned session"))
+    missing = [purpose for purpose in traffic_purposes() if purpose not in session["seeds"]]
     if missing:
         raise ValueError("planned session has no seed for " + ", ".join(missing))
-    seeds = {purpose: planned[0]["seeds"][purpose] for purpose in traffic_purposes()}
+    seeds = {purpose: session["seeds"][purpose] for purpose in traffic_purposes()}
     from scripts import gates  # Inside the function: gates imports this module.
+    stage, last, what = SESSION_GATES[mode]
     try:
-        gates.require(gates.ROOT / "data/results", a.protocol, "G5")
+        gates.require(gates.ROOT / "data/results", a.protocol, stage)
     except ValueError as error:
-        raise ValueError("a session of a planned role needs valid readiness records up to G4: " + str(error)) from None
+        raise ValueError(f"{what} needs valid readiness records up to {last}: " + str(error)) from None
     # A session of test_controls plans controls instead of events (package B8): its occurrences in the order of the
     # plan, the slots the deck left empty out, each as the plan states it (kind, polarity, class, dose and times).
-    controls = ({"controls": [x for x in planned[0]["controls"] if x.get("kind") is not None]}
-                if "controls" in planned[0] else {})
-    return {"cycles": cycles, "events": planned[0].get("events", []), **controls,
-            "traffic": _v5_traffic(a, p, rate, "protocol", seeds, cycles)}
+    controls = ({"controls": [x for x in session["controls"] if x.get("kind") is not None]}
+                if "controls" in session else {})
+    return {"cycles": cycles, "events": session.get("events", []), **controls,
+            "traffic": _v5_traffic(a, p, rate, "protocol", seeds, cycles), "plan_mode": mode, "attempt": attempt}
 
 
 def traffic_command(p, metadata, out):
@@ -1094,6 +1134,9 @@ def run_session(a, p):
     v5 = v5_arguments(a, p) if schema3 else None
     if not schema3 and (getattr(a, "rate", None) is not None or getattr(a, "events", None) is not None):
         raise ValueError("--rate and --events are only allowed for diagnostic runs under protocol schema 3")
+    for flag in ("mode", "attempt"):
+        if not schema3 and getattr(a, flag, None) is not None:
+            raise ValueError("--" + flag + PLANNED_ONLY)
     if a.scenario not in p["scenarios"]:
         raise ValueError("unknown benign scenario")
     vm = p.get("vm")
@@ -1193,8 +1236,10 @@ def run_session(a, p):
                     "campaign_id": getattr(a, "campaign_id", None),
                     "vm": vm, "domain": p["domain"],
                     **({"replaces": a.replaces} if getattr(a, "replaces", None) else {}),
-                    "role": a.role, "group": a.group, "group_attempt": attempt, "scenario": a.scenario,
-                    "typ": "benign", "seed": a.seed, "cycles": cycles, "guest_before": before,
+                    "role": a.role, "group": a.group, "group_attempt": attempt,
+                    # The attempt of the planned session and the mode of its plan (package B9; v5_planned).
+                    **({key: v5[key] for key in ("attempt", "plan_mode")} if schema3 and not diagnostic else {}),
+                    "scenario": a.scenario, "typ": "benign", "seed": a.seed, "cycles": cycles, "guest_before": before,
                     **({"events": events, "event_grace_s": p["events"]["grace_s"]} if "events" in p else {}),
                     # The planned controls of a session of test_controls (package B8; collection_logs compares them
                     # with controls.json).
@@ -1213,7 +1258,7 @@ def run_session(a, p):
                         "catalog_share": s["catalog_share"], "write_share": s["write_share"],
                         "summary_interval_s": 5, "load_model": "closed loop, not a fixed request rate"},
                     "metadata_not_model_inputs": ["scenario", "seed", "traffic", "boot_id", "group", "session_id", "events",
-                                                  "controls", "vm", "domain"],
+                                                  "controls", "vm", "domain", "attempt", "plan_mode"],
                     "working_storage": storage_identity(base),
                     "host_context": {"host_boot": Path("/proc/sys/kernel/random/boot_id").read_text().strip(),
                                      "qemu": qemu, "memory": memory, "python": sys.executable,
@@ -1412,14 +1457,18 @@ def capture_session(p, out, metadata, cycles):
             raise ValueError("preflight functional check failed: " + (smoke.stdout + smoke.stderr)[-500:])
         step("functional-check", result=smoke.stdout.strip()[-200:])
         write_guest("state_before.json", lab_json(p, "state"))
-        if controls:
-            # The session's starting levels (lab/guest_state.py levels, proposal 5.4): the level part of the return
-            # predicate before every control compares the guest with them (skeleton B8 section 3).
-            controls.levels = lab_json(p, "levels")
-            if type(controls.levels) is not dict:
+        if controls or p.get("schema") == protocol_v5.SCHEMA:
+            # The session's starting levels (lab/guest_state.py levels, proposal 5.4), of every session under schema
+            # 3 (package B9): the return predicate before every control compares the guest with them (skeleton B8
+            # section 3), its level part and, since B9, the modules loaded at the start (finding S2 of B8).
+            levels = lab_json(p, "levels")
+            if type(levels) is not dict:
                 raise ValueError("the guest's levels are no JSON object")
-            write_guest("levels_before.json", controls.levels)
-            step("levels", processes=controls.levels.get("processes"))
+            write_guest("levels_before.json", levels)
+            step("levels", processes=levels.get("processes"),
+                 modules=len(levels["modules"]) if type(levels.get("modules")) is list else None)
+            if controls:
+                controls.levels = levels
         pre = lab_json(p, "segment", "--label", out.name + "-pre", "--dest", guest)
         write_guest("pre_segment.json", pre)
         expected = smoke_rids(out / "preflight_smoke.json")
@@ -1928,6 +1977,12 @@ def main(argv=None):
     run.add_argument("--group", required=True)
     run.add_argument("--vm", help="VM name; required for (and only for) a protocol that lists vms")
     run.add_argument("--seed", type=int, required=True)
+    run.add_argument("--mode", choices=protocol_v5.MODES,
+                     help="Schema 3, a session of a planned role (required, no default): the plan it belongs to, of "
+                          "the campaign or of its rehearsal; refused otherwise")
+    run.add_argument("--attempt", type=int,
+                     help="Schema 3, a session of a planned role (required, no default): " + ATTEMPTS
+                          + "; --seed is that attempt's seed; refused otherwise")
     run.add_argument("--pilot-report", type=Path)
     run.add_argument("--session-id", help="Exclusive output name for a frozen campaign assignment")
     run.add_argument("--campaign-id")

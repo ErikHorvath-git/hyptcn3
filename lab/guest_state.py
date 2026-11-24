@@ -7,7 +7,8 @@ between measured sessions so that each segment belongs to exactly one run.
 Protocol v5 (proposal 5.4): `reset --seed S` returns the database and the
 documents to the seeded level of lab/seed.py, `pretouch` lets one process
 touch as much memory as the largest event and exit, `levels` prints the
-level values recorded at the start of each session. Package B8: `baseline
+level values recorded at the start of each session (since package B9 with
+the names of the loaded modules). Package B8: `baseline
 --levels JSON --tolerance JSON|null` prints the return predicate a control
 needs before it starts (lab/udalosti.py; skeleton B8 section 3).
 """
@@ -265,12 +266,15 @@ def tasks():
 
 
 def levels():
-    """Level values at the start of a session (proposal 5.4): processes, memory, database rows and sizes, files."""
+    """Level values at the start of a session (proposal 5.4): processes, memory, database rows and sizes, files, and
+    the names of the loaded modules (/proc/modules, package B9): the return predicate counts a candidate module as a
+    residue only when it was loaded after the session's start or a control chose it (finding S2 of B8)."""
+    import udalosti
     processes, threads = tasks()
     out = run("runuser", "-u", "postgres", "--", "psql", "-XtAF", "|", "hyptcn_lab", "-c", LEVELS).strip()
     stat = os.statvfs("/")
     print(json.dumps({"schema": "hyptcn3/guest-levels/1", "utc_unix": time.time(), "processes": processes,
-                      "threads": threads, "meminfo_kb": meminfo(),
+                      "threads": threads, "meminfo_kb": meminfo(), "modules": sorted(udalosti.loaded_modules(PROC)),
                       "loadavg": (PROC / "loadavg").read_text().split()[:3],
                       "database": dict(zip(LEVEL_NAMES, map(int, out.split("|")))),
                       "files": {"documents": files(DATA / "docs", "*.bin"), "reports": files(DATA / "reports"),
@@ -313,7 +317,16 @@ def levels_and_tolerance(levels_text, tolerance_text):
                                                                          for name in LEVEL_PARTS) + "}")
         if not all(type(_level(levels, path)) is int for path in LEVEL_PARTS.values()):
             raise SystemExit("invalid --levels: no processes and meminfo_kb.MemAvailable to judge the level part")
+    if start_modules(levels) is None:  # Package B9 (finding S2 of B8): the exact part needs them; no default.
+        raise SystemExit("invalid --levels: no modules, the names of the modules loaded at the session's start "
+                         "(guest_state.py levels)")
     return levels, tolerance
+
+
+def start_modules(levels):
+    """The modules loaded at the session's start as levels lists them (package B9), or None: not a list of names."""
+    names = levels.get("modules") if type(levels) is dict else None
+    return names if type(names) is list and all(type(name) is str for name in names) else None
 
 
 def failed_units():
@@ -337,13 +350,16 @@ def level_part(levels, tolerance):
 
 def baseline(levels, tolerance, controls=None):
     """The return predicate (skeleton B8 section 3) as {ok, exact, level, evidence}. The exact part: no residue of a
-    control (lab/udalosti.py residues: a process, the memfd or the negative's file, a candidate module, the listening
-    port) and no failed unit; the level part: level_part. `evidence` names every residue and every level outside its
-    band. Never raises: what cannot be read is a residue."""
+    control (lab/udalosti.py residues: a process, the memfd or the negative's file, a candidate module loaded after
+    the session's start, the levels' modules, or chosen by a control, in place or of this boot and never unloaded
+    (chosen_modules), the listening port) and no failed unit; the level part: level_part. `evidence` names every
+    residue and every level outside its band. Never raises: what cannot be read is a residue, and levels without
+    modules leave no loaded candidate ruled out."""
     if controls is None:
         import udalosti as controls
     found = []
-    for what, reader in (("the residues of the controls", lambda: controls.residues(PROC)),
+    for what, reader in (("the residues of the controls",
+                          lambda: controls.residues(PROC, start_modules(levels), controls.chosen_modules())),
                          ("the failed units", lambda: [{"residue": "unit", "unit": u} for u in failed_units()])):
         try:
             found += reader()

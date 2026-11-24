@@ -19,12 +19,19 @@ analysis, which the plan never draws). Package B7b (agent F) adds one for each k
 C, the groups of D, the validity predicate, the evaluable minimum and the volume class, the diagnostics, the stream
 injections, the two variants of Z4 in K2a (question Q13, provisional) and the domains of the grids (F3 of the
 verification of B7a). Package B7c (agent M) adds one for each key of design B7c 1.2: the metrics of the thesis with the
-bounds of O2 and O3, and the linkage table, which the self-check compares word for word.
+bounds of O2 and O3, and the linkage table, which the self-check compares word for word. Package B9a (agent P, design
+B9a 1.1) adds one for S3 and S5 of the B4 verification; the four cases of S1 of the verification of B4b, which the
+code before B9a catches already (each kills a mutant that survived there); one for S3 of the B8 verification (a dose
+of class B in no scenario of a negative of it) and for F3 of the verification of B7c (the carrier boots of K2); and the
+tests of the control deal at other rehearsal sizes (N1 of the confirmation of B4b) and of the bounds where the counts
+allow the doses to pair. Its fix (F4 and F6 of its verification) replaces the stream guest_reset of B9a by the one
+seeded level streams.seeded_level, with one deliberate error, and adds the bound of the pairing check at equality.
 """
 from collections import Counter
 import json
 import math
 from pathlib import Path
+import re
 
 import pytest
 
@@ -466,6 +473,23 @@ def per_dose_short(doc):
     return {"loader": ["protocol(): invalid controls"], **{name: [reason] for name in PLAN_CHECKS}}
 
 
+def boots_apart_from_the_carriers(doc):
+    """Package B9a (F3 of the verification of B7c): analysis.interventions.boots is the count of the boots of the
+    carrier roles of the campaign plan, 12 groups of test_benign and 8 of test_controls; tcn/k2.py refused another
+    count only in the final evaluation, after the seal is consumed. The loader does not bind it (the test protocols
+    take this section with other role sizes), the self-check does."""
+    doc["analysis"]["interventions"]["boots"] = 21
+    return {"analysis": ["analysis.interventions.boots is 21, the carrier roles of the campaign plan hold 20 boots "
+                         "(test_benign 12, test_controls 8)"]}
+
+
+def seeded_level_of_19_digits(doc):
+    """The fix of package B9a (F4 of its verification, Q18): the one seeded level of every group is a seed of
+    lab/guest_state.py reset --seed, which takes 1 to 18 digits, so 10^18 is refused by the loader."""
+    doc["streams"]["seeded_level"]["seed"] = 10 ** 18
+    return {"loader": ["protocol(): invalid streams.seeded_level"]}
+
+
 def _unplannable(shape):
     """The failures of a file that loads but cannot be planned because a group cannot hold one full round of the six
     types over two sessions with events (F1 of the verification of B4b): every check of the plan and the rehearsal
@@ -491,11 +515,12 @@ def no_event_free_session(doc):
 
 def no_group_on_vm(doc, plan):
     """Every group of dev moves to VM a. B4b: every group holds every type once, so every type of dev then has its 4
-    events on VM a and none on VM b (F1 of the verification of B4b)."""
+    events on VM a and none on VM b (F1 of the verification of B4b). B9a (S3 of the B4 verification): the 4 groups
+    of dev per VM, 4 and 0, differ by more than 1 as well."""
     for s in plan["sessions"]:
         if s["role"] == "dev":
             s["vm"] = "a"
-    return {"role_sizes": ["role dev has no group on VM b"],
+    return {"role_sizes": ["role dev has no group on VM b", "role dev: groups per VM differ by more than 1"],
             "events": [f"role dev: events of type {t} per VM differ by more than 1" for t in TYPES]}
 
 
@@ -754,7 +779,8 @@ def type_vm(doc, plan):
     """F1 of the verification of B4b: a group of train moves to the other VM. Every group holds every type once, so
     every type then has 7 events on one VM and 5 on the other. The group misses a scenario that its new VM holds 5
     times and its old one 4 (train has 18 sessions on each VM, 5, 5, 4 and 4 per scenario), so the scenario counts of
-    both VMs stay within 1."""
+    both VMs stay within 1. B9a (S3 of the B4 verification): the groups of train per VM, 7 and 5, differ by more than
+    1 as well."""
     train, other = [s for s in plan["sessions"] if s["role"] == "train"], {"a": "b", "b": "a"}
     on_vm = Counter((s["vm"], s["scenario"]) for s in train)
     groups = {}
@@ -764,7 +790,8 @@ def type_vm(doc, plan):
               if all(on_vm[other[ss[0]["vm"]], n] == 5 for n in set(SCENARIOS) - {s["scenario"] for s in ss}))
     for s in ss:
         s["vm"] = other[s["vm"]]
-    return {"events": [f"role train: events of type {t} per VM differ by more than 1" for t in TYPES]}
+    return {"role_sizes": ["role train: groups per VM differ by more than 1"],
+            "events": [f"role train: events of type {t} per VM differ by more than 1" for t in TYPES]}
 
 
 def card_vm(doc, plan):
@@ -967,6 +994,136 @@ def session_draws_injections(doc, plan):
                         f"replacement of {_label(s)} draws the analysis stream injections"]}
 
 
+# Package B9a (design B9a 1.1): the deferred checks of the plan (S3 and S5 of the B4 verification, S1 of the
+# verification of B4b, S3 of the B8 verification).
+
+def train_on_one_vm(doc, plan):
+    """S3 of the B4 verification, its own example: 11 of the 12 groups of train on VM a, which passed the checks
+    role_sizes and scenario_balance. Every group holds every type once, so every type of train then has 11 events on
+    VM a and 1 on VM b, which the check events saw (F1 of the verification of B4b). The scenario counts of both VMs
+    stay within 1: a scenario lies 9 times in train (three complete blocks) and the group left on VM b holds three
+    different ones, so VM a has 8, 8, 8 and 9, VM b 1, 1, 1 and 0."""
+    kept = next(s["group"] for s in plan["sessions"] if (s["role"], s["vm"]) == ("train", "b"))
+    for s in plan["sessions"]:
+        if s["role"] == "train" and s["group"] != kept:
+            s["vm"] = "a"
+    return {"role_sizes": ["role train: groups per VM differ by more than 1"],
+            "events": [f"role train: events of type {t} per VM differ by more than 1" for t in TYPES]}
+
+
+def type_outside_the_deck(doc, plan):
+    """S5 of the B4 verification: an event of a type outside events.types was caught only by the counts and by
+    'cannot check: KeyError' in the three checks that draw the replacements. The check events now names the type,
+    and each of those checks names the session whose replacement cannot be drawn. The event is the first one of the
+    first session of train; its own type then has 11 events in train, below min_per_type 12, and no count per
+    scenario or VM leaves its bound (3 to 2 in one scenario, 6 to 5 on one VM)."""
+    s = next(s for s in plan["sessions"] if s.get("events"))
+    assert s["role"] == "train"
+    x = s["events"][0]
+    gone, x["type"] = x["type"], "neznamy_typ"
+    missing = [f"no replacement of {_label(s)}: type neznamy_typ is outside events.types"]
+    return {"events": [f"session {_label(s)}: type neznamy_typ is outside events.types",
+                       f"role train: type {gone} has 11 events, below min_per_type 12"],
+            "full_snapshot_guard": missing, "times": missing, "streams": missing}
+
+
+def kind_outside_the_deck(doc, plan):
+    """S5 for a control: a dealt control of class A takes a kind outside controls.kinds. The check controls names it
+    as no card of the deck, as before, and the three checks of the replacements name the session whose replacement
+    cannot be drawn instead of 'cannot check: KeyError'. Its own card then has 6 occurrences: it is one with 4 on the
+    session's VM and 2 in its scenario, so the card stays within 1 per VM and per scenario."""
+    items = _controls(plan)
+    per_vm, per_scenario = _card_counts(items)
+    s, x = next((s, x) for s, x in items if x["dose"] is None and per_vm[x["kind"], x["polarity"], s["vm"]] == 4
+                and per_scenario[x["kind"], x["polarity"], s["scenario"]] == 2)
+    card = f"{x['kind']}/{x['polarity']}"
+    x["kind"] = "kontrola_neznama"
+    missing = [f"no replacement of {_label(s)}: control kind kontrola_neznama is outside controls.kinds"]
+    return {"controls": [f"session {_label(s)}: control kontrola_neznama/{x['polarity']} is no card of the deck",
+                         f"control {card} has 6 occurrences (expected 7)"],
+            "full_snapshot_guard": missing, "times": missing, "streams": missing}
+
+
+def tenth_spread_of_two(doc, plan):
+    """S1 of the verification of B4b (its mutant: the tolerance of the tenths raised to 2): one start of train moves
+    half a second later, into the next tenth of its interval, from a tenth that holds 7 of the 72 starts of train into
+    another that holds 7, so the tenths of the starts of train differ by exactly 2 (8 and 6). Its stop stays, so the
+    stops and every rule hold: it lasted 120.5 s or more, it starts far from the guards, and the gap before it only
+    widens."""
+    train = [x for s in plan["sessions"] if s["role"] == "train" for x in s["events"]]
+    starts = Counter(_tenths(x)[0] for x in train)
+    assert sorted(starts.values()) == [7] * 8 + [8] * 2
+    x = next(x for x in train if _tenths(x)[0] < 9 and starts[_tenths(x)[0]] == starts[_tenths(x)[0] + 1] == 7
+             and x["duration_s"] >= 120.5 and not 1735 <= x["start_s"] < 1965)
+    start, stop = _ends(x)
+    _move(x, start + 500, stop)
+    return {"phases": ["role train: starts per tenth of the interval differ by more than 1"]}
+
+
+def starts_at_upper_tenth_edges(doc, plan):
+    """S1 of the verification of B4b (its mutant: a one-sided KS distance, max((i + 1) / n - x), which misses phases
+    that lie above the uniform law): every start moves to the last millisecond of its tenth of the interval wherever
+    the item still lasts 120 s or more, and its stop stays. The tenths of the starts and of the stops stay in every
+    role, and every rule holds: a start only moves later within its tenth, and no guard begins inside a tenth. Only
+    the KS row of the starts sees it; the distance is the one of the moved starts, computed here."""
+    for s in plan["sessions"]:
+        for item in _items(s):
+            start, stop = _ends(item)
+            if stop - (start // 500 * 500 + 499) >= 120000:
+                _move(item, start // 500 * 500 + 499, stop)
+    return {"phases": [ks_rows(plan)[0]]}
+
+
+def event_shortened_below_the_span(doc, plan):
+    """S1 of the verification of B4b (its mutant: the lower bound of the duration span unchecked): the first event
+    that lasts less than 125 s ends one interval earlier, below 120 s, with its stop phase and tenth kept; the gap
+    after it only widens."""
+    s, x = next((s, x) for s in plan["sessions"] for x in s.get("events", []) if x["duration_s"] < 125)
+    start, stop = _ends(x)
+    _move(x, start, stop - 5000)
+    return {"times": [f"{_label(s)}: {x['type']} lasts {_seconds(x['duration_s'])} s, outside duration_s [120, 360]"]}
+
+
+def control_before_first_s(doc, plan):
+    """S1 of the verification of B4b (its mutant: the times of the controls unchecked): the first control of the
+    first session of test_controls starts at about 200 s, before first_s 300 s (earlier by whole intervals, with its
+    duration and phases). The gap after it only widens, and 200 s lies after the guard of the full snapshot at 0 s,
+    which ends at 160 s."""
+    s = next(s for s in plan["sessions"] if s["role"] == "test_controls")
+    x = min(_items(s), key=lambda item: item["start_s"])
+    start, stop = _ends(x)
+    shift = (start - 200000) // 5000 * 5000
+    _move(x, start - shift, stop - shift)
+    return {"times": [f"{_label(s)}: {x['kind']} starts at {_seconds(x['start_s'])} s, before first_s 300 s"]}
+
+
+def dose_unpaired(doc, plan):
+    """S3 of the B8 verification: split over the VMs only, a dose of class B could lie in no scenario of a negative of
+    it. Two controls of one card of class B on one VM trade their doses (no count per dose or per VM changes), so that
+    one dose then lies in no scenario of both its controls and its negatives while every other dose keeps one; the
+    counts allow it (every dose lies on both VMs of both cards, which lie in all four scenarios)."""
+    items = _dosed(plan)
+
+    def unpaired(kind):
+        at = {}
+        for s, x in items:
+            if x["kind"] == kind:
+                at.setdefault((x["polarity"], x["dose"]), set()).add(s["scenario"])
+        return [d for d in doc["controls"]["kinds"][kind]["doses"]
+                if not at.get(("control", d), set()) & at.get(("negative", d), set())]
+    assert not any(unpaired(x["kind"]) for _, x in items)
+    for s, x in items:
+        for t, y in items:
+            if (x["kind"], x["polarity"], s["vm"]) == (y["kind"], y["polarity"], t["vm"]) and x["dose"] != y["dose"]:
+                dose = x["dose"]
+                _trade(x, y, ("dose",))
+                if unpaired(x["kind"]) == [dose]:
+                    return {"controls": [f"control {x['kind']}: dose {dose} lies in no scenario of both its controls "
+                                         "and its negatives"]}
+                _trade(x, y, ("dose",))
+    raise AssertionError("no trade of two doses on one VM leaves exactly one dose unpaired")
+
+
 def replaced_type(doc, plan, monkeypatch):
     from scripts import protocol_v5
     real, target = protocol_v5.replacement, next(s for s in plan["sessions"] if s.get("events"))
@@ -1117,7 +1274,10 @@ FILE_CASES = {f.__name__: f for f in (unknown_key, missing_key, gate_085, max_7,
                                       validity_average_longer_than_the_window, context_of_the_whole_window,
                                       # Package B7c: the metrics of the thesis and the linkage table.
                                       garwood_level_of_95, event_test_two_sided, o2_bound_by_garwood,
-                                      linkage_reworded, linkage_not_a_text)}
+                                      linkage_reworded, linkage_not_a_text,
+                                      # Package B9a: F3 of the verification of B7c, the boots of K2; the fix of
+                                      # B9a: the one seeded level of the guest (F4 of its verification).
+                                      boots_apart_from_the_carriers, seeded_level_of_19_digits)}
 PLAN_CASES = {f.__name__: f for f in (no_group_on_vm, equal_scenarios, twice_at_position, two_events, start_in_guard,
                                       locked_to_grid, common_seed, control_relabelled, control_slot_emptied,
                                       event_free_first, group_of_two, seed_field,
@@ -1133,7 +1293,12 @@ PLAN_CASES = {f.__name__: f for f in (no_group_on_vm, equal_scenarios, twice_at_
                                       # Package B7a: the streams of the analysis are no streams of the plan.
                                       session_draws_an_analysis_stream,
                                       # Package B7b: nor is the stream injections.
-                                      session_draws_injections)}
+                                      session_draws_injections,
+                                      # Package B9a: S3 and S5 of the B4 verification, S1 of the verification of
+                                      # B4b and S3 of the B8 verification.
+                                      train_on_one_vm, type_outside_the_deck, kind_outside_the_deck,
+                                      tenth_spread_of_two, starts_at_upper_tenth_edges,
+                                      event_shortened_below_the_span, control_before_first_s, dose_unpaired)}
 REPLACEMENT_CASES = {f.__name__: f for f in (replaced_type, replaced_streams, replaced_in_guard,
                                              replaced_before_first_s, replaced_tenths, replaced_dose,
                                              # Package B7a: a monkeypatched seed of the analysis.
@@ -1800,3 +1965,250 @@ def test_the_keys_of_b7c_are_those_the_skeleton_and_the_design_name():
         "VO3": "časť vlastníka so vzorkami, mimo protokolu (E3, D16)", "VO4": "K1, K2 a bod 1 (E4)",
         "VO5": "O7 (E5)", "VO6": "O6 a bod 2 (E2)"}
     assert protocol_v5.analysis_plan(json.loads(V5.read_text()))["linkage"] == a["linkage"]
+
+
+# Package B9a (design B9a 1.1, agent P): the seeded level of the guest at the start of a group (since the fix of B9a,
+# F4 of its verification: one level for every group of both modes), and the control deal at other rehearsal sizes (N1
+# of the confirmation of B4b).
+
+def test_every_group_of_both_modes_starts_from_the_level_lab_install_sh_seeds(monkeypatch):
+    """The fix of package B9a (F4 of its verification; question Q18 to the lead, provisional by its proposal):
+    reset_seed(p) is streams.seeded_level.seed, one seeded level for every group of both modes, the level that
+    lab/install.sh seeds on its line python3 guest_state.py reset --seed 0. It is no random stream: guest_reset is in
+    neither PURPOSES nor streams.purposes nor the rule of the streams. The bound of its value check is the guest's:
+    the parser of lab/guest_state.py takes the seed and 10^18 - 1, and refuses 10^18."""
+    from lab import guest_state
+    from scripts import collection, protocol_v5
+    seeds = re.findall(r"guest_state\.py reset --seed ([0-9]+)", (ROOT / "lab/install.sh").read_text())
+    p = collection.protocol(V5)
+    assert seeds == ["0"] and protocol_v5.reset_seed(p) == int(seeds[0]) == p["streams"]["seeded_level"]["seed"]
+    assert "guest_reset" not in protocol_v5.PURPOSES and "guest_reset" not in p["streams"]["purposes"]
+    assert "guest_reset" not in p["streams"]["rule"]
+    given = []
+    monkeypatch.setattr(guest_state, "reset", given.append)
+    for value in (protocol_v5.reset_seed(p), protocol_v5.RESET_SEED_BOUND - 1):
+        guest_state.main(["reset", "--seed", str(value)])
+    assert given == [0, 10 ** 18 - 1]
+    with pytest.raises(SystemExit):
+        guest_state.main(["reset", "--seed", str(protocol_v5.RESET_SEED_BOUND)])
+
+
+@pytest.mark.parametrize("change, reason", [
+    (lambda level: level.update(seed=10 ** 18 - 1), None),
+    (lambda level: level.update(seed=10 ** 18), "invalid streams.seeded_level"),
+    (lambda level: level.update(seed=-1), "invalid streams.seeded_level"),
+    (lambda level: level.update(seed=True), "invalid streams.seeded_level"),
+    (lambda level: level.update(seed=0.0), "invalid streams.seeded_level"),
+    (lambda level: level.update(note=None), "invalid streams.seeded_level"),
+    (lambda level: level.pop("note"), "missing protocol key: streams.seeded_level.note"),
+    (lambda level: level.update(seeds=[0]), "unknown protocol key: streams.seeded_level.seeds"),
+], ids=["largest_seed", "19_digits", "negative", "a_bool", "a_float", "note_not_a_string", "no_note", "unknown_key"])
+def test_the_loader_knows_the_key_and_the_value_of_the_seeded_level(change, reason):
+    """The fix of package B9a: streams.seeded_level has exactly a seed and a note; the seed is an integer (no bool,
+    no float) of 0 to 10^18 - 1, as lab/guest_state.py takes it, and the note a string. reset_seed(p) returns the
+    largest seed, and refuses every seed the value check refuses, with the same reason."""
+    from scripts import protocol_v5
+    doc = json.loads(V5.read_text())
+    change(doc["streams"]["seeded_level"])
+    if reason is None:
+        protocol_v5.check_layout(doc)
+        assert protocol_v5.reset_seed(doc) == 10 ** 18 - 1
+        return
+    with pytest.raises(ValueError) as refused:
+        protocol_v5.check_layout(doc)
+    assert str(refused.value) == reason
+    if reason == "invalid streams.seeded_level":
+        with pytest.raises(ValueError) as refused:
+            protocol_v5.reset_seed(doc)
+        assert str(refused.value) == reason
+
+
+def test_a_reset_seed_is_refused_for_another_schema_and_takes_no_group_and_no_mode():
+    """reset_seed(p) refuses a protocol of another schema by name. It takes no group and no mode, since every group
+    of both modes starts from the one seeded level, so the call of B9a, reset_seed(p, group, mode=...), is refused."""
+    from scripts import protocol_v5
+    doc = json.loads(V5.read_text())
+    with pytest.raises(ValueError) as refused:
+        protocol_v5.reset_seed(dict(doc, schema="hyptcn3/collection-protocol/2"))
+    assert str(refused.value) == "the seed of the guest's reset requires protocol schema 3"
+    with pytest.raises(TypeError):
+        protocol_v5.reset_seed(doc, "v5-train-1", mode="campaign")
+
+
+# F6 of the verification of B9a (its mutant s3_check_gt, '>' for '>='): one kind of class B with the doses 1 and 2,
+# whose control and negative each hold every dose once on each VM and lie twice in each of the scenarios s1 and s2.
+# The cards share exactly as many scenarios as they hold doses on both VMs. Per VM, the sessions of one slot each hold
+# (scenario, polarity, dose).
+BOUND = {"paired": {vm: [("s1", "control", 1), ("s2", "control", 2), ("s1", "negative", 1), ("s2", "negative", 2)]
+                    for vm in ("a", "b")},
+         "unpaired": {vm: [("s1", "control", 1), ("s2", "control", 2), ("s2", "negative", 1), ("s1", "negative", 2)]
+                      for vm in ("a", "b")}}
+
+
+@pytest.mark.parametrize("layout", BOUND)
+def test_the_pairing_of_the_doses_is_checked_when_the_cards_share_as_many_scenarios_as_doses(layout):
+    """S3 of the B8 verification at its bound (F6 of the verification of B9a): the check controls asks every dose that
+    both cards hold on every VM to lie in a scenario of a control and of a negative of it as soon as the cards share at
+    least as many scenarios as there are such doses, equality included. Here they share exactly two for two doses.
+    Paired, the check passes; with the doses of the negatives swapped between the scenarios, both doses lie in no
+    common scenario and both are named. Every other row holds: per_kind 4 and per_dose 2 and 2, every card and dose
+    within 1 per VM and per scenario, no slot empty."""
+    from scripts import protocol_v5
+    doc = {"controls": {"slots_per_session": 1, "per_kind": 4, "negatives_per_kind": 4,
+                        "kinds": {"k": {"class": "B", "doses": [1, 2], "per_dose": [2, 2]}}},
+           "vms": [{"name": "a"}, {"name": "b"}], "scenarios": {"s1": {}, "s2": {}}}
+    sessions = [{"role": "test_controls", "group": f"g-{vm}", "position": i, "scenario": scenario, "vm": vm,
+                 "controls": [{"kind": "k", "polarity": polarity, "class": "B", "dose": dose}]}
+                for vm, mine in BOUND[layout].items() for i, (scenario, polarity, dose) in enumerate(mine)]
+    named = [] if layout == "paired" else [
+        f"control k: dose {dose} lies in no scenario of both its controls and its negatives" for dose in (1, 2)]
+    assert protocol_v5.check_controls(doc, {"mode": "campaign", "sessions": sessions}) == named
+
+
+@pytest.mark.parametrize("groups, reason", [
+    (2, None),
+    (4, None),
+    (3, "VM a holds 9 control slots, but every card within 1 per VM puts 10 to 17 of the 27 dealt cards on each VM"),
+    (5, "VM b holds 18 control slots, but every card within 1 per VM puts 20 to 25 of the 45 dealt cards on each VM"),
+], ids=["two_groups_per_role", "four_groups_per_role", "three_groups_per_role", "five_groups_per_role"])
+def test_the_control_deal_is_drawn_again_until_its_cards_are_balanced(groups, reason, tmp_path, monkeypatch):
+    """N1 of the confirmation of B4b: _deal_controls held the rows of the check controls only at the file's
+    rehearsal size of 2 groups per role. It now draws the deal again until no session holds a kind twice and every
+    card lies within 1 per VM and per scenario. At 2 groups per role (the file) the first draw passes, as in the
+    campaign, so neither deal changed; at 4 its first draw fails (a card off by 2 per scenario), a later one passes,
+    and the self-check of the rehearsal passes in both modes. At 3 and 5 test_controls has one group more on one VM:
+    its 9 slots more are more than the cards can follow when each lies within 1 per VM, so no deal can pass and the
+    plan says so by name before it draws again (design B9a 1.1 asks for 3, 4 and 5; see the problems of agent P)."""
+    from scripts import protocol_v5
+    doc = json.loads(V5.read_text())
+    doc["rehearsal"]["groups_per_role"] = groups
+    draws, real = [], protocol_v5._cards_balanced
+    monkeypatch.setattr(protocol_v5, "_cards_balanced", lambda p, deal: draws.append(real(p, deal)) or draws[-1])
+    if reason is not None:
+        with pytest.raises(ValueError) as refused:
+            protocol_v5.plan(doc, "rehearsal")
+        assert (str(refused.value), draws) == ("controls of role test_controls: " + reason, [])
+        return
+    protocol_v5.plan(doc, "rehearsal")
+    assert draws[-1] is True and not any(draws[:-1]) and (len(draws) == 1) == (groups == 2)
+    del draws[:]
+    protocol_v5.plan(doc, "campaign")
+    assert draws == [True]
+    monkeypatch.undo()
+    for mode in ("campaign", "rehearsal"):
+        (tmp_path / mode).mkdir()
+        code, report = selfcheck(tmp_path / mode, doc, "--mode", mode)
+        assert (code, report["passed"]) == (0, True), [c for c in report["checks"] if c["result"] != "passed"]
+
+
+@pytest.mark.parametrize("mode", ["campaign", "rehearsal"])
+def test_a_dose_of_class_b_lies_in_a_scenario_of_a_control_and_of_a_negative_where_the_counts_allow_it(mode,
+                                                                                                     monkeypatch):
+    """S3 of the B8 verification, on the plans of the file and of five other protocol names. In a campaign each card
+    of class B has 7 occurrences, one or more in each of the 4 scenarios, and each of its doses (2, 2 and 3
+    occurrences) lies on both VMs, so the counts allow it: the doses of both kinds are anchored (_anchor_doses) and
+    every dose lies in a scenario of a control and of a negative of it. In the rehearsal a card has 1 or 2
+    occurrences with different doses, so no dose lies on both VMs of a card: the counts do not allow it, and the doses
+    are dealt as before, without an anchor."""
+    from scripts import protocol_v5
+    doc = json.loads(V5.read_text())
+    kinds = {kind: k for kind, k in doc["controls"]["kinds"].items() if k["class"] == "B"}
+    anchored, real = [], protocol_v5._anchor_doses
+    monkeypatch.setattr(protocol_v5, "_anchor_doses", lambda kind, *rest: anchored.append(kind) or real(kind, *rest))
+    for name in [doc["name"]] + [f"name-{k}" for k in range(5)]:
+        del anchored[:]
+        at = {}
+        for s, x in _dosed(protocol_v5.plan(dict(doc, name=name), mode)):
+            at.setdefault((x["kind"], x["polarity"], x["dose"]), set()).add((s["vm"], s["scenario"]))
+        if mode == "rehearsal":
+            assert anchored == [] and all(len({vm for vm, _ in places}) == 1 for places in at.values()), name
+            continue
+        assert anchored == sorted(kinds), name
+        for kind, k in kinds.items():
+            for dose in k["doses"]:
+                control, negative = at[kind, "control", dose], at[kind, "negative", dose]
+                assert {vm for vm, _ in control} == {vm for vm, _ in negative} == {"a", "b"}, (name, kind, dose)
+                assert {sc for _, sc in control} & {sc for _, sc in negative}, (name, kind, dose)
+
+
+def test_the_carrier_boots_of_k2_are_those_of_the_campaign_in_both_modes_of_the_self_check(tmp_path):
+    """F3 of the verification of B7c: the self-check in mode rehearsal checks the same file, so it names the same count
+    as in mode campaign; the rehearsal's own carrier boots (2 of test_benign and 2 of test_controls) are bound neither
+    here nor by tcn/k2.py, which checks the count in mode campaign only."""
+    from scripts import protocol_v5
+    doc = json.loads(V5.read_text())
+    doc["analysis"]["interventions"]["boots"] = 21
+    code, report = selfcheck(tmp_path, doc, "--mode", "rehearsal")
+    assert (code, report["mode"]) == (2, "rehearsal")
+    assert {c["check"]: (c["result"], c["reasons"]) for c in report["checks"]} == expected_checks(analysis=[
+        "analysis.interventions.boots is 21, the carrier roles of the campaign plan hold 20 boots (test_benign 12, "
+        "test_controls 8)"])
+    groups = {s["group"] for s in protocol_v5.plan(doc, "rehearsal")["sessions"] if s["role"] in ("test_benign",
+                                                                                                   "test_controls")}
+    assert len(groups) == 4
+
+
+def _deal(plan):
+    """The control deal of `plan` as _deal_controls holds it before the doses: per group of test_controls its VM, the
+    scenarios of its sessions and their cards (kind, polarity), None for an empty slot."""
+    groups = {}
+    for s in plan["sessions"]:
+        if s["role"] == "test_controls":
+            group = groups.setdefault(s["group"], {"group": s["group"], "vm": s["vm"], "scenarios": [], "labels": []})
+            group["scenarios"].append(s["scenario"])
+            group["labels"].append([None if x["kind"] is None else (x["kind"], x["polarity"]) for x in s["controls"]])
+    return list(groups.values())
+
+
+@pytest.mark.parametrize("case", [None, "kind_twice", "card_vm", "card_scenario"],
+                         ids=["the_deal_of_the_file", "kind_twice", "card_vm", "card_scenario"])
+def test_the_redraw_of_the_control_deal_asks_for_each_row_a_draw_decides(case):
+    """N1 of the confirmation of B4b: _cards_balanced, which ends the redraws of _deal_controls, holds for the deal
+    of the plan of the file and fails on each row of the check controls that a draw decides, as the cases of the
+    self-check change the plan: a session that holds a kind twice (kind_twice), a card off by 2 per VM (card_vm) and
+    one off by 2 per scenario (card_scenario)."""
+    from scripts import protocol_v5
+    doc = json.loads(V5.read_text())
+    plan = protocol_v5.plan(doc)
+    if case is not None:
+        PLAN_CASES[case](doc, plan)
+    assert protocol_v5._cards_balanced(doc, _deal(plan)) is (case is None)
+
+
+# The deal of one kind of class B with two doses: per VM the sessions of one slot, each (scenario, polarity).
+LAYOUTS = {"as_many_doses_as_common_scenarios": ([2, 2], {vm: [("s1", "control"), ("s2", "control"),
+                                                                ("s1", "negative"), ("s2", "negative")]
+                                                           for vm in ("a", "b")}),
+           "a_dose_on_one_vm": ([1, 1], {"a": [("s1", "control"), ("s2", "negative")],
+                                         "b": [("s2", "control"), ("s1", "negative")]})}
+
+
+@pytest.mark.parametrize("layout", LAYOUTS)
+def test_the_doses_are_paired_at_the_bounds_where_the_counts_allow_it(layout, monkeypatch):
+    """S3 of the B8 verification at the bounds of 'the counts allow it', on one kind of class B with two doses whose
+    control and negative lie in the two scenarios s1 and s2. With 2 occurrences of each dose on each card, every dose
+    lies on both VMs, and the doses are as many as the common scenarios: both are anchored, and in each of 20 streams
+    every dose lies in a scenario of a control and of a negative of it. With 1 occurrence of each dose a dose lies on
+    one VM only, so the counts do not allow it: no anchor, and every card takes each dose once, as in package B8."""
+    import random
+    from scripts import protocol_v5
+    per_dose, sessions = LAYOUTS[layout]
+    c = {"kinds": {"k": {"class": "B", "doses": [1, 2], "per_dose": per_dose}}}
+    calls, real = [], protocol_v5._anchor_doses
+    monkeypatch.setattr(protocol_v5, "_anchor_doses", lambda kind, *rest: calls.append(kind) or real(kind, *rest))
+    for stream in range(20):
+        groups = [{"group": vm, "vm": vm, "scenarios": [scenario for scenario, _ in mine],
+                   "labels": [[("k", polarity)] for _, polarity in mine]} for vm, mine in sessions.items()]
+        del calls[:]
+        protocol_v5._deal_doses(c, groups, random.Random(stream))
+        at, held = {}, Counter()
+        for group in groups:
+            for scenario, [(kind, polarity, dose)] in zip(group["scenarios"], group["labels"]):
+                at.setdefault((polarity, dose), set()).add(scenario)
+                held[polarity, dose, group["vm"]] += 1
+        if per_dose == [2, 2]:
+            assert calls == ["k"] and all(at["control", d] & at["negative", d] for d in (1, 2)), stream
+            assert set(held.values()) == {1} and len(held) == 8, stream
+        else:
+            assert calls == [] and sorted((p, d) for p, d, _ in held) == [("control", 1), ("control", 2),
+                                                                          ("negative", 1), ("negative", 2)], stream

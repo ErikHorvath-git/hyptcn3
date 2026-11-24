@@ -165,8 +165,11 @@ def test_qemu_with_swap_already_off_is_left_where_it_is(host, place):
     qemu(host, 4242, place, "0")
     qemu(host, 4343, USER_UNIT.replace("virtqemud.service", "b.scope"), "max", domain="hyptcn-lab-b")  # Not this VM.
     record = labctl.Lab().qemu_swap_off()
+    # Package B9: the way that holds QEMU, and way 2 (a scope of an earlier move) is temporary (finding F4 of B5a).
+    way = ({"way": "unit", "temporary": False} if place == DAEMON_UNIT else
+           {"way": "scope", "temporary": True, "note": labctl.TEMPORARY})
     assert record == {"domain": "hyptcn-lab", "qemu_pid": 4242, "cgroup_before": place, "swap_max_before": "0",
-                      "scope": None, "cgroup": place, "memory_swap_max": "0", "vm_swap_kb": 0}
+                      "scope": None, "cgroup": place, "memory_swap_max": "0", "vm_swap_kb": 0, **way}
     assert host.calls == []
 
 
@@ -179,7 +182,8 @@ def test_qemu_is_moved_unless_a_cgroup_labctl_made_forbids_swap(host, before, sw
     record = labctl.Lab().qemu_swap_off()
     assert [call[:3] + call[8:9] for call in host.calls] == [["busctl", "--user", "call", SCOPE]]
     assert record == {"domain": "hyptcn-lab", "qemu_pid": 4242, "cgroup_before": before, "swap_max_before": swap,
-                      "scope": SCOPE, "cgroup": f"{MANAGER}/app.slice/{SCOPE}", "memory_swap_max": "0", "vm_swap_kb": 0}
+                      "scope": SCOPE, "cgroup": f"{MANAGER}/app.slice/{SCOPE}", "memory_swap_max": "0", "vm_swap_kb": 0,
+                      "way": "scope", "temporary": True, "note": labctl.TEMPORARY}  # Package B9, F4 of B5a.
 
 
 @pytest.mark.parametrize("before, swap, swap_kb, text", [

@@ -115,10 +115,15 @@ def finite(value):
     return value
 
 
-def local_file(directory, name):
+def local_file(directory, name, raw_target=None):
+    """An evidence file of the session directory; ValueError when its path escapes the directory. raw_target: where
+    the session's raw/ link points when the caller reads evidence through it (audit_logs archived_raw), the only
+    place outside the directory a member under raw/ may then lie."""
     path = directory / name
+    inside = isinstance(name, str) and path.resolve().is_relative_to(
+        raw_target if raw_target is not None and Path(name).parts[:1] == ("raw",) else directory.resolve())
     if (not isinstance(name, str) or Path(name).is_absolute() or ".." in Path(name).parts
-            or not path.resolve().is_relative_to(directory.resolve()) or path.is_symlink()):
+            or not inside or path.is_symlink()):
         raise ValueError("evidence path escapes session: " + str(name))
     return path
 
@@ -153,8 +158,13 @@ def qemu_unswapped(sample):
             and all(type(e) is dict and type(e.get("swap_kb")) is int and e["swap_kb"] == 0 for e in entries))
 
 
-def audit_logs(directory, *, snapshot_times=()):
+def audit_logs(directory, *, snapshot_times=(), archived_raw=False):
+    """The log audit of a session directory. archived_raw: the session's raw/ is the link scripts/collection_archive.py
+    reclaim_raw leaves to the verified archive copy, and the evidence under raw/ is read through it (the repeat of
+    features/quality.py require_log_audit while the archive is attached, finding S9 of B3, package B9a); the audit of
+    a capture never passes it, so there a raw/ that leads out of the session is refused as before."""
     directory = Path(directory).resolve()
+    raw_target = (directory / "raw").resolve() if archived_raw and (directory / "raw").is_symlink() else None
     problems = traffic_log.Problems()
     result = {"schema": SCHEMA, "session_dir": str(directory), "sections": {}}
     # Protocol v3: [host start - 1 s, host stop done + grace] of each event. Failures inside a window
@@ -247,7 +257,7 @@ def audit_logs(directory, *, snapshot_times=()):
         verified = 0
         for name, expected in files.items():
             try:
-                path = local_file(directory, name)
+                path = local_file(directory, name, raw_target)
                 check(path.stat().st_size == expected["size"] and digest(path) == expected["sha256"],
                       "evidence_hash", name)
                 # write_logs_manifest records lines and termination of every .jsonl and .log file.

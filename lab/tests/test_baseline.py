@@ -15,8 +15,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import guest_state  # noqa: E402
 import udalosti  # noqa: E402
 
-# The session's start as guest_state.py levels printed it: the fake guest has three processes and 1.5 GB available.
-LEVELS = {"schema": "hyptcn3/guest-levels/1", "processes": 3, "threads": 3, "meminfo_kb": {"MemAvailable": 1500000}}
+# The session's start as guest_state.py levels printed it: the fake guest has three processes and 1.5 GB available,
+# and (package B9) the modules of the fake guest's boot (conftest LOADED).
+LEVELS = {"schema": "hyptcn3/guest-levels/1", "processes": 3, "threads": 3, "meminfo_kb": {"MemAvailable": 1500000},
+          "modules": ["fuse", "virtio_net"]}
 TOLERANCE = {"processes": [-2, 5], "MemAvailable_kb": [-100000, 50000]}
 UNJUDGED = {"judged": False, "why": "controls.baseline null until G2"}
 

@@ -143,6 +143,17 @@ DEFINITIONS = {
                     "the replacement has its own row (replaces). Planned counts are plan rows, so a replacement "
                     "adds an attempted session, not a planned one. Every rejection record "
                     "(attempts/<session>.rejected.json) is listed with its reasons under campaign.rejections."),
+    "tolerated": ("F1 of the verification of B9a (the B2 panel item): the conditions the audit admitted in an "
+                  "accepted session instead of rejecting it, by register id of features/audit_policy.py TOLERATED, "
+                  "read from the audit's values.exceptions ({id: {observed, expected, over}}, exceptions_record); an "
+                  "audit without values.exceptions (one written before package B3, as those of the campaigns of "
+                  "protocol schemas 1 and 2 were) gives only the invalid rows, the length of "
+                  "values.quality.tolerated_invalid_seq; an audit with neither is 'not recorded', never 0. These "
+                  "are apart from the coverage rows of coverage.csv: rows_invalid_input counts every row a model "
+                  "input could not use, tolerated or not. Per register id the summary gives "
+                  "the total over the accepted sessions that record it, the largest count in one of them and the "
+                  "number of them over the expected count (the register's expected, null until G3b: then none is "
+                  "over it and the number is 0)."),
     "stop_request": ("campaign.py request-stop asks a running campaign to stop before its next capture; the "
                      "runner moves the request into events/ when it honors it (*_stop-request.json) and sets aside "
                      "one left by an earlier run when it starts (*_stop-request-stale.json). Not campaign events."),
@@ -315,6 +326,14 @@ COVERAGE_COLUMNS = ("session_id", "status", "audit_path", "source", "expected_sn
 EVENT_COLUMNS = ("time_utc", "vm", "status", "stage", "session", "group", "position", "message",
                  "duration_to_next_s", "attributed_to", "file")
 ROUTE_COLUMNS = ("session_id", "route", "requests", "ok", "errors", "share_of_measure_requests")
+# F1 of the verification of B9a: the tolerated conditions of every accepted session by register id (tolerated.csv). The
+# register ids are those the audits record (features/audit_policy.py TOLERATED; the report never imports features/),
+# invalid_rows first: it is the one id an audit without values.exceptions still records.
+TOLERATED_FIRST = "invalid_rows"
+TOLERATED_SOURCE = {"exceptions": "audit values.exceptions",
+                    "quality": "audit values.quality.tolerated_invalid_seq (an audit without values.exceptions: only "
+                               "the invalid rows)"}
+NOT_RECORDED = "not recorded: the audit has neither values.exceptions nor values.quality.tolerated_invalid_seq"
 SOURCE_COLUMNS = ("session_id", "session_dir", "kind", "path", "realpath", "bytes", "sha256",
                   "logs_manifest_sha256", "matches_logs_manifest")
 
@@ -718,6 +737,8 @@ class Session:
         self.intervals = []
         self.routes = []
         self.coverage = None
+        self.tolerated = None      # {register id: {observed, expected, over}} (tolerated_of), None: not recorded
+        self.tolerated_source = None
         self.times = {}
         self.window_sources = {}
         self.generator_measure = None  # unclipped generator measure phase, compared with the audit
@@ -1349,6 +1370,7 @@ def audit_step(s, inputs, pointer):
         return
     values = doc["values"]
     s.audit, s.audit_doc = values, doc
+    s.tolerated, s.tolerated_source = tolerated_of(values)
     row["audit_accepted"] = values["accepted"]
     row["audit_path"], row["audit_selection"] = str(path), selection
     logs = values.get("logs")
@@ -1388,6 +1410,80 @@ def audit_step(s, inputs, pointer):
         if ours != theirs:
             s.traffic_difference = ", ".join(k for k in ours if ours[k] != theirs[k])
     row.miss(AUDIT_FIELDS, "not provided by the selected audit")
+
+
+def tolerated_of(values):
+    """The tolerated conditions an audit records by register id (DEFINITIONS["tolerated"]): ({id: {"observed": n,
+    "expected": e, "over": bool}}, source) from values.exceptions, an entry that is not {observed: count} left out by
+    name in the source; from values.quality.tolerated_invalid_seq when the audit has no values.exceptions (the invalid
+    rows only, no expected count); (None, NOT_RECORDED) when it has neither."""
+    exceptions = values.get("exceptions")
+    if isinstance(exceptions, dict) and exceptions:
+        counts, unreadable = {}, []
+        for name, entry in exceptions.items():
+            observed = entry.get("observed") if isinstance(entry, dict) else None
+            if type(observed) is int and observed >= 0:
+                expected = entry.get("expected")
+                counts[str(name)] = {"observed": observed, "expected": expected if type(expected) is int else None,
+                                     "over": entry.get("over") is True}
+            else:
+                unreadable.append(str(name))
+        source = TOLERATED_SOURCE["exceptions"]
+        return counts, source + (f" (unreadable entries left out: {', '.join(unreadable)})" if unreadable else "")
+    seq = dig(values, "quality", "tolerated_invalid_seq")
+    if isinstance(seq, list):
+        return ({TOLERATED_FIRST: {"observed": len(seq), "expected": None, "over": False}},
+                TOLERATED_SOURCE["quality"])
+    return None, NOT_RECORDED
+
+
+def tolerated_ids(sessions):
+    """The register ids of tolerated.csv and of the summary: invalid_rows, then every other id the accepted sessions
+    record, in the order of their audits' records."""
+    ids = [TOLERATED_FIRST]
+    for s in sessions:
+        if s.status == "accepted" and s.tolerated:
+            ids += [name for name in s.tolerated if name not in ids]
+    return ids
+
+
+def tolerated_table(sessions):
+    """(columns, rows) of tolerated.csv: one row per accepted session, its count per register id (empty with the
+    reason in missing where it records none), the ids over their expected count and the source."""
+    ids = tolerated_ids(sessions)
+    columns = ("session_id", "status", "source", *ids, "over_expected", "missing")
+    rows = []
+    for s in sessions:
+        if s.status != "accepted":
+            continue
+        counts = s.tolerated or {}
+        absent = [name for name in ids if name not in counts]
+        rows.append({"session_id": s.sid, "status": s.status, "source": s.tolerated_source,
+                     **{name: counts[name]["observed"] for name in counts},
+                     "over_expected": joined(name for name in ids if counts.get(name, {}).get("over")) or None,
+                     "missing": (NOT_RECORDED if s.tolerated is None else
+                                 f"not recorded by this audit: {', '.join(absent)}" if absent else None)})
+    return columns, rows
+
+
+def tolerated_block(sessions):
+    """The summary of the tolerated conditions of the accepted sessions by register id (DEFINITIONS["tolerated"])."""
+    accepted = [s for s in sessions if s.status == "accepted"]
+    by_id = {}
+    for name in tolerated_ids(sessions):
+        held = [s.tolerated[name] for s in accepted if s.tolerated and name in s.tolerated]
+        expected = sorted({x["expected"] for x in held if x["expected"] is not None})
+        by_id[name] = {"total": sum(x["observed"] for x in held) if held else None,
+                       "max_in_one_session": max((x["observed"] for x in held), default=None),
+                       "sessions_over_expected": sum(x["over"] for x in held),
+                       # The register's expected count as the audits recorded it: null until G3b (then no session is
+                       # over it), a list when the audits differ.
+                       "expected": None if not expected else expected[0] if len(expected) == 1 else expected,
+                       "sessions_counted": len(held),
+                       **({} if held else {"missing": "no accepted session records it"})}
+    return {"definition": DEFINITIONS["tolerated"], "accepted_sessions": len(accepted),
+            "sources": dict(sorted(Counter(s.tolerated_source for s in accepted).items())),
+            "not_recorded": [s.sid for s in accepted if s.tolerated is None], "by_id": by_id}
 
 
 def set_gate(s, protocol):
@@ -1883,6 +1979,7 @@ def read_evidence(s, inputs, ctx):
         problem = row.missing.get("windows", "audit unreadable")
         s.reasons.append(problem)
         s.audit = s.audit_doc = None
+        s.tolerated, s.tolerated_source = None, NOT_RECORDED
         s.coverage = empty_coverage_row(s, problem)
     if ctx.get("manifest") is not None:
         guarded(s, "campaign provenance", ("provenance_problems",), campaign_step, ctx)
@@ -2035,11 +2132,13 @@ def stage_category(event):
         return "after_complete"
     if status == "closed":
         return "after_close"
+    # Package B9a (scripts/campaign.py, protocol schema 3): group-start (labctl stop, start, reset and pretouch of a
+    # group), seal (the ledger write of an accepted session of a sealed role) and rejected (a rejection not replaced).
     return {"preflight": "preflight", "session-preflight": "preflight", "reboot": "reboot",
             "capture": "capture_stage", "audit": "audit", "archive": "archive",
             "session-complete": "between_sessions", "index": "index", "replacement": "between_sessions",
-            "audit-wait": "audit_wait", "role-wait": "role_wait",
-            "retry": "retry_pause"}.get(stage, f"other:{stage}")
+            "audit-wait": "audit_wait", "role-wait": "role_wait", "group-start": "group_start", "seal": "seal",
+            "rejected": "between_sessions", "retry": "retry_pause"}.get(stage, f"other:{stage}")
 
 
 def campaign_time(events):
@@ -2241,6 +2340,8 @@ def build_campaign(directory, collections, inputs):
                 "vms": list(vms) if vms else None,
                 "replacement_rule": protocol.get("replacement") if isinstance(protocol, dict) else None,
                 "rejections": rejections, "rejections_definition": DEFINITIONS["replacement"],
+                # The count by cause the runner keeps in its state (package B9a, scripts/campaign.py LIMIT_RULE).
+                "rejections_by_cause": dict(sorted(Counter(r["cause"] for r in rejections).items())),
                 "groups": groups, "problems": problems}
     return {"mode": "campaign", "campaign": campaign, "sessions": sessions, "events": events,
             "campaign_time": time_doc, "stage_intervals": intervals, "protocol": protocol,
@@ -2659,6 +2760,7 @@ def build_summary(report, inputs, command, generated):
         "data_volume": {**{name: volume_block(members) for name, members in sets.items()},
                         "definition": DEFINITIONS["data_volume"]},
         "host": {name: host_block(members) for name, members in sets.items()},
+        "tolerated": tolerated_block(sessions),
         "per_scenario": per_scenario,
         "per_vm": per_vm or None,
         "per_vm_note": ("sessions by their VM (session.json vm; the plan row when there is none); a control "
@@ -2875,7 +2977,8 @@ def missing_reason(s, field):
 def plot_timeline(report):
     sessions = report["sessions"]
     lanes = [("capture_stage", "runner: capture stage"), ("audit", "runner: audit"), ("archive", "runner: archive"),
-             ("reboot", "runner: reboot"), ("preflight", "runner: preflight"),
+             ("reboot", "runner: reboot"), ("group_start", "runner: start of a group"), ("seal", "runner: seal"),
+             ("preflight", "runner: preflight"),
              ("between_sessions", "runner: between sessions"), ("audit_wait", "runner: waits for the audit lock"),
              ("role_wait", "runner: waits for earlier roles"), ("stopped", "runner: stopped"),
              ("unaccounted", "runner: unaccounted (unclean end)"), ("before_first_launch", "initialized, not launched"),
@@ -3251,6 +3354,8 @@ def readme(report, summary, files):
         "collector_cycles.csv": "every snapshot sidecar (timing, size, slots, hash flag)",
         "coverage.csv": "audit score-coverage breakdown per session (empty with a reason when there is no audit)",
         "routes.csv": "measure-phase requests per route and session",
+        "tolerated.csv": ("the conditions the audit admitted in every accepted session, by register id "
+                          "(values.exceptions), apart from the coverage rows invalid_input"),
         "events.csv": "campaign events with the time until the next event and its attribution",
         "sources.csv": ("every input file: session, session directory, path, real path, bytes, SHA-256, "
                         "logs_manifest.json comparison"),
@@ -3359,6 +3464,19 @@ def readme(report, summary, files):
     lines.append(f"- Archived sessions {va['archived_sessions']}; archive stored bytes "
                  f"{va['archive_stored_bytes']['total']} over {va['archive_stored_bytes']['sessions_counted']} "
                  "sessions.")
+    tb = s["tolerated"]
+    lines += ["", "## Tolerated conditions of the accepted sessions", "",
+              f"By register id (`tolerated.csv`, definitions: tolerated), over {tb['accepted_sessions']} accepted "
+              "sessions; apart from the coverage rows invalid_input of `coverage.csv`. Sources: "
+              + (", ".join(f"{k} {v}" for k, v in tb["sources"].items()) or "none") + ".", ""]
+    lines += [f"- `{name}`: " + (f"total {b['total']}, largest in one session {b['max_in_one_session']}, sessions "
+                                 f"over the expected count {b['sessions_over_expected']} (expected "
+                                 + (f"{b['expected']}" if b["expected"] is not None else "null until G3b, so no "
+                                    "session is over it") + f"; over {b['sessions_counted']} sessions that record it)"
+                                 if b["sessions_counted"] else b["missing"])
+              for name, b in tb["by_id"].items()]
+    if tb["not_recorded"]:
+        lines.append(f"- {NOT_RECORDED}: " + ", ".join(f"`{sid}`" for sid in tb["not_recorded"]) + ".")
     lines += ["", "## Definitions", ""]
     for key, value in DEFINITIONS.items():
         if isinstance(value, dict):
@@ -3480,6 +3598,7 @@ def write_report(out, report, inputs, command):
         "coverage.csv": csv_text(COVERAGE_COLUMNS, [dict(s.coverage, status=s.status) for s in sessions
                                                     if s.coverage]),
         "routes.csv": csv_text(ROUTE_COLUMNS, [route for s in sessions for route in s.routes]),
+        "tolerated.csv": csv_text(*tolerated_table(sessions)),
         "sources.csv": csv_text(SOURCE_COLUMNS, [dict(r, session_id=r["session"] or "") for r in
                                                  sorted(inputs.files.values(), key=lambda r: r["path"])]),
     }

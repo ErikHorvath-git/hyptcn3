@@ -259,11 +259,12 @@ def test_listed_invalid_row_with_a_cause_outside_the_rule_stays_out_of_the_corpu
         dataset.build(audits, tolerant, "protocol-test")
 
 
-@pytest.mark.parametrize("case", ["repeated", "rewritten", "reclaimed"])
+@pytest.mark.parametrize("case", ["repeated", "rewritten", "reclaimed", "reclaimed_rewritten", "detached"])
 def test_log_audit_is_repeated_where_the_session_keeps_its_logs(tmp_path, case):
     """B2 deferred point 6: on a session that keeps its logs the corpus build runs the log audit again, so a record
-    whose logs section was rewritten is refused; a session whose raw/ went to the archive is trusted, and the index
-    row says which of the two happened."""
+    whose logs section was rewritten is refused. Finding S9 of B3 (package B9a): a session whose raw/ went to the
+    archive is audited again through the link while the archive is attached (a rewritten record is refused there
+    too); with the archive not attached the record is trusted, and the index row says so by name."""
     from scripts import collection
     from scripts.tests import boundary_sessions as bs
     path = bs.write_protocol(tmp_path / "protocol.json", bs.family("S2G", bs.profile_dir(tmp_path / "profile")))
@@ -273,15 +274,22 @@ def test_log_audit_is_repeated_where_the_session_keeps_its_logs(tmp_path, case):
                                base=bs.time_base(p, "train", 0))
     audit = bs.audit(session, p)
     assert audit.code == 0, audit.values["reasons"]
-    if case == "rewritten":
+    if case.startswith("reclaimed") or case == "detached":
+        # scripts/collection_archive.py: raw/ becomes a link to the verified archive copy.
+        (session.directory / "raw").rename(tmp_path / "archive-raw")
+        (session.directory / "raw").symlink_to(tmp_path / "archive-raw", target_is_directory=True)
+    if case == "detached":  # The archive disk is not mounted: the link dangles.
+        (tmp_path / "archive-raw").rename(tmp_path / "archive-raw-elsewhere")
+    if case.endswith("rewritten"):
         report = json.loads(audit.path.read_text())
         report["values"]["logs"]["sections"]["monitor"]["samples"] += 1
         audit.path.write_text(json.dumps(report))
         with pytest.raises(ValueError, match="^log audit differs from the record$"):
             dataset.build([audit.path], p, dataset.sha(path))
         return
-    if case == "reclaimed":  # scripts/collection_archive.py: raw/ becomes a link to the verified archive copy
-        (session.directory / "raw").rename(tmp_path / "archive-raw")
-        (session.directory / "raw").symlink_to(tmp_path / "archive-raw", target_is_directory=True)
     row, = dataset.build([audit.path], p, dataset.sha(path))["sessions"]
-    assert row["log_audit"] == ("repeated" if case == "repeated" else "not repeated")
+    if case == "detached":
+        from features.quality import NOT_REPEATED  # A name of package B9a: imported here, the file collects before it.
+        assert row["log_audit"] == f"{NOT_REPEATED['detached']} ({tmp_path / 'archive-raw'})"
+        return
+    assert row["log_audit"] == "repeated"

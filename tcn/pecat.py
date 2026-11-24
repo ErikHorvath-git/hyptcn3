@@ -34,7 +34,10 @@ command (python -m tcn.finalne, package B7c agent E), on the same replays for ev
     otvoreny()                  the open final run of this process, or None
     zaloz(*, command, ledger=None)
                                 creates an empty ledger (refused when the file exists)
-    python -m tcn.pecat zaloz | zapis --corpus I | stav --corpus I | kontrola --archive A   [--ledger L]
+    python -m tcn.pecat zaloz | zapis --corpus I | zapis --audit A --mode M | stav --corpus I | kontrola --archive A
+                                [--ledger L]
+                                zapis --audit: one accepted session of a campaign from its audit record, the form the
+                                campaign's runner calls as the owner (package B9a; scripts/campaign.py SEAL_RULE)
 
 The guarded entry points (GUARD_RULE) call kontrola before anything is read or written: safeguard replay --archive
 (safeguard/cli.py), tcn.porovnanie replay, safeguard.runtime.replay_archive, the methods of tcn/metody.py and
@@ -911,28 +914,87 @@ def spotrebuj(index, *, out, command, ledger=None):
 
 # ------------------------------------------------------------------ command line
 
+AUDIT_SCHEMA = "hyptcn3/collection-audit/1"  # scripts/collection.py audit_session
+
+
+def _zapis_auditu(audit, mode, *, command, ledger=None):
+    """zapis --audit: the per-session form the campaign's runner calls as the campaign's owner right after the audit
+    accepts a session of a sealed role (package B9a, design B9a 1.3 item 7; scripts/campaign.py SEAL_RULE).
+
+    The record of zapis is read from the audit record and its session: id, role, group, vm and scenario from the
+    session.json the audit names (its sha256 must be the audit's session_sha256), features and features_sha256 from
+    the audit; the plan from the session's copy of the protocol (its sha256 must be the audit's protocol_sha256) in
+    plan mode `mode`, which the session's plan_mode (scripts/collection.py run, package B9a) must equal where it
+    records one. Only an accepted audit is written; every refusal names its reason. A session of a role that is not
+    sealed is counted apart, as zapis counts it."""
+    path = Path(audit).resolve()
+    try:
+        doc = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as error:
+        raise ValueError(f"the audit {path} cannot be read: {error}") from None
+    values = doc.get("values") if type(doc) is dict else None
+    if type(doc) is not dict or doc.get("schema") != AUDIT_SCHEMA or type(values) is not dict:
+        raise ValueError(f"{path}: no session audit of schema {AUDIT_SCHEMA}")
+    if values.get("accepted") is not True or values.get("reasons") != []:
+        raise ValueError(f"{path}: the audit does not accept its session; only an accepted session is sealed")
+    if type(values.get("session_dir")) is not str:
+        raise ValueError(f"{path}: the audit names no session directory (session_dir)")
+    directory = Path(values["session_dir"])
+    try:
+        session_sha, protocol_sha = _digest(directory / "session.json"), _digest(directory / "protocol.json")
+        meta = json.loads((directory / "session.json").read_text(encoding="utf-8"))
+        protocol = json.loads((directory / "protocol.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError) as error:
+        raise ValueError(f"{path}: the session's records cannot be read: {error}") from None
+    if session_sha != values.get("session_sha256"):
+        raise ValueError(f"{path}: session.json of {directory} changed since its audit")
+    if protocol_sha != values.get("protocol_sha256"):
+        raise ValueError(f"{path}: the session's protocol.json is not the protocol of its audit")
+    if type(meta) is not dict or meta.get("role") != values.get("role"):
+        raise ValueError(f"{path}: the audit's role is not the role of its session.json")
+    if "plan_mode" in meta and meta["plan_mode"] != mode:
+        raise ValueError(f"{path}: the session belongs to the plan of mode {meta['plan_mode']}, not {mode}")
+    record = {"id": meta.get("session_id"), "role": meta.get("role"), "group": meta.get("group"), "vm": meta.get("vm"),
+              "scenario": meta.get("scenario"), "features": values.get("features"),
+              "features_sha256": values.get("features_sha256")}
+    out = zapis([record], protocol=protocol, protocol_sha256=protocol_sha, mode=mode, command=command, ledger=ledger)
+    return dict(out, audit=str(path), session=record["id"])
+
 
 def main(argv=None):
     argv = list(sys.argv[1:] if argv is None else argv)
     parser = argparse.ArgumentParser(prog="python -m tcn.pecat", description=__doc__.split("\n")[0])
     sub = parser.add_subparsers(dest="action", required=True)
     for name, text in (("zaloz", "create an empty ledger (refused when the file exists)"),
-                       ("zapis", "write the sealed sessions of a corpus index into the ledger"),
+                       ("zapis", "write the sealed sessions of a corpus index, or one accepted session of a campaign "
+                                 "(--audit), into the ledger"),
                        ("stav", "the seal of a corpus index: its identity, the ledger, its runs (consumes nothing)"),
                        ("kontrola", "the decision of the seal for one feature archive (exit 3 when refused)")):
         command = sub.add_parser(name, help=text)
         if name == "kontrola":
             command.add_argument("--archive", required=True, type=Path)
+        elif name == "zapis":
+            source = command.add_mutually_exclusive_group(required=True)
+            source.add_argument("--corpus", type=Path)
+            source.add_argument("--audit", type=Path,
+                                help="the audit record of one accepted session (the campaign's runner, package B9a)")
+            command.add_argument("--mode", choices=MODES,
+                                 help="with --audit (required there, no default): the plan mode of the campaign; a "
+                                      "corpus names its own")
         elif name != "zaloz":
             command.add_argument("--corpus", required=True, type=Path)
         command.add_argument("--ledger", type=Path, default=None,
                              help="another ledger than the ledger of record (a G1 dry run: stage suchy); default "
                                   "data/results/kniha_pecati.json")
     a = parser.parse_args(argv)
+    if a.action == "zapis" and (a.audit is None) != (a.mode is None):
+        parser.error("--mode belongs to --audit, and --audit needs it (no default): a corpus index names its plan mode")
     line = shlex.join(["python", "-m", "tcn.pecat", *argv])
     try:
         if a.action == "zaloz":
             result = zaloz(command=line, ledger=a.ledger)
+        elif a.action == "zapis" and a.audit is not None:
+            result = _zapis_auditu(a.audit, a.mode, command=line, ledger=a.ledger)
         elif a.action == "zapis":
             result = zapis_korpus(a.corpus, command=line, ledger=a.ledger)
         elif a.action == "stav":

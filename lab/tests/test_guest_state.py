@@ -99,6 +99,7 @@ def test_levels_reports_processes_memory_database_and_files(tmp_path, monkeypatc
         (proc / str(pid) / "status").write_text(f"Name:\tx\nThreads:\t{threads}\n")
     (proc / "meminfo").write_text("MemTotal: 2000000 kB\nMemAvailable: 1500000 kB\nSwapTotal: 0 kB\n")
     (proc / "loadavg").write_text("0.10 0.20 0.30 1/100 4242\n")
+    (proc / "modules").write_text("virtio_net 61440 0 - Live 0x0\n")  # Package B9: levels reads it as well.
     (data / "docs").mkdir(parents=True)
     (data / "docs" / "1.bin").write_bytes(b"x" * 10)
     monkeypatch.setattr(guest_state, "PROC", proc)

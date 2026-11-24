@@ -5,6 +5,7 @@ the 18 behavior columns and per-bin measurements, so it requires their own
 complete traversals and successful memory reads. Neither policy fills gaps.
 """
 import json
+import os
 from pathlib import Path
 
 LEGACY_POLICY = "legacy-vector-v1"
@@ -58,6 +59,15 @@ def coverage_gate(protocol):
     return gate
 
 
+REPEATED = "repeated"
+# Why the log audit was not repeated, as the row of a corpus index records it (finding S9 of B3, package B9a: by
+# name); every such value begins with "not repeated".
+NOT_REPEATED = {"v1": "not repeated: a session of schema 1 recorded no request-level logs",
+                "no_times": "not repeated: no row times were given",
+                "no_logs": "not repeated: the session directory holds no logs_manifest.json",
+                "detached": "not repeated: raw/ links to an archive that is not attached"}
+
+
 def require_log_audit(metadata, values, snapshot_times=None):
     """Managed v2 sessions need the evidence verdict as well as valid features; returns how it was established.
 
@@ -66,30 +76,39 @@ def require_log_audit(metadata, values, snapshot_times=None):
 
     With `snapshot_times` (the row times of the session's feature archive) the log audit runs again where the
     record's session directory still holds the logs as the capture left them, and its result must equal the
-    record's logs section: "repeated". Anywhere else the record is trusted: "not repeated" (no times given, a v1
-    session, or no logs_manifest.json or a raw/ that collection_archive.py reclaimed into the archive). This
-    guards against the audit's own errors, not against a forger, who can also remove the logs.
+    record's logs section: "repeated". A session whose raw/ scripts/collection_archive.py reclaimed into its
+    verified archive (raw/ is then a link to the archive's raw/) is audited again through that link while the
+    archive is attached (finding S9 of B3, package B9a): the log audit reads raw/collect.log and raw/capture.json
+    there. Anywhere else the record is trusted and the value names why the audit was not repeated (NOT_REPEATED: a
+    v1 session, no times given, no logs_manifest.json, or a raw/ link whose archive is not attached, with its
+    target). This guards against the audit's own errors, not against a forger, who can also remove the logs.
     """
     if metadata.get("schema") != "hyptcn3/collection-session/2":
-        return "not repeated"
+        return NOT_REPEATED["v1"]
     logs = values.get("logs") or {}
     if (logs.get("schema") != "hyptcn3/collection-logs-audit/1"
             or logs.get("accepted") is not True or logs.get("problems") != []
             or logs.get("sections", {}).get("metadata", {}).get("session_sha256") != values.get("session_sha256")
             or not values.get("session_sha256")):
         raise ValueError("managed session requires an accepted log audit; re-audit the session")
-    directory = Path(values["session_dir"]) if snapshot_times is not None else None
-    if directory is None or not (directory / "logs_manifest.json").is_file() or (directory / "raw").is_symlink():
-        return "not repeated"
+    if snapshot_times is None:
+        return NOT_REPEATED["no_times"]
+    directory = Path(values["session_dir"])
+    if not (directory / "logs_manifest.json").is_file():
+        return NOT_REPEATED["no_logs"]
+    raw = directory / "raw"
+    archived = raw.is_symlink()
+    if archived and not raw.is_dir():
+        return f"{NOT_REPEATED['detached']} ({os.readlink(raw)})"
     from scripts.collection_logs import audit_logs
-    again = audit_logs(directory, snapshot_times=[float(t) for t in snapshot_times])
+    again = audit_logs(directory, snapshot_times=[float(t) for t in snapshot_times], archived_raw=archived)
     try:
         same = json.dumps(again, sort_keys=True, allow_nan=False) == json.dumps(logs, sort_keys=True, allow_nan=False)
     except ValueError:
         same = False  # A value JSON cannot state is in no result of the log audit.
     if not same:
         raise ValueError("log audit differs from the record")
-    return "repeated"
+    return REPEATED
 
 
 INVALID_ROW_TRAVERSALS = ("processes", "modules", "sockets", "memory_patterns")

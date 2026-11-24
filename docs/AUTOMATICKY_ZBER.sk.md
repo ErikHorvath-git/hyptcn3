@@ -334,6 +334,11 @@ uzavreté skôr, než čokoľvek zmeralo; to sa smie založiť znova.
 `status` ukazuje pri každej VM `continues` a `taken_over` (počet prevzatých
 priradení); `accepted_archived` ich započítava.
 
+`accepted_archived` je vždy počet session vlastnej VM. Runner, ktorý postaví
+index všetkých VM, zapíše počet session indexu pod vlastný kľúč
+`indexed_sessions` (oprava B9a: predtým ho zapísal do `accepted_archived`
+a `campaign_report.py` by ho porovnal s kontrolnými bodmi jednej VM).
+
 Úplnú opätovnú kontrolu archivovaných dát možno vykonať mimo merania:
 
 ```sh

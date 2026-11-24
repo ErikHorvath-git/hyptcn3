@@ -858,8 +858,9 @@ def test_finish_corpus_of_a_test_only_plan_of_schema_3_ends_with_an_event_index(
     directory = tmp_path / "campaign"
     (directory / "events").mkdir(parents=True)  # The state records of the campaign (update_state).
     (directory / "protocol.json").write_bytes(Path(w.path).read_bytes())
+    # The campaign's plan mode, as campaign.json names it (package B9a, scripts/campaign.py MODE_RULE).
     manifest = {"protocol_sha256": w.sha, "archive_root": str(tmp_path / "archive"), "archive_mount": None,
-                "archive_dir": str(tmp_path / "archive" / "campaigns" / "s3")}
+                "archive_dir": str(tmp_path / "archive" / "campaigns" / "s3"), "mode": "campaign"}
     copied = []
     monkeypatch.setattr(campaign, "guard_mount", lambda archive_root, mount: None)
     monkeypatch.setattr(campaign, "copy_exclusive", lambda source, destination: copied.append((source, destination)))

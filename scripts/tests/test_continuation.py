@@ -6,6 +6,8 @@ The first campaign has one replacement; its second rejection stops VM b inside i
 import json
 import os
 from pathlib import Path
+import re
+import shutil
 from types import SimpleNamespace
 
 import pytest
@@ -25,7 +27,14 @@ def environment(vm):
 
 @pytest.fixture
 def lab(tmp_path, monkeypatch):
-    """Fake capture/audit subprocesses that serve any campaign under tmp_path; real orchestration and archiver."""
+    """Fake capture/audit subprocesses that serve any campaign under tmp_path; real orchestration, archiver and final
+    index. The audit writes a real feature archive and the values of a real audit record (scripts/tests/kampan_v5.py
+    audit_values: its verdict is the one acceptance decision on that archive, which require_recorded admits for a
+    taken-over session, deferred point 10 of B2) at the time of its capture (one clock for both campaigns,
+    kampan_v5.Clock), and finish_corpus is the real one behind a spy that records its arguments (harness row B9
+    "Hotové, keď": the final index is no longer faked; finding F2 of the verification of B9a). So the index of a
+    continuation holds the sessions of both campaigns and passes the production check of training."""
+    from scripts.tests.kampan_v5 import SMALL_GRID, Clock, audit_values
     captures = tmp_path / "collections"
     captures.mkdir()
     source = json.loads(multi_protocol(tmp_path, min_free_gib=0,
@@ -33,10 +42,14 @@ def lab(tmp_path, monkeypatch):
                                        replacement={"max_per_campaign": 1, "same": ["vm", "role", "scenario"],
                                                     "covers": ["audit_rejected", "capture_incomplete"]}).read_text())
     source["scenarios"] = {k: source["scenarios"][k] for k in ("quiet", "steady")}
+    source.update(SMALL_GRID)  # Real archives of 96 rows, not 720 (kampan_v5.SMALL_GRID).
     protocol = tmp_path / "protocol.json"
     protocol.write_text(json.dumps(source))
     state = {"tmp": tmp_path, "captures": captures, "protocol": protocol, "calls": [], "reject": set(),
              "boot": {"a": "pilot-a", "b": "pilot-b"}, "reboots": 0, "finished": []}
+    # The current profile: the production check of the real index compares it with the tree (and the extractor,
+    # which campaign() freezes).
+    profile, clock = c.tree_hashes(c.ROOT / source["profile"]), Clock()
     qemu = lambda domain: {"pid": len(domain), "start_ticks": 1, "host_boot": "host-boot"}
     monkeypatch.setattr(c, "COLLECTIONS", captures)
     monkeypatch.setattr(c, "BASE", tmp_path)
@@ -66,6 +79,7 @@ def lab(tmp_path, monkeypatch):
         find = lambda sid: next(r for r in manifest["sessions"] if r["session_id"] == sid.split("-r")[0])
         if "run" in command:
             vm, sid = command[command.index("--vm") + 1], command[command.index("--session-id") + 1]
+            assert "--mode" not in command and "--attempt" not in command  # Schemas 1 and 2: collection.py run refuses both (package B9a); they are of schema 3.
             row = find(sid)
             assert row["vm"] == vm and command[command.index("--campaign-id") + 1] == manifest["id"]
             assert command[command.index("--expected-boot-id") + 1] == state["boot"][vm]
@@ -79,31 +93,31 @@ def lab(tmp_path, monkeypatch):
                        "campaign_id": manifest["id"], "commit": manifest["commit"], "measurement_dirty": [],
                        "host_context": {"qemu": qemu(collection.for_vm(
                            collection.protocol(directory / "protocol.json"), vm)["domain"])},
-                       "protocol_sha256": manifest["protocol_sha256"], "guest_before": identity})
+                       "protocol_sha256": manifest["protocol_sha256"], "guest_before": identity,
+                       "typ": "benign", "collector_sha256": RUNTIME["collector_sha256"], "profile_sha256": profile})
             (src / "raw").mkdir()
             (src / "raw/frame.vmicd").write_bytes(b"synthetic RAM " + sid.encode())
-            write_new(src / "end.json", {"completed": True, "guest_after": identity, "measurement_started": True})
+            start, end = clock.take(source)
+            write_new(src / "end.json", {"completed": True, "guest_after": identity, "measurement_started": True,
+                                         "measure_start_unix": start, "measure_end_unix": end})
             return 0
         src, report = Path(command[command.index("audit") + 1]), Path(command[command.index("--out") + 1])
         row = find(src.name)
         state["calls"].append(("audit", manifest["id"], row["vm"], row["group"], src.name))
-        feature = report.with_suffix(".npz")
-        feature.write_bytes(b"synthetic feature archive " + src.name.encode())
         accepted = src.name not in state["reject"]
+        values = audit_values(src, read_json(directory / "protocol.json"), directory / "protocol.json", report,
+                              extractor=manifest["extractor_sha256"], accepted=accepted,
+                              rejection=("timing:gap", "missed sampling slot"))
+        assert values["role"] == row["role"]
         write_new(report, {"schema": "hyptcn3/collection-audit/1", "commit": manifest["commit"],
-                  "measurement_dirty": [],
-                  "values": {"accepted": accepted, "reasons": [] if accepted else ["missed sampling slot"],
-                             "protocol_sha256": manifest["protocol_sha256"],
-                             "extractor_sha256": manifest["extractor_sha256"], "session_dir": str(src),
-                             "role": row["role"], "session_sha256": digest(src / "session.json"),
-                             "source_sha256": {"frame.vmicd": digest(src / "raw/frame.vmicd")},
-                             "features": str(feature), "features_sha256": digest(feature)}})
+                  "measurement_dirty": [], "values": values})
         return 0 if accepted else 2
     monkeypatch.setattr(c, "run_child", child)
+    real_finish = c.finish_corpus
 
-    def finish(directory, manifest, protocol, reports):
+    def finish(directory, manifest, protocol, reports):  # The spy: the call is recorded, then the real index.
         state["finished"].append((manifest["id"], manifest["vm"], list(reports)))
-        c.update_state(directory, vm=manifest["vm"], status="complete", stage="complete")
+        return real_finish(directory, manifest, protocol, reports)
     monkeypatch.setattr(c, "finish_corpus", finish)
     monkeypatch.setattr(c, "process_identity", lambda pid: {"alive": pid} if pid == os.getpid() else None)
     return state
@@ -127,7 +141,7 @@ def campaign(lab, name, commit="first-commit", continues=None, env=environment, 
         per_vm[vm] = {"guest_environment": env(vm), "pilot_report_sha256": digest(directory / f"pilot-{vm}.json"),
                       "estimated_session_bytes_with_reserve": 100, "estimated_archive_bytes_per_session": 10}
     manifest = {"schema": "hyptcn3/collection-campaign/1", "id": name, "workspace": str(c.ROOT), "commit": commit,
-                "sessions": rows, "owner": {"name": "test-owner"}, "extractor_sha256": {"test": "test"},
+                "sessions": rows, "owner": {"name": "test-owner"}, "extractor_sha256": c.extractor_hashes(),
                 "profile_sha256": PROFILE, "runtime": RUNTIME, "vms": per_vm,
                 "protocol_sha256": digest(directory / "protocol.json"),
                 "archive_dir": str(external), "archive_root": str(external), "archive_mount": {},
@@ -325,13 +339,13 @@ def test_init_freezes_the_continuation(lab, stopped, monkeypatch):
     monkeypatch.setattr(c, "pilot_gate", gate)
     monkeypatch.setattr(c, "git", lambda *args: "" if args[0] == "status" else "second-commit")
     monkeypatch.setattr(c, "runtime_identity", lambda: RUNTIME)
-    monkeypatch.setattr(c, "extractor_hashes", lambda: {"test": "test"})
     monkeypatch.setattr(c, "archive_estimate", lambda *a: {"bytes_per_session": 10})
     monkeypatch.setattr(c, "mount_identity", lambda *a, **kw: {})
+    # init's command line has --mode and --estimate-from (package B9a), both of protocol schema 3: not given here.
     arguments = SimpleNamespace(protocol=first / "protocol.json", name="druha", archive_compression="zstd",
                                 pilot_report=[f"{vm}={path}" for vm, path in pilots.items()],
                                 archive_root=lab["tmp"] / "external" / "init", archive_on_system_disk=True,
-                                continues=first)
+                                continues=first, mode=None, estimate_from=None)
     second = c.initialize(arguments)
     manifest, _ = c.load_campaign(second)
     assert manifest["continues"]["campaign"] == "prva" and len(manifest["continues"]["sessions"]) == 6
@@ -360,3 +374,77 @@ def test_taken_and_recaptured_groups_pass_the_corpus_builder(tmp_path):
     assert dataset.build([train, new_dev, *later], protocol(), "protocol-test")["complete"]
     with pytest.raises(ValueError, match="boot/group mapping is not one to one"):
         dataset.build([train, old_dev, new_dev, *later], protocol(), "protocol-test")
+
+
+def test_taken_session_is_decided_by_its_recorded_verdict(lab, stopped):
+    """Deferred point 10 of B2 (package B9a): a taken-over session is admitted by the one acceptance decision on its
+    record (features/acceptance.py require_recorded), not by its flag: a record that says accepted while its stored
+    facts give a verdict the protocol rejects is refused by name, though its audit pointer and checkpoint agree."""
+    first = stopped
+    c.close(first, "stopped")
+    old = rows_of(first, vm="a", role="train")[0]
+    pointer_path = first / "attempts" / (old["session_id"] + ".audit.json")
+    done_path = first / "attempts" / (old["session_id"] + ".done.json")
+    report = Path(read_json(pointer_path)["path"])
+    doc = read_json(report)
+    doc["values"]["acceptance"]["facts"]["integrity_findings"] = 1
+    assert doc["values"]["accepted"] is True
+    report.write_text(json.dumps(doc))
+    pointer_path.write_text(json.dumps({**read_json(pointer_path), "sha256": digest(report)}))
+    done_path.write_text(json.dumps({**read_json(done_path), "audit_sha256": digest(report)}))
+    reason = ("accepted audit of a session the protocol rejects: integrity findings require review before benign "
+              "admission")
+    with pytest.raises(ValueError, match=re.escape(f"session {old['session_id']} cannot be taken over, records "
+                                                   f"disagree: audit verdict and provenance (require_recorded: {reason})")):
+        campaign(lab, "druha", "second-commit", continues=first)
+
+
+def test_take_over_judges_the_closed_campaign_by_time_rank(tmp_path, monkeypatch):
+    """ORDER_RULE in take_over (PRE_B9; package B9a): a closed campaign of the v5 shape whose first test_controls group
+    is complete while the test_benign group before it in the plan (on the other VM) is not keeps the time order, as the
+    two test roles share a rank; one with a complete calibration group and an incomplete dev group does not."""
+    from scripts import protocol_v5
+    from scripts.tests.test_campaign import v5_protocol
+    monkeypatch.setattr(c, "BASE", tmp_path)
+    monkeypatch.setattr(c, "guard_mount", lambda *a: None)
+    monkeypatch.setattr(c, "taken_session", lambda previous, old, old_p, final, group: {"session_id": final["session_id"]})
+    (tmp_path / "source").mkdir()
+    path = v5_protocol(tmp_path / "source" / "protocol.json")
+    p = collection.protocol(path)
+    planned = protocol_v5.plan(p, mode="campaign")["sessions"]
+
+    def closed(name, complete):
+        directory = tmp_path / name
+        for child in ("attempts", "groups"):
+            (directory / child).mkdir(parents=True)
+        shutil.copyfile(path, directory / "protocol.json")
+        rows = [dict(row, session_id=f"{name}_{i:02d}_{row['vm']}") for i, row in enumerate(planned)]
+        manifest = {"schema": "hyptcn3/collection-campaign/1", "id": name, "workspace": str(c.ROOT), "commit": "first",
+                    "mode": "campaign", "sessions": rows, "protocol_sha256": digest(directory / "protocol.json"),
+                    "profile_sha256": PROFILE, "extractor_sha256": {"test": "test"}, "runtime": RUNTIME,
+                    "vms": {vm: {"guest_environment": environment(vm)} for vm in ("a", "b")},
+                    "archive_root": str(tmp_path), "archive_mount": {}}
+        write_new(directory / "campaign.json", manifest)
+        write_new(directory / "closed.json", {"reason": "stopped"})
+        for row in rows:
+            if row["role"] in ("train", "dev", "calibration") and row["group"] not in complete.get("not", ()) \
+                    or row["group"] in complete.get("also", ()):
+                write_new(directory / "attempts" / (row["session_id"] + ".done.json"), {})
+                if not (directory / "groups" / (row["group"] + ".json")).exists():
+                    write_new(directory / "groups" / (row["group"] + ".json"), {"identity": {"boot_id": row["group"]}})
+        continuation = {**manifest, "id": name + "-dalej",
+                        "sessions": [dict(row, session_id=f"{name}-dalej_{i:02d}") for i, row in enumerate(rows)]}
+        return directory, continuation
+
+    tests = list(dict.fromkeys(s["group"] for s in planned if s["role"] in ("test_benign", "test_controls")))
+    assert tests[:2] == ["v5-test_benign-1", "v5-test_controls-1"]
+    assert next(s["vm"] for s in planned if s["group"] == tests[0]) != next(s["vm"] for s in planned
+                                                                          if s["group"] == tests[1])
+    previous, continuation = closed("prva", {"also": ["v5-test_controls-1"]})
+    record = c.take_over(previous, continuation, p)
+    assert {r["session_id"] for r in record["sessions"].values()} == {
+        r["session_id"] for r in read_json(previous / "campaign.json")["sessions"]
+        if r["role"] in ("train", "dev", "calibration") or r["group"] == "v5-test_controls-1"}
+    previous, continuation = closed("druha", {"not": ["v5-dev-1", "v5-dev-2"]})
+    with pytest.raises(ValueError, match="^closed campaign completed a later role before an earlier one$"):
+        c.take_over(previous, continuation, p)

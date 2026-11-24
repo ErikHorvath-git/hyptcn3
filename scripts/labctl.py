@@ -67,6 +67,14 @@ QEMU_SCOPES = "hyptcn-qemu-*.scope"
 DAEMON_TRIES, DAEMON_PAUSE_S = 120, .25
 # systemctl --user and systemd-run --user of the daemon unit, and virsh list: 60 s each (judgment, B5a).
 UNIT_TIMEOUT_S = 60
+# labctl stop (package B9: a group starts with a new QEMU process, proposal 5.4): after virsh shutdown the domain's
+# state is read every STOP_PAUSE_S until it is shut off and its QEMU process has exited, at most STOP_TIMEOUT_S
+# (judgment: the bound and the pause of the reboot wait, Lab.reboot).
+STOP_TIMEOUT_S, STOP_PAUSE_S = 180, 2
+# Finding F4 of B5a (dokazy/B5/odlozene_B5a.md): way 2 is temporary, the record of every start says so.
+TEMPORARY = ("way 2 moved the QEMU process, not its memory: the pages it touched before the move stay charged to the "
+             "cgroup it ran in before, whose swap policy still applies to them (finding F4 of B5a); a group starts "
+             "through way 1: the VM shut off and the session daemon in its unit")
 
 
 def run(args, **kw):
@@ -517,7 +525,34 @@ class Lab:
             time.sleep(2)
         raise TimeoutError("Guest did not become healthy on a new boot")
 
+    def stop(self):
+        """Shut the VM down and wait until it is shut off and its QEMU process has exited (package B9: each group
+        starts with a new QEMU process, proposal 5.4; the start that follows is way 1). A VM already shut off stays
+        so. Prints and returns {domain, state_before, qemu_pid_before, state, seconds}; RuntimeError when the domain
+        is not shut off, or its QEMU still runs, STOP_TIMEOUT_S after virsh shutdown."""
+        self.owned()
+        before, pid, started = self.virsh("domstate", self.domain), qemu_pid(self.domain), time.monotonic()
+        if before != "shut off":
+            self.virsh("shutdown", self.domain)
+            while True:
+                state, running = self.virsh("domstate", self.domain), qemu_pid(self.domain)
+                if state == "shut off" and running is None:
+                    break
+                if time.monotonic() - started >= STOP_TIMEOUT_S:
+                    raise RuntimeError(f"domain {self.domain} is {state!r}" + (f" and its QEMU {running} runs"
+                                                                             if running else "")
+                                       + f" {STOP_TIMEOUT_S} s after virsh shutdown")
+                time.sleep(STOP_PAUSE_S)
+        record = {"domain": self.domain, "state_before": before, "qemu_pid_before": pid, "state": "shut off",
+                  "seconds": round(time.monotonic() - started, 3)}
+        print(json.dumps({"stop": record}, sort_keys=True), flush=True)
+        return record
+
     def start(self):
+        """Start the VM when it is shut off, through way 1 (daemon_step right before virsh start): the new QEMU process
+        inherits the daemon unit's cgroup (package B9: a group starts with stop, then start). A running VM keeps its
+        QEMU. main() runs the swap step after every start; its record, printed last, names the QEMU's pid, cgroup and
+        way (qemu_swap_off), which the campaign records."""
         self.owned()
         if self.virsh("domstate", self.domain) == "shut off":
             self.daemon_step()  # Way 1 of the swap ban: the daemon that starts this QEMU runs in a unit without swap.
@@ -587,7 +622,11 @@ class Lab:
         moved into a transient scope of the user's systemd manager with MemorySwapMax=0 (StartTransientUnit with
         PIDs, no root needed: skuska_swapu.md) and read back there. Then memory.swap.max must be 0 and VmSwap 0 kB,
         else RuntimeError with both values: a process moved late may keep pages swapped out before the move. A
-        failed move (both ways failed) names the owner's command."""
+        failed move (both ways failed) names the owner's command.
+
+        The record names the QEMU's pid and cgroup and the way that holds it (package B9): "unit" in the daemon's
+        unit (way 1), "scope" in a hyptcn-qemu scope, moved now or by an earlier start (way 2). Way 2 is temporary
+        (finding F4 of B5a): temporary is true and the note says why."""
         pid = qemu_pid(self.domain)
         if pid is None:
             raise RuntimeError(f"QEMU process of domain {self.domain} not found")
@@ -622,7 +661,9 @@ class Lab:
             raise RuntimeError(f"QEMU {pid} ({self.domain}) has VmSwap {kb_text(kb)} with memory.swap.max {value!r} in "
                                f"{cgroup}: pages swapped out before its cgroup forbade swap stay in swap until QEMU "
                                "touches them; a VM started again begins without them")
-        return {**record, "scope": scope, "cgroup": cgroup, "memory_swap_max": value, "vm_swap_kb": kb}
+        way = "unit" if in_user_unit(cgroup, DAEMON_SERVICE) else "scope"
+        return {**record, "scope": scope, "cgroup": cgroup, "memory_swap_max": value, "vm_swap_kb": kb, "way": way,
+                "temporary": way == "scope", **({"note": TEMPORARY} if way == "scope" else {})}
 
     def swap_step(self):
         """qemu_swap_off() as a step right after every start of the VM: its record is printed. A failure ends the
@@ -738,7 +779,8 @@ def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("command", choices=["up", "create", "clone", "start", "deploy", "status", "stop", "reboot",
                                             "traffic-start", "traffic-stop", "exec", "logs", "state", "levels",
-                                            "clock", "sync-clock", "segment", "journal", "event"])
+                                            "reset", "pretouch", "clock", "sync-clock", "segment", "journal",
+                                            "event"])
     parser.add_argument("--domain", default="hyptcn-lab")
     parser.add_argument("--vm", help="VM name of a multi-VM protocol (own state file, traffic unit and port); "
                                      "clone: the new disk gets a fresh machine-id and hostname before its first boot")
@@ -758,6 +800,9 @@ def main(argv=None):
                                          "guest_state.py levels printed")
     parser.add_argument("--tolerance", help="start of a control: controls.baseline of the protocol as JSON (null "
                                             "until G2)")
+    parser.add_argument("--seed", type=int, help="reset (required there, refused elsewhere): the seed of the "
+                                                 "protocol's seeded level (protocol_v5.reset_seed), 0 to 10**18 - 1, "
+                                                 "the 18 digits lab/guest_state.py reset --seed takes")
     parser.add_argument("--since", type=float, help="journal: start, Unix seconds")
     parser.add_argument("--until", type=float, help="journal: end, Unix seconds")
     parser.add_argument("--protocol", type=Path,
@@ -770,6 +815,11 @@ def main(argv=None):
         parser.error("--vm and --port belong together")
     if args.command == "clone" and args.vm is None:
         parser.error("clone creates a further VM and requires --vm and --port")
+    if (args.command == "reset") != (args.seed is not None):
+        parser.error("reset requires --seed (the seed of the protocol's seeded level, protocol_v5.reset_seed)"
+                     if args.command == "reset" else "--seed belongs to reset")
+    if args.seed is not None and not 0 <= args.seed < 10 ** 18:
+        parser.error("--seed is an integer from 0 to 10**18 - 1 (18 digits, lab/guest_state.py reset --seed)")
     if args.command in ("up", "traffic-start"):
         # Finding F5 of the B5b verification: without the protocol the old generator unit would start under v5 too.
         if args.protocol is None:
@@ -813,9 +863,8 @@ def main(argv=None):
             subprocess.run(["systemctl", "--user", "stop", unit], check=True)
     if args.command == "reboot":
         lab.reboot()
-    if args.command == "stop":
-        lab.owned()
-        print(lab.virsh("shutdown", lab.domain))
+    if args.command == "stop":  # Waits until the VM is shut off (package B9; Lab.stop).
+        lab.stop()
     if args.command == "exec":
         lab.owned()
         if not args.guest_command:
@@ -829,6 +878,14 @@ def main(argv=None):
     if args.command == "levels":  # The level values at the start of a session (proposal 5.4; package B8).
         lab.owned()
         print(json.dumps(lab.helper("levels"), sort_keys=True))
+    # The start of a group (proposal 5.4, package B9): the database and the documents at the protocol's seeded level,
+    # then one process touches the memory of the largest event; each prints the JSON guest_state.py prints.
+    if args.command == "reset":
+        lab.owned()
+        print(json.dumps(lab.helper("reset", "--seed", args.seed), sort_keys=True))
+    if args.command == "pretouch":
+        lab.owned()
+        print(json.dumps(lab.helper("pretouch"), sort_keys=True))
     if args.command == "clock":
         print(json.dumps(lab.clock()))
     if args.command == "sync-clock":

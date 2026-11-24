@@ -1612,3 +1612,112 @@ def test_multi_vm_report_problems_and_stop_requests(tmp_path, monkeypatch):
     assert (f"- `{last['session_id']}` (VM b), capture_incomplete: ValueError: collector failed; see capture.log; "
             "not replaced (guest boot or environment changed since the group started)") \
         in (out2 / "README.md").read_text()
+
+
+def test_report_knows_the_stages_and_the_rejection_counts_of_package_b9a(tmp_path, monkeypatch):
+    """Package B9a (scripts/campaign.py, protocol schema 3): the stages group-start, seal and rejected have their
+    categories (no other:<stage>), and the campaign summary counts the rejections by cause, as the runner's state
+    does (LIMIT_RULE)."""
+    assert [cr.stage_category({"status": "running", "stage": stage}) for stage in ("group-start", "seal", "rejected")] \
+        == ["group_start", "seal", "between_sessions"]
+    directory, _, _, _ = make_multi_campaign(tmp_path, monkeypatch)
+    out = tmp_path / "report"
+    assert run_report(["campaign", directory, "--out", out]) == 0
+    assert json.loads((out / "summary.json").read_text())["campaign"]["rejections_by_cause"] == {"audit_rejected": 1}
+
+
+def test_report_gives_the_tolerated_rows_by_register_id_apart_from_the_coverage_rows(tmp_path):
+    """F1 of the verification of B9a (the B2 panel item: the report showed tolerated rows only as the coverage rows
+    invalid_input): every accepted session's tolerated conditions by register id from its audit's values.exceptions,
+    the invalid rows from values.quality.tolerated_invalid_seq for an audit without values.exceptions, 'not recorded'
+    by name for an audit with neither (never 0), and per register id the total, the largest count in one accepted
+    session and the number of accepted sessions over the expected count (0 while the expected count is null)."""
+    work = tmp_path / "collections"
+    work.mkdir()
+
+    def exceptions(observed, expected=None):
+        """values.exceptions as features/audit_policy.py exceptions_record writes it (the ids the audits record)."""
+        ids = ("invalid_rows", "rule_closed_rows", "event_unit_restarts", "event_window_requests")
+        return {name: {"observed": observed.get(name, 0), "expected": (expected or {}).get(name),
+                       "over": name in (expected or {}) and observed.get(name, 0) > expected[name]} for name in ids}
+
+    audits = {
+        # One tolerated invalid row: the coverage counts 2 rows invalid_input (12 snapshots, 6 windows, 2 fulls).
+        "one": {"exceptions": exceptions({"invalid_rows": 1, "event_unit_restarts": 2}),
+                "quality": {"tolerated_invalid_seq": [7]}},
+        # An audit without values.exceptions (schemas 1 and 2): the invalid rows from the quality record.
+        "older": {"quality": {"tolerated_invalid_seq": [3, 9]}},
+        # A register with an expected count (after G3b): over it by name.
+        "over": {"exceptions": exceptions({"event_window_requests": 1}, {"event_window_requests": 0})},
+        "neither": {},
+        # A rejected session is in no total.
+        "rejected": {"exceptions": exceptions({"invalid_rows": 5})},
+    }
+    dirs = []
+    for i, (sid, added) in enumerate(audits.items()):
+        truth = make_session(work, sid, start=T0 + 1000 * i, kind="rejected" if sid == "rejected" else "accepted",
+                             windows=6, reasons=("score coverage below design gate 0.6",) if sid == "rejected" else ())
+        doc = json.loads(truth["audit"].read_text())
+        doc["values"].update(added)
+        write_json(truth["audit"], doc)
+        dirs.append(work / sid)
+    out = tmp_path / "report"
+    assert run_report(["sessions", *dirs, "--out", out]) == 0
+    status = {r["session_id"]: r["status"] for r in read_csv(out / "sessions.csv")}
+    assert status == {"one": "accepted", "older": "accepted", "over": "accepted", "neither": "accepted",
+                      "rejected": "rejected"}
+    coverage = by_id(read_csv(out / "coverage.csv"))
+    assert coverage["one"]["rows_invalid_input"] == "2"
+    tolerated = read_csv(out / "tolerated.csv")
+    assert list(tolerated[0]) == ["session_id", "status", "source", "invalid_rows", "rule_closed_rows",
+                                  "event_unit_restarts", "event_window_requests", "over_expected", "missing"]
+    rows = by_id(tolerated)
+    assert set(rows) == {"one", "older", "over", "neither"}
+    assert (rows["one"]["invalid_rows"], rows["one"]["event_unit_restarts"], rows["one"]["source"]) \
+        == ("1", "2", "audit values.exceptions")
+    assert (rows["one"]["over_expected"], rows["one"]["missing"]) == ("", "")
+    assert (rows["older"]["invalid_rows"], rows["older"]["event_unit_restarts"]) == ("2", "")
+    assert rows["older"]["source"].startswith("audit values.quality.tolerated_invalid_seq")
+    assert rows["older"]["missing"] == ("not recorded by this audit: rule_closed_rows, event_unit_restarts, "
+                                        "event_window_requests")
+    assert (rows["over"]["event_window_requests"], rows["over"]["over_expected"]) == ("1", "event_window_requests")
+    assert [rows["neither"][name] for name in ("invalid_rows", "event_unit_restarts")] == ["", ""]
+    assert rows["neither"]["missing"] == rows["neither"]["source"] == cr.NOT_RECORDED
+    assert "not recorded" in cr.NOT_RECORDED
+    block = json.loads((out / "summary.json").read_text())["tolerated"]
+    assert (block["accepted_sessions"], block["not_recorded"]) == (4, ["neither"])
+    assert block["by_id"]["invalid_rows"] == {"total": 3, "max_in_one_session": 2, "sessions_over_expected": 0,
+                                              "expected": None, "sessions_counted": 3}
+    assert block["by_id"]["event_unit_restarts"] == {"total": 2, "max_in_one_session": 2, "sessions_over_expected": 0,
+                                                     "expected": None, "sessions_counted": 2}
+    assert block["by_id"]["event_window_requests"] == {"total": 1, "max_in_one_session": 1,
+                                                       "sessions_over_expected": 1, "expected": 0,
+                                                       "sessions_counted": 2}
+    readme = (out / "README.md").read_text()
+    assert ("- `invalid_rows`: total 3, largest in one session 2, sessions over the expected count 0 (expected null "
+            "until G3b, so no session is over it; over 3 sessions that record it)") in readme
+    assert ("- `event_window_requests`: total 1, largest in one session 1, sessions over the expected count 1 "
+            "(expected 0; over 2 sessions that record it)") in readme
+    assert f"- {cr.NOT_RECORDED}: `neither`." in readme
+
+
+def test_campaign_summary_names_accepted_sessions_without_a_record_of_tolerated_rows(tmp_path, monkeypatch):
+    """F1 of the verification of B9a in campaign mode: the accepted sessions of a campaign whose audits record neither
+    values.exceptions nor values.quality.tolerated_invalid_seq are 'not recorded' by name in tolerated.csv and in the
+    campaign summary, and no total of 0 stands for them."""
+    directory, _, _, _ = make_multi_campaign(tmp_path, monkeypatch)
+    out = tmp_path / "report"
+    assert run_report(["campaign", directory, "--out", out]) == 0
+    accepted = sorted(r["session_id"] for r in read_csv(out / "sessions.csv") if r["status"] == "accepted")
+    assert len(accepted) == 2
+    rows = by_id(read_csv(out / "tolerated.csv"))
+    assert sorted(rows) == accepted
+    assert {(r["invalid_rows"], r["source"], r["missing"]) for r in rows.values()} \
+        == {("", cr.NOT_RECORDED, cr.NOT_RECORDED)}
+    block = json.loads((out / "summary.json").read_text())["tolerated"]
+    assert (block["accepted_sessions"], sorted(block["not_recorded"])) == (2, accepted)
+    assert block["by_id"] == {"invalid_rows": {"total": None, "max_in_one_session": None, "sessions_over_expected": 0,
+                                               "expected": None, "sessions_counted": 0,
+                                               "missing": "no accepted session records it"}}
+    readme = (out / "README.md").read_text()
+    assert "- `invalid_rows`: no accepted session records it" in readme and "total 0" not in readme

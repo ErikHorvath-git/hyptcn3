@@ -31,7 +31,9 @@ KINDS = ("kontrola_wx_memfd", "kontrola_modul_jadra", "kontrola_pocuvajuci_soket
 PROGRAM_KINDS = ("kontrola_wx_memfd", "kontrola_pocuvajuci_soket", "kontrola_zapisovac_pamate",
                  "kontrola_davka_procesov")
 DOSE = {"kontrola_zapisovac_pamate": 64, "kontrola_davka_procesov": 10}
-LEVELS = json.dumps({"schema": "hyptcn3/guest-levels/1", "processes": 3, "meminfo_kb": {"MemAvailable": 1500000}})
+# Package B9: the levels name the modules loaded at the session's start, here the fake guest's (conftest LOADED).
+LEVELS = json.dumps({"schema": "hyptcn3/guest-levels/1", "processes": 3, "meminfo_kb": {"MemAvailable": 1500000},
+                     "modules": ["fuse", "virtio_net"]})
 # The condition of the control's property, and the negative's conditions the property breaks.
 PROPERTY = {
     "kontrola_wx_memfd": (["one process of the occurrence holds an rwx mapping and the memfd"],

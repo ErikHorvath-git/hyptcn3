@@ -603,23 +603,92 @@ def memfd_holders(proc=None):
     return sorted(out)
 
 
-def residues(proc=None):
+# The candidates a control of this boot chose and could not unload (finding F3 of the B9a verification): halt() names
+# each one in this file of STATE while it stays loaded after the stop, and the file is no state file of a kind
+# (_state_files), so it is no state residue. chosen_modules() reads it, so every later return predicate and cleanup of
+# the boot counts the module as a residue; the file goes once none of its modules is loaded. STATE is under /run: the
+# reboot of a group's start empties it.
+LEFT_LOADED = "left-loaded-modules.json"
+# Why a loaded candidate is a residue when the modules of the session's start are not known (residues with None).
+UNKNOWN_START = "the modules loaded at the session's start are not known, so it cannot be ruled out"
+
+
+def _left_names():
+    """The names STATE / LEFT_LOADED holds; every candidate when the file exists but cannot be read (none ruled out)."""
+    try:
+        names = json.loads((STATE / LEFT_LOADED).read_text())
+    except FileNotFoundError:
+        return []
+    except (OSError, ValueError):
+        return list(MODULE_CANDIDATES)
+    return names if type(names) is list and all(type(name) is str for name in names) else list(MODULE_CANDIDATES)
+
+
+def left_loaded():
+    """The candidates a control of this boot chose and could not unload, while they are loaded (STATE / LEFT_LOADED,
+    finding F3 of the B9a verification). The names no longer in /proc/modules leave the file, and the file goes with
+    the last of them; while /proc/modules cannot be read none leaves. Never raises."""
+    names = _left_names()
+    try:
+        still = [name for name in names if name in loaded_modules(PROC)]
+    except OSError:
+        return names
+    try:
+        if still and still != names:
+            (STATE / LEFT_LOADED).write_text(json.dumps(still))
+        elif not still:
+            (STATE / LEFT_LOADED).unlink(missing_ok=True)
+    except OSError:
+        pass  # The names returned are right; the file is tidied at the next read.
+    return still
+
+
+def keep_left_loaded(name):
+    """Name the candidate `name` a control chose in STATE / LEFT_LOADED while it is loaded after its stop (halt;
+    finding F3 of the B9a verification); also when /proc/modules cannot be read, since it cannot be ruled out."""
+    try:
+        if name not in loaded_modules(PROC):
+            return
+    except OSError:
+        pass
+    STATE.mkdir(mode=0o700, exist_ok=True)
+    (STATE / LEFT_LOADED).write_text(json.dumps(sorted(set(_left_names()) | {name})))
+
+
+def chosen_modules():
+    """The candidates a control chose, as a sorted list: the one the module kind's occurrence in place remembers (its
+    state names it), and those a control of this boot chose and could not unload while they stay loaded
+    (left_loaded, finding F3 of the B9a verification)."""
+    name = remembered("kontrola_modul_jadra", "module")
+    return sorted(set(left_loaded()) | ({name} if type(name) is str else set()))
+
+
+def residues(proc, modules_at_start, chosen):
     """Whatever of any control is in the guest (the exact part of the return predicate, skeleton B8 section 3): a
-    process, the memfd or the negative's file, a candidate module, the listening port."""
+    process, the memfd or the negative's file, a candidate module, the listening port.
+
+    A loaded candidate module is a residue only when it was loaded after the session's start (not among
+    `modules_at_start`, the names guest_state.py levels listed then) or a control chose it (`chosen`, chosen_modules:
+    in place, or of this boot and never unloaded): finding S2 of B8, a candidate the kernel loaded at boot is no
+    residue. Without the start's names (None: the stop of an occurrence that never started) no loaded candidate is
+    ruled out, and every one is a residue, as before B9; the residue then says why (UNKNOWN_START)."""
     proc = proc or PROC
     found = [{"residue": "process", "pid": pid, "cmdline": text} for pid, text in control_processes(proc)]
     found += [{"residue": "memfd", "pid": pid, "target": target} for pid, target in memfd_holders(proc)]
     if NEGATIVE_FILE.exists():
         found.append({"residue": "file", "path": str(NEGATIVE_FILE)})
     loaded = loaded_modules(proc)
-    found += [{"residue": "module", "name": name} for name in MODULE_CANDIDATES if name in loaded]
+    why = {"why": UNKNOWN_START} if modules_at_start is None else {}  # The rule the residue was named by.
+    found += [{"residue": "module", "name": name, **why} for name in MODULE_CANDIDATES if name in loaded
+              and (modules_at_start is None or name not in modules_at_start or name in chosen)]
     found += [{"residue": "port", "port": CONTROL_PORT, "local": entry["local"]}
               for entry in listeners(CONTROL_PORT, proc)]
     return found
 
 
 def says(residue):
-    return SAYS[residue["residue"]].format(**residue)
+    text = SAYS[residue["residue"]].format(**residue)
+    return f"{text} ({residue['why']})" if "why" in residue else text
 
 
 def _wx_memfd(polarity, dose):
@@ -838,13 +907,14 @@ def missing(kind, polarity, dose):
     return [name for name, there in parts if not there]
 
 
-def launch(kind, polarity, dose):
+def launch(kind, polarity, dose, modules_at_start):
     """Start the control or its paired negative (skeleton B8 section 1) and return once it is in place (missing);
-    the leader's PID or None."""
+    the leader's PID or None. The occurrence remembers the modules loaded at the session's start (`modules_at_start`,
+    package B9) for its cleanup."""
     if kind == "kontrola_modul_jadra":
         name = module_candidate(PROC)
         values = {"polarity": polarity, "dose": dose, "module": name, "modules_before": len(loaded_modules(PROC)),
-                  **devices()}
+                  **devices(), "modules_at_start": modules_at_start}
         remember(kind, values)
         if polarity == "control":
             run("modprobe", name)
@@ -854,7 +924,7 @@ def launch(kind, polarity, dose):
             dry = run("modprobe", "-n", "-v", name)
             remember(kind, {**values, "dry_run": {"returncode": dry.returncode, "stdout": dry.stdout.strip()[:300]}})
         return None
-    remember(kind, {"polarity": polarity, "dose": dose})
+    remember(kind, {"polarity": polarity, "dose": dose, "modules_at_start": modules_at_start})
     leader = background(kind, ["runuser", "-u", "nobody", "--", "python3", "-c", PROGRAMS[kind],
                                *program_arguments(kind, polarity, dose)], output=STATE / (kind + ".out"))
     absent = []
@@ -874,28 +944,33 @@ def launch(kind, polarity, dose):
 
 def halt(kind):
     """Stop the occurrence: SIGTERM to its session and SIGKILL STOP_WAIT_S later if a process is left; the module of
-    the module kind removed (modprobe -r), the negative's file and the state files deleted."""
+    the module kind removed (modprobe -r), and named in STATE / LEFT_LOADED when it is still loaded after that, also
+    after a failed modprobe -r (keep_left_loaded, finding F3 of the B9a verification); the negative's file and the
+    state files deleted."""
     sid = kill_background(kind)
+    name = remembered(kind, "module") if kind == "kontrola_modul_jadra" else None
     try:
         if sid and not wait_for(lambda: not session_members(sid, PROC), STOP_WAIT_S):
             signal_session(sid, signal.SIGKILL)
             wait_for(lambda: not session_members(sid, PROC), KILL_WAIT_S)
-        name = remembered(kind, "module") if kind == "kontrola_modul_jadra" else None
         if name and name in loaded_modules(PROC):
             run("modprobe", "-r", name)
         if kind == "kontrola_wx_memfd":
             NEGATIVE_FILE.unlink(missing_ok=True)
     finally:
+        if type(name) is str:  # Before the state goes, which names it until then.
+            keep_left_loaded(name)
         for path in _state_files(kind):
             path.unlink(missing_ok=True)
     return sid
 
 
-def cleanup(kind, sid):
+def cleanup(kind, sid, modules_at_start, chosen):
     """Nothing of the occurrence remains after its stop (skeleton B8 section 2): no process of its session, no residue
-    of any control, no state file of the kind. Never raises."""
+    of any control (residues: a candidate module counts against the session's start `modules_at_start` and the
+    modules a control chose, `chosen`), no state file of the kind. Never raises."""
     try:
-        found = residues(PROC)
+        found = residues(PROC, modules_at_start, chosen)
         seen = {r["pid"] for r in found if r["residue"] == "process"}
         found += [{"residue": "process", "pid": pid, "cmdline": " ".join(_argv(pid))[:200]}
                   for pid in (session_members(sid, PROC) if sid else ()) if pid not in seen]
@@ -918,7 +993,7 @@ def control_start(kind, polarity, dose, levels, tolerance):
     if not found["ok"]:
         return {"baseline": found, "started": False}, None, "the return predicate does not hold"
     try:
-        leader = launch(kind, polarity, dose)
+        leader = launch(kind, polarity, dose, guest_state.start_modules(levels))
     except (Exception, SystemExit) as exc:  # noqa: BLE001  Whatever stops the start leaves a record; stop cleans.
         return {"baseline": found, "started": False}, None, _message(exc)
     return {"baseline": found, "started": True}, leader, None
@@ -929,12 +1004,15 @@ def control_stop(kind, polarity, dose):
     cleanup, also after a failed stop."""
     measured = effect(kind, polarity, dose)  # effect() never raises.
     sid = error = None
+    # Read before halt deletes the occurrence's state (package B9, finding S2 of B8): the modules loaded at the
+    # session's start, which its start remembered, and the candidate the module kind chose.
+    at_start, chosen = remembered(kind, "modules_at_start"), chosen_modules()
     try:
         sid = _session_of(kind)
         halt(kind)
     except (Exception, SystemExit) as exc:  # noqa: BLE001  The cleanup below shows what a failed stop left.
         error = _message(exc)
-    return {"effect": measured, "cleanup": cleanup(kind, sid)}, sid, error
+    return {"effect": measured, "cleanup": cleanup(kind, sid, at_start, chosen)}, sid, error
 
 
 CONTROL_USAGE = ("usage: udalosti.py start KIND --polarity control|negative [--dose D] --levels JSON "

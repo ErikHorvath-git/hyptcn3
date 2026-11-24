@@ -217,8 +217,9 @@ def finish_setup(c, root, monkeypatch):
     directory = root / "campaign"
     (directory / "events").mkdir(parents=True)
     (directory / "protocol.json").write_bytes(c.path.read_bytes())
+    # The campaign's plan mode, as campaign.json names it (package B9a, scripts/campaign.py MODE_RULE).
     manifest = {"protocol_sha256": c.sha, "archive_root": str(root / "archive"), "archive_mount": None,
-                "archive_dir": str(root / "archive" / "campaigns" / NAME)}
+                "archive_dir": str(root / "archive" / "campaigns" / NAME), "mode": c.mode}
     copied = []
     monkeypatch.setattr(campaign, "guard_mount", lambda archive_root, mount: None)
     monkeypatch.setattr(campaign, "copy_exclusive", lambda source, destination: copied.append((source, destination)))

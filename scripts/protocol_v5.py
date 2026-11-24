@@ -12,6 +12,8 @@ scripts/host_traffic.py reads the profiles section through profiles_problems():
                                    times and traffic seeds
     planned_rows(p, mode)          one row per planned session, the rows the corpus index and training match accepted
                                    sessions to (package B6a)
+    reset_seed(p)                  the seed of lab/guest_state.py reset --seed at the start of every group of both
+                                   modes (package B9a and its fix): streams.seeded_level.seed, one seeded level
     plans_events(p)                whether its sessions list events and keep events.json (log audit, corpus build)
     analysis_plan(p)               the analysis plan the training and the evaluation read (B6, B7)
     analysis_seed(p, purpose, unit, mode=...)
@@ -72,6 +74,16 @@ and O3 (proposal 4.2 and 9.2) and the classifier's measures, each with its numbe
 one check for this module and tcn/eval.py); analysis.linkage holds the table of the thesis' research questions VO1 to
 VO6 and the outputs that answer them, word for word as the skeleton writes it (LINKAGE; the self-check compares it,
 as it compares the methods of the claims with CONFIRMATORY). Both are G0.
+
+Package B9a (design B9a 1.1, agent P; its fix, F4 of its verification and question Q18 to the lead): every group of
+both modes starts from the one seeded level streams.seeded_level.seed (reset_seed, proposal 5.4, chapter 12), the
+level lab/install.sh seeds, and no random stream draws it; the self-check names a role whose
+group counts per VM differ by more than 1 (S3 of the B4 verification) and an item outside the protocol's deck (S5);
+the control deal is drawn again until its cards are balanced, at a rehearsal size where a balanced deal exists (N1 of
+the confirmation of B4b); where the counts allow it, every dose of class B lies in a scenario of a control and of a
+negative of it (S3 of the B8 verification), which changes the doses of the campaign's plan and nothing else; and
+analysis.interventions.boots must be the count of the carrier boots of the campaign plan (F3 of the verification of
+B7c; the check analysis).
 """
 from collections import Counter
 import copy
@@ -109,12 +121,18 @@ INTERLEAVED = ("test_benign", "test_controls")
 # unit of the plan, so SESSION_PURPOSES and every draw of the plan stay as they were (analysis_seed).
 # Package B7b (design B7b 1.4) adds injections, the placements of the interventions into features (skeleton B7
 # sections 5 and 9) per unit of INJECTION_UNITS; the plan draws it no more than the other two.
+# The fix of package B9a (F4 of its verification, question Q18 to the lead) removed the stream guest_reset of B9a,
+# one seed per group: every group of both modes starts from one seeded level (proposal 5.4, chapter 12), the value
+# streams.seeded_level.seed, which no random stream draws (reset_seed).
 ANALYSIS_PURPOSES = {"z0_alarms": "role", "bootstrap": "comparison", "injections": "insertion"}
 PURPOSES = {"scenario_order": "block", "event_free_position": "role", "event_deck": "role",
             "control_deck": "role", "phase_deck": "role", **ANALYSIS_PURPOSES, "event_times": "session",
             "traffic": "session", "traffic_arrivals": "session", "traffic_choices": "session",
             "traffic_sizes": "session"}
 SESSION_PURPOSES = tuple(purpose for purpose, unit in PURPOSES.items() if unit == "session")
+# lab/guest_state.py reset takes a seed of 1 to 18 digits ([0-9]{1,18}), so streams.seeded_level.seed is an integer
+# of 0 to RESET_SEED_BOUND - 1.
+RESET_SEED_BOUND = 10 ** 18
 METHODS = ("Z0", "Z1", "Z2", "Z3", "Z4", "Z5", "M")
 # Package B7a (skeleton B7 section 2, design B7a 1.4 and 1.6): the methods with free parameters, whose grid
 # analysis.methods.<m>.grid is null until G3a, and the names of their parameters, which a filled grid has exactly (one
@@ -192,7 +210,8 @@ BLANKS = {"better": 2, "not_better": 1, "undecided": 1}
 MAX_EXACT_BOOTS = 20
 MAX_INVALID_ROWS = 6  # Proposal 10.9 and D4: six event boundaries of a session with three events.
 # Redraws of a schedule that meets a full-snapshot guard, of unbalanced scenario blocks, of event-free sessions
-# whose positions are unbalanced, and of the cycle of control cells (judgment, accepted by the lead for B4).
+# whose positions are unbalanced, and of the cycle of control cells (judgment, accepted by the lead for B4); package
+# B9a draws the control deal again within the same bound (N1 of the confirmation of B4b; the same judgment).
 MAX_DRAWS = 1000
 # The lead's must_fix 6 on B4: the phases of the starts and of the stops are stratified by construction over the
 # ten tenths of the collection interval, and the start phases of the whole plan pass a Kolmogorov-Smirnov test
@@ -325,7 +344,10 @@ INNER = {
                        kinds=Each(_fixed("class", "doses", "per_dose", "columns", "note",
                                          expect=Each(_fixed("shift", "direction"))),
                                   extra={MODULE_KIND: _fixed("candidates")})),
-    "streams": _fixed("purposes", "rule", "note"),
+    # The fix of package B9a (F4 of its verification, Q18): seeded_level, the one seeded level of the guest's database
+    # at the start of every group, beside the random streams. It lies in this section so that every protocol that
+    # takes the streams section of the file (scripts/tests/boundary_sessions.py v5_sections) has it.
+    "streams": _fixed("purposes", "rule", "note", seeded_level=_fixed("seed", "note")),
     "analysis": ANALYSIS,
     "rehearsal": _fixed("name_suffix", "group_prefix", "groups_per_role", "note"),
     "determined_at": Some(DETERMINED),
@@ -651,6 +673,14 @@ def _ok_streams(p):
             and set(purposes) == set(PURPOSES) and _text(s["rule"]) and type(s["note"]) is str)
 
 
+def _ok_seeded_level(p):
+    """streams.seeded_level (the fix of package B9a): the seed is an integer of 0 to RESET_SEED_BOUND - 1, which
+    lab/guest_state.py reset --seed takes (1 to 18 digits), and the note is a string."""
+    level = p["streams"]["seeded_level"]
+    return (type(level["seed"]) is int and 0 <= level["seed"] < RESET_SEED_BOUND
+            and type(level["note"]) is str)
+
+
 def _receptive_field(kernel, blocks):
     """The receptive field of the TCN in rows (tcn/model.py recepcne_pole): two convolutions per block, dilations 1,
     2, ..., 2^(blocks - 1)."""
@@ -969,8 +999,8 @@ VALUE_CHECKS = (
     ("group_sessions", lambda p: _count(p["group_sessions"], 1)), ("roles", _ok_roles),
     ("interleave", _ok_interleave), ("scenarios", _ok_scenarios), ("profiles", _ok_profiles),
     ("scenario_rule", _ok_scenario_rule), ("events", _ok_events), ("full_snapshot_guard", _ok_guard),
-    ("controls", _ok_controls), ("streams", _ok_streams), ("analysis", _ok_analysis), ("rehearsal", _ok_rehearsal),
-    ("determined_at", _ok_determined))
+    ("controls", _ok_controls), ("streams", _ok_streams), ("streams.seeded_level", _ok_seeded_level),
+    ("analysis", _ok_analysis), ("rehearsal", _ok_rehearsal), ("determined_at", _ok_determined))
 
 
 def check_layout(p):
@@ -1335,6 +1365,14 @@ def _deal_controls(p, name, groups, g):
     round robin to different sessions, so no session holds a kind twice while a cell holds no more cards of one kind
     than sessions (the v5 file: a kind lays 14 cards along a cycle of 8 cells of 3 sessions; its rehearsal at most 4
     along 6 cells of one session). The slots of a session are in random order.
+
+    Package B9a (N1 of the confirmation of B4b): at other sizes a cell can hold more cards of a kind than sessions,
+    and the cards can leave the balance per VM or per scenario (a rehearsal of 3, 4 or 5 groups per role did). So the
+    whole deal is drawn again from the stream, at most MAX_DRAWS times, until its cards meet the rows of the check
+    controls that a draw decides (_cards_balanced); the counts of the cards and the doses follow from the deck, not
+    from a draw. The campaign of the file and its rehearsal of 2 groups per role pass at their first draw, so their
+    deals stay as they were. ValueError when no draw passes, and before any further draw when the counts alone make
+    the balance per VM impossible (_vm_split_problem: a rehearsal of 3 or 5 groups per role).
     """
     c, slots = p["controls"], p["controls"]["slots_per_session"]
     rng = random.Random(seed(name, "control_deck", CONTROL_ROLE, -1, 0))
@@ -1342,36 +1380,89 @@ def _deal_controls(p, name, groups, g):
              for polarity, n in (("control", c["per_kind"]), ("negative", c["negatives_per_kind"]))]
     sessions = [(group, i) for group in groups for i in range(g)]
     total = len(sessions) * slots
-    dealt = Counter(_rounds(rng, cards, max(c["per_kind"], c["negatives_per_kind"]))[:total])
     cells = {}
     for group, i in sessions:
         cells.setdefault((group["vm"], group["scenarios"][i]), []).append((group["group"], i))
-    cycle, left, sequence = _cell_cycle(cells, rng), {cell: len(cells[cell]) * slots for cell in cells}, []
-    while len(sequence) < total:
+    for draw in range(MAX_DRAWS):
+        dealt = Counter(_rounds(rng, cards, max(c["per_kind"], c["negatives_per_kind"]))[:total])
+        problem = None if draw else _vm_split_problem(p, groups, g, slots, dealt)
+        if problem:  # Every draw deals the same counts, so no draw can help.
+            raise ValueError(f"controls of role {CONTROL_ROLE}: {problem}")
+        cycle, left, sequence = _cell_cycle(cells, rng), {cell: len(cells[cell]) * slots for cell in cells}, []
+        while len(sequence) < total:
+            for cell in cycle:
+                if left[cell]:
+                    sequence.append(cell)
+                    left[cell] -= 1
+        # The polarity that comes first alternates over the kinds of the run (the first one drawn): in a campaign the
+        # first card of a kind starts at the same VM of the cycle, so its VM gets the controls of about half the
+        # kinds.
+        first = rng.sample(("control", "negative"), 2)
+        run = [(kind, polarity) for j, kind in enumerate(rng.sample(sorted(c["kinds"]), len(c["kinds"])))
+               for polarity in (first if j % 2 == 0 else first[::-1]) for _ in range(dealt[kind, polarity])]
+        per_cell = {}
+        for cell, card in zip(sequence, run + [None] * (total - len(run))):
+            per_cell.setdefault(cell, []).append(card)
+        labels = {}
         for cell in cycle:
-            if left[cell]:
-                sequence.append(cell)
-                left[cell] -= 1
-    # The polarity that comes first alternates over the kinds of the run (the first one drawn): in a campaign the
-    # first card of a kind starts at the same VM of the cycle, so its VM gets the controls of about half the kinds.
-    first = rng.sample(("control", "negative"), 2)
-    run = [(kind, polarity) for j, kind in enumerate(rng.sample(sorted(c["kinds"]), len(c["kinds"])))
-           for polarity in (first if j % 2 == 0 else first[::-1]) for _ in range(dealt[kind, polarity])]
-    per_cell = {}
-    for cell, card in zip(sequence, run + [None] * (total - len(run))):
-        per_cell.setdefault(cell, []).append(card)
-    labels = {}
-    for cell in cycle:
-        units = {}  # The cards of one kind together; every empty slot alone.
-        for j, card in enumerate(per_cell.get(cell, [])):
-            units.setdefault(card[0] if card else j, []).append(card)
-        flat = [card for unit in rng.sample(list(units.values()), len(units)) for card in rng.sample(unit, len(unit))]
-        members = rng.sample(cells[cell], len(cells[cell]))
-        for j, card in enumerate(flat):
-            labels.setdefault(members[j % len(members)], []).append(card)
-    for group in groups:
-        group["labels"] = [rng.sample(labels.get((group["group"], i), []), slots) for i in range(g)]
+            units = {}  # The cards of one kind together; every empty slot alone.
+            for j, card in enumerate(per_cell.get(cell, [])):
+                units.setdefault(card[0] if card else j, []).append(card)
+            flat = [card for unit in rng.sample(list(units.values()), len(units))
+                    for card in rng.sample(unit, len(unit))]
+            members = rng.sample(cells[cell], len(cells[cell]))
+            for j, card in enumerate(flat):
+                labels.setdefault(members[j % len(members)], []).append(card)
+        for group in groups:
+            group["labels"] = [rng.sample(labels.get((group["group"], i), []), slots) for i in range(g)]
+        if _cards_balanced(p, groups):
+            break
+    else:
+        raise ValueError(f"controls of role {CONTROL_ROLE}: no deal holds every kind at most once in a session and "
+                         f"every card within 1 per VM and per scenario after {MAX_DRAWS} draws")
     _deal_doses(c, groups, rng)  # Last: every draw above is the one of package B4b.
+
+
+def _vm_split_problem(p, groups, g, slots, dealt):
+    """Why no deal of the cards `dealt` ({card: its count}, the same at every draw) can hold every card within 1 per
+    VM of the protocol, or None. A card dealt n times lies floor(n / VMs) or ceil(n / VMs) times on each VM, so a VM
+    must hold at least the sum of the floors over the cards, and at most the sum of the ceilings (N1 of the
+    confirmation of B4b: a rehearsal of 3 or 5 groups per role puts one group of test_controls more on one VM, 9
+    slots, which the cards cannot follow). The bound named is the lower one: with two VMs and no slot left empty, a
+    VM above the sum of the ceilings leaves the other below the sum of the floors, and a VM with empty slots may hold
+    fewer cards than slots. With more VMs a VM above the ceilings is left to the draws (ValueError after MAX_DRAWS)."""
+    vms = [row["name"] for row in p["vms"]] if "vms" in p else []
+    if len(vms) < 2:
+        return None
+    n, cards = len(vms), sum(dealt.values())
+    low, high = sum(k // n for k in dealt.values()), sum(_ceil_div(k, n) for k in dealt.values())
+    for vm in vms:
+        held = sum(group["vm"] == vm for group in groups) * g * slots
+        if held < low:
+            return (f"VM {vm} holds {held} control slots, but every card within 1 per VM puts {low} to {high} of the "
+                    f"{cards} dealt cards on each VM")
+    return None
+
+
+def _cards_balanced(p, groups):
+    """Whether the cards of group["labels"] meet the rows of the check controls that a draw of _deal_controls
+    decides (N1 of the confirmation of B4b): no session holds a kind twice, and the occurrences of every card of the
+    deck per VM of the protocol and per scenario differ by at most 1."""
+    vms = [row["name"] for row in p["vms"]] if "vms" in p else []
+    where = Counter()
+    for group in groups:
+        for i, labels in enumerate(group["labels"]):
+            kinds = [card[0] for card in labels if card is not None]
+            if len(set(kinds)) != len(kinds):
+                return False
+            for card in labels:
+                if card is not None:
+                    where[card, "vm", group["vm"]] += 1
+                    where[card, "scenario", group["scenarios"][i]] += 1
+    return not any(len(values) > 1 and _spread(Counter({v: where[(kind, polarity), axis, v] for v in values}),
+                                                values) > 1
+                   for kind in p["controls"]["kinds"] for polarity in ("control", "negative")
+                   for axis, values in (("vm", vms), ("scenario", sorted(p["scenarios"]))))
 
 
 def _deal_doses(c, groups, rng):
@@ -1386,7 +1477,20 @@ def _deal_doses(c, groups, rng):
     dose by dose, the larger counts first, each VM takes the even share of the dose and the VMs with the most cards
     left to fill take one more each, until the remainder is dealt. Every share of a dose then differs by at most 1
     between the VMs, since the card's occurrences per VM do (_deal_controls). On each VM the card's occurrences take
-    their doses in random order. ValueError when the doses of a card do not fit its occurrences per VM."""
+    their doses in random order. ValueError when the doses of a card do not fit its occurrences per VM.
+
+    Package B9a (S3 of the B8 verification): split over the VMs only, a dose bound itself to scenarios (both 64 MiB
+    controls of the writer lay in eshop_low and both of its negatives in corp_high), so the negative of a dose did not
+    lie in its control's conditions. So, where the counts allow it, every dose that both cards of the kind hold lies in
+    a scenario of a control and of a negative of it. They allow it when each such dose has, on both cards, at least
+    as many occurrences as there are VMs, so that the split gives it one on every VM, and both cards lie in at least
+    as many common scenarios as there are such doses. Then each dose takes a common scenario of its own and in it one
+    occurrence of the control and one of the negative, all drawn from the stream (_anchor_doses); every VM's other
+    occurrences take the rest of its share in random order. In a campaign of the file a card of class B has 7
+    occurrences, at least one in each of the 4 scenarios, and its doses 2, 2 and 3, at least one on each of the 2 VMs,
+    so all three doses of both kinds are paired. In its rehearsal a card has 1 or 2 occurrences, so no dose lies on
+    both VMs, and the doses are dealt as before, the draws included, as in every kind where the counts do not allow
+    it."""
     where = {}  # (kind, polarity) -> its slots [(group, session index, slot index)] in plan order
     for group in groups:
         for i, labels in enumerate(group["labels"]):
@@ -1402,22 +1506,62 @@ def _deal_doses(c, groups, rng):
                     group["labels"][i][j] = (kind, polarity, None)
             continue
         deck = _rounds(rng, list(zip(k["doses"], k["per_dose"])), max(k["per_dose"]))
-        for polarity in ("control", "negative"):
-            slots = where.get((kind, polarity), [])
-            counts = Counter(deck[:len(slots)])
-            mine = {vm: [slot for slot in slots if slot[0]["vm"] == vm] for vm in vms}
-            left, shares = {vm: len(mine[vm]) for vm in vms}, {vm: [] for vm in vms}
-            rank = {vm: r for r, vm in enumerate(rng.sample(vms, len(vms)))}
-            for dose in sorted(counts, key=lambda d: (-counts[d], k["doses"].index(d))):
-                even, rest = divmod(counts[dose], len(vms))
-                for r, vm in enumerate(sorted(vms, key=lambda v: (-left[v], rank[v]))):
-                    shares[vm] += [dose] * (even + (r < rest))
-                    left[vm] -= even + (r < rest)
-            if any(left.values()):
-                raise ValueError(f"the doses of {kind}/{polarity} do not fit its occurrences per VM")
-            for vm in vms:
-                for (group, i, j), dose in zip(mine[vm], rng.sample(shares[vm], len(shares[vm]))):
-                    group["labels"][i][j] = (kind, polarity, dose)
+        cards = {polarity: where.get((kind, polarity), []) for polarity in ("control", "negative")}
+        counts = {polarity: Counter(deck[:len(slots)]) for polarity, slots in cards.items()}
+        paired = [dose for dose in k["doses"] if all(counts[polarity][dose] >= len(vms) for polarity in cards)]
+        common = sorted(set.intersection(*({group["scenarios"][i] for group, i, _ in slots}
+                                           for slots in cards.values())))
+        anchored = paired if len(common) >= len(paired) else []
+        shares = {}
+        for polarity, slots in cards.items():
+            shares[polarity] = _dose_shares(kind, polarity, k["doses"], slots, counts[polarity], vms, rng)
+            if not anchored:
+                _lay_doses(kind, polarity, slots, shares[polarity], vms, rng)
+        if anchored:
+            _anchor_doses(kind, cards, shares, anchored, common, vms, rng)
+
+
+def _dose_shares(kind, polarity, doses, slots, counts, vms, rng):
+    """{VM: the doses of the occurrences `slots` of the card (kind, polarity) on it}, the doses `counts` split over
+    the VMs as _deal_doses states it (design B8 1.2). ValueError when they do not fit the occurrences per VM."""
+    mine = {vm: [slot for slot in slots if slot[0]["vm"] == vm] for vm in vms}
+    left, shares = {vm: len(mine[vm]) for vm in vms}, {vm: [] for vm in vms}
+    rank = {vm: r for r, vm in enumerate(rng.sample(vms, len(vms)))}
+    for dose in sorted(counts, key=lambda d: (-counts[d], doses.index(d))):
+        even, rest = divmod(counts[dose], len(vms))
+        for r, vm in enumerate(sorted(vms, key=lambda v: (-left[v], rank[v]))):
+            shares[vm] += [dose] * (even + (r < rest))
+            left[vm] -= even + (r < rest)
+    if any(left.values()):
+        raise ValueError(f"the doses of {kind}/{polarity} do not fit its occurrences per VM")
+    return shares
+
+
+def _lay_doses(kind, polarity, slots, shares, vms, rng):
+    """The occurrences `slots` of the card (kind, polarity) on every VM take the doses of its share in random order."""
+    for vm in vms:
+        mine = [slot for slot in slots if slot[0]["vm"] == vm]
+        for (group, i, j), dose in zip(mine, rng.sample(shares[vm], len(shares[vm]))):
+            group["labels"][i][j] = (kind, polarity, dose)
+
+
+def _anchor_doses(kind, cards, shares, doses, common, vms, rng):
+    """S3 of the B8 verification: each dose of `doses` takes a scenario of `common` (where both cards lie) of its
+    own, and in it one occurrence of the control and one of the negative, drawn from the stream, take the dose; each
+    dose has a share on every VM, so any occurrence can. Then the other occurrences of every VM take the rest of its
+    share in random order (_lay_doses)."""
+    fixed = {polarity: {} for polarity in cards}
+    for dose, scenario in zip(doses, rng.sample(common, len(doses))):
+        for polarity, slots in cards.items():
+            n = rng.choice([n for n, (group, i, _) in enumerate(slots) if group["scenarios"][i] == scenario])
+            fixed[polarity][n] = dose
+            shares[polarity][slots[n][0]["vm"]].remove(dose)
+    for polarity, slots in cards.items():
+        for n, dose in fixed[polarity].items():
+            group, i, j = slots[n]
+            group["labels"][i][j] = (kind, polarity, dose)
+        _lay_doses(kind, polarity, [slot for n, slot in enumerate(slots) if n not in fixed[polarity]],
+                   shares[polarity], vms, rng)
 
 
 def _deal_tenths(name, role, groups):
@@ -1534,13 +1678,36 @@ def plan(p, mode="campaign"):
     return doc
 
 
+class OutsideDeck(ValueError):
+    """A session holds an item outside the protocol's deck (S5 of the B4 verification): replacement() names it
+    instead of failing on a missing key."""
+
+
+def _outside_types(p, session):
+    """A reason for every event of `session` whose type lies outside events.types (S5 of the B4 verification)."""
+    return [f"type {x.get('type')} is outside events.types" for x in session.get("events", [])
+            if x.get("type") not in p["events"]["types"]]
+
+
+def _outside_deck(p, session):
+    """A reason for every item of `session` outside the protocol's deck: an event type outside events.types, a
+    control kind outside controls.kinds. No session of plan() has one."""
+    return _outside_types(p, session) + [
+        f"control kind {x['kind']} is outside controls.kinds" for x in session.get("controls", [])
+        if x.get("kind") is not None and x["kind"] not in p["controls"]["kinds"]]
+
+
 def replacement(p, session, attempt, *, mode="campaign"):
     """Attempt `attempt` (2 or later) of a planned session: the same VM, role, group, position, scenario and event
     types or control kinds (with their polarities and doses, package B8) in order, and the same tenths of the
     interval for every start and stop (design B4b: the phases of a role stay stratified when a session is replaced);
-    new phases within those tenths, new durations and gaps, and new traffic seeds from the streams of this attempt."""
+    new phases within those tenths, new durations and gaps, and new traffic seeds from the streams of this attempt.
+    OutsideDeck (a ValueError) names an item outside the protocol's deck (S5 of the B4 verification)."""
     if type(attempt) is not int or attempt < 2:
         raise ValueError("a replacement is attempt 2 or later")
+    outside = _outside_deck(p, session)
+    if outside:
+        raise OutsideDeck(f"no replacement of {_label(session)}: {outside[0]}")
     name = _shape(p, mode)[0]
     group, position = session["group"], session["position"]
     seeds = dict(session["seeds"], **_session_seeds(name, group, position, attempt))
@@ -1575,6 +1742,24 @@ def planned_rows(p, mode):
     if repeated:
         raise ValueError("planned rows cannot be matched: group " + repeated[0])
     return rows
+
+
+def reset_seed(p):
+    """The seed of lab/guest_state.py reset --seed at the start of every group of both modes: streams.seeded_level.seed,
+    the one seeded level of the guest's database (proposal 5.4: every group starts with the database restored to its
+    seeded level; chapter 12: a fixed seeded state; question Q18 to the lead, provisional by its proposal: the level
+    lab/install.sh seeds, seed 0). The fix of package B9a (F4 of its verification) replaced the per-group stream
+    guest_reset of B9a by this one value. ValueError for another schema, and for a protocol whose seeded level the
+    loader would refuse (`invalid streams.seeded_level`)."""
+    if type(p) is not dict or p.get("schema") != SCHEMA:
+        raise ValueError("the seed of the guest's reset requires protocol schema 3")
+    try:
+        good = _ok_seeded_level(p)
+    except (KeyError, TypeError, AttributeError):
+        good = False
+    if not good:
+        raise ValueError("invalid streams.seeded_level")
+    return p["streams"]["seeded_level"]["seed"]
 
 
 # ------------------------------------------------------------------ the self-check
@@ -1637,6 +1822,9 @@ def check_reachability(doc, schedule=None):
 
 
 def check_role_sizes(doc, schedule):
+    """In a campaign the groups of a role are a multiple of the scenarios; every role has a group on every VM, and
+    within a role the group counts of the VMs differ by at most 1 (S3 of the B4 verification: 11 of the 12 groups of
+    train on one VM passed this check and the scenario balance). A group counts on the VM of its first session."""
     k = len(doc["scenarios"])
     groups = _groups(schedule)
     vms = [row["name"] for row in doc["vms"]] if "vms" in doc else []
@@ -1647,6 +1835,9 @@ def check_role_sizes(doc, schedule):
             reasons.append(f"groups of role {role} are not a multiple of {k}")
         on = {s.get("vm") for ss in mine for s in ss}
         reasons += [f"role {role} has no group on VM {vm}" for vm in vms if vm not in on]
+        per_vm = Counter(ss[0].get("vm") for ss in mine)
+        if mine and len(vms) > 1 and _spread(per_vm, vms) > 1:
+            reasons.append(f"role {role}: groups per VM differ by more than 1")
     return reasons
 
 
@@ -1688,13 +1879,15 @@ def check_events(doc, schedule):
     the verification of B4b): every session has a count of per_session events and no type twice, and no group (a
     boot) holds a type twice; every group one event-free session, whose positions and scenarios differ in a role by
     at most 1; in a role the counts per type differ by at most 1, and so do the counts of each type per scenario and
-    per VM; min_per_type in a campaign; no events in role test_controls."""
+    per VM; min_per_type in a campaign; no events in role test_controls. A type outside events.types is named (S5 of
+    the B4 verification)."""
     e = doc["events"]
     allowed, count, names = e["per_session"], max(e["per_session"]), sorted(doc["scenarios"])
     vms = [row["name"] for row in doc["vms"]] if "vms" in doc else []
     sessions = [s for s in schedule["sessions"] if s["role"] != CONTROL_ROLE]
     reasons = [f"session {_label(s)} has {len(s.get('events', []))} events (allowed {json.dumps(allowed)})"
                for s in sessions if len(s.get("events", [])) not in allowed]
+    reasons += [f"session {_label(s)}: {why}" for s in sessions for why in _outside_types(doc, s)]
     for s in sessions:
         held = Counter(x["type"] for x in s.get("events", []))
         reasons += [f"session {_label(s)} holds type {t} twice" for t in sorted(held) if held[t] > 1]
@@ -1748,13 +1941,17 @@ def check_controls(doc, schedule):
     The doses (package B8, design B8 1.2): a control of a kind of class A has none (null), one of class B one of the
     kind's doses; in a campaign each dose of a kind of class B has its count per_dose among the kind's controls and
     the same among its negatives, a rehearsal deals a prefix of the kind's deck of doses, so the counts per dose of a
-    card differ by at most 1; on the VMs the occurrences of every dose of a card differ by at most 1."""
+    card differ by at most 1; on the VMs the occurrences of every dose of a card differ by at most 1.
+
+    Package B9a (S3 of the B8 verification, _deal_doses): where the counts allow it, every dose that both cards of a
+    kind of class B hold on every VM lies in a scenario of a control and of a negative of it. They allow it when both
+    cards lie in at least as many common scenarios as there are such doses."""
     c, slots = doc["controls"], doc["controls"]["slots_per_session"]
     cards = {(kind, polarity): n for kind in sorted(c["kinds"])
              for polarity, n in (("control", c["per_kind"]), ("negative", c["negatives_per_kind"]))}
     vms, names = [row["name"] for row in doc["vms"]] if "vms" in doc else [], sorted(doc["scenarios"])
     sessions = [s for s in schedule["sessions"] if s["role"] == CONTROL_ROLE]
-    reasons, counts, empty, where, doses = [], Counter(), 0, Counter(), Counter()
+    reasons, counts, empty, where, doses, dosed = [], Counter(), 0, Counter(), Counter(), {}
     for s in sessions:
         items = s.get("controls", [])
         if len(items) != slots:
@@ -1775,6 +1972,7 @@ def check_controls(doc, schedule):
                 elif dose is not None:
                     doses[x["kind"], x["polarity"], dose] += 1
                     doses[x["kind"], x["polarity"], dose, s.get("vm")] += 1
+                    dosed.setdefault((x["kind"], x["polarity"], dose), set()).add(s["scenario"])
         held = Counter(x["kind"] for x in items if x.get("kind") is not None)
         reasons += [f"session {_label(s)} holds control kind {kind} twice" for kind in sorted(held) if held[kind] > 1]
     dealt = len(sessions) * slots
@@ -1800,6 +1998,16 @@ def check_controls(doc, schedule):
         reasons += [f"control {kind}/{polarity}: occurrences of dose {dose} per VM differ by more than 1"
                     for dose in k["doses"] if len(vms) > 1
                     and _spread(Counter({vm: doses[kind, polarity, dose, vm] for vm in vms}), vms) > 1]
+    for kind, k in sorted(c["kinds"].items()):
+        if k["class"] != "B" or not sessions:
+            continue
+        both = [dose for dose in k["doses"] if all(doses[kind, polarity, dose, vm] for polarity in
+                                                   ("control", "negative") for vm in vms or [None])]
+        lie = [{name for name in names if where[kind, polarity, "scenario", name]} for polarity in ("control",
+                                                                                                    "negative")]
+        if len(lie[0] & lie[1]) >= len(both):
+            reasons += [f"control {kind}: dose {dose} lies in no scenario of both its controls and its negatives"
+                        for dose in both if not dosed[kind, "control", dose] & dosed[kind, "negative", dose]]
     if sessions and empty != max(0, dealt - sum(cards.values())):
         reasons.append(f"{empty} empty control slots (expected {max(0, dealt - sum(cards.values()))})")
     if any(s.get("controls") for s in schedule["sessions"] if s["role"] != CONTROL_ROLE):
@@ -1821,10 +2029,23 @@ def _guarded(doc, sessions, prefix=""):
     return reasons
 
 
+def _replacements(doc, schedule):
+    """[(session, its replacement: attempt 2)] of the plan's sessions in order, and a reason for each session that
+    has none: replacement() refuses an item outside the protocol's deck by name (S5 of the B4 verification), which
+    a check of the replacements names instead of failing as a whole with `cannot check`."""
+    pairs, reasons = [], []
+    for s in schedule["sessions"]:
+        try:
+            pairs.append((s, replacement(doc, s, 2, mode=schedule["mode"])))
+        except OutsideDeck as error:
+            reasons.append(str(error))
+    return pairs, reasons
+
+
 def check_full_snapshot_guard(doc, schedule):
     """No planned item starts in a guard, and neither does an item of a replacement (attempt 2 draws new times)."""
-    replacements = [replacement(doc, s, 2, mode=schedule["mode"]) for s in schedule["sessions"]]
-    return _guarded(doc, schedule["sessions"]) + _guarded(doc, replacements, "replacement of ")
+    pairs, missing = _replacements(doc, schedule)
+    return _guarded(doc, schedule["sessions"]) + missing + _guarded(doc, [r for _, r in pairs], "replacement of ")
 
 
 def _timing_problems(doc, sessions, prefix=""):
@@ -1860,8 +2081,9 @@ def _timing_problems(doc, sessions, prefix=""):
 def check_times(doc, schedule):
     """Every planned item keeps first_s, its duration span, min_gap_s and tail_s, and so does every item of a
     replacement (attempt 2 draws new times; S1 of the B4 verification, the lead's must_fix 6 on B4)."""
-    replacements = [replacement(doc, s, 2, mode=schedule["mode"]) for s in schedule["sessions"]]
-    return _timing_problems(doc, schedule["sessions"]) + _timing_problems(doc, replacements, "replacement of ")
+    pairs, missing = _replacements(doc, schedule)
+    return (_timing_problems(doc, schedule["sessions"]) + missing
+            + _timing_problems(doc, [r for _, r in pairs], "replacement of "))
 
 
 def ks_distance(values):
@@ -1927,15 +2149,18 @@ def check_streams(doc, schedule):
     Package B7a: the streams of the analysis (ANALYSIS_PURPOSES) are no streams of the plan, so no session and no
     replacement draws one, and their seeds under the plan's name (z0_alarms per role, bootstrap per comparison of
     CONFIRMATORY, which the analysis check binds to the file, and since package B7b injections per unit of
-    INJECTION_UNITS) share none with each other or with the plan."""
+    INJECTION_UNITS) share none with each other or with the plan.
+
+    Package B9a: a session whose replacement cannot be drawn is named (_replacements, S5 of the B4 verification). The
+    seed of the guest's reset is no stream since the fix of B9a (streams.seeded_level, reset_seed)."""
     k = len(doc["scenarios"])
     groups = _groups(schedule)
     blocks = {}
     for role in ROLES:
         mine = [group for group, ss in groups.items() if ss[0]["role"] == role]
         blocks.update({group: i // k + 1 for i, group in enumerate(mine)})
-    replacements = [replacement(doc, s, 2, mode=schedule["mode"]) for s in schedule["sessions"]]
-    owners, reasons = {}, []
+    pairs, reasons = _replacements(doc, schedule)
+    replacements, owners = [r for _, r in pairs], {}
     for s in schedule["sessions"] + replacements:
         for purpose, value in s["seeds"].items():
             if purpose not in ANALYSIS_PURPOSES:  # A seed of the analysis in the plan is a reason of its own (below).
@@ -1954,7 +2179,7 @@ def check_streams(doc, schedule):
                     if purpose in ANALYSIS_PURPOSES]
     reasons += [f"session {_label(s)}: seed differs from seeds.traffic" for s in schedule["sessions"]
                 if s.get("seed") != s["seeds"].get("traffic")]
-    for s, r in zip(schedule["sessions"], replacements):
+    for s, r in pairs:
         for field in ("vm", "role", "group", "position", "scenario"):
             if r.get(field) != s.get(field):
                 reasons.append(f"replacement of {_label(s)} changes {field}")
@@ -2030,8 +2255,9 @@ def not_applicable(doc):
 
 def check_analysis(doc, schedule=None, *, stage="G0"):
     """The analysis plan is complete and compares K1, K2a and K2b with the methods of proposal 4.1; its linkage table
-    is the lead's word for word (LINKAGE, package B7c); null only at a path of determined_at or where it means none
-    (not_applicable); with stage Gk every path of a stage up to Gk holds a value."""
+    is the lead's word for word (LINKAGE, package B7c); its count of carrier boots is the campaign plan's (package
+    B9a); null only at a path of determined_at or where it means none (not_applicable); with stage Gk every path of
+    a stage up to Gk holds a value."""
     if stage not in STAGES:
         raise ValueError("unknown stage: " + str(stage))
     reasons = []
@@ -2051,6 +2277,19 @@ def check_analysis(doc, schedule=None, *, stage="G0"):
             reasons.append(f"analysis.linkage.{question} is {json.dumps(linkage[question], ensure_ascii=False)}, "
                            "the lead's table (skeleton B7, addendum 2 point 4) says "
                            f"{json.dumps(text, ensure_ascii=False)}")
+    # Package B9a (F3 of the verification of B7c): analysis.interventions.boots is the number of boots of the carrier
+    # roles of the campaign plan, one per group of test_benign and of test_controls (plan() makes roles[role] groups
+    # of every role in mode campaign); tcn/k2.py refuses another number only in the final evaluation, after the seal
+    # is consumed. The self-check binds it in both of its modes, since both check the one file; a rehearsal has its
+    # own carrier boots (2 + 2 in the file), which neither tcn/k2.py nor this check binds.
+    interventions = (analysis if type(analysis) is dict else {}).get("interventions")
+    boots = interventions.get("boots") if type(interventions) is dict else None
+    roles = doc.get("roles") if type(doc.get("roles")) is dict else {}
+    carriers = [roles.get(role) for role in CARRIERS]
+    if type(boots) is int and all(type(n) is int for n in carriers) and boots != sum(carriers):
+        reasons.append(f"analysis.interventions.boots is {boots}, the carrier roles of the campaign plan hold "
+                       f"{sum(carriers)} boots (" + ", ".join(f"{role} {n}" for role, n in zip(CARRIERS, carriers))
+                       + ")")
     determined = doc.get("determined_at") if type(doc.get("determined_at")) is dict else {}
     patterns = [x for paths in determined.values() if type(paths) is list for x in paths if type(x) is str]
     none = not_applicable(doc)

@@ -296,7 +296,12 @@ def test_session_records_cover_both_layouts_and_survive_a_concurrent_writer(tmp_
 
 @pytest.fixture
 def multi(tmp_path, monkeypatch):
-    """Fake capture/audit subprocesses for two VMs; real orchestration, files and archiver."""
+    """Fake capture/audit subprocesses for two VMs; real orchestration, files, archiver and final index. The audit
+    writes a real feature archive and the values of a real audit record (scripts/tests/kampan_v5.py audit_values) at
+    the time of its capture (one clock for both VMs, kampan_v5.Clock), and finish_corpus is the real one behind a spy
+    that records its arguments (harness row B9 "Hotové, keď": the final index is no longer faked; finding F2 of the
+    verification of B9a)."""
+    from scripts.tests.kampan_v5 import SMALL_GRID, Clock, audit_values
     directory = tmp_path / "multi-campaign"
     for name in ("events", "groups", "attempts", "logs"):
         (directory / name).mkdir(parents=True)
@@ -306,12 +311,15 @@ def multi(tmp_path, monkeypatch):
     doc = json.loads(multi_protocol(tmp_path, roles=dict.fromkeys(("train", "dev", "calibration", "test_benign"), 2),
                                     min_free_gib=0, replacement=dict(REPLACEMENT)).read_text())
     doc["scenarios"] = {"quiet": doc["scenarios"]["quiet"]}
+    doc.update(SMALL_GRID)  # Real archives of 96 rows, not 720 (kampan_v5.SMALL_GRID).
     write_new(directory / "protocol.json", doc)
     p = collection.protocol(directory / "protocol.json")
     rows = collection.plan(p)["sessions"]
     for i, row in enumerate(rows):
         row["session_id"] = f"multi-campaign_{i:02d}_{row['vm']}"
     env = lambda vm: {"kernel": "test-kernel", "machine_id": "machine-" + vm, "stack_sha256": "test-stack"}
+    # The current extractor and profile: the production check of the real index compares both with the tree.
+    profile, clock = c.tree_hashes(c.ROOT / p["profile"]), Clock()
     per_vm = {}
     for vm in ("a", "b"):
         write_new(directory / f"pilot-{vm}.json", {"synthetic": vm})
@@ -319,7 +327,7 @@ def multi(tmp_path, monkeypatch):
                       "estimated_session_bytes_with_reserve": 100, "estimated_archive_bytes_per_session": 10}
     manifest = {"schema": "hyptcn3/collection-campaign/1", "id": directory.name,
                 "workspace": str(c.ROOT), "commit": "test-commit", "sessions": rows,
-                "owner": {"name": "test-owner"}, "extractor_sha256": {"test": "test"}, "vms": per_vm,
+                "owner": {"name": "test-owner"}, "extractor_sha256": c.extractor_hashes(), "vms": per_vm,
                 "protocol_sha256": digest(directory / "protocol.json"),
                 "archive_dir": str(external), "archive_root": str(external), "archive_mount": {},
                 "planned_capture_hours": len(rows)}
@@ -354,6 +362,7 @@ def multi(tmp_path, monkeypatch):
         if "run" in command:
             vm = command[command.index("--vm") + 1]
             sid = command[command.index("--session-id") + 1]
+            assert "--mode" not in command and "--attempt" not in command  # Schemas 1 and 2: collection.py run refuses both (package B9a); they are of schema 3.
             row = next(r for r in rows if r["session_id"] == sid.split("-r")[0])
             assert row["vm"] == vm and command[command.index("--pilot-report") + 1].endswith(f"pilot-{vm}.json")
             for key in ("role", "group", "scenario", "seed"):  # A replacement repeats the frozen assignment.
@@ -369,9 +378,11 @@ def multi(tmp_path, monkeypatch):
                        **({"replaces": replaces} if replaces else {}),
                        "campaign_id": manifest["id"], "commit": manifest["commit"], "measurement_dirty": [],
                        "host_context": {"qemu": qemu(collection.for_vm(p, vm)["domain"])},
-                       "protocol_sha256": manifest["protocol_sha256"], "guest_before": identity})
+                       "protocol_sha256": manifest["protocol_sha256"], "guest_before": identity,
+                       "typ": "benign", "collector_sha256": "test-collector", "profile_sha256": profile})
             (src / "raw").mkdir()
             (src / "raw/frame.vmicd").write_bytes(b"synthetic RAM " + sid.encode())
+            start, end = clock.take(p)
             if sid in state["incomplete"]:  # The collector failed in the measured phase.
                 if state["lose"] == "boot":
                     state["boot"][vm] = "unexpected-reboot"
@@ -380,29 +391,27 @@ def multi(tmp_path, monkeypatch):
                 write_new(src / "end.json", {"completed": False, "measurement_started": True,
                                              "error": "ValueError: collector failed; see capture.log"})
                 return 2
-            write_new(src / "end.json", {"completed": True, "guest_after": identity, "measurement_started": True})
+            write_new(src / "end.json", {"completed": True, "guest_after": identity, "measurement_started": True,
+                                         "measure_start_unix": start, "measure_end_unix": end})
             return 0
         src = Path(command[command.index("audit") + 1])
         report = Path(command[command.index("--out") + 1])
         row = next(r for r in rows if r["session_id"] == src.name.split("-r")[0])
         state["calls"].append(("audit", row["vm"], row["group"]))
-        feature = report.with_suffix(".npz")
-        feature.write_bytes(b"synthetic feature archive " + src.name.encode())
         accepted = src.name not in state["reject"]
+        values = audit_values(src, read_json(directory / "protocol.json"), directory / "protocol.json", report,
+                              extractor=manifest["extractor_sha256"], accepted=accepted,
+                              rejection=("timing:gap", "missed sampling slot"))
+        assert values["role"] == row["role"]
         write_new(report, {"schema": "hyptcn3/collection-audit/1", "commit": manifest["commit"],
-                  "measurement_dirty": [],
-                  "values": {"accepted": accepted, "reasons": [] if accepted else ["missed sampling slot"],
-                             "protocol_sha256": manifest["protocol_sha256"],
-                             "extractor_sha256": manifest["extractor_sha256"], "session_dir": str(src),
-                             "role": row["role"], "session_sha256": digest(src / "session.json"),
-                             "source_sha256": {"frame.vmicd": digest(src / "raw/frame.vmicd")},
-                             "features": str(feature), "features_sha256": digest(feature)}})
+                  "measurement_dirty": [], "values": values})
         return 0 if accepted else 2
     monkeypatch.setattr(c, "run_child", child)
+    real_finish = c.finish_corpus
 
-    def finish(directory, manifest, protocol, reports):
+    def finish(directory, manifest, protocol, reports):  # The spy: the call is recorded, then the real index.
         state["finished"].append((manifest["vm"], protocol, list(reports)))
-        c.update_state(directory, vm=manifest["vm"], status="complete", stage="complete")
+        return real_finish(directory, manifest, protocol, reports)
     monkeypatch.setattr(c, "finish_corpus", finish)
     monkeypatch.setattr(c, "process_identity", lambda pid: {"alive": pid} if pid == os.getpid() else None)
     return state
@@ -872,3 +881,35 @@ def test_digest_releases_page_cache_of_large_files(tmp_path, monkeypatch):
     assert seen == []
     collection.digest(big)
     assert seen == [collection.os.POSIX_FADV_DONTNEED]
+
+
+def test_four_groups_per_role_of_the_v5_shape_keep_the_time_order_without_deadlock(tmp_path):
+    """ORDER_RULE (B6a F7, PRE_B9; package B9a): two runners of a plan of the v5 shape with 4 groups in every role, each
+    taking its VM's sessions in plan order and waiting while the other VM has an unfinished session of a lower time
+    rank (campaign.earlier_roles), finish all 60 sessions, and neither starts a session while the other VM still has
+    one of a lower rank. Ranked by the order of the protocol's roles they deadlocked at the first test_controls group
+    of each VM (a plan of 1 to 3 groups per role does not)."""
+    from scripts import protocol_v5
+    from scripts.tests.test_campaign import v5_protocol
+    (tmp_path / "source").mkdir()
+    p = collection.protocol(v5_protocol(tmp_path / "source" / "protocol.json",
+                                        roles=dict.fromkeys(protocol_v5.ROLES, 4)))
+    rows = protocol_v5.plan(p, mode="campaign")["sessions"]
+    for i, row in enumerate(rows):
+        row["session_id"] = f"poradie_{i:03d}_{row['vm']}"
+    directory = tmp_path / "campaign"
+    (directory / "attempts").mkdir(parents=True)
+    manifest = {"sessions": rows}
+    queues = {vm: [r for r in rows if r["vm"] == vm] for vm in ("a", "b")}
+    rank, done = protocol_v5.TIME_RANK, []
+    while queues["a"] or queues["b"]:
+        moved = False
+        for vm, other in (("a", "b"), ("b", "a")):
+            if queues[vm] and not c.earlier_roles(directory, manifest, p, queues[vm][0]):
+                row = queues[vm].pop(0)
+                assert all(rank[r["role"]] >= rank[row["role"]] for r in queues[other]), row["session_id"]
+                write_new(directory / "attempts" / (row["session_id"] + ".done.json"), {})
+                done.append(row["session_id"])
+                moved = True
+        assert moved, f"the runners deadlock: VM a at {queues['a'][0]['group']}, VM b at {queues['b'][0]['group']}"
+    assert sorted(done) == sorted(r["session_id"] for r in rows) and len(done) == 60
