@@ -68,6 +68,15 @@ STOP_REQUEST_SUFFIXES = ("_stop-request.json", "_stop-request-stale.json")
 STOP_REQUEST = re.compile(r".*_stop-request(?:-(?P<vm>[a-z0-9]{1,16}))??(?P<stale>-stale)?\.json")
 # campaign.reject: attempts/<session>.rejected.json; a replacement is the session <plan session>-r<n>.
 REJECTION_SCHEMA = "hyptcn3/campaign-rejection/1"
+# Package B9b (design B9b 1.1 and 1.3): the record of every ending of a campaign, written by scripts/campaign.py into
+# data/results/ as kampan_<campaign id>_<ending>_<UTC stamp>.json.
+ENDING_SCHEMA = "hyptcn3/campaign-ending/1"
+ENDING_NAME = "kampan_{id}_*.json"
+START_FAILURE_SCHEMA = "hyptcn3/campaign-group-start-failure/1"  # scripts/campaign.py START_FAILURE_SCHEMA (Q22).
+# The runner states of a campaign of protocol schema 3 that always come with an ending record (design B9b 1.2: the
+# pause and the invalid campaign write theirs); stopped and complete also name the stop after a boundary and one VM's
+# end before the other's, so the report shows them with the records it finds and requires none for them.
+RECORDED_STATES = ("paused", "invalid")
 
 DEFINITIONS = {
     "status": {
@@ -154,6 +163,30 @@ DEFINITIONS = {
                   "the total over the accepted sessions that record it, the largest count in one of them and the "
                   "number of them over the expected count (the register's expected, null until G3b: then none is "
                   "over it and the number is 0)."),
+    "ending": ("Package B9b: every ending of a campaign (complete, paused, stopped, invalid, closed by the operator) "
+               "writes one record into data/results/ (kampan_<campaign id>_<ending>_<UTC stamp>.json, schema "
+               "hyptcn3/campaign-ending/1, scripts/campaign.py). The report reads every such record of this campaign "
+               "from the results directory (--results-dir, default <campaign_dir>/../../results, which is "
+               "data/results beside data/campaigns) and lists them in the order of their date with their ending, "
+               "cause, stage and counts, as recorded; the state of each runner is its status file's status "
+               "(paused: the limit of replacements was exhausted, for review; invalid: a second exhaustion or a "
+               "changed measurement or lab hash; stopped: early stop, an error or an operator's stop). A runner of a "
+               "campaign of protocol schema 3 (campaign.json mode) paused or invalid without any ending record of "
+               "the campaign is a consistency problem (those two states always write one)."),
+    "group_start_failures": ("Package B9b, question Q22 (decided by its proposal until the lead answers): a failed "
+                             "start of a group (labctl stop, start, reset or pretouch) is no rejection of a session, "
+                             "since no session was measured, so it is counted apart from the rejections by cause: "
+                             "nothing is replaced and the limit is not charged, and a resumed run starts the group "
+                             "again from its beginning (scripts/campaign.py GROUP_START_RULE). The report lists the "
+                             "failures by group with VM, step, date, cause and reason, from values."
+                             "group_start_failures of the campaign's last ending record that lists them, else, while "
+                             "no ending record lists them, from groups/<group>.start-failed-<UTC>.json; a group "
+                             "started again has its record groups/<group>.json now, or the ending record says so."),
+    "limit": ("The limit of replacements (scripts/campaign.py LIMIT_RULE): the protocol's "
+              "replacement.max_per_campaign, applied in mode campaign and under protocol schemas 1 and 2 (0 without "
+              "a rule); in mode rehearsal (campaign.json mode) it is not applied, every covered rejection is "
+              "replaced, and the rejections are counted by cause (rejections_by_cause), from which G3b sets the "
+              "limit."),
     "stop_request": ("campaign.py request-stop asks a running campaign to stop before its next capture; the "
                      "runner moves the request into events/ when it honors it (*_stop-request.json) and sets aside "
                      "one left by an earlier run when it starts (*_stop-request-stale.json). Not campaign events."),
@@ -2126,6 +2159,10 @@ def stage_category(event):
     status, stage = event.get("status"), event.get("stage")
     if status == "stopped":
         return "stopped"
+    # Package B9b (scripts/campaign.py): a campaign paused for review when its limit of replacements is exhausted,
+    # and one that became invalid; neither runs until its continuation or never (DEFINITIONS["ending"]).
+    if status in ("paused", "invalid"):
+        return status
     if status == "ready":
         return "before_first_launch"
     if status == "complete":
@@ -2228,7 +2265,93 @@ def with_replacements(rows, rejected, problems):
     return out
 
 
-def build_campaign(directory, collections, inputs):
+# The values of an ending record the report lists (design B9b 1.1), beside its ending, cause and stage.
+ENDING_VALUES = ("mode", "planned_sessions", "accepted_sessions", "rejections_by_cause", "limit",
+                 "replacements_used", "continues")
+
+
+def read_endings(results, campaign_id, inputs, failures=None):
+    """The ending records of the campaign in the results directory (DEFINITIONS["ending"]), in the order of their date:
+    ([{file, path, sha256, date, ending, cause, stage, rejected_sessions (their count), deviations, and the values of
+    ENDING_VALUES as recorded}], problems, why none was read: null when the directory was searched). failures, a
+    dict: filled with {file: values.group_start_failures as recorded} (DEFINITIONS["group_start_failures"])."""
+    if not isinstance(campaign_id, str) or not SAFE_ID.fullmatch(campaign_id):
+        return [], [], "campaign.json names no usable campaign id, so its ending records cannot be found"
+    if not results.is_dir():
+        return [], [], f"the results directory {results} is absent"
+    found, problems = [], []
+    for path in sorted(results.glob(ENDING_NAME.format(id=campaign_id))):
+        try:
+            doc = inputs.read_json(path, "campaign_ending", None)
+        except (OSError, ValueError) as exc:
+            inputs.problem(path, f"ending record unreadable: {exc}")
+            continue
+        values = doc.get("values")
+        if doc.get("schema") != ENDING_SCHEMA or not isinstance(values, dict):
+            problems.append(f"{path.name} in {results} is not a campaign ending record ({ENDING_SCHEMA})")
+            continue
+        if values.get("campaign") != campaign_id:
+            continue  # The record of another campaign whose ID begins with this one's and an underscore.
+        rejected = values.get("rejected_sessions")
+        if failures is not None:
+            failures[path.name] = values.get("group_start_failures")
+        # The stage beside the provenance (as tcn.eval writes it), else in values, there also as tcn.pecat
+        # record_stage gives it ({stage, basis}).
+        stage = doc["stage"] if "stage" in doc else values.get("stage")
+        found.append({"file": path.name, "path": str(path), "sha256": inputs.sha(path),
+                      "date": doc.get("date") if isinstance(doc.get("date"), str) else None,
+                      "ending": values.get("ending"), "cause": values.get("cause"),
+                      "stage": stage.get("stage") if isinstance(stage, dict) else stage,
+                      **{key: values.get(key) for key in ENDING_VALUES},
+                      "rejected_sessions": len(rejected) if isinstance(rejected, list) else None,
+                      "deviations": values.get("deviations")})
+    found.sort(key=lambda e: (e["date"] or "", e["file"]))
+    return found, problems, None
+
+
+def group_start_failures(endings, recorded, started, files):
+    """DEFINITIONS["group_start_failures"]: {definition, source, total, groups, groups_started_again, by_group: {group:
+    [{vm, step, date, cause, reason, started_again, record}]}}, the groups in the order of their first failure.
+    endings: read_endings' records by date; recorded: their values.group_start_failures by file; started: the groups
+    whose record groups/<group>.json exists; files: (name, document) of groups/*.start-failed-*.json."""
+    listed = next(((e["file"], recorded.get(e["file"])) for e in reversed(endings)
+                   if isinstance(recorded.get(e["file"]), list)), None)
+    if listed is not None:
+        source = f"values.group_start_failures of the ending record {listed[0]}"
+        items = [{"record": f.get("record"), "date": f.get("date"), "group": f.get("group"), "vm": f.get("vm"),
+                  "step": f.get("step"), "cause": "group_start", "reason": f.get("reason"),
+                  "started_again": f.get("started_again") is True or f.get("group") in started}
+                 for f in listed[1] if isinstance(f, dict)]
+    else:
+        source = "groups/<group>.start-failed-<UTC>.json (no ending record of the campaign lists them)"
+        items = [{"record": name, "date": doc.get("date"), "group": doc.get("group"), "vm": doc.get("vm"),
+                  "step": doc.get("step"), "cause": doc.get("cause"), "reason": doc.get("reason"),
+                  "started_again": doc.get("group") in started} for name, doc in files]
+    by_group = {}
+    for item in sorted(items, key=lambda x: (str(x["date"]), str(x["record"]))):
+        by_group.setdefault(str(item["group"]), []).append({key: item[key] for key in (
+            "vm", "step", "date", "cause", "reason", "started_again", "record")})
+    return {"definition": DEFINITIONS["group_start_failures"], "source": source, "total": len(items),
+            "groups": len(by_group),
+            "groups_started_again": sum(any(x["started_again"] for x in found) for found in by_group.values()),
+            "by_group": by_group}
+
+
+def limit_of(manifest, protocol):
+    """The limit of replacements the campaign applies (DEFINITIONS["limit"], scripts/campaign.py replacement_limit):
+    {applied, max_per_campaign, mode, definition}; applied null with the reason when protocol.json is unreadable."""
+    mode = manifest.get("mode")
+    doc = {"mode": mode, "definition": DEFINITIONS["limit"]}
+    if mode == "rehearsal":
+        return dict(doc, applied=False, max_per_campaign=None)
+    if not isinstance(protocol, dict):
+        return dict(doc, applied=None, max_per_campaign=None,
+                    missing="protocol.json unreadable: the limit of replacements is not known")
+    rule = protocol.get("replacement")
+    return dict(doc, applied=True, max_per_campaign=rule.get("max_per_campaign", 0) if isinstance(rule, dict) else 0)
+
+
+def build_campaign(directory, collections, inputs, results=None):
     directory = directory.absolute()
     try:
         manifest = inputs.read_json(directory / "campaign.json", "campaign", None)
@@ -2236,6 +2359,7 @@ def build_campaign(directory, collections, inputs):
         raise DataError(f"cannot read campaign.json in {directory}: {exc}") from exc
     rows = plan_rows(manifest)
     collections = (collections or directory.parent.parent / "collections").absolute()
+    results = (results or directory.parent.parent / "results").absolute()  # DEFINITIONS["ending"]
     if not collections.is_dir():
         raise DataError(f"collections directory {collections} does not exist; pass the session base directory "
                         "with --collections-dir (every plan row would otherwise look not started)")
@@ -2284,13 +2408,15 @@ def build_campaign(directory, collections, inputs):
         except (OSError, ValueError) as exc:
             inputs.problem(directory / "closed.json", f"unreadable: {exc}")
             problems.append("closed.json exists but cannot be read")
-    groups, group_docs = [], {}
+    groups, group_docs, start_failed = [], {}, []
     for path in sorted((directory / "groups").glob("*.json")):
         try:
             doc = inputs.read_json(path, "campaign_group", None)
         except (OSError, ValueError) as exc:
             inputs.problem(path, f"campaign group record unreadable: {exc}")
             continue
+        if doc.get("schema") == START_FAILURE_SCHEMA:  # DEFINITIONS["group_start_failures"] (Q22).
+            start_failed.append((path.name, doc))
         if doc.get("schema") == "hyptcn3/campaign-group/1":
             group_docs[doc.get("group")] = doc
             groups.append({"group": doc.get("group"), "role": doc.get("role"), "date": doc.get("date"),
@@ -2329,6 +2455,16 @@ def build_campaign(directory, collections, inputs):
     problems += [f"attempts/{r['session']}.rejected.json names a session that is not in the plan"
                  for r in rejections if r["session"] not in dirs]
     state = states[None] if vms is None else {"vms": states}
+    # Package B9b: the state of every runner with the records of the campaign's endings (DEFINITIONS["ending"]).
+    recorded = {}
+    endings, ending_problems, endings_missing = read_endings(results, manifest.get("id"), inputs, failures=recorded)
+    problems += ending_problems
+    starts = group_start_failures(endings, recorded, set(group_docs), start_failed)
+    runners = [{"vm": vm, **{key: (doc or {}).get(key) for key in ("status", "stage", "message")}}
+               for vm, doc in states.items()]
+    problems += [f"{'status.json' if r['vm'] is None else 'status-' + r['vm'] + '.json'} says {r['status']}, but "
+                 f"{results} holds no ending record of the campaign ({ENDING_NAME.format(id=manifest.get('id'))})"
+                 for r in runners if r["status"] in RECORDED_STATES and not endings and "mode" in manifest]
     time_doc, intervals = campaign_time(events)
     campaign = {"id": manifest.get("id"), "directory": str(directory), "collections_dir": str(collections),
                 "archive_dir": manifest.get("archive_dir"), "commit": manifest.get("commit"),
@@ -2339,9 +2475,14 @@ def build_campaign(directory, collections, inputs):
                 "stop_request_pending": any(directory.glob("stop-request*.json")),
                 "vms": list(vms) if vms else None,
                 "replacement_rule": protocol.get("replacement") if isinstance(protocol, dict) else None,
+                "limit": limit_of(manifest, protocol),
                 "rejections": rejections, "rejections_definition": DEFINITIONS["replacement"],
                 # The count by cause the runner keeps in its state (package B9a, scripts/campaign.py LIMIT_RULE).
                 "rejections_by_cause": dict(sorted(Counter(r["cause"] for r in rejections).items())),
+                # Package B9b, Q22: apart from the rejections, since a failed start of a group rejects no session.
+                "group_start_failures": starts,
+                "runners": runners, "results_dir": str(results), "endings": endings,
+                "endings_missing": endings_missing, "endings_definition": DEFINITIONS["ending"],
                 "groups": groups, "problems": problems}
     return {"mode": "campaign", "campaign": campaign, "sessions": sessions, "events": events,
             "campaign_time": time_doc, "stage_intervals": intervals, "protocol": protocol,
@@ -2981,6 +3122,7 @@ def plot_timeline(report):
              ("preflight", "runner: preflight"),
              ("between_sessions", "runner: between sessions"), ("audit_wait", "runner: waits for the audit lock"),
              ("role_wait", "runner: waits for earlier roles"), ("stopped", "runner: stopped"),
+             ("paused", "runner: paused for review (limit of replacements)"), ("invalid", "runner: invalid campaign"),
              ("unaccounted", "runner: unaccounted (unclean end)"), ("before_first_launch", "initialized, not launched"),
              ("other", "runner: other")]
     intervals = report["stage_intervals"]
@@ -3320,6 +3462,21 @@ def readme(report, summary, files):
         if c["closed"]:
             lines += [f"Closed by the operator on {c['closed']['date']}: {md(c['closed']['reason'] or 'no reason')}. "
                       "A closed campaign has no corpus index and cannot be launched again.", ""]
+        lines += ["State of the runners: " + ", ".join(
+            ("" if r["vm"] is None else f"VM {r['vm']} ") + str(r["status"] or "no status file")
+            + (f" ({md(one_line(r['message']))})" if isinstance(r["message"], str) and r["message"] else "")
+            for r in c["runners"]) + ".", ""]
+        if c["endings"]:
+            lines += [f"Ending records of the campaign (`{c['results_dir']}`, definitions: ending):", ""]
+            lines += [f"- `{e['file']}` (SHA-256 `{e['sha256']}`), {e['date']}: ending {md(str(e['ending']))}, "
+                      f"cause {md(one_line(str(e['cause'])))}, stage {e['stage']}; accepted {e['accepted_sessions']} "
+                      f"of {e['planned_sessions']} planned sessions, {e['rejected_sessions']} rejected"
+                      + (f", rejections by cause {json.dumps(e['rejections_by_cause'], sort_keys=True)}"
+                         if isinstance(e["rejections_by_cause"], dict) else "") + "."
+                      for e in c["endings"]] + [""]
+        else:
+            lines += [f"No ending record of the campaign in `{c['results_dir']}`"
+                      + (f" ({md(c['endings_missing'])})" if c["endings_missing"] else "") + ".", ""]
         if c["stop_requests"] or c["stop_request_pending"]:
             honored = sum(r["honored"] for r in c["stop_requests"])
             lines += [f"Operator stop requests: {honored} honored, {len(c['stop_requests']) - honored} set aside as "
@@ -3329,19 +3486,32 @@ def readme(report, summary, files):
             lines += [f"VMs: {', '.join(c['vms'])}, one runner and status file per VM; sessions are read from "
                       "`<collections>/<campaign>/<vm>/<session>`. Runner stage seconds are summed over the VMs.", ""]
         if c["rejections"]:
-            rule = c["replacement_rule"] or {}
+            limit = c["limit"]
             replaced = sum(r["replacement"] is not None for r in c["rejections"])
+            bound = (f" of at most {limit['max_per_campaign']} per campaign" if limit["applied"] else
+                     "; the limit of replacements is not applied in mode rehearsal (definitions: limit)"
+                     if limit["applied"] is False else f" ({limit['missing']})")
             lines += [f"Sessions the runner recorded as unusable (rejecting audit or incomplete capture): "
                       f"{len(c['rejections'])}; replaced under the "
-                      f"protocol's rule: {replaced} of at most {rule.get('max_per_campaign', 0)} per campaign. "
+                      f"protocol's rule: {replaced}{bound}. "
                       "Such a session is never accepted data; a replacement is the same assignment in the "
-                      "same group boot:", ""]
+                      "same group boot. By cause: " + ", ".join(f"{cause} {n}" for cause, n in
+                                                               c["rejections_by_cause"].items()) + ":", ""]
             lines += [f"- `{r['session']}`" + (f" (VM {r['vm']})" if r["vm"] else "") + f", {r['cause']}: "
                       + md(one_line("; ".join(r["reasons"]) or "no reason recorded")) + "; "
                       + (f"replaced by `{r['replacement']}`" if r["replacement"] else
                          "not replaced" + (f" ({md(one_line(r['not_replaced']))})"
                                            if isinstance(r["not_replaced"], str) else ""))
                       for r in c["rejections"]] + [""]
+        starts = c["group_start_failures"]
+        if starts["total"]:
+            lines += [f"Failed starts of groups, no rejections of sessions (definitions: group_start_failures): "
+                      f"{starts['total']} in {starts['groups']} group{'s' if starts['groups'] != 1 else ''}, "
+                      f"{starts['groups_started_again']} of them started again; from {md(starts['source'])}:", ""]
+            lines += [f"- `{group}`" + (f" (VM {f['vm']})" if f["vm"] else "") + f": step {f['step']} on {f['date']}, "
+                      f"cause {f['cause']} ({md(one_line(str(f['reason'])))}); "
+                      + ("started again" if f["started_again"] else "not started again")
+                      for group, found in starts["by_group"].items() for f in found] + [""]
     else:
         lines += [f"Mode: sessions ({len(report['sessions'])} session directories read).", ""]
     lines += ["Only saved evidence was read; RAM images were not opened and archived members were not "
@@ -3636,6 +3806,9 @@ def main(argv=None):
     campaign.add_argument("--out", type=Path, required=True, help="new output directory (must not exist)")
     campaign.add_argument("--collections-dir", type=Path,
                           help="session base directory (default: <campaign_dir>/../../collections)")
+    campaign.add_argument("--results-dir", type=Path,
+                          help="directory of the campaign's ending records kampan_<id>_*.json (package B9b; default: "
+                               "<campaign_dir>/../../results, data/results beside data/campaigns)")
     sessions = modes.add_parser("sessions", help="explicit session directories")
     sessions.add_argument("session_dirs", type=Path, nargs="+")
     sessions.add_argument("--out", type=Path, required=True, help="new output directory (must not exist)")
@@ -3656,7 +3829,7 @@ def main(argv=None):
     inputs = Inputs()
     try:
         if args.mode == "campaign":
-            report = build_campaign(args.campaign_dir, args.collections_dir, inputs)
+            report = build_campaign(args.campaign_dir, args.collections_dir, inputs, args.results_dir)
             collections = Path(report["campaign"]["collections_dir"])
             if out.resolve().is_relative_to(collections.resolve()):
                 raise DataError(f"refusing to write the report inside the collections directory {collections}")

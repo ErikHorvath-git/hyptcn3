@@ -5,6 +5,8 @@ A protocol of schema 3 states both in sections of its own:
     "audit": {"lateness_max_s": 0.5, "cycle_ms_max": {"delta": 1500, "full": 3500},
               "periodicity": {"equal_spacings": 3, "min_spacing_rows": 2, "note": "author's judgment, G0"},
               "warnings_allowed": null, "rule_closed_rows_max": null,
+              "early_stop": {"marked_rows_rate_per_type": {"<event type>": null, ...}, "periodicity_stops": true,
+                             "note": "..."},
               "traffic": {"offered_load_tolerance": 0.2, "arrival_cv": [0.8, 1.2], "top_objects_share": 0.1,
                           "top_objects_min_requests": 0.5, "success_min": 0.88, "response_size_orders": 2,
                           "think_mean_tolerance_se": 4, "order_share_tolerance_se": 4,
@@ -20,6 +22,13 @@ rule_closed_rows_max null leaves that count unevaluated (printed next to the oth
 holds the bounds of the realism requirements of proposal 5.7 and of the offered-load check of proposal 5.3
 (scripts/traffic_log.py realism; package B5b), all determined in G0 (proposal 10.9).
 
+"early_stop" (package B9b, agent Z, and its fix: F5 of the verification, question Q24; the lead's skeleton B9 row
+skoré zastavenie) holds the rule of the early stop of a campaign (proposal 7.5): one rate of marked rows per occurrence
+for every event type of events.types (features/acceptance.py MARKED_ROWS_RULE), each null until G3b (proposal 10.9),
+and whether a session rejected for periodicity stops the campaign. early_stop(values, protocol, totals) applies it
+after every audit to the values of that audit and to the campaign's count since its restart point (EARLY_STOP_RULE;
+scripts/campaign.py early_stop_check sums the count), and poisson_quantile gives its bound.
+
 Every place of the audit code that admits a condition which would otherwise reject a session calls tolerate() with
 the condition's id. TOLERATED lists the ids; the register of a schema-3 protocol names exactly these, each with its
 cause, the decision that admits it and the count expected per session, and the audit prints the observed count
@@ -32,9 +41,38 @@ from pathlib import Path
 import re
 
 SCHEMA_3 = "hyptcn3/collection-protocol/3"
-AUDIT_KEYS = ("lateness_max_s", "cycle_ms_max", "periodicity", "warnings_allowed", "rule_closed_rows_max", "traffic")
+AUDIT_KEYS = ("lateness_max_s", "cycle_ms_max", "periodicity", "warnings_allowed", "rule_closed_rows_max", "traffic",
+              "early_stop")
 CYCLE_KEYS = ("delta", "full")
 PERIODICITY_KEYS = ("equal_spacings", "min_spacing_rows", "note")
+# Package B9b (design B9b 1.3) and its fix (F5 of its verification, question Q24): the keys of audit.early_stop.
+# marked_rows_rate_per_type has one key per event type of events.types (none without an events section), each the
+# rate of marked rows per occurrence (a number of at least 0) or null until G3b (determined_at).
+EARLY_STOP_KEYS = ("marked_rows_rate_per_type", "periodicity_stops", "note")
+EARLY_STOP_LEVEL = 0.99  # Proposal 10.9: the bound of the early stop is the 99th percentile of a Poisson distribution.
+EARLY_STOP_RULE = (
+    "the early stop of a campaign (proposal 7.5 and 10.9; the lead's skeleton B9 row skoré zastavenie and its section "
+    "5; design B9b 1.3 and its fix, F5 of the verification of B9b, question Q24 decided by its proposal; "
+    "features/audit_policy.py early_stop): after every audit of a completed capture the campaign stops when the audit "
+    "rejected the session with the code periodicity and audit.early_stop.periodicity_stops holds (one such session "
+    "suffices, the lead's judgment: periodicity is the sign of a systematic cause, and more sessions would fill the "
+    "limit of replacements with the same fault), or when the campaign's count C_T of marked rows at an event type T "
+    "is above b, the smallest count with P(X <= b) >= 0.99 for X ~ Poisson(rate_T x n_T) (poisson_quantile, Poisson(0) "
+    "gives 0): C_T and n_T are the sums of values.marked_rows_by_type and values.event_occurrences_by_type "
+    "(features/acceptance.py MARKED_ROWS_RULE) over the audited sessions of both VMs since the count's restart point, "
+    "accepted and rejected, replacements included (scripts/campaign.py early_stop_check, one file per session), and "
+    "rate_T is the rate of marked rows per occurrence in audit.early_stop.marked_rows_rate_per_type (proposal 10.9: "
+    "the rate of G2 and G3b together, determined at G3b); a null rate stops nothing, and C_T and n_T stay printed in "
+    "the runner's state. Q24 reads the count of proposal 7.5 as the campaign's, not one session's: the audit of a "
+    "session already judges one session (the tolerance of invalid rows, the cap of rule-closed rows), and the early "
+    "stop follows a systematic shift of the whole campaign. The count starts at the start of the campaign and starts "
+    "again after the campaign's latest recorded ending with an early-stop trigger, and a continuation counts only its "
+    "own sessions: both restart points follow a written human analysis, the executor's judgment (Q24). In a model of "
+    "Poisson counts at one rate per type, not a measurement (the executor's model of Q24, 36 occurrences per type and "
+    "six types as in the campaign plan): one comparison stops falsely at most 1 % per type; checked after every "
+    "occurrence, 0.12 to 0.28 of healthy campaigns stop falsely at rates of 0.01 to 3 per occurrence, where the count "
+    "of one session against one bound per type would stop 0.23 to 0.88 of them. A protocol of schema 1 or 2 has no "
+    "audit section and no early stop")
 TRAFFIC_KEYS = ("offered_load_tolerance", "arrival_cv", "top_objects_share", "top_objects_min_requests", "success_min",
                 "response_size_orders", "think_mean_tolerance_se", "order_share_tolerance_se", "background", "note")
 BACKGROUND_KEYS = ("logins_min", "reports_min", "document_max_to_median", "note")
@@ -104,11 +142,107 @@ def audit_bounds(protocol):
     if cap is not None and (type(cap) is not int or cap < 0):
         raise ValueError("invalid audit bounds: rule_closed_rows_max")
     _traffic_bounds(a["traffic"])
+    _early_stop_bounds(a["early_stop"], protocol)
     return a
 
 
 def _text(value):
     return type(value) is str and bool(value.strip())
+
+
+def event_types(protocol):
+    """The event types of a protocol, the keys of events.types (sorted), [] for a protocol without an events section;
+    None when its events section names no types as an object (malformed: the value check of audit.early_stop
+    refuses it)."""
+    if "events" not in protocol:
+        return []
+    events = protocol["events"]
+    types = events.get("types") if type(events) is dict else None
+    return sorted(types) if type(types) is dict else None
+
+
+def _early_stop_bounds(e, protocol):
+    """ValueError `invalid audit bounds: early_stop[.<key>]` for the first malformed key of audit.early_stop (package
+    B9b and its fix, Q24): exactly the keys of EARLY_STOP_KEYS; marked_rows_rate_per_type an object with one rate per
+    event type of events.types (event_types: none without an events section), each null (until G3b, proposal 10.9) or
+    a finite number of at least 0 (marked rows per occurrence); periodicity_stops a boolean (true by the lead's
+    skeleton B9 row skoré zastavenie: false would turn that stop off, a change of a G0 value); a note that says
+    something."""
+    def refuse(key):
+        raise ValueError("invalid audit bounds: early_stop" + ("." + key if key else ""))
+    if type(e) is not dict or set(e) != set(EARLY_STOP_KEYS):
+        refuse("")
+    rates, types = e["marked_rows_rate_per_type"], event_types(protocol)
+    if (type(rates) is not dict or types is None or sorted(rates) != types
+            or any(r is not None and not (_number(r) and r >= 0) for r in rates.values())):
+        refuse("marked_rows_rate_per_type")
+    if type(e["periodicity_stops"]) is not bool:
+        refuse("periodicity_stops")
+    if not _text(e["note"]):
+        refuse("note")
+
+
+def poisson_quantile(mean):
+    """The bound of the early stop (EARLY_STOP_RULE, proposal 10.9): the smallest b with P(X <= b) >= EARLY_STOP_LEVEL
+    for X ~ Poisson(mean), 0 for a mean of 0; ValueError for a mean that is no finite number of at least 0. Summed in
+    logarithms, so a large mean does not underflow."""
+    if not (_number(mean) and mean >= 0):
+        raise ValueError(f"the mean of a Poisson distribution is a finite number of at least 0, not {mean!r}")
+    if mean == 0:
+        return 0
+    bound, cdf = 0, 0.0
+    while True:
+        cdf += math.exp(bound * math.log(mean) - mean - math.lgamma(bound + 1))
+        if cdf >= EARLY_STOP_LEVEL:
+            return bound
+        bound += 1
+
+
+def _count(value):
+    return type(value) is int and value >= 0
+
+
+def early_stop(values, protocol, totals):
+    """EARLY_STOP_RULE after the audit of one session (scripts/collection.py audit_session) under `protocol`: None (no
+    stop), or the stop {rule, cause, type, count, bound, occurrences, rate}.
+
+    values: the values of the audit record (its acceptance codes). totals: the campaign's count since its restart
+    point, this session included (scripts/campaign.py early_stop_check): {event type: {"marked": C_T, "occurrences":
+    n_T}}. cause periodicity: values.acceptance.codes name periodicity and audit.early_stop.periodicity_stops holds;
+    type null, count the longest run of equal spacings the audit recorded (values.timing.periodic_run.equal_spacings,
+    null when the record holds none), bound audit.periodicity.equal_spacings, the run that rejects; occurrences and
+    rate null. cause marked_rows: the first event type (sorted) whose C_T is above b = poisson_quantile(rate_T x n_T),
+    with C_T, b, n_T and rate_T; a type with a null rate is not judged. None under a protocol of schema 1 or 2.
+    ValueError by name for values without the acceptance codes, and for a type with a rate whose C_T or n_T the totals
+    do not hold as counts: a count is never taken as 0."""
+    bounds = audit_bounds(protocol)
+    if bounds is None:
+        return None
+    acceptance = values.get("acceptance") if type(values) is dict else None
+    codes = acceptance.get("codes") if type(acceptance) is dict else None
+    if type(codes) is not list:
+        raise ValueError("early stop: the audit record holds no acceptance codes (values.acceptance.codes)")
+    rule = bounds["early_stop"]
+    if rule["periodicity_stops"] and "periodicity" in codes:
+        timing = values.get("timing")
+        run = timing.get("periodic_run") if type(timing) is dict else None
+        count = run.get("equal_spacings") if type(run) is dict else None
+        return {"rule": EARLY_STOP_RULE, "cause": "periodicity", "type": None,
+                "count": count if type(count) is int else None, "bound": bounds["periodicity"]["equal_spacings"],
+                "occurrences": None, "rate": None}
+    for kind, rate in sorted(rule["marked_rows_rate_per_type"].items()):
+        if rate is None:
+            continue
+        total = totals.get(kind) if type(totals) is dict else None
+        marked, occurrences = (total.get("marked"), total.get("occurrences")) if type(total) is dict else (None, None)
+        if not (_count(marked) and _count(occurrences)):
+            raise ValueError(f"early stop: the campaign's count holds no marked rows and occurrences of event type "
+                             f"{kind} (scripts/campaign.py early_stop_check), whose rate is {rate}")
+        bound = poisson_quantile(rate * occurrences)
+        if marked > bound:
+            return {"rule": EARLY_STOP_RULE, "cause": "marked_rows", "type": kind, "count": marked, "bound": bound,
+                    "occurrences": occurrences, "rate": rate}
+    return None
 
 
 def _traffic_bounds(t):

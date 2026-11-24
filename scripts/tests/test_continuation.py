@@ -400,12 +400,15 @@ def test_taken_session_is_decided_by_its_recorded_verdict(lab, stopped):
 
 
 def test_take_over_judges_the_closed_campaign_by_time_rank(tmp_path, monkeypatch):
-    """ORDER_RULE in take_over (PRE_B9; package B9a): a closed campaign of the v5 shape whose first test_controls group
-    is complete while the test_benign group before it in the plan (on the other VM) is not keeps the time order, as the
-    two test roles share a rank; one with a complete calibration group and an incomplete dev group does not."""
-    from scripts import protocol_v5
+    """ORDER_RULE in take_over (PRE_B9; package B9a): a campaign of the v5 shape that ended before it was continued
+    (under protocol schema 3 a paused one, package B9b CONTINUATION_RULE: its paused record and its frozen measurement
+    and lab hashes) whose first test_controls group is complete while the test_benign group before it in the plan (on
+    the other VM) is not keeps the time order, as the two test roles share a rank; one with a complete calibration
+    group and an incomplete dev group does not."""
+    from scripts import gates, protocol_v5
     from scripts.tests.test_campaign import v5_protocol
     monkeypatch.setattr(c, "BASE", tmp_path)
+    monkeypatch.setattr(c, "RESULTS", tmp_path / "results")
     monkeypatch.setattr(c, "guard_mount", lambda *a: None)
     monkeypatch.setattr(c, "taken_session", lambda previous, old, old_p, final, group: {"session_id": final["session_id"]})
     (tmp_path / "source").mkdir()
@@ -423,9 +426,14 @@ def test_take_over_judges_the_closed_campaign_by_time_rank(tmp_path, monkeypatch
                     "mode": "campaign", "sessions": rows, "protocol_sha256": digest(directory / "protocol.json"),
                     "profile_sha256": PROFILE, "extractor_sha256": {"test": "test"}, "runtime": RUNTIME,
                     "vms": {vm: {"guest_environment": environment(vm)} for vm in ("a", "b")},
-                    "archive_root": str(tmp_path), "archive_mount": {}}
+                    "archive_root": str(tmp_path), "archive_mount": {},
+                    "measurement_sha256": gates.measurement_sha256(), "lab_sha256": collection.lab_sha256(),
+                    # The fix round of B9b (F2): init freezes the measurement code file by file.
+                    "measurement_files_sha256": collection.measurement_sources()}
         write_new(directory / "campaign.json", manifest)
-        write_new(directory / "closed.json", {"reason": "stopped"})
+        # Package B9b: under protocol schema 3 the campaign a continuation continues is paused, with its record.
+        c.publish_ending(directory, manifest, {"date": "2026-11-24T00:00:00+00:00", "values": {
+            "ending": "paused", "cause": "the limit of replacements is used up (the setup of this test)"}})
         for row in rows:
             if row["role"] in ("train", "dev", "calibration") and row["group"] not in complete.get("not", ()) \
                     or row["group"] in complete.get("also", ()):
@@ -446,5 +454,5 @@ def test_take_over_judges_the_closed_campaign_by_time_rank(tmp_path, monkeypatch
         r["session_id"] for r in read_json(previous / "campaign.json")["sessions"]
         if r["role"] in ("train", "dev", "calibration") or r["group"] == "v5-test_controls-1"}
     previous, continuation = closed("druha", {"not": ["v5-dev-1", "v5-dev-2"]})
-    with pytest.raises(ValueError, match="^closed campaign completed a later role before an earlier one$"):
+    with pytest.raises(ValueError, match="^paused campaign completed a later role before an earlier one$"):
         c.take_over(previous, continuation, p)

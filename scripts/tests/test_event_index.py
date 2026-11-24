@@ -859,11 +859,16 @@ def test_finish_corpus_of_a_test_only_plan_of_schema_3_ends_with_an_event_index(
     (directory / "events").mkdir(parents=True)  # The state records of the campaign (update_state).
     (directory / "protocol.json").write_bytes(Path(w.path).read_bytes())
     # The campaign's plan mode, as campaign.json names it (package B9a, scripts/campaign.py MODE_RULE).
-    manifest = {"protocol_sha256": w.sha, "archive_root": str(tmp_path / "archive"), "archive_mount": None,
+    manifest = {"id": "s3", "protocol_sha256": w.sha, "archive_root": str(tmp_path / "archive"), "archive_mount": None,
                 "archive_dir": str(tmp_path / "archive" / "campaigns" / "s3"), "mode": "campaign"}
     copied = []
     monkeypatch.setattr(campaign, "guard_mount", lambda archive_root, mount: None)
     monkeypatch.setattr(campaign, "copy_exclusive", lambda source, destination: copied.append((source, destination)))
+    # The record of the complete ending comes first (package B9b, scripts/campaign.py ENDING_RULE), published as the
+    # campaign publishes it, into a results directory of the test.
+    monkeypatch.setattr(campaign, "RESULTS", tmp_path / "results")
+    campaign.publish_ending(directory, manifest, {"date": "2026-11-24T00:00:00+00:00", "values": {
+        "ending": "complete", "cause": "every planned session is accepted (the setup of this test)"}})
     campaign.finish_corpus(directory, manifest, w.p, honest(w))
     doc = json.loads((directory / "events_index.json").read_text())
     assert (doc["complete"], doc["plan_mode"], doc["planned_sessions"], len(doc["sessions"])) == (

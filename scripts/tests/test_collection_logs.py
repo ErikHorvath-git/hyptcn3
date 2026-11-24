@@ -713,10 +713,13 @@ WARN_LINE = "2026-01-01T00:00:03.000Z WARN  planovac: cyklus 7 trval 5.200 s (pe
 def test_collector_warning_is_judged_by_the_allowed_patterns(session, schema, allowed, unlisted):
     doc = {"schema": f"hyptcn3/collection-protocol/{schema}", "interval_s": 5}
     if schema == 3:  # Since package B5b the audit section also holds the traffic bounds (from the v5 file).
-        traffic = json.loads((logs.ROOT / "config/collection-v5.json").read_text())["audit"]["traffic"]
+        bounds = json.loads((logs.ROOT / "config/collection-v5.json").read_text())["audit"]
+        # Package B9b: and the early stop of the v5 file; this protocol has no events section, so no type to bound.
+        early_stop = dict(bounds["early_stop"], marked_rows_rate_per_type={})
         doc["audit"] = {"lateness_max_s": .5, "cycle_ms_max": {"delta": 1500, "full": 3500},
                         "periodicity": {"equal_spacings": 3, "min_spacing_rows": 2, "note": "test"},
-                        "warnings_allowed": allowed, "rule_closed_rows_max": None, "traffic": traffic}
+                        "warnings_allowed": allowed, "rule_closed_rows_max": None, "traffic": bounds["traffic"],
+                        "early_stop": early_stop}
     write(session / "protocol.json", doc)
     meta = logs.read_json(session / "session.json")
     write(session / "session.json", dict(meta, protocol_sha256=logs.digest(session / "protocol.json")))

@@ -213,16 +213,20 @@ def record_of(c, audit, position):
 def finish_setup(c, root, monkeypatch):
     """A campaign directory for scripts/campaign.py finish_corpus: its protocol and a manifest; the archive mount and
     the copy to the archive are replaced (the copies are recorded). The production check runs as the campaign runs
-    it."""
+    it. The record of the complete ending comes first (package B9b, scripts/campaign.py ENDING_RULE: finish_corpus
+    refuses without it), published as the campaign publishes it, into a results directory of the test."""
     directory = root / "campaign"
     (directory / "events").mkdir(parents=True)
     (directory / "protocol.json").write_bytes(c.path.read_bytes())
     # The campaign's plan mode, as campaign.json names it (package B9a, scripts/campaign.py MODE_RULE).
-    manifest = {"protocol_sha256": c.sha, "archive_root": str(root / "archive"), "archive_mount": None,
+    manifest = {"id": NAME, "protocol_sha256": c.sha, "archive_root": str(root / "archive"), "archive_mount": None,
                 "archive_dir": str(root / "archive" / "campaigns" / NAME), "mode": c.mode}
     copied = []
     monkeypatch.setattr(campaign, "guard_mount", lambda archive_root, mount: None)
     monkeypatch.setattr(campaign, "copy_exclusive", lambda source, destination: copied.append((source, destination)))
+    monkeypatch.setattr(campaign, "RESULTS", root / "results")
+    campaign.publish_ending(directory, manifest, {"date": "2026-11-24T00:00:00+00:00", "values": {
+        "ending": "complete", "cause": "every planned session is accepted (the setup of this test)"}})
     return directory, manifest, copied
 
 

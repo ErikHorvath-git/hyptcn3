@@ -1,8 +1,7 @@
 {
   "schema": "hyptcn3/collection-protocol/3",
   "name": "server-normal-v5",
-  "status": "g0",
-  "note": "Protocol v5 (docs/NAVRH_PROTOKOL_V5.sk.md; package B4, lead's skeleton dokazy/B4/kostra/KOSTRA.md). Schema 3 is the v5 layout: scripts/protocol_v5.py reads every section; python3 scripts/collection.py --protocol config/collection-v5.json selfcheck checks the file and its plan. A value a later stage determines (proposal 10.9) is null or preliminary at its one place, and determined_at names the stage of each such path. The numbers of the G0 rows of proposal 10.9 are the author's proposal by judgment; the owner may change them before G1.",
+  "note": "Protocol v5 (docs/NAVRH_PROTOKOL_V5.sk.md; package B4, lead's skeleton dokazy/B4/kostra/KOSTRA.md). Schema 3 is the v5 layout: scripts/protocol_v5.py reads every section; python3 scripts/collection.py --protocol config/collection-v5.json selfcheck checks the file and its plan. A value a later stage determines (proposal 10.9) is null or preliminary at its one place, and determined_at names the stage of each such path. The numbers of the G0 rows of proposal 10.9 are the author's proposal by judgment; the owner may change them before G1. The stage of this file is what the readiness records of scripts/gates.py say (gates.py status and require), not a field of the file: stage_binding hashes every value of the file at every stage, so a field that followed the stage would reopen the records of the stages before it; schema 3 therefore has no field status (question Q23), and schemas 1 and 2 keep theirs as history.",
   "profile": "profiles/debian12-6.1.0-42-cloud-amd64",
   "vms": [
     {
@@ -453,6 +452,18 @@
     },
     "warnings_allowed": null,
     "rule_closed_rows_max": null,
+    "early_stop": {
+      "marked_rows_rate_per_type": {
+        "naprazdno": null,
+        "restart_databazy": null,
+        "udrzba_zaloha": null,
+        "zamok_tabulky": null,
+        "zataz_pamate": null,
+        "zla_konfiguracia_sluzby": null
+      },
+      "periodicity_stops": true,
+      "note": "The early stop of a campaign (proposal 7.5 and 10.9; the lead's skeleton B9 row skor\u00e9 zastavenie, package B9b and its fix, question Q24): after every audit the campaign stops when the session was rejected for periodicity (periodicity_stops; one session suffices, the lead's judgment in the skeleton's section 5) or when the campaign's count of marked rows at an event type is above its bound. The marked rows are the invalid rows and the rows a parser rule closed (as features/acceptance.py marks them) whose time lies in the event window of an occurrence of that type, the window of the session's log audit (features/acceptance.py MARKED_ROWS_RULE). The count C_T sums them, and n_T the occurrences of the type, over the audited sessions of both VMs since the count's restart point (the start of the campaign, or its latest recorded ending with an early-stop trigger; a continuation counts only its own sessions: the executor's judgment, Q24). The bound is the 99th percentile of the Poisson distribution at rate_T x n_T, rate_T the rate of marked rows per occurrence in marked_rows_rate_per_type, determined at G3b from G2 and G3b together (proposal 10.9); null until then, so the count is printed in the runner's state and stops nothing (features/audit_policy.py EARLY_STOP_RULE, with the false-stop rates of the executor's Poisson model, a model and not a measurement)."
+    },
     "traffic": {
       "offered_load_tolerance": 0.2,
       "arrival_cv": [
@@ -928,7 +939,8 @@
     ],
     "G3b": [
       "replacement.max_per_campaign",
-      "audit.rule_closed_rows_max"
+      "audit.rule_closed_rows_max",
+      "audit.early_stop.marked_rows_rate_per_type.*"
     ]
   }
 }

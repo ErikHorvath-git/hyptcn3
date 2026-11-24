@@ -83,12 +83,15 @@ def _protokol(profil):
     # (scripts/tests/boundary_sessions.py v5_sections); udalost planuje protokol v kazdej relacii jednu.
     # Od balika B6b berie trening parametre z planu analyzy: FPR, jedna epocha a davka 64, ktore test predtym
     # zadaval prikazom, su v analysis (fit_analysis), spolu so stlpcami, ktore su vsetky neuronove.
-    from scripts.tests.boundary_sessions import audit_sections, fit_analysis, v5_sections
+    from scripts.tests.boundary_sessions import audit_sections, early_stop_bounds, fit_analysis, v5_sections
     v5 = v5_sections(("steady", "bursty"), {"train": 2, "dev": 2, "calibration": 2, "test_benign": 2},
                      group_sessions=2, window_rows=OKNO)
     v5["analysis"] = fit_analysis(v5["analysis"], fpr=FPR, max_epochs=1, batch_size=64)
+    sekcie = audit_sections(5)
+    # Balik B9b: audit.early_stop ma jednu hranicu na kazdy typ udalosti, tu na dva typy rozvrhu testu.
+    sekcie["audit"]["early_stop"] = early_stop_bounds(["udrzba_zaloha", "zamok_tabulky"])
     return {
-        **v5, **audit_sections(5),
+        **v5, **sekcie,
         "schema": "hyptcn3/collection-protocol/3", "name": "odovzdanie-korpusu-test",
         "quality_policy": "behavioral-inputs-v1", "profile": str(profil),
         "interval_s": 5, "max_gap_s": 7.5, "bin_bytes": 16777216, "window_rows": OKNO, "stride": 1,
@@ -273,6 +276,8 @@ def _relacia_cez_audit(koren, monkeypatch, riadok):
     # Dokazy pomocky maju desat snimok v dvoch sekundach; brana pokrytia je preto nizsie nez v kampani.
     p = dict(_protokol(adresar / "profile"), interval_s=.1, max_gap_s=.15, window_rows=3, cycles=10,
              min_score_coverage=.25, **bs.audit_sections(.1))
+    # Balik B9b: audit.early_stop ma jednu hranicu na kazdy typ udalosti protokolu, tu na dva typy rozvrhu testu.
+    p["audit"]["early_stop"] = bs.early_stop_bounds(sorted(p["events"]["types"]))
     # Udalosti planu sa zmestia do jednosekundovej relacie: stavba korpusu od balika B6a cita plan protokolu.
     p["events"] = dict(p["events"], duration_s=[.2, .3], first_s=.1, min_gap_s=.2, tail_s=.1, grace_s=.05)
     protokol_cesta = adresar / "protocol.json"

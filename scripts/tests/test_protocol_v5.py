@@ -430,6 +430,9 @@ def rehearsal_prefix(doc):
 
 def unknown_to_lab(doc):
     doc["events"]["types"]["zamok_databazy"] = doc["events"]["types"].pop("zamok_tabulky")
+    # Package B9b: audit.early_stop has one rate per event type, so the renamed type keeps its rate there.
+    rates = doc["audit"]["early_stop"]["marked_rows_rate_per_type"]
+    rates["zamok_databazy"] = rates.pop("zamok_tabulky")
     return {"lab_register": ["unknown to lab/: zamok_databazy"]}
 
 
@@ -488,6 +491,16 @@ def seeded_level_of_19_digits(doc):
     lab/guest_state.py reset --seed, which takes 1 to 18 digits, so 10^18 is refused by the loader."""
     doc["streams"]["seeded_level"]["seed"] = 10 ** 18
     return {"loader": ["protocol(): invalid streams.seeded_level"]}
+
+
+def early_stop_rate_below_zero(doc):
+    """Package B9b (design B9b 1.3) and its fix (F5 of its verification, Q24): the early stop holds a rate of marked
+    rows per occurrence for every event type, null until G3b; a negative one is refused by the value check of the
+    audit section (features/audit_policy.py audit_bounds), which the loader and the witnesses of the reachability
+    check both read."""
+    doc["audit"]["early_stop"]["marked_rows_rate_per_type"]["restart_databazy"] = -0.5
+    reason = "invalid audit bounds: early_stop.marked_rows_rate_per_type"
+    return {"loader": ["protocol(): " + reason], "reachability": ["cannot check: " + reason]}
 
 
 def _unplannable(shape):
@@ -1277,7 +1290,9 @@ FILE_CASES = {f.__name__: f for f in (unknown_key, missing_key, gate_085, max_7,
                                       linkage_reworded, linkage_not_a_text,
                                       # Package B9a: F3 of the verification of B7c, the boots of K2; the fix of
                                       # B9a: the one seeded level of the guest (F4 of its verification).
-                                      boots_apart_from_the_carriers, seeded_level_of_19_digits)}
+                                      boots_apart_from_the_carriers, seeded_level_of_19_digits,
+                                      # Package B9b: the rule of the early stop (audit.early_stop).
+                                      early_stop_rate_below_zero)}
 PLAN_CASES = {f.__name__: f for f in (no_group_on_vm, equal_scenarios, twice_at_position, two_events, start_in_guard,
                                       locked_to_grid, common_seed, control_relabelled, control_slot_emptied,
                                       event_free_first, group_of_two, seed_field,
@@ -1344,6 +1359,45 @@ def test_the_rehearsal_is_a_mode_of_the_file_with_10_groups_and_30_sessions():
     plan = protocol_v5.plan(json.loads(V5.read_text()), mode="rehearsal")
     assert (plan["mode"], plan["name"], plan["group_prefix"]) == ("rehearsal", "server-normal-v5-generalka", "g5-")
     assert (len({s["group"] for s in plan["sessions"]}), len(plan["sessions"])) == (10, 30)
+
+
+def test_a_protocol_of_schema_3_has_no_field_status(tmp_path):
+    """Q23 (F1 of the verification of B9b, must_fix; the B1 item 'pole protokolu status pilot_required nečíta žiadny
+    kód'): the stage of a protocol file is what the readiness records of scripts/gates.py say, and a field of the
+    file could not follow it, since gates.stage_binding hashes it at every stage; so schema 3 has no field status. The
+    file has none and its note says where the stage is; a copy with status is refused by name as an unknown key, by
+    the loader and by the layout check of the self-check. Schemas 1 and 2 keep theirs, as history."""
+    from scripts import collection, protocol_v5
+    doc = json.loads(V5.read_text())
+    assert "status" not in doc and "status" not in protocol_v5.TOP_LEVEL
+    assert all(text in doc["note"] for text in ("readiness records of scripts/gates.py", "stage_binding", "Q23"))
+    path = tmp_path / "protocol.json"
+    path.write_text(json.dumps(dict(doc, status="g0")))
+    with pytest.raises(ValueError) as error:
+        collection.protocol(path)
+    assert str(error.value) == "unknown protocol key: status"
+    assert protocol_v5.check_keys(dict(doc, status="g0")) == ["unknown protocol key: status"]
+    old = ROOT / "config/collection-v2.json"
+    assert json.loads(old.read_text())["status"] == "pilot_required"
+    assert collection.protocol(old)["status"] == "pilot_required"
+
+
+def test_the_interleaved_test_groups_of_the_campaign_plan_end_with_a_group_of_test_benign():
+    """N1 of the confirmation of B9a (package B9b, agent Z): the barrier of scripts/campaign.py (ORDER_RULE) orders
+    the starts of the test groups across the VMs, not their ends. So skeleton test 2 (no test_controls boot lies
+    wholly after every test_benign boot) holds by construction only for a plan whose interleaved sequence of the test
+    roles ends with a group of test_benign, which starts only after every group of test_controls has started. The
+    campaign plan of the file does, with v5-test_benign-12. The rehearsal plan ends with g5-test_controls-2: that is
+    the documented exposure of the rehearsal (a lag of about one group can break test 2 there), not pinned here."""
+    from scripts import protocol_v5
+    doc = json.loads(V5.read_text())
+    plan = protocol_v5.plan(doc, mode="campaign")
+    assert doc["interleave"] == [list(protocol_v5.INTERLEAVED)]
+    last = [s for s in plan["sessions"] if s["role"] in protocol_v5.INTERLEAVED][-1]
+    assert (last["role"], last["group"]) == ("test_benign", "v5-test_benign-12"), (
+        f"the interleaved sequence of the test roles of the campaign plan ends with {last['group']} (role "
+        f"{last['role']}): skeleton test 2 holds by construction only when it ends with a group of test_benign, since "
+        "the barrier of scripts/campaign.py ORDER_RULE orders the starts of the test groups and not their ends")
 
 
 def test_the_report_records_the_types_by_place_in_the_session_and_the_phases(tmp_path):

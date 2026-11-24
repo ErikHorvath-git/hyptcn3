@@ -601,6 +601,7 @@ def v5(tmp_path, monkeypatch):
         monkeypatch.setattr(c, name, 0)
     monkeypatch.setattr(c, "COLLECTIONS", captures)
     monkeypatch.setattr(c, "BASE", tmp_path / "campaigns")
+    monkeypatch.setattr(c, "RESULTS", results)  # Package B9b: the records of the endings, beside the test's ledger.
     monkeypatch.setattr(pecat, "KNIHA", state["ledger"])
     monkeypatch.setattr(pecat, "ZAZNAM", state["ledger"])
     monkeypatch.setattr(gates, "require", lambda results, path, stage: state["stages"].append((Path(path).name, stage)))
@@ -697,7 +698,12 @@ def v5(tmp_path, monkeypatch):
                 "measurement_dirty": [], "host_context": {"qemu": state["qemu"][vm]},
                 # What the real index reads besides (features/dataset.py build, safeguard/training.py validate_index).
                 "typ": "benign", "collector_sha256": V5_RUNTIME["collector_sha256"],
-                "profile_sha256": c.tree_hashes(Path(p["profile"]))}
+                "profile_sha256": c.tree_hashes(Path(p["profile"])),
+                # As scripts/collection.py run records them (package B9b: the record's grids read interval_s).
+                "collector_settings": {"writer": "delta", "fsync": collection.COLLECTOR_FSYNC, "hash": "sha256",
+                                       "writer_thread": True, "mlock": collection.COLLECTOR_MLOCK,
+                                       "interval_s": p["interval_s"], "full_every": p["full_every"],
+                                       "bin_bytes": p["bin_bytes"]}}
         for key, value in state["corrupt"].get(sid, {}).items():
             meta[key] = value
         write_new(src / "session.json", meta)
@@ -796,10 +802,13 @@ def ended_rehearsal(v5, sizes=((1000, 400), (1500, 300)), mode="rehearsal", ende
 
 
 def run_v5(directory):
+    complete = lambda: all(read_json(directory / f"status-{vm}.json")["status"] == "complete" for vm in ("a", "b"))
     for _ in range(20):
         for vm in ("a", "b"):
+            if complete():  # The fix round of B9b (F3): a complete campaign with its index does not run again.
+                return
             c.execute(directory, vm=vm)
-        if all(read_json(directory / f"status-{vm}.json")["status"] == "complete" for vm in ("a", "b")):
+        if complete():
             return
     pytest.fail("campaign did not complete")
 
@@ -963,19 +972,31 @@ def test_v5_rehearsal_replaces_every_covered_rejection_by_the_next_attempt(v5):
 
 def test_v5_campaign_stops_when_its_limit_is_used_up(v5):
     """LIMIT_RULE in mode campaign: the protocol's limit 1 holds; the second rejection is not replaced and the runner
-    stops as before package B9a (pause is B9b); the state counts the rejections by cause."""
+    stops: package B9b pauses the campaign there (PAUSE_RULE; before it the runner stopped with an error): its state is
+    paused, its record of the paused ending counts the rejections by cause, and the paused campaign does not run
+    again; the state counts the rejections by cause."""
     v5_protocol(v5["protocol"], limit=1)
     directory = v5_init(v5, "campaign", estimate_from=ended_rehearsal(v5))
     sid = first_of(directory)["session_id"]
     v5["reject"].update({sid, sid + "-r1"})
-    with pytest.raises(ValueError, match="^audit rejected session; archived without replacement: missed sampling slot$"):
-        c.execute(directory, vm="a")
+    assert c.execute(directory, vm="a") == 0  # An orderly stop, as for a stop request.
     first, second = c.rejections(directory)
     assert [(r["replacement"], r["limit_applied"], r["max_per_campaign"]) for r in (first, second)] \
         == [(sid + "-r1", True, 1), (None, True, 1)]
     assert second["not_replaced"] == "the protocol's 1 replacements per campaign are used up"
+    assert second["ending"] == "paused"
     assert [call[3:] for call in v5["calls"] if call[0] == "capture"] == [(1, "campaign"), (2, "campaign")]
-    assert read_json(directory / "status-a.json")["rejections_by_cause"] == {"audit_rejected": 2}
+    state = read_json(directory / "status-a.json")
+    assert state["rejections_by_cause"] == {"audit_rejected": 2}
+    assert (state["status"], state["stage"], state["message"]) == (
+        "paused", "limit", f"the limit of replacements is used up (1 per campaign): session {sid}-r1 rejected "
+                           "(audit_rejected: missed sampling slot)")
+    pointer, = c.endings(directory)
+    record = read_json(c.RESULTS / pointer["record"])["values"]
+    assert (pointer["ending"], record["ending"], record["rejections_by_cause"]) == (
+        "paused", "paused", {"audit_rejected": 2})
+    with pytest.raises(ValueError, match="is paused: it does not run again"):
+        c.execute(directory, vm="a")
 
 
 @pytest.mark.parametrize("key", [None, "attempt", "plan_mode", "events", "controls"])
@@ -1042,9 +1063,10 @@ def test_v5_group_starts_with_stop_start_reset_and_pretouch_recorded(v5):
 @pytest.mark.parametrize("step", ["stop", "start", "reset", "pretouch", "same_qemu", "way_2"])
 def test_v5_failed_group_start_rejects_before_the_measured_phase(v5, step):
     """GROUP_START_RULE: a failing step (or a start that leaves the old QEMU process, or one that holds the QEMU by way
-    2, the scope move, which labctl reports as temporary) rejects the group's first session before its measured phase
-    with the cause group_start and the step named; the protocol's rule covers no such cause, so nothing is replaced,
-    nothing captured and no group recorded."""
+    2, the scope move, which labctl reports as temporary) stops the runner before the group's first session is
+    measured, with the cause group_start and the step named; since package B9b (question Q22) it is no rejection of a
+    session but the group's start failure, groups/<group>.start-failed-<UTC>.json, and the stopped ending's record
+    names it; nothing is replaced, nothing captured and no group recorded."""
     directory = v5_init(v5)
     if step == "same_qemu":
         v5["same_qemu"] = True
@@ -1056,16 +1078,20 @@ def test_v5_failed_group_start_rejects_before_the_measured_phase(v5, step):
     with pytest.raises(ValueError, match="^" + re.escape(c.STOP_MESSAGE["group_start"] + ": " + named + ": ")):
         c.execute(directory, vm="a")
     first = first_of(directory)
-    record, = c.rejections(directory)
-    assert (record["session"], record["cause"], record["replacement"]) == (first["session_id"], "group_start", None)
-    assert record["reasons"][0].startswith(named + ": ") and len(record["reasons"]) == 1
+    path, = (directory / "groups").glob(first["group"] + ".start-failed-*.json")  # Q22: the group's start failure.
+    record = read_json(path)
+    assert (record["session"], record["cause"], record["step"]) == (first["session_id"], "group_start", named)
+    assert record["reason"].startswith(named + ": ")
     assert {"same_qemu": "labctl start left the QEMU process of the previous group",
             "way_2": "labctl start holds the QEMU by way 'scope' (temporary True)"}.get(
-        step, f"labctl {step} exited 1: labctl: synthetic failure of {step}") in record["reasons"][0]
-    assert record["not_replaced"] == "the protocol has no replacement rule for this cause"
+        step, f"labctl {step} exited 1: labctl: synthetic failure of {step}") in record["reason"]
+    assert c.rejections(directory) == []  # No rejection of a session: nothing is replaced or charged to the limit.
     assert not any(call[0] == "capture" for call in v5["calls"])
     assert not (directory / "groups" / (first["group"] + ".json")).exists()
-    assert read_json(directory / "status-a.json")["rejections_by_cause"] == {"group_start": 1}
+    pointer, = c.endings(directory)
+    ending = read_json(c.RESULTS / pointer["record"])["values"]
+    assert (ending["ending"], ending["cause"].split(":")[0]) == ("stopped", "group_start")
+    assert [(f["record"], f["step"]) for f in ending["group_start_failures"]] == [(path.name, named)]
 
 
 def test_v5_accepted_sessions_of_the_sealed_roles_are_sealed_at_once(v5):
@@ -1141,16 +1167,30 @@ def test_verify_frozen_admits_only_the_seal_ledger(tmp_path, monkeypatch, status
 
 def test_finish_corpus_keeps_the_error_text_of_the_production_check(tmp_path, monkeypatch):
     """B2 panel (deferred to B9): the refusal of validate_index, run as the owner, keeps the child's own error text
-    in the error that becomes the runner's status message."""
-    import features.dataset
-    (tmp_path / "events").mkdir()
-    p = collection.protocol(collection.DEFAULT)
-    monkeypatch.setattr(features.dataset, "build", lambda *a, **k: {"complete": True, "sessions": []})
-    monkeypatch.setattr(collection, "user_command", lambda args: [
-        sys.executable, "-c", "import sys; sys.exit('ValueError: the index holds the session s1 twice')"])
-    with pytest.raises(ValueError, match="refused the corpus index .* the index holds the session s1 twice$"):
-        c.finish_corpus(tmp_path, {"protocol_sha256": "p", "archive_root": "/", "archive_mount": {},
-                                   "archive_dir": str(tmp_path)}, p, [])
+    in the error that becomes the runner's status message. Finding F12 of the verification of B9b (harness row B9:
+    the final index is never faked in the tests): the index is a real one, features/dataset.py build over the real
+    archives and audits of a corpus of the v5 shape (features/tests/test_dataset_plan.py make_corpus, its record of
+    the complete ending first, finish_setup), and the real production check of training refuses it, run as the owner
+    (collection.user_command, here the command as it is): one feature archive changed after the build, when the
+    owner's command of the check is made. The error ends in the child's own text; the index stays in the campaign's
+    directory and goes to no archive."""
+    from features.tests.test_dataset_plan import finish_setup, make_corpus
+    corpus = make_corpus(tmp_path / "corpus", "campaign")
+    directory, manifest, copied = finish_setup(corpus, tmp_path, monkeypatch)
+    audits = list(corpus.audits.values())
+    changed = Path(read_json(audits[-1])["values"]["features"])
+
+    def as_owner(command):
+        if any("validate_index" in str(part) for part in command):  # After the build, before the check reads it.
+            with changed.open("ab") as stream:
+                stream.write(b"\0")
+        return list(map(str, command))
+    monkeypatch.setattr(collection, "user_command", as_owner)
+    with pytest.raises(ValueError, match=r"(?s)^the production check of training refused the corpus index "
+                                         + re.escape(str(directory / "corpus.json")) + r" \(safeguard/training\.py "
+                                         r"validate_index, exit 1\): .*ValueError: features checksum mismatch$"):
+        c.finish_corpus(directory, manifest, corpus.p, audits)
+    assert (directory / "corpus.json").exists() and copied == []
 
 
 @pytest.mark.parametrize("case, reason", [
@@ -1385,17 +1425,30 @@ def test_order_rule_starts_the_test_groups_in_the_plan_order_without_deadlock(tm
 def test_order_rule_wait_names_the_groups_and_keeps_its_exits(tmp_path, monkeypatch):
     """ORDER_RULE (F5): wait_for_earlier_roles under protocol schema 3 waits for the start of the groups before its
     group, names them in the state, and ends once their record exists; it keeps the exits of the rank wait: the
-    operator's stop request, and a reason when the other runner is not active after START_GRACE_S."""
+    operator's stop request, and a reason when the other runner is not active after START_GRACE_S. Finding N3 of the
+    confirmation of B9a (package B9b, agent T; the verifier's mutant f5_no_inactive_exit): the first wait has a bound,
+    a stand-in of time.sleep that fails after a few rounds, so a wait that does not end fails instead of hanging."""
     p, manifest, tests = v5_file_plan()
     for name in ("groups", "attempts", "events"):
         (tmp_path / name).mkdir()
     lower_ranks_done(tmp_path, manifest, p)
     row = first_row(manifest, tests[1][1])
     monkeypatch.setattr(c, "START_GRACE_S", 0)
+    polls = []
+
+    def bounded(seconds):
+        """The bound of the first wait (judgment of the test: the wait ends before its first poll, three polls are a
+        wait that does not end)."""
+        polls.append(seconds)
+        if len(polls) >= 3:
+            pytest.fail(f"the wait did not end after {len(polls)} polls although the other runner is not active "
+                        "(START_GRACE_S 0)")
+    monkeypatch.setattr(c.time, "sleep", bounded)
     # The other runner is not active: a reason to stop that names the groups.
     assert c.wait_for_earlier_roles(tmp_path, manifest, p, row) == (
         f"VM b has not started the groups before {tests[1][1]} in the plan ({tests[0][1]}) and its runner is not "
         "active")
+    assert polls == []
     # It is active: the state names what the runner waits for, and the wait ends when the group has started.
     write_new(tmp_path / "status-b.json", {"status": "running", "pid": os.getpid(),
                                            "process_identity": c.process_identity(os.getpid())})
@@ -1461,16 +1514,17 @@ def test_order_rule_states_the_order_inside_the_shared_rank():
 
 
 def test_a_group_start_rejection_is_never_replaced_as_the_rule_says(tmp_path):
-    """F7 of the verification of B9a: GROUP_START_RULE (written into campaign.json) and reject() state that a rejection
-    with the cause group_start is never replaced, why no protocol may cover it, that the runner stops by name and that
-    package B9b ends the campaign with a record; and so it is: REPLACEMENT_CAUSES lacks group_start, and the loader
-    refuses a replacement rule whose covers name it (the verifier's probe sondy/s/covers.py)."""
+    """F7 of the verification of B9a, and question Q22 of package B9b: GROUP_START_RULE (written into campaign.json)
+    and reject() state that a failed start of a group is no rejection of a session (so it is never replaced), why no
+    protocol may cover group_start, that the runner stops by name and that a resumed run starts the group again; and
+    so it is: REPLACEMENT_CAUSES lacks group_start, and the loader refuses a replacement rule whose covers name it (the
+    verifier's probe sondy/s/covers.py)."""
     for text in (" ".join(c.GROUP_START_RULE.split()), " ".join(c.reject.__doc__.split())):
         assert "its covers decide whether group_start is replaced" not in text
-        for phrase in ("A rejection with the cause group_start is never replaced", "no protocol may cover group_start",
+        for phrase in ("A failed start of a group is no rejection of a session", "no protocol may cover group_start",
                        "collection.check_replacement admits in replacement.covers only REPLACEMENT_CAUSES "
                        "(audit_rejected, capture_incomplete)", "the runner stops by name",
-                       "package B9b ends the campaign with a record"):
+                       "a resumed run starts the group again"):
             assert phrase in text, phrase
     assert c.RULES["group_start"] == c.GROUP_START_RULE
     assert set(collection.REPLACEMENT_CAUSES) == {"audit_rejected", "capture_incomplete"}
@@ -1536,8 +1590,8 @@ def test_v5_group_start_refuses_a_step_whose_result_is_not_what_it_asked(v5, mon
     """GROUP_START_RULE (F6 of the verification of B9a): a step that exits 0 without the result the start asked for is
     refused by name: the guest must echo the protocol's seed after labctl reset, labctl pretouch must have touched the
     memory, and the guest identity and the QEMU process after the pretouch must be those after the start. The group's
-    first session is rejected with the cause group_start before its measured phase, nothing is replaced, captured or
-    recorded as the group."""
+    first session is never measured: the cause group_start and the step are the group's start failure (question Q22,
+    package B9b: no rejection of a session), nothing is replaced, captured or recorded as the group."""
     directory = v5_init(v5)
     first = first_of(directory)
 
@@ -1554,9 +1608,11 @@ def test_v5_group_start_refuses_a_step_whose_result_is_not_what_it_asked(v5, mon
     after_lab_verb(monkeypatch, verb, change)
     with pytest.raises(ValueError, match="^" + re.escape(f"{c.STOP_MESSAGE['group_start']}: {step}: {said}") + "$"):
         c.execute(directory, vm="a")
-    record, = c.rejections(directory)
-    assert (record["session"], record["cause"], record["reasons"], record["replacement"]) \
-        == (first["session_id"], "group_start", [f"{step}: {said}"], None)
+    path, = (directory / "groups").glob(first["group"] + ".start-failed-*.json")  # Q22: no rejection of a session.
+    record = read_json(path)
+    assert (record["session"], record["cause"], record["step"], record["reason"]) \
+        == (first["session_id"], "group_start", step, f"{step}: {said}")
+    assert c.rejections(directory) == []
     assert [call[2] for call in v5["calls"] if call[0] == "lab"] \
         == ["stop", "start", "reset", *(["pretouch"] if step == "pretouch" else [])]  # refused at its step
     assert not any(call[0] == "capture" for call in v5["calls"])

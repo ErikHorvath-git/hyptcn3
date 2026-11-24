@@ -23,6 +23,10 @@ gate ask the same function instead of repeating a part of the rule:
     periodic_run()           the longest run of one spacing between the starts of bursts of flagged rows (the
                              audit records it always)
     spacing_mode()           the most frequent of those spacings (the audit records it; never a reason)
+    marked_rows_by_type()    the flagged rows inside the event windows of each event type, the windowed
+                             occurrences of each type, and the flagged rows outside every window (MARKED_ROWS_RULE;
+                             the audit records them, the campaign sums them for its early stop through
+                             features/audit_policy.py early_stop, package B9b and its fix)
 
 The time gap and the sampling period are decided here from the row times of the archive. What no reader of an
 archive can derive, and what therefore stays with the audit alone: the sidecars, the logs, the cadence of full
@@ -165,6 +169,50 @@ def spacing_mode(seqs):
 def flagged_seq(facts):
     """Rows the periodicity rule reads: the invalid rows and the rows a parser rule closed (v4c gave both)."""
     return sorted({row["seq"] for row in facts["invalid_rows"]} | set(facts["rule_closed_seq"]))
+
+
+# Package B9b, agent Z (design B9b 1.3; the early stop of proposal 7.5 and 10.9, features/audit_policy.py early_stop).
+MARKED_ROWS_RULE = (
+    "the marked rows of a session by event type (design B9b 1.3 and its fix: F5 and F8 of the verification of B9b, "
+    "question Q24; the early stop of proposal 7.5 and 10.9): the rows flagged_seq gives (the invalid rows and the rows "
+    "a parser rule closed, as features/acceptance.py marks them for the periodicity rule), each counted under every "
+    "event type one of whose occurrences in the session's events.json holds the row's time (its snapshot time, casy "
+    "of the archive) in the occurrence's event window, the window in which the log audit of the same session judges "
+    "the event (scripts/collection_logs.py event_window, one function for both: host_start_unix - 1 s to "
+    "host_stopped_unix + the session's event_grace_s, events.grace_s of its protocol, both ends included), since the "
+    "stop call of an event restores the lab until host_stopped_unix and the same audit admits the event's warnings in "
+    "that window; an occurrence the log audit does not window (no host start, or no host stop done) holds no row and "
+    "is no occurrence; a row inside no window is counted apart (outside events), as is every marked row of a session "
+    "without events (the controls of role test_controls are no events); beside the rows, the windowed occurrences of "
+    "each type are counted (event_occurrences_by_type); every event type of the protocol is in both counts, 0 when "
+    "none, and a type the protocol does not name is counted under its own name. The early stop does not judge one "
+    "session: the campaign sums both counts over its audited sessions and compares the sum per type with a bound at "
+    "its rate per occurrence (scripts/campaign.py early_stop_check, features/audit_policy.py EARLY_STOP_RULE: Q24, "
+    "decided by its proposal). The window is that of the log audit by F8; that a row counts under every type whose "
+    "window holds it is the executor's judgment (windows of one session do not overlap: min_gap_s)")
+
+
+def marked_rows_by_type(flagged, times, windows, types):
+    """MARKED_ROWS_RULE: ({event type: count of marked rows inside its windows}, {event type: windowed occurrences},
+    count of the marked rows inside no window).
+
+    flagged: the seq of the marked rows (flagged_seq of the verdict's facts); times: {seq: snapshot time} of the rows
+    of the session; windows: [(event type, start, end)] of the occurrences of the session that the log audit windows
+    (scripts/collection_logs.py event_window), [] for a session without events; types: the event types of the
+    protocol (events.types), each in both results. A marked row without a time is refused by name (ValueError),
+    never placed."""
+    counts, occurrences, outside = dict.fromkeys(types, 0), dict.fromkeys(types, 0), 0
+    for kind, _, _ in windows:
+        counts.setdefault(kind, 0)
+        occurrences[kind] = occurrences.get(kind, 0) + 1
+    for seq in flagged:
+        if seq not in times or not _seconds(times[seq]):
+            raise ValueError(f"marked row {seq} has no snapshot time")
+        inside = {kind for kind, start, end in windows if start <= times[seq] <= end}
+        for kind in inside:
+            counts[kind] += 1
+        outside += not inside
+    return dict(sorted(counts.items())), dict(sorted(occurrences.items())), outside
 
 
 def _verdict(protocol, role, assigned, rule, known, facts):

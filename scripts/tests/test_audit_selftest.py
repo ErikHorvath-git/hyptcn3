@@ -415,9 +415,16 @@ def test_selftest_protocol_carries_the_bounds_of_g0_and_the_whole_register():
     p = collection.protocol(SELFTEST_PROTOCOL)
     assert (p["schema"], p["interval_s"], p["max_gap_s"], p["window_rows"], p["full_every"], p["cycles"]) == (
         "hyptcn3/collection-protocol/3", 5, 7.5, 32, 360, 720)
-    assert {k: v for k, v in p["audit"].items() if k not in ("periodicity", "traffic")} == {
+    assert {k: v for k, v in p["audit"].items() if k not in ("periodicity", "traffic", "early_stop")} == {
         "lateness_max_s": .5, "cycle_ms_max": {"delta": 1500, "full": 3500}, "warnings_allowed": None,
         "rule_closed_rows_max": None}
+    # Package B9b and its fix (Q24): the rule of the early stop, one rate per event type of the file, each null until
+    # G3b, and the stop for periodicity of the lead's skeleton B9 (row skoré zastavenie).
+    early_stop = p["audit"]["early_stop"]
+    assert set(early_stop) == {"marked_rows_rate_per_type", "periodicity_stops", "note"}
+    assert early_stop["marked_rows_rate_per_type"] == dict.fromkeys(sorted(p["events"]["types"]))
+    assert early_stop["periodicity_stops"] is True
+    assert all(text in early_stop["note"] for text in ("judgment", "G3b", "10.9", "7.5"))
     assert (p["audit"]["periodicity"]["equal_spacings"], p["audit"]["periodicity"]["min_spacing_rows"]) == (3, 2)
     assert "judgment" in p["audit"]["periodicity"]["note"]
     # Package B5b: the bounds of proposals 5.3 and 5.7 and the tolerances of the author's judgment, named so.

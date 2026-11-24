@@ -192,7 +192,14 @@ UNSCORED_RULE = (
 CAMPAIGN_RULE = (
     "the record of the campaign in data/results (package B9): values.planned_sessions and accepted_sessions "
     "(integers; accepted_sessions equals the sessions of the index) and values.rejected_sessions, each {session, "
-    "cause, replacement: the session that replaced it or null}; tabulated by cause")
+    "cause, replacement: the session that replaced it or null}; tabulated by cause. Only the record of the complete "
+    "ending of the campaign of the index is read (F7 of the verification of B9b): its schema "
+    "hyptcn3/campaign-ending/1 (scripts/campaign.py ENDING_RULE), values.ending complete, values.campaign the campaign "
+    "of the index (the campaign_id that the session.json of every session of the index names, but of those it took "
+    "over from the campaign it continues, continues.taken_over_sessions), and its accepted sessions (the rows of "
+    "values.sessions in state accepted) the sessions of the index as a set; any other record is refused by name "
+    "before anything is computed")
+ENDING_SCHEMA = "hyptcn3/campaign-ending/1"  # scripts/campaign.py ENDING_SCHEMA: the record of a campaign's ending.
 TRAINING_RULE = (
     "design B7c 1.3 (question Q11 to the lead, provisional by the executor's proposal) and 5.4: before the seal, for "
     "every seed of M, on each of the fit roles dev and calibration, tcn.eval training_summary: the loss against the "
@@ -384,15 +391,70 @@ def gate(path, doc, stage):
             "protocol_sha256": doc["protocol_sha256"], "rule": GATE_RULE}
 
 
-def campaign_record(path, doc):
-    """CAMPAIGN_RULE: the record of the campaign, checked, and its rejected and replaced sessions by cause."""
+def index_campaign(doc, index=None):
+    """CAMPAIGN_RULE: the campaign of a corpus index, which the index states nowhere itself: the campaign_id that the
+    session.json of every session of the index names (scripts/collection.py run writes it), but of the sessions the
+    index takes over from the campaign it continues (continues.taken_over_sessions, scripts/campaign.py
+    continuation_note); a relative path of a session.json is read beside the index `index`. Refused by name when a
+    session.json cannot be read or the sessions name no single campaign."""
+    taken = set((doc.get("continues") or {}).get("taken_over_sessions") or [])
+    named = set()
+    for record in doc["sessions"]:
+        if record.get("id") in taken:
+            continue
+        file = Path(record.get("session") or "")
+        if not file.is_absolute() and index is not None:
+            file = Path(index).parent / file
+        try:
+            meta = json.loads(file.read_text())
+        except (OSError, ValueError) as error:
+            raise ValueError(f"the session.json of session {record.get('id')} of the corpus index cannot be read "
+                             f"({type(error).__name__}: {error}), so its campaign is not known "
+                             "(CAMPAIGN_RULE)") from None
+        named.add(meta.get("campaign_id") if type(meta) is dict else None)
+    if len(named) != 1 or type(next(iter(named))) is not str:
+        raise ValueError("the sessions of the corpus index name no single campaign (campaign_id of their session.json: "
+                         + ", ".join(sorted(map(repr, named))) + "), so no campaign record is its own (CAMPAIGN_RULE)")
+    return named.pop()
+
+
+def campaign_record(path, doc, index=None):
+    """CAMPAIGN_RULE: the record of the complete ending of the campaign of the corpus index `doc` (its file `index`,
+    for the relative paths of its sessions), checked, and its rejected and replaced sessions by cause. Each condition
+    is refused by name: the schema of the record of an ending, the ending complete, the campaign of the index, the
+    accepted sessions of the record the sessions of the index, the counts."""
     path = Path(path).resolve()
     record = json.loads(path.read_text())
     values = record.get("values") if type(record) is dict else None
+    schema = record.get("schema") if type(record) is dict else None
+    if schema != ENDING_SCHEMA:
+        raise ValueError(f"{path}: a record of schema {schema!r} is no record of the ending of a campaign "
+                         f"({ENDING_SCHEMA}, scripts/campaign.py ENDING_RULE): it is not the record of a corpus "
+                         "(CAMPAIGN_RULE)")
     if type(values) is not dict or not all(key in values for key in ("planned_sessions", "accepted_sessions",
                                                                        "rejected_sessions")):
         raise ValueError(f"{path}: the campaign record has values.planned_sessions, accepted_sessions and "
                          "rejected_sessions (package B9)")
+    if values.get("ending") != "complete":
+        raise ValueError(f"{path}: the record of the ending {values.get('ending')!r} of campaign "
+                         f"{values.get('campaign')!r} is not the record of a corpus: only the record of the complete "
+                         "ending is (CAMPAIGN_RULE)")
+    campaign = index_campaign(doc, index)
+    if values.get("campaign") != campaign:
+        raise ValueError(f"{path}: the record of campaign {values.get('campaign')!r} is not the record of the corpus "
+                         f"index of campaign {campaign!r} (CAMPAIGN_RULE)")
+    rows = values.get("sessions")
+    if type(rows) is not list or not all(type(row) is dict and type(row.get("session")) is str
+                                         and type(row.get("state")) is str for row in rows):
+        raise ValueError(f"{path}: the record has no values.sessions, a row {{session, state, ...}} per planned "
+                         "session and attempt (scripts/campaign.py ENDING_RULE) (CAMPAIGN_RULE)")
+    held = {row["session"] for row in rows if row["state"] == "accepted"}
+    indexed = {r["id"] for r in doc["sessions"]}
+    if held != indexed:
+        raise ValueError(f"{path}: the accepted sessions of the record are not the sessions of the corpus index (only "
+                         f"in the record: {', '.join(sorted(held - indexed)[:3]) or 'none'}; only in the index: "
+                         f"{', '.join(sorted(indexed - held)[:3]) or 'none'}): it is not the record of this corpus "
+                         "(CAMPAIGN_RULE)")
     planned, accepted, rejected = (values[key] for key in ("planned_sessions", "accepted_sessions",
                                                           "rejected_sessions"))
     if type(planned) is not int or type(accepted) is not int or type(rejected) is not list:
@@ -918,7 +980,7 @@ def refusals(corpus, models, *, campaign, replays, out):
     check_outputs(out, replays, state["stage"])
     gated = gate(path, doc, state["stage"])
     checked_tree = tree(state["stage"])
-    kampan = campaign_record(campaign, doc)
+    kampan = campaign_record(campaign, doc, path)
     index_sha256 = _digest(path)
     ms, model_records = bundles(models, index_sha256, protocol, plan)
     _, _, records = validate_index(path, diagnostic=False)

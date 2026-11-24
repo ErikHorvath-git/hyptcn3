@@ -242,6 +242,134 @@ stavu potom ostane `running`. `status` ho podľa živosti procesu označí ako
 `stale` a ďalšie spustenie zaznamená `unclean-end`. Session bez `end.json`
 sa považuje za neúplnú session s meraním.
 
+### Protokol v5: poradie testovacích skupín, ukončenia a ich záznamy
+
+Bežec kampane protokolu v5 začne skupinu roly `test_benign` alebo
+`test_controls` až vtedy, keď na druhej VM začala každá skupina týchto rolí,
+ktorá je v pláne pred ňou (`ORDER_RULE` v `scripts/campaign.py`). Táto bariéra
+pridáva kampani nečinný čas: v modeli overovateľa so session rovnakej dĺžky
+skončí kampaň v5 po 72 namiesto 66 dĺžkach session, asi o 9 % neskôr (model,
+nie meranie). Zastavenie jedného bežca zastaví aj druhého pri jeho
+najbližšej testovacej skupine, ktorá naň čaká (dôvod: bežec druhej VM nie je
+aktívny). Bariéra usporiada začiatky testovacích skupín, nie ich konce: test 2
+kostry B9 platí z konštrukcie iba pre plán, ktorého prekladaná postupnosť
+končí skupinou `test_benign`, ako plán kampane (`v5-test_benign-12`);
+generálka končí `g5-test_controls-2` a pri oneskorení asi o jednu skupinu ho
+poruší, čo záznam ukončenia uvedie v odchýlkach.
+
+Každé ukončenie kampane v5 zapíše jeden záznam
+`data/results/kampan_<kampaň>_<ukončenie>_<čas UTC>.json` (`ENDING_RULE`):
+`complete` (úplná, ešte pred indexom; `finish_corpus` bez neho odmietne),
+`paused` (pozastavená), `stopped` (zastavená: skoré zastavenie, chyba bežca,
+zlyhaný začiatok skupiny, žiadosť operátora), `invalid` (neplatná)
+a `closed` (uzavretá operátorom). Stupeň záznamu (otázka Q21, kým vedúci
+neodpovie, podľa jej návrhu): v režime `campaign` je `final`, keď kniha
+záznamu v pracovnom strome drží každú prijatú session zapečatených rolí;
+báza menuje sha256 knihy, lebo kniha sa commitne až po kampani a knihu na HEAD
+preverí `tcn.finalne`, keď záznam číta. Generálka dostane `generalka`.
+Inak je `suchy` s dôvodom: vlastná kniha testu alebo suchého behu G1,
+chýbajúca pečať, alebo záznam bez prijatej session zapečatených rolí.
+Kým beží iný bežec, ukončenie čaká
+v `ending.json` adresára kampane a ten bežec sa zastaví pri najbližšej
+kontrole; záznam zapíše posledný bežec, ktorý sa zastaví (po jeho páde ďalší
+`run`, `launch` alebo `close`). `request-stop` kampane v5 žiada `--reason`,
+ktorý záznam uvedie medzi odchýlkami. Zastaveniu na hranici `--stop-after`
+a zastaveniu preto, že bežec druhej VM nie je aktívny, záznam nepatrí.
+
+Každý záznam nesie medzi odchýlkami aj históriu kampane: každé skoršie
+zaznamenané ukončenie (druh, príčinu, meno záznamu a sha256), každý nečistý
+koniec a každú písomnú príčinu obnovenia po skorom zastavení (nižšie).
+Nečistý koniec zistí beh, ktorý pri voľnom zámku nájde stav svojej VM
+`running` (SIGKILL, pád, výpadok napájania). Pred pokračovaním ho zapíše ako
+`deviations/<čas UTC>_unclean-end_<vm>.json` s VM, s tým stavom (etapa,
+session, `updated_at`) a s časom zistenia. Je to odchýlka, nie ukončenie, lebo
+bežec druhej VM mohol pokračovať. Session má v zázname jeden zo štyroch
+stavov: `accepted` (kontrolný bod), `rejected` (záznam zamietnutia),
+`captured, not judged` (adresár session bez oboch: bežec sa zastavil počas jej
+zberu, auditu alebo pri zámku auditu) a `not run` (bez adresára session).
+Úplnú kampaň s hotovým indexom a kampaň uzavretú operátorom `run` ani `launch`
+už nespustia: odmietnu ich menom ešte pred kontrolou zmrazeného stromu, bez
+ďalšieho ukončenia a záznamu, takže commit záznamov po kampani nič nepokazí.
+Kampaň, ktorej bežec po zázname úplného ukončenia zanikol skôr, než dostaval
+index, sa spustí znova a nový beh index dostavia (výklad opravy B9b).
+
+Skoré zastavenie (otázka Q24, podľa jej návrhu): po každom audite
+dokončeného zberu bežec zapíše `marked/<session>.json` (VM, session,
+`audited_at`, označené riadky a výskyty po typoch udalostí z auditu, sha256
+záznamu auditu), sčíta súbory oboch VM od začiatku kampane alebo od jej
+posledného zaznamenaného ukončenia so spúšťačom skorého zastavenia
+(pokračovanie počíta iba svoje session) a rozhodne
+`features/audit_policy.py early_stop`. Session zamietnutá pre periodicitu,
+alebo počet kampane C_T označených riadkov pri type T nad 99. percentilom
+Poissonovho rozdelenia so strednou hodnotou miera_T × n_T výskytov
+(`audit.early_stop.marked_rows_rate_per_type`), zastaví kampaň. Session sa
+pritom najprv prijme a zapečatí, alebo zamietne a nahradí. Príčina menuje typ,
+počet, výskyty, mieru a hranicu. Miery sú `null` do G3b: počty sa iba vytlačia
+v stave bežca a kampaň ide ďalej. Skoré zastavenie, ktoré sa nedá rozhodnúť,
+zastaví kampaň ako chybu menom, nikdy nie ako „bez zastavenia“.
+Skoré zastavenie je zastavenie a otázka (HARNESS, kap. 7; `RESUME_RULE`):
+kým je posledným zaznamenaným ukončením zastavenie so skorým zastavením,
+`run` aj `launch` ho odmietnu menom. Kampaň pokračuje až s písomným rozborom
+príčiny, `run --vm <vm> --cause "<rozbor>"` alebo `launch --cause "<rozbor>"`,
+a počet skorého zastavenia potom začne znova od toho zastavenia.
+Príkaz ho zapíše ako `deviations/<čas UTC>_resume-after-early-stop_<vm>.json`
+(pri `launch` všetkých VM bez VM) s menom a sha256 záznamu, na ktorý
+odpovedá, a každý ďalší záznam ho uvedie medzi odchýlkami. Jedna odpoveď
+stačí obom VM. Prázdny `--cause` a `--cause` po inom ukončení ako skorom
+zastavení sa odmietnu menom. Ostatné zastavenia (žiadosť operátora, signál,
+zlyhaný začiatok skupiny, chyba) pokračujú obyčajným `run` alebo `launch`.
+
+Zlyhaný začiatok skupiny (otázka Q22, kým vedúci neodpovie, podľa jej návrhu)
+nie je zamietnutím session, lebo žiadna session sa nemerala. Zapíše sa ako
+`groups/<skupina>.start-failed-<čas UTC>.json` s krokom, výstupom a príčinou
+`group_start` a kampaň skončí ako zastavená s touto príčinou. Nič sa
+nenahrádza a limit náhrad sa nezaťaží. Obnovený `run` začne skupinu znova od
+začiatku (stop, start, reset, pretouch) a zachytí jej session podľa plánu,
+ako pokus 1. Každý zlyhaný začiatok uvedie každý ďalší záznam ukončenia
+(`group_start_failures`) aj v odchýlkach.
+
+Vyčerpaný limit náhrad v režime `campaign` kampaň pozastaví na rozbor: oba
+bežce skončia so stavom `paused` a `run` ani `launch` ju už nespustia.
+Pozastavená kampaň má jedno pokračovanie:
+
+```sh
+.venv/bin/python scripts/campaign.py init --continue data/campaigns/<pozastavená kampaň> \
+  --cause "<písomná príčina>" --mode campaign --estimate-from <generálka> \
+  --protocol config/collection-v5.json --archive-root <archív>
+```
+
+Žiada záznam pozastavenia (commitnutý: `init` žiada čistý strom), neprázdnu
+príčinu a nezmenený merací kód aj lab po súboroch
+(`collection.measurement_sources`, `collection.lab_sha256`) oproti zmrazeniu
+pozastavenej kampane; zmenený alebo chýbajúci súbor odmietne menom, nový súbor
+tiež (treba ho odstrániť a skúsiť znova); limit platí znova ten istý. Druhé
+vyčerpanie v pokračovaní alebo zmena meracieho kódu či labu počas kampane ju
+zneplatní (`invalid`, bez korpusu). `init` zmrazí oba po súboroch
+(`measurement_files_sha256` vedľa `measurement_sha256`, `lab_sha256`) a kampaň
+je neplatná, len keď sa zmrazený súbor zmenil alebo chýba. Nový súbor vedľa
+nich (odkladací súbor editora `lab/.udalosti.py.swp`, alebo súbor, ktorý git
+ignoruje a `labctl deploy` by ho skopíroval do hosťa) je zmenou stromu: beh ho
+odmietne menom (`campaign source changed`, s menom nového súboru), kampaň sa
+zastaví a po jeho odstránení pokračuje. Zastavenú kampaň
+možno po odstránení príčiny spustiť znova (`run`, `launch`). Zamietnutie
+session bez náhrady, ktoré nastalo po začiatku merania (príčina mimo
+`replacement.covers`, strata bootu, pokus, ktorý sa nedá vylosovať), však
+nechá kampaň zastavenú. Každé ďalšie spustenie sa zastaví na tom istom
+zamietnutí, kým ju operátor neuzavrie (`close`). Po kampani sa záznamy jej
+ukončení a kniha pečatí commitnú a odošlú spolu.
+
+Po ukončení, ktoré kampaň uzavrie (`complete`, `invalid`, `closed`), patrí do
+toho istého commitu so záznamami a knihou pečatí aj položka v
+[MERANIA.md](MERANIA.md) a za každú odchýlku zápis v
+[ODCHYLKY_V5.sk.md](ODCHYLKY_V5.sk.md); bez nich sa surové dáta nemažú (návrh,
+kap. 11.6). Položka uvádza kampaň a ukončenie, meno a sha256 záznamu,
+plánované, prijaté, zamietnuté a nahradené session, neskórovaný čas
+a odchýlky. Záznam takého ukončenia ju nesie v `values.merania_entry`, každé
+číslo so značkou `{{res:…}}` kontroly C, a príkaz, ktorý záznam zapísal, ju
+vypíše aj so sha256 záznamu, ktorý záznam sám v sebe niesť nemôže. Po
+zastavení sa dokumentácia ani záznamy necommitujú: zmrazený strom
+(`FROZEN_TREE_RULE`) by ďalší beh odmietol.
+
 Rovnaký príkaz pokračuje z existujúcich artefaktov, nezačína novú kampaň.
 Dokončené session sa nezbierajú znova. Prerušené kopírovanie a uvoľňovanie
 pracovných raw kópií sú obnoviteľné. Prerušená extrakcia dostane nový názov
@@ -358,7 +486,9 @@ Report číta iba uložené dôkazy (RAM obrazy neotvára, archív nedekomprimuj
 a každú hodnotu viaže na vstupný súbor so SHA-256. Chýbajúca hodnota má
 uvedený dôvod, nikdy odhad. Výstupný adresár musí byť nový a mimo vstupov.
 Odložené pokusy (`<session>.attempt-<n>`), žiadosti o zastavenie a uzavretie
-kampane uvádza osobitne. Počas bežiacej kampane ho nespúšťať, lebo zaťaží
+kampane uvádza osobitne, rovnako zlyhané začiatky skupín (po skupinách s VM,
+krokom, časom, príčinou a tým, či sa skupina začala znova), oddelene od
+zamietnutí po príčinách. Počas bežiacej kampane ho nespúšťať, lebo zaťaží
 hostiteľa.
 
 Stav pripravenosti pred spustením kampane je v

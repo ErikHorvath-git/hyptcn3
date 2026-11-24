@@ -87,9 +87,11 @@ def sections():
     flagged rows are adjacent or STEP apart, below the smallest spacing the periodicity rule counts."""
     from features import audit_policy
     from scripts.tests.boundary_sessions import traffic_bounds  # Package B5b: the traffic bounds of the v5 file.
+    from scripts.tests.boundary_sessions import early_stop_bounds  # Package B9b: the early stop of the v5 file.
     return {"audit": {"lateness_max_s": .1, "cycle_ms_max": {"delta": 300, "full": 700},
                       "periodicity": {"equal_spacings": 3, "min_spacing_rows": STEP + 1, "note": "test bounds"},
-                      "warnings_allowed": None, "rule_closed_rows_max": None, "traffic": traffic_bounds()},
+                      "warnings_allowed": None, "rule_closed_rows_max": None, "traffic": traffic_bounds(),
+                      "early_stop": early_stop_bounds()},
             "exceptions": {name: {"cause": "synthetic", "decision": "synthetic", "expected": None}
                            for name in audit_policy.TOLERATED}}
 
@@ -1040,13 +1042,16 @@ def v5_grid(max_rows, gate):
     strictest periodicity bound its audit section admits (two equal spacings of two rows or more in a row), so a
     witness it accepts is periodic under no bound."""
     from scripts.tests.boundary_sessions import traffic_bounds  # Package B5b: the traffic bounds of the v5 file.
+    # Package B9b: the early stop of the v5 file; without an events section the protocol has no event type to bound.
+    from scripts.tests.boundary_sessions import early_stop_bounds
     return {"schema": "hyptcn3/collection-protocol/3", "quality_policy": BEHAVIOR, "interval_s": 5,
             "max_gap_s": 7.5, "stride": 1, "bin_bytes": BIN_BYTES, "window_rows": 32, "full_every": 360,
             "cycles": 720, "pilot_cycles": 600, "min_score_coverage": gate,
             "invalid_rows": {"max": max_rows, "traversals": ["processes"]},
             "audit": {"lateness_max_s": .5, "cycle_ms_max": {"delta": 1500, "full": 3500},
                       "periodicity": {"equal_spacings": 2, "min_spacing_rows": 2, "note": "strictest test bound"},
-                      "warnings_allowed": None, "rule_closed_rows_max": None, "traffic": traffic_bounds()}}
+                      "warnings_allowed": None, "rule_closed_rows_max": None, "traffic": traffic_bounds(),
+                      "early_stop": early_stop_bounds([])}}
 
 
 @pytest.mark.parametrize("count", range(1, 8))

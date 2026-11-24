@@ -1721,3 +1721,156 @@ def test_campaign_summary_names_accepted_sessions_without_a_record_of_tolerated_
                                                "missing": "no accepted session records it"}}
     readme = (out / "README.md").read_text()
     assert "- `invalid_rows`: no accepted session records it" in readme and "total 0" not in readme
+
+
+# ---------------------------------------------------------------- package B9b: endings, causes and the limit
+
+ENDING = "hyptcn3/campaign-ending/1"  # scripts/campaign.py, design B9b 1.1 (agent R writes it).
+
+
+def ending_record(results, cid, ending, cause, date, *, stage_in_values=False, **values):
+    """An ending record of a campaign in the shape of design B9b 1.1 (kampan_<id>_<ending>_<stamp>.json in `results`),
+    with the provenance header of check E and the values the report lists; its stage suchy beside the header, or
+    only in values as tcn.pecat record_stage gives it ({stage, basis})."""
+    path = results / f"kampan_{cid}_{ending}_{date[:19].replace('-', '').replace(':', '')}Z.json"
+    stage = {"stage": "suchy", "basis": {"why": "synthetic"}}
+    write_json(path, {"schema": ENDING, "commit": "synthetic", "date": date, "host": "synthetic", "guest": None,
+                      "command": "scripts/campaign.py run", "n": 4, **({} if stage_in_values else {"stage": "suchy"}),
+                      "values": {"campaign": cid, "mode": "campaign", "ending": ending, "cause": cause,
+                                 **({"stage": stage} if stage_in_values else {}),
+                                 "planned_sessions": 4, "accepted_sessions": 2,
+                                 "rejected_sessions": [{"session": "x", "cause": "audit_rejected",
+                                                        "replacement": "x-r1"}],
+                                 "rejections_by_cause": {"audit_rejected": 1},
+                                 "limit": {"applied": True, "max_per_campaign": 1}, "replacements_used": 1,
+                                 "continues": None, "deviations": [], **values}})
+    return path
+
+
+def test_report_gives_the_state_of_each_runner_with_the_ending_records_of_package_b9b(tmp_path, monkeypatch):
+    """Design B9b 1.3: the states paused, invalid and stopped have their categories of runner time and their lanes,
+    and the report lists every ending record of the campaign (kampan_<id>_*.json in data/results beside
+    data/campaigns) in the order of its date, with its ending, cause, stage and counts; the record of another
+    campaign whose ID begins with this one's is not the campaign's."""
+    assert [cr.stage_category({"status": status, "stage": "limit"}) for status in ("paused", "invalid", "stopped")] \
+        == ["paused", "invalid", "stopped"]
+    directory, _, _, _ = make_multi_campaign(tmp_path, monkeypatch)
+    results = tmp_path / "data" / "results"
+    for vm in ("a", "b"):
+        camp.update_state(directory, vm=vm, status="paused", stage="limit",
+                          message="the limit of 1 replacement is exhausted")
+    paused = ending_record(results, "synthetic-multi", "paused", "the limit of 1 replacement is exhausted",
+                           "2027-01-15T10:00:00+00:00")
+    stopped = ending_record(results, "synthetic-multi", "stopped", "operator stop request",
+                            "2027-01-15T09:00:00+00:00", stage_in_values=True, accepted_sessions=1)
+    ending_record(results, "synthetic-multi_b", "complete", "every session accepted", "2027-01-15T11:00:00+00:00")
+    out = tmp_path / "report"
+    assert run_report(["campaign", directory, "--out", out]) == 0
+    campaign = json.loads((out / "summary.json").read_text())["campaign"]
+    assert [(e["file"], e["ending"], e["cause"], e["stage"], e["accepted_sessions"], e["sha256"])
+            for e in campaign["endings"]] == [
+        (stopped.name, "stopped", "operator stop request", "suchy", 1, sha(stopped)),
+        (paused.name, "paused", "the limit of 1 replacement is exhausted", "suchy", 2, sha(paused))]
+    assert {k: v for k, v in campaign["endings"][1].items() if k not in ("file", "path", "sha256")} == {
+        "date": "2027-01-15T10:00:00+00:00", "ending": "paused", "cause": "the limit of 1 replacement is exhausted",
+        "stage": "suchy", "mode": "campaign", "planned_sessions": 4, "accepted_sessions": 2,
+        "rejections_by_cause": {"audit_rejected": 1}, "limit": {"applied": True, "max_per_campaign": 1},
+        "replacements_used": 1, "continues": None, "rejected_sessions": 1, "deviations": []}
+    assert campaign["runners"] == [{"vm": vm, "status": "paused", "stage": "limit",
+                                    "message": "the limit of 1 replacement is exhausted"} for vm in ("a", "b")]
+    assert (campaign["results_dir"], campaign["endings_missing"], campaign["problems"]) == (str(results), None, [])
+    assert {str(paused), str(stopped)} <= {item["path"] for item in json.loads((out / "summary.json").read_text())[
+        "sources"] if item["kind"] == "campaign_ending"}  # Every value of the report comes from a listed file.
+    readme = (out / "README.md").read_text()
+    assert ("State of the runners: VM a paused (the limit of 1 replacement is exhausted), VM b paused (the limit of "
+            "1 replacement is exhausted).") in readme
+    assert (f"- `{paused.name}` (SHA-256 `{sha(paused)}`), 2027-01-15T10:00:00+00:00: ending paused, cause the limit "
+            "of 1 replacement is exhausted, stage suchy; accepted 2 of 4 planned sessions, 1 rejected, rejections by "
+            'cause {"audit_rejected": 1}.') in readme
+    assert readme.index(stopped.name) < readme.index(paused.name)
+
+
+def test_report_names_an_invalid_runner_of_schema_3_without_an_ending_record(tmp_path, monkeypatch):
+    """Design B9b 1.1 and 1.2: a campaign of protocol schema 3 (campaign.json mode) that is paused or invalid has
+    written its ending record; a runner in such a state (here invalid) with no record of the campaign is a
+    consistency problem, a stopped one (VM b, after a stop-after boundary) is not, and the report says why it read
+    no record."""
+    directory, _, _, _ = make_multi_campaign(tmp_path, monkeypatch)
+    manifest = json.loads((directory / "campaign.json").read_text())
+    (directory / "campaign.json").write_text(json.dumps(dict(manifest, mode="campaign")))
+    camp.update_state(directory, vm="a", status="invalid", stage="hash", message="the measurement code changed")
+    results = tmp_path / "data" / "results"
+    out = tmp_path / "report"
+    assert run_report(["campaign", directory, "--out", out]) == 0
+    campaign = json.loads((out / "summary.json").read_text())["campaign"]
+    assert (campaign["endings"], campaign["endings_missing"]) == ([], f"the results directory {results} is absent")
+    assert [p for p in campaign["problems"] if "ending record" in p] == [
+        f"status-a.json says invalid, but {results} holds no ending record of the campaign "
+        "(kampan_synthetic-multi_*.json)"]
+    assert [r["status"] for r in campaign["runners"]] == ["invalid", "stopped"]
+    assert (f"No ending record of the campaign in `{results}` (the results directory {results} is absent)."
+            in (out / "README.md").read_text())
+
+
+def test_report_lists_a_failed_start_of_a_group_apart_from_the_rejections(tmp_path, monkeypatch):
+    """Package B9b, question Q22 (scripts/campaign.py GROUP_START_RULE): a failed start of a group is no rejection of a
+    session. The report lists it by group, with VM, step, date, cause, reason and whether the group started again
+    (here it did: its record groups/<group>.json exists), apart from the rejections by cause, with a total in
+    summary.json and a line in the README. It reads groups/<group>.start-failed-<UTC>.json while no ending record
+    lists the failure, and then the last ending record's values.group_start_failures."""
+    directory, _, first, _ = make_multi_campaign(tmp_path, monkeypatch)
+    group, sid = first["a"]["group"], first["a"]["session_id"]
+    date, reason = "2027-01-15T08:50:00+00:00", "reset: labctl reset exited 1: psql: connection refused"
+    failure = directory / "groups" / f"{group}.start-failed-20270115T085000000000Z.json"
+    arc.write_new(failure, {"schema": "hyptcn3/campaign-group-start-failure/1", "date": date, "group": group,
+                            "vm": "a", "role": "train", "session": sid, "cause": "group_start", "step": "reset",
+                            "reason": reason, "output": {"steps": [], "log": None, "log_tail": None}})
+    expected = {"vm": "a", "step": "reset", "date": date, "cause": "group_start", "reason": reason,
+                "started_again": True, "record": failure.name}
+    for source in ("files", "record"):
+        if source == "record":
+            ending_record(tmp_path / "data" / "results", "synthetic-multi", "complete", "every planned session is "
+                          "accepted", "2027-01-15T12:00:00+00:00", group_start_failures=[
+                              {"record": failure.name, "date": date, "group": group, "vm": "a", "step": "reset",
+                               "reason": reason, "started_again": True}])
+        out = tmp_path / f"report-{source}"
+        assert run_report(["campaign", directory, "--out", out]) == 0
+        campaign = json.loads((out / "summary.json").read_text())["campaign"]
+        starts = campaign["group_start_failures"]
+        assert (starts["total"], starts["groups"], starts["groups_started_again"], starts["by_group"]) == (
+            1, 1, 1, {group: [expected]}), starts
+        assert starts["source"].startswith({"files": "groups/<group>.start-failed-<UTC>.json",
+                                            "record": "values.group_start_failures of the ending record"}[source])
+        assert starts["definition"] == cr.DEFINITIONS["group_start_failures"]
+        assert campaign["rejections_by_cause"] == {"audit_rejected": 1}  # Apart: no rejection is added.
+        readme = (out / "README.md").read_text()
+        assert ("Failed starts of groups, no rejections of sessions (definitions: group_start_failures): 1 in 1 "
+                "group, 1 of them started again") in readme
+        assert (f"- `{group}` (VM a): step reset on {date}, cause group_start ({reason}); started again"
+                in readme)
+
+
+def test_report_gives_the_limit_of_a_rehearsal_as_not_applied_and_the_rejections_by_cause(tmp_path, monkeypatch):
+    """Design B9b 1.3 (scripts/campaign.py LIMIT_RULE): in mode campaign the limit is the protocol's number, in mode
+    rehearsal it is not applied, which the report says instead of a limit of None; the rejections are counted by
+    cause in the README as in the summary."""
+    directory, _, _, _ = make_multi_campaign(tmp_path, monkeypatch)
+    out = tmp_path / "campaign"
+    assert run_report(["campaign", directory, "--out", out]) == 0
+    limit = json.loads((out / "summary.json").read_text())["campaign"]["limit"]
+    assert ({k: v for k, v in limit.items() if k != "definition"}, limit["definition"]) == (
+        {"applied": True, "max_per_campaign": 1, "mode": None}, cr.DEFINITIONS["limit"])
+    readme = (out / "README.md").read_text()
+    assert "replaced under the protocol's rule: 1 of at most 1 per campaign." in readme
+    assert "By cause: audit_rejected 1:" in readme
+    manifest = json.loads((directory / "campaign.json").read_text())
+    (directory / "campaign.json").write_text(json.dumps(dict(manifest, mode="rehearsal")))
+    out = tmp_path / "rehearsal"
+    assert run_report(["campaign", directory, "--out", out]) == 0
+    limit = json.loads((out / "summary.json").read_text())["campaign"]["limit"]
+    assert {k: v for k, v in limit.items() if k != "definition"} == {"applied": False, "max_per_campaign": None,
+                                                                    "mode": "rehearsal"}
+    readme = (out / "README.md").read_text()
+    assert ("replaced under the protocol's rule: 1; the limit of replacements is not applied in mode rehearsal "
+            "(definitions: limit).") in readme
+    assert "of at most" not in readme and "By cause: audit_rejected 1:" in readme

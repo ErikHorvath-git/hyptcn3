@@ -115,6 +115,19 @@ def finite(value):
     return value
 
 
+def event_window(record, grace_s):
+    """The event window of one occurrence of a session's events.json, protocol v3: [host_start_unix - 1 s,
+    host_stopped_unix + grace_s], grace_s the session's event_grace_s (events.grace_s of its protocol). The log audit
+    admits the evidence of the event in it (events below), and the count of the marked rows of the early stop takes
+    the same window (scripts/collection.py marked_rows_record, package B9b, F8 of its verification), so the two cannot
+    drift. None for an occurrence without its host start or without its host stop done: the log audit names it
+    (event_not_started, event_not_stopped) and windows nothing. A time or a grace that is no finite number is
+    refused (finite)."""
+    if "host_start_unix" not in record or "host_stopped_unix" not in record:
+        return None
+    return finite(record["host_start_unix"]) - 1, finite(record["host_stopped_unix"]) + finite(grace_s)
+
+
 def local_file(directory, name, raw_target=None):
     """An evidence file of the session directory; ValueError when its path escapes the directory. raw_target: where
     the session's raw/ link points when the caller reads evidence through it (audit_logs archived_raw), the only
@@ -577,8 +590,7 @@ def audit_logs(directory, *, snapshot_times=(), archived_raw=False):
             if "host_stopped_unix" not in record:
                 problems.add("event_not_stopped", record["type"])
                 continue
-            windows.append((finite(record["host_start_unix"]) - 1,
-                            finite(record["host_stopped_unix"]) + finite(meta["event_grace_s"])))
+            windows.append(event_window(record, meta["event_grace_s"]))
             event_types.append(record["type"])
             # The deployed guest script must be the one hashed at session start: a SHA-256 on both sides.
             script = meta["source_sha256"].get("lab/udalosti.py")

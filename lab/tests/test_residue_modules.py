@@ -150,3 +150,37 @@ def test_a_stop_without_the_modules_of_the_start_counts_every_loaded_candidate_a
     why = "the modules loaded at the session's start are not known, so it cannot be ruled out"
     assert printed(capsys)["cleanup"] == {"ok": False, "residues": [{"residue": "module", "name": "crc7", "why": why}],
                                           "evidence": [f"candidate module crc7 is loaded ({why})"]}
+
+
+@pytest.mark.parametrize("unreadable", ["not_json", "a_directory"])
+def test_an_unreadable_record_of_the_modules_left_loaded_makes_every_loaded_candidate_a_residue(control_guest, capsys,
+                                                                                                unreadable):
+    """Finding N3 of the confirmation of B9a (package B9b, agent T; the verifier's mutant f3_unreadable_none): STATE /
+    LEFT_LOADED exists but cannot be read (not JSON, or a directory where the file should be), so no candidate a
+    control chose can be ruled out: every loaded candidate is a residue of the return predicate, those among the
+    modules of the session's start included (crc7 and ts_kmp, which alone would pass them), the candidate not loaded
+    (crc8) is none, and a control does not start. This pins code that is already right (the reading of an unreadable
+    record as every candidate); its proof is the mutant, under which both pass."""
+    control_guest.load("crc7")
+    control_guest.load("ts_kmp")
+    at_start = sorted(udalosti.loaded_modules())
+    assert at_start == ["crc7", "fuse", "ts_kmp", "virtio_net"]
+    record = control_guest.state / udalosti.LEFT_LOADED
+
+    def spoil():
+        if unreadable == "not_json":
+            record.write_text("[\"crc7\",")  # Cut off while it was written.
+        else:
+            record.mkdir(exist_ok=True)
+    named = {"residues": [{"residue": "module", "name": "crc7"}, {"residue": "module", "name": "ts_kmp"}],
+             "evidence": ["candidate module crc7 is loaded", "candidate module ts_kmp is loaded"]}
+    spoil()
+    found = guest_state.baseline(levels(at_start), None)
+    assert (found["ok"], found["exact"]["residues"], found["evidence"]) == (False, named["residues"],
+                                                                            named["evidence"])
+    spoil()  # The read above may have tidied the file to the loaded names: unreadable again for the start.
+    udalosti.main(start("kontrola_wx_memfd", "control", at_start))
+    started = printed(capsys)
+    assert (started["started"], started["error"], started["baseline"]["exact"]) == (
+        False, "the return predicate does not hold", {"ok": False, "residues": named["residues"]})
+    assert control_guest.started == []

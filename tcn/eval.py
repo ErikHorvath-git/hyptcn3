@@ -69,10 +69,12 @@ znacka vedla indexu ostavaju schemam 1 a 2. Kazde prehratie korpusu schemy 3 pre
 podla archive_sha256 jeho configuration.json (SEAL_RULE, navrh B7c 5.5): prehratie zapecateneho archivu kampane sa
 cita iba vnutri finalneho behu, ktory jeho pecat spotreboval. Neskorovane useky su useky safeguard.runtime.unscored
 (jedno pravidlo, navrh B7c 5.6). Zaznam far a udalosti nesie stupen (navrh 11.1) podla tcn.pecat STAGE_RULE z rezimu
-planu a knihy procesu; O4 dava v kazdej skupine prirastok neuronoveho kanala nad pravidlovym (INCREMENT_RULE) a miera
-textu prace aj Garwoodov interval za skorovanu hodinu. Pri kazdom treningu (otazka Q11, docasne podla navrhu
-vykonavatela) training_summary dava stratu modelu voci Z3 a Z5 a suhrn skore po kontexte a scenari a training_record
-zaznam, ktory menuje balik.
+planu a knihy procesu, sprisneneho nalezom N2 B7c (balik B9b, tcn.pecat record_stage, RECORD_STAGE_RULE): final alebo
+generalka iba ked kniha zaznamu drzi archiv kazdej relacie zapecatenych roli indexu (pri final aj kniha na HEAD),
+inak suchy, s dovodom v stage_basis; O4 dava v kazdej skupine prirastok neuronoveho kanala nad pravidlovym
+(INCREMENT_RULE) a miera textu prace aj Garwoodov interval za skorovanu hodinu. Pri kazdom treningu (otazka Q11,
+docasne podla navrhu vykonavatela) training_summary dava stratu modelu voci Z3 a Z5 a suhrn skore po kontexte a
+scenari a training_record zaznam, ktory menuje balik.
 `malver` sa nemeni (D16).
 
 DETEKCIA MALVERU (dataset 3)
@@ -595,7 +597,7 @@ def vyhodnot_far(korpus, rola, prehratia, alfa=0.05, final=False, kampan=None, *
     if not triedy:
         values["klasifikacia_aktivit_dovod"] = BEZ_TRIED
     if d["rezim"] is not None:
-        values.update(_znacka_v5(d["rezim"], final_evaluation), pecat=d["pecat"],
+        values.update(_znacka_v5(d["rezim"], final_evaluation, d["index"]["sessions"]), pecat=d["pecat"],
                       v5=metriky_v5(protokol, d["v5"], triedy=triedy, rola=rola, vysledky_kontrol=vysledky_kontrol))
     return values, balik
 
@@ -771,12 +773,13 @@ def vyhodnot_udalosti(index_cesta, prehratia, alfa=0.05, rola=None, *, final_eva
     """
     alfa = _alfa(alfa)
     index = json.loads(open(index_cesta, encoding="utf-8").read())
-    korpus_sha, rezim = None, None
+    korpus_sha, rezim, relacie_korpusu = None, None, None
     if index.get("schema") == SCHEMA_KORPUS:
         if rola is None:
             raise ValueError("pri korpuse treba urcit rolu")
         if _je_v5(index.get("protocol_config")):
             rezim = _rola_v5(index, rola, final=False, final_evaluation=final_evaluation, prikaz="udalosti")
+            relacie_korpusu = index["sessions"]  # Balik B9b: stupen zaznamu podla relacii celeho korpusu (N2 B7c).
         elif final_evaluation is not False:
             raise ValueError("final_evaluation patri finalnemu prikazu protokolu schemy 3 (balik B7c)")
         index, korpus_sha = udalosti_z_korpusu(index, rola), _digest(index_cesta)
@@ -911,7 +914,7 @@ def vyhodnot_udalosti(index_cesta, prehratia, alfa=0.05, rola=None, *, final_eva
     if rezim is not None:
         if type(balik.get("classes")) is not list:
             raise ValueError("manifest balika nema zoznam tried (classes)")
-        values.update(_znacka_v5(rezim, final_evaluation),
+        values.update(_znacka_v5(rezim, final_evaluation, relacie_korpusu),
                       pecat={"decisions": dict(sorted(rozhodnutia.items())), "definition": SEAL_RULE},
                       v5=metriky_v5(protokol, v5, triedy=balik["classes"], rola=rola))
     return values, balik
@@ -1751,22 +1754,27 @@ BEZ_TRIED = ("balik nema triedy (zakladna metoda tcn/porovnanie.py): riadky nema
              "tabulky klasifikatora sa vynechavaju (navrh B7c 1.3)")
 
 
-def _znacka_v5(rezim, final_evaluation):
+def _znacka_v5(rezim, final_evaluation, relacie):
     """The plan mode of the index, the rehearsal mark every output of a rehearsal carries (design B7c 1.1) and the
-    stage of the record (proposal 11.1, _stupen_v5)."""
+    stage of the record (proposal 11.1, _stupen_v5) over the sessions of its corpus index (relacie), with its basis
+    (stage_basis, package B9b)."""
     from tcn import pecat
+    stupen = _stupen_v5(rezim, relacie)
     return {"plan_mode": rezim, "rehearsal": rezim == "rehearsal",
             "rehearsal_mark": REHEARSAL_MARK if rezim == "rehearsal" else None, "final_evaluation": final_evaluation,
-            "stage": _stupen_v5(rezim), "stage_rule": pecat.STAGE_RULE}
+            "stage": stupen["stage"], "stage_rule": pecat.STAGE_RULE, "stage_basis": stupen["basis"]}
 
 
-def _stupen_v5(rezim):
-    """The stage of a record of protocol schema 3 (proposal 11.1; the fix of F4 of B7c): tcn.pecat's own STAGE_RULE for
-    the plan mode of the index and the ledger of this process (tcn.pecat.KNIHA: the ledger of record gives final or
-    generalka, any other ledger, a G1 dry run in tcn.pecat vlastna_kniha or a test, gives suchy); the function is
-    pecat's (tcn.pecat stage), so the rule is not copied here."""
+def _stupen_v5(rezim, relacie):
+    """The stage of a record of protocol schema 3 (proposal 11.1; the fix of F4 of B7c, tightened by finding N2 of its
+    confirmation, package B9b): tcn.pecat record_stage (RECORD_STAGE_RULE) for the plan mode of the index over the
+    sessions of the whole corpus index, on the ledger of this process (tcn.pecat.KNIHA): final or generalka only
+    when that is the ledger of record and it holds the archive of every session of the sealed roles of the index,
+    final only when the ledger at HEAD holds them as well; suchy otherwise (a G1 dry run in tcn.pecat vlastna_kniha,
+    a test, a synthetic corpus whose archives the ledger of record does not hold), with the basis; the function is
+    pecat's, so the rule is not copied here."""
     from tcn import pecat
-    return pecat.stage(rezim)
+    return pecat.record_stage(rezim, relacie)
 
 
 def _rola_v5(index, rola, *, final, final_evaluation, prikaz):

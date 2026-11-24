@@ -74,8 +74,12 @@ def _protocol(profile):
     a["diagnostics"]["min_positive_episodes"] = 2
     v5["analysis"] = a
     v5["controls"].update(slots_per_session=2, min_duration_s=20, duration_s=[20, 30], horizon_s=30)
+    from scripts.tests.boundary_sessions import early_stop_bounds  # Package B9b: imported here, as its name is new.
+    sections = audit_sections(5)
+    # Package B9b: audit.early_stop holds one bound per event type, here the two types of the test's schedule.
+    sections["audit"]["early_stop"] = early_stop_bounds(["udrzba_zaloha", "zamok_tabulky"])
     return {
-        **v5, **audit_sections(5),
+        **v5, **sections,
         "schema": protocol_v5.SCHEMA, "name": "finalne-test", "quality_policy": "behavioral-inputs-v1",
         "profile": str(profile), "interval_s": 5, "max_gap_s": 7.5, "bin_bytes": 16777216, "window_rows": WINDOW,
         "stride": 1, "full_every": FULL_EVERY, "cycles": CYCLES, "pilot_cycles": CYCLES, "min_score_coverage": 0.7,
@@ -226,14 +230,20 @@ def campaign_models(campaign_corpus, tmp_path_factory):
     return _train(campaign_corpus, tmp_path_factory.mktemp("models-campaign"))
 
 
-@pytest.fixture(scope="module")
-def campaign_record(corpus, tmp_path_factory):
-    """The record of the campaign of package B9 (design B7c 1.4), of its documented shape: one rejected session
-    replaced, one not."""
-    path = tmp_path_factory.mktemp("campaign") / "campaign.json"
+def _campaign_record(corpus, path):
+    """The record of the complete ending of the campaign of `corpus` of package B9 (design B7c 1.4; package B9b,
+    scripts/campaign.py ENDING_RULE), of its documented shape: its schema, the ending complete, the campaign of the
+    index (the campaign_id of its session.json files, "finalne"), a row in state accepted per session of the index, one
+    rejected session replaced and one not. tcn.finalne reads only the record of its own corpus (CAMPAIGN_RULE, F7 of
+    the verification of B9b), so each corpus has its record."""
+    doc = json.loads(Path(corpus["index"]).read_text())
     planned = len(corpus["records"])
-    path.write_text(json.dumps({"commit": "0" * 40, "date": "2026-11-23", "host": "test", "guest": None,
-                                "command": "the test's record", "n": planned, "values": {
+    rows = [{"session": r["id"], "vm": r.get("vm"), "role": r["role"], "group": r["group"], "scenario": r["scenario"],
+             "attempt": 1, "state": "accepted", "cause": None, "replacement": None} for r in doc["sessions"]]
+    path.write_text(json.dumps({"schema": "hyptcn3/campaign-ending/1", "commit": "0" * 40, "date": "2026-11-23",
+                                "host": "test", "guest": None, "command": "the test's record", "n": planned,
+                                "values": {
+                                    "campaign": "finalne", "ending": "complete", "sessions": rows,
                                     "planned_sessions": planned, "accepted_sessions": planned,
                                     "rejected_sessions": [
                                         {"session": "finalne_03-r", "cause": "audit_rejected",
@@ -241,6 +251,18 @@ def campaign_record(corpus, tmp_path_factory):
                                         {"session": "finalne_07-c", "cause": "capture_incomplete",
                                          "replacement": None}]}}))
     return path
+
+
+@pytest.fixture(scope="module")
+def campaign_record(corpus, tmp_path_factory):
+    """The record of the complete ending of the corpus in plan mode rehearsal (_campaign_record)."""
+    return _campaign_record(corpus, tmp_path_factory.mktemp("campaign") / "campaign.json")
+
+
+@pytest.fixture(scope="module")
+def campaign_record_campaign(campaign_corpus, tmp_path_factory):
+    """The record of the complete ending of the corpus in plan mode campaign (_campaign_record)."""
+    return _campaign_record(campaign_corpus, tmp_path_factory.mktemp("campaign-campaign") / "campaign.json")
 
 
 @pytest.fixture
@@ -649,9 +671,9 @@ def test_the_command_line_takes_no_stage_and_no_ledger(option, corpus, campaign_
 # the mutants F5 to F8 of its verification)
 
 
-def test_a_campaign_runs_the_final_command_end_to_end_at_stage_final(campaign_corpus, campaign_models, campaign_record,
-                                                                    of_record, gates_passed, results, tmp_path,
-                                                                    monkeypatch, capsys):
+def test_a_campaign_runs_the_final_command_end_to_end_at_stage_final(campaign_corpus, campaign_models,
+                                                                    campaign_record_campaign, of_record, gates_passed,
+                                                                    results, tmp_path, monkeypatch, capsys):
     """Finding F3: the final command end to end in plan mode campaign at stage final, on a protocol whose
     analysis.interventions.boots are the carrier boots of the index, as the verifier's probe: the ledger of record
     (patched), its seal at HEAD (_in_git true), the gate records (scripts.gates.require patched: G6 asked) and a
@@ -666,7 +688,7 @@ def test_a_campaign_runs_the_final_command_end_to_end_at_stage_final(campaign_co
     monkeypatch.setattr(ev, "_git_stav", lambda: ("0" * 40, []))
     pecat.zapis_korpus(campaign_corpus["index"], command="the test's campaign (package B9)", ledger=of_record)
     out = results / "record.json"
-    argv = _argv(campaign_corpus, campaign_models, campaign_record, tmp_path, **{"--out": out})
+    argv = _argv(campaign_corpus, campaign_models, campaign_record_campaign, tmp_path, **{"--out": out})
     assert finalne._hlavny(argv) == 0
     record, p = json.loads(out.read_text()), campaign_corpus["protocol"]
     v = record["values"]
@@ -689,7 +711,7 @@ def test_a_campaign_runs_the_final_command_end_to_end_at_stage_final(campaign_co
     capsys.readouterr()
     second = tmp_path / "second"
     second.mkdir()
-    assert finalne._hlavny(_argv(campaign_corpus, campaign_models, campaign_record, second,
+    assert finalne._hlavny(_argv(campaign_corpus, campaign_models, campaign_record_campaign, second,
                                  **{"--out": results / "second.json"})) == 2
     assert capsys.readouterr().err == (
         f"tcn.finalne: {campaign_corpus['index'].resolve()}: the seal of the corpus cannot be consumed on the ledger "
@@ -723,6 +745,8 @@ def test_a_refusal_before_the_seal_consumes_nothing(case, corpus, campaign_corpu
     from tcn import finalne, pecat
     target = corpus if case == "out_outside_results_generalka" else campaign_corpus
     index, out, replays, campaign = target["index"], results / "record.json", tmp_path / "replays", campaign_record
+    if target is campaign_corpus:  # Package B9b (F7): the record of the complete ending of that corpus.
+        campaign = request.getfixturevalue("campaign_record_campaign")
     if target is campaign_corpus:
         pecat.zapis_korpus(index, command="the test's campaign (package B9)", ledger=ledger)
     if case not in ("replays_in_results", "campaign_record_of_another_corpus"):  # Stage final or generalka.

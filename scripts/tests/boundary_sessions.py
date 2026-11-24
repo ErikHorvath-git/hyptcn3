@@ -259,15 +259,17 @@ def audit_sections(interval_s, min_spacing_rows=2):
     the interval late, a delta cycle takes at most 30 % of it and a full one 70 %. Periodicity: 3 equal spacings in
     a row between the starts of bursts, each of at least `min_spacing_rows` rows (the author's judgment in G0). No
     collector warning is allowed and the cap of rule-closed rows is not set, as until G2 and G3b. The bounds of the
-    traffic's realism (package B5b) are those of config/collection-v5.json (traffic_bounds). Every TOLERATED id is
-    registered (REGISTER), with no expected count.
+    traffic's realism (package B5b) are those of config/collection-v5.json (traffic_bounds), and so is the rule of the
+    early stop (package B9b, early_stop_bounds: a rate per event type of the file, null until G3b). Every TOLERATED
+    id is registered (REGISTER), with no expected count.
     """
     from features import audit_policy  # A module of package B3: imported here, so this file collects before it.
     return {"audit": {"lateness_max_s": interval_s / 10,
                       "cycle_ms_max": {"delta": round(300 * interval_s, 6), "full": round(700 * interval_s, 6)},
                       "periodicity": {"equal_spacings": 3, "min_spacing_rows": min_spacing_rows,
                                       "note": "author's judgment in G0 (proposal 10.9), not a mechanism"},
-                      "warnings_allowed": None, "rule_closed_rows_max": None, "traffic": traffic_bounds()},
+                      "warnings_allowed": None, "rule_closed_rows_max": None, "traffic": traffic_bounds(),
+                      "early_stop": early_stop_bounds()},
             "exceptions": {name: {"cause": REGISTER[name][0], "decision": REGISTER[name][1], "expected": None}
                            for name in audit_policy.TOLERATED}}
 
@@ -278,10 +280,21 @@ def traffic_bounds():
     return copy.deepcopy(_v5_file()["audit"]["traffic"])
 
 
+def early_stop_bounds(types=None):
+    """audit.early_stop of config/collection-v5.json (package B9b and its fix, Q24), a copy: one rate of marked rows
+    per occurrence for every event type, null until G3b, and the stop for periodicity. types: the event types of a
+    test protocol that has other ones than the file (an empty list for a protocol without an events section), each
+    with a null rate."""
+    out = copy.deepcopy(_v5_file()["audit"]["early_stop"])
+    if types is not None:
+        out["marked_rows_rate_per_type"] = dict.fromkeys(types)
+    return out
+
+
 V5 = collection.ROOT / "config/collection-v5.json"
 # The keys v5_sections() gives a schema-3 test protocol; the document states the others itself (its grid, gate,
 # rule, name, profile, VM and group prefix) and the audit sections scaled to its interval (audit_sections).
-V5_SECTIONS = ("status", "warmup_s", "min_free_gib", "replacement", "group_sessions", "roles", "interleave",
+V5_SECTIONS = ("warmup_s", "min_free_gib", "replacement", "group_sessions", "roles", "interleave",
                "scenarios", "scenario_rule", "profiles", "events", "full_snapshot_guard", "controls", "streams",
                "analysis", "rehearsal", "determined_at")
 
@@ -301,13 +314,13 @@ def v5_sections(scenarios, roles, *, group_sessions, window_rows, max_per_campai
     profiles); the roles given plus test_controls with no group; group_sessions given
     (the families give len(scenarios), so every group holds every scenario); no interleaving; events whose
     per_session [0] plans no event; the analysis on the document's window (scaled_to_window);
-    replacement.max_per_campaign as the document had (0: a document without a rule replaced nothing); status
-    test_only.
+    replacement.max_per_campaign as the document had (0: a document without a rule replaced nothing). Schema 3 has no
+    field status (question Q23, F1 of the verification of B9b), so a test document has none either.
     """
     v5 = _v5_file()
     out = {key: copy.deepcopy(v5[key]) for key in V5_SECTIONS}
     entries = list(v5["scenarios"].values())
-    out.update(status="test_only", group_sessions=group_sessions, interleave=[],
+    out.update(group_sessions=group_sessions, interleave=[],
                roles={**{role: count for role, count in roles.items() if role != "test_controls"}, "test_controls": 0},
                scenarios={name: dict(entries[i % len(entries)]) for i, name in enumerate(scenarios)},
                events=dict(out["events"], per_session=[0]),

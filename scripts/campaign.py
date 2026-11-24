@@ -19,20 +19,32 @@ dokazy/B9/navrh/NAVRH_B9a.md section 1.3, proposal 5.4, 7.3, 7.5 and decision D1
 campaign.json (RULES): the time order of the roles and of the test groups (ORDER_RULE), the plan mode (MODE_RULE), no
 pilot (PILOT_RULE), the disk estimate (DISK_RULE), the stages at the start (STAGES_RULE), the replacement as a new
 attempt (REPLACEMENT_RULE) and its limit (LIMIT_RULE), the start of a group (GROUP_START_RULE), the seal of an accepted
-session (SEAL_RULE) and the one change the frozen tree admits (FROZEN_TREE_RULE). Pause, continuation under v5,
-early stop and the record at closure are package B9b; until then an exhausted limit stops as before.
+session (SEAL_RULE) and the changes the frozen tree admits (FROZEN_TREE_RULE).
+
+Protocol v5, package B9b (agent R: the design dokazy/B9/navrh/NAVRH_B9b.md sections 1.1, 1.2 and 3, the skeleton rows
+pozastavenie, jedno pokračovanie, záznam pri uzavretí, proposal 7.5, 10.4 to 10.7, 11.1 and 11.6): every ending of a
+campaign writes one record into data/results (ENDING_RULE): complete, paused (PAUSE_RULE), stopped (an early stop,
+EARLY_STOP_RULE; an error; an operator's stop request), invalid (INVALID_RULE) and closed; a paused campaign is
+continued once (init --continue --cause, CONTINUATION_RULE); the record evaluates skeleton test 2 over the realized
+boots (INTERLEAVE_RULE) and pairs the grids of the two VMs (GRID_RULE). Schemas 1 and 2 keep their endings and write
+no record. The fix round of B9b (agent R: F2, F3, F6, F10 and F11 of its verification): the frozen measurement code and
+lab file by file (INVALID_RULE), a complete or closed campaign that never runs again, the history in the deviations of
+every record, the written cause before a resume after an early stop (RESUME_RULE), the state of a captured session not
+yet judged and the entry of docs/MERANIA.md at a closing ending (ENDING_RULE).
 """
 import argparse
 from collections import Counter
 from contextlib import ExitStack, contextmanager
 from datetime import datetime, timezone
 import fcntl
+from fractions import Fraction
 import json
 import os
 from pathlib import Path
 import platform
 import pwd
 import re
+import shlex
 import shutil
 import signal
 import subprocess
@@ -48,6 +60,10 @@ from scripts.collection_archive import (archive_session, digest, guard_mount, mo
 
 BASE = ROOT / "data/campaigns"
 COLLECTIONS = ROOT / "data/collections"
+# ENDING_RULE (package B9b): the records of the endings of the campaigns of protocol schema 3, a tracked directory; the
+# tests point it at a directory of their own.
+RESULTS = ROOT / "data/results"
+RESULTS_IN_GIT = "data/results"  # RESULTS as git status names it (FROZEN_TREE_RULE).
 UNIT = "hyptcn-collection.service"
 CAMPAIGN_NAME = r"[a-zA-Z0-9][a-zA-Z0-9_-]{0,63}"
 # Attempts of one assignment that may end before the measured phase (failed
@@ -76,7 +92,15 @@ ORDER_RULE = (
     "it once its current group ends. Both waits keep the operator's stop request and end with a reason when the other "
     "runner is not active after START_GRACE_S; the state names what the runner waits for. take_over judges a closed "
     "campaign by the same rank; schemas 1 and 2 keep the rank alone, and a protocol of schema 1 or 2 whose one role "
-    "has no rank (test_events of the test-only protocols) ranks that role alone")
+    "has no rank (test_events of the test-only protocols) ranks that role alone. Scope (N1 of the confirmation of "
+    "B9a): the barrier orders the starts of the test groups, not their ends, so skeleton test 2 (no test_controls "
+    "boot wholly after every test_benign boot) holds by construction only for a plan whose interleaved sequence ends "
+    "with a test_benign group, as the campaign plan of config/collection-v5.json does (v5-test_benign-12); its "
+    "rehearsal ends with g5-test_controls-2 and can break test 2 under a lag of about one group (three replacements "
+    "on VM b suffice), which every ending record then shows in its deviations (INTERLEAVE_RULE). Cost and coupling "
+    "(N2): the barrier adds idle time, in the verifier's model with sessions of equal length (a model, not a "
+    "measurement) the v5 campaign ends after 72 instead of 66 session lengths, about 9 % longer; and stopping one "
+    "runner also stops the other at its next test group that needs it (its reason: the other runner is not active)")
 MODE_RULE = (
     "design B9a 1.3 item 2, skeleton row generálka: under protocol schema 3 a campaign has one plan mode, campaign or "
     "rehearsal (init --mode, required there and refused under schemas 1 and 2, no default); campaign.json records it "
@@ -113,8 +137,9 @@ LIMIT_RULE = (
     "proposal 7.5, skeleton row limit náhrad, design B9a 1.3 item 5: in mode campaign replacement.max_per_campaign of "
     "the protocol is the limit and a null limit (determined at G3b) is refused by name at init; in mode rehearsal the "
     "limit is not applied, every rejection the rule covers is replaced, and the rejections of the campaign are counted "
-    "by cause in its state (rejections_by_cause), from which G3b sets the limit; an exhausted limit stops the runner "
-    "as before (pause and continuation are package B9b)")
+    "by cause in its state (rejections_by_cause), from which G3b sets the limit; a rejection the exhausted limit "
+    "refuses pauses the campaign (PAUSE_RULE, package B9b), inside a continuation it makes the campaign invalid "
+    "(INVALID_RULE)")
 GROUP_START_RULE = (
     "proposal 5.4 and B5a F4, skeleton row začiatok bootu, design B9a 1.3 item 6: a group of protocol schema 3 starts "
     "with labctl stop, then labctl start (way 1: a new QEMU process in the daemon's unit, whose pid and cgroup the "
@@ -124,12 +149,16 @@ GROUP_START_RULE = (
     "(protocol_v5.reset_seed(p), the same for every group of both modes: proposal 5.4, the table of chapter 12, Q18; "
     "the guest must echo it) and labctl pretouch, each as the VM's owner and each output recorded in "
     "groups/<group>.json (start.steps, in this order); the guest identity and the QEMU process read again after the "
-    "pretouch must be those after the start; a failure of any step rejects the session before its measured phase "
-    "with the cause group_start and the step named. A rejection with the cause group_start is never replaced: no "
+    "pretouch must be those after the start. A failed start of a group is no rejection of a session (question Q22 "
+    "to the lead, decided by its proposal until he answers; before it, B9a's rejection with the cause group_start): "
+    "no session was measured, so it is recorded as groups/<group>.start-failed-<UTC>.json with the step, the output "
+    "of the steps done and the cause group_start, and the runner stops by name, which ends the campaign as stopped "
+    "with the cause group_start (ENDING_RULE); nothing is replaced and nothing is charged to the limit, and no "
     "protocol may cover group_start, because collection.check_replacement admits in replacement.covers only "
-    "REPLACEMENT_CAUSES (audit_rejected, capture_incomplete); the runner stops by name, and package B9b ends the "
-    "campaign with a record (F7 of the verification of B9a). The levels at the start of each session are taken by "
-    "scripts/collection.py run")
+    "REPLACEMENT_CAUSES (audit_rejected, capture_incomplete); a resumed run starts the group again from its "
+    "beginning (stop, start, reset, pretouch) and captures its sessions as planned, as attempt 1; every failed start "
+    "is listed in every later ending record (group_start_failures) and among its deviations. The levels at the start "
+    "of each session are taken by scripts/collection.py run")
 SEAL_RULE = (
     "skeleton row pečať, B7c PRE_B9, design B9a 1.3 item 7: right after the audit accepts a session of a sealed role "
     "(test_benign, test_controls: features/dataset.py ROLES without FIT_ROLES, which tcn/pecat.py SEALED_ROLES equals) "
@@ -138,14 +167,173 @@ SEAL_RULE = (
     "role, group, vm, scenario, features, features_sha256}; nothing during a campaign replays or scores a session")
 LEDGER = "data/results/kniha_pecati.json"  # tcn/pecat.py TRACKED: the seal ledger of record.
 FROZEN_TREE_RULE = (
-    "design B9a 1.3 item 8: the frozen tree admits exactly one change, the seal ledger " + LEDGER + " modified in "
-    "place (tcn.pecat checks its content on every read); HEAD stays the frozen commit and any other change refuses; "
-    "git status runs under the ledger's lock (tcn/pecat.py _locked), so another runner's seal write in progress is not "
-    "a change; the ledger is committed and pushed after the campaign closes (stage final of tcn.finalne requires it at "
-    "HEAD)")
+    "design B9a 1.3 item 8 and design B9b 1.1: the frozen tree admits the seal ledger " + LEDGER + " modified in "
+    "place (tcn.pecat checks its content on every read) and, under protocol schema 3, the records of the endings this "
+    "campaign wrote, data/results/kampan_<its id>_<ending>_<stamp>.json, new or modified, each with the sha256 its "
+    "endings/ names (ENDING_RULE); HEAD stays the frozen commit and any other change refuses; git status runs under "
+    "the lock of data/results (tcn/pecat.py _locked), under which the ledger and the records are written, so a write "
+    "in progress is not a change; after the campaign the records and the ledger are committed and pushed together "
+    "(stage final of tcn.finalne requires the ledger at HEAD)")
+# ------------------------------------------------------------------ protocol v5: the endings (package B9b, agent R)
+
+ENDING_SCHEMA = "hyptcn3/campaign-ending/1"
+ENDING_RULE = (
+    "design B9b 1.1 and 3, skeleton row záznam pri uzavretí, proposal 11.1, 11.3 and 11.6, and the fix round of B9b "
+    "(F3, F6, F10 and F11 of its verification): under protocol schema 3 every "
+    "ending of a campaign writes one record into data/results, kampan_<campaign id>_<ending>_<UTC stamp>.json of schema "
+    + ENDING_SCHEMA + ", with the header of check E of scripts/check_claims.sh (commit, date, host, guest, command, "
+    "n and values) and its stage (tcn.pecat record_stage over its accepted sessions with at_head false, question Q21 "
+    "decided by its proposal until the lead answers: final or generalka when the ledger of record in the working "
+    "tree holds every accepted session of the sealed roles, the basis naming that ledger's sha256, since the ledger "
+    "is committed after the campaign and tcn.finalne checks it at HEAD when it reads the record; else suchy with its "
+    "basis, a test's or the G1 dry run's own ledger, or a missing seal); the endings are complete (úplná: the runner "
+    "that finds every planned session accepted writes it before the index, and finish_corpus refuses without it), "
+    "paused (pozastavená, PAUSE_RULE), stopped (zastavená: an early stop, EARLY_STOP_RULE; an error the runner "
+    "catches; a failed start of a group, with the cause group_start, GROUP_START_RULE and question Q22; an operator's "
+    "stop request, with its reason), invalid (neplatná, INVALID_RULE) and closed (uzavretá operátorom: close, with "
+    "its reason); a "
+    "paused, stopped or invalid ending is pending in ending.json of the campaign directory from its first trigger, "
+    "which asks every other active runner to stop at its next check (its stop-request file), and its record is "
+    "written once the campaign is at rest, by the last runner to stop (or, after a crash of that runner, by the next "
+    "run, launch or close of the campaign), with every trigger in order, the last state of every runner and every "
+    "session as it then is; of the triggers of one ending the heavier kind holds (invalid, then paused, then "
+    "stopped); an operator's stop request for one VM stops the whole campaign so; a stop-after boundary and a runner "
+    "that stops because another VM's runner is not active are no ending; a stopped campaign runs again from where it "
+    "stopped (today's resume; after an early stop only with its written cause, RESUME_RULE), and its next ending "
+    "writes its own record (a complete ending whose index then fails is followed by a stopped one); a campaign whose "
+    "last recorded ending is closed, or complete with its index built (the state complete at the stage complete of "
+    "the runner that built it), does not run again: run and launch refuse it by name before verify_frozen and write no "
+    "ending and no record (F3; a complete ending whose runner died before its index was built runs again to build it, "
+    "the fix round's interpretation); endings/ of the campaign directory names every record with its sha256; values: "
+    "the campaign, its mode, "
+    "protocol and plan sha256, the ending and its cause, every planned session and attempt with its cause and "
+    "replacement in one of four states (F10): accepted (its checkpoint), rejected (its rejection record), captured, "
+    "not judged (its session directory without either: its runner stopped during its capture, its audit or while "
+    "held at the audit lock) and not run (no session directory); "
+    "planned_sessions, accepted_sessions and rejected_sessions as tcn.finalne reads "
+    "them (with the rejections of the campaign a continuation continues), the rejections by cause, the limit and the "
+    "replacements used, the nominal unscored seconds of every accepted session, the register of exceptions (the "
+    "largest count in one accepted session and the sessions over the expected count, features/audit_policy.py "
+    "exceptions_record; lead's answer to Q2), the grids (GRID_RULE), the interleave (INTERLEAVE_RULE), every failed "
+    "start of a group (group_start_failures, Q22), the seed of the guest's reset named with the protocol's sha256, "
+    "the deviations (F6: every earlier recorded ending of the campaign by its kind, cause, record and sha256; the "
+    "continuation with its written cause, every operator's stop request a runner honored with "
+    "its reason, the pause and the invalidation with their causes, a close with its reason, every unclean end a run "
+    "found (its VM's state still running while the lock was free: SIGKILL, a crash, a power loss), which the run "
+    "writes before it resumes as deviations/<UTC>_unclean-end_<vm>.json with that state, a deviation and not an "
+    "ending, since the other VM's runner may have gone on; every written cause of a resume after an early stop "
+    "(RESUME_RULE); every failed start of a "
+    "group and whether it started again, a violation of the interleave with its cause) and the path and sha256 of "
+    "docs/ODCHYLKY_V5.sk.md; the record of an ending that closes the campaign (complete, invalid, closed) carries in "
+    "values.merania_entry the text of its entry of docs/MERANIA.md (F11, proposal 11.6: the campaign and the ending, "
+    "the record's name, the planned, accepted, rejected and replaced sessions, the unscored time and the deviations, "
+    "each of which also gets its entry in docs/ODCHYLKY_V5.sk.md), and the command that writes the record prints the "
+    "entry with the record's sha256, which no file can hold of itself (endings/ names it as well); both go into the "
+    "commit after that ending, beside the records and the ledger; schemas 1 and 2 write no record")
+PAUSE_RULE = (
+    "proposal 7.5, skeleton row pozastavenie, design B9b 1.2 and 3: in mode campaign a rejection that the exhausted "
+    "limit of replacements refuses (LIMIT_RULE) pauses the whole campaign for analysis: its runner stops, every other "
+    "active runner stops at its next check through its stop-request file, also one held in the barrier of ORDER_RULE "
+    "(the paused record names what it was held for), the state of every runner is paused and the paused record counts "
+    "the rejections by cause; run and launch refuse a paused campaign by name, and init --continue continues it once "
+    "(CONTINUATION_RULE); in mode rehearsal the limit is not applied, so a rehearsal never pauses")
+CONTINUATION_RULE = (
+    "proposal 7.5, skeleton row jedno pokračovanie, design B9b 1.2: under protocol schema 3 init --continue <campaign "
+    "directory> --cause TEXT continues a paused campaign once and in its mode: it needs the campaign's paused record "
+    "(its last recorded ending paused, the record in data/results with the sha256 its endings/ names, no ending "
+    "pending), a written cause (required, refused when empty) and the measurement code and the lab unchanged since "
+    "that campaign was frozen, file by file (the maps init records, INVALID_RULE; F2 of the verification of B9b): a "
+    "changed or missing file is refused by name, and so is a new file beside them, which the operator removes before "
+    "trying again (a new file never makes a campaign invalid); the continuation has the same limit again, counted "
+    "anew; a campaign that ended other than paused "
+    "and a continuation are refused by name; its complete groups are taken over as under schemas 1 and 2 (take_over, "
+    "a replacement as the attempt it was), and the groups of the continued campaign are released for its continuation "
+    "only; schemas 1 and 2 keep the continuation of a closed campaign, whose close reason is its cause")
+INVALID_RULE = (
+    "proposal 7.5, skeleton row jedno pokračovanie, design B9b 1.2 and its fix (F2 of the verification of B9b): a "
+    "campaign is invalid after a second exhaustion "
+    "(a rejection the exhausted limit refuses inside a continuation) and when the measurement code or the lab changed "
+    "during it: init freezes both file by file, measurement_files_sha256 (scripts/collection.py measurement_sources, "
+    "beside their one hash measurement_sha256 of scripts/gates.py) and lab_sha256 (scripts/collection.py lab_sha256), "
+    "and verify_frozen, before the tree, finds the campaign invalid only when a file of the frozen set changed its "
+    "content or is gone; a new file beside them (an editor's swap file lab/.udalosti.py.swp, say) is a change of the "
+    "tree and not of the measurement code or the lab: verify_frozen refuses the run by name, naming the new files, "
+    "and the campaign runs again once they are removed; a campaign.json of protocol schema 3 without the per-file maps "
+    "is refused by name; the run or launch that finds a change ends the campaign as invalid; an "
+    "invalid campaign has no corpus (finish_corpus refuses it by name), never runs again and is never continued")
+RESUME_RULE = (
+    "HARNESS chapter 7 (a met stop rule is a stop and a question), skeleton section 5 and F6 of the verification of "
+    "B9b: when the last recorded ending of a campaign of protocol schema 3 is a stopped ending with an early stop "
+    "among its triggers (EARLY_STOP_RULE), run and launch are refused by name unless a written cause already "
+    "answers that record, or the command carries --cause TEXT, the written analysis of the stop; that command then "
+    "writes deviations/<UTC>_resume-after-early-stop_<vm>.json (without a VM for a launch of every VM): the record it "
+    "answers by name and sha256, the cause, the VM and the command, and every later record lists it among its "
+    "deviations; one answer serves both VMs; an empty --cause is refused by name, and so is --cause when the last "
+    "recorded ending is no early stop; every other stopped ending (an operator's stop, a signal, a failed start of a "
+    "group, an error) resumes with a plain run")
+EARLY_STOP_RULE = (
+    "proposal 7.5 and 10.9, skeleton row skoré zastavenie, design B9b 1.3 and its fix (F5 of the verification of B9b, "
+    "question Q24 decided by its proposal): after every audit of a completed capture, in both modes, the runner writes "
+    "marked/<session id>.json (its VM and session, audited_at, the audit's marked_rows_by_type and "
+    "event_occurrences_by_type and the sha256 of the audit record; a re-audit replaces it), sums the files of every VM "
+    "audited after the date of the campaign's latest recorded ending with an early-stop trigger (all of them before "
+    "such an ending; a continuation has a directory of its own and counts only its own sessions: both restart points "
+    "follow a written human analysis, the executor's judgment, Q24) and asks features/audit_policy.py early_stop (its "
+    "EARLY_STOP_RULE, with the false-stop rates of the executor's Poisson model, a model and not a measurement: at "
+    "most 1 % per comparison and type; checked after every occurrence, 0.12 to 0.28 per campaign at rates of 0.01 to "
+    "3, against 0.23 to 0.88 for the count of one session); a session rejected for periodicity, or the campaign's "
+    "count C_T of marked rows at an event type T above b, the 99th percentile of Poisson(rate_T x n_T) over its n_T "
+    "occurrences, stops the campaign: the stopped ending, its cause naming T, C_T, n_T, the rate and b, after the "
+    "session itself is sealed and checkpointed, or rejected and replaced, as always; an early stop that cannot be "
+    "decided (early_stop refuses, a count file or the record of an earlier ending cannot be read, the rows of a "
+    "counted session are not told by type while a rate is set) stops the campaign as an error by name, never as no "
+    "stop; while a rate is null, C_T and n_T are printed in the runner's state and the campaign goes on")
+INTERLEAVE_RULE = (
+    "skeleton section 4 test 2 and design B9b section 3 (agent T's observation of the fix round of B9a): the barrier of "
+    "ORDER_RULE orders the starts of the test groups, not their ends, so every ending record evaluates test 2 over the "
+    "realized boots of test_benign and test_controls, each from the first measured start to the last measured end of "
+    "its sessions (end.json measure_start_unix and measure_end_unix): late_controls are the test_controls boots that "
+    "start at or after the end of every test_benign boot (none while no test_benign boot is realized); alternation "
+    "is the share rule of scripts/protocol_v5.py check_role_order over the realized starts against the plan's group "
+    "counts of the two roles; ok when neither finds anything; a violation is a deviation of the record with its "
+    "cause. Scope (N1 of the confirmation of B9a, ORDER_RULE): test 2 holds by construction only for a plan whose "
+    "interleaved sequence ends with a test_benign group, as the campaign plan of config/collection-v5.json does; the "
+    "rehearsal ends with g5-test_controls-2 and can break test 2 under a lag of about one group, and its record then "
+    "shows the violation in deviations; at an ending before the plan's last test group the check speaks of the boots "
+    "realized so far")
+GRID_RULE = (
+    "skeleton row mriežky dvoch VM, design B9b 1.3 (a record only): for every pair of sessions of two VMs whose measured "
+    "phases overlap, the grid phase of each collector (values.timing.grid_phase_s of its audit) and their mutual shift "
+    "modulo interval_s, by scripts/campaign_grids.py grid_pairs over grid_session of every captured session (its "
+    "GRID_RULE: the later VM's phase minus the earlier one's); a session whose records cannot be read is named in "
+    "grids_unread")
 RULES = {"order": ORDER_RULE, "mode": MODE_RULE, "pilot": PILOT_RULE, "disk": DISK_RULE, "stages": STAGES_RULE,
          "replacement": REPLACEMENT_RULE, "limit": LIMIT_RULE, "group_start": GROUP_START_RULE, "seal": SEAL_RULE,
-         "frozen_tree": FROZEN_TREE_RULE}
+         "frozen_tree": FROZEN_TREE_RULE, "ending": ENDING_RULE, "pause": PAUSE_RULE,
+         "continuation": CONTINUATION_RULE, "invalid": INVALID_RULE, "early_stop": EARLY_STOP_RULE,
+         "resume": RESUME_RULE, "interleave": INTERLEAVE_RULE, "grids": GRID_RULE}
+# ENDING_RULE: the endings of a record's name, with the design's Slovak names.
+ENDINGS = {"complete": "úplná", "paused": "pozastavená", "stopped": "zastavená", "invalid": "neplatná",
+           "closed": "uzavretá operátorom"}
+PENDING = {"stopped": 0, "paused": 1, "invalid": 2}  # ENDING_RULE: the kinds a trigger leaves pending, lightest first.
+CLOSING = ("complete", "invalid", "closed")  # ENDING_RULE (F11): the endings that close a campaign (MERANIA.md entry).
+DEVIATION_LOG = "docs/ODCHYLKY_V5.sk.md"  # ENDING_RULE: the deviation log of protocol v5 (proposal 11.3).
+MEASUREMENT_LOG = "docs/MERANIA.md"  # ENDING_RULE (F11, proposal 11.6): the log of measurements, an entry per campaign.
+# ENDING_RULE and RESUME_RULE (F6): deviations/<UTC>_<kind>[_<vm>].json of the campaign directory, a deviation that
+# is no ending: an unclean end a run found, the written cause of a resume after an early stop.
+DEVIATION_SCHEMA = "hyptcn3/campaign-deviation/1"
+# INVALID_RULE (F2): the per-file maps init freezes into campaign.json, each with what it hashes and the function of
+# scripts/collection.py that hashes it now.
+FROZEN_MAPS = (("measurement_files_sha256", "the measurement code (scripts/gates.py measurement_sha256 over "
+                "scripts/collection.py measurement_sources", "measurement_sources"),
+               ("lab_sha256", "the lab (scripts/collection.py lab_sha256", "lab_sha256"))
+NAMED_FILES = 12  # The files a refusal names, the rest counted (the executor's judgment: the refusal stays readable).
+SEEDED_LEVEL = "streams.seeded_level.seed"  # The protocol's key of the seed of the guest's reset (protocol_v5.reset_seed).
+COMPLETE_CAUSE = ("every planned session is accepted: archived here, or taken over from the campaign this one "
+                  "continues")
+# FROZEN_TREE_RULE: the two status columns of git status --porcelain of a record of this campaign: new (untracked or
+# added) or modified.
+RECORD_CODES = ("??", "A ", "AM", " M", "M ", "MM")
 # STAGES_RULE: the stage gates.require checks before (every stage up to the one before it) by the campaign's mode.
 START_STAGES = {"campaign": ("G5", "G0 to G4"), "rehearsal": ("G3a", "G0 to G2")}
 # GROUP_START_RULE: the labctl verbs of the start of a group, in order, each with its timeout in seconds (the
@@ -668,9 +856,11 @@ def archive_estimate(session_dir, p, compression):
 
 def v5_freeze(a, p, compression):
     """What init freezes of a campaign of protocol schema 3, each condition refused by name before the lab is asked:
-    the plan mode (MODE_RULE), no pilot (PILOT_RULE), the limit of mode campaign (LIMIT_RULE), the seed of the disk
-    estimate (DISK_RULE: --estimate-from, in mode campaign only), the stages (STAGES_RULE), then the guest environment
-    of every VM. Returns (mode, per-VM part of the manifest, the manifest's keys of schema 3)."""
+    the plan mode (MODE_RULE), no pilot (PILOT_RULE), the written cause of a continuation (CONTINUATION_RULE), the limit
+    of mode campaign (LIMIT_RULE), the seed of the disk estimate (DISK_RULE: --estimate-from, in mode campaign only),
+    the stages (STAGES_RULE), then the guest environment of every VM, the measurement code and the lab (INVALID_RULE,
+    CONTINUATION_RULE: package B9b). Returns (mode, per-VM part of the manifest, the manifest's keys of schema 3)."""
+    from scripts import gates  # Inside the function, as require_stages: gates imports collection.
     mode = a.mode
     if mode is None:
         raise ValueError("a campaign of protocol schema 3 needs --mode campaign or --mode rehearsal (no default; "
@@ -679,6 +869,17 @@ def v5_freeze(a, p, compression):
         raise ValueError("invalid --mode: " + " or ".join(protocol_v5.MODES))
     if a.pilot_report:
         raise ValueError("protocol v5 has no pilot: init takes no --pilot-report (scripts/campaign.py PILOT_RULE)")
+    cause = getattr(a, "cause", None)
+    if getattr(a, "continues", None) is not None:
+        if type(cause) is not str or not cause.strip():
+            raise ValueError("a continuation of a campaign of protocol schema 3 needs --cause TEXT, the written cause "
+                             "of its pause (no default; scripts/campaign.py CONTINUATION_RULE)")
+        if mode != "campaign":
+            raise ValueError("a continuation continues a paused campaign of mode campaign (a rehearsal never pauses): "
+                             "--mode campaign (scripts/campaign.py CONTINUATION_RULE)")
+    elif cause is not None:
+        raise ValueError("--cause belongs to --continue: the written cause of a continuation (scripts/campaign.py "
+                         "CONTINUATION_RULE)")
     if mode == "campaign":
         if type((p.get("replacement") or {}).get("max_per_campaign")) is not int:
             raise ValueError(NULL_LIMIT)
@@ -695,7 +896,12 @@ def v5_freeze(a, p, compression):
         view = collection.for_vm(p, vm)
         per_vm[vm] = {"guest_environment": guest_environment(collection.guest_identity(view)),
                       **({} if vm is None else {"domain": view["domain"]})}
-    return mode, per_vm, {"disk_estimate": {"rule": DISK_RULE, "seed": seed}, "rules": RULES}
+    return mode, per_vm, {"disk_estimate": {"rule": DISK_RULE, "seed": seed}, "rules": RULES,
+                          # INVALID_RULE and CONTINUATION_RULE: what verify_frozen and a continuation compare, file by
+                          # file (F2), beside the one hash of the measurement sources.
+                          "measurement_sha256": gates.measurement_sha256(),
+                          "measurement_files_sha256": collection.measurement_sources(),
+                          "lab_sha256": collection.lab_sha256()}
 
 
 def initialize(a):
@@ -741,7 +947,7 @@ def initialize(a):
                 **v5_keys,
                 "note": "Frozen allocation, not a measurement or a completed corpus."}
     if getattr(a, "continues", None) is not None:
-        manifest["continues"] = take_over(a.continues, manifest, p)
+        manifest["continues"] = take_over(a.continues, manifest, p, cause=getattr(a, "cause", None))
     todo = {vm: [r for r in planned["sessions"] if r.get("vm") == vm and taken_over(manifest, r) is None]
             for vm in per_vm}
     COLLECTIONS.mkdir(exist_ok=True, parents=True)
@@ -749,10 +955,12 @@ def initialize(a):
     for vm in per_vm:
         capacity_guard(vm_view(manifest, p, vm)[0], p, len(todo[vm]), directory)
     # Group names repeat in every campaign of a protocol. Only a campaign
-    # explicitly closed by the operator releases them (its data stays).
-    groups = {r["group"] for r in planned["sessions"]}
+    # explicitly closed by the operator releases them (its data stays), and a
+    # paused one of schema 3 for its continuation (CONTINUATION_RULE).
+    groups, continued = {r["group"] for r in planned["sessions"]}, manifest.get("continues", {}).get("campaign")
     for old, doc in collection.session_records(COLLECTIONS):
-        if doc["group"] in groups and not closed_campaign(doc.get("campaign_id")):
+        if (doc["group"] in groups and not closed_campaign(doc.get("campaign_id"))
+                and (continued is None or doc.get("campaign_id") != continued)):
             raise ValueError("planned group already has data; resume or close its campaign: " + str(old))
     directory.mkdir(parents=True)
     for child in ("events", "groups", "attempts", "logs"):
@@ -789,6 +997,9 @@ def pilot_freeze(a, p, compression):
     for value, flag in ((a.mode, "--mode"), (a.estimate_from, "--estimate-from")):
         if value is not None:
             raise ValueError(flag + " applies only to protocol schema 3 (scripts/campaign.py MODE_RULE, DISK_RULE)")
+    if getattr(a, "cause", None) is not None:
+        raise ValueError("--cause applies only to protocol schema 3: a continuation of schema 1 or 2 takes the reason "
+                         "its campaign was closed with (scripts/campaign.py CONTINUATION_RULE)")
     if not a.pilot_report:
         raise ValueError("a campaign of protocol schema 1 or 2 needs --pilot-report (an accepted pilot audit; "
                          "multi-VM protocol: one VM=PATH per VM)")
@@ -878,8 +1089,13 @@ def taken_session(previous, old, old_p, final, group):
     selected audit accepts it is decided by the one acceptance decision on the
     record under the closed campaign's protocol (features/acceptance.py
     require_recorded; deferred point 10 of B2, package B9a), not by its flag.
+    Under protocol schema 3 (a paused campaign, CONTINUATION_RULE) a replacement
+    is compared as the attempt it was (attempt_row: its own seed), and the record
+    names that attempt.
     """
     from features.acceptance import require_recorded
+    if schema3(old_p):
+        final = attempt_row(old, old_p, final)
     name = final["session_id"]
     try:
         done = read_json(previous / "attempts" / (name + ".done.json"))
@@ -910,10 +1126,48 @@ def taken_session(previous, old, old_p, final, group):
         raise ValueError(f"session {name} cannot be taken over, records disagree: "
                          + ", ".join(k for k, ok in checks.items() if not ok))
     return {"campaign": old["id"], "session_id": name, "group": final["group"], "audit": str(report),
-            "audit_sha256": pointer["sha256"], "boot_id": meta["guest_before"]["boot_id"]}
+            "audit_sha256": pointer["sha256"], "boot_id": meta["guest_before"]["boot_id"],
+            **({"attempt": final["attempt"]} if schema3(old_p) else {})}
 
 
-def take_over(previous, manifest, p):
+def continuable(previous, old):
+    """CONTINUATION_RULE: the paused record ({record, sha256, date}) of the campaign of protocol schema 3 in `previous`
+    (its manifest `old`) that a continuation continues; every condition refused by name before anything is frozen: a
+    continuation, a closed campaign, an ending still pending, a last recorded ending other than paused or none, the
+    paused record missing or changed, and the measurement code or the lab changed since that campaign was frozen, file
+    by file (frozen_hashes: a file changed or gone; F2 of the verification of B9b), or a new file beside them."""
+    name = old["id"]
+    if "continues" in old:
+        raise ValueError(f"campaign {name} is a continuation of {old['continues']['campaign']}: a continuation is "
+                         "never continued (scripts/campaign.py CONTINUATION_RULE)")
+    if (previous / "closed.json").exists():
+        raise ValueError(f"campaign {name} was closed by the operator: only a paused campaign is continued "
+                         "(scripts/campaign.py CONTINUATION_RULE)")
+    pending = pending_ending(previous)
+    if pending is not None:
+        raise ValueError(f"campaign {name} has an ending not yet recorded ({pending['ending']}: {pending['cause']}): a "
+                         "run of one of its VMs records it first (scripts/campaign.py ENDING_RULE), and only a paused "
+                         "campaign is continued (CONTINUATION_RULE)")
+    latest = latest_ending(previous)
+    if latest is None or latest["ending"] != "paused":
+        raise ValueError(f"campaign {name} ended " + ("with no recorded ending" if latest is None else latest["ending"])
+                         + ", not paused: only a paused campaign is continued (scripts/campaign.py CONTINUATION_RULE)")
+    path = RESULTS / latest["record"]
+    if not path.is_file() or digest(path) != latest["sha256"]:
+        raise ValueError(f"the paused record of campaign {name} is {'missing' if not path.is_file() else 'changed'}: "
+                         f"{path} (scripts/campaign.py CONTINUATION_RULE)")
+    changed, new = frozen_hashes(old)
+    if changed:
+        raise ValueError(f"{changed} changed since campaign {name} was frozen: a continuation needs the measurement "
+                         "code and the lab unchanged (scripts/campaign.py CONTINUATION_RULE)")
+    if new:
+        raise ValueError(f"new files beside the measurement code and the lab that campaign {name} froze: "
+                         f"{named_files(new)}; remove them and try again (a new file is no change of the frozen set "
+                         "and never makes a campaign invalid; scripts/campaign.py CONTINUATION_RULE)")
+    return {"record": latest["record"], "sha256": latest["sha256"], "date": latest.get("date")}
+
+
+def take_over(previous, manifest, p, cause=None):
     """What a new campaign takes from the closed campaign it continues (PLAN_multivm_dataset.md, chapter 8).
 
     The predecessor stopped for good - a session its replacement rule could not
@@ -929,10 +1183,17 @@ def take_over(previous, manifest, p):
 
     A campaign is continued once, and a continuation is never continued. Only a
     continuation that was closed before it captured anything may be set up again.
+
+    Protocol schema 3 (package B9b, CONTINUATION_RULE): the predecessor is a
+    paused campaign, not a closed one (continuable), the continuation names its
+    written cause, and its record names the predecessor's paused record and
+    rejections, which the records of its endings carry on.
     """
     previous = Path(previous).resolve()
     old, old_p = load_campaign(previous)
-    if not (previous / "closed.json").exists():
+    if schema3(p):
+        paused = continuable(previous, old)
+    elif not (previous / "closed.json").exists():
         raise ValueError("only a campaign closed by the operator can be continued")
     if "continues" in old:
         raise ValueError("a continuation campaign cannot be continued again")
@@ -953,7 +1214,8 @@ def take_over(previous, manifest, p):
                       if vm_view(old, old_p, vm)[0]["guest_environment"]
                       != vm_view(manifest, p, vm)[0]["guest_environment"]]
     if differing:
-        raise ValueError("continuation differs from the closed campaign: " + ", ".join(differing))
+        raise ValueError("continuation differs from the " + ("paused" if schema3(p) else "closed") + " campaign: "
+                         + ", ".join(differing))
     guard_mount(old["archive_root"], old["archive_mount"])
     groups = {}
     for before, row in zip(old["sessions"], manifest["sessions"]):
@@ -980,17 +1242,26 @@ def take_over(previous, manifest, p):
     rank = time_rank(p)
     role = {name: rank[members[0][1]["role"]] for name, members in groups.items()}
     if any(complete[late] and not complete[early] and role[early] < role[late] for late in groups for early in groups):
-        raise ValueError("closed campaign completed a later role before an earlier one")
+        raise ValueError(("paused" if schema3(p) else "closed") + " campaign completed a later role before an "
+                         "earlier one")
     unused = rejections(previous)
+    if schema3(p):  # CONTINUATION_RULE: the paused record, the written cause and the predecessor's rejections.
+        ending = {"paused_record": paused, "cause": cause,
+                  "rejected_sessions": [{"session": r["session"], "cause": r.get("cause", "audit_rejected"),
+                                         "replacement": r.get("replacement"), "campaign": old["id"]} for r in unused],
+                  "rejections_by_cause": rejections_by_cause(previous)}
+    else:
+        ending = {"closed_sha256": digest(previous / "closed.json"),
+                  "closed_reason": read_json(previous / "closed.json")["reason"]}
     return {"campaign": old["id"], "directory": str(previous), "commit": old["commit"],
-            "campaign_sha256": digest(previous / "campaign.json"),
-            "closed_sha256": digest(previous / "closed.json"),
-            "closed_reason": read_json(previous / "closed.json")["reason"],
+            "campaign_sha256": digest(previous / "campaign.json"), **ending,
             "replacements_used": sum(r.get("replacement") is not None for r in unused),
             "not_replaced": [r["session"] for r in unused if r.get("replacement") is None],
             "sessions": sessions, "discarded_groups": discarded,
-            "note": "Taken-over sessions are indexed through the closed campaign's frozen audits. Discarded groups "
-                    "are captured again as a whole; what the closed campaign has of them is never indexed."}
+            "note": "Taken-over sessions are indexed through the "
+                    + ("paused" if schema3(p) else "closed") + " campaign's frozen audits. Discarded groups are "
+                    "captured again as a whole; what the " + ("paused" if schema3(p) else "closed")
+                    + " campaign has of them is never indexed."}
 
 
 @contextmanager
@@ -1005,19 +1276,83 @@ def ledger_lock():
         os.close(descriptor)
 
 
-def tree_changes():
+def own_records(directory):
+    """FROZEN_TREE_RULE: {path as git status names it: sha256} of the records of the endings a campaign wrote (the
+    names its endings/ holds, of its own id; ENDING_RULE)."""
+    if directory is None:
+        return {}
+    pattern = re.escape(f"kampan_{Path(directory).name}_") + "(?:" + "|".join(ENDINGS) + r")_[0-9]{8}T[0-9]{12}Z\.json"
+    return {f"{RESULTS_IN_GIT}/{pointer['record']}": pointer["sha256"] for pointer in endings(directory)
+            if re.fullmatch(pattern, str(pointer.get("record")))}
+
+
+def tree_changes(directory=None):
     """FROZEN_TREE_RULE: the lines of git status --porcelain other than the seal ledger modified in place (in the
-    worktree, the index or both)."""
-    return [line for line in git("status", "--porcelain").splitlines()
-            if line and not (line[3:] == LEDGER and line[:2] in (" M", "M ", "MM"))]
+    worktree, the index or both) and, of the campaign `directory`, the records of its endings it wrote, new or
+    modified, each with the sha256 its endings/ names (read in RESULTS)."""
+    own = own_records(directory)
+    changes = []
+    for line in git("status", "--porcelain").splitlines():
+        if not line:
+            continue
+        name, code = line[3:], line[:2]
+        if name == LEDGER and code in (" M", "M ", "MM"):
+            continue
+        if name in own and code in RECORD_CODES:
+            path = RESULTS / Path(name).name
+            if path.is_file() and digest(path) == own[name]:
+                continue
+        changes.append(line)
+    return changes
+
+
+class CampaignInvalid(ValueError):
+    """INVALID_RULE: the measurement code or the lab changed during a campaign of protocol schema 3."""
+
+
+def named_files(names):
+    """The first NAMED_FILES of `names`, and how many more there are."""
+    names = list(names)
+    more = len(names) - NAMED_FILES
+    return ", ".join(names[:NAMED_FILES]) + (f" and {more} more" if more > 0 else "")
+
+
+def frozen_hashes(manifest):
+    """INVALID_RULE (F2 of the verification of B9b): (what changed, new files) of the measurement code and of the lab
+    against the per-file maps init froze into a campaign of protocol schema 3 (FROZEN_MAPS). What changed is None
+    while every file of the frozen sets has its frozen content, else the text that names the files changed or gone;
+    the new files, beside the frozen sets, change neither (a change of the tree). A campaign.json without the maps is
+    refused by name."""
+    missing = [key for key, _, _ in FROZEN_MAPS if type(manifest.get(key)) is not dict]
+    if missing:
+        raise ValueError("campaign.json of protocol schema 3 freezes no " + " and no ".join(missing) + " (init records "
+                         "the measurement code and the lab file by file since the fix round of package B9b; "
+                         "scripts/campaign.py INVALID_RULE)")
+    changed, new = [], set()
+    for key, what, function in FROZEN_MAPS:
+        frozen, current = manifest[key], getattr(collection, function)()
+        names = sorted(name for name in frozen if current.get(name) != frozen[name])  # Changed or gone.
+        if names:
+            changed.append(f"{what}: {named_files(names)})")
+        new.update(set(current) - set(frozen))
+    return " and ".join(changed) or None, sorted(new)
 
 
 def verify_frozen(directory, manifest, p):
+    new = []
+    if schema3(p):  # INVALID_RULE (package B9b): the frozen hashes before the tree.
+        changed, new = frozen_hashes(manifest)
+        if changed:
+            raise CampaignInvalid(f"{changed} changed during the campaign: a campaign whose measurement code or lab "
+                                  "changed is invalid (scripts/campaign.py INVALID_RULE)")
     with ledger_lock():
-        head, changes = git("rev-parse", "HEAD"), tree_changes()
-    if head != manifest["commit"] or changes:
+        head, changes = git("rev-parse", "HEAD"), tree_changes(directory if schema3(p) else None)
+    if head != manifest["commit"] or changes or new:
         raise ValueError("campaign source changed; restore frozen commit before resuming"
-                         + (" (changed: " + "; ".join(changes[:5]) + ")" if changes else ""))
+                         + (" (changed: " + "; ".join(changes[:5]) + ")" if changes else "")
+                         # INVALID_RULE (F2): a change of the tree, not of the frozen sets; resumed without them.
+                         + (f" (new files beside the frozen measurement code and lab: {named_files(new)}; remove them "
+                            "and run again, scripts/campaign.py INVALID_RULE)" if new else ""))
     if (runtime_identity() != manifest["runtime"]
             or tree_hashes(ROOT / p["profile"]) != manifest["profile_sha256"]
             or extractor_hashes() != manifest["extractor_sha256"]):
@@ -1127,12 +1462,22 @@ def sleep_inhibited():
 
 
 class GroupStartFailed(ValueError):
-    """A step of the start of a group of protocol schema 3 failed (GROUP_START_RULE): the session is rejected before
-    its measured phase with the cause group_start."""
+    """A step of the start of a group of protocol schema 3 failed (GROUP_START_RULE): no session is measured; the
+    failure is recorded as the group's start failure (Q22), with `step`, the outputs of the steps before it (`steps`)
+    and the log of the failed command (`log`, None where none ran)."""
 
-    def __init__(self, step, detail):
+    def __init__(self, step, detail, log=None):
         super().__init__(f"{step}: {detail}")
-        self.step = step
+        self.step, self.log, self.steps = step, log, []
+
+
+class GroupStartStop(ValueError):
+    """GROUP_START_RULE (Q22): the runner stops by name after a failed start of a group, whose record is `record`
+    (groups/<group>.start-failed-<UTC>.json); the campaign ends as stopped with the cause group_start."""
+
+    def __init__(self, text, record):
+        super().__init__(text)
+        self.record = record
 
 
 def lab_step(directory, p, verb, *args):
@@ -1145,10 +1490,10 @@ def lab_step(directory, p, verb, *args):
     try:
         rc = run_child(command, log, timeout=GROUP_START_STEPS[verb])
     except (TimeoutError, OSError) as error:
-        raise GroupStartFailed(verb, f"{type(error).__name__}: {error}") from None
+        raise GroupStartFailed(verb, f"{type(error).__name__}: {error}", log) from None
     text = log.read_text(errors="replace") if log.exists() else ""
     if rc:
-        raise GroupStartFailed(verb, f"labctl {verb} exited {rc}: " + text.strip()[-CHILD_ERROR_CHARS:])
+        raise GroupStartFailed(verb, f"labctl {verb} exited {rc}: " + text.strip()[-CHILD_ERROR_CHARS:], log)
     printed = []
     for line in text.splitlines():
         try:
@@ -1178,6 +1523,18 @@ def start_group(directory, manifest, p, row):
         write_new(intent, {"group": row["group"], "previous_qemu": before, "date": now()})
     update_state(directory, vm=row.get("vm"), status="running", stage="group-start", group=row["group"])
     steps = []
+    try:
+        group = start_steps(directory, manifest, p, row, before, steps)
+    except GroupStartFailed as failure:  # GROUP_START_RULE (Q22): the outputs of the steps before the failed one.
+        failure.steps = steps
+        raise
+    write_new(ready, group)
+    return group
+
+
+def start_steps(directory, manifest, p, row, before, steps):
+    """GROUP_START_RULE: the steps of the start of a group (stop, start, reset, pretouch), each output appended to
+    `steps` as it is done; returns the group's record. GroupStartFailed names the step that failed."""
 
     def identity(step):
         try:
@@ -1229,7 +1586,6 @@ def start_group(directory, manifest, p, row):
              **({"vm": row["vm"], "domain": p["domain"]} if "vm" in row else {}),
              "role": row["role"], "identity": current, "qemu": qemu, "previous_qemu": before,
              "start": {"rule": GROUP_START_RULE, "reset_seed": seed, "steps": steps}}
-    write_new(ready, group)
     return group
 
 
@@ -1422,8 +1778,8 @@ def retire_attempt(directory, manifest, row, session):
 
 STOP_MESSAGE = {"audit_rejected": "audit rejected session; archived without replacement",
                 "capture_incomplete": "incomplete capture archived; allocation stopped, no automatic replacement",
-                "group_start": "the start of the group failed before the measured phase; allocation stopped, no "
-                               "automatic replacement"}
+                "group_start": "the start of the group failed before the measured phase; the campaign stopped, a run "
+                               "after the cause is removed starts the group again (Q22)"}
 
 
 def incomplete_reasons(session):
@@ -1455,12 +1811,13 @@ def reject(directory, manifest, p, row, cause, reasons, report=None):
     protocol's rule allows.
 
     cause: "audit_rejected" (completed capture, rejecting audit; report = that audit) or
-    "capture_incomplete" (the measured phase started, the capture did not complete), and under
-    protocol schema 3 "group_start" (a step of the start of its group failed before the measured
-    phase, GROUP_START_RULE). A rejection with the cause group_start is never replaced: no protocol
-    may cover group_start, because collection.check_replacement admits in replacement.covers only
-    REPLACEMENT_CAUSES (audit_rejected, capture_incomplete); the runner stops by name, and package
-    B9b ends the campaign with a record (F7 of the verification of B9a). The rule is part of the
+    "capture_incomplete" (the measured phase started, the capture did not complete). A failed start
+    of a group is no rejection of a session (GROUP_START_RULE, question Q22 decided by its proposal):
+    it is recorded as groups/<group>.start-failed-<UTC>.json, never passed here, nothing is replaced
+    or charged to the limit, and no protocol may cover group_start, because
+    collection.check_replacement admits in replacement.covers only REPLACEMENT_CAUSES
+    (audit_rejected, capture_incomplete); the runner stops by name, the campaign ends as stopped with
+    the cause group_start, and a resumed run starts the group again. The rule is part of the
     frozen protocol (collection.check_replacement): which causes it covers and one maximum per
     campaign shared by all of them. The replacement is the
     same assignment - VM, role, group, scenario, seed, event schedule - captured again in the same
@@ -1478,16 +1835,21 @@ def reject(directory, manifest, p, row, cause, reasons, report=None):
 
     Called under the audit lock, so the per-campaign count is exact over all VMs. Returns the
     replacement row or None (cause not covered, maximum used up, boot lost, or under schema 3 a next
-    attempt protocol_v5.replacement cannot draw, its OutsideDeck named: the caller stops).
+    attempt protocol_v5.replacement cannot draw, its OutsideDeck named: the caller stops). Under
+    protocol schema 3 a rejection the used-up maximum refuses names in its record the ending it brings
+    (package B9b): paused (PAUSE_RULE), or invalid inside a continuation (INVALID_RULE).
     """
     rule = p.get("replacement") or {}
     applied, limit = replacement_limit(manifest, p)
     used = sum(r.get("replacement") is not None for r in rejections(directory))
     plan_session, number = row.get("plan_session", row["session_id"]), row.get("replacement", 0) + 1
+    ending = None
     if cause not in rule.get("covers", collection.REPLACEMENT_CAUSES[:1] if rule else ()):
         refused = "the protocol has no replacement rule for this cause"
     elif applied and used >= limit:
         refused = f"the protocol's {limit} replacements per campaign are used up"
+        if schema3(p):  # PAUSE_RULE; a second exhaustion inside a continuation, INVALID_RULE.
+            ending = "invalid" if "continues" in manifest else "paused"
     else:
         refused = group_boot_lost(directory, p, row) if cause == "capture_incomplete" else None
     drawn = None
@@ -1508,6 +1870,7 @@ def reject(directory, manifest, p, row, cause, reasons, report=None):
         "replacement": replacement, "replacements_before": used, "max_per_campaign": limit,
         **({"limit_applied": applied, "plan_mode": manifest["mode"]} if schema3(p) else {}),
         **({"not_replaced": refused} if refused else {}),
+        **({"ending": ending} if ending else {}),
         "note": "Archived, never part of the corpus or event index. "
                 + (("Replaced by the next attempt of the same assignment (protocol replacement rule, "
                     "scripts/campaign.py REPLACEMENT_RULE)." if schema3(p) else
@@ -1527,13 +1890,44 @@ def reject(directory, manifest, p, row, cause, reasons, report=None):
 
 
 def take_stop_request(directory, vm=None):
-    """Consume an operator request to stop before the next capture."""
+    """Consume a request to stop before the next capture: the request (an operator's, or under protocol schema 3 one
+    another runner's trigger of an ending wrote, ENDING_RULE), None when there is none. A request that is empty or no
+    JSON object is honored as an operator's without a reason (a true value, as before package B9b)."""
     request = directory / vm_file("stop-request.json", vm)
     if not request.exists():
-        return False
+        return None
+    try:
+        doc = read_json(request)
+    except (OSError, ValueError):
+        doc = None
     os.replace(request, directory / "events" / f"{stamp()}_{request.name}")
     sync_dir(directory)
-    return True
+    return doc if type(doc) is dict and doc else {"note": "an empty or unreadable request, honored as an operator's"}
+
+
+class Stop(str):
+    """A reason to stop between sessions (the text, as before): `request`, the stop request the runner honored (None
+    for another reason), and `waited`, what the barrier of ORDER_RULE held the runner for (None outside it)."""
+
+    def __new__(cls, text, *, request=None, waited=None):
+        self = super().__new__(cls, text)
+        self.request, self.waited = request, waited
+        return self
+
+
+def stop_text(request):
+    """The reason of a stop for a request a runner honored: an operator's ("operator stop request", as before), or
+    under protocol schema 3 the ending another runner's trigger began (ENDING_RULE)."""
+    if "ending" in request:
+        return (f"the campaign is ending ({request['ending']}, VM {request.get('by')}: {request.get('cause')}): this "
+                "runner stopped at its next check")
+    return "operator stop request"
+
+
+def operator_reason(request):
+    """The reason an operator's stop request names (request-stop --reason), else None."""
+    reason = request.get("reason")
+    return reason if type(reason) is str and reason.strip() else None
 
 
 def earlier_roles(directory, manifest, p, row):
@@ -1600,23 +1994,29 @@ def wait_for_earlier_roles(directory, manifest, p, row):
     role until the other VMs have started every group of those roles that precedes
     it in the plan (earlier_groups). Returns a reason to stop instead (operator
     request, or the other runner is not running and nobody would end the wait),
-    else None. The state names what the runner waits for.
+    else None. The state names what the runner waits for. The reason is a Stop:
+    it carries the stop request the runner honored, the operator's or under
+    protocol schema 3 another runner's trigger of an ending (package B9b: a pause
+    ends this wait too, PAUSE_RULE), and what the runner was held for.
     """
     shown, grace = None, time.monotonic() + START_GRACE_S
     while True:
         pending, groups = earlier_roles(directory, manifest, p, row), earlier_groups(directory, manifest, p, row)
         if not pending and not groups:
             return None
-        if take_stop_request(directory, row["vm"]):
-            return "operator stop request"
+        message = wait_message(row, pending, groups)
+        request = take_stop_request(directory, row["vm"])
+        if request is not None:
+            return Stop(stop_text(request), request=request, waited=message)
         for vm in sorted({r["vm"] for r in pending + groups}):
             path = directory / vm_file("status.json", vm)
             if not campaign_running(read_json(path) if path.exists() else {}) and time.monotonic() >= grace:
                 if any(r["vm"] == vm for r in pending):
-                    return f"VM {vm} has not finished the roles before {row['role']} and its runner is not active"
-                return (f"VM {vm} has not started the groups before {row['group']} in the plan ("
-                        + ", ".join(r["group"] for r in groups if r["vm"] == vm) + ") and its runner is not active")
-        message = wait_message(row, pending, groups)
+                    return Stop(f"VM {vm} has not finished the roles before {row['role']} and its runner is not "
+                                "active", waited=message)
+                return Stop(f"VM {vm} has not started the groups before {row['group']} in the plan ("
+                            + ", ".join(r["group"] for r in groups if r["vm"] == vm) + ") and its runner is not active",
+                            waited=message)
         if message != shown:
             update_state(directory, vm=row["vm"], status="running", stage="role-wait", group=row["group"],
                          role=row["role"], message=message)
@@ -1659,11 +2059,861 @@ def seal_session(directory, manifest, row, report):
     return result
 
 
-def execute(directory, *, stop_after=None, vm=None):
+# ------------------------------------------------------------------ the endings (package B9b, agent R)
+
+NOBODY = object()  # ENDING_RULE: the trigger of an operator's command (launch), no runner of the campaign.
+POINTER_SCHEMA = "hyptcn3/campaign-ending-name/1"  # endings/<stamp>_<ending>.json: a record's name and sha256.
+PENDING_SCHEMA = "hyptcn3/campaign-ending-pending/1"  # ending.json: the pending ending and its triggers.
+
+
+@contextmanager
+def ending_lock(directory):
+    """ENDING_RULE: one change of the ending of a campaign at a time over its runners and commands (an exclusive flock
+    of the campaign directory, held while a last state, a trigger or a record is written; never nested)."""
+    descriptor = os.open(directory, os.O_RDONLY)
+    try:
+        fcntl.flock(descriptor, fcntl.LOCK_EX)
+        yield
+    finally:
+        os.close(descriptor)
+
+
+@contextmanager
+def results_lock():
+    """ENDING_RULE and FROZEN_TREE_RULE: a record is written into RESULTS under the lock of that directory, the one
+    under which tcn/pecat.py writes the ledger and verify_frozen runs git status (ledger_lock), so that no temporary
+    file of a record is seen as a change."""
+    RESULTS.mkdir(parents=True, exist_ok=True)
+    descriptor = os.open(RESULTS, os.O_RDONLY)
+    try:
+        fcntl.flock(descriptor, fcntl.LOCK_EX)
+        yield
+    finally:
+        os.close(descriptor)
+
+
+def endings(directory):
+    """ENDING_RULE: the recorded endings of a campaign, oldest first, from endings/ of its directory: {schema, ending,
+    cause, record (its name in RESULTS), sha256, date, pending (the id of the pending ending it recorded)}."""
+    folder = Path(directory) / "endings"
+    return [read_json(path) for path in sorted(folder.glob("*.json"))] if folder.is_dir() else []
+
+
+def latest_ending(directory):
+    """ENDING_RULE: the last recorded ending of a campaign, None before any."""
+    found = endings(directory)
+    return found[-1] if found else None
+
+
+def pending_ending(directory):
+    """ENDING_RULE: the pending ending of a campaign (ending.json: its kind, cause and triggers), else None."""
+    path = Path(directory) / "ending.json"
+    return read_json(path) if path.exists() else None
+
+
+def held_ending(directory):
+    """PAUSE_RULE and INVALID_RULE: "invalid" or "paused" when the campaign holds that ending, pending or the last one
+    recorded, else None."""
+    kinds = {doc["ending"] for doc in (pending_ending(directory), latest_ending(directory)) if doc}
+    return next((kind for kind in ("invalid", "paused") if kind in kinds), None)
+
+
+def refuse_held(directory, verb):
+    """PAUSE_RULE, INVALID_RULE and ENDING_RULE: a run or a launch of a paused or an invalid campaign is refused by
+    name, and so is one while an ending is pending (another runner is still active; settle came first)."""
+    name, kind, pending = Path(directory).name, held_ending(directory), pending_ending(directory)
+    if kind == "paused":
+        raise ValueError(f"campaign {name} is paused: it does not {verb} again; continue it once with init --continue "
+                         f"{directory} --cause TEXT (scripts/campaign.py PAUSE_RULE, CONTINUATION_RULE)")
+    if kind == "invalid":
+        raise ValueError(f"campaign {name} is invalid: it does not {verb} again, has no corpus and is never continued "
+                         "(scripts/campaign.py INVALID_RULE)")
+    if pending is not None:
+        raise ValueError(f"campaign {name} is ending ({pending['ending']}: {pending['cause']}): its other runner stops "
+                         f"at its next check; {verb} it again once that ending is recorded (scripts/campaign.py "
+                         "ENDING_RULE)")
+
+
+def index_built(directory, protocol):
+    """ENDING_RULE (F3): whether the index of the campaign is built, the last step of finish_corpus (the state complete
+    at the stage complete of the runner that built it)."""
+    for vm in vm_names(protocol):
+        path = Path(directory) / vm_file("status.json", vm)
+        state = read_json(path) if path.exists() else {}
+        if state.get("status") == "complete" and state.get("stage") == "complete":
+            return True
+    return False
+
+
+def refuse_ended(directory, protocol, verb):
+    """ENDING_RULE (F3 of the verification of B9b): a run or a launch of a campaign whose last recorded ending is
+    closed, or complete with its index built, is refused by name before verify_frozen, so that it writes no ending and
+    no record (the records and the ledger are committed after that ending, which moves HEAD). A complete ending whose
+    runner died before its index was built runs again and builds it (the fix round's interpretation)."""
+    name, latest = Path(directory).name, latest_ending(directory)
+    if latest is None:
+        return
+    if latest["ending"] == "closed":
+        raise ValueError(f"campaign {name} was closed by the operator (record {latest['record']}): it does not {verb} "
+                         "again (scripts/campaign.py ENDING_RULE)")
+    if latest["ending"] == "complete" and index_built(directory, protocol):
+        raise ValueError(f"campaign {name} is complete (record {latest['record']}) and its index is built: it does "
+                         f"not {verb} again (scripts/campaign.py ENDING_RULE)")
+
+
+def write_deviation(directory, kind, vm, doc):
+    """ENDING_RULE and RESUME_RULE (F6): deviations/<UTC>_<kind>[_<vm>].json of the campaign directory, a deviation
+    that is no ending; every later record lists it (deviation_events). Returns its path."""
+    folder = Path(directory) / "deviations"
+    folder.mkdir(exist_ok=True)
+    path = folder / (f"{stamp()}_{kind}" + ("" if vm is None else f"_{vm}") + ".json")
+    write_new(path, {"schema": DEVIATION_SCHEMA, "deviation": kind, "date": now(), "vm": vm, **doc})
+    return path
+
+
+def unclean_end(directory, vm, previous):
+    """ENDING_RULE (F6 of the verification of B9b): the run that finds its VM's previous state running while the lock
+    was free (SIGKILL, a crash, a power loss) writes deviations/<UTC>_unclean-end_<vm>.json before it resumes: the VM,
+    that state with its stage, session and updated_at, and the time of the finding. A deviation and not an ending: the
+    other VM's runner may have gone on."""
+    return write_deviation(directory, "unclean-end", vm, {
+        "previous": {key: previous.get(key) for key in ("status", "stage", "session", "group", "updated_at", "pid")},
+        "note": "The runner of this VM ended without a final status; its session is incomplete. Recorded by the next "
+                "run of the VM before it resumed (scripts/campaign.py ENDING_RULE)."})
+
+
+def early_stop_triggers(pointer, what):
+    """EARLY_STOP_RULE and RESUME_RULE, one reading for both (the restart point of the count, early_stop_restart, and
+    the written cause of a resume, early_stop_record): the early-stop triggers of the recorded ending `pointer` (of
+    endings/), a trigger whose detail holds early_stop, read from its record in RESULTS. ValueError by name for a
+    record that is missing or has another sha256 than endings/ names: `what` cannot be told then."""
+    path = RESULTS / pointer["record"]
+    if not path.is_file() or digest(path) != pointer["sha256"]:
+        raise ValueError(f"the record {path} of the ending {pointer['ending']} of {pointer['date']} is missing or "
+                         f"has another sha256 than endings/ names, so {what} cannot be told")
+    triggers = (read_json(path).get("values") or {}).get("triggers") or []
+    return [t for t in triggers if type(t) is dict and type(t.get("detail")) is dict and t["detail"].get("early_stop")]
+
+
+def early_stop_record(directory):
+    """RESUME_RULE: (pointer, its early-stop triggers) of the campaign's last recorded ending when it is a stopped
+    ending with an early stop among its triggers (early_stop_triggers, the reading of EARLY_STOP_RULE's restart
+    point), else None. The record missing, or with another sha256 than its endings/ names, is refused by name."""
+    latest = latest_ending(directory)
+    if latest is None or latest["ending"] != "stopped":
+        return None
+    triggers = early_stop_triggers(latest, "whether its stop needs a written cause (scripts/campaign.py RESUME_RULE)")
+    return (latest, triggers) if triggers else None
+
+
+def answer_early_stop(directory, vm, cause, verb, command):
+    """RESUME_RULE (F6 of the verification of B9b, HARNESS chapter 7): before a run or a launch of a campaign whose
+    last recorded ending is an early stop, the written cause of the resume. Refused by name without --cause unless a
+    deviation already answers that record; with it, deviations/<UTC>_resume-after-early-stop_<vm>.json answers it (vm
+    None: a launch of every VM). An empty --cause, and --cause when the last recorded ending is no early stop, are
+    refused by name. Returns the path written, else None."""
+    name = Path(directory).name
+    if cause is not None and (type(cause) is not str or not cause.strip()):
+        raise ValueError(f"{verb} --cause is empty: the written analysis of the early stop is required (no default; "
+                         "scripts/campaign.py RESUME_RULE)")
+    found = early_stop_record(directory)
+    if found is None:
+        if cause is not None:
+            raise ValueError(f"--cause answers an early stop, and the last recorded ending of campaign {name} is no "
+                             f"early stop: {verb} it without --cause (scripts/campaign.py RESUME_RULE)")
+        return None
+    latest, _ = found
+    answers = {"record": latest["record"], "sha256": latest["sha256"]}
+    if cause is None:
+        if any(doc.get("deviation") == "resume-after-early-stop" and {key: (doc.get("answers") or {}).get(key)
+                                                                      for key in answers} == answers
+               for _, doc in deviation_records(directory)):
+            return None
+        raise ValueError(f"campaign {name} stopped early ({latest['cause']}; record {latest['record']}): an early "
+                         f"stop is a stop and a question (HARNESS chapter 7); {verb} it again with --cause TEXT, the "
+                         "written analysis of its cause, which every later record lists among its deviations "
+                         "(scripts/campaign.py RESUME_RULE)")
+    return write_deviation(directory, "resume-after-early-stop", vm, {
+        "answers": {**answers, "cause": latest["cause"]}, "cause": cause, "command": command,
+        "note": "The written analysis of an early stop, before the campaign runs again (scripts/campaign.py "
+                "RESUME_RULE)."})
+
+
+def deviation_records(directory):
+    """ENDING_RULE (F6): [(name, doc)] of deviations/ of the campaign directory, oldest first; a file that cannot be
+    read is kept with its reason ({"unreadable": ...}), never left out."""
+    folder = Path(directory) / "deviations"
+    found = []
+    for path in sorted(folder.glob("*.json")) if folder.is_dir() else []:
+        try:
+            doc = read_json(path)
+        except (OSError, ValueError) as error:
+            doc = {"unreadable": f"{type(error).__name__}: {error}"}
+        found.append((path.name, doc if type(doc) is dict else {"unreadable": "not a JSON object"}))
+    return found
+
+
+def active_runners(directory, protocol, but=NOBODY):
+    """ENDING_RULE: the VMs of a campaign whose runner is active (its status running, its process alive), but the VM
+    `but` (the runner that asks; NOBODY: none is left out)."""
+    found = []
+    for vm in vm_names(protocol):
+        if but is not NOBODY and vm == but:
+            continue
+        path = Path(directory) / vm_file("status.json", vm)
+        if path.exists() and campaign_running(read_json(path)):
+            found.append(vm)
+    return found
+
+
+def begin_ending(directory, protocol, vm, kind, cause, detail=None):
+    """ENDING_RULE: a trigger of a paused, stopped or invalid ending, met by the runner of `vm` (NOBODY: an operator's
+    command). The ending is pending in ending.json with every trigger in order, the heavier kind holding (PENDING), and
+    every other active runner gets its stop request, so that it stops at its next check; the record follows once the
+    campaign is at rest (end_run, settle). Returns the pending ending."""
+    directory = Path(directory)
+    with ending_lock(directory):
+        path = directory / "ending.json"
+        pending = read_json(path) if path.exists() else {
+            "schema": PENDING_SCHEMA, "id": uuid.uuid4().hex, "ending": kind, "cause": cause, "date": now(),
+            "triggers": []}
+        if PENDING[kind] > PENDING[pending["ending"]]:
+            pending.update(ending=kind, cause=cause)
+        pending["triggers"].append({"date": now(), "vm": None if vm is NOBODY else vm, "ending": kind,
+                                    "cause": cause, "detail": detail})
+        write_new(path, pending, replace=True)
+        for other in active_runners(directory, protocol, but=vm):
+            try:
+                write_new(directory / vm_file("stop-request.json", other), {
+                    "schema": "hyptcn3/campaign-stop-request/1", "date": now(), "uid": os.getuid(),
+                    **({} if other is None else {"vm": other}), "ending": pending["ending"],
+                    "by": None if vm is NOBODY else vm, "cause": pending["cause"],
+                    "note": "Written by the trigger of an ending (scripts/campaign.py ENDING_RULE): this runner stops "
+                            "at its next check, as part of that ending."})
+            except FileExistsError:
+                pass  # A request is there already: the runner stops at its next check all the same.
+    return pending
+
+
+def end_run(directory, campaign, protocol, vm, *, command, status, stage, message, **state):
+    """ENDING_RULE: the last state of a run of the runner of `vm`. A run that stops while an ending is pending takes
+    that ending's kind (paused, stopped or invalid; complete stays), and when its stop leaves the campaign at rest the
+    pending ending is recorded. Returns the record's path, else None."""
+    directory = Path(directory)
+    with ending_lock(directory):
+        pending = pending_ending(directory)
+        if pending is not None and status != "complete":
+            status = pending["ending"]
+        update_state(directory, vm=vm, status=status, stage=stage, message=message, **state)
+        if pending is None or active_runners(directory, protocol):
+            return None
+        return record_pending(directory, campaign, protocol, pending, command=command)
+
+
+def settle(directory, campaign, protocol, *, command):
+    """ENDING_RULE: the record of a pending ending when no runner of the campaign is active (its last runner was stopped
+    by SIGKILL, a crash or a power loss before it wrote it); a run, a launch and a close settle first. Returns the
+    ending that stays pending (a runner is active), else None."""
+    directory = Path(directory)
+    with ending_lock(directory):
+        pending = pending_ending(directory)
+        if pending is None:
+            return None
+        if active_runners(directory, protocol):
+            return pending
+        record_pending(directory, campaign, protocol, pending, command=command)
+        return None
+
+
+def record_pending(directory, campaign, protocol, pending, *, command):
+    """ENDING_RULE, under ending_lock: the record of the pending ending, then the pending one goes; one recorded already
+    (a crash between its record and the removal) is not recorded twice. Returns the record's path, else None."""
+    latest, path = latest_ending(directory), None
+    if latest is None or latest.get("pending") != pending["id"]:
+        doc = ending_record(directory, campaign, protocol, pending["ending"], pending["triggers"],
+                            cause=pending["cause"], command=command)
+        path = publish_ending(directory, campaign, doc, pending=pending["id"])
+    (Path(directory) / "ending.json").unlink()
+    sync_dir(directory)
+    return path
+
+
+def complete_ending(directory, campaign, protocol, vm, *, command):
+    """ENDING_RULE: the record of the complete ending, written before the index by the runner of `vm` that finds every
+    planned session accepted (finish_corpus refuses without it), unless the last recorded ending is the complete one
+    already (a complete campaign run again). Refused by name while an ending is pending (the caller stops as part of
+    it instead). Returns its path, else None."""
+    directory = Path(directory)
+    with ending_lock(directory):
+        pending = pending_ending(directory)
+        if pending is not None:
+            raise ValueError(f"campaign {campaign['id']} is ending ({pending['ending']}: {pending['cause']}): no record "
+                             "of its complete ending while another ending is pending (scripts/campaign.py ENDING_RULE)")
+        latest = latest_ending(directory)
+        if latest is not None and latest["ending"] == "complete":
+            return None
+        trigger = {"date": now(), "vm": vm, "ending": "complete", "cause": COMPLETE_CAUSE, "detail": None}
+        doc = ending_record(directory, campaign, protocol, "complete", [trigger], cause=COMPLETE_CAUSE,
+                            command=command)
+        return publish_ending(directory, campaign, doc)
+
+
+# ENDING_RULE (F11): where the entry in a record of a closing ending names the record's own sha256, which no file can
+# hold of itself; the command that writes the record prints the entry with the sha256 in its place.
+MERANIA_SHA256 = "uvádza ho endings/ kampane a výpis príkazu, ktorý záznam zapísal"
+
+
+def merania_entry(doc, name):
+    """ENDING_RULE (F11 of the verification of B9b, proposal 11.6): the text of the entry of docs/MERANIA.md of the
+    record `doc` of an ending that closes the campaign, written as data/results/<name>: the campaign and the ending,
+    the record's name (its sha256 as MERANIA_SHA256), the planned, accepted, rejected and replaced sessions, the
+    unscored time and the deviations, each of which also gets its entry in docs/ODCHYLKY_V5.sk.md; every number from
+    the record with its marker of check C of scripts/check_claims.sh."""
+    v = doc.get("values") or {}
+    res = lambda key: "{{res:" + name + ":values." + key + "}}"
+    kind = v.get("ending")
+    by_cause = v.get("rejections_by_cause") or {}
+    unscored, continues = v.get("unscored") or {}, v.get("continues")
+    total = unscored.get("total_s")
+    causes = "; ".join(f"`{cause}` {count} " + res("rejections_by_cause." + cause) for cause, count in by_cause.items())
+    lines = ["## " + str(doc.get("date"))[:10] + f" — kampaň {v.get('campaign')}: ukončenie {ENDINGS.get(kind, kind)}",
+             "",
+             f"- **Záznam:** [`data/results/{name}`](../data/results/{name}), sha256 {MERANIA_SHA256}; stupeň "
+             f"`{(v.get('stage') or {}).get('stage')}`, commit zmrazenia `{v.get('frozen_commit')}`, príkaz "
+             f"`{doc.get('command')}`.",
+             f"- **Kampaň a ukončenie:** `{v.get('campaign')}` v režime `{v.get('mode')}` (protokol sha256 "
+             f"`{v.get('protocol_sha256')}`), ukončenie `{kind}` ({ENDINGS.get(kind, kind)}); "
+             f"príčina: {v.get('cause')}",
+             f"- **Session:** plánovaných {v.get('planned_sessions')} " + res("planned_sessions")
+             + f", prijatých {v.get('accepted_sessions')} " + res("accepted_sessions")
+             + f", zamietnutých {len(v.get('rejected_sessions') or [])}"
+             + (f" (podľa príčiny: {causes})" if causes else "")
+             + f", nahradených {v.get('replacements_used')} " + res("replacements_used")
+             + ("" if not continues else f" (v kampani {continues.get('campaign')}, ktorú pokračuje, "
+                f"{continues.get('replacements_used')} " + res("continues.replacements_used") + ")") + ".",
+             "- **Neskórovaný čas:** "
+             + ("nezaznamenaný" if type(total) not in (int, float)
+                else f"{total:.1f} " + res("unscored.total_s") + " s")
+             + " nominálne v prijatých session (`values.coverage.nominal_unscored_s` auditu každej); bez záznamu: "
+             + (", ".join(f"`{sid}`" for sid in unscored.get("not_recorded") or []) or "žiadna") + "."]
+    deviations = v.get("deviations") or []
+    lines.append(f"- **Odchýlky:** {len(deviations)}" + (", každá so zápisom v `docs/ODCHYLKY_V5.sk.md`:" if deviations
+                                                         else "."))
+    for event in deviations:
+        said = event.get("cause") or event.get("reason")
+        lines.append(f"  - `{event.get('event')}`" + (f" `{event['ending']}`" if event.get("ending") else "")
+                     + f" ({event.get('date')})" + (f": {said}" if said else "")
+                     + (f"; záznam `{event['record']}`" if event.get("record") else ""))
+    return "\n".join(lines) + "\n"
+
+
+def publish_ending(directory, campaign, doc, *, pending=None):
+    """ENDING_RULE: the record `doc` written into RESULTS as kampan_<campaign id>_<ending>_<UTC stamp>.json, a file of
+    the campaign's owner (the runner runs as root), then named with its sha256 in endings/ of the campaign directory
+    (`pending`: the id of the pending ending it records). The record of an ending that closes the campaign carries the
+    entry of docs/MERANIA.md (merania_entry), which is printed with the record's sha256 (F11). Returns its path."""
+    kind, when = doc["values"]["ending"], stamp()
+    name = f"kampan_{campaign['id']}_{kind}_{when}.json"
+    if kind in CLOSING:  # F11: the entry without the record's own sha256 (MERANIA_SHA256).
+        doc = {**doc, "values": {**doc["values"], "merania_entry": merania_entry(doc, name)}}
+    text = json.dumps(doc, indent=2, ensure_ascii=False, allow_nan=False) + "\n"
+    with results_lock():
+        path = RESULTS / name
+        temp = path.with_name(f".{name}.{uuid.uuid4().hex}.tmp")
+        try:
+            with temp.open("x", encoding="utf-8") as stream:
+                stream.write(text)
+                stream.flush()
+                os.fsync(stream.fileno())
+            if os.geteuid() == 0:  # The runner runs as root: the record stays a file of the campaign's owner.
+                os.chown(temp, campaign["owner"]["uid"], campaign["owner"]["gid"])
+            os.link(temp, path)  # Exclusive: a record is never replaced.
+        finally:
+            temp.unlink(missing_ok=True)
+        sync_dir(RESULTS)
+    folder = Path(directory) / "endings"
+    folder.mkdir(exist_ok=True)
+    write_new(folder / f"{when}_{kind}.json", {"schema": POINTER_SCHEMA, "ending": kind,
+                                              "cause": doc["values"]["cause"], "record": name,
+                                              "sha256": digest(path), "date": doc["date"], "pending": pending})
+    if kind in CLOSING:  # F11: the command that wrote the record prints the entry, with the record's sha256.
+        print(f"The entry of {MEASUREMENT_LOG} for this ending (scripts/campaign.py ENDING_RULE; one entry of "
+              f"{DEVIATION_LOG} per deviation):\n" + doc["values"]["merania_entry"].replace(
+                  MERANIA_SHA256, f"`{digest(path)}`"), flush=True)
+    return path
+
+
+def require_complete_record(directory, manifest):
+    """ENDING_RULE and INVALID_RULE: the index of a campaign of protocol schema 3 is built only after the record of its
+    complete ending; an invalid campaign has no corpus, and without that record (the last recorded ending complete, no
+    ending pending, the record in RESULTS with the sha256 its endings/ names) finish_corpus refuses, each by name."""
+    name = manifest.get("id", Path(directory).name)
+    if held_ending(directory) == "invalid":
+        raise ValueError(f"campaign {name} is invalid: an invalid campaign has no corpus (scripts/campaign.py "
+                         "INVALID_RULE)")
+    pending, latest = pending_ending(directory), latest_ending(directory)
+    if pending is not None or latest is None or latest["ending"] != "complete":
+        last = ("pending: " + pending["ending"] if pending is not None else
+                "none" if latest is None else latest["ending"])
+        raise ValueError(f"the record of the complete ending of campaign {name} is missing (its last ending: {last}): "
+                         "the record comes first, then the corpus (scripts/campaign.py ENDING_RULE)")
+    path = RESULTS / latest["record"]
+    if not path.is_file() or digest(path) != latest["sha256"]:
+        raise ValueError(f"the record of the complete ending of campaign {name} is not the one it wrote: {path} "
+                         f"{'is missing' if not path.is_file() else 'has another sha256'} (scripts/campaign.py "
+                         "ENDING_RULE)")
+    return path
+
+
+def early_stop_cause(stop):
+    """EARLY_STOP_RULE: the sentence of an early stop from what early_stop_check returns (features/audit_policy.py
+    early_stop: its cause a code, periodicity or marked_rows; its type, count and bound, and for marked rows the
+    occurrences, the rate, the sessions counted and the restart point of the count)."""
+    if stop.get("cause") == "periodicity":
+        run = ("a run of equal spacings the audit did not count" if stop.get("count") is None else
+               f"a run of {stop['count']} equal spacings")
+        return (f"a session rejected for periodicity: {run} of its flagged rows, the bound {stop.get('bound')} of "
+                "audit.periodicity.equal_spacings")
+    n = stop.get("occurrences")
+    return (f"{stop.get('count')} marked rows at the events of type {stop.get('type')} in its {n} "
+            f"occurrence{'' if n == 1 else 's'} over {stop.get('sessions')} audited sessions since "
+            f"{stop.get('since') or 'the start of the campaign'}, above the bound {stop.get('bound')}, the 99th "
+            f"percentile of the Poisson distribution at the rate {stop.get('rate')} per occurrence of "
+            "audit.early_stop.marked_rows_rate_per_type times its occurrences")
+
+
+MARKED_SCHEMA = "hyptcn3/campaign-marked-rows/1"  # EARLY_STOP_RULE: marked/<session id>.json, the count of one audit.
+
+
+def early_stop_restart(directory):
+    """EARLY_STOP_RULE: the restart point of the count of the early stop, the date of the campaign's latest recorded
+    ending (endings/) whose record holds an early-stop trigger, else None (the count runs from the start of the
+    campaign). ValueError by name for a record of an ending that is missing or has another sha256 than its name in
+    endings/: the restart point cannot be told then. The reading of an early-stop trigger is RESUME_RULE's as well
+    (early_stop_triggers)."""
+    for pointer in reversed(endings(directory)):
+        if early_stop_triggers(pointer, "the restart point of the count"):
+            return pointer["date"]
+    return None
+
+
+def marked_totals(directory, p, since):
+    """EARLY_STOP_RULE: the campaign's count of the early stop over the files marked/<session>.json of every VM
+    audited after `since` (every file when None): ({event type: {"marked": C_T, "occurrences": n_T}} for every type of
+    the protocol and any other a file names, the sessions counted, the sessions whose audit did not tell their rows by
+    type). ValueError by name for a file that is no such count, has no valid audited_at, or holds a malformed map."""
+    start = None if since is None else datetime.fromisoformat(since)
+    totals = {kind: {"marked": 0, "occurrences": 0} for kind in sorted(p["events"]["types"])}
+    counted, uncounted = [], []
+    for path in sorted((Path(directory) / "marked").glob("*.json")):
+        doc = read_json(path)
+        if type(doc) is not dict or doc.get("schema") != MARKED_SCHEMA or type(doc.get("session")) is not str:
+            raise ValueError(f"{path} is no count of the early stop ({MARKED_SCHEMA})")
+        if start is not None and datetime.fromisoformat(doc["audited_at"]) <= start:
+            continue
+        marked, occurrences = doc.get("marked_rows_by_type"), doc.get("event_occurrences_by_type")
+        if marked is None or occurrences is None:
+            uncounted.append(doc["session"])
+            continue
+        if (type(marked) is not dict or type(occurrences) is not dict or set(marked) != set(occurrences)
+                or not all(type(n) is int and n >= 0 for n in (*marked.values(), *occurrences.values()))):
+            raise ValueError(f"{path}: its marked rows and occurrences by event type are no counts of the same types")
+        for kind in marked:
+            total = totals.setdefault(kind, {"marked": 0, "occurrences": 0})
+            total["marked"] += marked[kind]
+            total["occurrences"] += occurrences[kind]
+        counted.append(doc["session"])
+    return dict(sorted(totals.items())), counted, uncounted
+
+
+def early_stop_check(directory, vm, row, values, p, report):
+    """EARLY_STOP_RULE after the audit (the record at `report`, its `values`) of a completed capture: writes the
+    session's count marked/<session id>.json, sums the files of every VM since the restart point of the count
+    (early_stop_restart, marked_totals) and asks features/audit_policy.py early_stop. Returns its stop, with the
+    restart point (since) and the number of sessions counted, else None; then the campaign's count is printed in the
+    runner's state, with the bound of every type whose rate is set. An early stop that cannot be decided (early_stop's
+    ValueError, a count or a record of an earlier ending that cannot be read, the rows of a counted session not told
+    by type while a rate is set) is an error by name, never no stop."""
+    from features.audit_policy import audit_bounds, early_stop, poisson_quantile
+    folder = Path(directory) / "marked"
+    folder.mkdir(exist_ok=True)
+    write_new(folder / f"{row['session_id']}.json", {
+        "schema": MARKED_SCHEMA, "vm": vm, "session": row["session_id"], "audited_at": now(),
+        "marked_rows_by_type": values.get("marked_rows_by_type"),
+        "event_occurrences_by_type": values.get("event_occurrences_by_type"),
+        "audit": str(report), "audit_sha256": digest(report)}, replace=True)
+    try:
+        since = early_stop_restart(directory)
+        totals, counted, uncounted = marked_totals(directory, p, since)
+        rates = audit_bounds(p)["early_stop"]["marked_rows_rate_per_type"]
+        if uncounted and any(rate is not None for rate in rates.values()):
+            raise ValueError(f"the audits of {', '.join(uncounted)} did not tell their marked rows by event type")
+        stop = early_stop(values, p, totals)
+    except (ValueError, KeyError, TypeError, OSError) as error:
+        raise ValueError(f"the early stop after the audit of {row['session_id']} cannot be decided: {error} "
+                         "(scripts/campaign.py EARLY_STOP_RULE)") from None
+    if stop is not None:
+        return dict(stop, since=since, sessions=len(counted))
+    shown = {kind: dict(total, rate=rates.get(kind), bound=None if rates.get(kind) is None else
+                        poisson_quantile(rates[kind] * total["occurrences"])) for kind, total in totals.items()}
+    update_state(directory, vm=vm, status="running", stage="early-stop", session=row["session_id"],
+                 marked_rows_since=since, marked_rows_counts=shown, marked_rows_sessions=len(counted),
+                 marked_rows_uncounted=uncounted,
+                 message=f"marked rows and occurrences by event type over {len(counted)} audited sessions since "
+                         f"{since or 'the start of the campaign'}: "
+                         + json.dumps({kind: [t["marked"], t["occurrences"]] for kind, t in shown.items()})
+                         + ": no bound of audit.early_stop is passed (a null rate, until G3b, only prints; "
+                           "EARLY_STOP_RULE)")
+    return None
+
+
+START_FAILURE_SCHEMA = "hyptcn3/campaign-group-start-failure/1"  # GROUP_START_RULE (Q22).
+
+
+def start_failure(directory, row, failure):
+    """GROUP_START_RULE (question Q22, decided by its proposal): the record of a failed start of the group of `row`,
+    groups/<group>.start-failed-<UTC>.json: the group, its VM and role, the session it was to start, the cause
+    group_start, the step, the reason, the outputs of the steps done before it and the log of the failed command (its
+    last CHILD_ERROR_CHARS). No rejection of a session: a resumed run starts the group again. Returns its path."""
+    log = Path(failure.log) if failure.log is not None else None
+    tail = log.read_text(errors="replace").strip()[-CHILD_ERROR_CHARS:] if log is not None and log.exists() else None
+    path = Path(directory) / "groups" / f"{row['group']}.start-failed-{stamp()}.json"
+    write_new(path, {"schema": START_FAILURE_SCHEMA, "date": now(), "group": row["group"],
+                     **({"vm": row["vm"]} if "vm" in row else {}), "role": row["role"], "session": row["session_id"],
+                     "cause": "group_start", "step": failure.step, "reason": str(failure),
+                     "output": {"steps": failure.steps, "log": None if log is None else str(log), "log_tail": tail},
+                     "note": "A failed start of a group, no rejection of a session (scripts/campaign.py "
+                             "GROUP_START_RULE, question Q22): no session was measured; a resumed run starts the group "
+                             "again from its beginning and captures its sessions as planned."})
+    return path
+
+
+def start_failures(directory):
+    """GROUP_START_RULE (Q22): every failed start of a group of a campaign, oldest first, as every later ending record
+    lists it: {record, date, group, vm, step, reason, started_again (the group has started since)}."""
+    found = []
+    for path in sorted((Path(directory) / "groups").glob("*.start-failed-*.json")):
+        doc = read_json(path)
+        found.append({"record": path.name, "date": doc.get("date"), "group": doc.get("group"), "vm": doc.get("vm"),
+                      "step": doc.get("step"), "reason": doc.get("reason"),
+                      "started_again": (Path(directory) / "groups" / f"{doc.get('group')}.json").exists()})
+    return sorted(found, key=lambda failure: str(failure["date"]))
+
+
+def audit_values_of(path):
+    """The values of an audit record, None when there is none that can be read."""
+    try:
+        doc = read_json(path)
+    except (OSError, ValueError, TypeError):
+        return None
+    values = doc.get("values") if type(doc) is dict else None
+    return values if type(values) is dict else None
+
+
+def measured_times(session):
+    """INTERLEAVE_RULE and GRID_RULE: (first, last) measured unix time of a session directory from its end.json
+    (measure_start_unix, measure_end_unix), None for a time it does not record."""
+    try:
+        end = read_json(Path(session) / "end.json")
+    except (OSError, ValueError, TypeError):
+        return None, None
+    number = lambda x: x if type(x) in (int, float) else None
+    return (number(end.get("measure_start_unix")), number(end.get("measure_end_unix"))) if type(end) is dict else (
+        None, None)
+
+
+def ending_sessions(directory, campaign):
+    """ENDING_RULE: every planned session and each of its attempts in the plan's order, as (row of values.sessions:
+    {session, vm, role, group, scenario, attempt, state, cause, replacement, captured, final, taken_over, audit (the
+    path of its audit record, None without one)}, its session directory or None, the values of its audit or None).
+    The state is one of four (F10 of the verification of B9b): accepted (its checkpoint), rejected (its rejection
+    record), captured, not judged (its session directory without either) and not run."""
+    rows = []
+    for planned in campaign["sessions"]:
+        taken = taken_over(campaign, planned)
+        if taken is not None:  # Accepted in the campaign this one continues, indexed through its frozen audit.
+            values = audit_values_of(taken["audit"])
+            session = values.get("session_dir") if values else None
+            rows.append(({"session": taken["session_id"], "vm": planned.get("vm"), "role": planned["role"],
+                          "group": planned["group"], "scenario": planned["scenario"], "attempt": taken.get("attempt"),
+                          "state": "accepted", "cause": None, "replacement": None, "captured": True, "final": True,
+                          "taken_over": taken["campaign"], "audit": taken["audit"]},
+                         Path(session) if type(session) is str else None, values))
+            continue
+        attempts = chain(directory, planned)
+        for i, row in enumerate(attempts):
+            sid = row["session_id"]
+            done, rejected = directory / "attempts" / (sid + ".done.json"), rejection_file(directory, sid)
+            session = session_dir(campaign, row)
+            state, cause, replacement, audit = "not run", None, None, None
+            if done.exists():
+                state, audit = "accepted", read_json(done).get("audit")
+            elif rejected.exists():
+                record = read_json(rejected)
+                state, cause, replacement, audit = ("rejected", record.get("cause", "audit_rejected"),
+                                                    record.get("replacement"), record.get("audit"))
+            elif session.is_dir():  # F10: its runner stopped during its capture, its audit or at the audit lock.
+                state = "captured, not judged"
+            rows.append(({"session": sid, "vm": row.get("vm"), "role": row["role"], "group": row["group"],
+                          "scenario": row["scenario"], "attempt": row.get("replacement", 0) + 1, "state": state,
+                          "cause": cause, "replacement": replacement, "captured": session.is_dir(),
+                          "final": i == len(attempts) - 1, "taken_over": None, "audit": audit},
+                         session, audit_values_of(audit) if audit else None))
+    return rows
+
+
+def unscored_summary(accepted):
+    """ENDING_RULE: values.coverage.nominal_unscored_s of the audit of every accepted session and their total; an audit
+    without it is not recorded, by name, never 0."""
+    sessions, missing = [], []
+    for row, _, values in accepted:
+        seconds = ((values or {}).get("coverage") or {}).get("nominal_unscored_s")
+        if type(seconds) in (int, float):
+            sessions.append({"session": row["session"], "nominal_unscored_s": seconds})
+        else:
+            missing.append(row["session"])
+    return {"sessions": sessions, "total_s": sum(x["nominal_unscored_s"] for x in sessions), "not_recorded": missing,
+            "source": "values.coverage.nominal_unscored_s of the audit of each accepted session"}
+
+
+def exceptions_summary(protocol, accepted):
+    """ENDING_RULE, the lead's answer to Q2: per register id of features/audit_policy.py TOLERATED, the largest count in
+    one accepted session and the number of accepted sessions over the expected count, from each audit's
+    values.exceptions judged against the protocol's register by exceptions_record (over is false while the expected
+    count is null, until G3a); an audit without a readable values.exceptions is not recorded, by name, never 0."""
+    from features.audit_policy import TOLERATED, exceptions_record, register
+    entries, held, missing = register(protocol) or {}, {name: [] for name in TOLERATED}, []
+    for row, _, values in accepted:
+        recorded, counts = (values or {}).get("exceptions"), Counter()
+        try:
+            if type(recorded) is not dict or not recorded:
+                raise ValueError("the audit records no values.exceptions")
+            for name, entry in recorded.items():
+                observed = entry.get("observed") if type(entry) is dict else None
+                if type(observed) is not int or observed < 0:
+                    raise ValueError(f"values.exceptions.{name} records no count")
+                counts[name] = observed
+            judged = exceptions_record(protocol, counts)
+        except ValueError as error:
+            missing.append({"session": row["session"], "reason": str(error)})
+            continue
+        for name, entry in judged.items():
+            held[name].append(entry)
+    return {"by_id": {name: {"max_in_one_session": max((x["observed"] for x in found), default=None),
+                             "sessions_over_expected": sum(x["over"] for x in found),
+                             "expected": (entries.get(name) or {}).get("expected"),
+                             "sessions_counted": len(found)} for name, found in held.items()},
+            "not_recorded": missing,
+            "source": "values.exceptions of the audit of each accepted session, judged by "
+                      "features/audit_policy.py exceptions_record against the protocol's register"}
+
+
+def interleave_check(rows, campaign):
+    """INTERLEAVE_RULE: skeleton test 2 over the realized boots of test_benign and test_controls (ending_sessions):
+    {ok, late_controls, alternation, order (every boot by its start: group, role, vm, start, end)}."""
+    boots = {}
+    for row, session, _ in rows:
+        start, end = measured_times(session) if row["role"] in protocol_v5.INTERLEAVED and session else (None, None)
+        if start is None:
+            continue
+        end = start if end is None else end
+        boot = boots.setdefault((row["vm"], row["group"]), {"group": row["group"], "role": row["role"],
+                                                           "vm": row["vm"], "start": start, "end": end})
+        boot.update(start=min(boot["start"], start), end=max(boot["end"], end))
+    order = sorted(boots.values(), key=lambda b: (b["start"], b["group"]))
+    benign_ends = [b["end"] for b in order if b["role"] == "test_benign"]
+    late = [b["group"] for b in order
+            if b["role"] == "test_controls" and benign_ends and b["start"] >= max(benign_ends)]
+    # The share rule of protocol_v5.check_role_order, against the plan's group counts of the two roles.
+    totals = Counter(role for role in dict((r["group"], r["role"]) for r in campaign["sessions"]).values()
+                     if role in protocol_v5.INTERLEAVED)
+    alternation = []
+    if all(totals[role] for role in protocol_v5.INTERLEAVED):
+        placed, bound = Counter(), max(Fraction(1, totals[role]) for role in protocol_v5.INTERLEAVED)
+        for b in order:
+            placed[b["role"]] += 1
+            shares = [Fraction(placed[role], totals[role]) for role in protocol_v5.INTERLEAVED]
+            if max(shares) - min(shares) > bound:
+                alternation.append(b["group"])
+    return {"ok": not late and not alternation, "late_controls": late, "alternation": alternation,
+            "order": order, "rule": INTERLEAVE_RULE}
+
+
+def runner_states(directory, protocol):
+    """ENDING_RULE: the last state of every runner of the campaign, and what the barrier of ORDER_RULE held it for
+    (PAUSE_RULE: the paused record names it)."""
+    states = []
+    for vm in vm_names(protocol):
+        path = Path(directory) / vm_file("status.json", vm)
+        state = read_json(path) if path.exists() else {}
+        held = state.get("waited") or (state.get("message") if state.get("stage") == "role-wait" else None)
+        states.append({"vm": vm, **{key: state.get(key) for key in ("status", "stage", "message", "session", "group",
+                                                                    "updated_at")},
+                       "active": campaign_running(state), "waited": held})
+    return states
+
+
+def deviation_events(directory, campaign, triggers, interleaved, failures=()):
+    """ENDING_RULE: the campaign's own events in time order: every earlier recorded ending (endings/: its kind, cause,
+    record and sha256; F6), the continuation with its written cause, every operator's stop request a runner honored
+    (events/, with its reason), the pause, the invalidation and the close of this ending, every deviation of
+    deviations/ (an unclean end, a written cause of a resume after an early stop; F6), every failed start of a group
+    (`failures`, start_failures; GROUP_START_RULE, Q22) and a violation of the interleave with its cause."""
+    directory, events = Path(directory), []
+    continues = campaign.get("continues") or {}
+    if "cause" in continues:
+        events.append({"event": "continuation", "date": campaign.get("date"), "continues": continues["campaign"],
+                       "cause": continues["cause"]})
+    for path in sorted((directory / "events").glob("*_stop-request*.json")):
+        try:
+            request = read_json(path)
+        except (OSError, ValueError):
+            request = None
+        if path.name.endswith("-stale.json") or type(request) is not dict or "ending" in request:
+            continue  # Not honored, or written by the trigger of an ending (that ending is the event).
+        events.append({"event": "operator_stop", "date": request.get("date"), "vm": request.get("vm"),
+                       "reason": operator_reason(request), "uid": request.get("uid"), "request": path.name})
+    for pointer in endings(directory):  # F6: the history, every earlier recorded ending of the campaign.
+        events.append({"event": "earlier_ending", "ending": pointer.get("ending"), "date": pointer.get("date"),
+                       "cause": pointer.get("cause"), "record": pointer.get("record"), "sha256": pointer.get("sha256")})
+    for name, doc in deviation_records(directory):  # F6: deviations that are no ending.
+        kind, previous = doc.get("deviation"), doc.get("previous") or {}
+        if kind == "unclean-end":
+            events.append({"event": "unclean_end", "date": doc.get("date"), "vm": doc.get("vm"), "deviation": name,
+                           "previous": previous,
+                           "cause": f"the runner of VM {doc.get('vm')} ended without a final status (SIGKILL, a crash "
+                                    f"or a power loss) at the stage {previous.get('stage')} of session "
+                                    f"{previous.get('session')}, its last state of {previous.get('updated_at')}"})
+        elif kind == "resume-after-early-stop":
+            events.append({"event": "resume_after_early_stop", "date": doc.get("date"), "vm": doc.get("vm"),
+                           "deviation": name, "answers": doc.get("answers"), "cause": doc.get("cause"),
+                           "command": doc.get("command")})
+        else:  # Not one of this rule's kinds, or unreadable: named, never left out.
+            events.append({"event": "deviation", "date": doc.get("date"), "deviation": name, "kind": kind,
+                           "cause": doc.get("cause") or doc.get("unreadable")})
+    names = {"paused": "pause", "invalid": "invalidation", "closed": "close"}
+    for trigger in triggers:
+        if trigger["ending"] in names:
+            events.append({"event": names[trigger["ending"]], "date": trigger["date"], "vm": trigger.get("vm"),
+                           "cause": trigger["cause"]})
+    for failure in failures:  # Q22: "the start of group G failed at step S, started again after the stop".
+        events.append({"event": "group_start_failure", "date": failure["date"], "vm": failure["vm"],
+                       "group": failure["group"], "step": failure["step"], "record": failure["record"],
+                       "cause": f"the start of group {failure['group']} failed at step {failure['step']}"
+                                + (", started again after the stop" if failure["started_again"] else "")
+                                + f" ({failure['reason']})"})
+    if not interleaved["ok"]:
+        causes = []
+        if interleaved["late_controls"]:
+            causes.append("the test_controls boots " + ", ".join(interleaved["late_controls"]) + " start after every "
+                          "test_benign boot ended: the barrier of ORDER_RULE orders the starts of the test groups, "
+                          "not their ends (one VM ran on while the other had stopped)")
+        if interleaved["alternation"]:
+            causes.append("the starts of " + ", ".join(interleaved["alternation"]) + " break the alternation of the "
+                          "two test roles (the share rule of protocol_v5.check_role_order)")
+        events.append({"event": "interleave", "date": now(), "cause": "; ".join(causes)})
+    return sorted(events, key=lambda event: str(event.get("date")))
+
+
+def ending_record(directory, campaign, protocol, kind, triggers, *, cause, command):
+    """ENDING_RULE: the record of an ending of a campaign of protocol schema 3 (`campaign` and `protocol` whole, not a
+    VM's view), as it is now: the header of check E, its stage and the values the rule names."""
+    from features.audit_policy import EARLY_STOP_RULE as DECISION_RULE
+    from scripts.campaign_grids import GRID_RULE as PAIRS_RULE, grid_pairs, grid_session
+    from tcn.pecat import RECORD_STAGE_RULE, record_stage
+    directory = Path(directory)
+    rows = ending_sessions(directory, campaign)
+    accepted = [entry for entry in rows if entry[0]["final"] and entry[0]["state"] == "accepted"]
+    applied, limit = replacement_limit(campaign, protocol)
+    own = rejections(directory)
+    used = sum(r.get("replacement") is not None for r in own)
+    continues = campaign.get("continues")
+    rejected = [*((continues or {}).get("rejected_sessions") or []),
+                *({"session": r["session"], "cause": r.get("cause", "audit_rejected"),
+                   "replacement": r.get("replacement"), "campaign": campaign["id"]} for r in own)]
+    grid_rows, unread = [], []  # GRID_RULE: grid_session of every captured session (scripts/campaign_grids.py).
+    for row, session, _ in rows:
+        if session is not None and (session / "session.json").is_file():
+            try:
+                found = grid_session(session, row["audit"])
+            except (OSError, ValueError) as error:
+                unread.append({"session": row["session"], "reason": f"{type(error).__name__}: {error}"})
+                continue
+            if found is not None:  # None: no measured phase.
+                grid_rows.append(found)
+    try:
+        grids = grid_pairs(grid_rows)  # Each row with the interval_s of its own session.json.
+    except ValueError as error:  # A malformed row, named: no pairs rather than no record.
+        grids, unread = [], [*unread, {"session": None, "reason": str(error)}]
+    failures = start_failures(directory)  # GROUP_START_RULE (Q22).
+    seals = [{"id": row["session"], "role": row["role"], "group": row["group"], "vm": row["vm"],
+              "scenario": row["scenario"], "features": (values or {}).get("features"),
+              "features_sha256": (values or {}).get("features_sha256")} for row, _, values in accepted]
+    try:
+        seed = {"seed": protocol_v5.reset_seed(protocol), "key": SEEDED_LEVEL}
+    except ValueError as error:
+        seed = {"seed": None, "key": SEEDED_LEVEL, "reason": str(error)}
+    interleaved = interleave_check(rows, campaign)
+    log = ROOT / DEVIATION_LOG
+    stage = record_stage(campaign["mode"], seals, at_head=False)  # ENDING_RULE, question Q21: no ledger at HEAD.
+    values = {
+        "campaign": campaign["id"], "mode": campaign["mode"], "protocol_sha256": campaign["protocol_sha256"],
+        "plan_sha256": digest(directory / "plan.json"), "frozen_commit": campaign["commit"], "ending": kind,
+        "ending_name": ENDINGS[kind], "cause": cause, "triggers": triggers, "stage": stage,
+        "sessions": [row for row, _, _ in rows], "planned_sessions": len(campaign["sessions"]),
+        "accepted_sessions": len(accepted), "rejected_sessions": rejected,
+        "rejections_by_cause": dict(sorted(Counter(r["cause"] for r in rejected).items())),
+        "limit": {"applied": applied, "max_per_campaign": limit, "used": used}, "replacements_used": used,
+        "unscored": unscored_summary(accepted), "exceptions": exceptions_summary(protocol, accepted),
+        "grids": grids, "grids_unread": unread, "interleave": interleaved, "group_start_failures": failures,
+        "reset_seed": {**seed, "protocol_sha256": campaign["protocol_sha256"]},
+        "runners": runner_states(directory, protocol),
+        "deviations": deviation_events(directory, campaign, triggers, interleaved, failures),
+        "deviation_log": {"path": DEVIATION_LOG, "sha256": digest(log) if log.is_file() else None},
+        "continues": None if continues is None else {
+            **{key: continues.get(key) for key in ("campaign", "directory", "commit", "cause", "paused_record",
+                                                   "replacements_used", "rejections_by_cause", "discarded_groups")},
+            "taken_over_sessions": len(continues.get("sessions", {}))},
+        "rules": {"ending": ENDING_RULE, "pause": PAUSE_RULE, "continuation": CONTINUATION_RULE,
+                  "invalid": INVALID_RULE, "early_stop": EARLY_STOP_RULE, "early_stop_decision": DECISION_RULE,
+                  "resume": RESUME_RULE,
+                  "interleave": INTERLEAVE_RULE, "grids": GRID_RULE, "grid_pairs": PAIRS_RULE, "limit": LIMIT_RULE,
+                  "group_start": GROUP_START_RULE, "stage": RECORD_STAGE_RULE}}
+    try:
+        head = git("rev-parse", "HEAD")
+    except (OSError, subprocess.SubprocessError):
+        head = None
+    guests = ({vm: campaign["vms"][vm]["guest_environment"] for vm in campaign["vms"]} if "vms" in campaign
+              else campaign.get("guest_environment"))
+    return {"schema": ENDING_SCHEMA, "commit": head, "date": now(), "host": platform.platform(), "guest": guests,
+            "command": command, "n": len(values["sessions"]), "stage": stage["stage"], "values": values,
+            "note": "The record of an ending of a collection campaign of protocol v5 (scripts/campaign.py ENDING_RULE, "
+                    "package B9b): its sessions by state and cause, replacements, unscored time and deviations; "
+                    "no detection result."}
+
+
+def run_command(directory, vm, stop_after, cause=None):
+    """ENDING_RULE: the command line of a runner, as launch starts it (the command of its records), with the written
+    cause of a resume after an early stop when it has one (RESUME_RULE)."""
+    return shlex.join(["python3", "scripts/campaign.py", "run", str(directory), *(["--vm", vm] if vm else []),
+                       *(["--stop-after", str(stop_after)] if stop_after else []),
+                       *(["--cause", cause] if cause is not None else [])])
+
+
+def execute(directory, *, stop_after=None, vm=None, cause=None):
     """Run the sessions of one VM in plan order (all sessions of a single-VM campaign).
 
     A multi-VM campaign has one runner process per VM; they share the frozen
-    plan, the audit lock and the final index, nothing else.
+    plan, the audit lock and the final index, nothing else. Under protocol
+    schema 3 (package B9b, ENDING_RULE) the runner meets the endings of the
+    campaign: the record of the complete ending before the index; a pause, or
+    an invalidation, when the limit refuses a rejection (PAUSE_RULE,
+    INVALID_RULE); an early stop after an audit (EARLY_STOP_RULE); an operator's
+    stop request; every error it catches (a failed start of a group among them)
+    and a changed measurement code or lab. A paused or invalid campaign does not
+    run again; a stopped one runs again from where it stopped (today's resume),
+    after an early stop only with the written cause `cause` (RESUME_RULE); a
+    closed one and a complete one with its index never run again (F3).
     """
     directory = Path(directory).resolve()
     campaign, protocol = load_campaign(directory)
@@ -1679,6 +2929,68 @@ def execute(directory, *, stop_after=None, vm=None):
         raise ValueError("run with sudo from the campaign owner's account")
     if (directory / "closed.json").exists():
         raise ValueError("campaign was closed by the operator: " + read_json(directory / "closed.json")["reason"])
+    v5, run_line = schema3(p), run_command(directory, vm, stop_after, cause)
+    if v5:  # ENDING_RULE: an ending a crashed last runner left pending is recorded first; PAUSE_RULE, INVALID_RULE.
+        settle(directory, campaign, protocol, command=run_line)
+        refuse_held(directory, "run")
+        refuse_ended(directory, protocol, "run")  # F3: before verify_frozen, no ending.
+        answer_early_stop(directory, vm, cause, "run", run_line)  # RESUME_RULE (F6).
+    elif cause is not None:
+        raise ValueError("--cause of run belongs to protocol schema 3: the written cause of a resume after an early "
+                         "stop (scripts/campaign.py RESUME_RULE)")
+    # ENDING_RULE (F4 of the verification of B9b): the endings recorded when this run passed refuse_held and the
+    # refusals after it (refuse_ended, answer_early_stop); an ending recorded after that, of any kind, stops this
+    # runner before its next capture (the capture loop).
+    recorded_at_start = len(endings(directory)) if v5 else 0
+
+    def last(status, stage, message, **state):
+        """The last state of this run (under schema 3 ENDING_RULE's end_run: a pending ending recorded at rest)."""
+        if v5:
+            end_run(directory, campaign, protocol, vm, command=run_line, status=status, stage=stage, message=message,
+                    **state)
+        else:
+            update_state(directory, vm=vm, status=status, stage=stage, message=message, **state)
+        return 0
+
+    def honor(request, waited=None):
+        """A stop request this runner honors before its next capture. Under schema 3 an operator's request triggers the
+        stopped ending, with its reason; a request of another runner's trigger makes this stop part of that ending
+        (ENDING_RULE). The barrier of ORDER_RULE names what it held this runner for (PAUSE_RULE)."""
+        text = stop_text(request)
+        if v5 and "ending" not in request:
+            reason = operator_reason(request)
+            text += f": {reason}" if reason else ""
+            begin_ending(directory, protocol, vm, "stopped", text, {"request": request})
+        kind = request["ending"] if v5 and request.get("ending") in PENDING else "stopped"
+        return last(kind, "between-sessions", text, **({"waited": waited} if v5 and waited else {}))
+
+    def limit_ending(record):
+        """PAUSE_RULE and INVALID_RULE: a rejection the exhausted limit refused ends the campaign as its record names
+        (paused, or invalid inside a continuation); the runner stops with it, as for a stop request."""
+        kind = record["ending"]
+        cause = (f"the limit of replacements is used up ({record.get('max_per_campaign')} per campaign): session "
+                 f"{record['session']} rejected ({record.get('cause', 'audit_rejected')}: "
+                 + "; ".join(record.get("reasons") or []) + ")"
+                 + (f"; a second exhaustion inside the continuation of {manifest['continues']['campaign']}"
+                    if kind == "invalid" else ""))
+        begin_ending(directory, protocol, vm, kind, cause, {"rejection": record})
+        return last(kind, "limit", cause, rejections_by_cause=rejections_by_cause(directory))
+
+    def early_ending(stop, row):
+        """EARLY_STOP_RULE: the stopped ending the audit of `row` calls for; the runner stops with it."""
+        cause = f"early stop after the audit of {row['session_id']}: {early_stop_cause(stop)}"
+        begin_ending(directory, protocol, vm, "stopped", cause, {"early_stop": stop, "session": row["session_id"]})
+        return last("stopped", "early-stop", cause, early_stop=stop)
+
+    def ending_already():
+        """ENDING_RULE: an ending another runner began while this one finished its last session: this runner stops as
+        part of it (its stop request, if any, honored), instead of the complete ending."""
+        pending = pending_ending(directory) if v5 else None
+        if pending is None:
+            return None
+        request = take_stop_request(directory, vm) or {"ending": pending["ending"], "cause": pending["cause"],
+                                                       "by": pending["triggers"][0]["vm"]}
+        return honor(request)
     interrupts = collection.Interrupts()
     owns_lock, inhibitor = False, None
     status_file = directory / vm_file("status.json", vm)
@@ -1686,21 +2998,23 @@ def execute(directory, *, stop_after=None, vm=None):
     try:
         with collection.collection_lock(COLLECTIONS, p["domain"] if vm else None) as lock_fd:
             owns_lock = True
+            previous = read_json(status_file) if status_file.exists() else {}
+            if previous.get("status") == "running":
+                # The lock was free, so that process is gone: SIGKILL, crash or power loss.
+                if v5:  # ENDING_RULE (F6): a deviation of every later record, written before anything can stop.
+                    unclean_end(directory, vm, previous)
+                update_state(directory, vm=vm, status="stopped", stage="unclean-end",
+                             message="previous run ended without a final status; its session is incomplete")
             verify_frozen(directory, manifest, p)
             if schema3(p):
                 require_stages(directory / "protocol.json", manifest["mode"])  # STAGES_RULE
-            last = read_json(status_file) if status_file.exists() else {}
-            if last.get("status") == "running":
-                # The lock was free, so that process is gone: SIGKILL, crash or power loss.
-                update_state(directory, vm=vm, status="stopped", stage="unclean-end",
-                             message="previous run ended without a final status; its session is incomplete")
             if stop_file.exists():
                 # A request is meant for a running campaign; one left by a previous run is not.
                 os.replace(stop_file, directory / "events" / f"{stamp()}_{stop_file.stem}-stale.json")
             inhibitor = hold_sleep_inhibitor()
             update_state(directory, vm=vm, status="running", stage="preflight", pid=os.getpid(),
                          process_identity=process_identity(os.getpid()), inhibitor_pid=getattr(inhibitor, "pid", None),
-                         message=None, signals=[])
+                         message=None, signals=[], **({"waited": None, "early_stop": None} if v5 else {}))
             reports = []
             processed = 0
             guard = lambda: guard_mount(manifest["archive_root"], manifest["archive_mount"])
@@ -1715,6 +3029,8 @@ def execute(directory, *, stop_after=None, vm=None):
                 if rejection_file(directory, row["session_id"]).exists():
                     record = read_json(rejection_file(directory, row["session_id"]))
                     if record.get("replacement") is None:
+                        if v5 and record.get("ending") in ("paused", "invalid"):
+                            return limit_ending(record)  # A pause or an invalidation its runner could not record.
                         raise ValueError(STOP_MESSAGE[record.get("cause", "audit_rejected")] + ": "
                                          + "; ".join(record["reasons"]))
                     continue  # Its replacement is the next row.
@@ -1737,15 +3053,34 @@ def execute(directory, *, stop_after=None, vm=None):
                     retire_attempt(directory, manifest, row, session)  # Left by a previous run.
                 attempts, refused_start = 0, None
                 while not session.exists():
-                    if take_stop_request(directory, vm):
-                        update_state(directory, vm=vm, status="stopped", stage="between-sessions",
-                                     message="operator stop request")
-                        return 0
+                    request = take_stop_request(directory, vm)
+                    if request is not None:
+                        return honor(request)
+                    # ENDING_RULE (F4 of the verification of B9b): an ending begun or recorded since this runner passed
+                    # refuse_held. begin_ending asks only the runners whose state said running then, so a runner that
+                    # wrote running after it reads the ending itself before every capture and stops as part of it:
+                    # a pending one with its kind and cause (the last runner to stop records it); one recorded after
+                    # this run started (stopped, paused or invalid: a pause or an invalidation recorded before it
+                    # never gets here, refuse_held refused it) with its kind, cause and record.
+                    pending = pending_ending(directory) if v5 else None
+                    if pending is not None:
+                        return honor({"ending": pending["ending"], "cause": pending["cause"],
+                                      "by": pending["triggers"][0]["vm"]})
+                    recorded = endings(directory) if v5 else []
+                    if len(recorded) > recorded_at_start:
+                        newest = recorded[-1]
+                        return last(newest["ending"], "between-sessions", f"the campaign ended {newest['ending']} "
+                                    f"({newest['cause']}; record {newest['record']}) after this run started: this "
+                                    "runner stopped before its next capture (scripts/campaign.py ENDING_RULE)",
+                                    ending_record=newest["record"])
                     if vm is not None:
                         reason = wait_for_earlier_roles(directory, manifest, p, row)
                         if reason:
-                            update_state(directory, vm=vm, status="stopped", stage="between-sessions", message=reason)
-                            return 0
+                            if reason.request is not None:
+                                return honor(reason.request, reason.waited)
+                            # The other runner is not active: no ending (ENDING_RULE), it records what it held for.
+                            return last("stopped", "between-sessions", reason,
+                                        **({"waited": reason.waited} if v5 else {}))
                     if attempts:
                         verify_frozen(directory, manifest, p)
                     attempts += 1
@@ -1778,15 +3113,11 @@ def execute(directory, *, stop_after=None, vm=None):
                                              "see its end.json and the campaign logs")
                         retire_attempt(directory, manifest, row, session)
                         time.sleep(RETRY_PAUSE_S)
-                if refused_start is not None:  # GROUP_START_RULE: no session directory, nothing to archive.
-                    reasons = [str(refused_start)]
-                    with audit_lock(directory, vm=vm, session=session.name):
-                        replacement = reject(directory, manifest, p, row, "group_start", reasons)
-                    if replacement is None:
-                        raise ValueError(STOP_MESSAGE["group_start"] + ": " + "; ".join(reasons))
-                    rows.insert(i + 1, replacement)
-                    continue
+                if refused_start is not None:  # GROUP_START_RULE (Q22): no session was measured, no rejection.
+                    failure = start_failure(directory, row, refused_start)
+                    raise GroupStartStop(STOP_MESSAGE["group_start"] + ": " + str(refused_start), failure)
                 # The session stays on the working disk while it waits; its VM starts nothing new.
+                values = None  # The values of its audit, None for a capture that did not complete (no audit).
                 with audit_lock(directory, vm=vm, session=session.name):
                     if not check_session(session, manifest, row, directory, p):
                         archive_capture(directory, manifest, session, p)
@@ -1801,9 +3132,21 @@ def execute(directory, *, stop_after=None, vm=None):
                         if not cause and schema3(p) and sealed_role(row["role"]):
                             seal_session(directory, manifest, row, report)  # SEAL_RULE: before the checkpoint.
                 if cause:
+                    # EARLY_STOP_RULE: after the session's own outcome, its rejection record (and replacement).
+                    stop = (early_stop_check(directory, vm, row, values, p, report) if v5 and values is not None
+                            else None)
                     if replacement is None:
+                        if stop is not None:  # EARLY_STOP_RULE: a trigger of its own beside the stop that follows.
+                            begin_ending(directory, protocol, vm, "stopped",
+                                         f"early stop after the audit of {row['session_id']}: "
+                                         + early_stop_cause(stop), {"early_stop": stop, "session": row["session_id"]})
+                        record = read_json(rejection_file(directory, row["session_id"]))
+                        if v5 and record.get("ending") in ("paused", "invalid"):
+                            return limit_ending(record)
                         raise ValueError(STOP_MESSAGE[cause] + ": " + "; ".join(reasons))
                     rows.insert(i + 1, replacement)
+                    if stop is not None:
+                        return early_ending(stop, row)
                     continue
                 write_new(checkpoint, {"session": session.name, "audit": str(report), "audit_sha256": digest(report),
                                        "manifest_sha256": digest(destination / "archive-manifest.json"),
@@ -1815,20 +3158,27 @@ def execute(directory, *, stop_after=None, vm=None):
                 processed += 1
                 update_state(directory, vm=vm, status="running", stage="session-complete",
                              accepted_archived=len(reports))
+                stop = early_stop_check(directory, vm, row, values, p, report) if v5 else None  # EARLY_STOP_RULE.
+                if stop is not None:
+                    return early_ending(stop, row)
                 if stop_after and processed >= stop_after and i + 1 < len(rows):
-                    update_state(directory, vm=vm, status="stopped", stage="between-sessions",
-                                 message="requested stop-after boundary")
-                    return 0
+                    return last("stopped", "between-sessions", "requested stop-after boundary")
             if vm is None:
+                if ending_already() is not None:
+                    return 0
+                if v5:
+                    complete_ending(directory, campaign, protocol, vm, command=run_line)  # ENDING_RULE: record first.
                 finish_corpus(directory, manifest, p, reports)
                 return 0
             # The runner that archives the campaign's last session builds the index of all VMs.
             with audit_lock(directory, vm=vm):
                 if not all(finished(directory, manifest, r) for r in manifest["sessions"]):
-                    update_state(directory, vm=vm, status="complete", stage="vm-complete", message=None,
-                                 accepted_archived=len(reports))
+                    return last("complete", "vm-complete", None, accepted_archived=len(reports))
+                if ending_already() is not None:
                     return 0
                 reports = [final_report(directory, manifest, r) for r in manifest["sessions"]]
+                if v5:
+                    complete_ending(directory, campaign, protocol, vm, command=run_line)  # ENDING_RULE: record first.
                 finish_corpus(directory, manifest, protocol, reports)
             return 0
     except BaseException as exc:
@@ -1837,9 +3187,22 @@ def execute(directory, *, stop_after=None, vm=None):
         except InterruptedError:
             pass  # First signal arrived exactly here; the handler disarmed itself.
         if owns_lock:
-            update_state(directory, vm=vm, status="stopped",
-                         stage="interrupted" if isinstance(exc, InterruptedError) else "error",
-                         message=str(exc), signals=interrupts.received)
+            stage = "interrupted" if isinstance(exc, InterruptedError) else "error"
+            if v5:  # ENDING_RULE: every error the runner catches is a trigger; INVALID_RULE: a changed hash.
+                kind = "invalid" if isinstance(exc, CampaignInvalid) else "stopped"
+                started = isinstance(exc, GroupStartStop)  # GROUP_START_RULE (Q22): the cause group_start.
+                try:
+                    begin_ending(directory, protocol, vm, kind, f"group_start: {exc}" if started else f"{stage}: {exc}",
+                                 {"stage": stage, "type": type(exc).__name__, "signals": interrupts.received,
+                                  **({"group_start_failure": exc.record.name} if started else {})})
+                    last(kind, stage, str(exc), signals=interrupts.received)
+                except Exception as error:  # noqa: BLE001 - the runner's own error goes on, its ending named beside
+                    exc.add_note(f"its ending was not recorded: {type(error).__name__}: {error}")
+                    update_state(directory, vm=vm, status=kind, stage=stage, signals=interrupts.received,
+                                 message=f"{exc} (its ending was not recorded: {type(error).__name__}: {error})")
+            else:
+                update_state(directory, vm=vm, status="stopped", stage=stage, message=str(exc),
+                             signals=interrupts.received)
         raise
     finally:
         release_sleep_inhibitor(inhibitor)
@@ -1956,6 +3319,8 @@ def finish_corpus(directory, manifest, p, reports):
     if schema3(p) and mode not in protocol_v5.MODES:
         raise ValueError("a campaign of protocol schema 3 names its plan mode in campaign.json (mode: campaign or "
                          "rehearsal; scripts/campaign.py MODE_RULE)")
+    if schema3(p):  # ENDING_RULE and INVALID_RULE (package B9b): the record of the complete ending comes first.
+        require_complete_record(directory, manifest)
     # indexed_sessions: the sessions of the index, of every VM; accepted_archived stays the count of this runner's VM
     # (campaign_report.py compares it with the VM's done checkpoints). Since several VMs (52fd3ca) the runner that
     # builds the index wrote the count of every VM into accepted_archived, a bug the real index in the tests of the
@@ -2006,8 +3371,10 @@ def finish_corpus(directory, manifest, p, reports):
     update_state(directory, vm=vm, status="complete", stage="complete", corpus=str(index), message=None)
 
 
-def launch(directory, stop_after=None, vm=None):
-    """One systemd unit per VM; without --vm every VM of the campaign is launched."""
+def launch(directory, stop_after=None, vm=None, cause=None):
+    """One systemd unit per VM; without --vm every VM of the campaign is launched. Under protocol schema 3 a closed
+    campaign and a complete one with its index are refused (F3), and after an early stop the launch writes the written
+    cause `cause` that its runners then find (RESUME_RULE)."""
     directory = Path(directory).resolve()
     manifest, p = load_campaign(directory)
     if vm is not None and vm not in vm_names(p):
@@ -2016,7 +3383,23 @@ def launch(directory, stop_after=None, vm=None):
         raise ValueError("launch with sudo from the campaign owner's account")
     if (directory / "closed.json").exists():
         raise ValueError("campaign was closed by the operator")
-    verify_frozen(directory, manifest, p)
+    command = shlex.join(["python3", "scripts/campaign.py", "launch", str(directory), *(["--vm", vm] if vm else []),
+                          *(["--stop-after", str(stop_after)] if stop_after else []),
+                          *(["--cause", cause] if cause is not None else [])])
+    if schema3(p):  # ENDING_RULE: a pending ending recorded first; PAUSE_RULE and INVALID_RULE refuse by name.
+        settle(directory, manifest, p, command=command)
+        refuse_held(directory, "launch")
+        refuse_ended(directory, p, "launch")  # F3: before verify_frozen, no ending.
+        answer_early_stop(directory, vm, cause, "launch", command)  # RESUME_RULE (F6).
+    elif cause is not None:
+        raise ValueError("--cause of launch belongs to protocol schema 3: the written cause of a resume after an early "
+                         "stop (scripts/campaign.py RESUME_RULE)")
+    try:
+        verify_frozen(directory, manifest, p)
+    except CampaignInvalid as error:  # INVALID_RULE: the launch that finds a changed hash ends the campaign invalid.
+        begin_ending(directory, p, NOBODY, "invalid", f"launch: {error}", {"command": command})
+        settle(directory, manifest, p, command=command)
+        raise
     if schema3(p):
         require_stages(directory / "protocol.json", manifest["mode"])  # STAGES_RULE
     # KillMode=mixed: SIGTERM reaches only the runner, which stops its child in
@@ -2043,15 +3426,21 @@ def campaign_running(state):
             and process_identity(state.get("pid")) == state["process_identity"])
 
 
-def request_stop(directory, vm=None):
+def request_stop(directory, vm=None, reason=None):
     """Ask the running campaign to stop before its next capture; the current session is kept.
 
-    Multi-VM: every running runner gets its own request, or only the one named.
+    Multi-VM: every running runner gets its own request, or only the one named. Under protocol schema 3 the
+    request names its reason (required, refused by name without one): the runner that honors it ends the campaign as
+    stopped, every other active runner stops at its next check, and the reason is a deviation of the record
+    (ENDING_RULE, package B9b).
     """
     directory = Path(directory).resolve()
     _, p = load_campaign(directory)
     if vm is not None and vm not in vm_names(p):
         raise ValueError("campaign has no VM " + vm)
+    if schema3(p) and (type(reason) is not str or not reason.strip()):
+        raise ValueError("a stop of a campaign of protocol schema 3 names its reason (--reason TEXT, no default): it is "
+                         "a deviation of the campaign's record (scripts/campaign.py ENDING_RULE)")
     running = [name for name in (vm_names(p) if vm is None else [vm])
                if (directory / vm_file("status.json", name)).exists()
                and campaign_running(read_json(directory / vm_file("status.json", name)))]
@@ -2061,7 +3450,7 @@ def request_stop(directory, vm=None):
         try:
             write_new(directory / vm_file("stop-request.json", name), {
                 "schema": "hyptcn3/campaign-stop-request/1", "date": now(), "uid": os.getuid(),
-                **({} if name is None else {"vm": name}),
+                **({} if name is None else {"vm": name}), **({} if reason is None else {"reason": reason}),
                 "note": "The current session finishes, is audited and archived; no new capture starts."})
         except FileExistsError:
             raise ValueError("stop already requested") from None
@@ -2069,12 +3458,15 @@ def request_stop(directory, vm=None):
 
 
 def close(directory, reason):
-    """Operator decision to end a stopped campaign: its data stays, its group names become reusable."""
+    """Operator decision to end a stopped campaign: its data stays, its group names become reusable. Under protocol
+    schema 3 its ending pending since a crash is recorded first, then the record of the closed ending (ENDING_RULE,
+    package B9b), before closed.json."""
     directory = Path(directory).resolve()
     manifest, p = load_campaign(directory)
     if not reason.strip():
         raise ValueError("closing a campaign requires a reason")
     names = vm_names(p)
+    command = shlex.join(["python3", "scripts/campaign.py", "close", str(directory), "--reason", reason])
     with ExitStack() as locks:
         # No runner of any campaign may be active; multi-VM: no runner on any of its domains.
         for row in collection.vms(p):
@@ -2088,6 +3480,16 @@ def close(directory, reason):
                                                   and each.get("stage") != "vm-complete"):
                 raise ValueError("campaign is already " + each["status"])
         guard_mount(manifest["archive_root"], manifest["archive_mount"])
+        if schema3(p):  # ENDING_RULE: no runner is active under these locks.
+            settle(directory, manifest, p, command=command)
+            latest = latest_ending(directory)
+            if latest is None or latest["ending"] != "closed":  # A close that failed after its record writes none.
+                trigger = {"date": now(), "vm": None, "ending": "closed", "cause": reason,
+                           "detail": {"uid": os.getuid(), "status_before": state}}
+                with ending_lock(directory):
+                    publish_ending(directory, manifest, ending_record(
+                        directory, manifest, p, "closed", [trigger], cause=f"closed by the operator: {reason}",
+                        command=command))
         write_new(directory / "closed.json", {
             "schema": "hyptcn3/campaign-closed/1", "id": manifest["id"], "date": now(), "reason": reason,
             "uid": os.getuid(), "status_before": state,
@@ -2104,6 +3506,8 @@ def status(directory):
         state = vm_status(directory, manifest, p, None)
     else:
         state = {"campaign": str(directory), "vms": {vm: vm_status(directory, manifest, p, vm) for vm in vm_names(p)}}
+    if schema3(p):  # ENDING_RULE: the pending ending and the last recorded one (status records nothing).
+        state["ending"] = {"pending": pending_ending(directory), "recorded": latest_ending(directory)}
     print(json.dumps(state, indent=2, ensure_ascii=False))
     return state
 
@@ -2156,18 +3560,29 @@ def main(argv=None):
                       help="Explicitly allow an archive on the root filesystem (no second disk)")
     init.add_argument("--archive-compression", choices=["zstd", "none"], default="zstd")
     init.add_argument("--continue", dest="continues", type=Path, metavar="CAMPAIGN_DIR",
-                      help="Continue this closed campaign of the same protocol: take over its complete "
-                           "groups, capture every other group again (once per campaign)")
+                      help="Continue this campaign of the same protocol once: take over its complete groups, capture "
+                           "every other group again; protocol schema 3: a paused campaign (with --cause, "
+                           "CONTINUATION_RULE), schemas 1 and 2: a closed one")
+    init.add_argument("--cause", metavar="TEXT",
+                      help="Protocol schema 3, with --continue (required there, no default; refused otherwise): the "
+                           "written cause of the pause, a deviation of the continuation's records (CONTINUATION_RULE)")
     for verb in ("run", "launch", "status", "verify-archives", "request-stop", "close"):
         cmd = sub.add_parser(verb)
         cmd.add_argument("directory", type=Path)
         if verb in ("run", "launch"):
             cmd.add_argument("--stop-after", type=int, help="Stop after this many newly archived sessions")
+            cmd.add_argument("--cause", metavar="TEXT",
+                             help="Protocol schema 3, after an early stop (required then unless a written cause "
+                                  "answers it already, no default; refused otherwise): the written analysis of the "
+                                  "stop, a deviation of every later record (RESUME_RULE)")
         if verb in ("run", "launch", "request-stop"):
             cmd.add_argument("--vm", help="Multi-VM campaign: this VM's runner (run requires it; "
                                           "launch and request-stop default to all VMs)")
         if verb == "close":
             cmd.add_argument("--reason", required=True, help="Recorded operator decision")
+        if verb == "request-stop":
+            cmd.add_argument("--reason", help="Protocol schema 3 (required there, no default): why the campaign "
+                                              "stops, a deviation of its record (ENDING_RULE)")
     a = ap.parse_args(argv)
     if getattr(a, "stop_after", None) is not None and a.stop_after < 1:
         ap.error("stop-after must be positive")
@@ -2176,11 +3591,11 @@ def main(argv=None):
     elif a.command == "status":
         status(a.directory)
     elif a.command == "launch":
-        launch(a.directory, a.stop_after, a.vm)
+        launch(a.directory, a.stop_after, a.vm, a.cause)
     elif a.command == "run":
-        return execute(a.directory, stop_after=a.stop_after, vm=a.vm)
+        return execute(a.directory, stop_after=a.stop_after, vm=a.vm, cause=a.cause)
     elif a.command == "request-stop":
-        request_stop(a.directory, a.vm)
+        request_stop(a.directory, a.vm, a.reason)
     elif a.command == "close":
         close(a.directory, a.reason)
     else:

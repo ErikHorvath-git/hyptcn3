@@ -1,6 +1,6 @@
 # Príručka k hyptcn3
 
-Vstupný dokument repozitára; stav kódu a artefaktov k 2026-11-23. Súbor je
+Vstupný dokument repozitára; stav kódu a artefaktov k 2026-11-24. Súbor je
 generovaný a needituje sa ručne — ako, hovorí kapitola 10.
 
 ## 1. Čo to je
@@ -30,7 +30,7 @@ make -C vmicollect test   # plná snímka, tri delty, obnova reťazca, kontroln�
 python3 -m pytest -q      # parser, príznaky, tcn, safeguard a skripty zberu
 ```
 
-`make test` prejde celú cestu zberu nad syntetickým obrazom veľkosti 16 MiB, ktorý si sám vyrobí. Testov je 5140 prešlých a 41 preskočených v `pytest` (spolu 5181 zozbieraných; preskočený test nie je prešiel) a 4 v C (`alarm_test`, `hole_test`, `perbin_test`, `retention_test`).
+`make test` prejde celú cestu zberu nad syntetickým obrazom veľkosti 16 MiB, ktorý si sám vyrobí. Testov je 5305 prešlých a 41 preskočených v `pytest` (spolu 5346 zozbieraných; preskočený test nie je prešiel) a 4 v C (`alarm_test`, `hole_test`, `perbin_test`, `retention_test`).
 
 ## 4. Ako vznikne snímka
 
@@ -69,12 +69,12 @@ nič nezapisuje“ v kapitole 6 platí o binárke; skript okolo nej `data/result
 |---|---|---|---|
 | `vmicollect/` | zberač snímok pamäte VM: C a eBPF nad QEMU/KVM | `vmicollect/src/collector.c` | 37 / 12 152 |
 | `guestparse/` | rekonštrukcia procesov, modulov a soketov zo snímky; kontroly integrity | `guestparse/view.py` | 35 / 8 248 |
-| `features/` | per-bin referencia k C, vektor snímky, okná, kvalita riadkov, rozhodnutie o prijatí sedenia, archív sedenia a index korpusu; staršia normalizácia pre `tcn/` | `features/perbin.py` | 34 / 9 879 |
-| `tcn/` | TCN bloky pre `safeguard/model.py`, baseliny a metriky; staršia diagnostická cesta tréningu a skórovania (`tcn/train.py`, `tcn/score.py`) | `tcn/model.py` | 38 / 22 642 |
+| `features/` | per-bin referencia k C, vektor snímky, okná, kvalita riadkov, rozhodnutie o prijatí sedenia, archív sedenia a index korpusu; staršia normalizácia pre `tcn/` | `features/perbin.py` | 35 / 10 349 |
+| `tcn/` | TCN bloky pre `safeguard/model.py`, baseliny a metriky; staršia diagnostická cesta tréningu a skórovania (`tcn/train.py`, `tcn/score.py`) | `tcn/model.py` | 38 / 23 025 |
 | `safeguard/` | integrovaná detekčná cesta: okná a normalizácia, modely, kalibrácia, balík a hostiteľský detektor | `safeguard/cli.py` | 17 / 5 329 |
 | `profiles/` | profil jadra hosťa: symboly a offsety polí štruktúr | `profiles/debian12-6.1.0-42-cloud-amd64/README.md` | jeden adresár na verziu jadra hosťa; nový boot rieši preukotvenie (L17) |
-| `scripts/` | zber a audit sedenia, kampaň (`scripts/campaign.py`), laboratórium a premávka, root behy, PoC techniky na validáciu citlivosti (`scripts/poc/`), kontroly tvrdení; staršie diagnostické sedenia a detektor (`scripts/session.sh`, `scripts/detektor.py`) | `scripts/collection.py` | 82 / 44 015 |
-| `lab/` | trvalé benígne API služby, PostgreSQL a nginx vo VM `hyptcn-lab` | `lab/services.py` | 25 / 5 056 |
+| `scripts/` | zber a audit sedenia, kampaň (`scripts/campaign.py`), laboratórium a premávka, root behy, PoC techniky na validáciu citlivosti (`scripts/poc/`), kontroly tvrdení; staršie diagnostické sedenia a detektor (`scripts/session.sh`, `scripts/detektor.py`) | `scripts/collection.py` | 87 / 49 037 |
+| `lab/` | trvalé benígne API služby, PostgreSQL a nginx vo VM `hyptcn-lab` | `lab/services.py` | 25 / 5 090 |
 | `harness/` | zlatý obraz hosťa, šablóna domény `hyptcn-guest`, izolovaná sieť bez NAT a manifesty starších sedení | `harness/README.md` | 15 / 264 |
 | `config/` | zmrazené protokoly zberu korpusu: doména, perióda, okná, roly a scenáre | `config/collection-v2.json` | 9 / 0 |
 | `data/` | výsledkové JSONy z meraní (`data/results/`) a pozemná pravda odobratá v hosťovi (`data/sessions/`); samotné snímky sú mimo gitu (`data/raw/`, zber korpusu `data/collections/<session>/`) | `data/results/2026-09-18_zmrazeny_host/README.md` | rastie s každým meraním, nepočíta sa |
@@ -254,7 +254,7 @@ znamenalo držať dve znenia toho istého. Nadpisy sú preto dosadené z neho, s
 | `docs/LAB.sk.md` | serverové laboratórium, premávka z hostiteľa a RAM zber | 333 |
 | `docs/METODIKA_ZBERU.sk.md` | protokol zberu, príznaky, rozdelenie korpusu a audit | 421 |
 | `docs/KONTROLA_ZBERU.sk.md` | pokrytie okien, kontrola logov a úložisko uloženého zberu | 232 |
-| `docs/AUTOMATICKY_ZBER.sk.md` | kampaň: spustenie, uložené dáta, zastavenie, archív, report | 394 |
+| `docs/AUTOMATICKY_ZBER.sk.md` | kampaň: spustenie, uložené dáta, zastavenie, archív, report | 524 |
 | `docs/PRIPRAVENOST_KAMPANE.sk.md` | pripravenosť kampane a zvyškové riziká (PASS/FAIL/UNVERIFIED) | 140 |
 | `docs/SAFEGUARD.sk.md` | tréning modelového balíka, replay a spustenie detektora | 567 |
 | `vmicollect/README.md` | zberač zvnútra: vrstvy, hooky, formáty | 642 |

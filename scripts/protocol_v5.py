@@ -233,8 +233,12 @@ BASELINE_PARTS = ("processes", "MemAvailable_kb")
 MODULE_NAME = r"[a-z0-9_]+"  # A module name as /proc/modules shows it.
 
 # Every top-level key of a schema-3 protocol; vms or the pair domain/target as in schema 2, two optional notes.
-# A section another package adds (B5b: profiles) is added here and to config/collection-v5.json together.
-TOP_LEVEL = ("schema", "name", "status", "profile", "interval_s", "max_gap_s", "bin_bytes", "window_rows",
+# A section another package adds (B5b: profiles) is added here and to config/collection-v5.json together. Schema 3 has
+# no field status (question Q23, F1 of the verification of B9b): the stage of a protocol file is what the readiness
+# records of scripts/gates.py say (gates.py status and require), and a field of the file could not follow it, since
+# stage_binding hashes it at every stage (a change in G1 would reopen the records of G0, and the file frozen at G4
+# would say g0 for good); a schema-3 file with status is refused as an unknown key. Schemas 1 and 2 keep theirs.
+TOP_LEVEL = ("schema", "name", "profile", "interval_s", "max_gap_s", "bin_bytes", "window_rows",
              "stride", "full_every", "cycles", "pilot_cycles", "warmup_s", "min_free_gib", "quality_policy",
              "min_score_coverage", "invalid_rows", "replacement", "group_prefix", "group_sessions", "roles",
              "interleave", "scenarios", "scenario_rule", "profiles", "events", "full_snapshot_guard", "controls",

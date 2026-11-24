@@ -988,6 +988,116 @@ def test_stage_applies_the_stage_rule_to_a_ledger(tmp_path, ledger, of_record):
     assert str(error.value) == "plan mode 'generalka': a stage is that of a plan mode, campaign or rehearsal"
 
 
+# ----------------------------------------------------------- the stage of a record (finding N2 of B7c, package B9b)
+
+
+def record_basis(path, **changes):
+    """The basis of tcn.pecat record_stage of a record of plan mode campaign over the corpus of `sealed` on the ledger
+    of record at `path`, with the values given changed."""
+    from tcn import pecat
+    return {"rule": pecat.RECORD_STAGE_RULE, "ledger": str(path.resolve()), "of_record": True, "mode": "campaign",
+            "sealed": len(SEALED), "missing": [], "seal_in_git": True, "why": None, **changes}
+
+
+def test_record_stage_is_final_only_when_the_ledger_of_record_and_head_hold_every_sealed_session(
+        sealed, of_record, monkeypatch):
+    """Finding N2 of the confirmation of B7c (RECORD_STAGE_RULE): a record of plan mode campaign over the sessions of
+    a corpus is final when the ledger of record holds the archive of every session of its sealed roles and the ledger
+    at HEAD holds them too, whether the sessions are the records of an index (id) or the rows of a campaign's record
+    (session); when HEAD does not hold them, or that cannot be shown (here the ledger lies outside the repository),
+    the record is suchy and its basis says why."""
+    from tcn import pecat
+    _, records = sealed
+    sessions, real = list(records.values()), pecat._in_git
+    monkeypatch.setattr(pecat, "_in_git", lambda path, hashes: True)
+    assert pecat.record_stage("campaign", sessions) == {"stage": "final", "basis": record_basis(of_record)}
+    rows = [{"session": r["id"], "vm": r["vm"], "role": r["role"], "state": "accepted",
+             "features_sha256": r["features_sha256"]} for r in sessions]
+    assert pecat.record_stage("campaign", rows) == {"stage": "final", "basis": record_basis(of_record)}
+    monkeypatch.setattr(pecat, "_in_git", lambda path, hashes: False)
+    assert pecat.record_stage("campaign", sessions) == {"stage": "suchy", "basis": record_basis(
+        of_record, seal_in_git=False, why=f"the ledger {of_record.resolve()} as committed at HEAD does not hold every "
+                                          "archive of the sessions of the sealed roles")}
+    monkeypatch.setattr(pecat, "_in_git", real)
+    assert pecat.record_stage("campaign", sessions) == {"stage": "suchy", "basis": record_basis(
+        of_record, seal_in_git=None, why=f"whether the ledger at HEAD holds them cannot be shown (the ledger "
+                                         f"{of_record.resolve()} lies outside the repository {ROOT}, or git is "
+                                         "unavailable)")}
+
+
+def test_record_stage_is_suchy_for_a_corpus_whose_seal_the_ledger_of_record_does_not_hold(tmp_path, of_record,
+                                                                                         monkeypatch):
+    """Finding N2 (the risk of question Q15): a synthetic campaign corpus whose archives the ledger of record does
+    not hold is suchy, never final, and so is one whose archives it holds for another plan mode; a rehearsal on the
+    ledger of record is generalka without a ledger at HEAD; a record without a session of a sealed role is suchy, and
+    so is every record on a ledger other than the ledger of record."""
+    from tcn import pecat
+    monkeypatch.setattr(pecat, "_in_git", lambda path, hashes: True)
+    _, records = corpus(tmp_path / "corpus")
+    sessions = list(records.values())
+    ids = [ident for ident, _ in SEALED]
+    assert pecat.record_stage("campaign", sessions) == {"stage": "suchy", "basis": record_basis(
+        of_record, missing=ids, seal_in_git=None,
+        why="the ledger of record holds no archive of 3 of the 3 sessions of the sealed roles for their session, "
+            "role and plan mode campaign (first tb-1): their seal is not the campaign's")}
+    pecat.zapis(sessions, protocol=protocol(), protocol_sha256=sha(V5), mode="rehearsal", command="rehearsal",
+                ledger=of_record)
+    assert pecat.record_stage("rehearsal", sessions) == {"stage": "generalka", "basis": record_basis(
+        of_record, mode="rehearsal", seal_in_git=None)}
+    assert pecat.record_stage("campaign", sessions)["basis"]["missing"] == ids
+    assert pecat.record_stage("campaign", [records[UNSEALED[0]]]) == {"stage": "suchy", "basis": record_basis(
+        of_record, sealed=0, missing=None, seal_in_git=None,
+        why="the record covers no session of the sealed roles test_benign, test_controls: the ledger of record "
+            "cannot tie it to the seal of a plan")}
+    rows = [{"session": "tb-1", "role": "test_benign"}, {"session": "tb-2", "role": "test_benign",
+                                                         "features_sha256": records["tb-2"]["features_sha256"]}]
+    assert pecat.record_stage("rehearsal", rows) == {"stage": "suchy", "basis": record_basis(
+        of_record, mode="rehearsal", sealed=2, missing=["tb-1"], seal_in_git=None,
+        why="1 of the 2 sessions of the sealed roles name no sha256 of their feature archive (first tb-1): their "
+            "seal cannot be shown")}
+    other = tmp_path / "other" / "kniha_pecati.json"
+    assert pecat.record_stage("rehearsal", sessions, ledger=other) == {"stage": "suchy", "basis": record_basis(
+        of_record, ledger=str(other.resolve()), of_record=False, mode="rehearsal", missing=None, seal_in_git=None,
+        why=f"the ledger {other.resolve()} is not the ledger of record {of_record.resolve()} (a G1 dry run or a "
+            "test)")}
+
+
+def test_record_stage_of_an_ending_record_does_not_ask_the_ledger_at_head(tmp_path, sealed, of_record, monkeypatch):
+    """Question Q21 (package B9b, decided by its proposal until the lead answers): the ending record of a campaign
+    passes at_head False, since its runner writes it before the ledger is committed. A record of plan mode campaign
+    is then final when the ledger of record in the working tree holds the archive of every session of the sealed
+    roles, the ledger at HEAD never asked; its basis says so and names the ledger's sha256 and that tcn.finalne checks
+    the ledger at HEAD. A missing seal and another ledger stay suchy as before, and the default (the records of
+    tcn.eval) keeps the whole rule of N2."""
+    from tcn import pecat
+    _, records = sealed
+    sessions = list(records.values())
+    monkeypatch.setattr(pecat, "_in_git", lambda path, hashes: pytest.fail("at_head False asks no ledger at HEAD"))
+    assert pecat.record_stage("campaign", sessions, at_head=False) == {"stage": "final", "basis": record_basis(
+        of_record, seal_in_git=None, at_head=False, ledger_sha256=sha(of_record), head=pecat.HEAD_BY_FINALNE)}
+    other = dict(sessions[0], features_sha256="0" * 64)
+    missing = pecat.record_stage("campaign", [other, *sessions[1:]], at_head=False)
+    assert (missing["stage"], missing["basis"]["missing"]) == ("suchy", [other["id"]]), missing
+    elsewhere = pecat.record_stage("campaign", sessions, ledger=tmp_path / "other" / "kniha_pecati.json",
+                                   at_head=False)
+    assert elsewhere["stage"] == "suchy" and "is not the ledger of record" in elsewhere["basis"]["why"]
+    monkeypatch.setattr(pecat, "_in_git", lambda path, hashes: False)
+    assert pecat.record_stage("campaign", sessions)["stage"] == "suchy"
+
+
+@pytest.mark.parametrize("mode, sessions, message", [
+    ("generalka", [], "plan mode 'generalka': a stage is that of a plan mode, campaign or rehearsal"),
+    ("campaign", "tb-1", "the sessions of a record are a list (index records, or the rows of a campaign's record)"),
+    ("campaign", [{"id": "tb-1"}], "a session of a record names its id (id, or session in the row of a campaign's "
+                                   "record) and its role"),
+], ids=["no_plan_mode", "no_list", "no_role"])
+def test_record_stage_refuses_what_it_cannot_judge(mode, sessions, message, ledger):
+    from tcn import pecat
+    with pytest.raises(ValueError) as error:
+        pecat.record_stage(mode, sessions)
+    assert str(error.value) == message
+
+
 # ------------------------------------------------------------------ the legacy tools (verification of B7c, F1)
 
 

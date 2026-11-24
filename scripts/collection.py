@@ -40,9 +40,9 @@ from features.quality import protocol_policy, coverage_gate, invalid_rows_rule, 
 # ideal_windows is kept for a tracked record script under data/results, which reads it from this module.
 from features.coverage import ideal_windows, scorable_windows
 from features.acceptance import assignment, flagged_seq, judge, periodic_run, protocol_reachability, spacing_mode
-from features.audit_policy import audit_bounds, exceptions_record, register, tolerate
+from features.audit_policy import audit_bounds, event_types, exceptions_record, register, tolerate
 from features.qualification import column_summary
-from scripts.collection_logs import audit_logs
+from scripts.collection_logs import audit_logs, event_window
 from scripts import protocol_v5
 from lab.udalosti import CONTROLS as CONTROL_TYPES, TYPES as EVENT_TYPES
 
@@ -1743,6 +1743,43 @@ def present(*values):
     return all(value is not MISSING for value in values)
 
 
+def marked_rows_record(directory, native, metadata, p, flagged, result):
+    """The marked rows of a session by event type (package B9b, agent Z, and its fix: F5 and F8 of the verification of
+    B9b): marked_rows_by_type, event_occurrences_by_type, marked_rows_outside_events and marked_rows_note of the
+    audit's values (features/acceptance.py MARKED_ROWS_RULE; the campaign sums the two maps for its early stop,
+    scripts/campaign.py early_stop_check). Under protocol schema 3: every event type of events.types, in the event
+    windows of the occurrences of the session's events.json as its log audit takes them (scripts/collection_logs.py
+    event_window, with the session's event_grace_s); a session that plans no event and has no events.json has none.
+    The three counts are null, with the reason as the note, under schemas 1 and 2 (no event types) and when the
+    events.json of a session that plans events is missing or cannot be read or windowed: then the rows cannot be told
+    by type, and never as 0."""
+    from features.acceptance import MARKED_ROWS_RULE, marked_rows_by_type  # The import line above is full.
+    types, windows, why = event_types(p) if p.get("schema") == protocol_v5.SCHEMA else None, [], None
+    path = directory / "events.json"
+    if types is None:
+        why = "the protocol names no event types (protocol schema 1 or 2): the marked rows are not counted by type"
+    elif native and path.exists():
+        try:
+            occurrences = json.loads(path.read_text())["events"]
+            if type(occurrences) is not list or not all(type(record) is dict for record in occurrences):
+                raise TypeError("events is no list of records")
+            grace = metadata["event_grace_s"] if occurrences else None
+            windows = [(str(record.get("type")), *window) for record in occurrences
+                       for window in [event_window(record, grace)] if window is not None]
+        except (OSError, ValueError, KeyError, TypeError) as error:
+            why = (f"events.json cannot be read or windowed ({type(error).__name__}): the marked rows cannot be told "
+                   "by type")
+    elif native and metadata.get("events"):
+        why = "the session plans events and has no events.json: the marked rows cannot be told by type"
+    if why is not None:
+        return {"marked_rows_by_type": None, "event_occurrences_by_type": None, "marked_rows_outside_events": None,
+                "marked_rows_note": why}
+    times = {int(seq): float(t) for seq, t in zip(result["seq"], result["casy"])}
+    by_type, occurrences, outside = marked_rows_by_type(flagged, times, windows, types)
+    return {"marked_rows_by_type": by_type, "event_occurrences_by_type": occurrences,
+            "marked_rows_outside_events": outside, "marked_rows_note": MARKED_ROWS_RULE}
+
+
 def audit_session(directory, p, protocol_path, output=None):
     """Audit one session directory under protocol `p` (read from `protocol_path`); 0 accepted, 2 refused.
 
@@ -1750,8 +1787,10 @@ def audit_session(directory, p, protocol_path, output=None):
     raw/capture.json and the sidecars: a missing one is the reason `missing key: <file>:<dotted.path>`
     (validate_sidecar still refuses a structurally broken sidecar). The checks with a bound apply only when the
     protocol has an audit section (schema 3, features/audit_policy.py); the record states the section or null
-    (values.audit_bounds), what the audit admitted next to the register of exceptions (values.exceptions) and
-    the timing of the collector (values.timing).
+    (values.audit_bounds), what the audit admitted next to the register of exceptions (values.exceptions),
+    the timing of the collector (values.timing) and, since package B9b, the flagged rows and the windowed occurrences
+    by event type (values.marked_rows_by_type, event_occurrences_by_type and marked_rows_outside_events,
+    marked_rows_record), which the campaign sums for its early stop.
     """
     directory = Path(directory).resolve()
     native = (directory / "session.json").exists()
@@ -1911,10 +1950,13 @@ def audit_session(directory, p, protocol_path, output=None):
     flagged = flagged_seq(verdict["facts"])
     spacing_min = bounds["periodicity"]["min_spacing_rows"] if bounds is not None else 2
     run, spacing = periodic_run(flagged, spacing_min)
-    # Phase of the collector's grid: frame 0 was due at its timestamp minus its lateness. Recorded only;
-    # pairing the grids of two VMs is package B9.
+    # Phase of the collector's grid: frame 0 was due at its timestamp minus its lateness. Recorded only; the
+    # campaign pairs the grids of two VMs (scripts/campaign_grids.py grid_pairs, package B9b).
     phase = (round((sidecars[0][1]["timestamp_unix"] - first_lateness) % p["interval_s"], 6)
              if present(first_lateness) else None)
+    # Package B9b: the flagged rows by event type, recorded for every session; the campaign judges them after every
+    # audit (features/audit_policy.py early_stop), the audit never does.
+    marked = marked_rows_record(directory, native, metadata, p, flagged, result)
     stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")
     output = Path(output).resolve() if output else directory / f"audit_{stamp}.json"
     feature_path = output.with_suffix(".npz")
@@ -1934,6 +1976,7 @@ def audit_session(directory, p, protocol_path, output=None):
                                           "flagged_rows": len(flagged)},
                          "spacing_mode": spacing_mode(flagged),
                          "grid_phase_s": phase},
+              **marked,
               "auditor_sha256": {str(f.relative_to(ROOT)): digest(f) for f in
                                   (Path(__file__), ROOT / "scripts/collection_logs.py",
                                    ROOT / "scripts/traffic_log.py", ROOT / "scripts/host_monitor.py",

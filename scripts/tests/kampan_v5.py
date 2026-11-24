@@ -23,6 +23,8 @@ then calls the real function. Only what touches the lab VMs, the host or the ext
                          the protocol's own grid) and the values of the audit record in the shape
                          features/tests/test_dataset_plan.py session writes, from collection.analyze_windows; a
                          session named in Harness.reject is refused with a reason the real decision gives
+    the records          scripts/campaign.py RESULTS, where every ending of a campaign writes its record (package
+                         B9b), is a directory under the test's directory
     the ledger           tcn.pecat.KNIHA and tcn.pecat.ZAZNAM are a file under the test's directory; a ledger command
                          of the campaign (python -m tcn.pecat or tcn/pecat.py, through run_child, subprocess.run or
                          subprocess.check_output) runs in this process with pecat.main, so it writes that file; a write
@@ -43,11 +45,26 @@ verification of B9a). Every capture takes the next slot of one clock, so the tim
 the captures and the corpus build checks the time order of the roles the campaign kept. A runaway loop of
 replacements or of starts of a group fails the test by name (RUNAWAY, finding F6) instead of running on.
 
+Package B9b (agent T; design NAVRH_B9b 1.4): the endings of a campaign and their records. The records of the endings
+go to a directory of the test (scripts/campaign.py RESULTS, Harness.results), never to data/results; Harness.records
+reads them. The fake audit writes the rest of the shape of a real audit record that the record of an ending reads:
+values.exceptions (features.audit_policy.exceptions_record over the counts of the audit's own decision, the counts a
+test adds, Harness.tolerated), values.timing with the phase of the collector's grid (grid_phase_s) and, under protocol
+schema 3, values.marked_rows_by_type (marked_rows: the counts a test gives, Harness.marked, 0 for every other event
+type). A test chooses the code of a rejection (Harness.codes: PERIODICITY), a capture that fails (Harness.fail_capture),
+a step during a capture (Harness.during: the operator's stop request), a session that runs at the same time as a
+session of the other VM (Harness.overlap), and a continuation (Harness.init continues and cause). Harness.run_to_end
+drives both runners in turn until no runner moves (a pause, a stop, an invalid campaign or the end), and
+Harness.background runs one runner in a thread of this process, as the two runners of the collection PC run at once,
+so that a pause or a stop meets the other runner while it waits (addendum of NAVRH_B9b, F5 of B9a).
+
 Names that package B9a and its fix round add (protocol_v5.reset_seed, the --mode and --attempt of collection.py run,
-init --mode and --estimate-from) are reached only when a harness runs, so this module imports on the code before them.
+init --mode and --estimate-from) and those of package B9b (init --continue with --cause under schema 3, the records of
+the endings, campaign.RESULTS) are reached only when a harness runs, so this module imports on the code before them.
 Only mechanics on synthetic sessions; no number here is a measurement (HONESTY P4).
 """
 import argparse
+from collections import Counter
 import contextlib
 import hashlib
 import io
@@ -60,8 +77,12 @@ import re
 import shlex
 import shutil
 import subprocess
+import threading
+import time
 
+from features.acceptance import flagged_seq, periodic_run, spacing_mode
 from features.archive import save
+from features.audit_policy import exceptions_record
 from features.tests import test_dataset_plan as dp
 from scripts import campaign as c
 from scripts import collection
@@ -87,6 +108,9 @@ RUNTIME = {"host": "test-host", "python": "test-python", "packages": {"numpy": "
 # positive number serves the fake capture, which runs no traffic (judgment of the test, no measurement).
 RATE = .5
 REJECTION = ("timing:gap", "timestamp gap")  # (code, reason) of an injected rejection: one the real decision gives.
+# The code and reason features/acceptance.py gives a session whose flagged rows are periodic (the early stop of package
+# B9b, proposal 7.5: such a rejection stops the campaign).
+PERIODICITY = ("periodicity", "periodic flagged rows")
 # Finding F6 of the verification of B9a: a runaway loop (a rehearsal replaces without a limit, a start of a group could
 # fail again and again) ends in an assertion of the harness instead of a hang. A campaign may capture at most RUNAWAY
 # sessions beyond the sessions of its plan, and a VM may be stopped at most RUNAWAY times beyond the groups planned on
@@ -113,52 +137,98 @@ class Deadlock(AssertionError):
 
 class Clock:
     """One clock for the captures of a test: every capture takes the next slot, as long as one session of its protocol
-    (cycles * interval_s) and SLOT_GAP_S, so the times of the archives follow the order of the captures."""
+    (cycles * interval_s) and SLOT_GAP_S, so the times of the archives follow the order of the captures. A capture
+    that runs at the same time as an earlier one (Harness.overlap) names its start; the clock then goes on after both.
+    The two runners of Harness.background take it from two threads, hence the lock."""
 
     def __init__(self, start=dp.BASE):
         self.now = float(start)
+        self.lock = threading.Lock()
 
-    def take(self, p):
-        """(start, end) of the next session of protocol `p`: the time of its first and of its last row."""
-        start = self.now
-        self.now = start + p["cycles"] * p["interval_s"] + SLOT_GAP_S
-        return start, start + (p["cycles"] - 1) * p["interval_s"]
+    def take(self, p, start=None):
+        """(start, end) of the next session of protocol `p`: the time of its first and of its last row; `start` given,
+        the session starts then (it overlaps the session before it)."""
+        with self.lock:
+            start = self.now if start is None else float(start)
+            self.now = max(self.now, start + p["cycles"] * p["interval_s"] + SLOT_GAP_S)
+            return start, start + (p["cycles"] - 1) * p["interval_s"]
 
 
-def audit_values(directory, p, protocol_path, output, *, extractor, accepted=True, rejection=REJECTION):
+def marked_rows(p, counts=None):
+    """values.marked_rows_by_type, event_occurrences_by_type, marked_rows_outside_events and marked_rows_note of an
+    audit (package B9b, agent Z, and its fix: Q24; design NAVRH_B9b 1.3, scripts/collection.py marked_rows_record):
+    under protocol schema 3 the marked rows (invalid rows and rows closed by a parser rule) inside the event windows of
+    every event type of the protocol, here 0 (the fake's sessions are clean and plan no event) unless a test gives the
+    count (Harness.marked), and none outside them; the windowed occurrences of every type, 0 but one of each type a
+    test gives a count for (a session holds a type at most once); under schemas 1 and 2 none of them is counted (null,
+    with the reason)."""
+    if p.get("schema") != pv.SCHEMA:
+        return {"marked_rows_by_type": None, "event_occurrences_by_type": None, "marked_rows_outside_events": None,
+                "marked_rows_note": "the protocol names no event types (protocol schema 1 or 2; fake of the test)"}
+    unknown = set(counts or {}) - set(p["events"]["types"])
+    if unknown:
+        raise AssertionError("marked rows of event types the protocol does not name: " + ", ".join(sorted(unknown)))
+    return {"marked_rows_by_type": {name: (counts or {}).get(name, 0) for name in sorted(p["events"]["types"])},
+            "event_occurrences_by_type": {name: int(name in (counts or {})) for name in sorted(p["events"]["types"])},
+            "marked_rows_outside_events": 0, "marked_rows_note": "synthetic counts of the fake audit of the test"}
+
+
+def audit_values(directory, p, protocol_path, output, *, extractor, accepted=True, rejection=REJECTION,
+                 tolerated=None, marked=None):
     """The values of the audit record of a session a fake capture left in `directory` (session.json, raw/ and end.json
     with measure_start_unix, the time of its first row), as collection.py audit records them: the real feature
     archive of a clean session of the protocol's own grid (scripts/tests/boundary_sessions.py extraction_result, its
     seed from the session ID), written at output.with_suffix(".npz"), and collection.analyze_windows' verdict and
     quality of it, in the shape of features/tests/test_dataset_plan.py session; source_sha256 and raw_bytes of the
     images in raw/. accepted False: the verdict refused with rejection (code, reason). features/dataset.py build and
-    safeguard.training.validate_index accept a session of these values, as the session of test_dataset_plan."""
+    safeguard.training.validate_index accept a session of these values, as the session of test_dataset_plan.
+
+    Package B9b (the record of an ending and the early stop read them): values.exceptions as collection.py audit
+    records it (features.audit_policy.exceptions_record of the counts analyze_windows gives, with `tolerated`, {id: n},
+    added); values.timing with the phase of the collector's grid (grid_phase_s: the first row's time modulo
+    interval_s, the fake's cycles start on time) and the periodic run of the flagged rows (a refusal with the code
+    periodicity has the run that refuses, audit.periodicity.equal_spacings); the marked rows by event type
+    (marked_rows of `marked`)."""
     directory, output = Path(directory), Path(output)
     meta, end = read_json(directory / "session.json"), read_json(directory / "end.json")
     sid, role = meta["session_id"], meta["role"]
     seed = int(hashlib.sha256(sid.encode()).hexdigest()[:8], 16)
-    result, _ = bs.extraction_result(sid, p["cycles"], p["full_every"], t0=float(end["measure_start_unix"]),
+    t0 = float(end["measure_start_unix"])
+    result, _ = bs.extraction_result(sid, p["cycles"], p["full_every"], t0=t0,
                                      interval_s=p["interval_s"], max_gap_s=p["max_gap_s"], seed=seed)
-    _, _, verdict, quality = collection.analyze_windows(result, p, sid, role)
+    counts = Counter()
+    _, _, verdict, quality = collection.analyze_windows(result, p, sid, role, counts=counts)
     if verdict["reasons"]:  # A clean session of the protocol's own grid; anything else is a broken fake.
         raise AssertionError(f"the clean session {sid} is not accepted: {verdict['reasons']}")
+    counts.update(tolerated or {})
     archive = save(output.with_suffix(".npz"), result)
     session_sha = digest(directory / "session.json")
     raw = sorted((directory / "raw").glob("*.vmicd"))
+    flagged = flagged_seq(verdict["facts"])
+    spacing_min = (p.get("audit") or {}).get("periodicity", {}).get("min_spacing_rows", 2)
+    run, spacing = periodic_run(flagged, spacing_min)
     values = {"accepted": True, "reasons": [], "role": role, "protocol_sha256": digest(protocol_path),
               "snapshots": verdict["snapshots"], "windows": verdict["windows"],
               "score_coverage": verdict["score_coverage"], "acceptance": verdict,
               "coverage": quality.pop("coverage", None),
               "logs": {"schema": "hyptcn3/collection-logs-audit/1", "accepted": True, "problems": [],
                        "sections": {"metadata": {"session_sha256": session_sha}}},
+              "exceptions": exceptions_record(p, counts),
+              "timing": {"lateness_s_max": 0.0, "delta_ms_max": None, "full_ms_max": None,
+                         "periodic_run": {"equal_spacings": run, "spacing": spacing, "min_spacing_rows": spacing_min,
+                                          "flagged_rows": len(flagged)},
+                         "spacing_mode": spacing_mode(flagged), "grid_phase_s": round(t0 % p["interval_s"], 6)},
               "quality": quality, "session_sha256": session_sha, "extractor_sha256": extractor,
               "features": str(archive), "features_sha256": digest(archive), "layout": result["layout"],
               "session_dir": str(directory), "source_sha256": {path.name: digest(path) for path in raw},
               "raw_bytes": sum(path.stat().st_size for path in raw)}
+    values.update(marked_rows(p, marked))
     if not accepted:
         code, reason = rejection
         values.update(accepted=False, reasons=[reason],
                       acceptance=dict(verdict, accepted=False, reasons=[reason], codes=[code]))
+        if code == "periodicity" and p.get("audit"):  # The run of equal spacings that refuses (acceptance.py).
+            values["timing"]["periodic_run"]["equal_spacings"] = p["audit"]["periodicity"]["equal_spacings"]
     return values
 
 
@@ -239,6 +309,12 @@ class Lab:
         state.update(running=True, boot=f"boot-{vm}-{next(self.boots)}",
                      qemu={"pid": next(self.pids), "start_ticks": next(self.ticks), "host_boot": HOST_BOOT})
         return state
+
+    def start_again(self, vm):
+        """The operator starts a VM that a failed start of a group left shut off (package B9b: the campaigns of a test
+        that follow need its guest)."""
+        if not self.vms[vm]["running"]:
+            self._boot(vm)
 
     def domain(self, vm):
         return next(d for d, name in self.domains.items() if name == vm)
@@ -363,6 +439,42 @@ def printed(out, key):
     return next(doc[key] for doc in docs if key in doc)
 
 
+class NoSignals:
+    """collection.Interrupts for a runner in a thread (Harness.background): signal handlers are the main thread's
+    alone, and no test sends a signal."""
+
+    def __init__(self):
+        self.received = []
+
+    def disarm(self):
+        pass
+
+    def restore(self):
+        pass
+
+
+class Runner:
+    """One runner of Harness.background: execute(directory, vm=vm) in a thread; `outcome` holds its return value
+    (value) or its exception (error) once it has ended."""
+
+    def __init__(self, directory, vm):
+        self.directory, self.vm, self.outcome = Path(directory), vm, {}
+        self.thread = threading.Thread(target=self._run, name=f"runner-{vm}", daemon=True)
+
+    def _run(self):
+        try:
+            self.outcome["value"] = c.execute(self.directory, vm=self.vm)
+        except BaseException as error:  # noqa: BLE001 - the test reads what ended the runner
+            self.outcome["error"] = error
+
+    def join(self, timeout):
+        """The outcome once the runner has ended; AssertionError when it is still running after `timeout` s."""
+        self.thread.join(timeout)
+        if self.thread.is_alive():
+            raise AssertionError(f"the runner of VM {self.vm} still runs {timeout} s later")
+        return self.outcome
+
+
 class Harness:
     """A campaign directory tree under `root` with the fakes of this module patched in through `patch` (a
     pytest.MonkeyPatch). The audit writes real feature archives and records (audit_values) and finish_corpus is the
@@ -372,14 +484,24 @@ class Harness:
     vm, sid, role, group, scenario, attempt, mode, seed, replaces, t0, t1, boot, qemu, ledger and done before it);
     audits; children (every child served); gates and selftests (the stages and self-tests asked, with "phase"
     campaign or session); kontrola (calls of tcn.pecat.kontrola: none during a campaign); finished (every call of
-    finish_corpus: campaign, vm, reports)."""
+    finish_corpus: campaign, vm, reports); printed (what each run of a runner printed, Harness.step).
+
+    What a test injects, each keyed by (group, scenario, attempt) of a session of any campaign of the harness or by
+    (campaign, group, scenario, attempt) of one campaign (Harness.injected): reject (the audit refuses it), codes
+    ((code, reason) of that refusal, else REJECTION), tolerated ({register id: count} the audit adds to its
+    exceptions), marked ({event type: marked rows}), fail_capture (the capture child fails before it writes anything:
+    an error of the runner), during (a function the capture calls once it has written the session, while its runner
+    runs) and overlap ((key of an earlier session, seconds): the session starts that long after the start of that
+    session, so the two run at the same time on the two VMs)."""
 
     def __init__(self, root, patch):
         self.root, self.mp = Path(root), patch
         self.collections, self.base = self.root / "collections", self.root / "campaigns"
         self.archive = self.root / "archive"
         self.ledger = self.root / "ledger" / "kniha_pecati.json"
-        for directory in (self.collections, self.base, self.archive, self.ledger.parent):
+        # Package B9b: the records of the endings (scripts/campaign.py RESULTS), never data/results in a test.
+        self.results = self.root / "results"
+        for directory in (self.collections, self.base, self.archive, self.ledger.parent, self.results):
             directory.mkdir(parents=True)
         self.profile = self.root / "profile"
         self.profile.mkdir()
@@ -391,19 +513,24 @@ class Harness:
         self.lab.sequence = self.sequence
         self.clock = Clock()
         self.captures, self.audits, self.children, self.gates, self.selftests = [], [], [], [], []
-        self.kontrola, self.finished, self.refusals, self.campaigns = [], [], [], []
+        self.kontrola, self.finished, self.refusals, self.campaigns, self.printed = [], [], [], [], []
         self.reject = set()  # (group, scenario, attempt) of the sessions the audit refuses.
+        # Package B9b: what a test injects (the class docstring), keyed as reject.
+        self.codes, self.tolerated, self.marked, self.during, self.overlap = {}, {}, {}, {}, {}
+        self.fail_capture = set()
         self.phase = "campaign"  # "session" while a capture or an audit child runs (the stages it asks).
         self.label = None  # The step of a test's scenario, kept in the records of the stages and the self-tests.
         self.patch()
 
     # ---------------------------------------------------------------- the protocol and the campaign
 
-    def protocol(self, name, *, limit, groups=None, rehearsal_groups=None):
+    def protocol(self, name, *, limit, groups=None, rehearsal_groups=None, edit=None):
         """A protocol file of features/tests/test_dataset_plan.py protocol_doc (five roles, two VMs, the test roles
         interleaved, 8-minute sessions) with replacement.max_per_campaign `limit`, min_free_gib 0 (tiny synthetic
         sessions on pytest's tmpfs, as scripts/tests/test_campaign.py) and a rate in every scenario (RATE);
-        groups: groups of every role of the campaign; rehearsal_groups: rehearsal.groups_per_role."""
+        groups: groups of every role of the campaign; rehearsal_groups: rehearsal.groups_per_role; edit: a function
+        that changes the document before it is written (package B9b: a bound of early stop, an expected count of the
+        register, another group prefix)."""
         doc = dp.protocol_doc(self.profile)
         doc["min_free_gib"] = 0
         doc["scenarios"] = {name_: dict(entry, rate=RATE) for name_, entry in doc["scenarios"].items()}
@@ -412,19 +539,27 @@ class Harness:
             doc["roles"] = dict.fromkeys(doc["roles"], groups)
         if rehearsal_groups is not None:
             doc["rehearsal"] = dict(doc["rehearsal"], groups_per_role=rehearsal_groups)
+        if edit is not None:
+            edit(doc)
         path = self.root / f"{name}.json"
         collection.write_json(path, doc)
         collection.protocol(path)  # The loader's checks, before any campaign reads it.
         return path
 
-    def init(self, protocol, mode, name, estimate_from=None):
+    def init(self, protocol, mode, name, estimate_from=None, *, continues=None, cause=None, extra=()):
         """scripts/campaign.py init with the command line of design 1.3: --mode, and --estimate-from in mode
-        campaign; the archive on this test's disk, without compression (the sessions are small). Returns the
-        campaign directory."""
+        campaign; the archive on this test's disk, without compression (the sessions are small). Package B9b
+        (design NAVRH_B9b 1.2): continues, the directory of the paused campaign it continues (--continue), with its
+        written cause (--cause); extra, more arguments as they are. Returns the campaign directory."""
         argv = ["init", "--protocol", str(protocol), "--mode", mode, "--archive-root", str(self.archive),
                 "--name", name, "--archive-on-system-disk", "--archive-compression", "none"]
         if estimate_from is not None:
             argv += ["--estimate-from", str(estimate_from)]
+        if continues is not None:
+            argv += ["--continue", str(continues)]
+        if cause is not None:
+            argv += ["--cause", cause]
+        argv += list(extra)
         with contextlib.redirect_stdout(io.StringIO()):
             c.main(argv)
         self.campaigns.append(self.base / name)
@@ -432,15 +567,18 @@ class Harness:
 
     def step(self, directory, vm):
         """One run of the VM's runner up to its next accepted session (execute(..., stop_after=1)); whether it moved
-        anything (a capture, a labctl command or a record of attempts/)."""
+        anything (a capture, a labctl command or a record of attempts/). What it printed is kept (printed)."""
         before = self.progress(directory)
+        out = io.StringIO()
         try:
-            with contextlib.redirect_stdout(io.StringIO()):
+            with contextlib.redirect_stdout(out):
                 c.execute(directory, vm=vm, stop_after=1)
         except BaseException as error:
             for refusal in self.refusals[-3:]:
                 error.add_note("refused child: " + refusal)
             raise
+        finally:
+            self.printed.append({"campaign": Path(directory).name, "vm": vm, "out": out.getvalue()})
         return self.progress(directory) != before
 
     def status(self, directory, vm):
@@ -470,6 +608,43 @@ class Harness:
         manifest = read_json(Path(directory) / "campaign.json")
         return [row for row in manifest["sessions"] if row.get("vm") == vm and not c.finished(directory, manifest, row)]
 
+    def run_to_end(self, directory, *, vms=VMS, rounds=400):
+        """Both runners in turn, one accepted session each, until a round in which no runner moved (package B9b: a
+        pause, an early stop, a stop or an invalid campaign ends the runs as the end of the plan does). A refusal of a
+        runner (ValueError) is kept, not raised. Returns ({vm: status}, [(vm, refusal text)])."""
+        directory, refused = Path(directory), []
+        for _ in range(rounds):
+            moved = False
+            for vm in vms:
+                if self.status(directory, vm).get("status") == "complete":
+                    continue
+                try:
+                    moved = self.step(directory, vm) or moved
+                except ValueError as error:
+                    refused.append((vm, str(error)))
+            if not moved:
+                return {vm: self.status(directory, vm) for vm in vms}, refused
+        raise AssertionError(f"the campaign did not end in {rounds} rounds")
+
+    def until_interleaved(self, directory, *, rounds=400):
+        """Both runners in turn until each VM's next session is of an interleaved role (protocol_v5.INTERLEAVED)."""
+        directory = Path(directory)
+        for _ in range(rounds):
+            due = [vm for vm in VMS if self.pending(directory, vm)
+                   and self.pending(directory, vm)[0]["role"] not in pv.INTERLEAVED]
+            if not due:
+                return
+            for vm in due:
+                self.step(directory, vm)
+        raise AssertionError(f"the runners did not reach the test roles in {rounds} rounds")
+
+    def alone(self, directory, vm, *, rounds=400):
+        """VM `vm` alone until a run of it moves nothing (it waits, or it stopped) or it is complete; its status."""
+        for _ in range(rounds):
+            if self.status(directory, vm).get("status") == "complete" or not self.step(directory, vm):
+                break
+        return self.status(directory, vm)
+
     def drift(self, directory, ahead="a", *, rounds=400):
         """A schedule in which VM `ahead` runs ahead of the other (finding F5 of the verification of B9a, the
         verifier's sondy/s/drift_harness.py): both runners in turn until each VM's next session is of an interleaved
@@ -478,21 +653,54 @@ class Harness:
         each VM after its run alone."""
         directory = Path(directory)
         behind = next(vm for vm in VMS if vm != ahead)
-        for _ in range(rounds):
-            due = [vm for vm in VMS if self.pending(directory, vm)
-                   and self.pending(directory, vm)[0]["role"] not in pv.INTERLEAVED]
-            if not due:
-                break
-            for vm in due:
-                self.step(directory, vm)
-        alone = {}
-        for vm in (ahead, behind):
-            for _ in range(rounds):
-                if self.status(directory, vm).get("status") == "complete" or not self.step(directory, vm):
-                    break
-            alone[vm] = self.status(directory, vm)
+        self.until_interleaved(directory, rounds=rounds)
+        alone = {vm: self.alone(directory, vm, rounds=rounds) for vm in (ahead, behind)}
         self.run(directory, rounds=rounds)
         return alone
+
+    def background(self, directory, vm):
+        """The runner of VM `vm` (execute without stop_after) started in a thread of this process, as the two runners
+        of the collection PC run at the same time; the test patches collection.Interrupts (NoSignals) first. Such a
+        runner may wait and start a group; a capture, an audit or a seal it asks for fails (Harness.serve), so that
+        only the runner of the main thread captures. Returns the Runner."""
+        if c.collection.Interrupts is not NoSignals:
+            raise AssertionError("a runner in a thread needs collection.Interrupts patched to NoSignals")
+        runner = Runner(directory, vm)
+        runner.thread.start()
+        return runner
+
+    def wait_for(self, directory, vm, stage, *, runner=None, timeout=60):
+        """Until the status of VM `vm` names `stage` (a runner in a thread reached it); AssertionError after
+        `timeout` s or when its runner ended first."""
+        deadline = time.monotonic() + timeout
+        while self.status(directory, vm).get("stage") != stage:
+            if runner is not None and not runner.thread.is_alive():
+                raise AssertionError(f"the runner of VM {vm} ended before {stage}: {runner.outcome} "
+                                     f"{self.status(directory, vm)}")
+            if time.monotonic() > deadline:
+                raise AssertionError(f"VM {vm} did not reach {stage} in {timeout} s: {self.status(directory, vm)}")
+            time.sleep(.02)
+
+    def records(self, directory):
+        """[(path, record)] of the records of the endings of one campaign (package B9b, design NAVRH_B9b 1.1: files
+        kampan_<campaign id>_<ending>_<UTC stamp>.json in scripts/campaign.py RESULTS, here Harness.results), by
+        name, which orders them by time within one ending; a record of another campaign whose name begins alike is
+        left out by its values.campaign."""
+        name = Path(directory).name
+        found = []
+        for path in sorted(self.results.glob(f"kampan_{name}_*.json")):
+            doc = read_json(path)
+            if (doc.get("values") or {}).get("campaign") == name:
+                found.append((path, doc))
+        return found
+
+    def injected(self, mapping, campaign, group, scenario, attempt, default=None):
+        """What a test injected for a session (the class docstring): under (campaign, group, scenario, attempt), else
+        under (group, scenario, attempt); a set gives True or False."""
+        keys = ((campaign, group, scenario, attempt), (group, scenario, attempt))
+        if isinstance(mapping, (set, frozenset)):
+            return any(key in mapping for key in keys)
+        return next((mapping[key] for key in keys if key in mapping), default)
 
     def progress(self, directory):
         return (len(self.captures), len(self.lab.calls),
@@ -549,6 +757,9 @@ class Harness:
         mp = self.mp
         mp.setattr(c, "COLLECTIONS", self.collections)
         mp.setattr(c, "BASE", self.base)
+        # Package B9b (design NAVRH_B9b 1.1): every ending writes its record into data/results; in a test into
+        # Harness.results. The name is set also where the code before B9b has none (raising False).
+        mp.setattr(c, "RESULTS", self.results, raising=False)
         for name in ("RETRY_PAUSE_S", "WAIT_POLL_S", "START_GRACE_S"):
             mp.setattr(c, name, 0)
         mp.setattr(c, "git", self.git)
@@ -672,7 +883,11 @@ class Harness:
         if kind is None:
             return None
         name, args = kind
-        if name == "labctl":
+        if name != "labctl" and threading.current_thread() is not threading.main_thread():
+            # Harness.background: a runner in a thread only waits; its capture, audit or seal would run beside the
+            # other runner's in fakes that redirect the process's output, so it fails here, by name, as a child.
+            code, out, err = 2, "", f"{name}: a runner in a thread of the test never captures, audits or seals\n"
+        elif name == "labctl":
             code, out, err = self.lab.command(args)
         elif name == "collection":
             code, out, err = self.collection_child(args)
@@ -738,6 +953,9 @@ class Harness:
                                  f"plan of {len(manifest['sessions'])} and RUNAWAY {RUNAWAY}")
         v5 = collection.v5_run(a, p)
         vm = p["vm"]
+        key = (a.campaign_id, a.group, a.scenario, getattr(a, "attempt", None))
+        if self.injected(self.fail_capture, *key):  # Package B9b: an error of the runner (the child fails at once).
+            raise ValueError(f"synthetic failure of the capture of {a.session_id}")
         identity, qemu = self.lab.identity(vm), self.lab.qemu(p["domain"])
         if getattr(a, "expected_boot_id", None) and identity["boot_id"] != a.expected_boot_id:
             raise ValueError("guest boot differs from campaign group")
@@ -748,7 +966,14 @@ class Harness:
         out.mkdir()
         shutil.copyfile(a.protocol, out / "protocol.json")
         shutil.copytree(self.profile, out / "profile")
-        t0, t1 = self.clock.take(p)
+        overlap = self.injected(self.overlap, *key)  # Package B9b: at the same time as an earlier session.
+        if overlap is not None:
+            other, shift = overlap
+            earlier = next(x for x in self.captures if self.injected({other}, x["campaign"], x["group"],
+                                                                     x["scenario"], x["attempt"]))
+            t0, t1 = self.clock.take(p, start=earlier["t0"] + shift)
+        else:
+            t0, t1 = self.clock.take(p)
         meta = {"schema": "hyptcn3/collection-session/2", "session_id": out.name, "campaign_id": a.campaign_id,
                 "vm": vm, "domain": p["domain"], **({"replaces": a.replaces} if a.replaces else {}),
                 "role": a.role, "group": a.group, "group_attempt": a.group_attempt,
@@ -758,6 +983,11 @@ class Harness:
                 **({"controls": v5["controls"]} if "controls" in v5 else {}),
                 "protocol_sha256": digest(a.protocol), "profile_sha256": c.tree_hashes(self.profile),
                 "collector_sha256": COLLECTOR, "traffic": v5["traffic"],
+                # As scripts/collection.py run records them (package B9b: scripts/campaign_grids.py reads interval_s).
+                "collector_settings": {"writer": "delta", "fsync": collection.COLLECTOR_FSYNC, "hash": "sha256",
+                                       "writer_thread": True, "mlock": collection.COLLECTOR_MLOCK,
+                                       "interval_s": p["interval_s"], "full_every": p["full_every"],
+                                       "bin_bytes": p["bin_bytes"]},
                 "host_context": {"host_boot": HOST_BOOT, "qemu": qemu, "memory": dict(MEMORY), "other_vms": []},
                 "commit": manifest["commit"], "commit_dirty": False, "measurement_dirty": [], "host": "test-host"}
         collection.write_json(out / "session.json", meta)
@@ -778,15 +1008,22 @@ class Harness:
             "order": next(self.sequence), "directory": str(out),
             "ledger": {entry["session"] for entry in ledger_entries(self.ledger).values()},
             "done": {path.name[:-len(".done.json")] for path in (campaign / "attempts").glob("*.done.json")}})
+        during = self.injected(self.during, *key)
+        if during is not None:  # Package B9b: while the session's runner runs (the operator's stop request).
+            during()
 
     def audit(self, directory, p, protocol_path, output):
         """collection.py audit (collection.audit_session): the record of the session with its real archive
-        (audit_values); a session named in reject is refused with REJECTION."""
+        (audit_values); a session named in reject is refused with REJECTION, or with the (code, reason) a test gives
+        it in codes; tolerated and marked add the counts a test gives it (package B9b)."""
         src = Path(directory)
         meta = read_json(src / "session.json")
-        accepted = (meta["group"], meta["scenario"], meta.get("attempt")) not in self.reject
+        key = (meta["campaign_id"], meta["group"], meta["scenario"], meta.get("attempt"))
+        accepted = not self.injected(self.reject, *key)
         output = Path(output)
-        values = audit_values(src, p, protocol_path, output, extractor=self.extractor, accepted=accepted)
+        values = audit_values(src, p, protocol_path, output, extractor=self.extractor, accepted=accepted,
+                              rejection=self.injected(self.codes, *key, default=REJECTION),
+                              tolerated=self.injected(self.tolerated, *key), marked=self.injected(self.marked, *key))
         campaign = read_json(Path(protocol_path).resolve().parent / "campaign.json")
         write_new(output, {"schema": "hyptcn3/collection-audit/1", "date": "2026-11-23T00:00:00+00:00",
                            "commit": campaign["commit"], "commit_dirty": False, "measurement_dirty": [],

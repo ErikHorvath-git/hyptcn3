@@ -12,7 +12,13 @@ command (python -m tcn.finalne, package B7c agent E), on the same replays for ev
                                 switched it (design B7c 5.1)
     vlastna_kniha(path)         a context manager: KNIHA is a ledger of its own outside data/results (a G1 dry run)
     stage(mode, *, ledger=None) the stage that STAGE_RULE gives plan mode `mode` on a ledger (KNIHA when None): final
-                                or generalka on the ledger of record, suchy on any other (tcn.eval's records use it)
+                                or generalka on the ledger of record, suchy on any other (a final run, kontrola)
+    record_stage(mode, sessions, *, ledger=None)
+                                the stage of a record that covers `sessions` (RECORD_STAGE_RULE, finding N2 of B7c,
+                                package B9b): {stage, basis}; final or generalka only when the ledger of record holds
+                                every sealed session of the record, and final only when the ledger at HEAD holds them
+                                too; suchy otherwise, the basis says why (the records of tcn.eval of protocol schema
+                                3 and the ending record of a campaign, scripts/campaign.py)
     identita(hashes)            the identity of a seal (IDENTITY_RULE)
     zapis(records, *, protocol, protocol_sha256, mode, command, ledger=None)
                                 writes the archives of the sessions of the sealed roles of a plan into the ledger (the
@@ -184,6 +190,24 @@ COMMIT_DIRTY_RULE = (
 RULES = {"identity": IDENTITY_RULE, "sealed": SEALED_RULE, "guard": GUARD_RULE, "rehearsal": REHEARSAL_RULE,
          "run": RUN_RULE, "timestamp": TIMESTAMP_RULE, "stage": STAGE_RULE, "seal_in_git": SEAL_IN_GIT_RULE,
          "snapshots": SNAPSHOT_RULE, "commit_dirty": COMMIT_DIRTY_RULE}
+# Package B9b, agent Z (finding N2 of the confirmation of B7c, dokazy/B7/odlozene_B7c.md). Written into the records
+# that take their stage by it (record_stage), not into the ledger: RULES is what the ledger keeps.
+RECORD_STAGE_RULE = (
+    "the stage of a record of the data of a plan (proposal 11.1; finding N2 of the confirmation of B7c, package B9b): "
+    "STAGE_RULE tightened by the sessions the record covers (tcn/pecat.py record_stage): final (plan mode campaign) "
+    "or generalka (plan mode rehearsal) only when the ledger is the ledger of record, the record covers at least one "
+    "session of the sealed roles, the ledger holds the archive (features_sha256) of every such session for that "
+    "session, role and plan mode, and, for final, the ledger at HEAD holds every one of those archives as well "
+    "(TIMESTAMP_RULE: seal_in_git true); otherwise suchy, and the basis names the first condition that failed; so a "
+    "synthetic corpus whose archives the ledger of record does not hold is recorded suchy, never final (the risk of "
+    "question Q15); the records of tcn.eval of protocol schema 3 (far, udalosti) take their stage by it over the "
+    "sessions of their corpus index, the ending record of a campaign (scripts/campaign.py) over its accepted "
+    "sessions; the ending record does not ask the ledger at HEAD (at_head false, question Q21 decided by its "
+    "proposal until the lead answers): the runner writes it before the ledger is committed, so it is final when the "
+    "ledger of record in the working tree holds every accepted session of the sealed roles, its basis names that "
+    "ledger's sha256, and tcn.finalne checks the ledger at HEAD (seal_in_git) when it reads the record")
+HEAD_BY_FINALNE = ("not asked (question Q21): the ledger at HEAD is checked by tcn.finalne (seal_in_git) when it reads "
+                   "the record")
 NOTE = ("Kniha pečatí testovacích rolí protokolu v5 (balík B7c); nie je to meranie. guest je null: kniha neopisuje "
         "hosťa, iba archívy príznakov a finálne behy.")
 
@@ -269,6 +293,91 @@ def stage(mode, *, ledger=None):
     if mode not in MODES:
         raise ValueError(f"plan mode {mode!r}: a stage is that of a plan mode, {' or '.join(MODES)}")
     return _stage(_ledger_path(ledger), mode)
+
+
+def _sealed_sessions(sessions):
+    """[(session id, role, features_sha256 or None)] of the sessions of the sealed roles among `sessions`
+    (record_stage); None where the session names no sha256 of its archive."""
+    if type(sessions) not in (list, tuple):
+        raise ValueError("the sessions of a record are a list (index records, or the rows of a campaign's record)")
+    out = []
+    for item in sessions:
+        ident = (item["id"] if "id" in item else item.get("session")) if type(item) is dict else None
+        role = item.get("role") if type(item) is dict else None
+        if type(ident) is not str or not ident or type(role) is not str or not role:
+            raise ValueError("a session of a record names its id (id, or session in the row of a campaign's record) "
+                             "and its role")
+        if role in SEALED_ROLES:
+            sha = item.get("features_sha256")
+            out.append((ident, role, sha if _is_sha(sha) else None))
+    return out
+
+
+def record_stage(mode, sessions, *, ledger=None, at_head=True):
+    """The stage of a record of plan mode `mode` that covers `sessions` (RECORD_STAGE_RULE, proposal 11.1; finding N2
+    of the confirmation of B7c): {"stage": final, generalka or suchy, "basis": {...}}.
+
+    sessions: the sessions whose data the record holds, each with its session id (id, as features/dataset.py names
+    it in an index, or session, as in a row of a campaign's ending record), its role and, for a session of a sealed
+    role, the sha256 of its feature archive (features_sha256); only those of SEALED_ROLES are checked. ledger: the
+    ledger to consult, KNIHA (the ledger of this process) when None. final (campaign) or generalka (rehearsal) only
+    when that ledger is the ledger of record (ZAZNAM), at least one session is of a sealed role, the ledger holds the
+    archive of each of them for its session, role and plan mode, and for final when the ledger at HEAD holds every
+    one of those archives (_in_git true); suchy otherwise, also when a session of a sealed role names no sha256 of its
+    archive (its seal cannot be shown).
+
+    basis: {rule, ledger, of_record, mode, sealed (the count of the sessions of the sealed roles), missing (the ids
+    whose archive the ledger does not hold for that session, role and mode, or that name no sha256; null when not
+    asked), seal_in_git (true, false, or null: not asked, or not shown because the ledger lies outside the repository
+    or git is unavailable), why (null at final or generalka)}. A plan mode that is none and a session without its id or
+    role are refused by name (ValueError).
+
+    at_head False (the ending record of a campaign, scripts/campaign.py ENDING_RULE; question Q21 to the lead, decided
+    by its proposal until he answers): the ledger at HEAD is not asked, since the runner writes the record before the
+    ledger is committed; a record of plan mode campaign is then final when the ledger of record in the working tree
+    holds every session of the sealed roles, and the basis adds at_head false, ledger_sha256 (the bytes of that ledger)
+    and head (tcn.finalne checks the ledger at HEAD, seal_in_git, when it reads the record). The records of tcn.eval
+    keep at_head True, the whole rule of N2."""
+    if mode not in MODES:
+        raise ValueError(f"plan mode {mode!r}: a stage is that of a plan mode, {' or '.join(MODES)}")
+    sealed = _sealed_sessions(sessions)
+    path, record = _ledger_path(ledger), Path(ZAZNAM).resolve()
+    basis = {"rule": RECORD_STAGE_RULE, "ledger": str(path), "of_record": path == record, "mode": mode,
+             "sealed": len(sealed), "missing": None, "seal_in_git": None, "why": None}
+
+    def dry(why, **found):
+        return {"stage": DRY_STAGE, "basis": dict(basis, **found, why=why)}
+    if path != record:
+        return dry(f"the ledger {path} is not the ledger of record {record} (a G1 dry run or a test)")
+    if not sealed:
+        return dry(f"the record covers no session of the sealed roles {', '.join(SEALED_ROLES)}: the ledger of "
+                   "record cannot tie it to the seal of a plan")
+    unnamed = [ident for ident, _, sha in sealed if sha is None]
+    if unnamed:
+        return dry(f"{len(unnamed)} of the {len(sealed)} sessions of the sealed roles name no sha256 of their feature "
+                   f"archive (first {unnamed[0]}): their seal cannot be shown", missing=unnamed)
+    doc = _read(path, missing_ok=True)
+    archives = doc["values"]["archives"] if doc is not None else {}
+    missing = [ident for ident, role, sha in sealed
+               if not (type(archives.get(sha)) is dict and (archives[sha].get("session"), archives[sha].get("role"),
+                                                              archives[sha].get("mode")) == (ident, role, mode))]
+    if missing:
+        return dry(f"the ledger of record holds no archive of {len(missing)} of the {len(sealed)} sessions of the "
+                   f"sealed roles for their session, role and plan mode {mode} (first {missing[0]}): their seal is "
+                   "not the campaign's", missing=missing)
+    basis["missing"] = []
+    if not at_head:  # Q21: the ending record of a campaign; the ledger at HEAD is tcn.finalne's to check.
+        basis.update(at_head=False, ledger_sha256=_digest(path) if path.is_file() else None, head=HEAD_BY_FINALNE)
+        return {"stage": STAGE[mode], "basis": basis}
+    if mode == "campaign":
+        seal_in_git = _in_git(path, [sha for _, _, sha in sealed])
+        basis["seal_in_git"] = seal_in_git
+        if seal_in_git is not True:
+            return dry(f"the ledger {path} as committed at HEAD does not hold every archive of the sessions of the "
+                       "sealed roles" if seal_in_git is False else
+                       f"whether the ledger at HEAD holds them cannot be shown (the ledger {path} lies outside the "
+                       f"repository {ROOT}, or git is unavailable)")
+    return {"stage": STAGE[mode], "basis": basis}
 
 
 def _run_mark(stage, mode):

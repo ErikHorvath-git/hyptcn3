@@ -807,7 +807,13 @@ def test_a_record_of_schema_3_carries_the_stage_of_its_ledger(mode, of_record, s
     if of_record:
         monkeypatch.setattr(pecat, "ZAZNAM", ledger)
     s = session("s1", "dev", group="g5-dev-1", events=[event(T0 + 200 * STEP, T0 + 230 * STEP)])
-    path, replays = corpus(tmp_path, [s], mode=mode)
+    # Package B9b (finding N2 of the confirmation of B7c, tcn.pecat record_stage): the stage of a record is that of
+    # the seal of its corpus, so the corpus holds a session of a sealed role whose archive the ledger holds in the
+    # corpus's mode (as a campaign writes it) and the ledger at HEAD holds it too; the role dev is evaluated.
+    path, replays = corpus(tmp_path, [s, sealed_session()], mode=mode)
+    seal_corpus(path, mode, ledger)
+    monkeypatch.setattr(pecat, "_in_git", lambda path, hashes: True)
+    replays = replays[:1]
     far, _ = ev.vyhodnot_far(path, "dev", replays)
     udalosti, _ = ev.vyhodnot_udalosti(path, replays, rola="dev")
     assert (far["stage"], udalosti["stage"], far["stage_rule"]) == (stage, stage, pecat.STAGE_RULE)
@@ -819,3 +825,62 @@ def test_a_record_of_schema_3_carries_the_stage_of_its_ledger(mode, of_record, s
     for name in ("far.json", "udalosti.json"):
         record = json.loads((tmp_path / name).read_text())
         assert (record["stage"], record["values"]["stage"]) == (stage, stage)
+
+
+def sealed_session():
+    """A session of the sealed role test_benign beside the evaluated session of role dev (package B9b)."""
+    return session("t1", "test_benign", group="g5-test_benign-1")
+
+
+def seal_corpus(path, mode, ledger):
+    """Write the sessions of the sealed roles of the corpus index at `path` into `ledger` in plan mode `mode`, as the
+    campaign writes them at acceptance (tcn.pecat zapis)."""
+    from tcn import pecat
+    index = json.loads(Path(path).read_text())
+    pecat.zapis(index["sessions"], protocol=index["protocol_config"], protocol_sha256="0" * 64, mode=mode,
+                command="test_eval_v5", ledger=ledger)
+
+
+@pytest.mark.parametrize("case", ["not_in_the_ledger", "not_at_head", "outside_the_repository",
+                                  "no_sealed_session"])
+def test_a_synthetic_campaign_corpus_is_recorded_suchy_with_the_basis_of_its_stage(case, tmp_path, monkeypatch):
+    """Finding N2 of the confirmation of B7c (package B9b): from the command line a corpus of plan mode campaign on
+    the ledger of record is recorded final only when that ledger holds the archives of the sessions of its sealed
+    roles and the ledger at HEAD holds them (the case final is the test above); a synthetic corpus whose archives the
+    ledger does not hold is suchy, and so is one whose seal the ledger at HEAD does not hold or cannot show (here the
+    ledger lies outside the repository) and one without a session of a sealed role; the far and udalosti records name
+    why (values.stage_basis)."""
+    from tcn import eval as ev
+    from tcn import pecat
+    ledger = tmp_path / "ledger" / "kniha_pecati.json"
+    ledger.parent.mkdir()
+    pecat.zaloz(command="test_eval_v5", ledger=ledger)
+    monkeypatch.setattr(pecat, "KNIHA", ledger)
+    monkeypatch.setattr(pecat, "ZAZNAM", ledger)
+    s = session("s1", "dev", group="v5-dev-1", events=[event(T0 + 200 * STEP, T0 + 230 * STEP)])
+    path, replays = corpus(tmp_path, [s] if case == "no_sealed_session" else [s, sealed_session()], mode="campaign")
+    if case in ("not_at_head", "outside_the_repository"):
+        seal_corpus(path, "campaign", ledger)
+    if case != "outside_the_repository":
+        monkeypatch.setattr(pecat, "_in_git", lambda path, hashes: case != "not_at_head")
+    why = {"not_in_the_ledger": "the ledger of record holds no archive of 1 of the 1 sessions of the sealed roles for "
+                                "their session, role and plan mode campaign (first t1): their seal is not the "
+                                "campaign's",
+           "not_at_head": f"the ledger {ledger.resolve()} as committed at HEAD does not hold every archive of the "
+                          "sessions of the sealed roles",
+           "outside_the_repository": f"whether the ledger at HEAD holds them cannot be shown (the ledger "
+                                     f"{ledger.resolve()} lies outside the repository {ROOT}, or git is unavailable)",
+           "no_sealed_session": "the record covers no session of the sealed roles test_benign, test_controls: the "
+                                "ledger of record cannot tie it to the seal of a plan"}[case]
+    replay = [str(replays[0])]
+    assert ev._hlavny(["far", "--corpus", str(path), "--role", "dev", "--replay", *replay, "--out",
+                       str(tmp_path / "far.json")]) == 0
+    assert ev._hlavny(["udalosti", "--index", str(path), "--role", "dev", "--replay", *replay, "--out",
+                       str(tmp_path / "udalosti.json")]) == 0
+    for name in ("far.json", "udalosti.json"):
+        record = json.loads((tmp_path / name).read_text())
+        basis = record["values"]["stage_basis"]
+        assert (record["stage"], record["values"]["stage"], basis["rule"], basis["of_record"], basis["why"]) == (
+            "suchy", "suchy", pecat.RECORD_STAGE_RULE, True, why)
+        assert basis["missing"] == (["t1"] if case == "not_in_the_ledger" else None if case == "no_sealed_session"
+                                    else [])

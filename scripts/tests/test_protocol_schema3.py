@@ -73,8 +73,9 @@ def v5(doc, max_per_campaign=0):
 
 def schema3(tmp_path, **changes):
     """The v4 protocol under schema 3, as a v5 document: the v4 grid, gate, rule, VMs, roles and scenario names
-    with the v5 sections (no event planned; the v4 replacement limit)."""
-    doc = json.loads(V4.read_text())
+    with the v5 sections (no event planned; the v4 replacement limit). Schema 3 has no field status (question Q23,
+    the fix of B9b), so the v4 file's status pilot_required is left out."""
+    doc = {key: value for key, value in json.loads(V4.read_text()).items() if key != "status"}
     doc.update(schema=SCHEMA + "3", **v5(doc, doc["replacement"]["max_per_campaign"]), **sections(doc["interval_s"]),
                **changes)
     path = tmp_path / "p.json"
