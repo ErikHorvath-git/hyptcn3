@@ -22,7 +22,10 @@ A session of role test_controls (package B8, design B8 section 1.4) keeps its co
 section "controls" reads only the three predicates the guest computed for each occurrence (baseline, effect,
 cleanup) and whether it ran: the sealed role, no feature is read (skeleton B8 section 4). The guest's health polls
 without a request id are admitted inside a control's start and stop calls, as inside an event window; nothing
-else is (a control is benign and inert: the service answers as outside every window).
+else is (a control is benign and inert: the service answers as outside every window). The reason names the cause
+(finding S1 of the B8 verification, package B10): a negative whose property is seen is negative_with_property, one
+whose predicate fails otherwise negative_not_in_place (NEGATIVE_PROPERTY), and an occurrence whose start the return
+predicate refused started nothing, so the effect and the cleanup of its stop are not its own.
 """
 import argparse
 from collections import Counter, defaultdict
@@ -78,6 +81,17 @@ CONTROL_CALLS = (("host_start_unix", "host_started_unix"), ("host_stop_unix", "h
 # (the bound of guest_clock below), and nginx stamps the guest's polls with the guest's time (executor's judgment,
 # the margin an event window has before its start).
 CALL_MARGIN_S = 1.0
+# The conditions of the paired negative of each control kind that the anomalous property breaks (the negative
+# predicates of lab/udalosti.py, effect.evidence.failed; lab/tests/test_kontroly.py checks that the names are the
+# guest's): a failed one is the property seen, negative_with_property; any other failed condition, or none named, is a
+# negative not in place as designed (its process tree, its program or its state), negative_not_in_place (finding S1 of
+# the B8 verification, package B10).
+NEGATIVE_PROPERTY = {
+    "kontrola_wx_memfd": ("no process of it holds an rwx mapping", "no process of it holds a memfd"),
+    "kontrola_modul_jadra": ("the module is not loaded",),
+    "kontrola_pocuvajuci_soket": ("nothing listens on the port",),
+    "kontrola_zapisovac_pamate": ("no later round rewrote it",),
+    "kontrola_davka_procesov": ("it started no process besides the long child",)}
 
 
 def digest(path):
@@ -635,14 +649,29 @@ def audit_logs(directory, *, snapshot_times=(), archived_raw=False):
             check(type(baseline) is dict and baseline.get("ok") is True
                   and (tolerance is None or type(level) is dict and level.get("judged") is True),
                   "control_without_baseline", kind)
+            # A start the return predicate refused started nothing (lab/udalosti.py control_start), so the stop that
+            # follows it stopped nothing: its effect and its cleanup are not the occurrence's (finding S1 of B8).
+            start = record.get("start")
+            refused = (type(start) is dict and start.get("started") is False and type(baseline) is dict
+                       and baseline.get("ok") is False)
             effect = record.get("effect")
             effective = type(effect) is dict and effect.get("ok") is True
-            if record.get("polarity") == "negative":  # Its tree ran and the property was absent (skeleton B8 §2).
-                check(effective, "negative_with_property", kind)
+            if refused:
+                pass
+            elif record.get("polarity") == "negative":  # Its tree ran and the property was absent (skeleton B8 §2).
+                if not effective:
+                    evidence = effect.get("evidence") if type(effect) is dict else None
+                    failed = evidence.get("failed") if type(evidence) is dict else None
+                    named = failed if type(failed) is list and all(type(x) is str for x in failed) else []
+                    seen = [x for x in named if x in NEGATIVE_PROPERTY.get(kind, ())]
+                    if seen:
+                        problems.add("negative_with_property", kind)
+                    if len(seen) < len(named) or not named:
+                        problems.add("negative_not_in_place", kind)
             else:
                 check(effective, "control_without_effect", kind)
             cleanup = record.get("cleanup")
-            check(type(cleanup) is dict and cleanup.get("ok") is True, "control_not_cleaned", kind)
+            check(refused or type(cleanup) is dict and cleanup.get("ok") is True, "control_not_cleaned", kind)
             # The deployed guest script must be the one hashed at session start, as for an event.
             check(type(script) is str and SHA256.fullmatch(script) is not None
                   and all(type(record.get(step)) is dict and record[step].get("script_sha256") == script

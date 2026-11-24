@@ -97,6 +97,15 @@ def test_effect_of_each_kind_holds_exactly_for_the_control_with_its_property_and
         assert measured["evidence"]["members"] == [600, 601]
 
 
+def test_the_log_audit_knows_the_conditions_each_negatives_property_breaks():
+    """Finding S1 of the B8 verification (package B10): the log audit names a negative whose effect predicate fails
+    by the conditions of effect.evidence.failed, negative_with_property for a condition its property breaks
+    (scripts/collection_logs.py NEGATIVE_PROPERTY); those are exactly the conditions that fail in a negative with the
+    property present (PROPERTY, the test above), so no condition of the guest is named wrongly."""
+    from scripts import collection_logs
+    assert collection_logs.NEGATIVE_PROPERTY == {kind: tuple(PROPERTY[kind][1]) for kind in KINDS}
+
+
 def remembered_as(**values):
     def change(guest, kind):
         path = guest.state / f"{kind}.before.json"

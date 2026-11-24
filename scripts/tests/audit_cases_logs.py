@@ -864,6 +864,27 @@ def _failed(name):
     return lambda record: record[name].update(ok=False)
 
 
+def _negative_failed(*conditions):
+    """mutate (of the negative's record): its effect predicate false with these failed conditions (lab/udalosti.py
+    names them in effect.evidence.failed; finding S1 of the B8 verification, package B10)."""
+    return lambda record: record["effect"].update(ok=False, evidence=dict(record["effect"]["evidence"],
+                                                                        failed=list(conditions)))
+
+
+def _refused_start(record):
+    """mutate: the start of the negative refused by the return predicate (lab/udalosti.py control_start: nothing
+    started), then the stop of nothing, as scripts/collection.py Controls records it: not executed, the baseline false,
+    and the effect and the cleanup of that stop false with the residue that refused the start (finding S1 of B8)."""
+    refused = dict(BASELINE, ok=False, exact={"ok": False, "residues": [{"residue": "process", "pid": 77}]})
+    record["start"].update(ok=False, error="the return predicate does not hold", started=False,
+                           baseline=copy.deepcopy(refused))
+    record.update(executed=False, baseline=copy.deepcopy(refused))
+    for key in ("effect", "cleanup"):
+        record[key] = dict(record[key], ok=False)
+        record["stop"][key] = dict(record[key])
+    record["effect"]["evidence"] = dict(record["effect"]["evidence"], failed=["the process tree runs"])
+
+
 def _without_controls_json(d, p, result):
     (d / "controls.json").unlink()
     evidence.seal(d)
@@ -887,7 +908,15 @@ _CONTROL_CASES = [
     ("control_without_baseline", _control(0, _failed("baseline")), logs("control_without_baseline:" + CONTROL_KIND)),
     # S2: the counterpart of a positive control not detected, from the guest's effect predicate (no feature is read).
     ("control_without_effect", _control(0, _failed("effect")), logs("control_without_effect:" + CONTROL_KIND)),
-    ("negative_with_property", _control(1, _failed("effect")), logs("negative_with_property:" + NEGATIVE_KIND)),
+    # S1 of B8: the property seen (the negative's own condition failed) and a negative not in place (another one).
+    ("negative_with_property", _control(1, _negative_failed("no later round rewrote it")),
+     logs("negative_with_property:" + NEGATIVE_KIND)),
+    ("negative_not_in_place", _control(1, _negative_failed("the process tree runs", "it holds the dose")),
+     logs("negative_not_in_place:" + NEGATIVE_KIND)),
+    ("negative_not_in_place:unnamed", _control(1, _failed("effect")), logs("negative_not_in_place:" + NEGATIVE_KIND)),
+    # S1 of B8: a start refused by the return predicate is not executed and has no baseline, nothing more.
+    ("control_not_executed:refused", _control(1, _refused_start),
+     logs("control_not_executed:" + NEGATIVE_KIND, "control_without_baseline:" + NEGATIVE_KIND)),
     ("control_not_cleaned", _control(0, _failed("cleanup")), logs("control_not_cleaned:" + CONTROL_KIND)),
     ("control_script_differs", _control(0, lambda r: r["stop"].update(script_sha256="0" * 64)),
      logs("control_script_differs:" + CONTROL_KIND)),
