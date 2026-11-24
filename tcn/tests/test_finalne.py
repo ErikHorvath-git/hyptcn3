@@ -1165,6 +1165,24 @@ def test_the_descriptive_values_of_k2_and_the_rates_on_the_sealed_roles_are_part
 # at a null m (tcn/finalne.py M_NULL_RULE, CONTROL_CLAIMS_RULE) and the readers of tcn/suchy_beh.py on its record
 
 
+def test_the_bounds_are_checked_at_the_stage_of_the_seal(campaign_corpus, of_record, tmp_path, monkeypatch, capsys):
+    """M_NULL_RULE: step 0 checks the bounds m at the stage of the run on the ledger of this process (tcn.pecat stage)
+    before the seal's state is read; a seal whose state gives another stage (here tcn.pecat stage made to say suchy on
+    the ledger of record, stage final) is refused by name before the seal is consumed, the ledger as it was."""
+    from tcn import finalne, pecat
+    pecat.zapis_korpus(campaign_corpus["index"], command="the test's campaign (package B9)", ledger=of_record)
+    monkeypatch.setattr(pecat, "stage", lambda mode, *, ledger=None: pecat.DRY_STAGE)
+    before = of_record.read_bytes()
+    argv = ["--corpus", str(campaign_corpus["index"]), "--models", str(tmp_path / "not-read"), "--campaign",
+            str(tmp_path / "not-read.json"), "--replays", str(tmp_path / "replays"), "--out",
+            str(tmp_path / "record.json")]
+    assert finalne._hlavny(argv) == 2
+    assert capsys.readouterr().err == (
+        "tcn.finalne: the seal's state gives stage final, the ledger of this process suchy: the bounds m were checked "
+        "at the stage of the run (M_NULL_RULE); refused before the seal is consumed\n")
+    assert of_record.read_bytes() == before and sorted(path.name for path in tmp_path.iterdir()) == []
+
+
 def test_a_dry_run_at_a_null_m_writes_its_claims_undecided_and_at_a_filled_m_decides_the_same(
         null_corpus, null_models, null_campaign_record, ledger, gates_passed, tmp_path, tmp_path_factory,
         monkeypatch):
@@ -1285,3 +1303,22 @@ def test_a_dry_run_at_a_null_m_writes_its_claims_undecided_and_at_a_filled_m_dec
     assert found["z1"]["chosen"] == next(fit["chosen"] for fit in v["methods"].values() if fit["name"] == "Z1")
     diagnostics = suchy_beh.diagnostiky(out)
     assert set(diagnostics["diagnostics"]) == {"tree", "one_member"} and diagnostics["evaluated"] in (True, False)
+    # neskorovane reads the replays, O1, O3 and O4 of the real record: seq 0 of a session of test_benign named as an
+    # invalid row lies in the stretch of its full snapshot, whose rows have no reason invalid_input, so that answer
+    # fails; the first event and the first control are read with the status their O3 and O4 give them.
+    control = next(r for r in null_corpus["records"] if r["role"] == "test_controls")
+    event = json.loads(Path(first["events"]).read_text())["events"][0]
+    kind = next(c for c in json.loads(Path(control["controls"]).read_text())["controls"] if c.get("kind"))["kind"]
+    read = suchy_beh.neskorovane(out, {"sessions": {
+        first["id"]: {"invalid_rows": [0], "marginal_changes": [],
+                      "unevaluated": [{"what": "event", "index": 0, "type": event["type"]}]},
+        control["id"]: {"invalid_rows": [], "marginal_changes": [],
+                        "unevaluated": [{"what": "control", "index": 0, "type": kind}]}}})
+    stretch, = read["invalid_rows"]
+    assert (stretch["replays"]["invalid_input_rows"], stretch["holds"], set(stretch["o1"])) == (
+        0, False, {str(seed) for seed in p["analysis"]["seeds"]})
+    o3 = v["opisné"]["metrics"]["o3"]["0"]["v5"]["o3"]["occurrences"]
+    o4 = v["opisné"]["metrics"]["o4"]["0"]["v5"]["o4"]["occurrences"]
+    assert read["events"][0]["seeds"]["0"]["status"] == next(o for o in o3 if o["session"] == first["id"])["status"]
+    assert read["controls"][0]["seeds"]["0"]["status"] == next(o for o in o4 if o["session"] == control["id"])[
+        "status"]
