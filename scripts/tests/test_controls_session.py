@@ -334,6 +334,24 @@ def test_the_clean_session_of_test_controls_is_accepted(v5, tmp_path):
     assert (audit.code, audit.values["reasons"]) == (2, ["logs: nginx_unknown_request:"])
 
 
+def test_a_health_poll_within_the_margin_of_a_call_of_a_control_is_admitted(v5, tmp_path):
+    """S8 of the B8 verification (package B10, mutant A9): a call of a control admits the guest's health polls from
+    CALL_MARGIN_S (1 s) before it starts to 1 s after it ends. One more poll 0.5 s after the last call is admitted, as
+    the six polls inside the calls are (5 s after it is not: the test above)."""
+    from scripts.tests.audit_cases_logs import controls_session
+    p, path = v5
+    session = controls_session(tmp_path, p, path, "controls-margin")
+    d = session.directory
+    last = json.loads((d / "controls.json").read_text())["controls"][-1]["host_stopped_unix"]
+    evidence._append_segment(d, "session", "nginx-access.jsonl", [json.dumps(
+        {"schema": "hyptcn3/nginx-access/1", "rid": "", "forwarded_rid": "x", "method": "GET", "uri": "/healthz",
+         "status": 200, "msec": last + .5}) + "\n"])
+    evidence.seal(d)
+    audit = bs.audit(session, p)
+    assert (audit.code, audit.values["reasons"]) == (0, [])
+    assert audit.values["logs"]["sections"]["correlation"]["tolerated_in_events"] == {"control_health_checks": 7}
+
+
 def _session_json(change):
     def mutate(d, p, result):
         meta = json.loads((d / "session.json").read_text())

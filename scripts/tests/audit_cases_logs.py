@@ -924,6 +924,13 @@ _CONTROL_CASES = [
      logs("controls_differ_from_plan", "nginx_unknown_request:")),
     ("control_not_executed", _control(0, lambda r: r.update(executed=False)),
      logs("control_not_executed:" + CONTROL_KIND)),
+    # Package B10, S8 of the B8 verification (mutant A1): executed, but a host time of its calls is missing; without it
+    # the stop call admits none of its health polls either.
+    ("control_not_executed:host_times", _control(0, lambda r: r.pop("host_stopped_unix")),
+     logs("control_not_executed:" + CONTROL_KIND, "nginx_unknown_request:")),
+    # Mutant A2 of the same verification: the record keeps the plan's class A or B as kind_class.
+    ("controls_differ_from_plan:kind_class", _control(0, lambda r: r.update(kind_class="B")),
+     logs("controls_differ_from_plan")),
     ("control_without_baseline", _control(0, _failed("baseline")), logs("control_without_baseline:" + CONTROL_KIND)),
     # S2: the counterpart of a positive control not detected, from the guest's effect predicate (no feature is read).
     ("control_without_effect", _control(0, _failed("effect")), logs("control_without_effect:" + CONTROL_KIND)),

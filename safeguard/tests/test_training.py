@@ -573,6 +573,43 @@ def test_sensitivity_table_on_a_linear_model_equals_the_hand_calculation():
         assert row["one_unit_suffices"] == {0: True, 1: False}.get(c)
 
 
+def test_one_unit_suffices_when_only_the_move_down_crosses_the_threshold():
+    """F3 of the B6b verification (package B10, mutant X3): one_unit_suffices scores a move of one unit in either
+    direction (SENSITIVITY_METHOD). A score that falls as proc_total rises: no move up crosses the threshold 0.5, the
+    smallest move down is 0.5, and one unit down crosses it."""
+    from dataclasses import dataclass
+    from safeguard.training import SENSITIVITY_RTOL, sensitivity_table
+    column = MENA.index("proc_total")
+
+    @dataclass(frozen=True)
+    class Row:
+        vector: np.ndarray
+
+    class Falling:
+        def score(self, window):
+            return {"score": 10. - float(window[-1].vector[column])}
+    window = [Row(np.full(len(MENA), 10.))] * 2
+    row, = sensitivity_table(Falling(), window, .5, ["proc_total"], {"proc_total": 1.}, {"proc_total": 1.})["columns"]
+    assert (row["up"], row["one_unit_suffices"]) == (None, True)
+    assert .5 <= row["down"] <= .5 * (1 + 1.5 * SENSITIVITY_RTOL)
+
+
+def test_the_classifier_is_clipped_with_its_own_norm(monkeypatch):
+    """F3 of the B6b verification (package B10, mutant T1): the head is trained apart from the predictor with its own
+    clip (proposal 8.2). The plan holds both norms at 5, so here they differ: the predictor's training gets
+    gradient_clip 5 and the classifier's classifier_gradient_clip 2."""
+    import safeguard.training as training
+    clips = []
+    monkeypatch.setattr(training, "_fit", lambda model, loss, train, dev, *, clip, **settings: (
+        clips.append(clip), ({"selected_epoch": 1}, []))[1])
+    parameters = {"learning_rate": .001, "gradient_clip": 5, "classifier_gradient_clip": 2, "batch_size": 32,
+                  "stopping": {"max_epochs": 1}, "seed": 0}
+    config = architecture(8, global_features=G)
+    training._train_predictor(config, {"train": None, "dev": None}, parameters)
+    training._train_classifier(config, 2, {"train": None, "dev": None}, parameters)
+    assert clips == [5, 2]
+
+
 def test_manifest_carries_the_sensitivity_table_of_the_median_calibration_window(trained):
     """Skeleton B6 section 5 and test 3: the manifest has the table for every TCN column, on the calibration window
     with the (lower) median score; every change it records lifts the row above the threshold on the saved bundle and

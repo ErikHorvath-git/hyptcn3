@@ -101,12 +101,12 @@ def final_run(tmp_path):
     run.close()
 
 
-def session(kind, shifted=INSIDE, columns=None, wx_only=(), invalid=(), full_every=360):
+def session(kind, shifted=INSIDE, columns=None, wx_only=(), invalid=(), full_every=360, rows=ROWS):
     """The extraction result of a session with one occurrence of `kind`: every column of the kind at LEVEL, the
     `columns` (default: all of them) plus SHIFT in the rows `shifted` and plus 5 SHIFT in the DECOYS, the W+X and memfd
-    patterns of PID in the shifted rows and the DECOYS (in the rows `wx_only` W+X alone), the rows `invalid` unclosed
-    and a full snapshot every `full_every` rows."""
-    result, _ = bs.extraction_result("s", ROWS, full_every, t0=T0, interval_s=5, bins=BINS,
+    patterns of PID in the shifted rows and the DECOYS (in the rows `wx_only` W+X alone), the rows `invalid` unclosed,
+    a full snapshot every `full_every` rows, and `rows` rows (package B10: more for a longer occurrence)."""
+    result, _ = bs.extraction_result("s", rows, full_every, t0=T0, interval_s=5, bins=BINS,
                                      quality={seq: bs.unclosed_row() for seq in invalid})
     columns = KINDS[kind]["columns"] if columns is None else columns
     for seq, row in enumerate(result["matica"]):
@@ -157,6 +157,9 @@ MEASURED = [seq for seq in INSIDE if seq not in (70, 71, 80)]
     # A horizon without a scored row: no 32 measured rows in a row end in it. The outcomes from the features are
     # judged on the measured rows alone.
     ("kontrola_modul_jadra", "control", {}, GAPS, MEASURED, True, True, False),
+    # Package B10, S8 of the B8 verification (mutant O7): a module control without the module in any row (last, so
+    # that the ids above keep their numbers).
+    ("kontrola_modul_jadra", "control", {}, {"shifted": []}, [], False, False, True),
 ])
 def test_outcomes(kind, polarity, record, change, showing, saw, moved, scored, final_run):
     from scripts.controls import outcomes
@@ -176,6 +179,38 @@ def test_outcomes(kind, polarity, record, change, showing, saw, moved, scored, f
     for name, column in columns.items():  # The expected shift of the record's dose.
         shift = KINDS[kind]["expect"][name]["shift"]
         assert column["expect"] == (shift[doses.index(dose)] if type(shift) is list else shift)
+
+
+def test_a_row_scored_after_the_horizon_does_not_score_the_occurrence(final_run):
+    """S8 of the B8 verification (package B10, mutant O9): the sensor scored the occurrence when a window the live
+    detector scores ends in its horizon (start to start + horizon_s 180 s), not later. A 360 s occurrence over the rows
+    of GAPS in a session of 140 rows: the horizon holds no run of 32 measured rows, while after the full snapshot at
+    row 80 the windows end from row 112 on, inside the occurrence and after its horizon."""
+    from features.coverage import scorable_windows
+    from scripts.controls import outcomes
+    kind, doc = "kontrola_modul_jadra", protocol()
+    result = session(kind, rows=140, **GAPS)
+    out = outcomes(occurrence(kind, host_stop_unix=START + 360, host_stopped_unix=START + 363), result, doc,
+                   role="test_controls", final_evaluation=True)
+    windows, _ = scorable_windows(result, doc, "control-" + kind, 140)
+    scored = {int(m["seq_do"]) for m in windows.meta}
+    assert scored & set(out["window"]["inside"]) == set(range(112, 132)) and out["window"]["horizon"] == HORIZON
+    assert (out["window"]["scored"], out["sensor_scored"]) == ([], False)
+
+
+def test_the_writer_shows_its_dose_only_beyond_the_bytes_of_the_reference_rows(final_run):
+    """S8 of the B8 verification (package B10, mutant O12): the writer's change in a row is its changed bytes less
+    those of the reference rows (LEVEL .02 of the 512 MiB guest, 10.24 MiB). The rows wholly inside at a change ratio
+    of .135, 69.12 MiB, would hold the dose of 64 MiB with the reference counted in; less it, 58.88 MiB, none shows
+    it."""
+    from scripts.controls import outcomes
+    kind = "kontrola_zapisovac_pamate"
+    result = session(kind)
+    for seq in INSIDE:
+        result["matica"][seq][MENA.index("mem_changed_ratio")] = .135
+    saw = outcomes(occurrence(kind), result, protocol(), role="test_controls", final_evaluation=True)["parser_saw"]
+    assert (saw["ok"], saw["showing"]) == (False, [])
+    assert saw["object"]["reference_bytes"] == pytest.approx(.02 * (512 << 20))
 
 
 @pytest.mark.parametrize("fall,reached", [(False, False), (True, True)])
@@ -256,6 +291,8 @@ def test_feature_archive_gives_the_same_outcomes(tmp_path):
     ("test_control", "final", False, "unknown session role: 'test_control'"),  # A misspelt role opens nothing.
     ("test_controls", "G6", True, "unknown stage of the record: 'G6' (proposal 11.1: suchy, skuska, generalka, "
                                   "final)"),
+    # Package B10 (O14 of the B8 verification on the seal of B7c): only True is the final evaluation, not a truthy 1.
+    ("test_controls", "final", 1, SEALED),
 ])
 def test_sealed_role(role, stage, final_evaluation, reason, request, tmp_path):
     """Package B7c: the final evaluation is the final command's run (final_run); at a stage before the final one the

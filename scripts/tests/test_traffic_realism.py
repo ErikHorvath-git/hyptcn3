@@ -240,6 +240,63 @@ def test_the_think_time_is_that_of_the_request_times_not_the_logged_draw(tmp_pat
     assert max(times) < 1 and not found["ok"]
 
 
+# Package B10, F7 of the B5b verification (its mutants M18 to M21, M23, M28 and M29): the other side of each two-sided
+# bound, and each part of the background on its own; one log each that breaks the requirement and nothing else.
+GONE = evidence.Step("detail", "GET", "/api/catalog/7", 7, 404, 40, 404)  # A deliberate 404 on the top object.
+OTHER_SIDE = {
+    # Eight spacings of 0.25 and one of 4: CV 1.77, above 1.2.
+    "arrival_cv:above": ("steady", {"spacings": (.25,) * (len(evidence.ESHOP) - 2) + (4.,)}),
+    # Every drawn think 20 s: the mean 19.1 s lies far from the profile's 7 s, and every think is below its 70 s.
+    "think_time:mean": ("steady", {"thinks": (20.,)}),
+    # Four more deliberate 404s (on the most requested object, so the concentration holds): 34 of 39 answered 2xx,
+    # 0.872, below success_min 0.88.
+    "success_rate:below_min": ("steady", {"sessions": tuple([*steps, GONE] if i < 4 else steps
+                                                            for i, steps in enumerate(evidence.ESHOP))}),
+    # 70 user sessions of eshop high, none of them orders: 0 against 0.2 within 0.19 (4 standard errors of 70).
+    "order_share:too_few": ("bursty", {"sessions": tuple([s for s in steps if s not in (evidence.ORDER, evidence.CART,
+                                                                                         evidence.CART_ADD)]
+                                                         for steps in evidence.ESHOP) * 7,
+                                       "spacings": (.25, .25, 2.5) * 23}),
+    "offered_load_differs_from_plan:above": ("bursty", {"rate_factor": .5}),  # Twice the planned user sessions.
+    "background:logins": ("office", {"sessions": tuple([s for s in steps if s != evidence.LOGIN]
+                                                       for steps in evidence.CORP)}),  # No login at all.
+    # The largest download 200000 bytes, 3.1 times the median one (64000): no tail of 10 times.
+    "background:tail": ("office", {"sessions": tuple([s._replace(bytes=200000) if s.bytes == 900000 else s
+                                                      for s in steps] for steps in evidence.CORP)}),
+}
+
+
+@pytest.mark.parametrize("case", OTHER_SIDE)
+def test_a_log_that_breaks_the_other_side_of_a_requirement_is_refused_with_its_name(tmp_path, p, case):
+    name = case.split(":")[0]
+    scenario, variant = OTHER_SIDE[case]
+    d = session(tmp_path, p, scenario, **variant)
+    result = audit(d)
+    reason = name if name == "offered_load_differs_from_plan" else "traffic_realism:" + name
+    assert result["problems"] == [reason]
+    found = result["sections"]["realism"]
+    failed = [r["name"] for r in found["requirements"] if not r["ok"]] + (
+        ["offered_load_differs_from_plan"] if not found["offered_load"]["ok"] else [])
+    assert failed == [name]
+
+
+def test_the_offered_load_is_summed_over_the_intervals_outside_every_window(tmp_path, p):
+    """F7 of the B5b verification (package B10, mutant M27): the offered and the planned user sessions are both summed
+    over the measure-phase intervals that overlap no window. The clean log offers its plan exactly over every
+    interval; windows inside the two intervals that hold two arrivals each leave 6 offered of about 8.93 planned,
+    a ratio below the tolerance of 0.2."""
+    d = session(tmp_path, p, "steady")
+    start = records(d)[0]["start_unix"]
+    ivs = [r for r in records(d, "traffic_intervals.jsonl") if r.get("type") == "interval" and r["phase"] == "measure"]
+    busy = [iv for iv in ivs if iv["offered_sessions"] == 2]
+    kept = [iv for iv in ivs if iv["offered_sessions"] != 2]
+    offered, planned = sum(iv["offered_sessions"] for iv in kept), sum(iv["planned_sessions"] for iv in kept)
+    assert (len(busy), offered, realism(d, p)["offered_load"]["ok"]) == (2, 6, True)
+    windows = [(start + iv["mono_start"] + .1, start + iv["mono_end"] - .1) for iv in busy]
+    assert realism(d, p, windows)["offered_load"] == {"offered": 6, "planned": round(planned, 6),
+                                                      "ratio": round(6 / planned, 6), "ok": False}
+
+
 def test_the_cv_is_computed_on_spacings_rescaled_by_the_envelope(tmp_path, p):
     """The same arrival times judged against a flat envelope give another CV: the rescaling is the planned one."""
     d = session(tmp_path, p, "steady")

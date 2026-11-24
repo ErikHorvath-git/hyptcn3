@@ -788,6 +788,9 @@ def test_a_class_below_the_minimum_stays_pooled_in_k2():
     found_by_m = k2.detection(found, protocol=protocol())(model, .5, K, N)
     assert (found_by_m["evaluated"], found_by_m["pooled"]) == (["D"], ["C", "D"])
     assert found_by_m["shares"] == {boot: pytest.approx(value) for boot, value in values["shares"]["M:seed 0"].items()}
+    # N1 of the confirmation of B7b (package B10): its share over every boot is pooled too, M's detections of D over
+    # every planned intervention of both classes (the 72 of both test roles), not over those of D alone.
+    assert len(items) == 72 and found_by_m["share"] == pytest.approx(len(evaluable["D"]) / len(items))
     decided = k2.k2(decision_protocol(0.1), values, mode="campaign")
     for claim in ("k2a", "k2b"):
         assert (decided[claim]["status"], decided[claim]["classes_pooled"]) == ("evaluated", ["C", "D"])

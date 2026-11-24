@@ -633,6 +633,8 @@ def test_builder_parameters_reach_the_audited_evidence(tmp_path):
     ("late_nginx_error", "nginx_error_log_nonempty"), ("not_stopped", "event_not_stopped"),
     ("plan", "events_differ_from_plan"), ("no_events_file", "events:unreadable"),
     ("script", "event_script_differs"), ("late_health_check", "nginx_unknown_request"),
+    # Finding S5 of B3 (package B10, mutant m25): a protocol that plans events and a session.json that lists none.
+    ("not_listed", "events:unreadable"),
 ])
 def test_event_session_stays_strict_outside_windows(tmp_path, case, problem):
     d = build(tmp_path, event=True)
@@ -671,6 +673,11 @@ def test_event_session_stays_strict_outside_windows(tmp_path, case, problem):
         else:
             del doc["events"][0]["host_stopped_unix"]
         write(d / "events.json", doc)
+    elif case == "not_listed":  # An events section plans events under schemas 1 and 2 (protocol_v5.plans_events).
+        write(d / "protocol.json", {"synthetic": True, "events": {}})
+        meta = logs.read_json(d / "session.json")
+        del meta["events"]
+        write(d / "session.json", dict(meta, protocol_sha256=logs.digest(d / "protocol.json")))
     else:
         (d / "events.json").unlink()
     seal(d)
@@ -746,6 +753,21 @@ def test_collector_warning_is_judged_by_the_allowed_patterns(session, schema, al
     assert result["problems"] == (["collector_warning_unlisted:" + message] if unlisted else [])
     assert result["tolerated"]["collector_warnings"] == int(schema == 3 and not unlisted)
     assert result["sections"]["collector"]["warnings"] == [WARN_LINE]
+
+
+def test_a_warning_under_bounds_that_cannot_be_read_is_judged_as_under_the_null_list(session):
+    """Finding S5 of B3 (package B10, mutant m26): a schema-3 protocol whose audit section cannot be read admits no
+    warning, as the null list of G0 does: the warning is a problem beside the unreadable bounds, never unjudged."""
+    write(session / "protocol.json", {"schema": "hyptcn3/collection-protocol/3", "interval_s": 5})  # No audit section.
+    meta = logs.read_json(session / "session.json")
+    write(session / "session.json", dict(meta, protocol_sha256=logs.digest(session / "protocol.json")))
+    with (session / "raw/collect.log").open("a") as stream:
+        stream.write(WARN_LINE + "\n")
+    seal(session)
+    result = logs.audit_logs(session)
+    assert result["problems"] == ["audit_bounds:unreadable:ValueError: protocol schema 3 requires the audit section",
+                                  "collector_warning_unlisted:" + WARN_LINE.split("WARN  ", 1)[1]]
+    assert result["tolerated"]["collector_warnings"] == 0
 
 
 def test_snapshot_must_be_inside_traffic_phase(session):

@@ -197,7 +197,9 @@ def test_the_columns_of_the_rule_channel_are_no_input_of_the_tcn():
     ("sock_listen", [(seq, "sock_listen", 1) for seq in range(30, ROWS)], list(range(30, ROWS)),
      list(range(32, ROWS))),
     ("sock_listen", [(seq, "sock_listen", 1) for seq in range(ROWS)], [], []),
-], ids=["rule_value", "rule_differenced_persistent_step", "rule_differenced_another_constant_level"])
+    ("mod_total", [(seq, "mod_total", 1) for seq in (21, 22, 23)], [21, 22, 23], [25]),
+], ids=["rule_value", "rule_differenced_persistent_step", "rule_differenced_another_constant_level",
+        "right_after_the_barrier"])
 def test_a_one_unit_change_of_a_rule_column_alarms_the_rule_channel_and_never_the_neural_one(name, changes,
                                                                                               exceeded, alarmed):
     """Skeleton section 6 test 2. mod_total (class rule, its range over train and calibration [31, 31]) one unit
@@ -207,9 +209,11 @@ def test_a_one_unit_change_of_a_rule_column_alarms_the_rule_channel_and_never_th
     the session's first measured row (question Q8, its revised proposal accepted by the lead 2026-11-24; the range of
     that change over train and calibration [0, 0]): one more listening socket from row 30 on stays +1 to the end, so
     the alarm rises at row 32 and stays; a boot whose sock_listen is one higher in every row changes nothing and
-    raises none. In each case the neural score of every row is exactly that of the session without the change (the
-    rule columns are no input of the TCN): with the threshold at the highest score of that session the neural channel
-    never alarms, and no alarm is a model_anomaly."""
+    raises none. Package B10 (F3 of the B6b verification, mutants R2 and R3): the full snapshot at row 20 clears the
+    history of the rule channel, so three exceeding rows right after it, 21 to 23, alarm only once the history holds
+    5 rows again, at row 25, and the 5 rows before the barrier never count. In each case the neural score of every
+    row is exactly that of the session without the change (the rule columns are no input of the TCN): with the
+    threshold at the highest score of that session the neural channel never alarms, and no alarm is a model_anomaly."""
     model = bundle(rule())
     clean = [row["score"] for row in replay(model, TEST)]
     model.manifest["calibration"]["threshold"] = max(score for score in clean if score is not None)

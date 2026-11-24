@@ -781,6 +781,51 @@ def test_short_session_forged_with_its_log_audit_is_refused(case, tmp_path):
     assert audit.values["windows"] == bs.window_count(n - 1, W, F)
 
 
+# Package B10: the deferred points 1 and 2 of B2 (K5-B and should_fix 3 of the check K5).
+
+def test_a_tolerated_row_of_a_planned_diagnostic_session_is_audited_and_indexed(tmp_path):
+    """Deferred point 1 of B2 (K5-B, mutant c9): a planned diagnostic session falls under the protocol's invalid_rows
+    rule. Its one isolated row whose process list did not close (bs.isolated_seqs) is tolerated: the audit accepts
+    the session with that row listed and the windows of the oracle, and the index admits it beside an honest clean
+    session."""
+    w = planned_diagnostic(tmp_path)
+    n, W, F = w.p["pilot_cycles"], w.p["window_rows"], w.p["full_every"]
+    seq, = bs.isolated_seqs(1, W, F)
+    session = bs.build_session(w.root, w.p, w.path, w.places[0], session_id="diag-0",
+                               base=bs.time_base(w.p, "diagnostic", 0), rows=n, quality={seq: bs.unclosed_row()},
+                               meta={"cycles": n})
+    audit = bs.audit(session, w.p)
+    (session.directory / "events.json").write_text('{"events": []}\n')  # Only its digest is read.
+    v = audit.values
+    assert (audit.code, v["accepted"], v["reasons"]) == (0, True, [])
+    assert v["quality"]["tolerated_invalid_seq"] == [seq] and v["windows"] == bs.window_count(n, W, F, invalid=[seq])
+    doc = diagnostic_index(w, [audit.path, accepted_diagnostic(w, 1, 1, n)[1].path])
+    assert (doc["complete"], [s["id"] for s in doc["sessions"]]) == (True, ["diag-0", "diag-1"])
+
+
+def test_a_recorded_length_given_as_text_is_no_target_at_the_index(tmp_path):
+    """Deferred point 2 of B2 (should_fix 3 of K5): the index hands the decision the cycles of session.json as they
+    are, and a planned diagnostic session whose cycles is the text "80" has no target length (features/acceptance.py
+    assignment). Its honest 80/80 record, with session.json changed to the text and the digest of session.json in the
+    record and in its log audit section rewritten to match, is refused by the decision on the row count; the twin,
+    the same rewrite with cycles 80 kept a number, is admitted."""
+    w = planned_diagnostic(tmp_path)
+    n = w.p["pilot_cycles"]
+    (session, audit), (_, honest) = (accepted_diagnostic(w, slot, slot, n) for slot in range(2))
+    meta_path = session.directory / "session.json"
+
+    def recorded(value, name):
+        meta_path.write_text(json.dumps(dict(json.loads(meta_path.read_text()), cycles=value)))
+        digest = sha(meta_path)
+
+        def edit(v):
+            v["session_sha256"] = v["logs"]["sections"]["metadata"]["session_sha256"] = digest
+        return forge(tmp_path, audit.path, edit, name=name)
+    assert diagnostic_index(w, [recorded(n, "twin"), honest.path])["complete"]
+    forged = recorded(str(n), "text")
+    refused(w, [forged, honest.path], f"{REJECTS}{ROWS}: {forged}")
+
+
 # Package B7c (the lead's addendum of 2026-11-22T20:30Z to the skeleton of B7): under protocol schema 3 the planned
 # sessions are the rows of the plan of the index's mode, not the product of the role counts and the scenarios.
 

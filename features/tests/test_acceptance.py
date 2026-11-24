@@ -571,6 +571,9 @@ UNREADABLE = {
     "findings_missing": (lambda d: _with_quality(d, lambda q: q[1].pop("findings")), "invalid quality record", True),
     "validity_missing": (lambda d: _with_quality(d, lambda q: q[1].pop("behavior_valid")), "invalid quality record",
                          True),
+    # Finding S5 of B3 (package B10, mutant m23): without process_walk a row could hide a list a parser rule closed.
+    "process_walk_missing": (lambda d: _with_quality(d, lambda q: q[1].pop("process_walk")), "invalid quality record",
+                             True),
     # A counter that is no JSON value exists only in an extraction result; an archive stores quality as JSON.
     "counter_not_json": (lambda d: _with_quality(d, lambda q: q[F // 2].update(read_errors=np.int64(0))),
                          "invalid quality record", False),
