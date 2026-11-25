@@ -775,6 +775,10 @@ RATE_ORIGIN = (
     "(~/hyptcn3-logs/v5/dokazy/skuska_labu/behy/skuska_labu_20261123T092454Z_cast1.json values.proposed_rate eshop_low "
     "1.2, eshop_high 3.2, and _cast2.json corp_low 1.2, corp_high 3.2; the skeleton of G1, row C3: eshop and corp low "
     "1.2, high 3.2), user sessions a second at envelope level 1; G2 determines rate")
+FILE_RATE_ORIGIN = (
+    "the rate of the protocol file, which G2 wrote (tcn.hodnoty zapis G2, its record data/results/hodnoty_G2_<UTC>.json; "
+    "the lead's answer to Q72 point 3, 2026-11-25: the copy takes the file's rate where it is not null, so that the "
+    "dry run runs at the campaign's load)")
 CUSUM_SHIFTS = (0.0, 0.25, 0.5, 1.0, 2.0)  # normalized units (train standard deviations of M's normalizer)
 EWMA_ALPHAS = (0.02, 0.05, 0.1, 0.2, 0.3, 0.5, 0.7, 0.9, 1.0)
 RIDGE_ALPHAS = (1e-4, 1e-3, 1e-2, 0.1, 1.0, 10.0, 100.0, 1e3, 1e4)
@@ -800,7 +804,8 @@ COLUMNS_ORIGIN = (
     "values.proposed_columns; G3a determines analysis.columns")
 COPY_RULE = (
     "the working copy of the protocol (the skeleton of G1, sections 0 and 6 point 1; the lead's answer to Q32, "
-    "2026-11-24T21:25Z): the real file with the values of later stages the chain needs, scenarios.*.rate (G2), the "
+    "2026-11-24T21:25Z): the real file with the values of later stages the chain needs, scenarios.*.rate (G2; the "
+    "file's rate where it is not null, else the lab trial's: the lead's answer to Q72 point 3), the "
     "grids of Z1, Z3 and Z5 and analysis.columns (G3a) and replacement.max_per_campaign (G3b), each with its origin in "
     "zaznam.json; every path in which the copy differs from the file is one that determined_at assigns to a stage "
     "after G1 (scripts/gates.py later_paths), else the copy is refused naming the path, and its hashes of stages G0 "
@@ -945,8 +950,10 @@ def _z1_ma(window_rows):
 
 def hodnoty_kopie(doc):
     """{path: {value, origin}} that the working copy fills but analysis.columns (COPY_RULE): the rate of every
-    scenario, the grids of Z1, Z3 and Z5 and the limit of the replacements."""
-    out = {f"scenarios.{name}.rate": {"value": RATES[s["intensity"]], "origin": RATE_ORIGIN}
+    scenario (the file's where it is not null, else the lab trial's; Q72), the grids of Z1, Z3 and Z5 and the limit of
+    the replacements."""
+    out = {f"scenarios.{name}.rate": ({"value": s["rate"], "origin": FILE_RATE_ORIGIN} if s.get("rate") is not None
+                                      else {"value": RATES[s["intensity"]], "origin": RATE_ORIGIN})
            for name, s in doc["scenarios"].items()}
     grids = {"Z1": {"moving_average_rows": _z1_ma(doc["window_rows"]), "cusum_shift": list(CUSUM_SHIFTS)},
              "Z3": {"ewma_alpha": list(EWMA_ALPHAS)}, "Z5": {"ridge_alpha": list(RIDGE_ALPHAS)}}

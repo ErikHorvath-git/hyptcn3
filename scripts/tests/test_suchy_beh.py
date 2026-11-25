@@ -307,6 +307,20 @@ def test_a_copy_with_a_changed_value_of_g0_or_g1_is_refused_by_name(path, value,
             gates.require(svet.results, bad, "G1")
 
 
+def test_the_copy_takes_the_rate_of_the_file_where_g2_wrote_it():
+    """The lead's answer to Q72 point 3: the copy takes the file's rate of a scenario where it is not null (after
+    Zápis 1 of G2), with that origin in zaznam.json, and the lab trial's rate where it is null."""
+    from features.tests import test_dataset_plan as dp
+    from tcn import suchy_beh
+    doc = dp.protocol_doc("profile")
+    doc["scenarios"]["eshop_high"]["rate"] = 11.7376
+    rates = {path: item for path, item in suchy_beh.hodnoty_kopie(doc).items() if path.endswith(".rate")}
+    assert rates.pop("scenarios.eshop_high.rate") == {"value": 11.7376, "origin": suchy_beh.FILE_RATE_ORIGIN}
+    assert rates == {f"scenarios.{name}.rate": {"value": suchy_beh.RATES[s["intensity"]],
+                                                "origin": suchy_beh.RATE_ORIGIN}
+                     for name, s in doc["scenarios"].items() if name != "eshop_high"}
+
+
 def test_the_command_refuses_a_copy_with_a_changed_value_of_g0_by_name(svet, monkeypatch):
     """The command checks its own copy (COPY_RULE): when the values it fills hold a value of G0 (here cycles, the
     only change of the test), the run is refused at its second step naming the path, with exit 2 and zaznam.json."""
