@@ -70,14 +70,23 @@ def maly_protokol(root):
     session and its events as on the plan of config/collection-v5.json; with the file's think times an eshop user
     session that orders outlasts the gaps of up to three event windows of 30 to 60 s in 8 minutes, and the log audit's
     order share, read outside every window (scripts/traffic_log.py realism), refuses the session. Its later-stage
-    values are those protocol_doc gives (rates and grids null, every column neural, no replacement): the working copy
-    of the command fills them. Returns the path of the file."""
+    values are those protocol_doc gives on config/collection-v5.json as the G0 record holds it
+    (scripts/tests/protokol_g0.py; rates and grids null, every column neural, no replacement), while G2 writes its
+    values into the file from its Zápis 1 on: the working copy of the command fills them. Returns the path of the
+    file."""
     from features.tests import test_dataset_plan as dp
     from scripts import collection
+    from scripts.tests import boundary_sessions as bs, protokol_g0
     profile = root / "profile"
     profile.mkdir()
     (profile / "symbols.txt").write_text("synthetic profile\n")
-    doc = dp.protocol_doc(profile)
+    with pytest.MonkeyPatch.context() as patch:
+        patch.setattr(bs, "V5", protokol_g0.g0_file())
+        bs._v5_file.cache_clear()
+        try:
+            doc = dp.protocol_doc(profile)
+        finally:
+            bs._v5_file.cache_clear()  # The next reader takes the file itself again.
     doc["events"]["per_session"] = [0, 3]
     doc["min_free_gib"] = 0
     a = doc["analysis"]
@@ -328,6 +337,8 @@ def test_the_copy_takes_the_rate_of_the_file_where_g2_wrote_it():
     from features.tests import test_dataset_plan as dp
     from tcn import suchy_beh
     doc = dp.protocol_doc("profile")
+    for scenario in doc["scenarios"].values():  # The file before G2 wrote its rates (protocol_doc takes the file's).
+        scenario["rate"] = None
     doc["scenarios"]["eshop_high"]["rate"] = 11.7376
     rates = {path: item for path, item in suchy_beh.hodnoty_kopie(doc).items() if path.endswith(".rate")}
     assert rates.pop("scenarios.eshop_high.rate") == {"value": 11.7376, "origin": suchy_beh.FILE_RATE_ORIGIN}
@@ -676,7 +687,8 @@ def test_the_command_line_of_the_dry_run(svet, capsys):
     out = svet.root / "prikaz" / "out"
     assert suchy_beh.main(["beh", "--generator", "nulovy", "--seed", "0", "--out", str(out)]) == 2
     assert "the following arguments are required: --praca, --cesta" in capsys.readouterr().err
-    assert suchy_beh.main(["hranice"]) == 2 and "invalid choice" in capsys.readouterr().err
+    # hranice is a command since C4a; an unknown one:
+    assert suchy_beh.main(["nic"]) == 2 and "invalid choice" in capsys.readouterr().err
     out.mkdir(parents=True)
     assert suchy_beh.main(["beh", "--generator", "nulovy", "--seed", "0", "--out", str(out), "--praca",
                            str(svet.root / "prikaz" / "praca"), "--cesta", "plna", "--protocol",

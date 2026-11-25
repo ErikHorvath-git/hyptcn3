@@ -14,10 +14,13 @@ import time
 import pytest
 
 from scripts import campaign, collection, protocol_v5
+from scripts.tests import protokol_g0
 from skuska import g2
 
 ROOT = Path(__file__).resolve().parents[2]
-V5 = ROOT / "config/collection-v5.json"
+# The protocol file as the G0 record holds it (scripts/tests/protokol_g0.py): these tests give the rate by --rate
+# while the file's is null, and G2 writes the rates and the caps into config/collection-v5.json from Zápis 1 on.
+V5 = protokol_g0.g0_file()
 P = collection.protocol(V5)
 MEASURED = 3600  # The fake measured phase of a session, in fake seconds.
 

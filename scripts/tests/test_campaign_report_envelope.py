@@ -32,6 +32,8 @@ from scripts import host_traffic as ht
 
 REPO = Path(__file__).resolve().parents[2]
 V5 = REPO / "config/collection-v5.json"
+# The eshop cap of the file: 500 until G2, the value of G2 from its Zápis 1 on.
+CAP = json.loads(V5.read_text())["profiles"]["eshop"]["max_concurrent"]
 GENERATOR = REPO / "scripts/host_traffic.py"
 SEEDS = {"traffic": 11, "traffic_arrivals": 12, "traffic_choices": 13, "traffic_sizes": 14}
 REQUESTS, INTERVALS = "traffic_requests.jsonl", "traffic_intervals.jsonl"
@@ -251,7 +253,7 @@ def test_another_seed_in_session_json_is_a_mismatch(tmp_path):
 
 @pytest.mark.parametrize("change, where, found, expected", [
     (lambda q: q["arrivals"].update(step_s=31), ".arrivals.step_s", "31", "30"),
-    (lambda q: q.update(max_concurrent=499), ".max_concurrent", "499", "500"),
+    (lambda q: q.update(max_concurrent=CAP - 1), ".max_concurrent", str(CAP - 1), str(CAP)),
     (lambda q: q["think_s"].pop("max"), ".think_s.max", "absent", None),
     (lambda q: q.update(extra=1), ".extra", "1", "absent"),
 ], ids=["arrivals", "value", "key_absent", "key_added"])

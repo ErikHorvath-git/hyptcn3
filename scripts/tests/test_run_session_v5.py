@@ -17,8 +17,12 @@ from types import SimpleNamespace
 
 import pytest
 
+from scripts.tests import protokol_g0
+
 ROOT = Path(__file__).resolve().parents[2]
-V5 = ROOT / "config/collection-v5.json"
+# The protocol file as the G0 record holds it (scripts/tests/protokol_g0.py): these tests give the rate by --rate
+# while the file's is null, and G2 writes the rates and the caps into config/collection-v5.json from Zápis 1 on.
+V5 = protokol_g0.g0_file()
 LOAD_MODEL = ("open loop: user sessions arrive as a non-homogeneous Poisson process with intensity rate x "
               "envelope(t), at most max_concurrent in progress")  # Design B5b 1.4.
 PLAN_KEYS = {"type", "class", "start_s", "duration_s", "start_phase_s", "stop_phase_s"}

@@ -111,9 +111,11 @@ def test_families_carry_the_parameters_of_section_3(tmp_path):
             "V4": (dict(common, **{key: config[key] for key in from_config}), 2)}
     roles = ("train", "dev", "calibration", "test_benign")
     # Since B4 a schema-3 family is a v5 document (bs.v5_sections): test_controls without a group, the scenario
-    # names with v5 entries, events of which none can be planned and a replacement rule that replaces nothing.
-    v5_scenarios = {"steady": {"profile": "eshop", "intensity": "low", "rate": None},
-                    "bursty": {"profile": "eshop", "intensity": "high", "rate": None}}
+    # names with v5 entries, events of which none can be planned and a replacement rule that replaces nothing. The
+    # entries are the file's in its order, with its rates: null until G2, the values of G2 from its Zápis 1 on.
+    rates = {name: s["rate"] for name, s in json.loads(bs.V5.read_text())["scenarios"].items()}
+    v5_scenarios = {"steady": {"profile": "eshop", "intensity": "low", "rate": rates["eshop_low"]},
+                    "bursty": {"profile": "eshop", "intensity": "high", "rate": rates["eshop_high"]}}
     for name, (row, each) in rows.items():
         doc = bs.family(name, profile)
         v5 = doc["schema"] == "hyptcn3/collection-protocol/3"

@@ -32,7 +32,7 @@ from features.contract import validate_sidecar
 from features.coverage import scorable_windows
 from features.snapshot import MENA
 from scripts import collection, protocol_v5
-from scripts.tests import boundary_sessions as bs
+from scripts.tests import boundary_sessions as bs, protokol_g0
 from scripts.tests import suchy_generatory as sg
 from scripts.tests import test_collection_logs as evidence
 
@@ -51,6 +51,13 @@ THIN = 17
 @functools.lru_cache(maxsize=None)
 def real():
     return collection.protocol(collection.ROOT / "config/collection-v5.json")
+
+
+@functools.lru_cache(maxsize=None)
+def g0_state():
+    """config/collection-v5.json as the G0 record holds it, its rates null (scripts/tests/protokol_g0.py); G2 writes
+    the rates into the file from its Zápis 1 on."""
+    return collection.protocol(protokol_g0.g0_file())
 
 
 @functools.lru_cache(maxsize=None)
@@ -716,7 +723,7 @@ def test_the_classes_by_construction_and_generator_json():
     (lambda a: a.update(rezim="iny"), r"^the mode of the generator is nulovy or strukturovany, not 'iny'$"),
     (lambda a: a.update(seed=-1), r"^the seed of a run is an integer of at least 0$"),
     (lambda a: a.update(seed=True), r"^the seed of a run is an integer of at least 0$"),
-    (lambda a: a.update(protokol=real()), r"^scenarios\.eshop_high\.rate is None: the counts of the generators depend "
+    (lambda a: a.update(protokol=g0_state()), r"^scenarios\.eshop_high\.rate is None: the counts of the generators depend "
                                           r"on the offered load"),
     (lambda a: a["row"].update(group="x5-train-1"), r"^group 'x5-train-1' starts with the prefix of no plan mode"),
     (lambda a: a["row"].update(position=7), r"^the row v5-train-1#7 is no session of the campaign plan"),

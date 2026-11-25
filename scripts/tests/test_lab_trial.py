@@ -24,8 +24,13 @@ import sys
 
 import pytest
 
+from scripts.tests import protokol_g0
+
 ROOT = Path(__file__).resolve().parents[2]
-V5 = ROOT / "config/collection-v5.json"
+# The protocol file as the G0 record holds it (scripts/tests/protokol_g0.py): these tests give the rate by --rate
+# and read the preliminary caps 500 and 250, while G2 writes the rates and the caps into config/collection-v5.json
+# from Zápis 1 on.
+V5 = protokol_g0.g0_file()
 BASE = datetime(2026, 1, 1, tzinfo=timezone.utc).timestamp()  # The synthetic logs' time (test_collection_logs).
 QEMU = {"pid": 4242, "start_ticks": 1, "host_boot": "host-boot"}
 COMMIT = "c" * 40
@@ -853,7 +858,7 @@ def test_the_executors_choices_of_the_saturation_series_are_named_as_such():
                 "executor's judgment, package B11)" in basis
             and "less than 1.15 times the served one (the executor's reading, package B11, of the lead's \"until "
                 "neighbouring steps are closer than 15 %\")" in basis)
-    text = (V5.parents[1] / "docs/NAVRH_PROTOKOL_V5.sk.md").read_text(encoding="utf-8")
+    text = (ROOT / "docs/NAVRH_PROTOKOL_V5.sk.md").read_text(encoding="utf-8")
     section = " ".join(text[text.index("### 10.3 "):text.index("### 10.4 ")].split())
     assert ("rad skončí chybou (nález F1 overenia B5c)" in section
             and "v geometrickom strede, zaokrúhlenom na tri desatinné miesta (úsudok vykonávateľa, balík B11)"

@@ -38,9 +38,13 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import pytest
 
+from scripts.tests import protokol_g0
+
 ROOT = Path(__file__).resolve().parents[2]
 SCRIPT = ROOT / "scripts/host_traffic.py"
-V5 = ROOT / "config/collection-v5.json"
+# The protocol file as the G0 record holds it (scripts/tests/protokol_g0.py): these tests give the rate by --rate,
+# while G2 writes the rates and the caps into config/collection-v5.json from Zápis 1 on.
+V5 = protokol_g0.g0_file()
 SEEDS = {"traffic": 11, "traffic_arrivals": 12, "traffic_choices": 13, "traffic_sizes": 14}
 JSON_TYPE = "application/json"
 REPORT = "20261122T120000000000Z-0123abcd"  # The form of a report id of lab/services.py (REPORT_ID).

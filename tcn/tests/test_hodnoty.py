@@ -11,10 +11,14 @@ from types import SimpleNamespace
 import pytest
 
 from scripts import collection, gates, protocol_v5
+from scripts.tests import protokol_g0
 from tcn import hodnoty
 
 ROOT = Path(__file__).resolve().parents[2]
 V5 = ROOT / "config/collection-v5.json"
+# The file as the G0 record holds it (scripts/tests/protokol_g0.py): the writes here start from it, Write 1 of map H0
+# point C from the rates null and the caps 500 and 250, while G2 writes its values into V5 from its Zápis 1 on.
+G0 = protokol_g0.g0_file()
 G1_FINAL = {"analysis.k1.m": 0.05, "analysis.k2a.m": 0.1, "analysis.k2b.m": 0.1}
 G2_FINAL = {"invalid_rows.max": 3, "min_score_coverage": 557 / 720, "scenarios.eshop_low.rate": 3.522,
             "scenarios.eshop_high.rate": 9.392, "scenarios.corp_low.rate": 3.0, "scenarios.corp_high.rate": 8.0,
@@ -27,7 +31,7 @@ G2_FINAL = {"invalid_rows.max": 3, "min_score_coverage": 557 / 720, "scenarios.e
 def w(tmp_path):
     protocol = tmp_path / "config" / "collection-v5.json"
     protocol.parent.mkdir()
-    protocol.write_bytes(V5.read_bytes())
+    protocol.write_bytes(G0.read_bytes())
     results = tmp_path / "results"
     results.mkdir()
     source = tmp_path / "zdroj.json"
@@ -56,7 +60,7 @@ def write(w, stage, values, *, partial, time="20261125T120000Z"):
 
 def untouched(w, record):
     """Nothing was written: the protocol is the original file, no record and no temporary file."""
-    assert w.protocol.read_bytes() == V5.read_bytes()
+    assert w.protocol.read_bytes() == G0.read_bytes()
     assert not record.exists()
     assert sorted(p.name for p in w.protocol.parent.iterdir()) == ["collection-v5.json"]
     assert not list(w.results.glob(".*"))
@@ -69,7 +73,7 @@ def test_a_g2_write_of_one_path(w):
     before = {stage: gates.stage_binding(w.protocol, stage) for stage in gates.STAGES}
     doc, record = write(w, "G2", {"scenarios.eshop_high.rate": 9.392}, partial=True)
     new = json.loads(w.protocol.read_text())
-    old = json.loads(V5.read_text())
+    old = json.loads(G0.read_text())
     old["scenarios"]["eshop_high"]["rate"] = 9.392
     assert new == old
     assert w.protocol.read_bytes() == (json.dumps(new, indent=2) + "\n").encode()
@@ -80,7 +84,7 @@ def test_a_g2_write_of_one_path(w):
     assert json.loads(record.read_text()) == doc
     assert (v["stage"], v["partial"], doc["n"]) == ("G2", True, 1)
     assert v["earlier_bindings"] == {s: {"sha256": before[s][0], "rule": before[s][1]} for s in ("G0", "G1")}
-    assert v["protocol_sha256_before"] == hodnoty._sha256(V5.read_bytes())
+    assert v["protocol_sha256_before"] == hodnoty._sha256(G0.read_bytes())
     assert v["protocol_sha256_after"] == hodnoty._sha256(w.protocol.read_bytes())
     [path] = v["paths"]
     assert (path["path"], path["pattern"], path["old"], path["new"]) == (
@@ -218,7 +222,7 @@ def test_an_existing_record_is_refused_before_anything_is_read(w):
     assert record.read_text() == "{}\n"
     assert hodnoty.main(["zapis", "G2", "--protocol", str(w.protocol), "--values", str(w.tmp / "none.json"),
                          "--record", str(record), "--partial"]) == 2
-    assert w.protocol.read_bytes() == V5.read_bytes()
+    assert w.protocol.read_bytes() == G0.read_bytes()
 
 
 @pytest.mark.parametrize("name", ["hodnoty_G1_20261125T120000Z.json", "hodnoty_G2.json",
@@ -270,7 +274,7 @@ def test_a_new_file_the_loader_or_the_selfcheck_refuses_is_not_written(w):
 
 
 def test_a_protocol_not_in_the_projects_form_is_refused(w):
-    w.protocol.write_text(json.dumps(json.loads(V5.read_text()), indent=1) + "\n")
+    w.protocol.write_text(json.dumps(json.loads(G0.read_text()), indent=1) + "\n")
     before = w.protocol.read_bytes()
     record = record_path(w, "G2")
     with pytest.raises(hodnoty.Refused, match=r"is not in the project's form \(json\.dumps\(doc, indent=2\)"):

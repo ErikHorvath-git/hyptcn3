@@ -23,7 +23,7 @@ import pytest
 
 from scripts import collection_logs as logs, traffic_log as tl
 from scripts.tests import boundary_sessions as bs, test_collection_logs as evidence
-from scripts.tests import test_traffic_log as sample
+from scripts.tests import protokol_g0, test_traffic_log as sample
 
 ROOT = Path(__file__).resolve().parents[2]
 SCENARIOS = ("steady", "bursty", "office", "office_busy")  # v5_sections: eshop low and high, corp low and high.
@@ -38,13 +38,21 @@ STAND_IN = {name: {"arrivals": {"ramp_s": 120, "wave_period_s": [1200, 2400], "p
 
 @pytest.fixture(scope="module")
 def p(tmp_path_factory):
-    """A schema-3 protocol of the S3 shape with the four v5 scenarios and the profiles section."""
-    doc = bs.protocol_doc(bs.profile_dir(tmp_path_factory.mktemp("realism") / "profile"),
-                          schema="hyptcn3/collection-protocol/3", cycles=96, pilot_cycles=80, window_rows=8,
-                          full_every=64, gate=bs.worst_gate(96, 8, 64, bs.RULE["max"]), name="realism",
-                          scenarios={name: {} for name in SCENARIOS})
-    doc.update(bs.audit_sections(1))
-    doc.setdefault("profiles", copy.deepcopy(json.loads(bs.V5.read_text()).get("profiles", STAND_IN)))
+    """A schema-3 protocol of the S3 shape with the four v5 scenarios and the profiles section, taken over from the
+    protocol file as the G0 record holds it (scripts/tests/protokol_g0.py): the known answers here are those of the
+    null rate, while G2 writes the rates into config/collection-v5.json from its Zápis 1 on."""
+    with pytest.MonkeyPatch.context() as patch:
+        patch.setattr(bs, "V5", protokol_g0.g0_file())
+        bs._v5_file.cache_clear()
+        try:
+            doc = bs.protocol_doc(bs.profile_dir(tmp_path_factory.mktemp("realism") / "profile"),
+                                  schema="hyptcn3/collection-protocol/3", cycles=96, pilot_cycles=80, window_rows=8,
+                                  full_every=64, gate=bs.worst_gate(96, 8, 64, bs.RULE["max"]), name="realism",
+                                  scenarios={name: {} for name in SCENARIOS})
+            doc.update(bs.audit_sections(1))
+            doc.setdefault("profiles", copy.deepcopy(json.loads(bs.V5.read_text()).get("profiles", STAND_IN)))
+        finally:
+            bs._v5_file.cache_clear()  # The next reader takes the file itself again.
     return doc
 
 
