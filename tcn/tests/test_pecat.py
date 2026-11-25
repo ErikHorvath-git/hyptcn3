@@ -204,13 +204,15 @@ def test_zapis_seals_the_test_roles_with_the_provenance_of_a_record(tmp_path, le
         sealed, [], {"train": 1}, "campaign", plan_name("campaign"))
     doc = json.loads(ledger.read_text())
     assert {"commit", "commit_dirty", "date", "host", "guest", "command", "n", "values"} <= set(doc)
-    assert (doc["schema"], doc["n"], doc["command"], doc["guest"]) == ("hyptcn3/seal-ledger/1", 3, "campaign", None)
+    assert (doc["schema"], doc["n"], doc["command"], doc["guest"]) == ("hyptcn3/seal-ledger/2", 3, "campaign", None)
     assert set(doc["values"]["created"]) == {"date", "commit", "commit_dirty", "command"}  # Verification of B7c, F5.
     assert type(doc["commit_dirty"]) is bool or doc["commit_dirty"] is None
     entry = doc["values"]["archives"][records["tc-1"]["features_sha256"]]
     assert {key: entry[key] for key in ("role", "session", "plan", "mode", "protocol_sha256")} == {
         "role": "test_controls", "session": "tc-1", "plan": plan_name("campaign"), "mode": "campaign",
         "protocol_sha256": sha(V5)}
+    # The lead's answer to Q31 (CONTENT_RULE): beside every sealed archive its content fingerprint.
+    assert (entry["content_sha256"], entry["content_why"]) == (pecat.odtlacok(records["tc-1"]["features"])[0], None)
     before = ledger.read_bytes()
     again = pecat.zapis_korpus(index, command="again", ledger=ledger)
     assert (again["written"], again["already"], ledger.read_bytes()) == ([], sealed, before)
@@ -287,10 +289,12 @@ def test_zapis_refuses_a_second_archive_of_a_sealed_session(tmp_path, ledger, mo
     assert (out["written"], entry["session"], entry["beside"]) == ([digest], "tb-1", [old["features_sha256"]])
 
 
-@pytest.mark.parametrize("case", ["missing", "malformed", "created_twice"])
+@pytest.mark.parametrize("case", ["missing", "malformed", "created_twice", "schema_1", "no_content_fingerprint"])
 def test_a_missing_or_malformed_ledger_is_refused(tmp_path, ledger, case):
     """Without the ledger no archive can be told sealed or not: kontrola refuses a missing or malformed ledger by
-    name; a ledger is created once."""
+    name; a ledger is created once. Schema 2 (question Q31): a ledger of schema 1, whose archives carry no content
+    fingerprint, and an archive of the ledger without its content_sha256 are refused by name, not read without the
+    binding of the content."""
     from tcn import pecat
     archive, _ = write_archive(tmp_path / "a.npz", "a", 0)
     if case == "created_twice":
@@ -298,13 +302,20 @@ def test_a_missing_or_malformed_ledger_is_refused(tmp_path, ledger, case):
             pecat.zaloz(command="again", ledger=ledger)
         assert str(error.value) == f"the ledger {ledger} exists: a ledger is created once"
         return
+    reason = f"the ledger {ledger} is no seal ledger of schema hyptcn3/seal-ledger/2"
     if case == "missing":
         ledger.unlink()
         reason = (f"the ledger {ledger} is missing: it is a tracked file of the repository (git checkout "
                   "data/results/kniha_pecati.json); without it no archive can be told sealed or not")
+    elif case == "malformed":
+        ledger.write_text(json.dumps({"schema": "hyptcn3/seal-ledger/2", "values": {"archives": []}}))
     else:
-        ledger.write_text(json.dumps({"schema": "hyptcn3/seal-ledger/1", "values": {"archives": []}}))
-        reason = f"the ledger {ledger} is no seal ledger of schema hyptcn3/seal-ledger/1"
+        doc = json.loads(ledger.read_text())
+        if case == "schema_1":  # The empty ledger as packages B7c and B10 wrote it.
+            doc["schema"] = "hyptcn3/seal-ledger/1"
+        else:
+            doc["values"]["archives"]["a" * 64] = {"role": "test_benign", "session": "x", "mode": "campaign"}
+        ledger.write_text(json.dumps(doc))
     with pytest.raises(ValueError) as error:
         pecat.kontrola(archive, purpose="test")
     assert str(error.value) == reason
@@ -322,7 +333,7 @@ def test_the_tracked_ledger_is_a_record_of_data_results():
     assert set(doc["values"]["created"]) == {"date", "commit", "commit_dirty", "command"}
     assert doc["values"]["rules"] == pecat.RULES
     assert (doc["schema"], doc["values"]["roles"], doc["values"]["runs"]) == (
-        "hyptcn3/seal-ledger/1", list(SEALED_ROLES), [])
+        "hyptcn3/seal-ledger/2", list(SEALED_ROLES), [])
 
 
 def test_the_rule_the_ledger_keeps_for_snapshots_reads_the_restore_marker():
@@ -626,6 +637,360 @@ def test_a_window_set_names_the_archive_of_its_sessions(sealed, case):
                  normalizer=test.normalizer, window_rows=WINDOW, max_gap_s=GAP, interval_s=INTERVAL)
         assert str(error.value) == ("session tb-1: features_sha256 is the sha256 of its feature archive (64 lowercase "
                                     "hex digits) or absent")
+
+
+# ------------------------------------------------------- the session and the content of an archive (question Q31)
+# The finding S1 of the G0 verification (should_fix at test_sealed, dokazy/G0/odlozene_G0.md) and the lead's answer to
+# question Q31 (OTAZKY_VEDUCEMU.md, 2026-11-24): the probe of the verifier (dokazy/G0/overenie/sondy/
+# test_sonda_overenie.py) saved a re-extraction of a sealed session, which differs from its archive only in trvanie_s,
+# and kontrola answered not_sealed. The seal binds an archive by its bytes, its session and its content
+# (tcn/pecat.py SEALED_RULE, CONTENT_RULE).
+
+# The seed of the archive of each session of corpus() (its position there).
+SEED = {ident: seed for seed, (ident, _) in enumerate((*SEALED, UNSEALED))}
+BINDS_SESSION = "the seal binds the session, whatever the bytes of its archive (tcn/pecat.py SEALED_RULE)"
+BINDS_CONTENT = ("the seal binds the content, whatever the bytes of its archive (tcn/pecat.py SEALED_RULE, "
+                 "CONTENT_RULE)")
+
+
+def reextraction(path, ident, seed=None):
+    """The probe's re-extraction of session `ident`: its extraction result saved again with other processing times
+    (trvanie_s), as features/snapshot.py retazec measures them at every run of scripts/collection.py audit; the rows
+    of its archive in corpus() (seed None: SEED). (path, sha256)."""
+    result, _ = bs.extraction_result(ident, ROWS, FULL_EVERY, t0=T0, interval_s=INTERVAL,
+                                     seed=SEED[ident] if seed is None else seed, quality={INVALID: bs.unclosed_row()})
+    result["trvanie_s"] = [float(t) + 0.001 for t in result["trvanie_s"]]
+    return bs.save_archive(path, result)
+
+
+def bound_message(purpose, what, digest, record, ledger, *, named_by=None, content=None, mode="campaign",
+                  consumed=""):
+    """The refusal of an archive of sha256 `digest` that tcn/pecat.py binds to the sealed archive of `record` by its
+    session (named_by: what names the session) or by its content (content: its fingerprint), not by its bytes."""
+    sealed = f"session {record['id']} of role {record['role']}, plan {plan_name(mode)}, ledger {ledger}"
+    if named_by is not None:
+        because = (f"is sealed by its session (sha256 {digest}; {named_by} names session {record['id']}, which the "
+                   f"ledger seals by the archive {record['features_sha256']}: {sealed}): {BINDS_SESSION}")
+    else:
+        because = (f"is sealed by its content (sha256 {digest}; its content fingerprint {content} is that of the "
+                   f"archive {record['features_sha256']}, which the ledger seals for {sealed}): {BINDS_CONTENT}")
+    return f"{purpose}: refused, {what} {because}; {GUARD}{consumed}"
+
+
+def refusal(call):
+    """The text of the refusal (tcn.pecat.Zapecatene) of `call`."""
+    from tcn import pecat
+    with pytest.raises(pecat.Zapecatene) as error:
+        call()
+    return str(error.value)
+
+
+def training_windows(record, path):
+    """A window set of safeguard.training.Windows (the windows a method of tcn/opisne.py fitted without a normalizer
+    scores) of one session, whose index record `record` names the archive at `path`."""
+    from safeguard.features import FeatureNormalizer, NormalizationRule, feature_contract, frames_from_archive
+    from safeguard.training import Windows
+    with np.load(path, allow_pickle=False) as data:
+        frames = frames_from_archive(data, record["id"])
+    normalizer = FeatureNormalizer.fit([f for f in frames if f.measured],
+                                       NormalizationRule.from_protocol(protocol(), diagnostic=True))
+    return Windows([(record, frames)], normalizer, feature_contract(frames[0], WINDOW, GAP), [record["scenario"]])
+
+
+def test_the_reextraction_in_the_directory_of_a_sealed_session_is_refused_by_its_session(sealed, ledger, tmp_path):
+    """Finding S1 of the G0 verification as a test: the probe's re-extraction of the sealed session tb-1 differs from
+    its sealed archive only in trvanie_s; saved in the session's directory (audit_<stamp>.npz beside its session.json,
+    where scripts/collection.py audit_session saves it) it is refused by name, naming the session and the session.json
+    that names it, at kontrola and before safeguard.runtime.replay_archive replays a row (the probe replayed 24)."""
+    from tcn import pecat
+    _, records = sealed
+    record = records["tb-1"]
+    directory, _ = session_directory(tmp_path / "sessions", "tb-1")
+    again, digest = reextraction(directory / "audit_again.npz", "tb-1")
+    with np.load(record["features"]) as a, np.load(again) as b:
+        assert sorted(k for k in a.files if not np.array_equal(a[k], b[k])) == ["trvanie_s"]  # The probe's finding.
+    assert digest != record["features_sha256"]
+    named_by = directory.resolve() / "session.json"
+    assert refusal(lambda: pecat.kontrola(again, purpose="test")) == bound_message(
+        "test", f"the archive {again}", digest, record, ledger, named_by=named_by)
+    assert refusal(lambda: replay_runtime(again, None)) == bound_message(
+        "safeguard.runtime.replay_archive", f"the archive {again}", digest, record, ledger, named_by=named_by)
+
+
+def test_the_reextraction_copied_outside_the_session_directory_is_refused_by_its_content(sealed, ledger, tmp_path):
+    """The lead's addition in Q31: the same re-extraction copied into a directory without a session.json, and none in
+    its parent, is refused by name by its content fingerprint, naming the session; the fingerprint is the one zapis
+    stored beside the sealed archive. A byte-identical re-save there is refused by its bytes, as before."""
+    from tcn import pecat
+    _, records = sealed
+    record = records["tb-1"]
+    again, digest = reextraction(tmp_path / "elsewhere" / "deeper" / "audit_again.npz", "tb-1")
+    refused = refusal(lambda: pecat.kontrola(again, purpose="test"))
+    content = pecat.odtlacok(again)[0]
+    stored = json.loads(ledger.read_text())["values"]["archives"][record["features_sha256"]]["content_sha256"]
+    assert content == pecat.odtlacok(record["features"])[0] == stored
+    assert refused == bound_message("test", f"the archive {again}", digest, record, ledger, content=content)
+    assert refusal(lambda: replay_runtime(again, None)) == bound_message(
+        "safeguard.runtime.replay_archive", f"the archive {again}", digest, record, ledger, content=content)
+    same, _ = write_archive(tmp_path / "elsewhere" / "deeper" / "audit_same.npz", "tb-1", SEED["tb-1"])
+    assert refusal(lambda: pecat.kontrola(same, purpose="test")) == sealed_message(
+        "test", f"the archive {same}", record, "campaign", ledger)
+
+
+@pytest.mark.parametrize("binding", ["bytes", "session", "content"])
+def test_each_binding_alone_refuses(sealed, ledger, tmp_path, binding):
+    """SEALED_RULE: each binding refuses an archive alone, the other two not holding: its bytes (a copy of the sealed
+    archive of tb-1 outside a session directory, whose entry here holds no fingerprint, as for a file whose arrays
+    zapis could not read), its session (an extraction of tb-1 with other rows in the directory whose session.json
+    names tb-1) and its content (the re-extraction of tb-1 outside a session directory); the refusal names the
+    binding."""
+    from tcn import pecat
+    _, records = sealed
+    record = records["tb-1"]
+    if binding == "bytes":
+        doc = json.loads(ledger.read_text())
+        doc["values"]["archives"][record["features_sha256"]].update(content_sha256=None, content_why="the test's")
+        ledger.write_text(json.dumps(doc))
+        path = tmp_path / "elsewhere" / "deeper" / "copy.npz"
+        path.parent.mkdir(parents=True)
+        shutil.copyfile(record["features"], path)
+    elif binding == "session":
+        directory, _ = session_directory(tmp_path / "sessions", "tb-1")
+        path, _ = write_archive(directory / "audit_other.npz", "tb-1", 99)
+    else:
+        path, _ = reextraction(tmp_path / "elsewhere" / "deeper" / "audit_again.npz", "tb-1")
+    refused = refusal(lambda: pecat.kontrola(path, purpose="test"))
+    assert refused == {
+        "bytes": lambda: sealed_message("test", f"the archive {path}", record, "campaign", ledger),
+        "session": lambda: bound_message("test", f"the archive {path}", sha(path), record, ledger,
+                                         named_by=path.parent.resolve() / "session.json"),
+        "content": lambda: bound_message("test", f"the archive {path}", sha(path), record, ledger,
+                                         content=pecat.odtlacok(path)[0])}[binding]()
+    archives = pecat._read(ledger.resolve())["values"]["archives"]
+    assert pecat._bound(archives, pecat._item(sha(path), path=path)) == {record["features_sha256"]: [binding]}
+
+
+def test_a_window_set_is_bound_by_what_it_holds_of_its_archives(sealed, ledger, tmp_path):
+    """The callers that pass only sha256 (the lead's answer to Q31): a window set of safeguard.training.Windows names
+    the path of each archive in its index records, so its content binds it: the re-extraction of tb-1 under another
+    session id, outside a session directory, is refused by its content; a window set of tcn.metody.Okna names the
+    sha256 and the session of each archive, not its path or content, so it binds by the session it names: the method
+    Z0 refuses a window set of that re-extraction under the id tb-1; one built from arrays names no archive and is not
+    checked (NO_ARCHIVE_RULE); kontrola given the sha256 alone (as tcn.eval gives the archive_sha256 of a replay) has
+    the bytes alone and lets the re-extraction through, and its decision says why, while a caller that gives the path
+    or the session beside the sha256 (paths, sessions) has it refused; lists of another length are refused by name."""
+    from tcn import pecat
+    from tcn.metody import Z0, Okna
+    _, records = sealed
+    record = records["tb-1"]
+    again, digest = reextraction(tmp_path / "elsewhere" / "deeper" / "audit_again.npz", "tb-1")
+    renamed = dict(record, id="renamed", features=str(again), features_sha256=digest)
+    refused = refusal(lambda: pecat.kontrola_okien(training_windows(renamed, again), "test"))
+    assert refused == bound_message("test", "an archive of the window set", digest, record, ledger,
+                                    content=pecat.odtlacok(again)[0])
+    moved = dict(records, **{"tb-1": dict(record, features=str(again), features_sha256=digest)})
+    train, dev, test = window_sets(moved, [("tr-1", "train"), ("tr-1", "dev"), ("tb-1", "test_benign")])
+    method = Z0()
+    method.fit(train, dev, protocol=protocol(), seed=0)
+    assert refusal(lambda: method.scores(test)) == bound_message(
+        "Z0 scores a window set of role test_benign", "an archive of the window set", digest, record, ledger,
+        named_by="the window set")
+    arrays = {key: value for key, value in test.session_arrays(0).items() if key != "features_sha256"}
+    synthetic = Okna([arrays], [tuple(int(x) for x in test.index[0][:2]) + (None,)], role="test_benign",
+                     normalizer=test.normalizer, window_rows=WINDOW, max_gap_s=GAP, interval_s=INTERVAL)
+    assert synthetic.session_ids == ["tb-1"] and pecat.kontrola_okien(synthetic, "test") is None
+    decision = pecat.kontrola(sha256=digest, purpose="test")
+    assert (decision["allowed"], decision["bound"], decision["checked"]) == ("not_sealed", [], [
+        {"sha256": digest, "sessions": [], "session_why": None, "content_sha256": None,
+         "content_why": pecat.NO_PATH}])
+    assert refusal(lambda: pecat.kontrola(sha256=digest, paths=[again], purpose="test")) == bound_message(
+        "test", "an archive of the window set", digest, record, ledger, content=pecat.odtlacok(again)[0])
+    assert refusal(lambda: pecat.kontrola(sha256=[digest], sessions=["tb-1"], purpose="test")) == bound_message(
+        "test", "an archive of the window set", digest, record, ledger, named_by="the window set")
+    for given in ({"paths": [again, again]}, {"sessions": []}, {"sessions": [""]}):
+        with pytest.raises(ValueError) as error:
+            pecat.kontrola(sha256=digest, purpose="test", **given)
+        assert str(error.value) == ("sessions and paths are lists as long as the list of sha256, each item a session "
+                                    "id or a path of the archive, or None")
+
+
+@pytest.mark.parametrize("case", ["unsealed", "rehearsal"])
+def test_an_unsealed_session_and_a_rehearsal_stay_allowed(tmp_path, ledger, of_record, case):
+    """REHEARSAL_RULE and SEALED_RULE as before the bindings of Q31: in a campaign the archive of the train session tr-1
+    and its re-extraction in its session directory are not sealed (its session is not in the ledger, its content is
+    its own) and are replayed; in a rehearsal (on the ledger of record: stage generalka) the re-extraction of tb-1 in
+    its session directory and copied elsewhere is bound to the rehearsal's archive by its session and its content, and
+    let through with the rehearsal mark. The decision names what bound it."""
+    from tcn import pecat
+    mode, ident = ("campaign", "tr-1") if case == "unsealed" else ("rehearsal", "tb-1")
+    index, records = corpus(tmp_path / "corpus", mode)
+    pecat.zapis_korpus(index, command="the campaign" if case == "unsealed" else "the rehearsal", ledger=ledger)
+    directory, _ = session_directory(tmp_path / "sessions", ident)
+    own = directory / "features.npz"
+    shutil.copyfile(records[ident]["features"], own)
+    again, _ = reextraction(directory / "audit_again.npz", ident)
+    copy, _ = reextraction(tmp_path / "elsewhere" / "deeper" / "audit_again.npz", ident)
+    named = [{"session": ident, "named_by": str(directory.resolve() / "session.json")}]
+    for path, sessions, by in ((again, named, ["session", "content"]), (copy, [], ["content"]),
+                               (own, named, ["bytes", "session", "content"])):
+        decision = pecat.kontrola(path, purpose="test")
+        assert decision["allowed"] == ("not_sealed" if case == "unsealed" else "rehearsal")
+        assert [(c["sha256"], c["sessions"], c["content_sha256"]) for c in decision["checked"]] == [
+            (sha(path), sessions, pecat.odtlacok(again)[0])]
+        if case == "unsealed":
+            assert (decision["allowed"], decision["sealed"], decision["bound"], decision["mark"]) == (
+                "not_sealed", False, [], None)
+        else:
+            assert (decision["allowed"], decision["sealed"], decision["stage"], decision["mark"]) == (
+                "rehearsal", True, "generalka", pecat.REHEARSAL_MARK)
+            assert decision["bound"] == [{"archive": records[ident]["features_sha256"], "session": ident,
+                                          "mode": "rehearsal", "by": by}]
+        assert len(replay_runtime(path, None)) == ROWS
+
+
+def test_a_directory_that_names_no_session_binds_none_and_the_other_bindings_decide(sealed, ledger, tmp_path):
+    """SEALED_RULE: a session.json without a session_id (as features/tests/test_qualification.py writes one beside
+    every archive) or one that cannot be read binds no session. The snapshot guard refuses such a directory by name,
+    but an archive has two more bindings, which decide: the re-extraction of tb-1 there is refused by its content, the
+    archive of the train session tr-1 is not sealed, and its decision names the session.json."""
+    from tcn import pecat
+    _, records = sealed
+    for name, text, why in (("nameless", "{}", "names no session_id"), ("broken", "{", "cannot be read (")):
+        directory = tmp_path / name
+        directory.mkdir()
+        (directory / "session.json").write_text(text)
+        again, digest = reextraction(directory / "audit_again.npz", "tb-1")
+        refused = refusal(lambda: pecat.kontrola(again, purpose="test"))
+        assert refused == bound_message("test", f"the archive {again}", digest, records["tb-1"], ledger,
+                                        content=pecat.odtlacok(again)[0])
+        train = directory / "train.npz"
+        shutil.copyfile(records["tr-1"]["features"], train)
+        decision = pecat.kontrola(train, purpose="test")
+        checked, = decision["checked"]
+        assert (decision["allowed"], checked["sessions"]) == ("not_sealed", [])
+        assert checked["session_why"].startswith(f"{directory.resolve() / 'session.json'} {why}")
+
+
+def test_the_final_run_reads_its_own_archives_and_refuses_another_campaigns(sealed, ledger, tmp_path):
+    """GUARD_RULE (the lead's answer to Q31): inside the final run that consumed the seal its own archive is let
+    through (final_run) though its session and its content bind it as well, and so is the re-extraction of one of its
+    sessions, which binds only to the run's archives; an archive bound to the sealed archive of another campaign
+    corpus is refused, also in the directory of a session of the run; after the run the re-extraction is refused by
+    its session, the seal consumed."""
+    from tcn import pecat
+    index, records = sealed
+    other, mine = corpus(tmp_path / "other", sessions=(("ob-1", "test_benign"),))
+    pecat.zapis_korpus(other, command="another campaign", ledger=ledger)
+    record = records["tb-1"]
+    directory, _ = session_directory(tmp_path / "sessions", "tb-1")
+    own = directory / "features.npz"
+    shutil.copyfile(record["features"], own)
+    again, digest = reextraction(directory / "audit_again.npz", "tb-1")
+    stranger = directory / "ob-1.npz"
+    shutil.copyfile(mine["ob-1"]["features"], stranger)
+    with pecat.spotrebuj(index, out=tmp_path / "final.json", command="final", ledger=ledger) as run:
+        decision = pecat.kontrola(again, purpose="test")
+        assert decision["allowed"] == "final_run" and [b["by"] for b in decision["bound"]] == [["session", "content"]]
+        decision = pecat.kontrola(own, purpose="test")
+        assert (decision["allowed"], decision["identity"], decision["bound"]) == ("final_run", run.identity, [
+            {"archive": record["features_sha256"], "session": "tb-1", "mode": "campaign",
+             "by": ["bytes", "session", "content"]}])
+        assert len(replay_runtime(own, None)) == ROWS
+        assert refusal(lambda: pecat.kontrola(stranger, purpose="test")) == sealed_message(
+            "test", f"the archive {stranger}", mine["ob-1"], "campaign", ledger)
+    entry, = json.loads(ledger.read_text())["values"]["runs"]
+    consumed = (f"; its seal was consumed by the final run opened {entry['opened']['date']} (out "
+                f"{tmp_path / 'final.json'})")
+    assert refusal(lambda: pecat.kontrola(again, purpose="test")) == bound_message(
+        "test", f"the archive {again}", digest, record, ledger, named_by=directory.resolve() / "session.json",
+        consumed=consumed)
+
+
+def test_a_file_whose_arrays_cannot_be_read_is_bound_by_its_bytes_and_its_session(tmp_path, ledger):
+    """CONTENT_RULE: a file that is no archive of arrays (the fake archives of tcn/tests/test_eval_v5.py and
+    scripts/tests/test_campaign.py) is sealed with no content fingerprint, and the ledger and the decision say why;
+    its bytes bind it and so does its session: another such file in its session directory is refused by its session,
+    one elsewhere is not sealed."""
+    from tcn import pecat
+    directory, _ = session_directory(tmp_path / "sessions", "tf-1")
+    fake = directory / "features.npz"
+    fake.write_bytes(b"archive tf-1")
+    record = {"id": "tf-1", "role": "test_benign", "group": "g-tf-1", "vm": "a", "scenario": "eshop_low",
+              "features": str(fake), "features_sha256": sha(fake)}
+    pecat.zapis([record], protocol=protocol(), protocol_sha256=sha(V5), mode="campaign", command="the campaign",
+                ledger=ledger)
+    entry = json.loads(ledger.read_text())["values"]["archives"][record["features_sha256"]]
+    assert entry["content_sha256"] is None
+    assert entry["content_why"].startswith("its arrays cannot be read (ValueError: ")
+    assert refusal(lambda: pecat.kontrola(fake, purpose="test")) == sealed_message(
+        "test", f"the archive {fake}", record, "campaign", ledger)
+    beside = directory / "audit_again.npz"
+    beside.write_bytes(b"archive tf-1, again")
+    assert refusal(lambda: pecat.kontrola(beside, purpose="test")) == bound_message(
+        "test", f"the archive {beside}", sha(beside), record, ledger, named_by=directory.resolve() / "session.json")
+    elsewhere = tmp_path / "elsewhere" / "deeper" / "audit_again.npz"
+    elsewhere.parent.mkdir(parents=True)
+    elsewhere.write_bytes(b"archive tf-1, again")
+    decision = pecat.kontrola(elsewhere, purpose="test")
+    checked, = decision["checked"]
+    assert (decision["allowed"], checked["content_sha256"]) == ("not_sealed", None)
+    assert checked["content_why"].startswith("its arrays cannot be read (ValueError: ")
+
+
+def changed(value):
+    """`value` (an array of features/archive.py save) with every element changed."""
+    if value.dtype.kind == "U":
+        return np.char.add(value, "x")
+    if value.dtype == np.dtype(bool):
+        return ~value
+    return value + 1
+
+
+def test_the_content_fingerprint_holds_the_fields_its_rule_names(tmp_path):
+    """CONTENT_RULE (the lead's answer to Q31): the fields of the fingerprint and those it leaves out are every field
+    features/archive.py save writes, and the rule names each, those of the fingerprint in its order; the fingerprint is
+    the sha256 the rule states, the same of the path and of the arrays and of a re-extraction, and it changes with
+    each field it holds and with none it leaves out; an archive without one of its fields has none, and says why."""
+    import re
+    from tcn import pecat
+    path, _ = write_archive(tmp_path / "a.npz", "a", 0)
+    with np.load(path, allow_pickle=False) as data:
+        arrays = {name: data[name] for name in data.files}
+    fields, outside = set(pecat.CONTENT_FIELDS), set(pecat.NOT_CONTENT)
+    assert set(arrays) == fields | outside and not fields & outside
+    rule = pecat.RULES["content"]
+    places = [re.search(rf"(?<!\w){name}(?!\w)", rule) for name in pecat.CONTENT_FIELDS + pecat.NOT_CONTENT]
+    assert all(places) and [p.start() for p in places[:len(fields)]] == sorted(p.start() for p in places[:len(fields)])
+    expected = hashlib.sha256()
+    for name in pecat.CONTENT_FIELDS:
+        value = np.ascontiguousarray(arrays[name])
+        expected.update(f"{name} {value.dtype.str} {','.join(str(n) for n in value.shape)}\n".encode("ascii"))
+        expected.update(value.tobytes())
+    found = expected.hexdigest()
+    again, _ = reextraction(tmp_path / "b.npz", "a", 0)
+    assert pecat.odtlacok(path) == pecat.odtlacok(str(path)) == pecat.odtlacok(arrays) == pecat.odtlacok(again) == (
+        found, None)
+    for name, value in arrays.items():
+        assert (pecat.odtlacok(dict(arrays, **{name: changed(value)}))[0] != found) == (name in fields), name
+    del arrays["snimky"]
+    assert pecat.odtlacok(arrays) == (None, "it lacks the field snimky of features/archive.py save (CONTENT_RULE)")
+
+
+def test_the_rules_the_ledger_keeps_state_the_bindings(ledger):
+    """The lead's answer to Q31: the rules the ledger keeps state what the code does, the three bindings of an archive
+    (SEALED_RULE), the fingerprint (RULES content), the final run that lets through what binds only to its archives,
+    and the two entry points GUARD_RULE did not name (GUARD_RULE); the ledger a test creates keeps them."""
+    from tcn import pecat
+    assert all(text in pecat.RULES["sealed"] for text in (
+        "by one of three bindings", "its bytes (the ledger holds its sha256)",
+        "its session (the ledger holds an archive of the session id that the directory of an archive given by its path "
+        "names", "its content (the ledger holds an archive of its content fingerprint, CONTENT_RULE)",
+        "binds no session", "with the content fingerprint of each"))
+    assert all(text in pecat.RULES["guard"] for text in (
+        "it is an archive of the run or bound to one and every archive of plan mode campaign it is bound to is one of "
+        "the run's", "features/qualification.py from_index", "tcn.eval far and udalosti"))
+    assert pecat.RULES["content"] == pecat.CONTENT_RULE
+    assert json.loads(ledger.read_text())["values"]["rules"] == pecat.RULES
 
 
 # ------------------------------------------------------------------ the final run

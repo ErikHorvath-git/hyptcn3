@@ -25,10 +25,17 @@ command (python -m tcn.finalne, package B7c agent E), on the same replays for ev
                                 campaign calls it, package B9; one session or many, idempotent)
     zapis_korpus(index, *, command, ledger=None)
                                 zapis of the sealed sessions of a corpus index (features/dataset.py)
-    kontrola(archive=None, *, sha256=None, purpose, ledger=None)
-                                the check before every replay or scoring of an archive: the decision, or Zapecatene
+    odtlacok(archive)           the content fingerprint of a feature archive, of its path or of its arrays
+                                (CONTENT_RULE, the lead's answer to Q31): (sha256, None) or (None, why)
+    kontrola(archive=None, *, sha256=None, purpose, ledger=None, sessions=None, paths=None)
+                                the check before every replay or scoring of an archive: the decision, or Zapecatene;
+                                an archive given by its path is bound to the ledger by its bytes, the session of its
+                                directory and its content, one given by its sha256 by its bytes and by the session
+                                (sessions) and the path (paths) its caller gives with it (SEALED_RULE)
     kontrola_okien(windows, purpose, *, ledger=None)
-                                kontrola of the archives a window set holds (tcn.metody.Okna, safeguard.training.Windows)
+                                kontrola of the archives a window set holds: by their bytes and the sessions the set
+                                names (tcn.metody.Okna), and where its index records name their path
+                                (safeguard.training.Windows) also by the directory and the content of each
     kontrola_snimok(directory, *, purpose, ledger=None)
                                 the check before the raw snapshots of a session enter a detector: the session that the
                                 session.json of the directory or of its parent names (SNAPSHOT_RULE), or the marker of
@@ -50,16 +57,22 @@ The guarded entry points (GUARD_RULE) call kontrola before anything is read or w
 (safeguard/cli.py), tcn.porovnanie replay, safeguard.runtime.replay_archive, the methods of tcn/metody.py and
 tcn/opisne.py given a window set that holds a sealed archive, scripts/controls.py outcomes of a session of role
 test_controls, the TCN-gui (TCN-gui/analyza.py resolve_input, before it opens an input: analyze, tcn_gui.py with
-its button and --png, TCN-gui/porovnanie.py compare) and the legacy activity classifier tcn/klasifikator.py before it
-loads each archive of an index. Package B11 adds the qualification of the feature columns (features/qualification.py
-from_index, purpose features/qualification.py), before it opens the archive of a session of a sealed role, which only
-the index of a rehearsal gives it; GUARD_RULE is one of RULES, which the ledger stores, so its text stays as it was
-and does not name it. The raw snapshots of a session enter a detector through kontrola_snimok
-(SNAPSHOT_RULE): safeguard replay --snapshots and watch, safeguard.runtime.run_directory (also under the TCN-gui and
-safeguard run), scripts/validate_safeguard.py and the legacy standalone detector scripts/detektor.py. A guard
-refuses by name with Zapecatene, a ValueError, so every caller that reports a ValueError reports the refusal. Unguarded, by design or for the lead:
-safeguard.runtime.Detector.process on frames, features.archive.load (reading is no replay) and the live snapshots of
-safeguard watch and run before the campaign writes the session into the ledger.
+its button and --png, TCN-gui/porovnanie.py compare), the legacy activity classifier tcn/klasifikator.py before it
+loads each archive of an index, the qualification of the feature columns (features/qualification.py from_index,
+package B11) before it opens the archive of a session of a sealed role, which only the index of a rehearsal gives it,
+and tcn.eval far and udalosti before they read the rows of a replay, by the archive_sha256 of its configuration.json
+(GUARD_RULE names the last two since the ledger was recreated for question Q31). The seal binds the session and the
+content of an archive, not only its bytes (SEALED_RULE, the lead's answer to Q31): kontrola given the path of an
+archive also finds the session of its directory as kontrola_snimok does and computes its content fingerprint
+(odtlacok, CONTENT_RULE), which zapis stores beside every sealed archive. Two callers give neither the path nor the
+content of an archive, so the content does not bind them (Q31, for the lead): tcn.eval gives the archive_sha256 of a
+replay (its bytes alone), and a window set of tcn.metody.Okna names the sha256 and the session of each archive (its
+bytes and its session). The raw snapshots of a session enter a detector through kontrola_snimok (SNAPSHOT_RULE):
+safeguard replay --snapshots and watch, safeguard.runtime.run_directory (also under the TCN-gui and safeguard run),
+scripts/validate_safeguard.py and the legacy standalone detector scripts/detektor.py. A guard refuses by name with
+Zapecatene, a ValueError, so every caller that reports a ValueError reports the refusal. Unguarded, by design or for
+the lead: safeguard.runtime.Detector.process on frames, features.archive.load (reading is no replay) and the live
+snapshots of safeguard watch and run before the campaign writes the session into the ledger.
 
 The ledger protects against mistakes, not intent (TIMESTAMP_RULE): a person can edit the file. Its time stamp is the
 push to the remote repository of the commit that holds it, and every run records whether the seals it consumed were
@@ -80,6 +93,8 @@ import shlex
 import socket
 import subprocess
 import sys
+import zipfile
+import zlib
 
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:  # python -m tcn.pecat from another directory
@@ -87,7 +102,10 @@ if str(ROOT) not in sys.path:  # python -m tcn.pecat from another directory
 
 from scripts.protocol_v5 import MODES, SCHEMA as PROTOCOL_SCHEMA  # noqa: E402
 
-SCHEMA = "hyptcn3/seal-ledger/1"
+# Schema 2 (question Q31): every archive of the ledger carries its content fingerprint (content_sha256, content_why),
+# which the content binding of kontrola reads; a ledger of schema 1 has none, so it is refused by name, not read without
+# that binding.
+SCHEMA = "hyptcn3/seal-ledger/2"
 RUN_SCHEMA = "hyptcn3/seal-run/1"
 DECISION_SCHEMA = "hyptcn3/seal-decision/1"
 INDEX_SCHEMA = "hyptcn3/corpus-index/1"
@@ -108,6 +126,15 @@ DRY_MARK = ("suchý beh (návrh 10.2): dokazuje logiku reťazca, nie vedu ani se
             "kniha pečatí mimo data/results")
 MARKS = {"final": FINAL_MARK, "generalka": REHEARSAL_MARK, DRY_STAGE: DRY_MARK}  # The mark of each stage.
 _SHA = re.compile(r"[0-9a-f]{64}")
+# The fields of features/archive.py save (the lead's answer to Q31, CONTENT_RULE): those of the content fingerprint, in
+# its order, and those it leaves out; tcn/tests/test_pecat.py pins that together they are every field save writes.
+CONTENT_FIELDS = ("mena", "matica", "seq", "casy", "valid", "perbin", "biny", "chain_ids", "snimky", "poznamky",
+                  "quality_json", "layout_json")
+NOT_CONTENT = ("trvanie_s", "schema", "quality_policy", "max_medzera_s")
+# The bindings of an archive to the ledger (SEALED_RULE), in the order a refusal names them.
+BINDINGS = ("bytes", "session", "content")
+# Why the content does not bind an archive given by its sha256 without its path (the decision's checked content_why).
+NO_PATH = "kontrola was given its sha256 without its path (paths), so its content does not bind it"
 
 # ------------------------------------------------------------------ the rules (written into the ledger and the records)
 
@@ -117,29 +144,62 @@ IDENTITY_RULE = (
     "test_controls, each line ending in a newline (what sort | sha256sum gives for them); it is no path and no index, "
     "so a copy of the corpus under another path has the same seal (skeleton B7 section 7)")
 SEALED_RULE = (
-    "an archive is sealed when the ledger holds its sha256: zapis writes the archives of the sessions of the sealed "
-    "roles of a plan (the campaign at acceptance, package B9; zapis_korpus for a corpus index); an archive the ledger "
-    "does not hold is not sealed: the ledger is the seal, whatever the path or the role a caller names; the seal binds "
-    "the session, not only the bytes of its archive (verification of B7c, F8): in plan mode campaign zapis refuses a "
-    "second archive with other bytes for a plan, mode, role and session the ledger holds (a re-extraction is the same "
-    "session), in plan mode rehearsal it keeps the second one beside the first (REHEARSAL_RULE: not enforced)")
+    "an archive is sealed when the ledger holds it by one of three bindings (the lead's answer to Q31): its bytes (the "
+    "ledger holds its sha256), its session (the ledger holds an archive of the session id that the directory of an "
+    "archive given by its path names, read as SNAPSHOT_RULE reads a snapshot directory: the session.json in it, its "
+    "restore marker, then those of its parent; or the session id its caller names for it, as a window set does for "
+    "each archive it holds) or its content (the ledger holds an archive of its content fingerprint, CONTENT_RULE); "
+    "kontrola binds an archive given by its path by all three, and one given by its sha256 by its bytes and by what "
+    "its caller gives with it, the session id it names (sessions) and the path of the archive (paths), whose directory "
+    "and content bind it as well: kontrola_okien gives the sessions a window set names for its archives and the paths "
+    "its index records name (safeguard.training.Windows), tcn.eval the sha256 of a replay alone; a session.json or a "
+    "restore marker that cannot be read or names no session_id binds no session, and an archive whose arrays cannot be "
+    "read has no fingerprint: the other bindings decide and the decision says why; zapis writes the archives of the "
+    "sessions of the sealed roles of a plan with the content fingerprint of each (the campaign at acceptance, package "
+    "B9; zapis_korpus for a corpus index); an archive bound to none is not sealed: the ledger is the seal, whatever "
+    "the path or the role a caller names; the seal binds the session and the content, not only the bytes of its "
+    "archive (verification of B7c, F8; verification of G0, S1): a re-extraction of a sealed session given by its path "
+    "is sealed by its session in the session's directory and by its content anywhere, and in plan mode campaign zapis "
+    "refuses a second archive with other bytes for a plan, mode, role and session the ledger holds (a re-extraction is "
+    "the same session), in plan mode rehearsal it keeps the second one beside the first (REHEARSAL_RULE: not enforced)")
 GUARD_RULE = (
-    "a sealed archive of a campaign (plan mode campaign) is replayed or scored only inside the final run that consumed "
-    "its seal (spotrebuj in the process of the final command, python -m tcn.finalne); outside it every guarded entry "
-    "point refuses it by name before anything is read or written: safeguard replay --archive, tcn.porovnanie replay, "
+    "a sealed archive of a campaign (one that SEALED_RULE binds to an archive the ledger holds in plan mode campaign) "
+    "is replayed or scored only inside the final run that consumed its seal (spotrebuj in the process of the final "
+    "command, python -m tcn.finalne), which lets an archive through when it is an archive of the run or bound to one "
+    "and every archive of plan mode campaign it is bound to is one of the run's; outside it every guarded entry point "
+    "refuses it by name before anything is read or written: safeguard replay --archive, tcn.porovnanie replay, "
     "safeguard.runtime.replay_archive, the methods of tcn/metody.py and tcn/opisne.py given a window set that holds "
     "it, scripts/controls.py outcomes of its controls, the TCN-gui (TCN-gui/analyza.py resolve_input before it "
     "opens an input, so analyze, tcn_gui.py with its button Skontrolovať všetky and --png, and TCN-gui/porovnanie.py "
-    "compare) and the legacy activity classifier tcn/klasifikator.py before it loads each archive of an index; the "
-    "raw snapshots of its session likewise (SNAPSHOT_RULE): safeguard replay --snapshots and watch, "
-    "safeguard.runtime.run_directory (also as the TCN-gui uses it), scripts/validate_safeguard.py and the legacy "
-    "standalone detector scripts/detektor.py over --snapshots; after the final run it stays refused (the test role is "
-    "used once)")
+    "compare), the legacy activity classifier tcn/klasifikator.py before it loads each archive of an index, the "
+    "qualification of the feature columns (features/qualification.py from_index, before it opens the archive of a "
+    "session of a sealed role) and tcn.eval far and udalosti before they read the rows of a replay (by the "
+    "archive_sha256 its configuration.json names, so by its bytes alone); the raw snapshots of its session likewise "
+    "(SNAPSHOT_RULE): safeguard replay --snapshots and watch, safeguard.runtime.run_directory (also as the TCN-gui "
+    "uses it), scripts/validate_safeguard.py and the legacy standalone detector scripts/detektor.py over --snapshots; "
+    "after the final run it stays refused (the test role is used once)")
+CONTENT_RULE = (
+    "the content fingerprint of a feature archive (content_sha256; the lead's answer to Q31) is the sha256 over the "
+    "fields of features/archive.py save that are a function of the raw snapshots and their sidecars, and the order of "
+    "the columns, in this order: mena (the order of the columns, which gives the matrix its meaning), matica (the "
+    "feature matrix), seq and casy (the sequence number and the time of each row), valid (the validity of each row), "
+    "perbin and biny (the per-bin values and the identity of the bins, from the sidecars), chain_ids (the chain of "
+    "each row), snimky (the file name of the snapshot of each row), poznamky (the notes of the traversals of each "
+    "row), quality_json (the quality of each row) and layout_json (the memory layout of the sidecars); each field adds "
+    "the line of its name, its numpy dtype (dtype.str, little-endian) and its shape (the integers joined by commas), "
+    "separated by spaces and ended by a newline, then its bytes in C order; it leaves out trvanie_s (the processing "
+    "time of each snapshot, which differs at every extraction: the finding of the G0 verification), schema (the "
+    "version of the archive format, a constant of the code that a replay requires, safeguard/features.py "
+    "frames_from_archive) and quality_policy and max_medzera_s (parameters of the extraction from the protocol, not "
+    "of the raw data; the fields they shape, valid and matica, are in); an archive whose arrays cannot be read, or "
+    "that lacks one of these fields, has no fingerprint (content_sha256 null, and the reason in content_why of its "
+    "entry in the ledger and of the decision)")
 REHEARSAL_RULE = (
     "an archive of a rehearsal (plan mode rehearsal, proposal 10.4 and 10.5) is kept in the ledger and not enforced: "
-    "every guard lets it through and its decision carries the rehearsal mark, a rehearsal may run the final command "
-    "more than once (each run recorded with its number), and every output of such a run carries the rehearsal mark "
-    "(stage generalka on the ledger of record, STAGE_RULE)")
+    "every guard lets through an archive that SEALED_RULE binds to archives of a rehearsal alone (the rehearsal's own, "
+    "or a re-extraction of one of its sessions) and its decision carries the rehearsal mark, a rehearsal may run the "
+    "final command more than once (each run recorded with its number), and every output of such a run carries the "
+    "rehearsal mark (stage generalka on the ledger of record, STAGE_RULE)")
 RUN_RULE = (
     "spotrebuj consumes the seal of a corpus once: in plan mode campaign every sealed archive of the corpus must be in "
     "the ledger before (written by the campaign), of that plan, role and session, and none may be in an earlier run; "
@@ -198,8 +258,9 @@ RESTORED_RULE = (
     "from its archive are refused like those of the session itself")
 NO_ARCHIVE_RULE = (
     "a window set whose sessions name no feature archive (built from arrays: synthetic data, the tests) holds no sealed "
-    "archive; a window set of tcn.metody.Okna.from_sessions names the archive of every session (features_sha256 of its "
-    "index record)")
+    "archive, and kontrola_okien binds none of its sessions (SEALED_RULE binds the session a window set names for an "
+    "archive it holds); a window set of tcn.metody.Okna.from_sessions names the archive of every session "
+    "(features_sha256 of its index record)")
 COMMIT_DIRTY_RULE = (
     "commit_dirty of the ledger's header and of its created block: whether the working tree differs from the commit "
     "(git status --porcelain: a changed, staged or untracked path), the ledger itself and its temporary files aside, "
@@ -207,7 +268,7 @@ COMMIT_DIRTY_RULE = (
     "scripts/validate_safeguard.py record commit_dirty); null when git is unavailable (verification of B7c, F5)")
 RULES = {"identity": IDENTITY_RULE, "sealed": SEALED_RULE, "guard": GUARD_RULE, "rehearsal": REHEARSAL_RULE,
          "run": RUN_RULE, "timestamp": TIMESTAMP_RULE, "stage": STAGE_RULE, "seal_in_git": SEAL_IN_GIT_RULE,
-         "snapshots": SNAPSHOT_RULE, "commit_dirty": COMMIT_DIRTY_RULE}
+         "snapshots": SNAPSHOT_RULE, "commit_dirty": COMMIT_DIRTY_RULE, "content": CONTENT_RULE}
 # Package B9b, agent Z (finding N2 of the confirmation of B7c, dokazy/B7/odlozene_B7c.md). Written into the records
 # that take their stage by it (record_stage), not into the ledger: RULES is what the ledger keeps.
 RECORD_STAGE_RULE = (
@@ -470,10 +531,13 @@ def _empty(command, path):
 
 
 def _check(doc, path):
+    """The ledger's shape (schema 2: every archive with its content fingerprint, a sha256 or null; question Q31)."""
     values = doc.get("values") if type(doc) is dict else None
     if (type(doc) is not dict or doc.get("schema") != SCHEMA or type(values) is not dict
             or type(values.get("archives")) is not dict or type(values.get("runs")) is not list
-            or not all(_is_sha(h) and type(e) is dict for h, e in values["archives"].items())
+            or not all(_is_sha(h) and type(e) is dict and "content_sha256" in e
+                       and (e["content_sha256"] is None or _is_sha(e["content_sha256"]))
+                       for h, e in values["archives"].items())
             or not all(type(run) is dict and type(run.get("archives")) is list for run in values["runs"])):
         raise ValueError(f"the ledger {path} is no seal ledger of schema {SCHEMA}")
     return doc
@@ -584,6 +648,54 @@ def _sealed_records(records, base=None):
     return out
 
 
+# ------------------------------------------------------------- the content of an archive (the lead's answer to Q31)
+
+# What reading the arrays of a file that is no feature archive raises (numpy.load and its members, allow_pickle off).
+_UNREADABLE = (OSError, ValueError, KeyError, EOFError, zipfile.BadZipFile, zlib.error)
+
+
+def _fingerprint(arrays):
+    """CONTENT_RULE over a mapping of the arrays of a feature archive: (sha256, None) or (None, why)."""
+    import numpy as np
+    digest = hashlib.sha256()
+    for name in CONTENT_FIELDS:
+        if name not in arrays:
+            return None, f"it lacks the field {name} of features/archive.py save (CONTENT_RULE)"
+        value = np.asarray(arrays[name])
+        if value.dtype.hasobject:
+            return None, f"its field {name} holds Python objects, not the array features/archive.py save writes"
+        if value.dtype.byteorder == ">":
+            value = value.astype(value.dtype.newbyteorder("<"))
+        value = np.ascontiguousarray(value)
+        digest.update(f"{name} {value.dtype.str} {','.join(str(n) for n in value.shape)}\n".encode("ascii"))
+        digest.update(value.tobytes())
+    return digest.hexdigest(), None
+
+
+def odtlacok(archive):
+    """The content fingerprint of a feature archive (CONTENT_RULE): `archive` is the path of the archive or the mapping
+    of its arrays (numpy.load of it, features/archive.py load). (sha256 hex digest, None), or (None, why) when its
+    arrays cannot be read (a file that is no feature archive) or it lacks a field of CONTENT_FIELDS; never raises for
+    an unreadable file, since the other bindings of SEALED_RULE still decide."""
+    if not isinstance(archive, (str, os.PathLike)):
+        try:
+            return _fingerprint(archive)
+        except _UNREADABLE as error:
+            return None, f"its arrays cannot be read ({type(error).__name__}: {error})"
+    import numpy as np
+    try:
+        data = np.load(archive, allow_pickle=False)
+    except _UNREADABLE as error:
+        return None, f"its arrays cannot be read ({type(error).__name__}: {error})"
+    if not hasattr(data, "files"):  # One array (.npy), not the named arrays of an archive.
+        return None, "it holds one array, not the named arrays of a feature archive (features/archive.py save)"
+    with data:
+        try:
+            return _fingerprint(data)
+        except _UNREADABLE as error:
+            return None, f"its arrays cannot be read ({type(error).__name__}: {error})"
+
+
 def zaloz(*, command, ledger=None):
     """Create an empty ledger (the tracked one once, a G1 dry run's own); refused when the file exists."""
     path = _ledger_path(ledger)
@@ -603,8 +715,9 @@ def zapis(records, *, protocol, protocol_sha256, mode, command, ledger=None):
     campaign (protocol schema 3, mode campaign or rehearsal, no default). An archive already in the ledger for the same
     session, role, plan and mode is kept as it is; for another one it is refused by name. In plan mode campaign a
     second archive with other bytes for a plan, mode, role and session the ledger holds is refused (SEALED_RULE: the
-    seal binds the session); a rehearsal keeps it beside the first. A ledger that does not exist yet is created.
-    Returns {ledger, plan, mode, written, already, not_sealed}."""
+    seal binds the session); a rehearsal keeps it beside the first. Every archive it writes carries its content
+    fingerprint (content_sha256, CONTENT_RULE; null with the reason in content_why for a file whose arrays cannot be
+    read). A ledger that does not exist yet is created. Returns {ledger, plan, mode, written, already, not_sealed}."""
     plan = plan_name(protocol, mode)
     if not _is_sha(protocol_sha256):
         raise ValueError("protocol_sha256 is the sha256 of the protocol file of the plan")
@@ -636,9 +749,11 @@ def zapis(records, *, protocol, protocol_sha256, mode, command, ledger=None):
                     f"{plan} (campaign) by the archive {held[0]}; a second archive with other bytes of a sealed "
                     "session (a re-extraction) is refused: the seal binds the session, not only the bytes of its "
                     "archive (SEALED_RULE)")
+            content, why = odtlacok(record["features"])
             archives[sha] = {"role": record["role"], "session": record["id"], "group": record.get("group"),
                              "vm": record.get("vm"), "scenario": record.get("scenario"), "plan": plan, "mode": mode,
                              "protocol_sha256": protocol_sha256, "features": record["features"],
+                             "content_sha256": content, "content_why": why,
                              "written": {"date": _now(), "commit": _commit(), "command": command},
                              **({"beside": held} if held else {})}
             written.append(sha)
@@ -676,17 +791,25 @@ def zapis_korpus(index, *, command, ledger=None):
 # ------------------------------------------------------------------ the check before a replay or a scoring
 
 
-def _decision(purpose, path, archive, sha, allowed, *, ledger, mark=None, identity=None, sealed=None, rule):
+def _decision(purpose, path, archive, sha, allowed, *, ledger, mark=None, identity=None, sealed=None, rule, checked=(),
+              bound=()):
+    """A decision of the seal; checked holds what kontrola bound each archive by (_item) and bound the ledger's
+    archives it found bound (SEALED_RULE): each {archive, session, mode, by}, by the bindings of BINDINGS that hold."""
     return {"schema": DECISION_SCHEMA, "purpose": purpose, "archive": archive, "sha256": sha, "ledger": str(path),
             "sealed": sealed, "allowed": allowed, "stage": None if mark is None else mark["stage"],
             "rehearsal": bool(mark and mark["rehearsal"]), "mark": None if mark is None else mark["mark"],
-            "identity": identity, "rule": rule}
+            "identity": identity, "rule": rule, "checked": list(checked), "bound": list(bound)}
+
+
+def _consumed(doc, sha):
+    """The end of a refusal: the final run that consumed the seal of the ledger's archive `sha`, if one did."""
+    runs = [run for run in doc["values"]["runs"] if sha in run["archives"]]
+    return (f"; its seal was consumed by the final run opened {runs[0].get('opened', {}).get('date')} (out "
+            f"{runs[0].get('out')})" if runs else "")
 
 
 def _refusal(purpose, what, sha, entry, doc, path):
-    runs = [run for run in doc["values"]["runs"] if sha in run["archives"]]
-    consumed = (f"; its seal was consumed by the final run opened {runs[0].get('opened', {}).get('date')} (out "
-                f"{runs[0].get('out')})" if runs else "")
+    consumed = _consumed(doc, sha)
     return Zapecatene(
         f"{purpose}: refused, {what} is sealed (sha256 {sha}; session {entry.get('session')} of role "
         f"{entry.get('role')}, plan {entry.get('plan')}, ledger {path}): a sealed archive of a campaign is replayed or "
@@ -694,100 +817,206 @@ def _refusal(purpose, what, sha, entry, doc, path):
         f"(tcn/pecat.py GUARD_RULE){consumed}")
 
 
-def kontrola(archive=None, *, sha256=None, purpose, ledger=None, what=None):
+def _bound_refusal(purpose, what, item, key, how, entry, doc, path):
+    """The refusal of an archive that SEALED_RULE binds to the ledger's archive `key` of a campaign by its session or
+    its content (`how`), not by its bytes: it names the session, the binding and the archive the ledger holds."""
+    session = entry.get("session")
+    sealed = f"session {session} of role {entry.get('role')}, plan {entry.get('plan')}, ledger {path}"
+    if how == "session":
+        named_by = next(s["named_by"] for s in item["sessions"] if s["session"] == session)
+        because = (f"is sealed by its session (sha256 {item['sha256']}; {named_by} names session {session}, which the "
+                   f"ledger seals by the archive {key}: {sealed}): the seal binds the session, whatever the bytes of "
+                   "its archive (tcn/pecat.py SEALED_RULE)")
+    else:
+        because = (f"is sealed by its content (sha256 {item['sha256']}; its content fingerprint "
+                   f"{item['content_sha256']} is that of the archive {key}, which the ledger seals for {sealed}): the "
+                   "seal binds the content, whatever the bytes of its archive (tcn/pecat.py SEALED_RULE, CONTENT_RULE)")
+    return Zapecatene(f"{purpose}: refused, {what} {because}; a sealed archive of a campaign is replayed or scored "
+                      "only by the final command (python -m tcn.finalne) in the run that consumes its seal "
+                      f"(tcn/pecat.py GUARD_RULE){_consumed(doc, key)}")
+
+
+def _item(sha, *, path=None, named=None, content_why=None):
+    """What kontrola binds one archive by (SEALED_RULE): {sha256, sessions, session_why, content_sha256, content_why}.
+    sessions: [{session, named_by}], the session the directory of its path names (named_by: the session.json or the
+    restore marker that names it, read as SNAPSHOT_RULE reads a directory) and the one a window set names for it
+    (named_by: the window set); session_why: why the directory names none. content_sha256: its fingerprint from its
+    path (CONTENT_RULE), else None and content_why says why. Neither a directory that names no session nor a file
+    whose arrays cannot be read is refused here: the other bindings decide."""
+    item = {"sha256": sha, "sessions": [], "session_why": None, "content_sha256": None, "content_why": content_why}
+    if path is not None:
+        directory = Path(path).resolve().parent
+        meta, ident, problem = _session_meta(directory)
+        if ident is not None:
+            item["sessions"].append({"session": ident, "named_by": str(meta)})
+        else:
+            item["session_why"] = problem or (f"neither {directory} nor its parent holds a session.json or a restore "
+                                              "marker")
+        item["content_sha256"], item["content_why"] = odtlacok(path)
+    if type(named) is str and named:
+        item["sessions"].append({"session": named, "named_by": "the window set"})
+    return item
+
+
+def _bound(archives, item):
+    """{key: bindings} of the ledger's archives that SEALED_RULE binds `item` (_item) to, the bindings in the order of
+    BINDINGS: bytes (the key is its sha256), session (the archive's session is one named for it), content (the
+    archive's content fingerprint is its own)."""
+    names = {s["session"] for s in item["sessions"]}
+    content = item["content_sha256"]
+    out = {}
+    for key, entry in archives.items():
+        how = [name for name, holds in (("bytes", key == item["sha256"]), ("session", entry.get("session") in names),
+                                        ("content", content is not None and entry.get("content_sha256") == content))
+               if holds]
+        if how:
+            out[key] = how
+    return out
+
+
+def _decide(items, *, purpose, path, what, archive, single):
+    """The decision of kontrola over the archives `items` (_item) on the resolved ledger `path` (GUARD_RULE): an archive
+    bound to an archive of plan mode campaign that is not one of the open final run's is refused (by the first binding
+    of BINDINGS that holds); one that is an archive of the open run or bound to one is final_run; one bound only to
+    archives of a rehearsal is rehearsal; one bound to none is not_sealed."""
+    doc = _read(path)
+    archives = doc["values"]["archives"]
+    run, allowed, marks, sealed, found = _OPEN, [], [], False, {}
+    for item in items:
+        bound = _bound(archives, item)
+        for key, how in bound.items():
+            found.setdefault(key, set()).update(how)
+        outside = [key for key in sorted(bound) if archives[key].get("mode") == "campaign"
+                   and (run is None or key not in run.archives)]
+        if outside:
+            how = next(name for name in BINDINGS if any(name in bound[key] for key in outside))
+            key = next(key for key in outside if how in bound[key])
+            if how == "bytes":
+                raise _refusal(purpose, what, key, archives[key], doc, path)
+            raise _bound_refusal(purpose, what, item, key, how, archives[key], doc, path)
+        if run is not None and (item["sha256"] in run.archives or any(key in run.archives for key in bound)):
+            allowed.append("final_run")
+            marks.append(run.mark)
+            sealed = True
+        elif bound:  # Bound to archives of a rehearsal only (REHEARSAL_RULE: let through with its mark).
+            allowed.append("rehearsal")
+            marks.append(_run_mark(_stage(path, "rehearsal"), "rehearsal"))
+            sealed = True
+        else:
+            allowed.append("not_sealed")
+    reasons = sorted(set(allowed))
+    mark = next((m for m in marks if m["rehearsal"]), marks[0] if marks else None)
+    rules = {"not_sealed": SEALED_RULE, "rehearsal": REHEARSAL_RULE, "final_run": GUARD_RULE}
+    return _decision(purpose, path, archive, items[0]["sha256"] if single else sorted({i["sha256"] for i in items}),
+                     reasons[0] if len(reasons) == 1 else reasons, ledger=path, mark=mark,
+                     identity=None if run is None or "final_run" not in reasons else run.identity, sealed=sealed,
+                     rule=" | ".join(rules[r] for r in reasons), checked=items,
+                     bound=[{"archive": key, "session": archives[key].get("session"),
+                             "mode": archives[key].get("mode"), "by": [name for name in BINDINGS if name in how]}
+                            for key, how in sorted(found.items())])
+
+
+def kontrola(archive=None, *, sha256=None, purpose, ledger=None, what=None, sessions=None, paths=None):
     """The check before a replay or a scoring (GUARD_RULE): give the path of one feature archive (archive) or the
     sha256 of the archives (sha256: one or a list) a caller is about to replay or score; purpose names the entry point
-    in a refusal, and what what is read when only sha256 is given (default: an archive of the window set). Returns
-    the decision {schema, purpose, archive, sha256, ledger, sealed, allowed, stage, rehearsal, mark, identity, rule}:
-    allowed is not_sealed (SEALED_RULE), rehearsal (REHEARSAL_RULE: the mark of the stage of this ledger,
-    STAGE_RULE), final_run (an archive of the final run of this process: the run's stage and mark) or unreadable
-    (UNREADABLE_RULE); for a list the distinct values, sorted. Raises Zapecatene for a sealed archive of a campaign
-    outside the final run that consumed it, ValueError when the ledger is missing or malformed."""
+    in a refusal, and what what is read when only sha256 is given (default: an archive of the window set). With
+    sha256 a caller gives what else it holds of each archive (the lead's answer to Q31), in lists as long as the list
+    of sha256 (one item for one sha256), None where it holds nothing: sessions, the session id it names for the
+    archive (a window set), and paths, the path of the archive, whose directory and content then bind it too. So an
+    archive is bound to the ledger by its bytes, its session and its content (SEALED_RULE): one given by its path by
+    all three, one given by its sha256 alone by its bytes. Returns the decision {schema, purpose, archive, sha256,
+    ledger, sealed, allowed, stage, rehearsal, mark, identity, rule, checked, bound}: allowed is not_sealed
+    (SEALED_RULE), rehearsal (REHEARSAL_RULE: the mark of the stage of this ledger, STAGE_RULE), final_run (an archive
+    of the final run of this process or bound to one: the run's stage and mark) or unreadable (UNREADABLE_RULE); for a
+    list the distinct values, sorted. Raises Zapecatene for a sealed archive of a campaign outside the final run that
+    consumed it, naming its session and the binding, ValueError when the ledger is missing or malformed."""
     if type(purpose) is not str or not purpose:
         raise ValueError("kontrola names the entry point that asks (purpose)")
     if (archive is None) == (sha256 is None):
         raise ValueError("kontrola takes the path of one archive or the sha256 of the archives, exactly one")
     path = _ledger_path(ledger)
     if archive is not None:
+        if sessions is not None or paths is not None:
+            raise ValueError("kontrola takes sessions and paths with the sha256 of the archives, not with a path")
         try:
-            hashes = [_digest(archive)]
+            sha = _digest(archive)
         except OSError:
             return _decision(purpose, path, str(archive), None, "unreadable", ledger=path, rule=UNREADABLE_RULE)
-        what = f"the archive {archive}"
-    else:
-        hashes = [sha256] if type(sha256) is str else list(sha256)
-        if not hashes or not all(map(_is_sha, hashes)):
-            raise ValueError("sha256 is the sha256 hex digest of a feature archive, or a non-empty list of them")
-        hashes = sorted(set(hashes))
-        what = "an archive of the window set" if what is None else what
-    doc = _read(path)
-    run, allowed, marks, sealed = _OPEN, [], [], False
-    for sha in hashes:
-        if run is not None and sha in run.archives:
-            allowed.append("final_run")
-            marks.append(run.mark)
-            sealed = True
-            continue
-        entry = doc["values"]["archives"].get(sha)
-        if entry is None:
-            allowed.append("not_sealed")
-            continue
-        sealed = True
-        if entry.get("mode") == "rehearsal":
-            allowed.append("rehearsal")
-            marks.append(_run_mark(_stage(path, "rehearsal"), "rehearsal"))
-            continue
-        raise _refusal(purpose, what, sha, entry, doc, path)
-    reasons = sorted(set(allowed))
-    mark = next((m for m in marks if m["rehearsal"]), marks[0] if marks else None)
-    rules = {"not_sealed": SEALED_RULE, "rehearsal": REHEARSAL_RULE, "final_run": GUARD_RULE}
-    return _decision(purpose, path, None if archive is None else str(archive),
-                     hashes[0] if archive is not None or type(sha256) is str else hashes,
-                     reasons[0] if len(reasons) == 1 else reasons, ledger=path, mark=mark,
-                     identity=None if run is None or "final_run" not in reasons else run.identity, sealed=sealed,
-                     rule=" | ".join(rules[r] for r in reasons))
+        return _decide([_item(sha, path=archive)], purpose=purpose, path=path, what=f"the archive {archive}",
+                       archive=str(archive), single=True)
+    hashes = [sha256] if type(sha256) is str else list(sha256)
+    if not hashes or not all(map(_is_sha, hashes)):
+        raise ValueError("sha256 is the sha256 hex digest of a feature archive, or a non-empty list of them")
+    sessions = [None] * len(hashes) if sessions is None else list(sessions)
+    paths = [None] * len(hashes) if paths is None else [None if p is None else str(p) for p in paths]
+    if (len(sessions) != len(hashes) or len(paths) != len(hashes)
+            or not all(s is None or type(s) is str and s for s in sessions) or not all(p is None or p for p in paths)):
+        raise ValueError("sessions and paths are lists as long as the list of sha256, each item a session id or a path "
+                         "of the archive, or None")
+    given = sorted(set(zip(hashes, sessions, paths)), key=lambda one: (one[0], one[1] or "", one[2] or ""))
+    return _decide([_item(h, named=s, path=p, content_why=NO_PATH) for h, s, p in given], purpose=purpose, path=path,
+                   what="an archive of the window set" if what is None else what, archive=None,
+                   single=type(sha256) is str)
 
 
 def _window_archives(windows):
-    """The sha256 of the archives the sessions of a window set name: tcn.metody.Okna.archives, or the index records of
-    safeguard.training.Windows (its sessions (record, frames, ...)); [] when it names none (NO_ARCHIVE_RULE)."""
+    """[(sha256, session id or None, path or None)] of the archives the sessions of a window set name ([] when it names
+    none, NO_ARCHIVE_RULE): a window set of tcn.metody.Okna names the sha256 of each (Okna.archives) and its session
+    (Okna.session_ids), not its path or its content; the index records of safeguard.training.Windows (its sessions
+    (record, frames, ...)) name the sha256 (features_sha256), the session (id) and the path (features) of each."""
     archives = getattr(windows, "archives", None)
     if archives is not None:
-        return [h for h in archives if h is not None]
+        names = list(getattr(windows, "session_ids", None) or ())
+        return [(sha, names[s] if s < len(names) and type(names[s]) is str and names[s] else None, None)
+                for s, sha in enumerate(archives) if sha is not None]
     sessions = getattr(windows, "sessions", None)
-    if type(sessions) is list:
-        return [s[0]["features_sha256"] for s in sessions
-                if type(s) is tuple and s and type(s[0]) is dict and _is_sha(s[0].get("features_sha256"))]
-    return []
+    if type(sessions) is not list:
+        return []
+    records = [s[0] for s in sessions
+               if type(s) is tuple and s and type(s[0]) is dict and _is_sha(s[0].get("features_sha256"))]
+    return [(r["features_sha256"], r["id"] if type(r.get("id")) is str and r["id"] else None,
+             r["features"] if type(r.get("features")) is str and r["features"] else None) for r in records]
 
 
 def kontrola_okien(windows, purpose, *, ledger=None):
     """kontrola of the archives that the sessions of a window set name, before a method scores it (the hook of
-    tcn/metody.py and tcn/opisne.py); None when the set names no archive (NO_ARCHIVE_RULE)."""
-    hashes = _window_archives(windows)
-    if not hashes:
+    tcn/metody.py and tcn/opisne.py): each by its bytes, by the session the set names for it and, where the set's
+    index records name its path (safeguard.training.Windows), by the session of its directory and its content
+    (SEALED_RULE); None when the set names no archive (NO_ARCHIVE_RULE)."""
+    found = _window_archives(windows)
+    if not found:
         return None
-    return kontrola(sha256=hashes, purpose=purpose, ledger=ledger)
+    hashes, sessions, paths = (list(column) for column in zip(*found))
+    return kontrola(sha256=hashes, sessions=sessions, paths=paths, purpose=purpose, ledger=ledger)
 
 
-def _session_of(directory):
-    """(the session.json or the restore marker, the session id) of a snapshot directory (SNAPSHOT_RULE, RESTORED_RULE):
-    the session.json in it, else its restore marker, else the same in its parent; (None, None) when none exists;
-    ValueError by name for one that cannot be read or names no session_id."""
+def _session_meta(directory):
+    """(meta, session id, problem) of a directory (SNAPSHOT_RULE, RESTORED_RULE): meta is the first that exists of the
+    session.json in it, its restore marker, the session.json and the restore marker of its parent; (None, None, None)
+    when none exists; problem names a meta that cannot be read or names no session_id (whose session id is None)."""
     for meta in (directory / "session.json", directory / RESTORED, directory.parent / "session.json",
                  directory.parent / RESTORED):
         if meta.is_file():
             try:
                 doc = json.loads(meta.read_text(encoding="utf-8"))
             except (OSError, ValueError) as error:
-                raise ValueError(f"{meta} cannot be read ({error}): the session of the snapshot directory {directory} "
-                                 "cannot be told (tcn/pecat.py SNAPSHOT_RULE)") from None
+                return meta, None, f"{meta} cannot be read ({error})"
             ident = doc.get("session_id") if type(doc) is dict else None
             if type(ident) is not str or not ident:
-                raise ValueError(f"{meta} names no session_id: the session of the snapshot directory {directory} "
-                                 "cannot be told (tcn/pecat.py SNAPSHOT_RULE)")
-            return meta, ident
-    return None, None
+                return meta, None, f"{meta} names no session_id"
+            return meta, ident, None
+    return None, None, None
+
+
+def _session_of(directory):
+    """(the session.json or the restore marker, the session id) of a snapshot directory (SNAPSHOT_RULE, RESTORED_RULE):
+    the session.json in it, else its restore marker, else the same in its parent; (None, None) when none exists;
+    ValueError by name for one that cannot be read or names no session_id."""
+    meta, ident, problem = _session_meta(directory)
+    if problem is not None:
+        raise ValueError(f"{problem}: the session of the snapshot directory {directory} cannot be told (tcn/pecat.py "
+                         "SNAPSHOT_RULE)")
+    return meta, ident
 
 
 def kontrola_snimok(directory, *, purpose, ledger=None):
@@ -968,7 +1197,8 @@ def spotrebuj(index, *, out, command, ledger=None):
     archives give their features_sha256), no final run open in this process, and in plan mode campaign every sealed
     archive in the ledger for its session, role and plan and none in an earlier run, nor any of its sessions with
     another archive in an earlier run of plan mode campaign (RUN_RULE: the seal binds the sessions). A rehearsal (plan
-    mode rehearsal) writes the archives the ledger does not hold yet and may run again (REHEARSAL_RULE). The stage of
+    mode rehearsal) writes the archives the ledger does not hold yet, each with its content fingerprint (CONTENT_RULE),
+    and may run again (REHEARSAL_RULE). The stage of
     the run comes from the ledger (STAGE_RULE), and at stage final the ledger at HEAD must hold every sealed archive
     of the corpus (SEAL_IN_GIT_RULE). The run is written into the ledger before it opens. Returns the Beh; refusals
     are Zapecatene."""
@@ -996,10 +1226,12 @@ def spotrebuj(index, *, out, command, ledger=None):
                         f"{record['features_sha256']}) is not in the ledger {ledger_path}: the campaign writes every "
                         "sealed session into it before the final run (tcn/pecat.py zapis), so this corpus has no seal "
                         "to consume (RUN_RULE)")
+                content, why = odtlacok(record["features"])  # CONTENT_RULE, as zapis stores it.
                 archives[record["features_sha256"]] = {
                     "role": record["role"], "session": record["id"], "group": record.get("group"),
                     "vm": record.get("vm"), "scenario": record.get("scenario"), "plan": plan, "mode": mode,
                     "protocol_sha256": doc.get("protocol_sha256"), "features": record["features"],
+                    "content_sha256": content, "content_why": why,
                     "written": {"date": _now(), "commit": _commit(), "command": command,
                                 "by": "the final run of a rehearsal (REHEARSAL_RULE: kept, not enforced)"}}
                 continue

@@ -43,9 +43,23 @@ def pack(directory, name, text):
 
 # Protocol v3 variant: restart_sluzby of orders, host bounds 1.45-1.6 s, grace .1 s -> window .45-1.7 s.
 EVENT = {"type": "restart_sluzby", "class": "restart_sluzby", "start_s": 0, "duration_s": 1}
+# The lines of systemd (PID 1) of one restart of a unit (systemctl restart of a unit of Type=simple), as the guest's
+# journal holds them (journalctl -o short-iso-precise --utc; the journals of the lab trials, dokazy/skuska_labu/behy).
+# Since package B12 the log audit times the restart of a unit an event restarts by these lines.
+RESTART_MESSAGES = ("Stopping {unit}.service - hyptcn benign lab {name}...", "{unit}.service: Deactivated successfully.",
+                    "Stopped {unit}.service - hyptcn benign lab {name}.", "{unit}.service: Consumed 1.234s CPU time.",
+                    "Started {unit}.service - hyptcn benign lab {name}.")
+ORDERS_RESTART_S = 1.46  # build(event=True): lab/udalosti.py restarts orders in the event's start call (1.45-1.5 s).
 # SHA-256 of lab/udalosti.py in session.json and in both replies of the event script.
 SCRIPT_SHA256 = hashlib.sha256(b"synthetic lab/udalosti.py").hexdigest()
 QEMU_PID = 4242  # The session VM's QEMU in every host monitor sample (label qemu), never swapped.
+
+
+def restart_lines(unit, offset, base=BASE, messages=RESTART_MESSAGES):
+    """The journal lines of systemd of one restart of `unit`, `offset` s after `base`, 1 ms apart (RESTART_MESSAGES)."""
+    name = unit.split("@", 1)[-1]
+    return [f"{utc(offset + i / 1000, base)} guest systemd[1]: {text.format(unit=unit, name=name)}\n"
+            for i, text in enumerate(messages)]
 
 
 @pytest.fixture
@@ -144,6 +158,7 @@ def build(tmp_path, event=False, *, session_name="synthetic-session", base=BASE,
     errors = ""
     if event:
         journal.append(f"{at(1.5)} guest python3[999]: Traceback (most recent call last):\n")
+        journal += restart_lines("hyptcn-lab@orders", ORDERS_RESTART_S, base)  # Inside the window (package B12).
         errors = (f"{datetime.fromtimestamp(base + 1, timezone.utc):%Y/%m/%d %H:%M:%S} [error] 7#7: *1 connect() "
                   "failed (111: Connection refused) while connecting to upstream\n")
         write(d / "events.json", {"schema": "hyptcn3/session-events/1", "events": [dict(
@@ -725,6 +740,61 @@ def test_worker_statement_timeout_is_admitted_only_inside_an_event_window(tmp_pa
     d = build(tmp_path / "no-events")
     add_journal_line(d, f"{utc(1.5)} {line}")
     assert "journal_error_or_loss" in logs.audit_logs(d)["problem_counts"]
+
+
+def rewrite_journal(d, keep):
+    """Keep only the lines of the guest's journal segment for which keep(line) holds, then reseal."""
+    path, doc_path = d / "guest/journal-journal.txt.gz", d / "guest/journal_segment.json"
+    doc = logs.read_json(doc_path)
+    index = next(i for i, f in enumerate(doc["files"]) if f["name"].endswith("journal.txt"))
+    lines = gzip.decompress(path.read_bytes()).decode().splitlines(keepends=True)
+    doc["files"][index] = pack(d, "journal-journal.txt", "".join(line for line in lines if keep(line)))
+    write(doc_path, doc)
+    seal(d)
+
+
+def test_an_event_unit_restarts_only_inside_the_window_of_its_occurrence(tmp_path):
+    """Package B12, the lead's answer to Q67: the restart of orders by its event (restart_sluzby) is admitted inside
+    the occurrence's window and counted there (the fixture, window .45-1.7 s, restart at 1.46 s); the same unit
+    restarting outside every window of a type that restarts it is refused by name, whatever the session's types."""
+    d = build(tmp_path / "inside", event=True)
+    result = logs.audit_logs(d)
+    assert result["accepted"], result["problems"]
+    assert result["tolerated"]["event_unit_restarts"] == 1
+    assert result["sections"]["correlation"]["event_unit_restarts"] == [
+        {"window": 0, "type": "restart_sluzby", "units": {"hyptcn-lab@orders": len(RESTART_MESSAGES)}}]
+    assert result["sections"]["guest"]["units_timed"] == ["hyptcn-lab@orders"]
+    d = build(tmp_path / "outside", event=True)
+    add_journal_line(d, "".join(restart_lines("hyptcn-lab@orders", 2.5)))
+    result = logs.audit_logs(d)
+    assert not result["accepted"]
+    assert "service_restarted_outside_event" in result["problem_counts"], result["problems"]
+    assert "service_restarted_outside_event:hyptcn-lab@orders" in result["problems"]
+
+
+@pytest.mark.parametrize("case", ["untimed_line", "keys_changed_without_a_start_line"])
+def test_a_restart_of_an_event_unit_the_audit_cannot_place_in_time_is_refused(tmp_path, case):
+    """Package B12: fail closed. A systemd line of the unit whose time cannot be read, or a change of its four keys
+    between the guest's states without a start line of it in the journal, is service_restarted."""
+    d = build(tmp_path, event=True)
+    if case == "untimed_line":
+        add_journal_line(d, "yesterday guest systemd[1]: Started hyptcn-lab@orders.service - hyptcn benign lab orders.\n")
+    else:  # The fixture's state_after holds orders with a new InvocationID; drop its restart lines from the journal.
+        rewrite_journal(d, lambda line: "hyptcn-lab@orders.service" not in line)
+    result = logs.audit_logs(d)
+    assert not result["accepted"]
+    assert "service_restarted:hyptcn-lab@orders" in result["problems"], result["problems"]
+
+
+def test_without_events_a_restart_is_judged_by_the_guests_states_as_before(tmp_path):
+    """Package B12 changes nothing for a session without events: no unit is timed, the journal lines of a unit are not
+    judged, and a change of its keys between the states is service_restarted (case restart above)."""
+    d = build(tmp_path)
+    add_journal_line(d, "".join(restart_lines("hyptcn-lab@orders", 2.5)))
+    result = logs.audit_logs(d)
+    assert result["accepted"], result["problems"]
+    assert result["sections"]["guest"]["units_timed"] == []
+    assert "event_unit_restarts" not in result["sections"]["correlation"]
 
 
 def test_failed_request_outside_event_window_is_rejected(tmp_path):

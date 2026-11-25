@@ -363,6 +363,7 @@ audit a archivácia po jednej, zmrazený commit a hash protokolu.
 | major faulty zberača na cyklus (`capture.rusage.majflt`) | `audit.collector_majflt_max`, `null` do G2, pravidlo kap. 10.9 (vedúci 2026-11-24, Q29) | sonda s 500 major faultami na cyklus prešla (riziko capture R4) |
 | doména a PID v každom sidecari sa zhodujú so session | presná zhoda | chýbajúca väzba na VM |
 | každá plánovaná udalosť prebehla a má účinok | predikát | udalosť bez účinku sa dnes prijme |
+| reštart jednotky, ktorú typ udalosti reštartuje zámerne, iba v okne výskytu toho typu | okno udalosti (štart − 1 s až stop + `events.grace_s`); reštart mimo neho je dôvod `service_restarted_outside_event`, reštart bez času v žurnáli hosťa `service_restarted` (zmena vedúceho 2026-11-24, odpoveď na otázku Q67) | v4 padla na crash-loope služby, ktorý audit pustil, lebo jednotku udalosti ospravedlnil na celú session |
 | nasadené súbory v hosťovi sa zhodujú s `lab/` v commite | presná zhoda | zastaraný hosť prejde pilotom |
 | počet riadkov uzavretých pravidlom | vzorec, kap. 10.9 | sedem riadkov presne po piatich snímkach prešlo bez povšimnutia |
 | periodicita označených riadkov | opakovaný rozstup | to isté |
@@ -790,9 +791,29 @@ ladiť smie: lab, kontroly auditu, maska stĺpcov podľa pravidiel z kap. 8.1, m
 Hranice K1 a K2, zoznam zásahov a kontrol, horizont a definície sa neladia; sú zmrazené
 od G1.
 
+**Spojená generálka** (rozhodnutie vlastníka 2026-11-25, výklad vedúceho; denník odchýlok, zápis 7). G3a a G3b sú
+jeden plán generálky (10 skupín, 30 session). Kód sa po štarte generálky nemení; zmena kódu znamená pôvodný postup
+(nová G3a a plná G3b). Časť G3a tvorí prvých 7 až 8 skupín plánu: toľko prvých skupín, aby každá rola mala aspoň
+jednu skupinu na každej VM. Z nich sa určia hodnoty G3a (mriežky, maska, `expected`), zapíšu sa do súboru a ich
+commit je kandidát na zmrazenie. Zvyšné skupiny sú časť G3b (kap. 10.5).
+
 ### 10.5 G3b Potvrdzujúca generálka (nikdy v datasete)
 
 Jedna, na commite, ktorý kandiduje na zmrazenie, bez zásahu do kódu. Rovnaký tvar ako G3a.
+
+**Spojená generálka** (rozhodnutie vlastníka 2026-11-25, výklad vedúceho; denník odchýlok, zápis 7). Časť G3b sú
+zvyšné 2 až 3 skupiny plánu generálky z kap. 10.4, na kandidátovi, bez zásahu. Pred jej štartom sa zapíše a potom
+nemení, čo znamená „totožné bez chýb“:
+- žiadna session nie je zamietnutá pre chybu kódu, labu alebo zberača a náhrady sú v medziach kap. 7.5;
+- každá session G3b leží v rozsahu session G3a (min až max, tolerancia ±10 % rozsahu) pre p99 času cyklu, neplatné
+  riadky, riadky uzavreté pravidlom, označené riadky na výskyt po type, major faulty a varovania;
+- žiadny stĺpec masky nezmení triedu, keď sa kvalifikácia kap. 8.1 zopakuje na všetkých 10 skupinách;
+- žiadna nevysvetlená periodicita.
+
+Ak to platí, reťaz vrátane K1 a K2 (označené ako generálka) prejde nad celou generálkou na jednom commite. Hodnoty
+G3b (limit náhrad, strop uzavretých riadkov, skoré zastavenie) sa určia z G2 a celej generálky a nasleduje záznam
+G3b s číslami pre vlastníka. Ak to neplatí, generálka sa dokončí ako plná G3b podľa tejto kapitoly: nový plán 10
+skupín na kandidátovi.
 
 - Prejde celú reťaz vrátane K1 a K2. Výsledky sú označené ako generálka.
 - Dodá mieru zamietnutí pre limit náhrad a hodnoty pre vzorce z kap. 10.9.

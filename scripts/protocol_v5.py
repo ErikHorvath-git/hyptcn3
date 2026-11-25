@@ -1756,10 +1756,13 @@ def _outside_types(p, session):
 
 def _outside_deck(p, session):
     """A reason for every item of `session` outside the protocol's deck: an event type outside events.types, a
-    control kind outside controls.kinds. No session of plan() has one."""
+    control kind outside controls.kinds, and events in a session of test_controls, which holds controls and no events
+    (proposal 7.2) and so has no rule to draw an event's times from (D [11] of B10, package B12: before it the draw
+    raised KeyError, and the checks of the replacements said only `cannot check`). No session of plan() has one."""
     return _outside_types(p, session) + [
         f"control kind {x['kind']} is outside controls.kinds" for x in session.get("controls", [])
-        if x.get("kind") is not None and x["kind"] not in p["controls"]["kinds"]]
+        if x.get("kind") is not None and x["kind"] not in p["controls"]["kinds"]] + (
+        [f"role {CONTROL_ROLE} has events"] if session.get("role") == CONTROL_ROLE and session.get("events") else [])
 
 
 def replacement(p, session, attempt, *, mode="campaign"):

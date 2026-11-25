@@ -981,3 +981,49 @@ def test_a_refused_input_names_its_reason_and_writes_nothing(env, capsys, case):
     assert (list(out.iterdir()) == []) if out.exists() else case != "run_directory_exists"
     assert (env.calls, env.started, env.health) == ([], [], [])
     assert not (env.tmp / "labctl_argv.json").exists()
+
+
+# ------------------------------------------------------------------ stage G2, L1 and L2: a record of both VMs
+
+
+def edited_run(env, monkeypatch, name, step, vm, **fields):
+    """fake_run on one QEMU per VM, its result.json then given `fields` (record reads them as a step writes them)."""
+    q = qemu_process({"a": 4242, "b": 4343}[vm])
+    out = fake_run(env, monkeypatch, name, step, vm, q, q)
+    doc = json.loads((out / "result.json").read_text())
+    doc.update(fields)
+    (out / "result.json").write_text(json.dumps(doc))
+    return out
+
+
+def saturation_fields(profile, served):
+    """The fields of a saturation run of `profile` whose largest served rate is `served`, proposed by peak_share."""
+    return {"scenario": f"{profile}_high", "profile": profile, "intensity": "high",
+            "saturation": {"rate": served, "proposed_rate": {"low": round(.3 * served, 4), "high": round(.8 * served, 4)}}}
+
+
+def test_a_record_of_both_vms_keeps_the_guest_and_the_saturation_of_each_vm(env, monkeypatch):
+    """L1 and L2 (dokazy/G2p/odlozene_G2p.md), the lead's answer to Q64: the guest of each VM is the identity of its
+    own last deploy; the saturation series are kept per VM and profile, and a profile's proposed rate is that of the VM
+    with the smaller served rate, since one rate holds for both VMs; a profile with a series on one VM proposes
+    nothing and names the VM without it."""
+    dirs = [edited_run(env, monkeypatch, "deploy-a", "deploy", "a", guest={"boot_id": "boot-a"}),
+            edited_run(env, monkeypatch, "deploy-b", "deploy", "b", guest={"boot_id": "boot-b"}),
+            edited_run(env, monkeypatch, "sat-a-eshop", "saturation", "a", **saturation_fields("eshop", 14.672)),
+            edited_run(env, monkeypatch, "sat-b-eshop", "saturation", "b", **saturation_fields("eshop", 13.455)),
+            edited_run(env, monkeypatch, "sat-a-corp", "saturation", "a", **saturation_fields("corp", 8.0))]
+    target = env.tmp / "results/skuska_labu_20261125T130000Z.json"
+    target.parent.mkdir()
+    assert run("record", "--out-record", target, *dirs) == 0
+    doc = json.loads(target.read_text())
+    assert doc["guest"] == {"vms": [{"vm": "a", "domain": "hyptcn-lab-a", "identity": {"boot_id": "boot-a"}},
+                                    {"vm": "b", "domain": "hyptcn-lab-b", "identity": {"boot_id": "boot-b"}}]}
+    eshop = doc["values"]["saturation"]["eshop"]
+    assert set(eshop["by_vm"]) == {"a", "b"}
+    assert eshop["combined"] == {"vm": "b", "rate": 13.455, "proposed_rate": {"low": 4.0365, "high": 10.764}}
+    proposed = doc["values"]["proposed_rate"]
+    assert (proposed["eshop_low"], proposed["eshop_high"], proposed["corp_low"], proposed["corp_high"]) == (
+        4.0365, 10.764, None, None)
+    assert "no saturation run of profile corp on VM b: the rate needs a series on every VM" in doc["problems"]
+    assert "no deploy run on VM a" not in doc["problems"] and "no deploy run" not in doc["problems"]
+    assert "no long run of scenario eshop_high on VM b" in doc["problems"]

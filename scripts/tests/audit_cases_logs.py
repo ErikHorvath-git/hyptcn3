@@ -563,6 +563,11 @@ _CASES = [
      logs("event_without_effect:" + EVENT)),
     ("event_without_effect:not_ok", edit("events.json", _event(lambda e: e["effect"].update(ok=False))),
      logs("event_without_effect:" + EVENT)),
+    # Package B12 (the lead's answer to Q67): orders, which the clean session's event restarts by design, restarts
+    # again outside the window of that occurrence (window .45-1.7 s, the restart at 2.5 s).
+    ("service_restarted_outside_event", edit_segment("journal", "journal.txt", lambda lines: [
+        *lines, *evidence.restart_lines("hyptcn-lab@orders", 2.5)]),
+     logs("service_restarted_outside_event:hyptcn-lab@orders")),
 ]
 
 _CASES.append(  # lab/services.py since B5a: the docs service is a unit of the lab like the others.

@@ -4,6 +4,7 @@
   .venv/bin/python scripts/campaign_report.py campaign data/campaigns/<id> --out NEW_DIR
   .venv/bin/python scripts/campaign_report.py sessions SESSION [SESSION ...] --out NEW_DIR
   .venv/bin/python scripts/campaign_report.py envelope SESSION [SESSION ...] --protocol P --out NEW_FILE
+  .venv/bin/python scripts/campaign_report.py majflt AUDIT [AUDIT ...] --protocol P --out NEW_FILE
 
 The report reads saved evidence only: session, end, audit and archive
 metadata, the request and interval logs, the host monitor, snapshot sidecars
@@ -24,6 +25,18 @@ line per session and writes NEW_FILE, a new JSON record with the provenance
 header of check E of scripts/check_claims.sh. Exit 0 = every session matches,
 1 = a mismatch, 2 = usage error (nothing written) or a session with a data
 error (the record names every mismatch as well).
+
+The mode majflt (the lead's answer to Q29, 2026-11-24; MAJFLT_RULE) proposes
+the bound audit.collector_majflt_max of the protocol P from the audit records
+of the error-free G2 runs that the G2 record names: per VM the largest count
+of the collector's major faults in one cycle (values.collector_majflt) with
+its session, seq and cycle and the sessions and cycles counted, then the
+largest over both VMs, the value the rule gives. It reads the audit records
+and, for the VM of each, the session.json the audit read; no RAM, no archive
+member, no score. It never writes the protocol. It prints one line per VM and
+the proposal, and writes NEW_FILE, a new JSON record with the provenance
+header of check E. Exit 0 = proposal made, 2 = usage or data error (nothing
+written).
 
 A reporting tool, not part of capture, audit or archival (collection.py lists
 it in NOT_MEASUREMENT). Only the standard library and NumPy are used; plots
@@ -4242,6 +4255,311 @@ def envelope(args, command):
     return code
 
 
+# ---------------------------------------------------------------- majflt mode (the lead's answer to Q29)
+
+MAJFLT_SCHEMA = "hyptcn3/collector-majflt-bound/1"
+MAJFLT_KEY = "audit.collector_majflt_max"  # The value G2 sets by the rule (determined_at G2 of the protocol).
+MAJFLT_FIELDS = ("max", "max_seq", "sum", "cycles")  # values.collector_majflt (scripts/collection.py majflt_record).
+# The rule as audit.collector_majflt_note of the protocol states it (the lead's answer to Q29): the mode applies it
+# only under a note that states it, and quotes it.
+MAJFLT_RULE_TEXT = ("The rule, written before the data: the largest count per cycle observed in the error-free runs of "
+                    "G2 on both VMs; at zero the bound is 0.")
+MAJFLT_GUEST = ("none: the mode majflt reads saved audit records and the session.json the audit of each read; no VM is "
+                "contacted")
+MAJFLT_RULE = (
+    "The lead's answer to question Q29 (2026-11-24) and audit.collector_majflt_note of the protocol: the bound "
+    "audit.collector_majflt_max is null until G2, which sets it by the rule written before the data, the largest count "
+    "per cycle observed in the error-free runs of G2 on both VMs, and 0 when every count is 0 (row P2 of "
+    "dokazy/B10/odlozene_B10.md). This mode, outside the measurement code, proposes that value from saved audit "
+    "records and never writes the protocol. It does not decide which runs are error-free: the G2 record states that, "
+    "names the records it counts and gives them here, each once. scripts/collection.py audit (audit_session) writes "
+    "the record of a session into the session's directory as audit_<UTC stamp>.json, or to the file its --out names. "
+    "Of each record the mode reads schema and values.protocol_sha256, accepted, reasons, collector_majflt "
+    "(majflt_record: max, the largest count of one cycle; max_seq, the seq of the first cycle with it; sum; cycles, "
+    "the cycles counted), session_dir and session_sha256. The record names no VM, and the directory of a G2 session, "
+    "a diagnostic run, need not name one either; so the VM is the session's: vm of the session.json in "
+    "values.session_dir, read only when its sha256 is values.session_sha256 (the file the audit read) and only when "
+    "the protocol's vms give that VM the domain it names (the executor's judgment, G2 preparation). Nothing else is "
+    "read: no RAM, no archive member, no score. Refused by name, each a data error: a record that cannot be read or "
+    "is no audit record of "
+    "scripts/collection.py (schema hyptcn3/collection-audit/1 with values); one that is no audit of the protocol (its "
+    "values.protocol_sha256 is not the sha256 of the protocol, which must be of schema 3); one whose verdict is not "
+    "accepted (values.accepted not true), unless every one of its reasons is a collector warning outside the allowed "
+    "patterns (logs: collector_warning_unlisted; audit.warnings_allowed is null until G2, so every warning refuses a "
+    "session, and the lead's answer to Q60, 2026-11-24, counts such a session; the record lists it under "
+    "values.warnings_only and its entry says accepted_by warnings_only); one without values.collector_majflt (absent or null) or with one not of "
+    "its shape (four integers of at least 0, at least one cycle); a session.json missing, unreadable, not the one the "
+    "audit read, or naming no VM of the protocol with its domain; a record named twice, and two records of one "
+    "session (values.session_dir; a session counts once, the executor's judgment, G2 preparation). Per VM of the "
+    "protocol: the largest max over its records, with its record, session (session_id), seq (max_seq) and cycle "
+    "(full when the seq is a multiple of full_every, the cadence the audit holds an accepted session to, else delta; "
+    "at a largest count of 0 every cycle has it and the seq is the first, 0), and the sessions and cycles counted; "
+    "then the largest over the VMs, with all sessions and cycles. Equal counts go to the first record given, and "
+    "over the VMs to the first VM of the protocol's vms (the executor's judgment, G2 preparation). The proposal for "
+    "audit.collector_majflt_max is that largest count, so 0 when every count is 0. It is refused by name when a VM "
+    "of the protocol has no record (the rule needs both VMs). The protocol is refused before any record is read "
+    "when it is not of schema 3, lacks audit.collector_majflt_max or audit.collector_majflt_note, has a note that "
+    "does not state this rule, has a bound that is not null (an audit under a bound accepts no cycle above it, so "
+    "its records cannot show the largest count the rule asks for; the executor's judgment, G2 preparation), or names "
+    "fewer than two VMs. Exit 0: the proposal is made, printed after one line per VM with the rule quoted from the "
+    "note, and recorded in --out, a new file (refused before anything is read when it exists, and refused inside the "
+    "session directory of a record); 2: a usage or data error, every refusal named on stderr and nothing written.")
+
+
+def majflt_protocol(path):
+    """(sha256, {VM name: domain} in the order of vms, full_every, audit.collector_majflt_note) of the protocol of the
+    mode majflt; a DataError, before any record is read, for a protocol MAJFLT_RULE does not apply to."""
+    try:
+        raw = Path(path).read_bytes()
+        doc = json.loads(raw)
+    except (OSError, ValueError) as error:
+        raise DataError(f"cannot read protocol {path}: {error}") from None
+    if type(doc) is not dict or doc.get("schema") != protocol_v5.SCHEMA:
+        raise DataError(f"protocol {path}: protocol schema is not {protocol_v5.SCHEMA}: {MAJFLT_KEY} is a key of its "
+                        "audit section")
+    # Only the two keys of the rule (the lead's answer to Q29); the audit read the whole section when it wrote each
+    # record, and no feature or extractor code is imported here.
+    audit = doc.get("audit")
+    for key in ("collector_majflt_max", "collector_majflt_note"):
+        if not isinstance(audit, dict) or key not in audit:
+            raise DataError(f"protocol {path}: no audit.{key} (the lead's answer to Q29)")
+    if audit["collector_majflt_max"] is not None:
+        raise DataError(f"protocol {path}: {MAJFLT_KEY} is {_shown(audit['collector_majflt_max'])}, not null: an "
+                        "audit under a bound accepts no cycle above it, so its records cannot show the largest count "
+                        "the rule asks for (null until G2, determined_at G2)")
+    note = audit["collector_majflt_note"]
+    if not isinstance(note, str) or MAJFLT_RULE_TEXT not in note:
+        raise DataError(f"protocol {path}: audit.collector_majflt_note does not state the rule this mode applies, "
+                        f"\"{MAJFLT_RULE_TEXT}\"")
+    rows = doc.get("vms")
+    vms = {}
+    for row in rows if type(rows) is list else ():
+        if type(row) is dict and type(row.get("name")) is str and type(row.get("domain")) is str:
+            vms.setdefault(row["name"], row["domain"])
+    if type(rows) is not list or len(vms) != len(rows) or len(vms) < 2:
+        raise DataError(f"protocol {path}: names fewer than two VMs, each with its own name and a domain (vms): the "
+                        "rule takes the runs on both VMs")
+    full = doc.get("full_every")
+    if type(full) is not int or full < 1:
+        raise DataError(f"protocol {path}: full_every is {_shown(full, 40)}, not an integer >= 1 (it tells a full "
+                        "snapshot's cycle)")
+    return hashlib.sha256(raw).hexdigest(), vms, full, note
+
+
+def _majflt_shape(value):
+    """values.collector_majflt as majflt_record writes it for a session with a count in every cycle."""
+    return (isinstance(value, dict) and set(value) == set(MAJFLT_FIELDS)
+            and all(type(value[key]) is int and value[key] >= 0 for key in MAJFLT_FIELDS) and value["cycles"] >= 1)
+
+
+def majflt_audit(path, protocol_sha, vms, full_every):
+    """One audit record by MAJFLT_RULE under the protocol with the sha256 protocol_sha, its vms ({name: domain}) and
+    full_every: ({path, sha256, session, session_dir, session_json_sha256, vm, collector_majflt, cycle}, None), or
+    (None, why it is refused)."""
+    try:
+        raw = Path(path).read_bytes()
+        doc = json.loads(raw)
+    except OSError as error:
+        return None, f"{path}: cannot be read ({type(error).__name__}: {error})"
+    except ValueError as error:
+        return None, f"{path}: not JSON ({error})"
+    what = f"not an audit record of scripts/collection.py (a JSON object of schema {AUDIT_SCHEMA} with values)"
+    if not isinstance(doc, dict):
+        return None, f"{path}: {what}: not a JSON object"
+    if doc.get("schema") != AUDIT_SCHEMA:
+        return None, f"{path}: {what}: its schema is {_shown(_get(doc, 'schema'), 60)}"
+    values = doc.get("values")
+    if not isinstance(values, dict):
+        return None, f"{path}: {what}: its values are {_shown(_get(doc, 'values'), 40)}"
+    recorded = _get(values, "protocol_sha256")
+    if recorded != protocol_sha:
+        return None, (f"{path}: not an audit of the protocol: its values.protocol_sha256 is {_shown(recorded, 80)}, "
+                      f"the protocol's sha256 is {protocol_sha}")
+    verdict = _get(values, "accepted")
+    warnings_only = verdict is False and _only_unlisted_warnings(values.get("reasons"))
+    if verdict is not True and not warnings_only:
+        reasons = values.get("reasons")
+        listed = "; ".join(map(one_line, reasons)) if isinstance(reasons, list) else ""
+        listed = listed if len(listed) <= 300 else listed[:297] + "..."
+        return None, (f"{path}: its verdict is not accepted: values.accepted is {_shown(verdict, 40)}"
+                      + (f" (reasons: {listed})" if listed else ""))
+    faults = _get(values, "collector_majflt")
+    if faults is _ABSENT or faults is None:
+        return None, (f"{path}: records no values.collector_majflt (it is {_shown(faults)}), the largest count per "
+                      "cycle the rule takes")
+    if not _majflt_shape(faults):
+        return None, (f"{path}: values.collector_majflt is {_shown(faults)}, not the audit's record of a session with "
+                      "a count in every cycle (max, max_seq, sum and cycles: integers of at least 0, at least one "
+                      "cycle)")
+    # MAJFLT_RULE: the record names no VM; the session.json the audit read does.
+    directory, bound = _get(values, "session_dir"), _get(values, "session_sha256")
+    if not isinstance(directory, str) or not isinstance(bound, str):
+        return None, (f"{path}: names no session.json the audit read: values.session_dir is {_shown(directory, 80)}, "
+                      f"values.session_sha256 {_shown(bound, 80)}")
+    meta_path = Path(directory) / "session.json"
+    try:
+        meta_raw = meta_path.read_bytes()
+    except FileNotFoundError:
+        return None, (f"{path}: no session.json in values.session_dir {directory}, which names the session's VM (was "
+                      "the session moved after its audit?)")
+    except OSError as error:
+        return None, f"{path}: {meta_path} cannot be read ({type(error).__name__}: {error})"
+    meta_sha = hashlib.sha256(meta_raw).hexdigest()
+    if meta_sha != bound:
+        return None, (f"{path}: {meta_path} is not the session.json the audit read: its sha256 is {meta_sha}, "
+                      f"values.session_sha256 {bound}")
+    try:
+        meta = json.loads(meta_raw)
+    except ValueError as error:
+        return None, f"{path}: {meta_path} is not JSON ({error})"
+    if not isinstance(meta, dict):
+        return None, f"{path}: {meta_path} is not a JSON object"
+    vm, domain, session = (_get(meta, key) for key in ("vm", "domain", "session_id"))
+    if not isinstance(vm, str) or vm not in vms:
+        return None, f"{path}: {meta_path} names the VM {_shown(vm, 40)}, not a VM of the protocol ({', '.join(vms)})"
+    if domain != vms[vm]:
+        return None, (f"{path}: {meta_path} names the domain {_shown(domain, 60)} for the VM {vm}, the protocol's vms "
+                      f"give it {vms[vm]}")
+    if not isinstance(session, str):
+        return None, f"{path}: {meta_path} names no session_id: it is {_shown(session, 40)}"
+    entry = {"path": path, "sha256": hashlib.sha256(raw).hexdigest(), "session": session, "session_dir": directory,
+             "session_json_sha256": meta_sha, "vm": vm, "collector_majflt": {key: faults[key] for key in MAJFLT_FIELDS},
+             "cycle": "full" if faults["max_seq"] % full_every == 0 else "delta"}
+    if warnings_only:
+        entry["accepted_by"] = "warnings_only"
+    return entry, None
+
+
+# The reason of the log audit for a collector warning outside audit.warnings_allowed (scripts/collection_logs.py, the
+# section collector; the audit prefixes its problems with "logs: ").
+UNLISTED_WARNING = "logs: collector_warning_unlisted:"
+
+
+def _only_unlisted_warnings(reasons):
+    """The lead's answer to Q60: a verdict refused for collector warnings outside the allowed patterns alone."""
+    return (isinstance(reasons, list) and bool(reasons)
+            and all(isinstance(r, str) and r.startswith(UNLISTED_WARNING) for r in reasons))
+
+
+def majflt_together(entries, vms, out):
+    """The refusals of the accepted entries taken together (MAJFLT_RULE): two records of one session and an --out
+    inside the session directory of a record; when there is none, every VM of the protocol without a record."""
+    refused, by_session = [], defaultdict(list)
+    for entry in entries:
+        by_session[entry["session_dir"]].append(entry["path"])
+    for directory, paths in by_session.items():
+        if len(paths) > 1:
+            refused.append(f"{len(paths)} audit records name one session, values.session_dir {directory}: "
+                           + ", ".join(paths) + " (a session counts once)")
+    target = Path(os.path.realpath(out.parent))
+    for directory in by_session:
+        own = Path(os.path.realpath(directory))
+        if target == own or target.is_relative_to(own):
+            refused.append(f"refusing to write {out} inside the session directory {directory}")
+    if refused:
+        return refused
+    return [f"no audit record of VM {name}: the rule needs both VMs of the protocol ({', '.join(vms)})"
+            for name in vms if not any(entry["vm"] == name for entry in entries)]
+
+
+def majflt_summary(entries, vms):
+    """({VM: the largest count of its records with record, session, session_dir, seq and cycle, and its sessions and
+    cycles}, the same over the VMs with the VM and all sessions and cycles) by MAJFLT_RULE: max() keeps the first of
+    equal counts, so the first record given and the first VM of the protocol's vms."""
+    by_vm = {}
+    for name in vms:
+        mine = [entry for entry in entries if entry["vm"] == name]
+        top = max(mine, key=lambda entry: entry["collector_majflt"]["max"])
+        by_vm[name] = {"max": top["collector_majflt"]["max"], "record": top["path"], "session": top["session"],
+                       "session_dir": top["session_dir"], "seq": top["collector_majflt"]["max_seq"],
+                       "cycle": top["cycle"], "sessions": len(mine),
+                       "cycles": sum(entry["collector_majflt"]["cycles"] for entry in mine)}
+    name = max(vms, key=lambda vm: by_vm[vm]["max"])
+    largest = {"vm": name, **by_vm[name], "sessions": len(entries),
+               "cycles": sum(entry["collector_majflt"]["cycles"] for entry in entries)}
+    return by_vm, largest
+
+
+def majflt_line(name, entry):
+    """The line of one VM on stdout: its largest count, where it fell, and what was counted."""
+    return (f"vm {name}: max {entry['max']} in session {entry['session']} seq {entry['seq']} ({entry['cycle']} cycle), "
+            f"record {entry['record']}; {entry['sessions']} session(s), {entry['cycles']} cycle(s) counted")
+
+
+def majflt(args, command):
+    """The mode majflt (MAJFLT_RULE): refuses an --out that exists before it reads anything and a record named twice,
+    then reads the protocol and each record in the order given; writes the new record, prints one line per VM and the
+    proposal, and returns the exit code."""
+    out = Path(os.path.abspath(args.out))
+    if out.exists() or out.is_symlink():
+        print(f"campaign_report: --out already exists, nothing was read or written: {out}", file=sys.stderr)
+        return 2
+    paths = [os.path.abspath(path) for path in args.audits]
+    real = [os.path.realpath(path) for path in paths]
+    twice = sorted({path for path, r in zip(paths, real) if real.count(r) > 1})
+    if twice:
+        print("campaign_report: majflt: an audit record is named more than once: " + ", ".join(twice), file=sys.stderr)
+        return 2
+    try:
+        protocol_sha, vms, full_every, note = majflt_protocol(args.protocol)
+    except DataError as error:
+        print(f"campaign_report: majflt: {error}", file=sys.stderr)
+        return 2
+    entries, refused = [], []
+    for path in paths:
+        entry, why = majflt_audit(path, protocol_sha, vms, full_every)
+        if entry is None:
+            refused.append(why)
+        else:
+            entries.append(entry)
+    refused = refused or majflt_together(entries, vms, out)
+    if refused:
+        for why in refused:
+            print(f"campaign_report: majflt: {one_line(why)}", file=sys.stderr)
+        print(f"campaign_report: majflt: {len(refused)} refusal(s): no proposal, nothing written", file=sys.stderr)
+        return 2
+    by_vm, largest = majflt_summary(entries, vms)
+    identity = git_identity()
+    record = {"schema": MAJFLT_SCHEMA, "commit": identity["commit"], "commit_dirty": identity["dirty"],
+              "date": datetime.now(timezone.utc).isoformat(timespec="seconds"), "host": platform.platform(),
+              "guest": MAJFLT_GUEST, "command": command, "n": len(entries),
+              "values": {"protocol": {"path": os.path.abspath(args.protocol), "sha256": protocol_sha,
+                                      MAJFLT_KEY: None, "vms": vms, "full_every": full_every},
+                         "records": entries, "by_vm": by_vm, "largest": largest,
+                         "warnings_only": [e["path"] for e in entries if e.get("accepted_by") == "warnings_only"],
+                         "proposal": {"key": MAJFLT_KEY, "value": largest["max"], "rule": MAJFLT_RULE_TEXT,
+                                      "note": note},
+                         "rule": MAJFLT_RULE},
+              "note": "The bound of the collector's major faults per cycle proposed from saved audit records (the "
+                      "lead's answer to Q29); the protocol is not written, no score is read and nothing is detected."}
+    text = json.dumps(record, indent=1, ensure_ascii=False, allow_nan=False) + "\n"
+    try:
+        out.parent.mkdir(parents=True, exist_ok=True)
+        stream = open(out, "x", encoding="utf-8")
+    except FileExistsError:
+        print(f"campaign_report: --out appeared meanwhile, nothing was overwritten: {out}", file=sys.stderr)
+        return 2
+    except OSError as error:
+        print(f"campaign_report: cannot create {out}: {type(error).__name__}: {error}", file=sys.stderr)
+        return 2
+    try:
+        with stream:
+            stream.write(text)
+    except OSError as error:
+        out.unlink(missing_ok=True)
+        print(f"campaign_report: cannot write {out}: {type(error).__name__}: {error}", file=sys.stderr)
+        return 2
+    for name in vms:
+        print(majflt_line(name, by_vm[name]))
+    print(f"proposal: {MAJFLT_KEY} = {largest['max']} (vm {largest['vm']}, session {largest['session']} seq "
+          f"{largest['seq']}, {largest['cycle']} cycle, record {largest['record']}; {largest['sessions']} session(s), "
+          f"{largest['cycles']} cycle(s) on {len(vms)} VMs); the rule of audit.collector_majflt_note: "
+          f"\"{MAJFLT_RULE_TEXT}\"", flush=True)
+    print(f"campaign_report: majflt: {len(entries)} record(s), proposal {MAJFLT_KEY} = {largest['max']}; record {out}",
+          file=sys.stderr)
+    return 0
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     modes = parser.add_subparsers(dest="mode", required=True)
@@ -4263,11 +4581,23 @@ def main(argv=None):
                                help="the protocol file the sessions ran with (its sha256 is that of their "
                                     "protocol.json)")
     envelope_mode.add_argument("--out", type=Path, required=True, help="new JSON record (must not exist)")
+    majflt_mode = modes.add_parser("majflt", help="the bound audit.collector_majflt_max proposed from the audit "
+                                                  "records of error-free G2 runs (the lead's answer to Q29; "
+                                                  "MAJFLT_RULE)")
+    majflt_mode.add_argument("audits", type=Path, nargs="+",
+                             help="audit records of collection.py audit (audit_<UTC stamp>.json in each session "
+                                  "directory, or its --out), the ones the G2 record names")
+    majflt_mode.add_argument("--protocol", type=Path, required=True,
+                             help="the protocol file the sessions were audited under (its sha256 is their "
+                                  "values.protocol_sha256)")
+    majflt_mode.add_argument("--out", type=Path, required=True, help="new JSON record (must not exist)")
     args = parser.parse_args(argv)
     command = shlex.join([str(Path(sys.argv[0])) if argv is None else "scripts/campaign_report.py",
                           *(sys.argv[1:] if argv is None else argv)])
     if args.mode == "envelope":
         return envelope(args, command)
+    if args.mode == "majflt":
+        return majflt(args, command)
     out = args.out.absolute()
     if out.exists() or out.is_symlink():
         print(f"campaign_report: output directory already exists: {out}", file=sys.stderr)

@@ -1201,13 +1201,19 @@ def type_counts_apart(doc, plan):
 def controls_session_with_an_event(doc, plan):
     """Mutant C9: the first session of test_controls holds a copy of the first event of the plan. The check events
     names the role. test_controls has no rule of events to draw a replacement's event times from, so the three checks
-    that draw the replacements cannot draw that session's (a KeyError of replacement(), not named; the check events
-    is the one that names the error)."""
+    that draw the replacements name the session whose replacement cannot be drawn (D [11] of B10, package B12; before
+    it replacement() raised KeyError 'n' and those checks said only 'cannot check')."""
     t = next(s for s in plan["sessions"] if s["role"] == "test_controls")
     t["events"] = [json.loads(json.dumps(next(s for s in plan["sessions"] if s.get("events"))["events"][0]))]
-    error = ["cannot check: KeyError: 'n'"]
-    return {"events": ["role test_controls has events"], "full_snapshot_guard": error, "times": error,
-            "streams": error}
+    missing = [f"no replacement of {_label(t)}: role test_controls has events"]
+    # The check times, which the KeyError hid before, now also judges the copied event: it reads a session's events
+    # and then its controls in that order (no plan mixes them), so the first control follows the event and starts
+    # less than min_gap_s after it ends.
+    after = next(c for c in t["controls"] if c.get("kind") is not None)
+    gap = [f"{_label(t)}: {after['kind']} starts less than min_gap_s {doc['events']['min_gap_s']} s after the item "
+           "before it ends"]
+    return {"events": ["role test_controls has events"], "full_snapshot_guard": missing, "times": gap + missing,
+            "streams": missing}
 
 
 def role_out_of_time_order(doc, plan):

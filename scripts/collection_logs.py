@@ -26,6 +26,23 @@ else is (a control is benign and inert: the service answers as outside every win
 (finding S1 of the B8 verification, package B10): a negative whose property is seen is negative_with_property, one
 whose predicate fails otherwise negative_not_in_place (NEGATIVE_PROPERTY), and an occurrence whose start the return
 predicate refused started nothing, so the effect and the cleanup of its stop are not its own.
+
+The restarts (package B12, the lead's answer to Q67, 2026-11-24: v4 failed on a crash loop of a service that the audit
+let through). A unit that an event type of the session restarts by design (EVENT_UNITS) is not exempt for the whole
+session: its restart is admitted only inside the window of an occurrence of a type that restarts it, and a restart
+outside every such window is service_restarted_outside_event, whatever the session's types. The window is the one
+every other check of an event uses (event_window: host start - 1 s to host stop done + the session's event_grace_s);
+the lead's "start to stop + tail_s" names its tail, which is event_grace_s (events.grace_s of the protocol), not the
+protocol's events.tail_s, the planned free time between the last stop and the end of the session (no window). The
+source of the time is the session's guest journal segment (guest/journal_segment.json, journalctl -o
+short-iso-precise --utc of lab/guest_state.py journal, verified by the section segments): every line of systemd (PID
+1) that names the unit (UNIT_LINE), placed at its journal time; all of them, from the session's creation to the end
+of the capture, must lie inside such windows. The four keys of the unit in guest/state_before.json and
+guest/state_after.json (RESTART_KEYS) say whether it restarted between the two. A restart the audit cannot place in
+time is never admitted (fail closed): a line of the unit whose time cannot be read, or a change of the four keys
+without a start line of the unit in the segment, is service_restarted, as a restart of a unit no event restarts. The
+count of the admitted restarts, event_unit_restarts, is one per window and unit it admitted, and the section
+correlation lists them per window.
 """
 import argparse
 from collections import Counter, defaultdict
@@ -61,9 +78,22 @@ SERVICES = ("auth", "catalog", "orders", "docs")  # The HTTP services of lab/ser
 NGINX_EXACT = {"/": None, "/healthz": "orders", "/api/orders": "orders", "/api/cart": "orders"}
 NGINX_PREFIX = (("/api/catalog", "catalog"), ("/api/auth/", "auth"), ("/api/docs", "docs"), ("/api/reports", "docs"),
                 ("/static/", None), ("/", None))
-# Units a protocol-v3 event restarts by design (lab/udalosti.py); any other restart stays a problem.
+# Units a protocol-v3 event restarts by design (lab/udalosti.py); since package B12 (the lead's answer to Q67) such a
+# restart is admitted only inside the window of an occurrence of a type that restarts the unit, and any other restart
+# stays a problem.
 EVENT_UNITS = {"zla_konfiguracia_sluzby": ("hyptcn-lab@catalog",), "restart_sluzby": ("hyptcn-lab@orders",),
                "restart_databazy": ("postgresql@15-main", *APPS)}
+# The keys of a unit in the guest's states (lab/guest_state.py units) that every restart changes.
+RESTART_KEYS = ("NRestarts", "InvocationID", "ExecMainPID", "ExecMainStartTimestampMonotonic")
+# Package B12: a line of systemd (PID 1) about a unit in the guest's journal ("<time> <host> systemd[1]: <message>",
+# journalctl -o short-iso-precise --utc): a stop or start job of the unit ("Stopping <unit>.service - <description>...",
+# "Stopped", "Starting", "Started", "Failed to start"), or any message under the unit's name ("<unit>.service:
+# Deactivated successfully.", "Main process exited, ...", "Scheduled restart job, ..."). These are the forms of the
+# guest's systemd, as the journals of the lab trials hold them (dokazy/skuska_labu/behy). A manager that names a job
+# by the description alone names no unit: a restart it logged that way has no line here, and so no time. Groups: the
+# time, the job, the unit of a job, the unit of a message.
+UNIT_LINE = re.compile(r"^(\S+) \S+ systemd\[1\]: (?:(Starting|Started|Stopping|Stopped|Failed to start) (\S+)\.service"
+                       r"(?: - .*|\.\.\.|\.)|(\S+)\.service: .*)$")
 # zamok_tabulky restarts nothing: the worker reports the statement timeout and tries again
 # (lab/services.py). Its journal line is admitted only inside an event window, like a traceback.
 WORKER_ERROR = "worker dependency error: "
@@ -203,6 +233,9 @@ def audit_logs(directory, *, snapshot_times=(), archived_raw=False):
     # Requests inside an event window: one exception each, counted in traffic(); traffic() and correlation()
     # relax their checks for exactly these.
     during = set()
+    # Package B12: each unit an event type of the session restarts by design, whether its RESTART_KEYS changed between
+    # the guest's states (guest()); correlation() times its restarts in the guest's journal.
+    changed_units = {}
     counts = Counter()  # Exceptions admitted, by id of features/audit_policy.py TOLERATED.
     # The session's protocol and its audit bounds (None: schema 1 or 2). Until protocol.json has been read the
     # bounds are unknown and admit nothing. v5: a schema-3 protocol with the profiles section, whose sessions run
@@ -214,6 +247,19 @@ def audit_logs(directory, *, snapshot_times=(), archived_raw=False):
 
     def in_call(*times):
         return any(lo <= t <= hi for t in times for lo, hi in calls)
+
+    def timed_units():
+        """Package B12: the units an event type of the session restarts by design (EVENT_UNITS), in REQUIRED_UNITS
+        order; only an occurrence with a window counts (events() names one without)."""
+        restarted = {unit for kind in event_types for unit in EVENT_UNITS.get(kind, ())}
+        return [unit for unit in REQUIRED_UNITS if unit in restarted]
+
+    def admitting_window(unit, stamp):
+        """Package B12: the index (in windows) of the first occurrence whose type restarts `unit` and whose window
+        holds the journal time `stamp`; None outside every such window. ValueError when the time cannot be read."""
+        t = unix(stamp)
+        return next((i for i, (kind, (lo, hi)) in enumerate(zip(event_types, windows))
+                     if unit in EVENT_UNITS.get(kind, ()) and lo <= t <= hi), None)
 
     def check(condition, key, detail=None):
         if not condition:
@@ -312,20 +358,23 @@ def audit_logs(directory, *, snapshot_times=(), archived_raw=False):
             clock = read_json(directory / "guest" / f"clock_{when}.json")
             check(abs(finite(clock["offset_s"])) <= 1.0 and 0 <= finite(clock["uncertainty_s"]) <= 1.0,
                   "guest_clock", when)
-        restarted = {unit for kind in event_types for unit in EVENT_UNITS.get(kind, ())}
+        # A unit an event type of the session restarts by design keeps its RESTART_KEYS unjudged here: the journal
+        # pass of correlation() admits its restart only inside the window of an occurrence of such a type and wants a
+        # start line of it where they changed (package B12, the lead's answer to Q67). Every other unit keeps them.
+        timed = timed_units()
         for unit in REQUIRED_UNITS:
-            if unit in restarted:
-                tolerate(counts, "event_unit_restarts")
-                continue
             a, b = before["units"].get(unit, {}), after["units"].get(unit, {})
-            check(all(k in a and k in b and a[k] == b[k] for k in
-                      ("NRestarts", "InvocationID", "ExecMainPID", "ExecMainStartTimestampMonotonic")),
-                  "service_restarted", unit)
+            kept = all(k in a and k in b and a[k] == b[k] for k in RESTART_KEYS)
+            if unit in timed:
+                changed_units[unit] = not kept
+            else:
+                check(kept, "service_restarted", unit)
         for name in SERVICES:
             unit = "hyptcn-lab@" + name
             known_pids.setdefault(name, set()).update(str(state["units"][unit]["ExecMainPID"]) for state in (before, after))
         return {"boot_id": after["boot_id"], "database_before": before["database"],
-                "database_after": after["database"], "units_checked": [u for u in REQUIRED_UNITS if u not in restarted]}
+                "database_after": after["database"], "units_checked": [u for u in REQUIRED_UNITS if u not in timed],
+                "units_timed": timed}
 
     def segments():
         files, counts = {}, {}
@@ -490,6 +539,11 @@ def audit_logs(directory, *, snapshot_times=(), archived_raw=False):
             check(pre[row["rid"]] == [row["status"]], "preflight_correlation", row["rid"])
         pids = {name: known_pids[name] for name in SERVICES}
         service, catalog_calls = Counter(), Counter()
+        # Package B12: the systemd lines of each unit an event type of the session restarts by design, by the window
+        # that admits them (an index of windows), outside every window of a type that restarts it, or without a time;
+        # and the units with a start line.
+        timed = timed_units()
+        admitted, outside, untimed, started = defaultdict(Counter), Counter(), Counter(), set()
         journal = contents["journal:journal.txt"]
         for line in journal.splitlines():
             m = SERVICE_LINE.search(line)
@@ -505,6 +559,32 @@ def audit_logs(directory, *, snapshot_times=(), archived_raw=False):
                     tolerate(counts, "event_window_journal")
                 else:
                     problems.add("journal_error_or_loss", line[:180])
+            u = UNIT_LINE.match(line)
+            unit = u[3] or u[4] if u else None
+            if unit in timed:
+                try:
+                    where = admitting_window(unit, u[1])
+                except ValueError:
+                    untimed[unit] += 1
+                    continue
+                if where is None:
+                    outside[unit] += 1
+                else:
+                    admitted[where][unit] += 1
+                if u[2] == "Started":
+                    started.add(unit)
+        # A line outside every window of a type that restarts the unit refuses it by name; a line without a readable
+        # time, or a change of its RESTART_KEYS (guest()) without a start line of it, is a restart the audit cannot
+        # place in time: refused as any other restart (fail closed). Where the section guest could not be read the
+        # change is unknown, and that section refuses the session. Each window counts the units it admitted.
+        for unit in timed:
+            if outside[unit]:
+                problems.add("service_restarted_outside_event", unit)
+            if untimed[unit] or changed_units.get(unit) is True and unit not in started:
+                problems.add("service_restarted", unit)
+        for where in sorted(admitted):
+            for unit in admitted[where]:
+                tolerate(counts, "event_unit_restarts")
 
         def served(rid, name, method, route, status):
             return sum(service[(rid, pid, method, route, status)] for pid in pids[name])
@@ -543,7 +623,11 @@ def audit_logs(directory, *, snapshot_times=(), archived_raw=False):
                 problems.add("nginx_error_log_nonempty", line[:180])
         return {"requests": len(expected), "nginx_matched_once": sum(matched[rid] == 1 for rid in expected),
                 "service_records": sum(service.values()), "preflight_requests": len(smoke["values"]["checks"]),
-                **({"tolerated_in_events": dict(tolerated)} if windows or calls else {})}
+                **({"tolerated_in_events": dict(tolerated)} if windows or calls else {}),
+                # Package B12: per window that admitted a restart, its type and the systemd lines of each unit in it.
+                **({"event_unit_restarts": [{"window": where, "type": event_types[where],
+                                             "units": dict(admitted[where])} for where in sorted(admitted)]}
+                   if timed else {})}
 
     def monitor():
         end = read_json(directory / "end.json")

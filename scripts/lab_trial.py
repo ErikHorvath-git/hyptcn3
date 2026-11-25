@@ -60,6 +60,10 @@ RESULT_SCHEMA = "hyptcn3/lab-trial-run/1"
 RECORD_SCHEMA = "hyptcn3/lab-trial/1"
 PERIODS_SCHEMA = "hyptcn3/lab-trial-periods/1"
 STAGE = "skuska"  # Proposal 11.1: the stage of every record.
+# The lead's answer to Q64 (2026-11-24): the saturation series runs per VM and profile, one VM at a time, and one rate
+# holds for both VMs, so a profile's rate comes from the smaller served rate.
+SATURATION_COMBINE_RULE = ("Q64: the series of each VM and profile; a profile's proposed rate is that of the VM with "
+                           "the smaller served rate (rate), since one rate holds for both VMs")
 NOTE = ("Lab test on one VM after package B5 (docs/HARNESS_V5.sk.md chapter 5 point 11, RIADENIE point 4), stage "
         "skuska: evidence of no criterion of G0 or G2. No collector, no sudo, no session, nothing in "
         "data/collections. The proposed rates are proposals: G2 determines scenarios.*.rate.")
@@ -1314,22 +1318,50 @@ def record(a, argv):
     steps = defaultdict(list)
     for d, doc in runs:
         steps[doc["step"]].append((d, doc))
-    saturation = {}
+    # A record of both VMs (stage G2, L1 and L2 of dokazy/G2p/odlozene_G2p.md): the VMs in the order the runs first
+    # name them; with one VM the record keeps the shapes of the lab test after B5.
+    vms = list(dict.fromkeys(doc["vm"] for _, doc in runs))
+    several = len(vms) > 1
+    on = (lambda v: f" on VM {v}") if several else (lambda v: "")
+    by_vm = defaultdict(dict)
     for d, doc in steps["saturation"]:
-        if doc["profile"] in saturation:
-            problems.append(f"several saturation runs of profile {doc['profile']}: the last one given counts "
-                            f"({d.name})")
-        saturation[doc["profile"]] = {"run": d.name, "scenario": doc["scenario"], **doc["saturation"]}
+        if doc["profile"] in by_vm[doc["vm"]]:
+            problems.append(f"several saturation runs of profile {doc['profile']}{on(doc['vm'])}: the last one given "
+                            f"counts ({d.name})")
+        by_vm[doc["vm"]][doc["profile"]] = {"run": d.name, "scenario": doc["scenario"], **doc["saturation"]}
+    if not several:
+        saturation = by_vm[vms[0]] if vms else {}
+        combined = saturation
+    else:
+        # The lead's answer to Q64: one rate holds for both VMs, so a profile's rate comes from the VM with the smaller
+        # served rate of its series; it needs a series on every VM.
+        saturation, combined = {}, {}
+        for profile in dict.fromkeys(prof for v in vms for prof in by_vm[v]):
+            found = {v: by_vm[v][profile] for v in vms if profile in by_vm[v]}
+            entry = {"by_vm": found, "rule": SATURATION_COMBINE_RULE}
+            missing = [v for v in vms if v not in found]
+            if missing:
+                problems.append(f"no saturation run of profile {profile} on VM {', '.join(missing)}: the rate needs "
+                                "a series on every VM")
+            elif all(s.get("proposed_rate") for s in found.values()):
+                v = min(found, key=lambda v: (found[v]["rate"], vms.index(v)))
+                entry["combined"] = {"vm": v, "rate": found[v]["rate"], "proposed_rate": found[v]["proposed_rate"]}
+                combined[profile] = entry["combined"]
+            saturation[profile] = entry
     proposed = {}
     for name, s in p["scenarios"].items():
-        found = saturation.get(s["profile"])
-        proposed[name] = found["proposed_rate"][s["intensity"]] if found else None
+        found = combined.get(s["profile"])
+        proposed[name] = found["proposed_rate"][s["intensity"]] if found and found.get("proposed_rate") else None
         if not found:
             problems.append(f"no saturation run of profile {s['profile']}: no rate proposed for {name}")
-        for step in ("scenario", "long"):
-            if not any(doc["scenario"] == name for _, doc in steps[step]):
-                problems.append(f"no {step} run of scenario {name}")
-    if not steps["deploy"]:
+        for v in vms:
+            for step in ("scenario", "long"):
+                if not any(doc["scenario"] == name and doc["vm"] == v for _, doc in steps[step]):
+                    problems.append(f"no {step} run of scenario {name}{on(v)}")
+    for v in vms:
+        if not any(doc["vm"] == v for _, doc in steps["deploy"]):
+            problems.append(f"no deploy run{on(v)}")
+    if not vms:
         problems.append("no deploy run")
     commits = sorted({doc["commit"] for _, doc in runs})
     if len(commits) > 1:
@@ -1349,15 +1381,39 @@ def record(a, argv):
                                     ([] if doc["step"] == "deploy" else [doc["qemu"]]) + [doc["qemu_after"]])
     problems += [f"VM {', '.join(sorted(names[domain]))} ({domain}): its QEMU process changed between or during its "
                  "runs (a restart of the VM)" for domain, found in qemus.items() if len(found) > 1]
-    pooled = periods_of([d for d, _ in steps["long"]]) if steps["long"] else None
-    for item in pooled or []:
-        if item["name"] in ("hyptcn-lab-udrzba.timer", AUTOVACUUM) and not item["spacings"]:
-            problems.append(f"{item['name']}: spacing not measured: {item['why']}")
-    autovacuum = autovacuum_property(pooled, p["interval_s"]) if pooled else None
-    problems += autovacuum_problems(autovacuum)
-    caps = proposed_max_concurrent(p, steps["long"], problems)
-    guest = {"vm": runs[0][1]["vm"], "domain": runs[0][1]["domain"],
-             "identity": steps["deploy"][-1][1].get("guest") if steps["deploy"] else None}
+    def periods_and_property(longs, where=""):
+        pooled = periods_of([d for d, _ in longs]) if longs else None
+        for item in pooled or []:
+            if item["name"] in ("hyptcn-lab-udrzba.timer", AUTOVACUUM) and not item["spacings"]:
+                problems.append(f"{item['name']}{where}: spacing not measured: {item['why']}")
+        found = autovacuum_property(pooled, p["interval_s"]) if pooled else None
+        problems.extend(f"{problem}{where}" for problem in autovacuum_problems(found))
+        return pooled, found
+
+    def identity(v):
+        deploys = [doc for _, doc in steps["deploy"] if doc["vm"] == v]
+        return deploys[-1].get("guest") if deploys else None
+
+    domains = {doc["vm"]: doc["domain"] for _, doc in runs}
+    if not several:
+        pooled, autovacuum = periods_and_property(steps["long"])
+        caps = proposed_max_concurrent(p, steps["long"], problems)
+        guest = {"vm": runs[0][1]["vm"], "domain": runs[0][1]["domain"],
+                 "identity": steps["deploy"][-1][1].get("guest") if steps["deploy"] else None}
+    else:
+        # L1 and L2: the guest, the periods with the property of Q9, and the proposed max_concurrent of each VM from
+        # its own runs; max_concurrent of a profile is the largest of the VMs (MAX_CONCURRENT_RULE, one cap for both).
+        pooled, autovacuum, by_vm_caps = {}, {}, {}
+        for v in vms:
+            longs = [(d, doc) for d, doc in steps["long"] if doc["vm"] == v]
+            pooled[v], autovacuum[v] = periods_and_property(longs, f" (VM {v})")
+            by_vm_caps[v] = proposed_max_concurrent(p, longs, problems)
+        caps = {"rule": MAX_CONCURRENT_RULE, "by_vm": by_vm_caps, "profiles": {}}
+        for profile in p["profiles"]:
+            values = [c["profiles"][profile]["max_concurrent"] for c in by_vm_caps.values()]
+            caps["profiles"][profile] = {"max_concurrent": None if None in values else max(values),
+                                         "by_vm": dict(zip(by_vm_caps, values))}
+        guest = {"vms": [{"vm": v, "domain": domains[v], "identity": identity(v)} for v in vms]}
     # n: the run directories assembled (each one step of the lab test).
     doc = {"schema": RECORD_SCHEMA, "stage": STAGE, "date": datetime.now(timezone.utc).isoformat(timespec="seconds"),
            "commit": commit(), "host": host(), "guest": guest,
