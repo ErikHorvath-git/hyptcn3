@@ -692,10 +692,13 @@ def test_a_generator_json_without_the_keys_of_the_readers_is_refused(bad, reason
         suchy_beh.neskorovane(_unscored_record(), bad)
 
 
-def test_the_command_belongs_to_package_c3(capsys):
-    """The command entry: python -m tcn.suchy_beh refuses every call but --help, naming package C3."""
+def test_the_command_entry_prints_the_pure_part_and_refuses_an_incomplete_call(capsys):
+    """The command entry (package C3 since the G1 preparation's C3: python -m tcn.suchy_beh beh, tested in
+    scripts/tests/test_suchy_beh.py): --help prints the module's docstring with the pure part; no command, a call of
+    beh without its required options and an unknown command are refused with exit 2 by the parser, before anything
+    runs."""
     from tcn import suchy_beh
     assert suchy_beh.main(["--help"]) == 0 and "hranice_m(zaznamy)" in capsys.readouterr().out
     for argv in ([], ["beh", "--generator", "nulovy", "--seed", "0", "--out", "x"], ["hranice"]):
         assert suchy_beh.main(argv) == 2
-        assert "package C3" in capsys.readouterr().err
+        assert "usage: python -m tcn.suchy_beh" in capsys.readouterr().err

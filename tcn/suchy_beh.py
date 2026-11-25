@@ -1,11 +1,34 @@
-"""The pure part of the G1 dry run (protocol v5, G1 preparation, package C2): the bounds m from the null runs, the
-decisions at an m, and the readers of the known answers of proposal 10.2.
+"""The G1 dry run (protocol v5, G1 preparation): its pure part (package C2), the bounds m from the null runs, the
+decisions at an m and the readers of the known answers of proposal 10.2, and its command (package C3).
 
-Binding texts: the skeleton dokazy/G1/kostra/KOSTRA.md (row C2 of section 1, the known answers of section 2), the
-lead's answer to questions Q32 to Q41 (2026-11-24T21:25Z: Q33 the unit of the percentile is the run, Q32 the grids and
-the column mask, Q34 m null at stage suchy, Q36 the marginal change in the structured runs only, Q41 the diagnostics
-where they are evaluated), proposal 6.4, 8.4, 8.5, 10.2 and 10.9. Nothing here runs the chain: the command that does,
-python -m tcn.suchy_beh beh ..., is package C3's, and main() refuses every call but --help.
+Binding texts: the skeleton dokazy/G1/kostra/KOSTRA.md (rows C2 and C3 of section 1, the known answers of section 2),
+the lead's answer to questions Q32 to Q41 (2026-11-24T21:25Z: Q33 the unit of the percentile is the run, Q32 the grids
+and the column mask, Q34 m null at stage suchy, Q36 the marginal change in the structured runs only, Q37 the threads,
+Q38 the mask of one qualification pass per generator, Q41 the diagnostics where they are evaluated), point 5 of his
+POKYNY_TEMPO_2026-11-25 (the shortened path), proposal 6.4, 7.5, 8.3, 8.4, 8.5, 10.2 and 10.9.
+
+THE COMMAND (package C3):
+
+    python -m tcn.suchy_beh beh --generator G --seed S --out DIR --praca WORK --cesta plna|skratena
+                                [--protocol P] [--vysledky R] [--chyby]
+
+One run from the plan to the report (Beh.run): scripts/gates.py require of G1 on the protocol file P (default
+config/collection-v5.json; R, default data/results, holds its gate records) and on the working copy (COPY_RULE: the
+rates, the grids of Z1, Z3 and Z5, analysis.columns of the qualification pass, MASK_RULE, and the limit of the
+replacements; its hashes of G0 and G1 are the file's); the rehearsal and the campaign of the real scripts/campaign.py
+on the harness of scripts/tests/suchy_kampan.py, whose fakes zaznam.json names (FAKES), the sessions of generator G
+(scripts/tests/suchy_generatory.py) at the run's seed S and one rejection injected (READ_ERROR_RULE), so that the
+campaign replaces once; the real corpus index of finish_corpus; safeguard.training.train_bundle at every seed of
+analysis.seeds; tcn.finalne evaluate on the run's own ledger (stage suchy), by the full path or the shortened one
+(SHORT_RULE, --cesta, no default); the readers of the known answers; scripts/campaign_report.py campaign; with --chyby
+the nine injected errors on the run's own targets (FAULTS_RULE); the cleanup (CLEANUP_RULE); check E of
+scripts/check_claims.sh over DIR. DIR receives the records, each with the header of check E (zaznam.json,
+generator.json, kvalifikacia.json, final.json with its attachments, vlozene_chyby.json), and the logs, each with the
+full header of S2 (suchy_beh.log, sprava.log, kontrola_E.log); WORK the campaign, its archive and index, the bundles,
+the replays, the ledgers and the report. The threads are fixed (VLAKNA, the lead's answer to Q37), no internet socket
+connects (bez_siete), the ledger of record is never written (strazena_kniha). Exit codes: EXIT_RULE.
+
+THE PURE PART (package C2):
 
     hranice_m(zaznamy)          the bounds m of K1, K2a and K2b from the records of the null runs (BOUND_RULE), with
                                 their derivation, the numbers beside them (BESIDE_RULE), the flag of the spread
@@ -729,17 +752,1015 @@ def strukturovane(zaznam, m=None):
 
 # ------------------------------------------------------------------ the command (package C3)
 
+REPO = Path(__file__).resolve().parents[1]
+PROTOKOL = REPO / "config" / "collection-v5.json"  # The real file of proposal 10.2 (the default of --protocol).
+VYSLEDKY = REPO / "data" / "results"  # The gate records (scripts/gates.py), the default of --vysledky.
+TRACKED_LEDGER = VYSLEDKY / "kniha_pecati.json"  # The ledger of record, which a dry run never writes.
+SCHEMA_RUN = "hyptcn3/g1-dry-run/1"
+SCHEMA_GENERATOR = "hyptcn3/g1-generator/1"
+SCHEMA_QUALIFICATION = "hyptcn3/g1-qualification-pass/1"
+SCHEMA_FAULTS = "hyptcn3/g1-injected-errors/1"
+REZIMY = ("nulovy", "strukturovany")  # scripts/tests/suchy_generatory.py MODES
+CESTY = ("plna", "skratena")
+# The lead's answer to Q37 (2026-11-24T21:25Z): two runs at once only with a number of compute threads the code fixes,
+# the same in every run. 2 threads of PyTorch and of the native thread pools (threadpoolctl): the executor's judgment,
+# G1 preparation (two runs at once take four of the six cores; the tests of tcn/ train with 2 threads too).
+VLAKNA = 2
+GUEST_NOTE = "bez VM: suchý beh G1 (návrh 10.2), syntetické session"  # The skeleton, section 4: guest null, a reason.
+# The working copy (the skeleton, section 0 and row C3; the lead's answer to Q32): the values of later stages that the
+# chain needs, each with its origin; the copy's hashes of G0 and G1 are the real file's (COPY_RULE).
+RATES = {"low": 1.2, "high": 3.2}
+RATE_ORIGIN = (
+    "the rates the lab trial proposes "
+    "(~/hyptcn3-logs/v5/dokazy/skuska_labu/behy/skuska_labu_20261123T092454Z_cast1.json values.proposed_rate eshop_low "
+    "1.2, eshop_high 3.2, and _cast2.json corp_low 1.2, corp_high 3.2; the skeleton of G1, row C3: eshop and corp low "
+    "1.2, high 3.2), user sessions a second at envelope level 1; G2 determines rate")
+CUSUM_SHIFTS = (0.0, 0.25, 0.5, 1.0, 2.0)  # normalized units (train standard deviations of M's normalizer)
+EWMA_ALPHAS = (0.02, 0.05, 0.1, 0.2, 0.3, 0.5, 0.7, 0.9, 1.0)
+RIDGE_ALPHAS = (1e-4, 1e-3, 1e-2, 0.1, 1.0, 10.0, 100.0, 1e3, 1e4)
+GRID_ORIGIN = (
+    "the executor's judgment, G1 preparation: the full family of candidates G3a will propose (the lead's answer to "
+    "Q32: never shrunk for time, with the edge members), under the rules of proposal 8.3 (Z1 a threshold per column on "
+    "its value, first difference, moving average and CUSUM, and on mem_changed_max; Z3 prediction by the last value, "
+    "the window mean and the EWMA; Z5 linear autoregression, ridge) and the skeleton of B7, section 2 (the free "
+    "parameters: Z1 the length of the moving average and the shift of the CUSUM, selected by the share of the "
+    "interventions inserted into dev it detects; Z3 the coefficient of the EWMA and Z5 the strength of the "
+    "regularization, each selected by the loss on dev): Z1 moving_average_rows every power of two from 2 up to "
+    "window_rows and window_rows itself (the longest the window holds), cusum_shift 0 (a plain cumulative sum, the "
+    "edge) to 2 standard deviations; Z3 ewma_alpha over the whole range (0, 1] from 0.02 (close to the window mean) to "
+    "1 (the last value); Z5 ridge_alpha from 1e-4 (close to least squares) to 1e4 (the strongest, close to the "
+    "intercept alone) by factors of 10")
+MAX_PER_CAMPAIGN = 9
+LIMIT_ORIGIN = (
+    "proposal 7.5: the limit is the smallest number at which the predicted probability of completing the plan is at "
+    "least 0.95, and its indicative table for 132 sessions and a rehearsal of 30 attempts gives 9 when the rehearsal "
+    "rejected none (the skeleton of G1, row C3: 9, no rejection); G3b determines it")
+COLUMNS_ORIGIN = (
+    "the qualification pass of the run's generator (MASK_RULE; the lead's answer to Q38), kvalifikacia.json "
+    "values.proposed_columns; G3a determines analysis.columns")
+COPY_RULE = (
+    "the working copy of the protocol (the skeleton of G1, sections 0 and 6 point 1; the lead's answer to Q32, "
+    "2026-11-24T21:25Z): the real file with the values of later stages the chain needs, scenarios.*.rate (G2), the "
+    "grids of Z1, Z3 and Z5 and analysis.columns (G3a) and replacement.max_per_campaign (G3b), each with its origin in "
+    "zaznam.json; every path in which the copy differs from the file is one that determined_at assigns to a stage "
+    "after G1 (scripts/gates.py later_paths), else the copy is refused naming the path, and its hashes of stages G0 "
+    "and G1 (scripts/gates.py stage_binding) are those of the file, else it is refused naming the stage; the command "
+    "calls scripts/gates.py require of G1 (a valid record of G0) on the file and on the copy")
+MASK_RULE = (
+    "the column mask of the copy (the skeleton of G1, row C3 and section 6 point 7; the lead's answer to Q38): one "
+    "qualification pass per generator, always at seed 0 of the generator whatever the run's seed, so that every run of "
+    "a generator has the same mask (tcn.suchy_beh hranice_m refuses runs whose masks differ): the sessions of roles "
+    "train and dev of the campaign plan of the copy without the mask, built by suchy_kampan.postav_session (one boot "
+    "per group, each session in the plan's order one slot of a session's length and kampan_v5.SLOT_GAP_S after the one "
+    "before), each audited by the real audit (boundary_sessions.audit) and refused by name when the audit refuses it; "
+    "of every accepted audit the measured rows of its feature archive (features/qualification.py measured) and the "
+    "offered load of its traffic_intervals.jsonl (offered_load), then features/qualification.py qualify in plan mode "
+    "campaign (its roles train and dev; never from_index, which reads the index of a campaign only at stage final); "
+    "its proposed_columns are the copy's analysis.columns; the classes by construction of the generator "
+    "(suchy_generatory.TRIEDY) are written beside them, and a difference is a finding, not a failure")
+SHORT_RULE = (
+    "the shortened path of the dry run (the lead's POKYNY_TEMPO_2026-11-25, point 5): the real tcn.finalne evaluate, "
+    "so that I and D are computed by the same functions as in the full path (tcn/finalne.py k1_claim and k2_claims, "
+    "tcn/k2.py k2_values, tcn.tvrdenia), with only what the criteria of G1 do not read left out, inside "
+    "tcn/suchy_beh.py alone (the final command of a campaign has no option to leave anything out): the descriptive "
+    "methods of analysis.descriptive_methods (tcn.opisne runs nothing in fit_methods), the context truncation of the "
+    "diagnostics (diagnostic_fits fits none, so opisné.diagnostics.context is empty) and the networks of the "
+    "diagnostics but those structured_generator reads, the model with shuffled context and the network with random "
+    "weights, which a run of the structured generator keeps (tcn/finalne.py STRUCTURE_CONTROLS) and a null run leaves "
+    "out with their claims (opisné.diagnostics.claims names the rule); M at every seed of analysis.seeds, Z0 to Z5, "
+    "the interventions, K1, K2a, K2b, the threshold-likeness of Z1 to Z3, the other diagnostics (the boot left out of "
+    "calibration, the alarm rules, the threshold from clean traffic), the replays, the metrics and the attachments are "
+    "those of the full path")
+KEPT_NETWORKS = {"nulovy": (), "strukturovany": ("shuffled context", "random weights")}  # tcn/finalne.py
+# STRUCTURE_CONTROLS, the networks structured_generator reads (the lead's list names M, Z1 to Z5 and the diagnostics
+# of Z1 to Z3; that the structured runs keep these two networks is the executor's reading, G1 preparation).
+FAULTS_RULE = (
+    "the nine injected errors of proposal 10.2 (scripts/tests/vlozene_chyby.py vsetky, in its order) on the run's own "
+    "targets (deferred item G [12] of B10: each injection on a copy of its own): Session, the session of the campaign "
+    "the run captured first with an event and without a tolerated invalid row, attempt 1, built again from "
+    "generator.json (values.captures, suchy_kampan.postav_session) before its audit, under the campaign's protocol; "
+    "Korpus, the accepted audits of the run's corpus in the order of its index, every session directory copied with "
+    "its audit record and its feature archive (every path of the session directory in the record, its session_dir, its "
+    "features and the paths of the log audit's sections, naming the copy, so that the log audit repeated in the copy "
+    "is the record's, features/quality.py require_log_audit); Pecat, a copy of the run's index and of its ledger after "
+    "its own final run (the branch 'consumed'), and a new directory; for each error expected = vloz(target) and got = "
+    "krok(target), equal or not; a clean target of each kind is admitted: a Session copy accepted by krok_audit and a "
+    "Korpus copy indexed by krok_korpus with no refusal, and of a Pecat the run's own final evaluation on its ledger "
+    "before it consumed the seal (complete) and the seal letting the replay of an archive of role train through "
+    "(tcn.pecat kontrola, allowed not_sealed)")
+CLEANUP_RULE = (
+    "after the run and its injected errors (the skeleton of G1, row C3: the session directories are deleted only after "
+    "--chyby): the session directories of the campaign and of the qualification pass and the copies of the injected "
+    "errors are deleted; the archive of the campaign (a copy of every session directory), the corpus index (it names "
+    "the deleted directories), the bundles, the replays, the ledgers, the ending records and the report stay in the "
+    "working directory, and the run's records in its out")
+EXIT_RULE = (
+    "exit 0 when the run ended with the record of stage suchy, the report, check E with no finding and, with --chyby, "
+    "nine of nine errors refused by their expected reasons and every clean target admitted; 1 when the run ended but "
+    "one of these did not hold (zaznam.json and the log name it); 2 for a refusal or a failure (zaznam.json says which "
+    "step, with the error)")
+
+
+def _cas():
+    from datetime import datetime, timezone
+    return datetime.now(timezone.utc).isoformat(timespec="seconds")
+
+
+def _git(*args):
+    import subprocess
+    found = subprocess.run(["git", "-C", str(REPO), *args], capture_output=True, text=True)
+    return found.stdout.rstrip("\n") if found.returncode == 0 else None
+
+
+def _sha(path):
+    import hashlib
+    with Path(path).open("rb") as stream:
+        return hashlib.file_digest(stream, "sha256").hexdigest()
+
+
+def _hostitel():
+    import platform
+    import socket
+    return f"{socket.gethostname()} ({platform.platform()})"
+
+
+def hlavicka_s2(command):
+    """The full header of S2 (deferred item S2 of G0) of a log: commit, date, host, git status --porcelain and the
+    command as run, each line beginning with '# '."""
+    status = _git("status", "--porcelain")
+    lines = [f"# commit {_git('rev-parse', 'HEAD')}", f"# date {_cas()}", f"# host {_hostitel()}",
+             "# git status --porcelain:" + (" (none)" if not status else ""),
+             *(f"#   {line}" for line in (status or "").splitlines()), f"# command {command}"]
+    return "".join(line + "\n" for line in lines)
+
+
+def hlavicka_e(schema, command, n, values, **extra):
+    """A record with the header of check E (scripts/check_claims.sh: commit, date, host, guest, command, n and
+    values): guest null with its reason (GUEST_NOTE), the commit with whether the tree differed from it."""
+    status = _git("status", "--porcelain")
+    return {"schema": schema, "commit": _git("rev-parse", "HEAD"), "commit_dirty": None if status is None else
+            bool(status), "date": _cas(), "host": _hostitel(), "guest": None, "guest_note": GUEST_NOTE,
+            "command": command, "n": n, **extra, "values": values}
+
+
+def _json(value):
+    from tcn.finalne import _json_default
+    return json.dumps(value, indent=1, ensure_ascii=False, allow_nan=False, default=_json_default) + "\n"
+
+
+def _zapis(path, doc):
+    """A new JSON file (never overwritten)."""
+    with Path(path).open("x", encoding="utf-8") as stream:
+        stream.write(_json(doc))
+    return Path(path)
+
+
+def _cesta(doc, path):
+    node = doc
+    for key in path.split("."):
+        node = node[key]
+    return node
+
+
+def _nastav(doc, path, value):
+    keys = path.split(".")
+    node = doc
+    for key in keys[:-1]:
+        node = node[key]
+    node[keys[-1]] = _copy_value(value)
+
+
+def _copy_value(value):
+    return json.loads(json.dumps(value))
+
+
+def _z1_ma(window_rows):
+    """Z1's moving averages (GRID_ORIGIN): every power of two from 2 up to window_rows, and window_rows itself."""
+    out, n = [], 2
+    while n < window_rows:
+        out.append(n)
+        n *= 2
+    return [*out, window_rows]
+
+
+def hodnoty_kopie(doc):
+    """{path: {value, origin}} that the working copy fills but analysis.columns (COPY_RULE): the rate of every
+    scenario, the grids of Z1, Z3 and Z5 and the limit of the replacements."""
+    out = {f"scenarios.{name}.rate": {"value": RATES[s["intensity"]], "origin": RATE_ORIGIN}
+           for name, s in doc["scenarios"].items()}
+    grids = {"Z1": {"moving_average_rows": _z1_ma(doc["window_rows"]), "cusum_shift": list(CUSUM_SHIFTS)},
+             "Z3": {"ewma_alpha": list(EWMA_ALPHAS)}, "Z5": {"ridge_alpha": list(RIDGE_ALPHAS)}}
+    for method, grid in grids.items():
+        out[f"analysis.methods.{method}.grid"] = {"value": grid, "origin": GRID_ORIGIN}
+    out["replacement.max_per_campaign"] = {"value": MAX_PER_CAMPAIGN, "origin": LIMIT_ORIGIN}
+    return out
+
+
+def _rozdiely(a, b, path=()):
+    """The dotted paths at which two JSON values differ: the keys of an object one by one, any other value whole."""
+    if type(a) is dict and type(b) is dict:
+        out = []
+        for key in sorted(set(a) | set(b)):
+            if key not in a or key not in b:
+                out.append((*path, key))
+            else:
+                out.extend(_rozdiely(a[key], b[key], (*path, key)))
+        return out
+    return [] if a == b and type(a) is type(b) else [path]
+
+
+def over_kopiu(skutocny, kopia):
+    """COPY_RULE: the working copy `kopia` of the protocol file `skutocny` (paths), checked: {paths, stages {G0, G1}},
+    the paths in which it differs; a path of no later stage than G1 is refused by name, so is a stage hash that
+    differs."""
+    from scripts import gates
+    real, mine = (json.loads(Path(path).read_text()) for path in (skutocny, kopia))
+    later = gates.later_paths(real.get("determined_at"), "G1")
+    paths = _rozdiely(real, mine)
+    for path in paths:
+        if not any(len(keys) <= len(path) and all(k in ("*", p) for k, p in zip(keys, path)) for keys in later):
+            where = ".".join(path) or "(the whole document)"
+            raise ValueError(f"the working copy {kopia} differs from the protocol file {skutocny} at {where}, which "
+                             "determined_at assigns to no stage after G1: refused (COPY_RULE; the lead's answer to "
+                             "Q32)")
+    stages = {}
+    for stage in ("G0", "G1"):
+        stages[stage] = {"file": gates.stage_sha256(skutocny, stage), "copy": gates.stage_sha256(kopia, stage)}
+        if stages[stage]["file"] != stages[stage]["copy"]:
+            raise ValueError(f"the working copy {kopia} has another hash of stage {stage} than the protocol file "
+                             f"{skutocny}: refused (COPY_RULE)")
+    return {"paths": [".".join(path) for path in paths], "stages": stages, "rule": COPY_RULE}
+
+
+def _gate(vysledky, protocol):
+    """scripts/gates.py require of G1 (a valid record of G0) on a protocol file, real (COPY_RULE)."""
+    from scripts import gates
+    gates.require(vysledky, protocol, "G1")
+    return {"results": str(vysledky), "protocol": str(protocol), "protocol_sha256": _sha(protocol), "stage": "G1",
+            "requires": "G0", "g0_stage_sha256": gates.stage_sha256(protocol, "G0"), "passed": True}
+
+
+class _Patch:
+    """Attributes set for the length of a block and restored after it, in reverse order."""
+
+    def __init__(self):
+        self.saved = []
+
+    def set(self, target, name, value):
+        self.saved.append((target, name, getattr(target, name)))
+        setattr(target, name, value)
+
+    def undo(self):
+        while self.saved:
+            target, name, value = self.saved.pop()
+            setattr(target, name, value)
+
+
+class _Context:
+    def __init__(self, enter):
+        self.enter, self.patch = enter, _Patch()
+
+    def __enter__(self):
+        self.enter(self.patch)
+        return self.patch
+
+    def __exit__(self, *exc):
+        self.patch.undo()
+        return False
+
+
+def vlakna():
+    """VLAKNA for the length of a block: the threads of PyTorch and the limit of the native thread pools
+    (threadpoolctl), the same in the command and in a check that evaluates its corpus again; PyTorch's are restored
+    after it."""
+    import threadpoolctl
+    import torch
+
+    def enter(patch):
+        before = torch.get_num_threads()
+        limits = threadpoolctl.threadpool_limits(VLAKNA)  # First: its restore resets the OpenMP pool of PyTorch.
+        torch.set_num_threads(VLAKNA)
+        patch.threads = (before, limits)
+
+    class Vlakna(_Context):
+        def __exit__(self, *exc):
+            before, limits = self.patch.threads
+            limits.restore_original_limits()
+            torch.set_num_threads(before)
+            return super().__exit__(*exc)
+    return Vlakna(enter)
+
+
+COMMAND_PATCHES = (
+    {"what": "VLAKNA threads of PyTorch and of the native thread pools (threadpoolctl) for the whole run",
+     "patches": ["torch.set_num_threads", "threadpoolctl.threadpool_limits"]},
+    {"what": "bez_siete: a connection of an internet socket of the process is refused",
+     "patches": ["socket.socket.connect", "socket.socket.connect_ex"]},
+    {"what": "strazena_kniha: a write of the ledger of record is refused", "patches": ["tcn.pecat._write"]},
+    {"what": "tcn.pecat vlastna_kniha: the run's ledger is the ledger of the process for the training, the final "
+     "evaluation and the injected errors (stage suchy)", "patches": ["tcn.pecat.KNIHA"]},
+    {"what": "vysledky_finalneho: tcn.finalne reads the gate records of --vysledky (GATE_RULE), only when it is not "
+     "data/results", "patches": ["tcn.finalne.RESULTS"]},
+    {"what": "skratena_cesta, only with --cesta skratena (SHORT_RULE)",
+     "patches": ["tcn.finalne.fit_methods", "tcn.finalne.diagnostic_fits", "tcn.finalne._variants",
+                 "tcn.finalne.control_claims"]},
+)
+
+
+def bez_siete():
+    """The dry run uses no network (proposal 10.2): a connection of an internet socket of this process is refused by
+    name (an AF_INET or AF_INET6 connect); its attempts are kept in .attempts of the patch."""
+    import socket
+
+    def enter(patch):
+        patch.attempts = []
+        connect, connect_ex = socket.socket.connect, socket.socket.connect_ex
+
+        def refuse(real):
+            def call(self, address):
+                if self.family in (socket.AF_INET, socket.AF_INET6):
+                    patch.attempts.append(repr(address))
+                    raise OSError(f"the G1 dry run uses no network: a connection to {address!r} is refused")
+                return real(self, address)
+            return call
+        patch.set(socket.socket, "connect", refuse(connect))
+        patch.set(socket.socket, "connect_ex", refuse(connect_ex))
+    return _Context(enter)
+
+
+def strazena_kniha():
+    """A write of the ledger of record (data/results/kniha_pecati.json) is refused before it happens."""
+    from tcn import pecat
+
+    def enter(patch):
+        original = pecat._write
+
+        def write(path, doc, command):
+            if Path(path).resolve() == TRACKED_LEDGER.resolve():
+                raise AssertionError("the G1 dry run never writes the ledger of record " + str(TRACKED_LEDGER))
+            return original(path, doc, command)
+        patch.set(pecat, "_write", write)
+    return _Context(enter)
+
+
+def vysledky_finalneho(vysledky):
+    """tcn/finalne.py reads the gate records of its stage in RESULTS (GATE_RULE): here those of --vysledky."""
+    from tcn import finalne
+
+    def enter(patch):
+        if Path(vysledky).resolve() != Path(finalne.RESULTS).resolve():
+            patch.set(finalne, "RESULTS", Path(vysledky))
+    return _Context(enter)
+
+
+def skratena_cesta(rezim):
+    """SHORT_RULE for a run of generator `rezim`, for the length of a block."""
+    from tcn import diagnostiky, finalne, opisne
+    keep = KEPT_NETWORKS[rezim]
+
+    def enter(patch):
+        fit_methods, diagnostic_fits = finalne.fit_methods, finalne.diagnostic_fits
+        variants, control_claims = finalne._variants, finalne.control_claims
+
+        def fit_short(*args, **kwargs):
+            inner = _Patch()
+            inner.set(opisne, "runs", lambda protocol: [])
+            try:
+                return fit_methods(*args, **kwargs)
+            finally:
+                inner.undo()
+
+        def diagnostics_short(*args, **kwargs):
+            inner = _Patch()
+            inner.set(diagnostiky, "context_truncation", lambda *a, **k: None)
+            try:
+                return dict(diagnostic_fits(*args, **kwargs), context={})
+            finally:
+                inner.undo()
+
+        def controls_short(networks, values, protocol, plan, mode):
+            if not keep:
+                return {"rule": finalne.CONTROL_CLAIMS_RULE, "not_computed": SHORT_RULE}
+            return control_claims(networks, values, protocol, plan, mode)
+        patch.set(finalne, "fit_methods", fit_short)
+        patch.set(finalne, "diagnostic_fits", diagnostics_short)
+        patch.set(finalne, "_variants", lambda: {name: net for name, net in variants().items() if name in keep})
+        patch.set(finalne, "control_claims", controls_short)
+    return _Context(enter)
+
+
+def vyhodnot(index, bundles, *, campaign, replays, out, ledger, cesta, rezim, vysledky=VYSLEDKY):
+    """The final evaluation of the dry run: tcn.finalne evaluate on the run's own ledger (stage suchy), the gate
+    records of `vysledky`, by the full path or by the shortened one (SHORT_RULE). Returns the record."""
+    from tcn import finalne
+    if cesta not in CESTY:
+        raise ValueError(f"the path of the dry run is {' or '.join(CESTY)}, not {cesta!r}")
+    with vysledky_finalneho(vysledky):
+        if cesta == "plna":
+            return finalne.evaluate(index, bundles, campaign=campaign, replays=replays, out=out, ledger=ledger)
+        with skratena_cesta(rezim):
+            return finalne.evaluate(index, bundles, campaign=campaign, replays=replays, out=out, ledger=ledger)
+
+
+def kvalifikacny_prechod(praca, kopia, protokol, rezim):
+    """MASK_RULE: (the values of kvalifikacia.json, the proposed columns) of the copy without the mask `kopia` (its
+    file) and `protokol` (the copy, loaded), the run's generator `rezim`, below the directory `praca`."""
+    from features import archive as feature_archive
+    from features import qualification as fq
+    from scripts import collection
+    from scripts import protocol_v5 as pv
+    from scripts.tests import boundary_sessions as bs
+    from scripts.tests import kampan_v5 as kv
+    from scripts.tests import suchy_generatory as sg
+    from scripts.tests import suchy_kampan as sk
+    roles = fq.ROLES_BY_MODE["campaign"]
+    rows = [dict(s, attempt=1) for s in pv.plan(protokol, "campaign")["sessions"] if s["role"] in roles]
+    span = protokol["cycles"] * protokol["interval_s"] + kv.SLOT_GAP_S
+    vms = [vm["name"] for vm in protokol["vms"]]
+    found, sessions, load, audits = {}, [], {}, []
+    for i, row in enumerate(rows):
+        p = collection.for_vm(protokol, row["vm"])
+        guest = {"kernel": kv.KERNEL, "boot_id": f"kvalifikacia-{row['group']}", "machine_id": f"machine-{row['vm']}",
+                 "stack_sha256": kv.STACK, "stack_manifest": list(bs.STACK_MANIFEST)}
+        qemu = {"pid": kv.FIRST_PID + vms.index(row["vm"]), "start_ticks": 1, "host_boot": kv.HOST_BOOT}
+        ident = f"kvalifikacia_{i + 1:02d}_{row['vm']}_{row['role']}_{row['scenario']}"
+        root = Path(praca) / "sessions" / row["vm"]
+        root.mkdir(parents=True, exist_ok=True)
+        session = sk.postav_session(root, p, kopia, row, rezim, 0, protokol, session_id=ident,
+                                    prvy_riadok_unix=kv.Clock().now + i * span, guest=guest, qemu=qemu)
+        (Path(praca) / "audits").mkdir(exist_ok=True)
+        audit = bs.audit(session, p, output=Path(praca) / "audits" / f"{ident}.json")
+        if audit.code != 0:
+            raise ValueError(f"the qualification pass: the audit refused session {ident}: {audit.values['reasons']}")
+        data = feature_archive.load(audit.archive)
+        mask = fq.measured(data)
+        times = np.asarray(data["casy"], dtype=float)
+        found[ident] = np.asarray(data["matica"], dtype=float)[mask][:, :len(feature_archive.BEHAVIOR_NAMES)]
+        sessions.append({"id": ident, "role": row["role"], "group": row["group"], "vm": row["vm"],
+                         "scenario": row["scenario"], "profile": protokol["scenarios"][row["scenario"]]["profile"],
+                         "position": row["position"], "start": float(times[0])})
+        load[ident] = fq.offered_load(session.directory / "traffic_intervals.jsonl", times[mask],
+                                      protokol["interval_s"])
+        audits.append({"session": ident, "role": row["role"], "group": row["group"], "vm": row["vm"],
+                       "audit": str(audit.path), "audit_sha256": _sha(audit.path),
+                       "features_sha256": audit.values["features_sha256"]})
+    result = fq.qualify(found, sessions, protokol, mode="campaign", load=load,
+                        response="plan mode campaign: its roles train and dev hold no control (features/"
+                                 "qualification.py ROLES_BY_MODE)")
+    proposed = result["proposed_columns"]
+    differ = {name: {"pass": proposed[name], "construction": sg.TRIEDY[name]} for name in proposed
+              if proposed[name] != sg.TRIEDY[name]}
+    values = {"generator": rezim, "seed": 0, "rule": MASK_RULE, "copy_without_mask": str(kopia),
+              "copy_without_mask_sha256": _sha(kopia), "sessions": audits, "qualification": result,
+              "proposed_columns": proposed, "classes_by_construction": dict(sg.TRIEDY),
+              "differences": differ, "finding": bool(differ)}
+    return values, proposed
+
+
+def _riadky_tvrdeni(values):
+    """The claims of a final record as zaznam.json carries them: per claim its status, outcome, m, statistic, compare
+    and per method the point estimate (the mean of its values per boot) and the interval."""
+    out = {}
+    for claim, record in (values.get("claims") or {}).items():
+        methods = record.get("methods") or {}
+        out[claim] = {"status": (values.get("conclusions") or {}).get(claim, {}).get("status"),
+                      "outcome": record.get("outcome"), "m": record.get("m"), "statistic": record.get("statistic"),
+                      "compare": record.get("compare"), "conclusion": record.get("conclusion"),
+                      "methods": {z: {"mean": item.get("mean"), "interval": item.get("interval"),
+                                      "boots": len(item.get("values") or {})}
+                                  for z, item in methods.items() if type(item) is dict}}
+    return out
+
+
+class Beh:
+    """One run of the dry run (beh): the arguments of the command line, the log, the steps and their times."""
+
+    def __init__(self, generator, seed, out, praca, cesta, *, protocol=PROTOKOL, vysledky=VYSLEDKY, chyby=False,
+                 command):
+        if generator not in REZIMY:
+            raise ValueError(f"the generator is {' or '.join(REZIMY)}, not {generator!r}")
+        if type(seed) is not int or seed < 0:
+            raise ValueError("the seed of a run is an integer of at least 0")
+        if cesta not in CESTY:
+            raise ValueError(f"the path is {' or '.join(CESTY)}, not {cesta!r}")
+        self.generator, self.seed, self.cesta, self.chyby = generator, seed, cesta, bool(chyby)
+        self.out, self.praca = Path(out).absolute(), Path(praca).absolute()
+        self.protocol, self.vysledky = Path(protocol).absolute(), Path(vysledky).absolute()
+        self.command = command
+        for path, option in ((self.out, "--out"), (self.praca, "--praca")):
+            if path.exists() or path.is_symlink():
+                raise FileExistsError(f"{option} {path} exists; a run writes a new directory")
+        if self.praca == self.out or self.out in self.praca.parents or self.praca in self.out.parents:
+            raise ValueError("--out and --praca are two separate directories, neither inside the other")
+        results = VYSLEDKY.resolve()
+        if self.praca.resolve() == results or results in self.praca.resolve().parents:
+            raise ValueError(f"--praca {self.praca} lies in {results}: the run's own ledger and its replays lie "
+                             "outside data/results (tcn/pecat.py vlastna_kniha, tcn/finalne.py REPLAY_RULE)")
+        self.out.mkdir(parents=True)
+        self.praca.mkdir(parents=True)
+        self.log = self.out / "suchy_beh.log"
+        self.log.write_text(hlavicka_s2(command))
+        self.kroky, self.facts, self.checks = [], {}, []
+
+    def zapis_log(self, text):
+        with self.log.open("a") as stream:
+            stream.write(f"{_cas()} {text}\n")
+
+    def krok(self, name):
+        """A step of the run: its start, end and seconds in self.kroky and in the log."""
+        import time
+        beh = self
+
+        class Krok:
+            def __enter__(self):
+                self.t0, self.start = time.monotonic(), _cas()
+                beh.zapis_log(f"krok {name}: začiatok")
+                return self
+
+            def __exit__(self, kind, error, trace):
+                item = {"step": name, "start": self.start, "end": _cas(), "s": round(time.monotonic() - self.t0, 3)}
+                if kind is not None:
+                    item["error"] = f"{kind.__name__}: {error}"
+                beh.kroky.append(item)
+                beh.zapis_log(f"krok {name}: {'koniec' if kind is None else 'chyba ' + item['error']} "
+                              f"({item['s']} s)")
+                return False
+        return Krok()
+
+    def kontrola(self, name, holds, detail):
+        """A check of EXIT_RULE: kept in self.checks and in the log."""
+        self.checks.append({"check": name, "holds": bool(holds), "detail": detail})
+        self.zapis_log(f"kontrola {name}: {'platí' if holds else 'NEPLATÍ'} ({detail})")
+
+    # ---------------------------------------------------------------- the chain
+
+    def run(self):
+        """The run, from the plan to the report and check E: its exit code (EXIT_RULE); zaznam.json either way."""
+        import torch
+        self.failure = None
+        try:
+            with vlakna(), bez_siete() as self.siet, strazena_kniha():
+                self.threads = {"torch_threads": torch.get_num_threads(),
+                                "torch_interop_threads": torch.get_num_interop_threads(), "threadpool_limit": VLAKNA,
+                                "rule": "VLAKNA (the lead's answer to Q37): fixed by the code, the same in every run"}
+                self._chain()
+        except Exception as error:  # noqa: BLE001 - every failure is written into zaznam.json (EXIT_RULE)
+            self.failure = {"step": self.kroky[-1]["step"] if self.kroky else None,
+                            "error": f"{type(error).__name__}: {error}"}
+            self.zapis_log(f"zlyhanie: {self.failure['error']}")
+            print(f"tcn.suchy_beh: {self.failure['error']}", file=sys.stderr)
+            if not (self.out / "zaznam.json").exists():
+                try:
+                    self._zaznam()
+                except Exception as late:  # noqa: BLE001 - the log keeps it
+                    self.zapis_log(f"zaznam.json sa nedal zapísať: {type(late).__name__}: {late}")
+            return 2
+        failed = [c["check"] for c in self.checks if not c["holds"]]
+        if failed:
+            print("tcn.suchy_beh: these checks of the run did not hold: " + ", ".join(failed), file=sys.stderr)
+        return 1 if failed else 0
+
+    def _chain(self):
+        import shutil
+        from scripts import collection
+        from scripts.collection_archive import read_json
+        from tcn import pecat
+        with self.krok("1 protokol a stupne"):
+            self.real_doc = json.loads(self.protocol.read_text())
+            collection.protocol(self.protocol)  # The loader's checks, before anything else.
+            self.gates = [_gate(self.vysledky, self.protocol)]
+        with self.krok("2 pracovna kopia bez masky"):
+            doc0 = _copy_value(self.real_doc)
+            self.values = hodnoty_kopie(doc0)
+            for path, item in self.values.items():
+                _nastav(doc0, path, item["value"])
+            self.kopia0 = _zapis(self.praca / "protokol_kopia_bez_masky.json", doc0)
+            over_kopiu(self.protocol, self.kopia0)
+            p0 = collection.protocol(self.kopia0)
+        with self.krok("3 kvalifikacny prechod"):
+            values, proposed = kvalifikacny_prechod(self.praca / "kvalifikacia", self.kopia0, p0, self.generator)
+            self.kvalifikacia = _zapis(self.out / "kvalifikacia.json", hlavicka_e(
+                SCHEMA_QUALIFICATION, self.command, len(values["sessions"]), values))
+            self.mask_finding = values["differences"]
+        with self.krok("4 pracovna kopia"):
+            doc = _copy_value(doc0)
+            doc["analysis"]["columns"] = proposed
+            self.values["analysis.columns"] = {"value": proposed, "origin": COLUMNS_ORIGIN}
+            self.kopia = _zapis(self.praca / "protokol_kopia.json", doc)
+            self.copy_check = over_kopiu(self.protocol, self.kopia)
+            self.gates.append(_gate(self.vysledky, self.kopia))
+            self.P = collection.protocol(self.kopia)
+        with self.krok("5 generalka a kampan"):
+            self._kampan()
+        with self.krok("6 generator.json"):
+            self._generator_json()
+        with self.krok("7 trening M"):
+            from safeguard.training import train_bundle
+            from scripts.protocol_v5 import analysis_plan
+            (self.praca / "baliky").mkdir()
+            with pecat.vlastna_kniha(self.kniha):
+                self.bundles = [Path(train_bundle(self.index, self.praca / "baliky" / f"seed-{seed}",
+                                                  window_rows=self.P["window_rows"], max_gap_s=self.P["max_gap_s"],
+                                                  seed=seed)["bundle"]) for seed in analysis_plan(self.P)["seeds"]]
+        with self.krok("8 finalne vyhodnotenie"):
+            self.kniha_pred = self.praca / "kniha_pred_finalnym_behom.json"
+            shutil.copyfile(self.kniha, self.kniha_pred)
+            self.final = self.out / "final.json"
+            with pecat.vlastna_kniha(self.kniha):
+                self.record = vyhodnot(self.index, self.bundles, campaign=self.ending, replays=self.praca / "prehratia",
+                                       out=self.final, ledger=self.kniha, cesta=self.cesta, rezim=self.generator,
+                                       vysledky=self.vysledky)
+            values = self.record["values"]
+            self.kontrola("final_record", self.record.get("stage") == "suchy" and values.get("status") == "complete",
+                          f"stage {self.record.get('stage')}, status {values.get('status')}")
+        with self.krok("9 citace znamych odpovedi"):
+            self._citace()
+        with self.krok("10 sprava kampane"):
+            self._sprava()
+        if self.chyby:
+            with self.krok("11 vlozene chyby"):
+                self._chyby()
+        with self.krok("12 upratanie"):
+            removed = [self.h.collections, self.praca / "kvalifikacia" / "sessions", self.praca / "chyby"]
+            self.removed = [str(path) for path in removed if path.exists()]
+            for path in removed:
+                if path.exists():
+                    shutil.rmtree(path)
+        with self.krok("13 kontrola E pred zaznamom"):
+            self.check_e = self._kontrola_e("pred zápisom zaznam.json")
+        with self.krok("14 zaznam"):
+            self._zaznam()
+        with self.krok("15 kontrola E"):
+            last = self._kontrola_e("po zápise zaznam.json, nad každým JSON v --out")
+            self.kontrola("check_E", self.check_e["exit"] == 0 and last["exit"] == 0,
+                          f"exit {self.check_e['exit']} before and {last['exit']} after zaznam.json (kontrola_E.log)")
+        read_json(self.out / "zaznam.json")  # Readable once written.
+
+    def _kampan(self):
+        """The rehearsal and the campaign on the harness (suchy_kampan.Kampan), one rejection injected."""
+        import pytest
+        from scripts import protocol_v5 as pv
+        from scripts.collection_archive import read_json
+        from scripts.tests import suchy_kampan as sk
+        P = self.P
+        self.kniha = self.praca / "kniha" / "kniha_pecati.json"
+        self.kniha.parent.mkdir()
+        with pytest.MonkeyPatch.context() as mp:
+            h = sk.Kampan(self.praca / "kampan", mp, protokol=P, rezim=self.generator, seed=self.seed, kniha=self.kniha)
+            h.label = "rehearsal"
+            self.rehearsal = h.init(self.kopia, "rehearsal", P["name"] + P["rehearsal"]["name_suffix"])
+            h.run(self.rehearsal)
+            h.label = "campaign"
+            first = next(s for s in pv.plan(P, "campaign")["sessions"] if s["role"] == REJECTED_ROLE)
+            self.injected = {"campaign": P["name"], "group": first["group"], "scenario": first["scenario"],
+                             "attempt": 1, "rule": sk.READ_ERROR_RULE}
+            h.reject.add((P["name"], first["group"], first["scenario"], 1))
+            self.campaign = h.init(self.kopia, "campaign", P["name"], estimate_from=self.rehearsal)
+            h.run(self.campaign)
+        self.h = h
+        self.index = self.campaign / "corpus.json"
+        self.endings = {}
+        for directory in (self.rehearsal, self.campaign):
+            found = [path for path, doc in h.records(directory)
+                     if (doc.get("values") or {}).get("ending") == "complete"]
+            if len(found) != 1:
+                raise ValueError(f"the campaign {directory.name} has {len(found)} records of its complete ending, not "
+                                 "one")
+            self.endings[directory.name] = found[0]
+        self.ending = self.endings[self.campaign.name]
+        self.ending_doc = read_json(self.ending)
+
+    def _generator_json(self):
+        """generator.json of the run (check E's header): suchy_generatory.generator_json of every captured row and
+        attempt, the readers' form of the sessions of the corpus (suchy_kampan.GENERATOR_MAP_RULE) and what rebuilds
+        every capture (suchy_kampan.SESSION_RULE)."""
+        from scripts.collection_archive import read_json
+        from scripts.tests import suchy_generatory as sg
+        from scripts.tests import suchy_kampan as sk
+        h = self.h
+        gen = sg.generator_json([entry["row"] for entry in h.riadky], self.generator, self.seed, self.P)
+        by_session = {entry["session"]: record for entry, record in zip(h.riadky, gen["sessions"])}
+        verdicts = {}
+        for audit in h.audits:  # The last audit of a session decides (a session is audited once).
+            verdicts[audit["sid"]] = audit
+        self.corpus_ids = [r["id"] for r in read_json(self.index)["sessions"]]
+        captures = [{"session": entry["session"], "campaign": entry["campaign"], "vm": entry["vm"],
+                     "plan_mode": entry["plan_mode"], "row": entry["row"], "first_row_unix": entry["first_row_unix"],
+                     "guest": entry["guest"], "qemu": entry["qemu"], "fields": entry["fields"],
+                     "read_error": entry["read_error"], "accepted": verdicts[entry["session"]]["accepted"],
+                     "reasons": verdicts[entry["session"]]["reasons"]} for entry in h.riadky]
+        values = {"generator": gen, "sessions": sk.zaznam_generatora({sid: by_session[sid] for sid in self.corpus_ids}),
+                  "corpus_sessions": self.corpus_ids, "captures": captures,
+                  "rules": {"session": sk.SESSION_RULE, "read_error": sk.READ_ERROR_RULE,
+                            "map": sk.GENERATOR_MAP_RULE, "keys": GENERATOR_KEYS}}
+        self.generator_values = values
+        self.generator_file = _zapis(self.out / "generator.json", hlavicka_e(
+            SCHEMA_GENERATOR, self.command, len(captures), values))
+
+    def _citace(self):
+        """The readers of the known answers over the run's record (C2): what zaznam.json carries of section 2."""
+        readers = {"diagnostics_controls": lambda: diagnostiky(self.final),
+                   "marginal_change": lambda: okrajova_zmena(self.final, self.generator_values),
+                   "unscored_spans": lambda: neskorovane(self.final, self.generator_values)}
+        self.answers = {}
+        for name, read in readers.items():
+            try:
+                self.answers[name] = read()
+            except ValueError as error:
+                self.answers[name] = {"error": str(error)}
+                self.kontrola(f"reader {name}", False, str(error))
+
+    def _sprava(self):
+        """scripts/campaign_report.py campaign of the campaign, its output in sprava.log (S2 header)."""
+        import contextlib
+        import io
+        import shlex
+        from scripts import campaign_report
+        self.sprava = self.praca / "sprava"
+        argv = ["campaign", str(self.campaign), "--out", str(self.sprava), "--collections-dir",
+                str(self.h.collections), "--results-dir", str(self.h.results)]
+        out, err = io.StringIO(), io.StringIO()
+        with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+            code = campaign_report.main(argv)
+        with (self.out / "sprava.log").open("x") as stream:
+            command = shlex.join(["scripts/campaign_report.py", *argv]) + " (in the process of the run)"
+            stream.write(hlavicka_s2(command))
+            stream.write(out.getvalue() + err.getvalue() + f"exit {code}\n")
+        self.sprava_code = code
+        self.kontrola("report", code == 0 and (self.sprava / "summary.json").is_file(), f"exit {code}")
+
+    def _kontrola_e(self, kedy):
+        """Check E (scripts/check_claims.sh --json-hlavicky with VMIC_RESULTS_DIR the run's out), into kontrola_E.log
+        with the S2 header: {exit, output, when}."""
+        import os
+        import shlex
+        import subprocess
+        command = ["bash", str(REPO / "scripts" / "check_claims.sh"), "--json-hlavicky"]
+        env = dict(os.environ, VMIC_RESULTS_DIR=str(self.out))
+        found = subprocess.run(command, cwd=REPO, env=env, capture_output=True, text=True, timeout=600)
+        with (self.out / "kontrola_E.log").open("a") as stream:
+            stream.write(hlavicka_s2(f"VMIC_RESULTS_DIR={shlex.quote(str(self.out))} {shlex.join(command)}")
+                         + f"# when {kedy}\n" + found.stdout + found.stderr + f"exit {found.returncode}\n")
+        return {"exit": found.returncode, "output": (found.stdout + found.stderr).strip()[-2000:], "when": kedy,
+                "log": str(self.out / "kontrola_E.log")}
+
+    def _chyby(self):
+        """FAULTS_RULE: vlozene_chyby.json."""
+        import shutil
+        from scripts import collection
+        from scripts.tests import suchy_kampan as sk
+        from scripts.tests import vlozene_chyby as vc
+        from tcn import pecat
+        root = self.praca / "chyby"
+        root.mkdir()
+        gen = json.loads(self.generator_file.read_text())["values"]
+        protocol_path = self.campaign / "protocol.json"
+        records = {capture["session"]: record for capture, record in zip(gen["captures"], gen["generator"]["sessions"])}
+        chosen = next((c for c in gen["captures"] if c["campaign"] == self.P["name"] and c["row"]["attempt"] == 1
+                       and c["accepted"] and c["row"].get("events") and not records[c["session"]]["invalid_rows"]),
+                      None)
+        if chosen is None:
+            raise ValueError("the campaign captured no session with an event and without a tolerated invalid row: no "
+                             "target Session (FAULTS_RULE)")
+        index_doc = json.loads(self.index.read_text())
+
+        def session(d):
+            p = collection.for_vm(self.P, chosen["vm"])
+            built = sk.postav_session(d, p, protocol_path, chosen["row"], self.generator, self.seed, self.P,
+                                      session_id=chosen["session"], prvy_riadok_unix=chosen["first_row_unix"],
+                                      guest=chosen["guest"], qemu=chosen["qemu"], polia=chosen["fields"])
+            return vc.Session(built.directory, protocol_path, p, built.result)
+
+        def korpus(d):
+            audits = []
+            for r in index_doc["sessions"]:
+                source = Path(r["audit"]).parent
+                target = d / source.name
+                shutil.copytree(source, target, symlinks=True)
+                audit = target / Path(r["audit"]).name
+                # The audit record names the session directory (session_dir, features, the paths of the log audit's
+                # sections), which features/quality.py require_log_audit compares with the log audit repeated there:
+                # the copy's record names the copy (FAULTS_RULE).
+                text = audit.read_text()
+                for old, new in ((f'"{source}/', f'"{target}/'), (f'"{source}"', f'"{target}"')):
+                    text = text.replace(old, new)
+                audit.write_text(text)
+                audits.append(audit)
+            return vc.Korpus(audits, self.P, _sha(protocol_path), "campaign")
+
+        def pecat_target(d):
+            shutil.copyfile(self.index, d / "corpus.json")
+            shutil.copyfile(self.kniha, d / "kniha_pecati.json")
+            (d / "work").mkdir()
+            return vc.Pecat(d / "corpus.json", d / "kniha_pecati.json", d / "work")
+        builders = {"Session": session, "Korpus": korpus, "Pecat": pecat_target}
+        rows = []
+        for chyba in vc.vsetky():
+            d = root / chyba.id
+            d.mkdir()
+            target = builders[chyba.ciel.__name__](d)
+            expected = chyba.vloz(target)
+            got = chyba.krok(target)
+            rows.append({"id": chyba.id, "chyba": chyba.chyba, "ciel": chyba.ciel.__name__, "krok": chyba.krok.__name__,
+                         "expected": expected, "got": got, "equal": expected == got, "reasons": list(chyba.dovody)})
+            self.zapis_log(f"vložená chyba {chyba.id}: {'rovnaký dôvod' if expected == got else 'INÝ DÔVOD'}")
+        clean = {}
+        d = root / "cisty_session"
+        d.mkdir()
+        got = vc.krok_audit(session(d))
+        clean["Session"] = {"krok": "krok_audit", "target": chosen["session"], "got": got, "admitted": got == []}
+        d = root / "cisty_korpus"
+        d.mkdir()
+        got = vc.krok_korpus(korpus(d))
+        clean["Korpus"] = {"krok": "krok_korpus", "audits": len(index_doc["sessions"]), "got": got,
+                           "admitted": got == []}
+        d = root / "cisty_pecat"
+        d.mkdir()
+        target = pecat_target(d)
+        train = next(r for r in index_doc["sessions"] if r["role"] == "train")
+        allowed = pecat.kontrola(train["features"], purpose="tcn.porovnanie replay", ledger=target.ledger)["allowed"]
+        values = self.record["values"]
+        clean["Pecat"] = {"krok_finalne": {"what": "the run's own final evaluation on its ledger before it consumed "
+                                           "the seal", "out": str(self.final), "stage": self.record.get("stage"),
+                                           "status": values.get("status"), "ledger_before": str(self.kniha_pred),
+                                           "ledger_before_sha256": _sha(self.kniha_pred)},
+                          "krok_prehratie": {"what": "tcn.pecat kontrola of the archive of the first session of role "
+                                             "train, the purpose of a replay", "session": train["id"],
+                                             "allowed": allowed},
+                          "admitted": values.get("status") == "complete" and allowed == "not_sealed"}
+        refused = sum(row["equal"] for row in rows)
+        admitted = all(item["admitted"] for item in clean.values())
+        out = {"errors": rows, "refused_as_expected": refused, "of": len(rows), "clean_targets": clean,
+               "clean_admitted": admitted, "session_target": chosen["session"], "rule": FAULTS_RULE}
+        self.faults = _zapis(self.out / "vlozene_chyby.json", hlavicka_e(SCHEMA_FAULTS, self.command, len(rows), out))
+        self.faults_summary = {"file": str(self.faults), "sha256": _sha(self.faults), "refused_as_expected": refused,
+                               "of": len(rows), "clean_admitted": admitted}
+        self.kontrola("fault_injections", refused == len(rows) == 9 and admitted,
+                      f"{refused} of {len(rows)} refused by their expected reasons, clean targets admitted {admitted}")
+
+    # ---------------------------------------------------------------- zaznam.json
+
+    def _subory(self):
+        """The paths and sha256 of what the run made (the skeleton, row C3)."""
+        files = {}
+
+        def item(path):
+            path = Path(path)
+            return {"path": str(path), "sha256": _sha(path)} if path.is_file() else {"path": str(path), "sha256": None}
+        files["protocol"] = item(self.protocol)
+        for key, attr in (("copy", "kopia"), ("copy_without_mask", "kopia0"), ("qualification", "kvalifikacia"),
+                          ("generator", "generator_file"), ("index", "index"), ("ending", "ending"),
+                          ("final", "final"), ("ledger", "kniha"), ("ledger_before_final", "kniha_pred"),
+                          ("faults", "faults")):
+            if getattr(self, attr, None) is not None:
+                files[key] = item(getattr(self, attr))
+        if getattr(self, "endings", None):
+            files["endings"] = {name: item(path) for name, path in self.endings.items()}
+        if getattr(self, "bundles", None):
+            files["bundles"] = [dict(item(Path(b) / "manifest.json"), bundle=str(b)) for b in self.bundles]
+        if getattr(self, "record", None) is not None:
+            files["attachments"] = self.record["values"].get("attachments")
+            files["replays"] = str(self.praca / "prehratia")
+        if getattr(self, "sprava", None) is not None:
+            files["report"] = {"directory": str(self.sprava), "summary": item(self.sprava / "summary.json"),
+                               "readme": item(self.sprava / "README.md"), "exit": self.sprava_code,
+                               "log": item(self.out / "sprava.log")}
+        return files
+
+    def _retaz(self):
+        """chain_end_to_end (the skeleton, section 2): what the run did, from the plan to the report."""
+        from scripts.tests import suchy_kampan as sk
+        h, P = self.h, self.P
+        captures = self.generator_values["captures"]
+        corpus = set(self.corpus_ids)
+        mine = [c for c in captures if c["session"] in corpus]
+        events = [e for c in mine for e in c["row"].get("events", [])]
+        controls = [x for c in mine for x in c["row"].get("controls", []) if x.get("kind") is not None]
+        invalid = {sid: entry["invalid_rows"] for sid, entry in self.generator_values["sessions"].items()
+                   if entry["invalid_rows"]}
+        ending = self.ending_doc["values"]
+        rejected = [{"session": c["session"], "reasons": c["reasons"], "read_error": c["read_error"]}
+                    for c in captures if not c["accepted"]]
+        return {
+            "record": {"stage": self.record.get("stage"), "status": self.record["values"].get("status"),
+                       "mark": (self.record["values"].get("mark") or {}).get("mark")},
+            "group_prefixes": {"campaign": P["group_prefix"], "rehearsal": P["rehearsal"]["group_prefix"],
+                               "groups": sorted({c["row"]["group"] for c in captures})},
+            "vms": sorted({c["vm"] for c in captures}),
+            "events": {"sessions": sum(bool(c["row"].get("events")) for c in mine), "occurrences": len(events),
+                       "types": sorted({e["type"] for e in events})},
+            "controls": {"sessions": sum(bool(c["row"].get("controls")) for c in mine), "occurrences": len(controls),
+                         "kinds": sorted({x["kind"] for x in controls})},
+            "tolerated_invalid_rows": {"sessions": invalid, "rows": sum(len(v) for v in invalid.values())},
+            "rehearsal": {"campaign": self.rehearsal.name, "ending": str(self.endings[self.rehearsal.name]),
+                          "sessions": sum(c["campaign"] == self.rehearsal.name for c in captures)},
+            "campaign": {"campaign": self.campaign.name, "ending": str(self.ending), "corpus_sessions": len(corpus),
+                         "planned_sessions": ending.get("planned_sessions"),
+                         "accepted_sessions": ending.get("accepted_sessions"),
+                         "rejected_sessions": ending.get("rejected_sessions"),
+                         "replacements_used": ending.get("replacements_used")},
+            "replacement": {"injected": self.injected, "rejected": rejected,
+                            "replaced": [r for r in ending.get("rejected_sessions") or [] if r.get("replacement")]},
+            "fakes": [f["fake"] for f in sk.FAKES], "check_E": self.check_e, "report_exit": self.sprava_code,
+            "network": {"attempts": list(self.siet.attempts), "rule": "bez_siete: no connection of an internet socket"},
+            "stages_asked_by_the_campaign": len(h.gates), "selftests_asked_by_the_campaign": len(h.selftests)}
+
+    def _zaznam(self):
+        """zaznam.json (check E's header): the copy and both hashes, the fakes, the steps, the paths and sha256, the
+        claims, and one entry per criterion of G1 (the skeleton, section 2) with what the run shows of it."""
+        from scripts import gates
+        from scripts.tests import suchy_kampan as sk
+        ok = self.failure is None and getattr(self, "record", None) is not None
+        values = {
+            "status": "complete" if self.failure is None else "failed", "failure": self.failure,
+            "generator": self.generator, "seed": self.seed, "cesta": self.cesta, "chyby": self.chyby,
+            "protocol": {"path": str(self.protocol), "sha256": _sha(self.protocol),
+                         "g0_stage_sha256": gates.stage_sha256(self.protocol, "G0"),
+                         "g1_stage_sha256": gates.stage_sha256(self.protocol, "G1")},
+            "copy": {"values": {path: dict(item, file=_cesta_alebo_nic(self.real_doc, path)) for path, item in
+                                getattr(self, "values", {}).items()},
+                     "check": getattr(self, "copy_check", None), "rule": COPY_RULE,
+                     "mask_rule": MASK_RULE, "mask_finding": getattr(self, "mask_finding", None)},
+            "gates": getattr(self, "gates", []), "results": str(self.vysledky),
+            "fakes": list(sk.FAKES), "infrastructure": list(sk.INFRASTRUCTURE),
+            "command_patches": list(COMMAND_PATCHES), "threads": getattr(self, "threads", None),
+            "steps": list(self.kroky),
+            "files": self._subory(), "checks": list(self.checks),
+            "shortening": None if self.cesta == "plna" else {"rule": SHORT_RULE, "kept_networks":
+                                                             list(KEPT_NETWORKS[self.generator])},
+            "cleanup": {"removed": getattr(self, "removed", []), "rule": CLEANUP_RULE},
+            "rules": {"exit": EXIT_RULE, "faults": FAULTS_RULE, "short": SHORT_RULE, "copy": COPY_RULE,
+                      "mask": MASK_RULE, "session": sk.SESSION_RULE, "read_error": sk.READ_ERROR_RULE}}
+        if ok:
+            record = self.record["values"]
+            claims = _riadky_tvrdeni(record)
+            controls = ((record.get(OPISNE) or {}).get("diagnostics") or {}).get("claims")
+            values["claims"] = claims
+            values["known_answers"] = {
+                "chain_end_to_end": self._retaz(),
+                "null_generator": {"applies": self.generator == "nulovy", "claims": claims,
+                                   "reader": "tcn.suchy_beh hranice_m, rozhodnutia and bez_jedneho over the records of "
+                                             "at least MIN_RUNS null runs (package C4)"},
+                "structured_generator": {"applies": self.generator == "strukturovany", "claims": claims,
+                                         "controls": controls,
+                                         "reader": "tcn.suchy_beh strukturovane(final.json, m) at the bounds m of G1 "
+                                                   "(package C4)"},
+                **self.answers,
+                "fault_injections": getattr(self, "faults_summary", None) or {"not_run": "the run had no --chyby"}}
+        n = len(getattr(self, "corpus_ids", []) or [])
+        _zapis(self.out / "zaznam.json", hlavicka_e(SCHEMA_RUN, self.command, n, values))
+
+
+OPISNE = "opisné"  # tcn/finalne.py OPISNE
+REJECTED_ROLE = "train"  # The role whose first planned session the campaign rejects once (judgment, G1 preparation).
+
+
+def _cesta_alebo_nic(doc, path):
+    """The value at `path` of the real file, or None where it has none."""
+    try:
+        return _cesta(doc, path)
+    except (KeyError, TypeError):
+        return None
+
 
 def main(argv=None):
-    """The command entry of the G1 dry run belongs to package C3: every call but --help is refused."""
+    """python -m tcn.suchy_beh beh ...: one run of the G1 dry run (Beh); --help prints the module docstring."""
+    import argparse
+    import shlex
     argv = list(sys.argv[1:] if argv is None else argv)
     if argv in (["--help"], ["-h"]):
         print(__doc__.rstrip())
         return 0
-    print("tcn.suchy_beh: the command of the G1 dry run (beh, hranice, tabulka) is package C3's; this module holds the "
-          "pure part of package C2 only (hranice_m, rozhodnutia, bez_jedneho, okrajova_zmena, neskorovane, "
-          "diagnostiky, strukturovane)", file=sys.stderr)
-    return 2
+    parser = argparse.ArgumentParser(prog="python -m tcn.suchy_beh", description="the G1 dry run (package C3)")
+    sub = parser.add_subparsers(dest="command", required=True)
+    beh = sub.add_parser("beh", help="one run from the plan to the report and check E")
+    beh.add_argument("--generator", required=True, choices=REZIMY, help="the generator of the sessions (C1)")
+    beh.add_argument("--seed", required=True, type=int, help="the run's seed, an integer of at least 0")
+    beh.add_argument("--out", required=True, type=Path, help="a new directory for the run's records and logs")
+    beh.add_argument("--praca", required=True, type=Path,
+                     help="a new working directory (the campaign, the bundles, the replays), outside --out")
+    beh.add_argument("--cesta", required=True, choices=CESTY,
+                     help="plna: the whole final evaluation; skratena: SHORT_RULE (POKYNY_TEMPO point 5)")
+    beh.add_argument("--protocol", type=Path, default=PROTOKOL,
+                     help=f"the protocol file of the run (default {PROTOKOL.relative_to(REPO)}, the real file)")
+    beh.add_argument("--vysledky", type=Path, default=VYSLEDKY,
+                     help=f"the gate records scripts/gates.py require reads (default {VYSLEDKY.relative_to(REPO)})")
+    beh.add_argument("--chyby", action="store_true", help="the nine injected errors on the run's targets")
+    try:
+        a = parser.parse_args(argv)
+    except SystemExit as exit_:
+        return exit_.code if type(exit_.code) is int else 2
+    command = shlex.join(["python", "-m", "tcn.suchy_beh", *argv])
+    try:
+        run = Beh(a.generator, a.seed, a.out, a.praca, a.cesta, protocol=a.protocol, vysledky=a.vysledky,
+                  chyby=a.chyby, command=command)
+    except (OSError, ValueError) as error:
+        print(f"tcn.suchy_beh: {error}", file=sys.stderr)
+        return 2
+    code = run.run()
+    print(json.dumps({"zaznam": str(run.out / "zaznam.json"), "exit": code,
+                      "checks": {c["check"]: c["holds"] for c in run.checks}}, ensure_ascii=False))
+    return code
 
 
 if __name__ == "__main__":
