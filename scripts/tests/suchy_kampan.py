@@ -21,24 +21,38 @@ ledger, spies); nothing else is patched:
                         working copy (or its replacement), the rows of scripts/tests/suchy_generatory.py riadky in its
                         mode and run seed, the evidence of boundary_sessions.build_session under the copy's rate, the
                         row's events that ran and its controls, the identity of the group's guest boot and QEMU process
+    zapis_prevadzky     the traffic of that session (PREVADZKA_RULE, package C3b): the real scripts/host_traffic.py on
+                        a simulated clock with the lab's answers of LAB_RULE and the arrivals of PRICHODY_RULE, whose
+                        counts follow the planned offered load of suchy_generatory.ponukana_zataz, the load the
+                        counts of the rows follow and Z4 reads (the lead's answer to Q72 point 2)
     zaznam_generatora   the readers' form of generator.json (tcn/suchy_beh.py GENERATOR_KEYS) of the sessions of a
                         corpus, from the records of suchy_generatory.zaznam (GENERATOR_MAP_RULE)
 
 A session named in Harness.reject is built with one read error (READ_ERROR_RULE), which the real audit refuses, so the
 campaign replaces it with its next attempt. Only mechanics on synthetic sessions (HONESTY P4).
 """
+import bisect
 import copy
+import functools
+import hashlib
 import json
+import math
 from pathlib import Path
+import random
 import subprocess
+import threading
+from types import SimpleNamespace
 
+from features.audit_policy import audit_bounds
 from scripts import collection
+from scripts import host_traffic as ht
 from scripts import protocol_v5 as pv
 from scripts.collection_archive import read_json
 from scripts.tests import boundary_sessions as bs
 from scripts.tests import kampan_v5 as kv
 from scripts.tests import suchy_generatory as sg
 from scripts.tests import test_collection_logs as evidence
+from scripts.tests import test_host_traffic_v5 as htv5
 
 # What the dry run still fakes (the skeleton, row C3: lab, the host's identity and swap, the archive, the campaign's
 # requirement of the stages and of the self-test, the sleep inhibitor, root), each with what stands in for it and the
@@ -77,6 +91,13 @@ FAKES = (
      "patches": ["scripts.campaign.git", "scripts.campaign.verify_frozen"]},
     {"fake": "capture", "what": "collection.run_session: postav_session (suchy_kampan.SESSION_RULE)",
      "why": "no VM in G1: the skeleton's fake capture", "patches": ["scripts.collection.run_session"]},
+    {"fake": "the lab's answers and the clock of the traffic generator", "what": "the real scripts/host_traffic.py "
+     "of the session's command line (scripts/collection.py traffic_command) writes the traffic logs of every session "
+     "on a clock that jumps from one scheduled time to the next (every request lasts 0 s) with the answers of the lab "
+     "of suchy_kampan.LAB_RULE, the arrivals of suchy_kampan.PRICHODY_RULE (the counts follow the planned offered "
+     "load, suchy_generatory.ponukana_zataz); nginx and the services' journal lines follow its requests "
+     "(suchy_kampan.PREVADZKA_RULE)", "why": "no VM and no lab in G1 (the lead's answer to Q72 point 2: the load Z4 "
+     "reads is the load the counts follow)", "patches": []},
     {"fake": "extraction from guest RAM", "what": "collection.audit_session is the real one, whose "
      "collection.retazec returns the session's rows of scripts/tests/suchy_generatory.py riadky "
      "(boundary_sessions.audit); every other check of the audit and the log audit are real",
@@ -104,13 +125,13 @@ SESSION_RULE = (
     "a session of the dry run as a capture leaves it, before its audit (the skeleton of G1, row C3): "
     "boundary_sessions.build_session of the row (a row of the plan of the working copy in its mode, or its "
     "replacement, protocol_v5.replacement, with its attempt), its first snapshot at the time of the clock of the "
-    "harness and one interval_s after the logs of the traffic begin (test_collection_logs.build starts the measurement "
-    "1 s after them; so the offered load of the interval of every frame is logged, tcn/finalne.py LOAD_RULE), every "
-    "sidecar at the time of its row; the generator's frame (the events, the controls and the rows of suchy_generatory) "
-    "starts suchy_generatory.FIRST_ROW_S before the first snapshot; the logs of the traffic under the copy's rate on "
-    "the whole session (test_collection_logs.v5_traffic, the construction of item P3 of G2p, run again after "
-    "events.json so that its user sessions lie after every event window, its journal lines of the orders service "
-    "naming the service's pid in the guest's state, since no event of the plan restarts a unit here); session.json "
+    "harness, every sidecar at the time of its row; the generator's frame (the events, the controls and the rows of "
+    "suchy_generatory) starts suchy_generatory.FIRST_ROW_S before the first snapshot, and the measurement with it "
+    "(end.json measure_start_unix; test_collection_logs.build starts it 1 s after its base and ends it "
+    "ceil(cycles x interval_s) + 1 s after that), so that the traffic begins warmup_s before the measurement as "
+    "scripts/collection.py capture_session starts it and suchy_generatory.LOAD_RULE plans it; the traffic of the whole "
+    "session by the real generator (PREVADZKA_RULE, package C3b: its logs in place of those of "
+    "test_collection_logs.v5_traffic, which build_session writes first); session.json "
     "with the row's events and controls as the plan states them, the guest identity of the group's boot (the lab's, "
     "with the stack manifest of boundary_sessions) and the QEMU process of the group (every sidecar names its pid), "
     "and the fields of the capture of kampan_v5 (campaign, attempt, plan mode, commit); events.json the row's events "
@@ -131,9 +152,64 @@ GENERATOR_MAP_RULE = (
     "than analysis.evaluable.scored_share (evaluable false in the record), {what: control in role test_controls else "
     "event, index: its index among the events or the controls with a kind, type: the event's type or the control's "
     "kind}")
+PREVADZKA_RULE = (
+    "the traffic of a session of the dry run (package C3b; the lead's answer to Q72 point 2: the load Z4 reads is the "
+    "load the counts follow): the real scripts/host_traffic.py of the command line scripts/collection.py "
+    "traffic_command gives the session (its copy of the protocol, the scenario, the row's traffic seeds, the "
+    "protocol's rate, --dur warmup_s + cycles x interval_s, --warmup-s, summary intervals of 5 s), read as its main "
+    "reads it: prepare_v5 (the envelope of draw_envelope from the row's traffic seed, as "
+    "suchy_generatory.ponukana_zataz draws it, and the arrival plan of arrival_times), SessionRecorder (both logs of "
+    "schema /2, the header with the rate and its source, every summary interval with offered_sessions and "
+    "planned_sessions, the arrival records and the user session fields of every request), OpenLoop and UserClient "
+    "with the user sessions of eshop and corp; three things differ from a run on the lab: the arrivals of "
+    "PRICHODY_RULE, a clock that jumps from one scheduled time to the next (scripts/tests/test_host_traffic_v5.py "
+    "FakeClock: every request lasts 0 s) on the session's times (the origin warmup_s before end.json "
+    "measure_start_unix, the phase measure at measure_start_unix, post at measure_end_unix, the stop STOP_AFTER_S "
+    "after it), and the answers of LAB_RULE; two things differ from the generator's process: the run id is the first "
+    "12 hex digits of the sha256 of the session id (the generator draws a random one), so that a session built twice "
+    "is the same, and its log writer (host_traffic Writer, its records, their numbers and both end records) writes "
+    "every record when it is put, in the thread of the simulation (the generator's writer thread keeps the requests "
+    "from waiting for the disk; the records are the same, and the simulation does not switch threads for each); "
+    "traffic.json is the generator's status at its stop (host_traffic main_v5 save; its three fields of the real "
+    "clock, elapsed_s, ok_per_s and updated_at, on the session's clock), traffic_before.json its status at the end of "
+    "the warmup through scripts/collection.py check_warmup, end.json traffic_rc its exit "
+    "code (main_v5), session.json traffic the block of scripts/collection.py _v5_traffic; nginx's access line and the "
+    "services' journal lines of every request at its end, as test_collection_logs.v5_traffic writes them (the service "
+    "of its route, the call of auth where the route asks it, the catalog call of an order; test_collection_logs "
+    "_service and _asks_auth), each service under its pid in the guest's state; the lines of the requests of "
+    "test_collection_logs.build and v5_traffic leave both segments")
+PRICHODY_RULE = (
+    "the arrivals of a session of the dry run (package C3b): the generator's plan (host_traffic arrival_times of the "
+    "stream traffic_arrivals) but in the summary interval that holds most of the interval (t - interval_s, t] of a "
+    "row (the row's main interval, from 0.9 of it in the dry run's frame), which gets the count that brings the "
+    "row's offered load (features/qualification.py offered_load: every summary interval adds its offered_sessions "
+    "times the share of its length inside the row's interval) nearest to the row's plan, rate x the integral of the "
+    "envelope over the row's interval (suchy_generatory.ponukana_zataz and LOAD_RULE), from the last row to the "
+    "first (the next row's main interval, which a row reads at 0.1, is decided before it), wherever that plan is at "
+    "least 0.5 / audit.traffic.offered_load_tolerance user sessions, so that a count of whole user sessions reads it "
+    "within the tolerance of the log audit (2.5 at the tolerance 0.2; every row at the rates of Zápis 1 of G2); the n "
+    "arrivals of such an interval are placed anew, the n + 1 gaps on the envelope's integral (from the interval's "
+    "start to the first arrival, between them, from the last to its end) Dirichlet with parameter (n - 1) / (n + 1) "
+    "(one arrival uniform), under which every gap has the coefficient of variation 1 of a gap of a Poisson process, "
+    "so that the count the plan fixes does not lower the coefficient of variation of the rescaled spacings that the "
+    "log audit judges (scripts/traffic_log.py realism arrival_cv, bounds 0.8 to 1.2; the executor's judgment, G1 "
+    "preparation, from design checks of envelopes of each profile at 96 and 720 rows: the uniform placement, the "
+    "law of a Poisson process given its count, gave 0.83 to 1.02 at 3.2 and 4.4 user sessions a second over 40 "
+    "envelopes, the Dirichlet one 0.84 to 1.16 at 1.2 to 11.7376 over 60, its mean 0.98 to 1.0), mapped to times by "
+    "the generator's inverse of the integral "
+    "(Envelope.inverse), rounded as it rounds them and inside the interval; every other interval keeps the "
+    "generator's arrivals as drawn (the warmup but the main interval of the first row, the time after the last row, "
+    "a row whose plan is lower); the draws continue the stream traffic_arrivals after arrival_times")
+LAB_RULE = (
+    "the lab's answers to the generator in the dry run: scripts/tests/test_host_traffic_v5.py FakeLab (the routes of "
+    "lab/services.py and lab/nginx.conf, the cart of every customer, the deliberate client errors with their status), "
+    "a static file and a document of the seeded level with the size lab/seed.py gives it: static_files(0) by its "
+    "name, generate(0) by its id (one PBKDF2 iteration, on which no size depends; seed 0, the executor's judgment), "
+    "their content not built (the generator reads only its length)")
+STOP_AFTER_S = 0.5  # The runner stops the generator this long after the post phase begins (judgment; stop_child).
+MAX_PLACEMENTS = 1000  # Draws of an interval's arrivals until all lie inside it (judgment), then refused.
 MIDDLE = lambda p: p["full_every"] // 2  # noqa: E731 - the snapshot of READ_ERROR_RULE (as vlozene_chyby._middle).
 EVENT_STOPPED_S, EVENT_STARTED_S = 0.1, 0.05  # The host's calls of an event (judgment: within the event's window).
-RESTARTED_PID = "999"  # test_collection_logs.build(event=True): the orders service after its restart_sluzby.
 
 
 def profil(p):
@@ -184,14 +260,310 @@ def _chyba_citania(result, directory, p):
     evidence.write(found[0], side)
 
 
+# ------------------------------------------------------------------ the traffic of a session (package C3b)
+
+class _Telo:
+    """A response body of `n` bytes that is not built: the generator reads only its length (LAB_RULE)."""
+    __slots__ = ("n",)
+
+    def __init__(self, n):
+        self.n = n
+
+    def __len__(self):
+        return self.n
+
+
+@functools.lru_cache(maxsize=1)
+def _velkosti_labu():
+    """LAB_RULE: ({static file: bytes}, {document id: bytes}) of the seeded level of lab/seed.py at seed 0."""
+    from lab import seed
+    level = seed.generate(0, iterations=1)
+    return dict(seed.static_files(0)), {item["id"]: item["bytes"] for item in level["documents"]}
+
+
+class SluzbyLabu(htv5.FakeLab):
+    """LAB_RULE: the lab's answers to the requests of the generator."""
+
+    def __init__(self):
+        super().__init__()
+        self.static, self.documents = _velkosti_labu()
+
+    def _answer(self, method, path, query, auth, body, rid):
+        status, kind, data = super()._answer(method, path, query, auth, body, rid)
+        if status == 200 and method == "GET" and path.startswith("/static/"):
+            data = _Telo(self.static[path[len("/static/"):]])
+        elif status == 200 and method == "GET" and path.startswith("/api/docs/"):
+            data = _Telo(self.documents[int(path.rsplit("/", 1)[1])])
+        return status, kind, data
+
+
+class Hodiny(htv5.FakeClock):
+    """The clock of PREVADZKA_RULE: test_host_traffic_v5 FakeClock (a wait jumps to the next scheduled time, an event
+    runs when the time reaches it, the run stops at `limit`) whose wall clock is `origin_wall` + its time."""
+
+    def __init__(self, origin_wall, limit, stop):
+        super().__init__(limit, stop)
+        self.origin_wall = origin_wall
+
+    def wall(self):
+        return self.origin_wall + self.now
+
+    def dobeh(self):
+        """After the scheduler returned: the events up to the limit, then the limit (the runner's stop)."""
+        while self.events and self.events[0][0] <= self.limit:
+            when, callback = self.events.pop(0)
+            self.now = max(self.now, when)
+            callback()
+        self.now = max(self.now, self.limit)
+
+
+class _Pisar(ht.Writer):
+    """host_traffic Writer that writes in the thread of the simulation (PREVADZKA_RULE): never started, nothing to
+    join."""
+
+    def join(self, timeout=None):
+        return None
+
+
+class Zapisovac(ht.SessionRecorder):
+    """host_traffic SessionRecorder of PREVADZKA_RULE: the run id given (Recorder draws a random one), its Writer
+    writing every record at once in this thread (put), and the request records kept in `poziadavky`."""
+
+    def __init__(self, args, run, stop, files, clock, run_id):
+        super().__init__(args, run, stop, None, clock=clock)
+        self.run_id, self.poziadavky = run_id, []
+        self.writer = _Pisar(files, None, self.fail, self.SCHEMAS)
+        for key in files:
+            self.put(key, self.header(key))
+
+    def put(self, key, rec):
+        if key == "end":
+            self.writer.finish(rec)
+            return
+        if rec.get("type") == "request":
+            self.poziadavky.append(rec)
+        self.writer.guard(self.writer._write, key, rec)
+
+
+# The options of scripts/host_traffic.py main and the types its parser gives them; every other option is a string.
+TYPY_PRIKAZU = {"dur": float, "seed": int, "vlakien": int, "burst": float, "catalog_share": float,
+                "write_share": float, "protocol": Path, "rate": float, "warmup_s": float, "out": Path,
+                "requests_log": Path, "intervals_log": Path, "summary_interval_s": float}
+MOZNOSTI_PRIKAZU = ("target", "dur", "seed", "vlakien", "burst", "profile", "catalog_share", "write_share",
+                    "protocol", "scenario", "seeds", "rate", "warmup_s", "out", "session_id", "requests_log",
+                    "intervals_log", "summary_interval_s", "initial_phase")
+
+
+def argumenty(prikaz):
+    """The namespace host_traffic.py main parses from `prikaz`, the command line of scripts/collection.py
+    traffic_command (the interpreter and the script first): every option of its parser of the parser's type, when
+    not given its default (None, --profile legacy)."""
+    if Path(str(prikaz[1])).name != "host_traffic.py" or len(prikaz[2:]) % 2:
+        raise ValueError("not a command line of scripts/host_traffic.py with a value to every option")
+    out = dict(dict.fromkeys(MOZNOSTI_PRIKAZU), profile="legacy")
+    for flag, value in zip(prikaz[2::2], prikaz[3::2]):
+        name = str(flag)[2:].replace("-", "_")
+        if not str(flag).startswith("--") or name not in out:
+            raise ValueError(f"host_traffic.py has no option {flag}")
+        out[name] = TYPY_PRIKAZU.get(name, str)(str(value))
+    return SimpleNamespace(**out)
+
+
+def hranice_intervalov(switches, stop, step):
+    """The bounds of the summary intervals of a run of host_traffic.py (Recorder _roll, switch and close): from 0
+    every `step` seconds, a phase switch inside an interval closes it there and the next ones start from the switch,
+    and the last one closes at the stop (an empty one there is left out)."""
+    bounds = [0.0]
+    for at in (*switches, stop):
+        while bounds[-1] + step <= at:
+            bounds.append(bounds[-1] + step)
+        if at > bounds[-1]:
+            bounds.append(at)
+    return bounds
+
+
+def _rozmiestni(rng, n, envelope, lo, hi):
+    """PRICHODY_RULE: n arrival times inside (lo, hi), placed on the envelope's integral."""
+    if n == 0:
+        return []
+    a, b = envelope.cumulative(lo), envelope.cumulative(hi)
+    for _ in range(MAX_PLACEMENTS):
+        if n == 1:
+            ys = [rng.uniform(a, b)]
+        else:
+            gaps = [rng.gammavariate((n - 1) / (n + 1), 1.0) for _ in range(n + 1)]
+            total, done, ys = sum(gaps), 0.0, []
+            for gap in gaps[:-1]:
+                done += gap
+                ys.append(a + (b - a) * done / total)
+        times = [round(envelope.inverse(y), ht.ROUND) for y in ys]
+        if all(lo < t < hi for t in times):
+            return times
+    raise ValueError(f"no placement of {n} arrivals inside [{lo}, {hi}) in {MAX_PLACEMENTS} draws")
+
+
+def prichody(run, bounds, rows, interval_s, tolerance, rng):
+    """PRICHODY_RULE: (the arrival times, their record) of the V5Run `run` (prepare_v5, its arrival plan from the
+    stream traffic_arrivals, which `rng` continues), the bounds of its summary intervals and the times of the rows
+    (seconds of its clock); tolerance: audit.traffic.offered_load_tolerance. A row whose interval reaches into the
+    main interval of an earlier row cannot be read this way (ValueError)."""
+    envelope, rate = run.envelope, run.rate
+    bins = [[] for _ in bounds[1:]]
+    for t in run.arrivals:
+        i = bisect.bisect_right(bounds, t) - 1
+        if not 0 <= i < len(bins):
+            raise ValueError(f"the planned arrival at {t} s lies outside the summary intervals")
+        bins[i].append(t)
+    shares = []
+    for t in rows:
+        first = max(0, bisect.bisect_right(bounds, t - interval_s) - 1)
+        shares.append({i: (min(bounds[i + 1], t) - max(bounds[i], t - interval_s)) / (bounds[i + 1] - bounds[i])
+                       for i in range(first, min(len(bins), bisect.bisect_right(bounds, t)))
+                       if min(bounds[i + 1], t) > max(bounds[i], t - interval_s)})
+        if abs(sum((bounds[i + 1] - bounds[i]) * share for i, share in shares[-1].items()) - interval_s) > 1e-6:
+            raise ValueError(f"the summary intervals do not cover the interval of the row at {t} s")
+    main = [max(found, key=found.get) for found in shares]
+    if len(set(main)) != len(main):
+        raise ValueError("two rows share the summary interval that holds most of their intervals")
+    counts, placed, plans = {i: len(found) for i, found in enumerate(bins)}, {}, []
+    for r in reversed(range(len(rows))):
+        m, found = main[r], shares[r]
+        if any(i in main[:r] for i in found if i != m):
+            raise ValueError(f"the interval of row {r} reaches into the main interval of an earlier row")
+        rest = sum(share * counts[i] for i, share in found.items() if i != m)
+        plan = rate * envelope.integral(rows[r] - interval_s, rows[r])
+        plans.append(plan)
+        if plan >= 0.5 / tolerance:
+            counts[m] = placed[m] = max(0, math.floor((plan - rest) / found[m] + 0.5))
+    out = []
+    for i, found in enumerate(bins):
+        out += _rozmiestni(rng, placed[i], envelope, bounds[i], bounds[i + 1]) if i in placed else found
+    return sorted(out), {"rule": PRICHODY_RULE, "rows": len(rows), "rows_placed": len(placed),
+                         "lowest_plan": round(min(plans), 6) if plans else None, "planned": len(run.arrivals),
+                         "arrivals": len(out)}
+
+
+def _stav(metrics, recorder, run, loop, args, clock, final):
+    """The status file of the generator (host_traffic main_v5 save) at the time of the clock (PREVADZKA_RULE)."""
+    result = metrics.snapshot()
+    elapsed = clock.mono() - recorder.origin
+    result.update(elapsed_s=round(elapsed, 3), ok_per_s=round(result["ok"] / max(elapsed, .001), 3),
+                  updated_at=ht.utc(clock.wall()))
+    result.update(target=args.target, profile=run.profile, scenario=run.scenario, seed=run.seeds["traffic"],
+                  rate=run.rate, final=final, session_id=args.session_id, run_id=recorder.run_id,
+                  phase=recorder.phase, requests_logged=recorder.requests_logged(), logging_error=recorder.error,
+                  log_backpressure_s=round(recorder.blocked_s, 3), worker_errors=recorder.worker_errors,
+                  requests_log=str(args.requests_log), intervals_log=str(args.intervals_log), **loop.status())
+    return result
+
+
+def _hostovske_logy(d, requests, origin, old):
+    """PREVADZKA_RULE: nginx's access lines and the services' journal lines of `requests` (the request records), in
+    place of the lines of the requests `old` (their rids)."""
+    units = read_json(d / "guest" / "state_before.json")["units"]
+    nginx, journal = [], []
+
+    def call(r, name, method, route, status):
+        journal.append(f"{evidence.utc(r['t_end_mono'], origin)} guest "
+                       f"python3[{units['hyptcn-lab@' + name]['ExecMainPID']}]: client request rid={r['rid']} "
+                       f"method={method} path={route} status={status}\n")
+    for r in requests:
+        nginx.append(json.dumps({"schema": "hyptcn3/nginx-access/1", "rid": r["rid"], "forwarded_rid": r["rid"],
+                                 "method": r["method"], "uri": r["route"], "status": r["status"],
+                                 "msec": origin + r["t_end_mono"], "bytes": r["response_bytes"]}) + "\n")
+        name = evidence._service(r["route"])
+        if name is None:
+            continue
+        if evidence._asks_auth(r["method"], r["route"]):
+            call(r, "auth", "GET", "/api/auth/check", 401 if r["status"] == 401 else 200)
+        call(r, name, r["method"], r["route"], r["status"])
+        if r["route"] == "/api/orders" and r["method"] == "POST" and r["status"] == 201:
+            call(r, "catalog", "GET", "/api/catalog/prices", 200)
+
+    def rid(line):
+        found = line.split(" rid=", 1)
+        return found[1].split(" ", 1)[0] if len(found) == 2 else None
+    evidence._segment(d, "session", "nginx-access.jsonl",
+                      lambda lines: [line for line in lines if json.loads(line)["rid"] not in old] + nginx)
+    evidence._segment(d, "journal", "journal.txt", lambda lines: [line for line in lines if rid(line) not in old]
+                      + journal)
+
+
+def zapis_prevadzky(d, p, row, times):
+    """PREVADZKA_RULE: the traffic of the session directory `d` (built by boundary_sessions.build_session, its
+    session.json and end.json final but the traffic) of the planned row `row` under protocol `p` (the session's view of
+    the working copy), the times of its rows `times` (unix). Returns the record of PRICHODY_RULE with the run id."""
+    scenario = p["scenarios"][row["scenario"]]
+    if scenario.get("rate") is None:
+        raise ValueError(f"scenarios.{row['scenario']}.rate is null: a session of a planned role runs at the "
+                         "protocol's rate (the working copy gives it)")
+    meta, end = read_json(d / "session.json"), read_json(d / "end.json")
+    seeds = {purpose: row["seeds"][purpose] for purpose in collection.traffic_purposes()}
+    meta["traffic"] = collection._v5_traffic(SimpleNamespace(scenario=row["scenario"]), p, scenario["rate"],
+                                             "protocol", seeds, meta["cycles"])
+    evidence.write(d / "session.json", meta)
+    args = argumenty(collection.traffic_command(p, meta, d))
+    old = {r["rid"] for r in map(json.loads, (d / "traffic_requests.jsonl").read_text().splitlines())
+           if r.get("type") == "request"}
+    for path in (args.requests_log, args.intervals_log, args.out, d / "traffic_before.json"):
+        path.unlink()
+    run = ht.prepare_v5(args)
+    stream = random.Random(run.seeds["traffic_arrivals"])
+    if ht.arrival_times(run.envelope, run.rate, stream) != run.arrivals:
+        raise ValueError("the arrival plan of prepare_v5 is not arrival_times of the stream traffic_arrivals")
+    origin = end["measure_start_unix"] - run.warmup_s
+    measure, post = end["measure_start_unix"] - origin, end["measure_end_unix"] - origin
+    if measure != run.warmup_s:
+        raise ValueError("the measurement does not start warmup_s after the traffic (suchy_generatory.LOAD_RULE)")
+    bounds = hranice_intervalov((measure, post), post + STOP_AFTER_S, args.summary_interval_s)
+    tolerance = audit_bounds(p)["traffic"]["offered_load_tolerance"]
+    arrivals, record = prichody(run, bounds, [t - origin for t in times], p["interval_s"], tolerance, stream)
+    run = ht.V5Run(**dict(vars(run), arrivals=arrivals))
+    stop, failures = threading.Event(), []
+    clock = Hodiny(origin, post + STOP_AFTER_S, stop)
+    files = {"requests": open(args.requests_log, "x"), "intervals": open(args.intervals_log, "x")}
+    recorder = Zapisovac(args, run, stop, files, clock, hashlib.sha256(d.name.encode()).hexdigest()[:12])
+    metrics = ht.SessionMetrics(recorder.origin, ht.utc(recorder.origin_wall))
+    lab = SluzbyLabu()
+    loop = ht.OpenLoop(run, recorder, ht.UserClient(args.target, metrics, recorder, opener=lab.opener), stop,
+                       lambda function, *items: function(*items), clock=clock)
+
+    def warmup_end():
+        """The end of the warmup as capture_session reads it, then the phase measure."""
+        try:
+            evidence.write(args.out, _stav(metrics, recorder, run, loop, args, clock, False))
+            collection.write_json(d / "traffic_before.json", collection.check_warmup(p, d))
+        except Exception as error:  # noqa: BLE001 - the scheduler would take it for a failed user session
+            failures.append(error)
+        recorder.switch("measure")
+    clock.events = [(measure, warmup_end), (post, lambda: recorder.switch("post"))]
+    loop.serve()
+    clock.dobeh()
+    recorder.close(loop.end_fields())
+    if failures:
+        raise failures[0]
+    status = _stav(metrics, recorder, run, loop, args, clock, True)
+    evidence.write(args.out, status)
+    evidence.write(d / "end.json", dict(end, traffic_rc=3 if recorder.error else int(
+        status["unexpected_results"] != 0 or status["ok"] <= 0)))
+    intervals = [r for r in map(json.loads, args.intervals_log.read_text().splitlines()) if r["type"] == "interval"]
+    found = [iv["mono_start"] for iv in intervals] + [intervals[-1]["mono_end"]]
+    expected = [round(b, 6) for b in bounds]
+    if found != expected or [iv["offered_sessions"] for iv in intervals] != [
+            sum(1 for t in arrivals if lo <= t < hi) for lo, hi in zip(bounds, bounds[1:])]:
+        raise ValueError("the summary intervals of the generator are not those PRICHODY_RULE placed the arrivals in")
+    _hostovske_logy(d, recorder.poziadavky, origin, old)
+    return dict(record, run_id=recorder.run_id)
+
+
 def postav_session(root, p, protocol_path, row, rezim, seed, protokol, *, session_id, prvy_riadok_unix, guest, qemu,
                    polia=None, chyba_citania=False):
     """SESSION_RULE: the session `session_id` of `row` below `root`, as a boundary_sessions.Session (directory,
     protocol_path, result: the rows the audit's extraction returns). p: the protocol as the session's VM sees it
     (collection.for_vm of the copy), protokol: the copy itself (the generator reads its plans), guest: the identity of
     the guest's boot, qemu: the QEMU process, polia: more fields of session.json, chyba_citania: READ_ERROR_RULE."""
-    base = float(prvy_riadok_unix) - p["interval_s"]  # The logs begin one interval before the first snapshot.
     start = float(prvy_riadok_unix) - sg.FIRST_ROW_S  # The generator's frame: its events, controls and rows.
+    base = start - 1  # test_collection_logs.build starts the measurement 1 s after its base (SESSION_RULE).
     items = {"events": copy.deepcopy(row.get("events", [])), "event_grace_s": protokol["events"]["grace_s"],
              "source_sha256": {"lab/udalosti.py": evidence.SCRIPT_SHA256}}
     if row["role"] == pv.CONTROL_ROLE:
@@ -211,20 +583,12 @@ def postav_session(root, p, protocol_path, row, rezim, seed, protokol, *, sessio
         state = read_json(d / "guest" / f"state_{when}.json")
         evidence.write(d / "guest" / f"state_{when}.json", dict(state, boot_id=guest["boot_id"],
                                                                  kernel=guest["kernel"]))
-    events = _udalosti(row, start)
-    evidence.write(d / "events.json", {"schema": "hyptcn3/session-events/1", "events": events})
-    if events:
-        evidence.v5_traffic(d, p)  # Again: its user sessions after every event window (SESSION_RULE).
-        # v5_traffic names the orders service of build()'s own event (restart_sluzby, orders as pid RESTARTED_PID) in
-        # the journal lines of its requests after that event; no event of the plan restarts a unit here, so they name
-        # the service's pid in the guest's state (SESSION_RULE).
-        orders = read_json(d / "guest" / "state_before.json")["units"]["hyptcn-lab@orders"]["ExecMainPID"]
-        evidence._segment(d, "journal", "journal.txt", lambda lines: [
-            line.replace(f"python3[{RESTARTED_PID}]:", f"python3[{orders}]:") for line in lines])
+    evidence.write(d / "events.json", {"schema": "hyptcn3/session-events/1", "events": _udalosti(row, start)})
     if row["role"] == pv.CONTROL_ROLE:
         evidence.write(d / "controls.json", sg.controls_json(row, start))
     result = sg.riadky(row, rezim, seed, protokol)
     result["casy"] = [start + t for t in result["casy"]]
+    zapis_prevadzky(d, p, row, result["casy"])
     times = dict(zip(result["seq"], result["casy"]))
     for path in (d / "raw").glob("*.json"):
         side = json.loads(path.read_text())

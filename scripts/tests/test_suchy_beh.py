@@ -10,6 +10,10 @@ and point 5 of his POKYNY_TEMPO_2026-11-25, as the coordinator's brief of C3 lis
 4. the fakes named under fakes in zaznam.json and nothing else patched; the run calls scripts/gates.py require of G1
    on the real file and on the copy (a missing record of G0 refuses the run);
 5. the header of check E on every record of a run and the full header of S2 on every log.
+Package C3b (the lead's answer to Q72 point 2) adds, as the coordinator's brief of C3b lists it:
+6. for a session of each scenario at the rates of Zápis 1 of G2 (on a copy of the small protocol), the offered load
+   Z4 reads equals the planned load the counts follow (suchy_generatory.ponukana_zataz) within the log audit's
+   tolerance, the real audit accepting the clean session; the traffic logs are the generator's and reproducible.
 The real plan runs in C4 only. The small protocol takes the numbers its corpus can carry (as
 tcn/tests/test_finalne.py _protocol): they are the test's, no judgment of the protocol. Its record of G0 is the
 test's, in a directory of the test (--vysledky); no test writes data/results, the ledger of record or docs/. Only
@@ -30,6 +34,9 @@ RESULTS = ROOT / "data" / "results"
 TRACKED_LEDGER = RESULTS / "kniha_pecati.json"
 CLAIMS = ("k1", "k2a", "k2b")
 HEADER_E = ("commit", "date", "host", "guest", "command", "n")
+# Package C3b (the test's judgment): the small protocol is 7.5 times shorter than config/collection-v5.json (96 rows
+# against 720), and its think times are divided by the same factor (maly_protokol).
+THINK_SCALE = 720 / 96
 
 
 def _digest(path):
@@ -58,8 +65,13 @@ def maly_protokol(root):
     (sessions of a few MB on pytest's tmpfs, as kampan_v5 Harness.protocol) and the analysis numbers a corpus of this
     size carries, as tcn/tests/test_finalne.py _protocol takes them: 4 carrier boots, short blocks, few repetitions and
     resamples, an evaluable occurrence of 10 s, a horizon and a reverberation of 20 s, 2 positive episodes; the
-    controls' horizon 30 s. Its later-stage values are those protocol_doc gives (rates and grids null, every column
-    neural, no replacement): the working copy of the command fills them. Returns the path of the file."""
+    controls' horizon 30 s. Package C3b: the think times of both profiles (think_s mean and max) divided by
+    THINK_SCALE, so that a user session of the real generator (suchy_kampan.PREVADZKA_RULE) is as long against the
+    session and its events as on the plan of config/collection-v5.json; with the file's think times an eshop user
+    session that orders outlasts the gaps of up to three event windows of 30 to 60 s in 8 minutes, and the log audit's
+    order share, read outside every window (scripts/traffic_log.py realism), refuses the session. Its later-stage
+    values are those protocol_doc gives (rates and grids null, every column neural, no replacement): the working copy
+    of the command fills them. Returns the path of the file."""
     from features.tests import test_dataset_plan as dp
     from scripts import collection
     profile = root / "profile"
@@ -78,6 +90,9 @@ def maly_protokol(root):
     a["statistics"]["bootstrap"] = 200
     a["diagnostics"]["min_positive_episodes"] = 2
     doc["controls"]["horizon_s"] = 30
+    for params in doc["profiles"].values():
+        params["think_s"] = dict(params["think_s"], mean=params["think_s"]["mean"] / THINK_SCALE,
+                                 max=params["think_s"]["max"] / THINK_SCALE)
     path = root / "protokol.json"
     collection.write_json(path, doc)
     collection.protocol(path)
@@ -492,6 +507,161 @@ def test_every_record_has_the_header_of_check_e_and_every_log_that_of_s2(nulovy,
         found = subprocess.run(["bash", str(ROOT / "scripts/check_claims.sh"), "--json-hlavicky"], cwd=ROOT,
                                env=dict(os.environ, VMIC_RESULTS_DIR=str(run.out)), capture_output=True, text=True)
         assert found.returncode == 0, found.stdout + found.stderr
+
+
+# ------------------------------------------------------------------ 6. the traffic of a session (package C3b)
+
+# Zápis 1 of G2 as the coordinator's brief of C3b states it: user sessions a second at the envelope's peak of the high
+# and the low scenarios, and the preliminary profiles.*.max_concurrent; config/collection-v5.json has them once G2 wrote
+# them, and the working copy takes the file's rates (FILE_RATE_ORIGIN). Here on a copy of the small protocol only.
+ZAPIS_1 = {"high": 11.7376, "low": 4.4016}
+ZAPIS_1_CAP = 2818
+
+
+def _zapis_1(doc):
+    for s in doc["scenarios"].values():
+        s["rate"] = ZAPIS_1[s["intensity"]]
+    for params in doc["profiles"].values():
+        params["max_concurrent"] = ZAPIS_1_CAP
+
+
+def _postav(svet, tmp_path, scenario, name="s", role=None):
+    """(row, the copy loaded, the Session, its real audit) of the planned session of the scenario (and the role, when
+    given) with the most events (the first of them) in the campaign plan of the working copy of the small protocol at
+    the rates of Zápis 1, built by the fake capture of the run (suchy_kampan.postav_session) and audited by the real
+    audit (boundary_sessions.audit), as tcn/suchy_beh.py kvalifikacny_prechod does."""
+    from scripts import collection, protocol_v5 as pv
+    from scripts.tests import boundary_sessions as bs, kampan_v5 as kv, suchy_kampan as sk
+    copy_path = _copy(svet, tmp_path, _zapis_1)
+    protokol = collection.protocol(copy_path)
+    rows = [dict(s, attempt=1) for s in pv.plan(protokol, "campaign")["sessions"]
+            if s["scenario"] == scenario and role in (None, s["role"])]
+    row = max(rows, key=lambda s: len(s.get("events", [])))
+    p = collection.for_vm(protokol, row["vm"])
+    guest = {"kernel": kv.KERNEL, "boot_id": "c3b-" + row["group"], "machine_id": "machine-" + row["vm"],
+             "stack_sha256": kv.STACK, "stack_manifest": list(bs.STACK_MANIFEST)}
+    qemu = {"pid": kv.FIRST_PID, "start_ticks": 1, "host_boot": kv.HOST_BOOT}
+    root = tmp_path / name
+    root.mkdir()
+    session = sk.postav_session(root, p, copy_path, row, "strukturovany", 0, protokol, session_id="c3b_" + scenario,
+                                prvy_riadok_unix=kv.Clock().now, guest=guest, qemu=qemu)
+    return row, protokol, session, bs.audit(session, p, output=tmp_path / f"{name}_audit.json")
+
+
+def _zaznamy(path):
+    return [json.loads(line) for line in Path(path).read_text().splitlines()]
+
+
+@pytest.mark.parametrize("scenario", ["eshop_low", "eshop_high", "corp_low", "corp_high"])
+def test_the_offered_load_z4_reads_is_the_planned_load_the_counts_follow(scenario, svet, tmp_path):
+    """Package C3b (the lead's answer to Q72 point 2): a session of each scenario of the small protocol at the rates of
+    Zápis 1, built by the fake capture and accepted by the real audit, every realism requirement of the log audit and
+    its offered load met. The offered load Z4 reads of every row (features/qualification.py offered_load over the
+    times of the archive, as tcn/finalne.py load_session reads it) equals the planned offered load the counts of the
+    generator follow (suchy_generatory.ponukana_zataz) within the log audit's offered_load_tolerance. The logs are those
+    of the generator: its header (generator, the copy's rate from the protocol, the envelope draw_envelope draws from
+    the row's traffic seed as ponukana_zataz draws it); a summary interval that holds most of a row's interval offers
+    its planned sessions to less than two, every other one holds the generator's planned arrivals (arrival_times of
+    the stream traffic_arrivals) at their times; the traffic begins warmup_s before the measurement, the frame in
+    which the events' and controls' windows lie where the plan puts them."""
+    import random
+    import numpy as np
+    from features import archive as feature_archive
+    from features import qualification as fq
+    from features.audit_policy import audit_bounds
+    from scripts import host_traffic as ht
+    from scripts.tests import suchy_generatory as sg
+    row, protokol, session, audit = _postav(svet, tmp_path, scenario)
+    tolerance = audit_bounds(protokol)["traffic"]["offered_load_tolerance"]
+    times = [float(t) for t in session.result["casy"]]  # The times of the rows, which the archive keeps.
+    d = session.directory
+    load = fq.offered_load(d / "traffic_intervals.jsonl", times, protokol["interval_s"])
+    plan = sg.ponukana_zataz(row, protokol)
+    assert type(load) is list and len(load) == len(plan) == protokol["cycles"]
+    assert all(abs(got - want) <= tolerance * want for got, want in zip(load, plan)), max(
+        abs(got - want) / want for got, want in zip(load, plan))
+    assert (audit.code, audit.values["reasons"]) == (0, [])
+    assert [float(t) for t in feature_archive.load(audit.archive)["casy"]] == times
+    logs = json.loads(audit.path.read_text())["values"]["logs"]
+    realism = logs["sections"]["realism"]
+    assert all(item["ok"] for item in realism["requirements"]) and realism["offered_load"]["ok"]
+    requests, intervals = _zaznamy(d / "traffic_requests.jsonl"), _zaznamy(d / "traffic_intervals.jsonl")
+    header, s = requests[0], protokol["scenarios"][scenario]
+    warmup, interval_s = protokol["warmup_s"], protokol["interval_s"]
+    dur = warmup + protokol["cycles"] * interval_s
+    envelope, _ = ht.draw_envelope(protokol["profiles"][s["profile"]]["arrivals"],
+                                   random.Random(row["seeds"]["traffic"]), dur, warmup,
+                                   protokol["scenario_rule"]["min_peak_to_mean"])
+    assert (header["generator"], header["rate"], header["rate_source"]) == (ht.V5_GENERATOR, s["rate"], "protocol")
+    assert header["envelope"] == envelope.as_dict() and header["seeds"]["traffic"] == row["seeds"]["traffic"]
+    end = json.loads((d / "end.json").read_text())
+    origin = header["start_unix"]
+    assert end["measure_start_unix"] - origin == warmup and min(times) - end["measure_start_unix"] == pytest.approx(
+        sg.FIRST_ROW_S)
+    events = json.loads((d / "events.json").read_text())["events"]
+    assert events and [e["host_start_unix"] for e in events] == [end["measure_start_unix"] + e["start_s"]
+                                                                  for e in row["events"]]
+    planned = ht.arrival_times(envelope, s["rate"], random.Random(row["seeds"]["traffic_arrivals"]))
+    arrivals = [r["t_mono"] for r in requests if r.get("type") == "arrival"]
+    ivs = [r for r in intervals if r.get("type") == "interval"]
+    held = set()
+    for t in np.asarray(times) - origin:  # The summary interval that holds most of each row's interval.
+        overlap = [min(iv["mono_end"], t) - max(iv["mono_start"], t - interval_s) for iv in ivs]
+        held.add(int(np.argmax(overlap)))
+    assert min(plan) >= 0.5 / tolerance and len(held) == len(times)
+    for i, iv in enumerate(ivs):
+        mine = [t for t in arrivals if iv["mono_start"] <= t < iv["mono_end"]]
+        assert iv["offered_sessions"] == len(mine)
+        if i in held:
+            assert abs(iv["offered_sessions"] - iv["planned_sessions"]) < 2, iv
+        else:
+            assert mine == [t for t in planned if iv["mono_start"] <= t < iv["mono_end"]], iv["interval"]
+
+
+def test_the_controls_of_a_session_lie_where_the_plan_puts_them(svet, tmp_path):
+    """The controls of a session of test_controls start where the plan puts them, start_s after the measurement,
+    which begins warmup_s after the traffic; the real audit accepts the session, and the offered load Z4 reads follows
+    the plan as in a session with events."""
+    from features import qualification as fq
+    from features.audit_policy import audit_bounds
+    from scripts.tests import suchy_generatory as sg
+    row, protokol, session, audit = _postav(svet, tmp_path, "corp_low", role="test_controls")
+    assert (audit.code, audit.values["reasons"]) == (0, [])
+    d = session.directory
+    end = json.loads((d / "end.json").read_text())
+    planned = [c for c in row["controls"] if c.get("kind") is not None]
+    records = json.loads((d / "controls.json").read_text())["controls"]
+    assert planned and [r["host_start_unix"] for r in records] == [end["measure_start_unix"] + c["start_s"]
+                                                                    for c in planned]
+    assert end["measure_start_unix"] - _zaznamy(d / "traffic_requests.jsonl")[0]["start_unix"] == protokol["warmup_s"]
+    tolerance = audit_bounds(protokol)["traffic"]["offered_load_tolerance"]
+    load = fq.offered_load(d / "traffic_intervals.jsonl", session.result["casy"], protokol["interval_s"])
+    assert all(abs(got - want) <= tolerance * want for got, want in zip(load, sg.ponukana_zataz(row, protokol)))
+
+
+def test_a_session_built_twice_has_the_same_traffic(svet, tmp_path):
+    """PREVADZKA_RULE: the run id comes from the session id, the arrivals and the user sessions from the row's traffic
+    seeds, so the same session built twice has the same arrivals, requests, phases and summary intervals in its logs,
+    the same nginx and journal lines and the same status of the generator."""
+    import gzip
+    _, _, first, _ = _postav(svet, tmp_path, "corp_high", "prvy")
+    _, _, second, _ = _postav(svet, tmp_path, "corp_high", "druhy")
+
+    def records(d):
+        out = {}
+        for name in ("traffic_requests.jsonl", "traffic_intervals.jsonl"):
+            found = _zaznamy(d / name)
+            out[name] = [r for r in found if r.get("type") != "header"]
+            out[name + " header"] = {k: v for k, v in found[0].items() if k not in ("config", "pid")}
+        for name in ("session", "journal"):
+            segment = json.loads((d / "guest" / f"{name}_segment.json").read_text())
+            out[name] = [gzip.decompress((d / "guest" / entry["file"]).read_bytes()) for entry in segment["files"]]
+        out["status"] = {k: v for k, v in json.loads((d / "traffic.json").read_text()).items()
+                         if k not in ("requests_log", "intervals_log")}
+        return out
+    assert records(first.directory) == records(second.directory)
+    assert records(first.directory)["traffic_requests.jsonl header"]["run_id"] == hashlib.sha256(
+        b"c3b_corp_high").hexdigest()[:12]
 
 
 # ------------------------------------------------------------------ the command line
