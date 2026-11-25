@@ -1874,3 +1874,32 @@ def test_report_gives_the_limit_of_a_rehearsal_as_not_applied_and_the_rejections
     assert ("replaced under the protocol's rule: 1; the limit of replacements is not applied in mode rehearsal "
             "(definitions: limit).") in readme
     assert "of at most" not in readme and "By cause: audit_rejected 1:" in readme
+
+
+def test_a_replacement_of_a_v5_campaign_is_the_attempt_the_campaign_captured(tmp_path):
+    """The G1 preparation (C3) found that the report compared a replacement's session.json with its planned row. Under
+    protocol schema 3 a replacement is attempt n + 1 of its planned row, with its own seed, phases and traffic seeds
+    (campaign.attempt_row, REPLACEMENT_RULE), so every replacement of a v5 campaign read as differing from the frozen
+    assignment. with_replacements gives the rows campaign.chain and campaign.attempt_row give; schemas 1 and 2 keep the
+    planned row (the test above)."""
+    from scripts import protocol_v5
+    p = json.loads((REPO / "config" / "collection-v5.json").read_text())
+    rows = [dict(row, session_id=f"c_{i + 1:02d}")
+            for i, row in enumerate(protocol_v5.plan(p, mode="campaign")["sessions"][:3])]
+    first = rows[0]["session_id"]
+    (tmp_path / "attempts").mkdir()
+    rejected = {}
+    for sid, after in ((first, f"{first}-r1"), (f"{first}-r1", f"{first}-r2")):
+        rejected[sid] = {"session": sid, "replacement": after}
+        (tmp_path / "attempts" / f"{sid}.rejected.json").write_text(json.dumps(rejected[sid]))
+    expected = [camp.attempt_row({"mode": "campaign"}, p, row) for row in camp.chain(tmp_path, rows[0])]
+    problems = []
+    out = cr.with_replacements(rows, rejected, problems, protocol=p, mode="campaign")
+    assert problems == []
+    assert [{k: v for k, v in row.items() if k != "replaced_by"} for row in out[:3]] == expected
+    assert [row.get("replaced_by") for row in out[:3]] == [f"{first}-r1", f"{first}-r2", None]
+    assert [row["attempt"] for row in out[:3]] == [1, 2, 3] and len({row["seed"] for row in out[:3]}) == 3
+    assert out[3:] == rows[1:]
+    # Without the campaign's protocol (protocol.json absent) the report cannot draw the attempt: the planned row stays.
+    old = cr.with_replacements(rows, rejected, [], protocol=None, mode="campaign")
+    assert old[1]["seed"] == rows[0]["seed"] and "attempt" in old[1] and old[1]["attempt"] == 1

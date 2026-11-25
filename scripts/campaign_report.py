@@ -2276,8 +2276,17 @@ def read_rejections(directory, inputs):
     return records
 
 
-def with_replacements(rows, rejected, problems):
-    """Plan rows, each followed by the replacements of its audit-rejected sessions (campaign.chain)."""
+# campaign.CAMPAIGN_KEYS: the keys a campaign adds to a row of its plan (session ID, the chain of replacements).
+CAMPAIGN_KEYS = ("session_id", "replaces", "plan_session", "replacement")
+
+
+def with_replacements(rows, rejected, problems, protocol=None, mode=None):
+    """Plan rows, each followed by the replacements of its audit-rejected sessions (campaign.chain), each as the
+    assignment its capture ran (campaign.attempt_row, REPLACEMENT_RULE): under protocol schema 3 (`protocol`, the
+    campaign's protocol.json, and `mode`, its plan mode) replacement n is attempt n + 1 of its planned row, drawn by
+    protocol_v5.replacement with its own seed, phases and traffic seeds; under schemas 1 and 2 the planned row (the
+    same assignment and seed)."""
+    v5 = isinstance(protocol, dict) and protocol.get("schema") == protocol_v5.SCHEMA
     out = []
     for row in rows:
         current = row
@@ -2292,7 +2301,24 @@ def with_replacements(rows, rejected, problems):
             if replacement is None:
                 break
             current = {**row, "session_id": replacement, "replaces": current["session_id"]}
+            if v5:
+                current = v5_attempt(protocol, mode, row, current, number, problems)
     return out
+
+
+def v5_attempt(protocol, mode, planned, current, number, problems):
+    """campaign.attempt_row of replacement `number` of the planned row `planned` under protocol schema 3: attempt
+    number + 1, protocol_v5.replacement in the campaign's mode, with the campaign's keys. A draw protocol_v5 refuses
+    is a problem (campaign.py could not have captured it), and the row stays `current`."""
+    base = {key: value for key, value in planned.items() if key not in CAMPAIGN_KEYS}
+    try:
+        drawn = protocol_v5.replacement(protocol, base, number + 1, mode=mode)
+    except ValueError as error:
+        problems.append(f"replacement {current['session_id']}: protocol_v5.replacement refuses attempt {number + 1} "
+                        f"of {planned['session_id']} ({error}); it is compared with its planned row")
+        return current
+    return {**drawn, "session_id": current["session_id"], "replaces": current["replaces"],
+            "plan_session": planned["session_id"], "replacement": number}
 
 
 # The values of an ending record the report lists (design B9b 1.1), beside its ending, cause and stage.
@@ -2427,7 +2453,8 @@ def build_campaign(directory, collections, inputs, results=None):
     states = {vm: optional("status.json" if vm is None else f"status-{vm}.json", "campaign_status")
               for vm in (vms or [None])}
     rejected = read_rejections(directory, inputs)
-    planned_rows, rows = rows, with_replacements(rows, rejected, problems)
+    planned_rows, rows = rows, with_replacements(rows, rejected, problems, protocol=protocol,
+                                                 mode=manifest.get("mode"))
     events, stop_requests = read_events(directory, inputs)
     closed = None
     if (directory / "closed.json").exists():
