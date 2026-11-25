@@ -1573,3 +1573,18 @@ def test_the_legacy_detector_refuses_the_snapshots_of_a_sealed_session(sealed, l
         "scripts/detektor.py", f"the snapshot directory {raw.resolve()} of session tb-1", records["tb-1"], "campaign",
         ledger) + "\n"
     assert not out.exists()
+
+
+def test_tcn_eval_binds_a_replay_by_the_archive_its_configuration_names(sealed, of_record, tmp_path):
+    """The second G0 verification (should_fix of test_sealed, the lead's note of 2026-11-25): tcn.eval far and udalosti
+    asked the seal by the sha256 of a replay's archive alone, so a replay of a re-extraction of the sealed tb-1,
+    outside any session directory, was not_sealed. Its configuration.json names the archive's path, as safeguard replay
+    --archive writes it, and the seal now binds it by its content as well (the verifier's probe)."""
+    from tcn import eval as ev, pecat
+    again, digest = reextraction(tmp_path / "elsewhere" / "audit_again.npz", "tb-1")
+    replay = tmp_path / "replay"
+    replay.mkdir()
+    (replay / "configuration.json").write_text(json.dumps({"archive": str(again.resolve()), "archive_sha256": digest}))
+    with pytest.raises(pecat.Zapecatene) as error:
+        ev._pecat_prehratia(str(replay), "test_benign", "far")
+    assert "is sealed by its content" in str(error.value) and "tb-1" in str(error.value)

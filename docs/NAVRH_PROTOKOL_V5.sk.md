@@ -363,7 +363,7 @@ audit a archivácia po jednej, zmrazený commit a hash protokolu.
 | major faulty zberača na cyklus (`capture.rusage.majflt`) | `audit.collector_majflt_max`, `null` do G2, pravidlo kap. 10.9 (vedúci 2026-11-24, Q29) | sonda s 500 major faultami na cyklus prešla (riziko capture R4) |
 | doména a PID v každom sidecari sa zhodujú so session | presná zhoda | chýbajúca väzba na VM |
 | každá plánovaná udalosť prebehla a má účinok | predikát | udalosť bez účinku sa dnes prijme |
-| reštart jednotky, ktorú typ udalosti reštartuje zámerne, iba v okne výskytu toho typu | okno udalosti (štart − 1 s až stop + `events.grace_s`); reštart mimo neho je dôvod `service_restarted_outside_event`, reštart bez času v žurnáli hosťa `service_restarted` (zmena vedúceho 2026-11-24, odpoveď na otázku Q67) | v4 padla na crash-loope služby, ktorý audit pustil, lebo jednotku udalosti ospravedlnil na celú session |
+| reštart jednotky, ktorú typ udalosti reštartuje zámerne, iba v okne výskytu toho typu | okno udalosti (štart − 1 s až stop + `events.grace_s`); reštart mimo neho je dôvod `service_restarted_outside_event`, reštart bez času v žurnáli hosťa `service_restarted` (zmena vedúceho 2026-11-24, odpoveď na otázku Q67; okno `grace_s` potvrdil vedúci 2026-11-25 po overení G0) | v4 padla na crash-loope služby, ktorý audit pustil, lebo jednotku udalosti ospravedlnil na celú session |
 | nasadené súbory v hosťovi sa zhodujú s `lab/` v commite | presná zhoda | zastaraný hosť prejde pilotom |
 | počet riadkov uzavretých pravidlom | vzorec, kap. 10.9 | sedem riadkov presne po piatich snímkach prešlo bez povšimnutia |
 | periodicita označených riadkov | opakovaný rozstup | to isté |

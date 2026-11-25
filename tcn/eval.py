@@ -420,7 +420,13 @@ def _pecat_prehratia(adresar, rola, prikaz):
                          "configuration.json (safeguard replay --archive and tcn.porovnanie replay write it since "
                          "package B7c): under protocol schema 3 the seal decides by it whether the replay may be read "
                          "(tcn.eval SEAL_RULE)")
-    return pecat.kontrola(sha256=sha, purpose=f"tcn.eval {prikaz}", what=f"the archive of the replay {adresar}"), sha
+    # The archive's path, which safeguard replay --archive writes beside its sha256, lets the seal bind the replay by
+    # the session of its directory and by its content too, not by its bytes alone (the lead's answer to Q31 and his
+    # note on the second G0 verification, 2026-11-25).
+    archive = konf.get("archive")
+    paths = [archive] if type(archive) is str else None
+    return pecat.kontrola(sha256=sha, paths=paths, purpose=f"tcn.eval {prikaz}",
+                          what=f"the archive of the replay {adresar}"), sha
 
 
 def _archiv_prehratia(adresar, konf, archiv_sha):
