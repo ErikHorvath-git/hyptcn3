@@ -112,3 +112,42 @@ def test_levels_reports_processes_memory_database_and_files(tmp_path, monkeypatc
     assert record["database"] == dict(zip(guest_state.LEVEL_NAMES, (5000, 2000, 200, 3000, 1, 7500, 300, 500,
                                                                      9000000, 25)))
     assert record["files"]["documents"] == {"files": 1, "bytes": 10} and record["files"]["reports"]["files"] == 0
+
+
+class Vanished:
+    """A path of a listing whose file is removed before its stat (package B13: the worker prunes the oldest reports
+    beyond 100 while levels runs): an is_file before the removal still saw a file, the stat finds none."""
+
+    def __init__(self, path, error=FileNotFoundError):
+        self.path, self.error = path, error
+
+    def is_file(self):
+        return True
+
+    def stat(self):
+        raise self.error(2, os.strerror(2), str(self.path))
+
+
+class Listing:
+    """A directory whose glob lists `paths` (each a pathlib.Path or a Vanished)."""
+
+    def __init__(self, *paths):
+        self.paths = paths
+
+    def glob(self, pattern):
+        return list(self.paths)
+
+
+def test_files_skips_a_path_that_vanishes_before_its_stat_and_raises_any_other_error(tmp_path):
+    """The long run dokazy/G2/behy/08-long-b-corp_high (package B13): a report removed between the listing and its stat
+    ended a whole levels call with FileNotFoundError. Each path now counts by its own single stat: one that vanished is
+    skipped, the rest are counted with their bytes; a directory is no file; every other error still raises."""
+    (tmp_path / "a.csv.gz").write_bytes(b"x" * 10)
+    (tmp_path / "b.csv.gz").write_bytes(b"y" * 32)
+    (tmp_path / "sub").mkdir()
+    listed = sorted(tmp_path.glob("*"))
+    assert guest_state.files(tmp_path) == {"files": 2, "bytes": 42}
+    assert guest_state.files(Listing(*listed, Vanished(tmp_path / "c.csv.gz"))) == {"files": 2, "bytes": 42}
+    assert guest_state.files(Listing(Vanished(tmp_path / "c.csv.gz"))) == {"files": 0, "bytes": 0}
+    with pytest.raises(PermissionError):
+        guest_state.files(Listing(*listed, Vanished(tmp_path / "d.csv.gz", PermissionError)))

@@ -22,6 +22,7 @@ import pwd
 import re
 import resource
 import signal
+from stat import S_ISREG
 import subprocess
 import sys
 import time
@@ -248,8 +249,20 @@ def pretouch():
 
 
 def files(directory, pattern="*"):
-    found = [p for p in directory.glob(pattern) if p.is_file()]
-    return {"files": len(found), "bytes": sum(p.stat().st_size for p in found)}
+    """{files, bytes} of the regular files of `directory` that match `pattern`, each path judged by its own single stat
+    (its link followed, as is_file follows it). The worker prunes reports and the maintenance rotates the document log
+    while levels runs: a path that vanishes between the listing and its stat is skipped. In the long run
+    dokazy/G2/behy/08-long-b-corp_high a levels call failed on FileNotFoundError of a report that is_file had found
+    and the stat after it no longer did (package B13). Every other error raises."""
+    count = size = 0
+    for path in directory.glob(pattern):
+        try:
+            found = path.stat()
+        except FileNotFoundError:
+            continue
+        if S_ISREG(found.st_mode):
+            count, size = count + 1, size + found.st_size
+    return {"files": count, "bytes": size}
 
 
 def tasks():
