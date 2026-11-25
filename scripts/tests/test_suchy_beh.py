@@ -69,8 +69,10 @@ def maly_protokol(root):
     THINK_SCALE, so that a user session of the real generator (suchy_kampan.PREVADZKA_RULE) is as long against the
     session and its events as on the plan of config/collection-v5.json; with the file's think times an eshop user
     session that orders outlasts the gaps of up to three event windows of 30 to 60 s in 8 minutes, and the log audit's
-    order share, read outside every window (scripts/traffic_log.py realism), refuses the session. Its later-stage
-    values are those protocol_doc gives on config/collection-v5.json as the G0 record holds it
+    order share, read outside every window (scripts/traffic_log.py realism), refuses the session. Package B13: D_max of
+    the order share (audit.traffic.order_share_session_max_s), an upper bound of a user session's duration, is divided
+    by THINK_SCALE as well, so that the user sessions it leaves out before a window are as many as on the plan. Its
+    later-stage values are those protocol_doc gives on config/collection-v5.json as the G0 record holds it
     (scripts/tests/protokol_g0.py; rates and grids null, every column neural, no replacement), while G2 writes its
     values into the file from its Zápis 1 on: the working copy of the command fills them. Returns the path of the
     file."""
@@ -102,6 +104,7 @@ def maly_protokol(root):
     for params in doc["profiles"].values():
         params["think_s"] = dict(params["think_s"], mean=params["think_s"]["mean"] / THINK_SCALE,
                                  max=params["think_s"]["max"] / THINK_SCALE)
+    doc["audit"]["traffic"]["order_share_session_max_s"] /= THINK_SCALE
     path = root / "protokol.json"
     collection.write_json(path, doc)
     collection.protocol(path)

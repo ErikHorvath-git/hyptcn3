@@ -432,11 +432,13 @@ def test_selftest_protocol_carries_the_bounds_of_g0_and_the_whole_register():
     assert all(text in early_stop["note"] for text in ("judgment", "G3b", "10.9", "7.5"))
     assert (p["audit"]["periodicity"]["equal_spacings"], p["audit"]["periodicity"]["min_spacing_rows"]) == (3, 2)
     assert "judgment" in p["audit"]["periodicity"]["note"]
-    # Package B5b: the bounds of proposals 5.3 and 5.7 and the tolerances of the author's judgment, named so.
+    # Package B5b: the bounds of proposals 5.3 and 5.7 and the tolerances of the author's judgment, named so; package
+    # B13: D_max of the order share (the lead's answer to Q73 point 1), 242 s.
     traffic = p["audit"]["traffic"]
     assert {k: v for k, v in traffic.items() if k not in ("background", "note")} == {
         "offered_load_tolerance": .2, "arrival_cv": [.8, 1.2], "top_objects_share": .1, "top_objects_min_requests": .5,
-        "success_min": .88, "response_size_orders": 2, "think_mean_tolerance_se": 4, "order_share_tolerance_se": 4}
+        "success_min": .88, "response_size_orders": 2, "think_mean_tolerance_se": 4, "order_share_tolerance_se": 4,
+        "order_share_session_max_s": 242}
     assert {k: v for k, v in traffic["background"].items() if k != "note"} == {
         "logins_min": 1, "reports_min": 1, "document_max_to_median": 10}
     assert all("judgment" in note for note in (traffic["note"], traffic["background"]["note"]))

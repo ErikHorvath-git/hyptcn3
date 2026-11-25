@@ -660,6 +660,50 @@ def _duplicate_last(r, i):
     r[-1]["records"] += 1  # Written by the generator: the end record counts it.
 
 
+def windows_after_user_sessions(d, p, result):
+    """mutate (package B13, the lead's answer to Q73 point 1: the order share by the start of a user session): an empty
+    event (naprazdno) of its own after each run of user sessions of the measure phase, planned in session.json and
+    recorded in events.json as the clean session's event is. Its window [host start - 1 s, host stop done +
+    event_grace_s] opens 0.5 s after the last request of the run and less than audit.traffic.order_share_session_max_s
+    (D_max) after the first of them starts; no request lies in it, and no arrival in it or in the second around it (so
+    the offered load keeps its summary intervals that hold arrivals). Every user session of the measure phase then
+    starts less than D_max before a window, and the start rule leaves all of them out: there is no share to judge. The
+    overlap rule before B13 kept every one of them, since none of their requests touches a window. ValueError when a
+    session of this shape has no such gap."""
+    d_max = p["audit"]["traffic"]["order_share_session_max_s"]
+    meta, doc = _read(d, "session.json"), _read(d, "events.json")
+    rows = _records(d, "traffic_requests.jsonl")
+    base, grace, script = rows[0]["start_unix"], meta["event_grace_s"], meta["source_sha256"]["lab/udalosti.py"]
+    requests = [r for r in rows if r.get("type") == "request"]
+    ends = {}
+    for r in requests:
+        ends[r["user_session"]] = max(ends.get(r["user_session"], r["t_end_mono"]), r["t_end_mono"])
+    users = sorted((a["t_mono"], ends[a["user_session"]]) for a in _arrivals(rows)
+                   if a["phase"] == "measure" and a["admitted"])
+    opens, first, last = [], None, None
+    for start, end in users:
+        if first is not None and max(last, end) + .5 - first > d_max - 1:
+            opens.append(last + .5)
+            first = None
+        first, last = (start, end) if first is None else (first, max(last, end))
+    opens.append(last + .5)
+    times = [t for r in requests for t in (r["t_start_mono"], r["t_end_mono"])]
+    for lo in opens:
+        if (any(lo <= t <= lo + 1 + grace for t in times)
+                or any(lo - 1 <= a["t_mono"] <= lo + 2 + grace for a in _arrivals(rows))):
+            raise ValueError(f"no gap for a window at {lo} s after the start of the traffic")
+        planned = {"type": "naprazdno", "class": "naprazdno", "start_s": round(lo + 1, 6), "duration_s": 0}
+        meta["events"].append(planned)
+        doc["events"].append(dict(planned, executed=True, effect={"ok": True, "predicate": "synthetic"},
+                                  host_start_unix=base + lo + 1, host_started_unix=base + lo + 1,
+                                  host_stop_unix=base + lo + 1, host_stopped_unix=base + lo + 1,
+                                  start={"ok": True, "script_sha256": script},
+                                  stop={"ok": True, "health": 200, "script_sha256": script}))
+    _write(d, "session.json", meta)
+    _write(d, "events.json", doc)
+    evidence.seal(d)
+
+
 E = evidence
 RID_UNKNOWN, RID_CART = _rid(E.ESHOP, E.UNKNOWN), _rid(E.ESHOP, E.CART)  # The deliberate 404, a cart of eshop.
 RID_DOC = _rid(E.CORP, E.DOC)  # A document download of corp.
@@ -676,6 +720,10 @@ _V5_CASES = [
     ("traffic_realism:think_time", traffic("eshop", thinks=(.25, .5, .75)), logs("traffic_realism:think_time")),
     ("traffic_realism:order_share", traffic("eshop", sessions=tuple(
         s if E.ORDER in s else [*s, E.CART_ADD, E.ORDER] for s in E.ESHOP)), logs("traffic_realism:order_share")),
+    # Package B13 (the lead's answer to Q73 point 1): the order share leaves a user session out by its start alone,
+    # here every user session of the measure phase (windows_after_user_sessions); before B13 it kept them all.
+    ("traffic_realism:order_share:start", steps(traffic("eshop"), windows_after_user_sessions),
+     logs("traffic_realism:order_share")),
     ("traffic_realism:object_concentration", traffic("eshop", sessions=_distinct(E.ESHOP)),
      logs("traffic_realism:object_concentration")),
     ("traffic_realism:success_rate", traffic("eshop", sessions=tuple(  # No deliberate error: 100 %.

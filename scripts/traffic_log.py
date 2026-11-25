@@ -733,10 +733,15 @@ def realism(requests_path, intervals_path, protocol, scenario, *, windows=()):
                             drawn think_s), their mean within think_mean_tolerance_se standard errors (sample standard
                             deviation over sqrt(n)) of profiles.eshop.think_s.mean, their maximum at most think_s.max
                             plus THINK_LAG_S
-      order_share (eshop)   the share of the admitted user sessions that arrived in the measure phase, lie outside
-                            every window (arrival and every request) and place an order (POST /api/orders without
-                            an intended status), within order_share_tolerance_se standard errors
-                            (sqrt(p (1 - p) / n)) of p = profiles.eshop.order_share[<intensity>]
+      order_share (eshop)   of the admitted user sessions that arrived in the measure phase and did not start in
+                            [window start - D_max, window end] of any window, the share that place an order (POST
+                            /api/orders without an intended status), within order_share_tolerance_se standard errors
+                            (sqrt(p (1 - p) / n)) of p = profiles.eshop.order_share[<intensity>]; D_max is
+                            order_share_session_max_s, an upper bound of a user session's duration, one for every
+                            kind of user session (package B13, the lead's answer to Q73 point 1): a user session is
+                            left out by its start, its arrival, alone, whatever its later requests touch, because a
+                            selection by overlap with a window depends on the length of a user session, and an
+                            ordering one is longer
       object_concentration  the requests that name an object (object not null; an object is its kind by route and
                             its id): the most requested top_objects_share of the distinct objects (rounded up) get at
                             least top_objects_min_requests of these requests
@@ -835,21 +840,24 @@ def realism(requests_path, intervals_path, protocol, scenario, *, windows=()):
                                 f"maximum at most its max plus {THINK_LAG_S:g} s of the generator's own delay"))
 
         share_design = params["order_share"][intensity]
-        sessions = {a["user_session"]: {"times": [_unix(a["t_utc"])], "orders": 0} for a in arrivals if a["admitted"]}
+        # Package B13 (the lead's answer to Q73 point 1): left out by the start alone. Before, a user session that
+        # touched a window with its arrival or a request was left out, so an ordering user session, which lasts
+        # longer, was left out more often (the C4 pass, dokazy/G1/kod/vysledok_C3b.json: 15 of 16 shares low).
+        d_max = limit["order_share_session_max_s"]
+        sessions = {a["user_session"]: {"start": _unix(a["t_utc"]), "orders": 0} for a in arrivals if a["admitted"]}
         for r in every:
             if r["user_session"] in sessions:
-                entry = sessions[r["user_session"]]
-                entry["times"] += [_unix(r["t_start_utc"]), _unix(r["t_end_utc"])]
-                entry["orders"] += (r["method"] == "POST" and r["route"] == "/api/orders"
-                                    and r["intended_status"] is None)
-        kept = [s for s in sessions.values() if not overlaps(min(s["times"]), max(s["times"]))]
+                sessions[r["user_session"]]["orders"] += (r["method"] == "POST" and r["route"] == "/api/orders"
+                                                          and r["intended_status"] is None)
+        kept = [s for s in sessions.values() if not any(lo - d_max <= s["start"] <= hi for lo, hi in windows)]
         share = sum(1 for s in kept if s["orders"]) / len(kept) if kept else None
         tolerance = (limit["order_share_tolerance_se"] * math.sqrt(share_design * (1 - share_design) / len(kept))
                      if kept else None)
         out.append(_requirement("order_share", _round(share), {"share": share_design, "tolerance": _round(tolerance)},
                                 share is not None and abs(share - share_design) <= tolerance,
                                 f"{sum(1 for s in kept if s['orders'])} of {len(kept)} user sessions ordered "
-                                f"(intensity {intensity}); {len(sessions) - len(kept)} touching a window left out"))
+                                f"(intensity {intensity}); {len(sessions) - len(kept)} starting in a window or less "
+                                f"than D_max {d_max:g} s before one left out"))
 
     counts = Counter((object_kind(r["route"]), json.dumps(r["object"])) for r in requests if r["object"] is not None)
     total = sum(counts.values())

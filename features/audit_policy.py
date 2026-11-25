@@ -11,6 +11,7 @@ A protocol of schema 3 states both in sections of its own:
               "traffic": {"offered_load_tolerance": 0.2, "arrival_cv": [0.8, 1.2], "top_objects_share": 0.1,
                           "top_objects_min_requests": 0.5, "success_min": 0.88, "response_size_orders": 2,
                           "think_mean_tolerance_se": 4, "order_share_tolerance_se": 4,
+                          "order_share_session_max_s": 242,
                           "background": {"logins_min": 1, "reports_min": 1, "document_max_to_median": 10,
                                          "note": "..."},
                           "note": "..."}}
@@ -25,7 +26,9 @@ capture.rusage.majflt of every sidecar, are recorded and printed by the audit of
 (scripts/collection.py majflt_record) and a reason only above a number, which G2 sets by the rule of
 collector_majflt_note (null or an integer of at least 0, and a note that says something). "traffic"
 holds the bounds of the realism requirements of proposal 5.7 and of the offered-load check of proposal 5.3
-(scripts/traffic_log.py realism; package B5b), all determined in G0 (proposal 10.9).
+(scripts/traffic_log.py realism; package B5b), all determined in G0 (proposal 10.9); order_share_session_max_s is
+D_max of the order share (package B13, the lead's answer to Q73 point 1): a user session that starts in [window start
+- D_max, window end] of an event window is left out of it, by its start alone.
 
 "early_stop" (package B9b, agent Z, and its fix: F5 of the verification, question Q24; the lead's skeleton B9 row
 skoré zastavenie) holds the rule of the early stop of a campaign (proposal 7.5): one rate of marked rows per occurrence
@@ -110,7 +113,8 @@ EARLY_STOP_MODEL = {
               "by the verifier's Monte Carlo of 40000 campaigns with poisson_quantile (dokazy/B9/overenie_B9b, F5)",
 }
 TRAFFIC_KEYS = ("offered_load_tolerance", "arrival_cv", "top_objects_share", "top_objects_min_requests", "success_min",
-                "response_size_orders", "think_mean_tolerance_se", "order_share_tolerance_se", "background", "note")
+                "response_size_orders", "think_mean_tolerance_se", "order_share_tolerance_se",
+                "order_share_session_max_s", "background", "note")
 BACKGROUND_KEYS = ("logins_min", "reports_min", "document_max_to_median", "note")
 REGISTER_KEYS = ("cause", "decision", "expected")
 # Conditions the audit admits instead of rejecting the session; the comment names where tolerate() counts each.
@@ -291,8 +295,9 @@ def _traffic_bounds(t):
     """ValueError `invalid audit bounds: traffic[.<key>]` for the first malformed key of audit.traffic: every key of
     TRAFFIC_KEYS and no other; shares strictly between 0 and 1; the CV interval contains 1 (unit Poisson spacings);
     the top objects' minimum share of the requests above their share of the objects; positive orders of magnitude
-    and tolerances in standard errors; the background bounds of corp with counts of at least 1 and a document
-    ratio above 1; notes that say something."""
+    and tolerances in standard errors; D_max of the order share (order_share_session_max_s, package B13) a positive
+    number of seconds; the background bounds of corp with counts of at least 1 and a document ratio above 1; notes
+    that say something."""
     def refuse(key):
         raise ValueError("invalid audit bounds: traffic" + ("." + key if key else ""))
     if type(t) is not dict or set(t) != set(TRAFFIC_KEYS):
@@ -305,7 +310,8 @@ def _traffic_bounds(t):
         refuse("arrival_cv")
     if not (_number(t["top_objects_min_requests"]) and t["top_objects_share"] < t["top_objects_min_requests"] <= 1):
         refuse("top_objects_min_requests")
-    for key in ("response_size_orders", "think_mean_tolerance_se", "order_share_tolerance_se"):
+    for key in ("response_size_orders", "think_mean_tolerance_se", "order_share_tolerance_se",
+                "order_share_session_max_s"):
         if not (_number(t[key]) and t[key] > 0):
             refuse(key)
     b = t["background"]

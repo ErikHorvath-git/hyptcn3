@@ -18,6 +18,7 @@ import re
 import statistics
 import subprocess
 import sys
+from types import SimpleNamespace
 
 import pytest
 
@@ -327,6 +328,45 @@ def test_the_offered_load_is_summed_over_the_intervals_outside_every_window(tmp_
     windows = [(start + iv["mono_start"] + .1, start + iv["mono_end"] - .1) for iv in busy]
     assert realism(d, p, windows)["offered_load"] == {"offered": 6, "planned": round(planned, 6),
                                                       "ratio": round(6 / planned, 6), "ok": False}
+
+
+def test_the_order_share_leaves_a_user_session_out_by_its_start_and_not_by_its_length(tmp_path, p):
+    """Package B13 (the lead's answer to Q73 point 1): 25 user sessions 20.96 s apart, every fifth one orders and
+    lasts 40 s, the others 10 s; two windows, each opening 35 s after a user session that orders starts and closing
+    1 s after the fifth one from it. By the start (D_max 41 s, the longest user session's 40 s and a second) each
+    window leaves out its five user sessions, one of them ordering: 3 of 15, the share of all 25 (0.2). By the
+    overlap of before B13 it left out the ordering one, still running, and only the three short ones after the next:
+    3 of 17, low, as in the C4 pass (dokazy/G1/kod/vysledok_C3b.json)."""
+    e = evidence
+    buyer, other = [e.HOME, e.DETAIL, e.CART_ADD, e.CART, e.ORDER], [e.HOME, e.DETAIL]
+    d = session(tmp_path, p, "bursty", sessions=tuple(buyer if k % 5 == 0 else other for k in range(25)),
+                spacings=(1.,) * 24, thinks=(10.,), flat=True, measure_s=600, snapshots=600)
+    rows = records(d)
+    base = rows[0]["start_unix"]
+    ends = {}
+    for r in rows:
+        if r.get("type") == "request":
+            ends[r["user_session"]] = max(ends.get(r["user_session"], 0), r["t_end_mono"])
+    users = sorted((a["t_mono"], ends[a["user_session"]], a["user_session"]) for a in rows
+                   if a.get("type") == "arrival" and a["phase"] == "measure")
+    ordering = {r["user_session"] for r in rows if r.get("type") == "request" and r["step"] == "order"
+                and r["user_session"] in {uid for _, _, uid in users}}  # Not build()'s order of the warmup.
+    starts = [start for start, _, _ in users]
+    assert len(users) == 25 and len(ordering) == 5 and {users[k][2] for k in range(0, 25, 5)} == ordering
+    assert {round(b - a, 2) for a, b in zip(starts, starts[1:])} == {20.96}
+    assert {round(end - start, 2) for start, end, uid in users} == {40.01, 10.0}
+    windows = [(starts[5 * j] + 35, starts[5 * j + 4] + 1) for j in (1, 3)]
+    q = copy.deepcopy(p)
+    q["audit"]["traffic"]["order_share_session_max_s"] = 41
+    by_start = [u for u in users if not any(lo - 41 <= u[0] <= hi for lo, hi in windows)]
+    by_overlap = [u for u in users if not any(lo <= u[1] and u[0] <= hi for lo, hi in windows)]
+    share = [sum(u[2] in ordering for u in kept) / len(kept) for kept in (by_start, by_overlap)]
+    assert (len(by_start), len(by_overlap), share) == (15, 17, [3 / 15, 3 / 17]) and share[0] == 5 / 25
+    found = requirement(realism(d, q, [(base + lo, base + hi) for lo, hi in windows]), "order_share")
+    assert (found["value"], found["ok"]) == (round(3 / 15, 6), True)
+    assert found["bound"] == {"share": .2, "tolerance": round(4 * math.sqrt(.2 * .8 / 15), 6)}
+    assert found["note"] == ("3 of 15 user sessions ordered (intensity high); 10 starting in a window or less than "
+                             "D_max 41 s before one left out")
 
 
 def test_the_cv_is_computed_on_spacings_rescaled_by_the_envelope(tmp_path, p):
@@ -893,6 +933,8 @@ def test_under_a_rate_of_the_protocol_the_helper_keeps_the_plan_of_the_null_rate
     ("top_objects_min_requests", .1), ("success_min", 1.), ("response_size_orders", 0),
     ("think_mean_tolerance_se", -1), ("order_share_tolerance_se", None), ("background", {"logins_min": 1}),
     ("note", " "), ("extra", 1),
+    # Package B13: D_max of the order share, a positive number of seconds.
+    ("order_share_session_max_s", 0), ("order_share_session_max_s", "242"),
 ])
 def test_a_malformed_traffic_bound_is_refused_with_its_name(p, key, value):
     from features.audit_policy import audit_bounds
@@ -923,3 +965,82 @@ def test_the_v5_file_bounds_name_their_origin():
     traffic = audit_bounds(doc)["traffic"]
     assert "judgment" in traffic["note"] and "judgment" in traffic["background"]["note"]
     assert all(chapter in traffic["note"] for chapter in ("5.3", "5.7"))
+
+
+def _ordering_requests(funnel, errors):
+    """{N: probability} of the number of requests of an eshop user session that orders, as scripts/host_traffic.py
+    Eshop draws them (its code read, never run here): home and a number of catalog pages from funnel.pages, each page
+    followed by a number of details from funnel.details_per_page, each of these views by a static file with
+    funnel.static_share; then the login, a number of products from funnel.cart_items into the cart, the cart and the
+    order; after every one of these requests one deliberate client error with the odds share / (1 - share)."""
+    def uniform(lo, hi):
+        return {k: 1 / (hi - lo + 1) for k in range(lo, hi + 1)}
+
+    def add(a, b):
+        out = {}
+        for x, pa in a.items():
+            for y, pb in b.items():
+                out[x + y] = out.get(x + y, 0) + pa * pb
+        return out
+
+    def with_each(dist, share):  # n and one more request after each of them with `share`: n + Binomial(n, share).
+        out = {}
+        for n, pn in dist.items():
+            for k in range(n + 1):
+                out[n + k] = out.get(n + k, 0) + pn * math.comb(n, k) * share ** k * (1 - share) ** (n - k)
+        return out
+    views = {}
+    for pages, pp in uniform(*funnel["pages"]).items():
+        details = {0: 1.}
+        for _ in range(pages):
+            details = add(details, uniform(*funnel["details_per_page"]))
+        for k, pk in details.items():
+            views[1 + pages + k] = views.get(1 + pages + k, 0) + pp * pk
+    ordering = {c + 3: pc for c, pc in uniform(*funnel["cart_items"]).items()}  # login, the cart items, cart, order
+    regular = add(with_each(views, funnel["static_share"]), ordering)
+    return with_each(regular, errors["share"] / (1 - errors["share"]))
+
+
+def _erlang_survival(k, mean, t):
+    """P(the sum of k exponential think times of `mean` > t)."""
+    term, total, x = math.exp(-t / mean), 0., t / mean
+    for j in range(k):
+        term = term * x / j if j else term
+        total += term
+    return total
+
+
+def test_d_max_is_the_duration_an_ordering_user_session_of_the_profile_exceeds_with_probability_0_001():
+    """Package B13 (the lead's answer to Q73 point 1): audit.traffic.order_share_session_max_s of the file, D_max, is
+    the duration that an ordering user session of profiles.eshop, the longest kind, exceeds with probability 0.001
+    (the executor's judgment), rounded up to whole seconds: its N - 1 think times exponential with the mean
+    think_s.mean (their cut at think_s.max only shortens a user session), N its requests (_ordering_requests), the
+    requests' own duration left out. The note of audit.traffic names the derivation. The distribution of N is that of
+    the generator: a run of its state machine on 4000 ordering user sessions has its mean within 4 standard errors."""
+    from scripts import host_traffic as ht
+    doc = json.loads(bs.V5.read_text())
+    eshop, traffic = doc["profiles"]["eshop"], doc["audit"]["traffic"]
+    requests = _ordering_requests(eshop["funnel"], eshop["client_errors"])
+    assert sum(requests.values()) == pytest.approx(1, abs=1e-12) and (min(requests), max(requests)) == (6, 64)
+
+    def survival(t):
+        return sum(pn * _erlang_survival(n - 1, eshop["think_s"]["mean"], t) for n, pn in requests.items())
+    d_max = next(t for t in range(1, 5000) if survival(t) <= .001)
+    assert (d_max, round(survival(d_max - 1), 6), round(survival(d_max), 6)) == (242, .001041, .000981)
+    assert traffic["order_share_session_max_s"] == d_max
+    assert all(text in traffic["note"] for text in ("order_share_session_max_s", "Q73", "probability 0.001",
+                                                    "241.68 s", "the executor's judgment (package B13)"))
+    lab, counts, n = ht.Lab("eshop", eshop), [], 0
+    while len(counts) < 4000:
+        user = ht.Eshop(eshop, "high", n, {"traffic_choices": 7, "traffic_sizes": 8}, lab, "0123456789ab")
+        n += 1
+        if not user.buyer:
+            continue
+        user.customer, steps, step = 1, 0, user.start()
+        while step is not None:
+            steps += 1
+            step = user.reply(SimpleNamespace(status=200, payload={"token": "t"}))
+        counts.append(steps)
+    mean = sum(k * pk for k, pk in requests.items())
+    sd = math.sqrt(sum(k * k * pk for k, pk in requests.items()) - mean ** 2)
+    assert abs(statistics.mean(counts) - mean) < 4 * sd / math.sqrt(len(counts)) and set(counts) <= set(requests)

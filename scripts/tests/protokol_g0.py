@@ -4,9 +4,11 @@ From Zápis 1 of stage G2 on, tcn/hodnoty.py writes the values of the later stag
 four rates and the preliminary caps first). The tests that run the tools on the file as G0 recorded it (a null rate
 given by --rate, the preliminary caps 500 and 250, the null values of G1, G3a and G3b) read g0_file(): the
 repository's file with every path that determined_at assigns to a later stage set back to its value at G0. The copy
-is checked against the bytes the G0 record bound (G0_SHA256, the file at commit 9a869c6 of the second G0 record
-data/results/gate_G0_20261125T164240Z.json), so a change of the file's G0 part fails here by name and not as a
-changed assertion somewhere else. A test of the file's current values reads the file itself.
+is checked against the bytes the G0 record bound (G0_SHA256), so a change of the file's G0 part fails here by name
+and not as a changed assertion somewhere else. A test of the file's current values reads the file itself. G0_SHA256
+was the file at commit 9a869c6 of the second G0 record data/results/gate_G0_20261125T164240Z.json (8fe3eea1); package
+B13 adds a value of G0, audit.traffic.order_share_session_max_s with its origin in audit.traffic.note (the lead's
+answer to Q73 point 1), so it is the file of B13 with its later values set back, which the next G0 record binds.
 """
 import atexit
 import hashlib
@@ -17,7 +19,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 REAL = ROOT / "config/collection-v5.json"
-G0_SHA256 = "8fe3eea1e2c273c0f614246a0ff12d05a3483840a16f436fbe3d31e64ef8f47d"
+G0_SHA256 = "4dc32413756fb7c7eac8aface35705c33176c98f0495e82242c52bdc7a2d1822"
 EXCEPTIONS = ("collector_warnings", "event_traffic_exit", "event_unit_restarts", "event_window_health_checks",
               "event_window_journal", "event_window_nginx_errors", "event_window_requests", "inconclusive_integrity",
               "invalid_rows", "rule_closed_rows", "unconfirmed_findings")
