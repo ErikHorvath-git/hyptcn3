@@ -25,6 +25,7 @@ def services(monkeypatch):
         stub.OperationalError = type("OperationalError", (stub.Error,), {})
         errors.QueryCanceled = type("QueryCanceled", (stub.OperationalError,), {})
         pool.ThreadedConnectionPool = object
+        pool.PoolError = type("PoolError", (stub.Error,), {})  # psycopg2.pool: getconn of a full pool.
         stub.errors, stub.pool = errors, pool
         for module in (stub, errors, pool):
             monkeypatch.setitem(sys.modules, module.__name__, module)

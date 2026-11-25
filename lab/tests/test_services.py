@@ -20,6 +20,7 @@ import signal
 import subprocess
 import sys
 import threading
+import time
 import types
 from types import SimpleNamespace
 import urllib.error
@@ -54,6 +55,7 @@ def load_services(monkeypatch):
         stub.OperationalError = type("OperationalError", (stub.Error,), {})
         errors.QueryCanceled = type("QueryCanceled", (stub.OperationalError,), {})
         pool.ThreadedConnectionPool = object
+        pool.PoolError = type("PoolError", (stub.Error,), {})  # psycopg2.pool: getconn of a full pool.
         stub.errors, stub.pool = errors, pool
         for module in (stub, errors, pool):
             monkeypatch.setitem(sys.modules, module.__name__, module)
@@ -522,3 +524,285 @@ def test_worker_pause_is_drawn_from_0_8_to_1_2_seconds(lab, monkeypatch):
         for number, handler in handlers.items():
             signal.signal(number, handler)
     assert len(waits) == 5 and all(.8 <= w <= 1.2 for w in waits) and len(set(waits)) == 5
+
+
+
+# The pool waits for a connection (package B13, the lead's answer to Q74, 2026-11-25T22:15Z): a request waits for a
+# free connection of its service's pool at most 3 s, the services' statement_timeout, and after the wait fails with
+# 503 as before. The pool is the one main() builds for the service (psycopg2's ThreadedConnectionPool replaced by
+# FakeConnections, the HTTP server by one whose serve_forever runs the test), so its size is the service's own.
+WAIT_S = 3  # The lead's answer to Q74: the wait equals the statement_timeout of the services, 3 s.
+PRODUCT = (1, "produkt", 990, "kategoria", "opis")
+PRODUCT_SQL = "FROM products WHERE id="  # lab/services.py SQL_PRODUCT, the statement of a product detail.
+
+
+class FakeConnections:
+    """psycopg2's ThreadedConnectionPool(minconn, maxconn) as lab/services.py uses it, without PostgreSQL: getconn
+    lends one of maxconn connections and raises psycopg2.pool.PoolError "connection pool exhausted" when all are out,
+    as psycopg2 does; putconn takes one back. The statements of every connection go to statement(sql), which calls
+    `block` first when a test sets it."""
+
+    def __init__(self, minconn, maxconn, **connect):
+        self.minconn, self.maxconn, self.connect = minconn, maxconn, connect
+        self.out, self.lock, self.taken, self.statements, self.block = set(), threading.Lock(), 0, [], None
+
+    def getconn(self):
+        with self.lock:
+            if len(self.out) == self.maxconn:
+                raise sys.modules["psycopg2.pool"].PoolError("connection pool exhausted")
+            conn = FakeConnection(self)
+            self.out.add(conn)
+            self.taken += 1
+            return conn
+
+    def putconn(self, conn):
+        with self.lock:
+            self.out.remove(conn)
+
+    def closeall(self):
+        pass
+
+    def statement(self, sql):
+        with self.lock:
+            self.statements.append(sql)
+        if self.block is not None:
+            self.block(sql)
+        return [PRODUCT] if PRODUCT_SQL in sql else []
+
+
+class FakeConnection:
+    """A connection of FakeConnections: a transaction as a with block (psycopg2 commits or rolls back), a cursor."""
+
+    def __init__(self, pool):
+        self.pool = pool
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *error):
+        return False
+
+    def cursor(self):
+        return FakeCursor(self.pool)
+
+
+class FakeCursor:
+    def __init__(self, pool):
+        self.pool, self.rows = pool, []
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *error):
+        return False
+
+    def execute(self, sql, params=()):
+        self.rows = list(self.pool.statement(sql))
+
+    def fetchone(self):
+        return self.rows.pop(0) if self.rows else None
+
+    def fetchall(self):
+        rows, self.rows = self.rows, []
+        return rows
+
+
+def served(monkeypatch, service, scenario):
+    """main() of `service` on FakeConnections; scenario(s, connections) runs in place of its server (of the worker's
+    loop for the worker). Returns (services module, the FakeConnections main() built)."""
+    s = load_services(monkeypatch)
+    made = []
+
+    def pool(minconn, maxconn, **connect):
+        made.append(FakeConnections(minconn, maxconn, **connect))
+        return made[-1]
+
+    class Server:
+        def __init__(self, address, handler):
+            self.address = address
+
+        def serve_forever(self):
+            scenario(s, made[0])
+    monkeypatch.setattr(s, "ThreadedConnectionPool", pool)
+    monkeypatch.setattr(s, "ThreadingHTTPServer", Server)
+    monkeypatch.setattr(s, "worker", lambda: scenario(s, made[0]))
+    monkeypatch.setattr(s, "SECRET", b"lab-test-secret")
+    monkeypatch.setattr(sys, "argv", ["services.py", service])
+    s.main()
+    return s, made[0]
+
+
+class Holding:
+    """The next n product statements of `connections` wait inside their transactions, each holding its connection,
+    until release() lets one go on; release_all() lets every one go on, also the later ones."""
+
+    def __init__(self, connections, n):
+        self.gate, self.inside, self.lock, self.n, self.open = threading.Semaphore(0), [], threading.Lock(), n, False
+        connections.block = self.block
+
+    def block(self, sql):
+        if PRODUCT_SQL in sql:
+            with self.lock:
+                if self.open or len(self.inside) == self.n:
+                    return
+                self.inside.append(sql)
+            self.gate.acquire()
+
+    def release(self):
+        self.gate.release()
+
+    def release_all(self):
+        with self.lock:
+            self.open = True
+        for _ in range(self.n):
+            self.gate.release()
+
+
+def until(condition, timeout=10.):
+    """Wait (polling) until condition() holds; False when it did not within `timeout` seconds."""
+    deadline = time.monotonic() + timeout
+    while not condition():
+        if time.monotonic() > deadline:
+            return False
+        time.sleep(.01)
+    return True
+
+
+def request(s, results, label):
+    """A product detail of the catalog in a thread of its own; (label, status, body, start, end) goes to results."""
+    def run():
+        started = time.monotonic()
+        status, body, _ = call(s, "catalog", "GET", "/api/catalog/1")
+        results.append((label, status, body, started, time.monotonic()))
+    thread = threading.Thread(target=run, daemon=True)
+    thread.start()
+    return thread
+
+
+def test_the_thirteenth_concurrent_request_waits_and_succeeds_once_a_connection_is_returned(monkeypatch):
+    """12 requests hold the 12 connections of the catalog's pool; the 13th waits, holding none, and gets the
+    connection the first released one returns (before B13 it got 503 at once: PoolError of a full pool)."""
+    results = []
+
+    def scenario(s, connections):
+        held = Holding(connections, 12)
+        try:
+            threads = [request(s, results, n) for n in range(12)]
+            assert until(lambda: len(held.inside) == 12) and len(connections.out) == 12
+            late = request(s, results, "13th")
+            time.sleep(.5)
+            assert results == [] and len(connections.out) == 12  # It waits and holds no connection while it waits.
+            held.release()
+            late.join(WAIT_S)
+            assert not late.is_alive()
+        finally:
+            held.release_all()
+        for thread in threads:
+            thread.join(10)
+    s, connections = served(monkeypatch, "catalog", scenario)
+    assert (connections.minconn, connections.maxconn) == (12, 12)
+    label, status, body, started, ended = next(r for r in results if r[0] == "13th")
+    assert status == 200 and body["id"] == 1 and ended - started >= .5
+    assert len(results) == 13 and sorted(r[1] for r in results) == [200] * 13
+    assert connections.out == set() and connections.taken == 13
+    # Every transaction first limits its statements to the same 3 s.
+    assert connections.statements.count("SET LOCAL statement_timeout = '3s'") == 13
+
+
+def test_a_request_that_would_wait_more_than_3_s_gets_503(monkeypatch, capsys):
+    """All 12 connections stay taken: the 13th request waits 3 s, then gets 503 from the PoolError as before, its
+    journal line "dependency error: connection pool exhausted"; the 12 then finish and return theirs."""
+    results = []
+
+    def scenario(s, connections):
+        held = Holding(connections, 12)
+        try:
+            threads = [request(s, results, n) for n in range(12)]
+            assert until(lambda: len(held.inside) == 12)
+            request(s, results, "13th").join(WAIT_S + 5)
+        finally:
+            held.release_all()
+        for thread in threads:
+            thread.join(10)
+    s, connections = served(monkeypatch, "catalog", scenario)
+    label, status, body, started, ended = next(r for r in results if r[0] == "13th")
+    assert (status, body) == (503, {"error": "dependency unavailable"})
+    assert WAIT_S <= ended - started < WAIT_S + 2
+    assert "dependency error: connection pool exhausted" in capsys.readouterr().err
+    assert sorted(r[1] for r in results if r[0] != "13th") == [200] * 12
+    assert connections.out == set() and connections.taken == 12
+
+
+def test_no_wait_is_for_a_connection_of_its_own_thread(monkeypatch):
+    """No deadlock: a thread that holds a connection never waits for another, it takes a free one at once or fails at
+    once as before. On the worker's pool of one a second take would wait for the thread's own connection; on a
+    service's pool requests that each took a second one at a time could wait for each other's."""
+    found, results = {}, []
+
+    def worker(s, connections):
+        error = sys.modules["psycopg2.pool"].PoolError
+        with s.database():
+            started = time.monotonic()
+            with pytest.raises(error, match="^connection pool exhausted$"):
+                with s.database():
+                    pass
+            found["worker"] = time.monotonic() - started
+        found["worker_after"] = len(connections.out)
+        with s.database():  # The connection went back: the next round takes it at once.
+            found["worker_again"] = len(connections.out)
+
+    def catalog(s, connections):
+        held = Holding(connections, 11)
+        try:
+            threads = [request(s, results, n) for n in range(11)]
+            assert until(lambda: len(held.inside) == 11)
+            with s.database():  # The 12th connection; a second one of this thread fails at once.
+                started = time.monotonic()
+                with pytest.raises(sys.modules["psycopg2.pool"].PoolError):
+                    with s.database():
+                        pass
+                found["catalog"] = time.monotonic() - started
+        finally:
+            held.release_all()
+        for thread in threads:
+            thread.join(10)
+        with s.database():  # With connections free a second one of this thread is lent at once.
+            with s.database():
+                found["two"] = len(connections.out)
+    _, connections = served(monkeypatch, "worker", worker)
+    assert (connections.minconn, connections.maxconn) == (1, 1)
+    assert found["worker"] < 1 and found["worker_after"] == 0 and found["worker_again"] == 1
+    served(monkeypatch, "catalog", catalog)
+    assert found["catalog"] < 1 and found["two"] == 2 and sorted(r[1] for r in results) == [200] * 11
+
+
+def test_every_connection_taken_goes_back_also_on_an_error(monkeypatch):
+    """A statement that fails is answered 503 and its connection goes back; a connection that cannot be opened takes
+    nothing: after 13 of each the 12 connections still serve 12 requests at a time."""
+    results = []
+
+    def scenario(s, connections):
+        psycopg2 = sys.modules["psycopg2"]  # The guest's, or the stub load_services puts in its place.
+
+        def fail(sql):
+            if PRODUCT_SQL in sql:
+                raise psycopg2.Error("server closed the connection unexpectedly")
+        connections.block = fail
+        assert [call(s, "catalog", "GET", "/api/catalog/1")[0] for _ in range(13)] == [503] * 13
+        opened = connections.getconn
+
+        def refuse():
+            raise psycopg2.OperationalError("could not connect to server")
+        connections.getconn, connections.block = refuse, None
+        assert [call(s, "catalog", "GET", "/api/catalog/1")[0] for _ in range(13)] == [503] * 13
+        connections.getconn = opened
+        held = Holding(connections, 12)
+        try:
+            threads = [request(s, results, n) for n in range(12)]
+            assert until(lambda: len(held.inside) == 12) and len(connections.out) == 12
+        finally:
+            held.release_all()
+        for thread in threads:
+            thread.join(10)
+    _, connections = served(monkeypatch, "catalog", scenario)
+    assert connections.out == set() and sorted(r[1] for r in results) == [200] * 12

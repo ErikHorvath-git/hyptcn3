@@ -30,11 +30,16 @@ from urllib.parse import parse_qs, urlsplit
 import uuid
 
 import psycopg2
-from psycopg2.pool import ThreadedConnectionPool
+from psycopg2.pool import PoolError, ThreadedConnectionPool
 
 PORTS = {"catalog": 8081, "auth": 8082, "orders": 8083, "docs": 8084}
 SECRET = os.environ.get("LAB_SECRET", "").encode()
-POOL = None
+POOL = None  # The Pool of the service's process (main).
+# The lead's answer to Q74 (2026-11-25T22:15Z, package B13): a request waits for a free connection of its service's
+# pool at most as long as one statement of the services may run, their statement_timeout. One constant for both.
+DATABASE_TIMEOUT_S = 3
+STATEMENT_TIMEOUT = f"SET LOCAL statement_timeout = '{DATABASE_TIMEOUT_S}s'"
+POOL_SIZE, WORKER_POOL_SIZE = 12, 1  # The connections of a service's process, and of the worker's.
 # Journal line of a worker round that failed on a statement timeout; scripts/collection_logs.py
 # admits it only inside an event window, like a traceback. A failed report stage prints the same prefix.
 WORKER_ERROR = "worker dependency error: "
@@ -101,16 +106,52 @@ class Reply(Exception):
         self.status = status
 
 
+class Pool:
+    """The database connections of one service process: `connections`, psycopg2's ThreadedConnectionPool of `size`
+    connections kept open (main), and the count of the free ones.
+
+    take() lends one for the length of a with block. psycopg2's getconn alone raises PoolError at once when all are
+    taken: in the long run dokazy/G2/behy/07-long-a-eshop_high 7 requests got 503 right after the envelope's peak, their
+    guest journal "dependency error: connection pool exhausted". The lead's answer to Q74 (2026-11-25T22:15Z, package
+    B13): a thread that holds no connection waits for a free one at most DATABASE_TIMEOUT_S, as an application's pool
+    waits with a time limit, and holds none while it waits. A thread that holds one already never waits for another: it
+    takes a free one at once or fails at once, as before. So no wait is for a connection of its own (on the worker's
+    pool of one it would be), and no requests that each hold one wait for each other's. Without a connection in time
+    take() raises PoolError "connection pool exhausted", the error and the text of psycopg2, which handle_api answers
+    with 503 as before. Every connection taken goes back, also on an error."""
+
+    def __init__(self, connections, size):
+        self.connections, self.free, self.held = connections, threading.BoundedSemaphore(size), threading.local()
+
+    @contextmanager
+    def take(self):
+        held = getattr(self.held, "count", 0)
+        if not (self.free.acquire(blocking=False) if held else self.free.acquire(timeout=DATABASE_TIMEOUT_S)):
+            raise PoolError("connection pool exhausted")
+        try:
+            conn = self.connections.getconn()
+        except BaseException:
+            self.free.release()
+            raise
+        self.held.count = held + 1
+        try:
+            yield conn
+        finally:
+            self.held.count = held
+            try:
+                self.connections.putconn(conn)
+            finally:
+                self.free.release()
+
+
 @contextmanager
 def database():
-    conn = POOL.getconn()
-    try:
+    """A cursor in a transaction on a connection of POOL (Pool.take), each statement limited to DATABASE_TIMEOUT_S."""
+    with POOL.take() as conn:
         with conn:
             with conn.cursor() as cursor:
-                cursor.execute("SET LOCAL statement_timeout = '3s'")
+                cursor.execute(STATEMENT_TIMEOUT)
                 yield cursor
-    finally:
-        POOL.putconn(conn)
 
 
 def token_for(user, role="customer"):
@@ -638,9 +679,9 @@ def main():
     # concurrent connections on return and repeatedly created PostgreSQL
     # backend processes. Keep the bounded pool alive across requests.
     # auth reads the employees' password hashes since protocol v5.
-    pool_size = 1 if service == "worker" else 12
-    POOL = ThreadedConnectionPool(pool_size, pool_size, dbname="hyptcn_lab", user="hyptcnlab",
-                                  host="/var/run/postgresql", connect_timeout=5)
+    pool_size = WORKER_POOL_SIZE if service == "worker" else POOL_SIZE
+    POOL = Pool(ThreadedConnectionPool(pool_size, pool_size, dbname="hyptcn_lab", user="hyptcnlab",
+                                       host="/var/run/postgresql", connect_timeout=5), pool_size)
     try:
         if service == "worker":
             worker()
@@ -650,7 +691,7 @@ def main():
             server.serve_forever()
     finally:
         if POOL:
-            POOL.closeall()
+            POOL.connections.closeall()
 
 
 if __name__ == "__main__":
