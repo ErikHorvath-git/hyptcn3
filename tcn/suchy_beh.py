@@ -7,10 +7,12 @@ and the column mask, Q34 m null at stage suchy, Q36 the marginal change in the s
 Q38 the mask of one qualification pass per generator, Q41 the diagnostics where they are evaluated), point 5 of his
 POKYNY_TEMPO_2026-11-25 (the shortened path), proposal 6.4, 7.5, 8.3, 8.4, 8.5, 10.2 and 10.9.
 
-THE COMMAND (package C3):
+THE COMMANDS (package C3: beh; package C4a: hranice and tabulka):
 
     python -m tcn.suchy_beh beh --generator G --seed S --out DIR --praca WORK --cesta plna|skratena
                                 [--protocol P] [--vysledky R] [--chyby]
+    python -m tcn.suchy_beh hranice --behy DIR... --out OUT
+    python -m tcn.suchy_beh tabulka --behy DIR... --hranice OUT/hranice_m.json --out TABLE
 
 One run from the plan to the report (Beh.run): scripts/gates.py require of G1 on the protocol file P (default
 config/collection-v5.json; R, default data/results, holds its gate records) and on the working copy (COPY_RULE: the
@@ -27,6 +29,21 @@ generator.json, kvalifikacia.json, final.json with its attachments, vlozene_chyb
 full header of S2 (suchy_beh.log, sprava.log, kontrola_E.log); WORK the campaign, its archive and index, the bundles,
 the replays, the ledgers and the report. The threads are fixed (VLAKNA, the lead's answer to Q37), no internet socket
 connects (bez_siete), the ledger of record is never written (strazena_kniha). Exit codes: EXIT_RULE.
+
+hranice (package C4a) reads the --out of the null runs (RUN_RULE; refused by name: fewer than MIN_RUNS, a run of the
+structured generator, the same seed twice, a run that did not end with exit 0 or whose check E is not clean,
+EXIT_READING_RULE, measurement code that is not its commit's, CODE_RULE, a marginal change, NO_CHANGE_RULE, another
+commit, protocol file, column mask or working copy, FAMILY_RULE) and writes into OUT, each JSON with the header of
+check E: hranice_m.json (hranice_m of the pure part with the numbers beside m, the lead's check under for_the_lead,
+LEAD_RULE, the runs and what they share), nulove.json (rozhodnutia at m, bez_jedneho and the reading of
+null_generator, NULL_READING_RULE) and the values file of python -m tcn.hodnoty zapis G1 (VALUES_FILE_RULE); it never
+writes the protocol. Exit codes: EXIT_HRANICE_RULE (3 when the lead's check fired).
+
+tabulka (package C4a) reads the --out of every run, the null runs of hranice_m.json exactly and at least
+MIN_STRUCTURED structured runs (TABLE_RULE), and writes into TABLE, each with the header of check E:
+strukturovane.json, diagnostiky.json, okrajova_zmena.json, neskorovane.json, vlozene_chyby.json (the readers of the
+pure part over the runs) and znamy_odpovede.json, one row per criterion of scripts/gates.py CRITERIA["G1"] with its
+reading (READINGS), its verdict and the paths of its files. Exit codes: EXIT_TABULKA_RULE.
 
 THE PURE PART (package C2):
 
@@ -908,9 +925,39 @@ def hlavicka_e(schema, command, n, values, **extra):
             "command": command, "n": n, **extra, "values": values}
 
 
+E_BEFORE = "pred zápisom zaznam.json"  # The two runs of check E of beh, named by the line '# when' of kontrola_E.log.
+E_AFTER = "po zápise zaznam.json, nad každým JSON v --out"
+
+
+def kontrola_e(directory, kedy, log=True):
+    """Check E (scripts/check_claims.sh --json-hlavicky with VMIC_RESULTS_DIR the directory) over every JSON below
+    `directory`: {exit, output, when, log}. With log its output is appended to directory/kontrola_E.log after the S2
+    header and the line '# when' (a run of beh, and the commands hranice and tabulka over their own --out); without
+    it nothing is written (the commands over the --out of a run, which they never change)."""
+    import os
+    import shlex
+    import subprocess
+    directory = Path(directory)
+    command = ["bash", str(REPO / "scripts" / "check_claims.sh"), "--json-hlavicky"]
+    env = dict(os.environ, VMIC_RESULTS_DIR=str(directory))
+    found = subprocess.run(command, cwd=REPO, env=env, capture_output=True, text=True, timeout=600)
+    path = directory / "kontrola_E.log"
+    if log:
+        with path.open("a") as stream:
+            stream.write(hlavicka_s2(f"VMIC_RESULTS_DIR={shlex.quote(str(directory))} {shlex.join(command)}")
+                         + f"# when {kedy}\n" + found.stdout + found.stderr + f"exit {found.returncode}\n")
+    return {"exit": found.returncode, "output": (found.stdout + found.stderr).strip()[-2000:], "when": kedy,
+            "log": str(path) if log else None}
+
+
 def _json(value):
     from tcn.finalne import _json_default
     return json.dumps(value, indent=1, ensure_ascii=False, allow_nan=False, default=_json_default) + "\n"
+
+
+def _plain(value):
+    """The value as JSON gives it back (numpy numbers as Python numbers, tuples as lists): what a file holds."""
+    return json.loads(_json(value))
 
 
 def _zapis(path, doc):
@@ -1394,11 +1441,11 @@ class Beh:
                 if path.exists():
                     shutil.rmtree(path)
         with self.krok("13 kontrola E pred zaznamom"):
-            self.check_e = self._kontrola_e("pred zápisom zaznam.json")
+            self.check_e = self._kontrola_e(E_BEFORE)
         with self.krok("14 zaznam"):
             self._zaznam()
         with self.krok("15 kontrola E"):
-            last = self._kontrola_e("po zápise zaznam.json, nad každým JSON v --out")
+            last = self._kontrola_e(E_AFTER)
             self.kontrola("check_E", self.check_e["exit"] == 0 and last["exit"] == 0,
                           f"exit {self.check_e['exit']} before and {last['exit']} after zaznam.json (kontrola_E.log)")
         read_json(self.out / "zaznam.json")  # Readable once written.
@@ -1499,17 +1546,7 @@ class Beh:
     def _kontrola_e(self, kedy):
         """Check E (scripts/check_claims.sh --json-hlavicky with VMIC_RESULTS_DIR the run's out), into kontrola_E.log
         with the S2 header: {exit, output, when}."""
-        import os
-        import shlex
-        import subprocess
-        command = ["bash", str(REPO / "scripts" / "check_claims.sh"), "--json-hlavicky"]
-        env = dict(os.environ, VMIC_RESULTS_DIR=str(self.out))
-        found = subprocess.run(command, cwd=REPO, env=env, capture_output=True, text=True, timeout=600)
-        with (self.out / "kontrola_E.log").open("a") as stream:
-            stream.write(hlavicka_s2(f"VMIC_RESULTS_DIR={shlex.quote(str(self.out))} {shlex.join(command)}")
-                         + f"# when {kedy}\n" + found.stdout + found.stderr + f"exit {found.returncode}\n")
-        return {"exit": found.returncode, "output": (found.stdout + found.stderr).strip()[-2000:], "when": kedy,
-                "log": str(self.out / "kontrola_E.log")}
+        return kontrola_e(self.out, kedy)
 
     def _chyby(self):
         """FAULTS_RULE: vlozene_chyby.json."""
@@ -1730,8 +1767,701 @@ def _cesta_alebo_nic(doc, path):
         return None
 
 
+# ------------------------------------------------------------------ the commands hranice and tabulka (package C4a)
+
+SCHEMA_HRANICE = "hyptcn3/g1-bounds-file/1"  # hranice_m.json
+SCHEMA_NULOVE = "hyptcn3/g1-null-runs/1"  # nulove.json
+SCHEMA_TABLE = {"strukturovane.json": "hyptcn3/g1-structured-runs/1",
+                "diagnostiky.json": "hyptcn3/g1-diagnostics-runs/1",
+                "okrajova_zmena.json": "hyptcn3/g1-marginal-change-runs/1",
+                "neskorovane.json": "hyptcn3/g1-unscored-runs/1",
+                "vlozene_chyby.json": "hyptcn3/g1-injected-errors-runs/1",
+                "znamy_odpovede.json": "hyptcn3/g1-known-answers/1"}
+VALUES_FILE = "hodnoty_G1.vstup"  # VALUES_FILE_RULE: the input of python -m tcn.hodnoty zapis G1
+BOUND_PATHS = {claim: f"analysis.{claim}.m" for claim in CLAIMS}  # determined_at.G1 of config/collection-v5.json
+MIN_STRUCTURED = 3  # The lead's answer to Q35 (2026-11-24T21:25Z): three seeds of the structured generator.
+EXIT_LEAD = 3  # The lead's check fired (LEAD_RULE): the files are written, m is not to be written yet.
+RUN_FILES = {"final": "final.json", "generator": "generator.json", "faults": "vlozene_chyby.json"}
+
+RUN_RULE = (
+    "a run is the --out of one python -m tcn.suchy_beh beh, read and never changed: its zaznam.json (schema "
+    f"{SCHEMA_RUN}) names the run, <generator>_<seed>, and the sha256 of its final.json, generator.json and, with "
+    "--chyby, vlozene_chyby.json, which the command reads from the same directory and refuses by name when missing "
+    "or of another sha256 (so a moved --out is read where it lies, and the attachments of final.json are read at the "
+    "paths the record names, sha256 checked, tcn/finalne.py ATTACHMENT_RULE); the run must be complete (zaznam.json "
+    "status complete without failure, final.json a complete record of stage suchy, generator.json of the run's "
+    "generator and seed); one run per name, the same seed of a generator twice is refused (twenty copies of one run "
+    "are one run)")
+EXIT_READING_RULE = (
+    "a run ended with exit 0 (EXIT_RULE of beh, whose exit code no file holds) when its records show it: zaznam.json "
+    "complete, without failure, with the checks final_record and report (and fault_injections with --chyby) and every "
+    "check it holds true, its check E before zaznam.json (known_answers.chain_end_to_end.check_E) exit 0, and its "
+    f"kontrola_E.log exactly the two blocks of beh, '{E_BEFORE}' and '{E_AFTER}', each exit 0 (the last check of beh, "
+    "check_E, runs after zaznam.json is written); check E is clean when, besides, scripts/check_claims.sh "
+    "--json-hlavicky over the run's --out finds nothing now (run again by the command, which writes nothing there)")
+CODE_RULE = (
+    "the code of a run: one commit named by its zaznam.json, its final.json (the header and values.tree, tcn.eval "
+    "_git_stav) and the S2 header of its suchy_beh.log, else refused; its measurement code (scripts/collection.py "
+    "is_measurement, the code gates.measurement_sha256 hashes) is that of the commit when no changed path of git status "
+    "--porcelain at its start (S2 header) and at its final evaluation (final.json values.tree.changed) is measurement "
+    "code (a rename names both paths; an untracked directory under a directory of measurement code counts), else "
+    "refused: zaznam.json of beh names no measurement_sha256, so equal commits of such runs are equal measurement "
+    "hashes; runs on two commits (the structured runs after the commit that writes m) have the same measurement code "
+    "when git diff --name-only between the commits names no measurement code, else refused")
+FAMILY_RULE = (
+    "the null runs of the bounds are one family: the same commit (CODE_RULE: so the same measurement code), the same "
+    "protocol file (sha256 and the hashes of stages G0 and G1, zaznam.json values.protocol), the same column mask "
+    "(analysis.columns of the copy, MASK_RULE) and the same working copy (its sha256 and every value it fills, "
+    "COPY_RULE), and the final record of every run computed under its copy (final.json values.corpus.protocol_sha256 "
+    "is the copy's sha256); the first difference is refused by name, the two runs and both values named; the "
+    "structured runs of the table are one family by the same rule among themselves, and with the null runs share the "
+    "measurement code, the hash of stage G0 of the protocol and every value the copy fills but analysis.columns (each "
+    "generator has its own qualification pass, the lead's answer to Q38; the structured runs run under the file with m "
+    "filled, whose hash of stage G1 is another)")
+NO_CHANGE_RULE = (
+    "nothing is inserted into the null runs from which m is computed (the lead's answer to Q36, 2026-11-24T21:25Z: the "
+    "marginal change only in the structured runs): a null run whose generator.json holds a marginal change is refused")
+LEAD_RULE = (
+    "the lead's check before m is written (his answer to Q33, 2026-11-24T21:25Z: 'Ak sa percentily metód jedného "
+    "tvrdenia líšia o viac než 0,02 (K1) alebo 0,05 (K2), napíš mi to pred zápisom m do súboru'): every claim whose "
+    "flag of SPREAD_RULE is raised (the largest minus the smallest percentile of its methods above SPREAD_BOUND) is named "
+    "under for_the_lead with the percentile of every method; the command then writes all its files and exits "
+    f"{EXIT_LEAD}, so that m is not written into the protocol (python -m tcn.hodnoty zapis G1) before the lead has seen "
+    "it")
+NULL_READING_RULE = (
+    "the reading of null_generator (proposal 10.2 and the skeleton of G1, section 2, with the lead's answer to Q33): at "
+    f"least MIN_RUNS ({MIN_RUNS}) null runs, and every claim (K1, K2a, K2b) not_better or undecided in all of them but "
+    "one at most, both in the decisions at the bounds m of all the runs (DECISION_RULE) and in the table without one "
+    "run (LEAVE_ONE_OUT_RULE); a claim nevyhodnotené in a run is an exception")
+VALUES_FILE_RULE = (
+    f"the values file {VALUES_FILE} is the input of the one writer of the values of a stage (python -m tcn.hodnoty "
+    "zapis G1; the lead's answer to Q66): exactly {stage, values, note} as tcn/hodnoty.py read_values takes it, for "
+    "each of analysis.k1.m, analysis.k2a.m and analysis.k2b.m its value (hranice_m.json values.m), its sources "
+    "(hranice_m.json and the zaznam.json and final.json of every null run, by their absolute paths) and its "
+    "derivation; it holds no header of check E, which read_values refuses, and so it is not named *.json, the files "
+    "check E reads as results (its provenance is the record of tcn.hodnoty, which names its sha256, and hranice_m.json, "
+    "which names it); the command never writes the protocol")
+TABLE_RULE = (
+    "the table of known answers (proposal 10.2; the skeleton of G1, section 2, with the lead's answers to Q33, Q35, "
+    "Q36 and Q41): one row per criterion of scripts/gates.py CRITERIA['G1'], in its order, with its reading "
+    "(READINGS), its verdict (passed true or false, from the files the command wrote and the runs' records) and the "
+    "paths of the files it was read from; it reads the null runs of hranice_m.json exactly (by name and the sha256 of "
+    "their zaznam.json and final.json), refuses a hranice_m.json or a nulove.json beside it that is not what hranice "
+    f"computes from those runs, and at least MIN_STRUCTURED ({MIN_STRUCTURED}) structured runs, decided at the m of "
+    "hranice_m.json (a structured run decided at another m is refused by name); a run that ended with exit 1 is read "
+    "and its rows show what did not hold")
+READINGS = {
+    "chain_end_to_end": (
+        "one command on the real file (a copy with the hashes of stages G0 and G1 of the file, both gates of G1 "
+        "passed) from the plan to the report and check E, exit 0, a record of stage suchy; the group prefixes of the "
+        "rehearsal and the campaign, two VMs, events, controls, tolerated invalid rows, the rehearsal and the campaign "
+        "to their complete ending, a replacement at least once (the rejection injected through Harness.reject), the "
+        "report exit 0, check E clean then and now (EXIT_READING_RULE); in every run, from its zaznam.json "
+        "(known_answers.chain_end_to_end) and kontrola_E.log"),
+    "null_generator": NULL_READING_RULE + (
+        "; m by proposal 10.9 as the lead reads it (Q33): the 95th percentile of the point estimates, one per run, the "
+        "maximum over the methods of the claim; the null runs of hranice_m.json"),
+    "structured_generator": (
+        "K1, K2a and K2b better in every structured run, and no claim of the model with shuffled context or of the "
+        "network with random weights better (STRUCTURED_RULE), at the m of hranice_m.json; at least three structured "
+        "runs (the lead's answer to Q35)"),
+    "diagnostics_controls": (
+        "the tree and the share of one member mark Z1, Z2 and Z3 threshold-like (used) in every run where both are "
+        "evaluated (DIAGNOSTICS_RULE: at least analysis.diagnostics.min_positive_episodes positive episodes), and they "
+        "are evaluated in every structured run; one not evaluated there is a finding for the lead, not a passed "
+        "criterion (the lead's answer to Q41); every run"),
+    "marginal_change": (
+        "the marginal change (+8 standard deviations of the role train in one input column of the TCN, in the band "
+        "before the first full snapshot of one session of every group of test_benign) only in the structured runs "
+        "(the lead's answer to Q36): in every structured run Z1 as fitted and the replay of M of every seed give an "
+        "alarm edge within analysis.horizon_s at every change outside an unscored stretch, which is listed apart "
+        "(MARGINAL_RULE), with one change judged at least; no null run holds a change (NO_CHANGE_RULE)"),
+    "unscored_spans": (
+        "the inserted invalid rows lie in the replays and in O1 as unscored stretches with their seq and number of "
+        "rows, an event and a control whose first analysis.evaluable.first_s seconds are scored less than half are "
+        "nevyhodnotené in O3 and O4 and out of the denominators of the false alarms (UNSCORED_RULE, proposal 6.4); "
+        "holds in every run"),
+    "fault_injections": (
+        "the nine errors of scripts/tests/vlozene_chyby.py vsetky, in its order, each refused by exactly its expected "
+        "reasons, and every clean target admitted (FAULTS_RULE); in every run with --chyby, of which one null run and "
+        "one structured run at least"),
+}
+EXIT_HRANICE_RULE = (
+    f"hranice exits 0 when it wrote its files and check E over its --out is clean, {EXIT_LEAD} when the lead's check "
+    "fired (LEAD_RULE), 1 when check E over its --out is not clean (before the lead's check: the files are defective), "
+    "and 2 for a refusal, before --out is created")
+EXIT_TABULKA_RULE = (
+    "tabulka exits 0 when it wrote its files, every row of the table passed and check E over its --out is clean, 1 "
+    "when a row did not pass or check E is not clean, and 2 for a refusal, before --out is created")
+
+
+def _citaj(path, kto):
+    """The JSON object of a file, else refused by name."""
+    try:
+        doc = json.loads(Path(path).read_text())
+    except (OSError, ValueError) as error:
+        raise ValueError(f"{kto}: {path} cannot be read ({type(error).__name__}: {error})") from None
+    if type(doc) is not dict:
+        raise ValueError(f"{kto}: {path} is no JSON object")
+    return doc
+
+
+def _s2(path, kto):
+    """{commit, status} of the S2 header of a log of beh: the commit and the lines of git status --porcelain."""
+    try:
+        lines = Path(path).read_text().splitlines()
+    except OSError as error:
+        raise ValueError(f"{kto}: {path} cannot be read ({type(error).__name__}: {error})") from None
+    commit, status, listing = None, None, False
+    for line in lines:
+        if not line.startswith("# ") or line.startswith("# command "):
+            break
+        if line.startswith("# commit "):
+            commit = line[len("# commit "):]
+        elif line.startswith("# git status --porcelain:"):
+            status, listing = [], line == "# git status --porcelain:"
+        elif listing and line.startswith("#   "):
+            status.append(line[len("#   "):])
+    if commit is None or status is None:
+        raise ValueError(f"{kto}: {path} has no S2 header with the commit and git status --porcelain")
+    return {"commit": commit, "status": status}
+
+
+def _meracie(paths):
+    """The paths of measurement code among the paths of git status --porcelain entries (CODE_RULE)."""
+    from scripts import collection
+    out = []
+    for entry in paths:
+        for path in str(entry).split(" -> "):
+            path = path.strip().strip('"')
+            parts = Path(path).parts
+            if parts and (collection.is_measurement(path) or (path.endswith("/") and parts[0] in
+                                                              collection.MEASUREMENT_DIRS and "tests" not in parts)):
+                out.append(path)
+    return out
+
+
+def _bloky_e(path):
+    """[(when, exit)] of the blocks of a kontrola_E.log, in its order; [] when it cannot be read."""
+    import re
+    try:
+        lines = Path(path).read_text().splitlines()
+    except OSError:
+        return []
+    out, when = [], None
+    for line in lines:
+        if line.startswith("# when "):
+            when = line[len("# when "):]
+        elif re.fullmatch(r"exit -?\d+", line):
+            out.append((when, int(line.split()[1])))
+            when = None
+    return out
+
+
+def _koniec(values, directory):
+    """EXIT_READING_RULE: the reasons the records of a complete run give that it did not end with exit 0."""
+    out = []
+    checks = values.get("checks") if type(values.get("checks")) is list else []
+    names = [c.get("check") for c in checks if type(c) is dict]
+    missing = [name for name in ("final_record", "report", *(("fault_injections",) if values.get("chyby") else ()))
+               if name not in names]
+    if missing:
+        out.append("zaznam.json has no check " + ", ".join(missing))
+    failed = [str(c.get("check")) if type(c) is dict else repr(c) for c in checks
+              if type(c) is not dict or c.get("holds") is not True]
+    if failed:
+        out.append("checks that did not hold: " + ", ".join(failed))
+    before = ((((values.get("known_answers") or {}).get("chain_end_to_end") or {}).get("check_E") or {}).get("exit"))
+    if before != 0:
+        out.append(f"check E before zaznam.json exit {before!r}")
+    blocks = _bloky_e(Path(directory) / "kontrola_E.log")
+    if blocks != [(E_BEFORE, 0), (E_AFTER, 0)]:
+        out.append(f"kontrola_E.log holds the blocks {blocks}, not the two of beh each with exit 0")
+    return out
+
+
+def nacitaj_beh(directory):
+    """RUN_RULE: the --out of one run of beh, read for hranice and tabulka (never written): {dir, name, generator,
+    seed, cesta, chyby, values (of zaznam.json), header, files {zaznam, final, generator, faults}, record (final.json),
+    generator_values, faults_values, code (CODE_RULE), exit_reasons (EXIT_READING_RULE), check_E_now}."""
+    d = Path(directory).resolve()
+    kto = f"--behy {d}"
+    doc = _citaj(d / "zaznam.json", kto)
+    values = doc.get("values")
+    if doc.get("schema") != SCHEMA_RUN or type(values) is not dict:
+        raise ValueError(f"{kto}: zaznam.json is no record of python -m tcn.suchy_beh beh (schema {SCHEMA_RUN})")
+    generator, seed = values.get("generator"), values.get("seed")
+    if generator not in REZIMY or type(seed) is not int or seed < 0:
+        raise ValueError(f"{kto}: zaznam.json names no generator ({' or '.join(REZIMY)}) and seed of a run")
+    name = f"{generator}_{seed}"
+    kto = f"run {name} ({d})"
+    if values.get("status") != "complete" or values.get("failure") is not None:
+        raise ValueError(f"{kto} did not complete (status {values.get('status')!r}, failure {values.get('failure')!r}),"
+                         " so it did not end with exit 0: the commands read complete runs only (RUN_RULE)")
+    recorded = values.get("files") if type(values.get("files")) is dict else {}
+    files = {"zaznam": {"path": str(d / "zaznam.json"), "sha256": _sha(d / "zaznam.json")}}
+    for key, file_name in RUN_FILES.items():
+        if key == "faults" and not values.get("chyby"):
+            continue
+        path = d / file_name
+        if not path.is_file():
+            raise ValueError(f"{kto}: no {file_name} in its --out (RUN_RULE)")
+        found = (recorded.get(key) or {}).get("sha256") if type(recorded.get(key)) is dict else None
+        digest = _sha(path)
+        if digest != found:
+            raise ValueError(f"{kto}: {path} is not the {file_name} its zaznam.json names (sha256 {digest}, zaznam.json "
+                             f"{found}; RUN_RULE)")
+        files[key] = {"path": str(path), "sha256": digest}
+    record = _citaj(d / "final.json", kto)
+    _hodnoty(record, kto)  # A complete record of stage suchy, else refused by name.
+    gen = _citaj(d / "generator.json", kto).get("values")
+    own = gen.get("generator") if type(gen) is dict else None
+    if type(own) is not dict or (own.get("rezim"), own.get("seed")) != (generator, seed):
+        raise ValueError(f"{kto}: its generator.json is not of generator {generator} and seed {seed} (RUN_RULE)")
+    faults = _citaj(d / RUN_FILES["faults"], kto).get("values") if "faults" in files else None
+    return {"dir": str(d), "name": name, "generator": generator, "seed": seed, "cesta": values.get("cesta"),
+            "chyby": bool(values.get("chyby")), "values": values, "header": {key: doc.get(key) for key in (
+                "commit", "commit_dirty", "date", "host", "command")},
+            "files": files, "record": record, "generator_values": gen, "faults_values": faults,
+            "code": _kod(doc, record, d, kto), "exit_reasons": _koniec(values, d),
+            "check_E_now": kontrola_e(d, "nad --out behu, príkazom hranice alebo tabulka", log=False)}
+
+
+def _kod(doc, record, d, kto):
+    """CODE_RULE for one run: {commit, changed_at_start, changed_at_final}, refused by name."""
+    s2 = _s2(d / "suchy_beh.log", kto)
+    tree = record["values"].get("tree") if type(record["values"].get("tree")) is dict else {}
+    commits = {"zaznam.json": doc.get("commit"), "final.json": record.get("commit"),
+               "final.json values.tree": tree.get("commit"), "suchy_beh.log": s2["commit"]}
+    if not all(type(c) is str and c for c in commits.values()) or len(set(commits.values())) != 1:
+        raise ValueError(f"{kto}: its records name the commits {commits}; a run runs on one commit (CODE_RULE)")
+    changed = tree.get("changed")
+    if type(changed) is not list:
+        raise ValueError(f"{kto}: its final.json names no changed paths of its tree (values.tree.changed; CODE_RULE)")
+    found = {"its start (the S2 header of suchy_beh.log)": _meracie(line[3:] for line in s2["status"]),
+             "its final evaluation (final.json values.tree.changed)": _meracie(changed)}
+    if any(found.values()):
+        raise ValueError(f"{kto}: its measurement code is not that of its commit {commits['zaznam.json']} (changed "
+                         "measurement code at " + "; at ".join(f"{when}: {', '.join(paths)}" for when, paths in
+                                                                 found.items() if paths) + "; CODE_RULE)")
+    return {"commit": commits["zaznam.json"], "changed_at_start": s2["status"], "changed_at_final": changed}
+
+
+def _jedinecne(runs):
+    """The runs sorted by generator and seed; the same run twice is refused (RUN_RULE)."""
+    seen = {}
+    for run in runs:
+        if run["name"] in seen:
+            raise ValueError(f"run {run['name']} is given twice ({seen[run['name']]} and {run['dir']}): one run per "
+                             "seed of a generator (RUN_RULE; twenty copies of one run are one run)")
+        seen[run["name"]] = run["dir"]
+    return sorted(runs, key=lambda run: (REZIMY.index(run["generator"]), run["seed"]))
+
+
+def _identita(run):
+    """What the runs of one family share (FAMILY_RULE)."""
+    v = run["values"]
+    filled = {path: item.get("value") if type(item) is dict else item
+              for path, item in ((v.get("copy") or {}).get("values") or {}).items()}
+    protocol = v.get("protocol") if type(v.get("protocol")) is dict else {}
+    copy_file = (v.get("files") or {}).get("copy") if type((v.get("files") or {}).get("copy")) is dict else {}
+    return {"commit": run["code"]["commit"],
+            "protocol": {key: protocol.get(key) for key in ("sha256", "g0_stage_sha256", "g1_stage_sha256")},
+            "mask": filled.get(COLUMNS), "copy": {"sha256": copy_file.get("sha256"), "values": filled}}
+
+
+def _na_ceste(doc, path):
+    for key in path:
+        if type(doc) is not dict or key not in doc:
+            return "(none)"
+        doc = doc[key]
+    return doc
+
+
+def _rozdiel(a, b):
+    """Where two values of a family differ: the paths of two objects (at most five, with both values), else both."""
+    if type(a) is dict and type(b) is dict:
+        paths = _rozdiely(a, b)
+        text = "; ".join(f"{'.'.join(map(str, path)) or '(the whole)'} {_na_ceste(a, path)!r} and "
+                         f"{_na_ceste(b, path)!r}" for path in paths[:5])
+        return f"they differ at {text}" + (f" and at {len(paths) - 5} more" if len(paths) > 5 else "")
+    return f"{a!r} and {b!r}"
+
+
+FAMILY_WHAT = {"commit": "commit (CODE_RULE: the measurement code with it)", "protocol": "protocol file",
+               "mask": "column mask (analysis.columns of the copy)", "copy": "working copy of the protocol"}
+
+
+def _rodina(runs, keys=tuple(FAMILY_WHAT)):
+    """FAMILY_RULE among `runs`: the first difference refused by name; the shared values returned."""
+    for run in runs:
+        found = _identita(run)
+        if found["copy"]["sha256"] is None or found["mask"] is None:
+            raise ValueError(f"run {run['name']} ({run['dir']}): zaznam.json names no working copy with its column mask"
+                             " (files.copy, copy.values; FAMILY_RULE)")
+        corpus = (run["record"]["values"].get("corpus") or {}).get("protocol_sha256")
+        if corpus != found["copy"]["sha256"]:
+            raise ValueError(f"run {run['name']} ({run['dir']}): its final record was computed under the protocol "
+                             f"{corpus}, not under its working copy {found['copy']['sha256']} (FAMILY_RULE)")
+    first, shared = runs[0], _identita(runs[0])
+    for run in runs[1:]:
+        found = _identita(run)
+        for key in keys:
+            if found[key] != shared[key]:
+                raise ValueError(f"runs {first['name']} and {run['name']} ran with another {FAMILY_WHAT[key]}: "
+                                 f"{_rozdiel(shared[key], found[key])} (FAMILY_RULE)")
+    return {key: shared[key] for key in keys}
+
+
+def _meracie_medzi(a, b):
+    """CODE_RULE: the measurement code changed between the commits a and b (git diff --name-only), refused when git
+    cannot compare them."""
+    import subprocess
+    if a == b:
+        return []
+    found = subprocess.run(["git", "-C", str(REPO), "diff", "--name-only", a, b], capture_output=True, text=True)
+    if found.returncode:
+        raise ValueError(f"the commits {a} and {b} cannot be compared in {REPO} (git diff: {found.stderr.strip()}): "
+                         "the measurement code of the runs is not known to be the same (CODE_RULE)")
+    return _meracie(found.stdout.splitlines())
+
+
+def _behy_suhrn(runs):
+    """{run: what the outputs name of it}."""
+    return {run["name"]: {"dir": run["dir"], "generator": run["generator"], "seed": run["seed"], "cesta": run["cesta"],
+                          "chyby": run["chyby"], "files": run["files"], "commit": run["code"]["commit"],
+                          "check_E_now": {"exit": run["check_E_now"]["exit"]}} for run in runs}
+
+
+def _nulove(records, m):
+    """The values of nulove.json: the decisions at m, the table without one run and the reading of null_generator."""
+    decided, table = rozhodnutia(records, m), bez_jedneho(records)
+    claims = {claim: {"exceptions_at_m": decided["claims"][claim]["exceptions"],
+                      "exceptions_leave_one_out": table["claims"][claim]["exceptions"]} for claim in CLAIMS}
+    for found in claims.values():
+        found["holds"] = len(found["exceptions_at_m"]) <= 1 and len(found["exceptions_leave_one_out"]) <= 1
+    holds = len(records) >= MIN_RUNS and all(found["holds"] for found in claims.values())
+    return {"m": m, "decisions": decided, "leave_one_out": table,
+            "reading": {"runs": len(records), "claims": claims, "holds": holds, "rule": NULL_READING_RULE}}
+
+
+def _null_runs(runs, kto):
+    """hranice's refusals of the runs it is given (BOUND_RULE, RUN_RULE, EXIT_READING_RULE, NO_CHANGE_RULE,
+    FAMILY_RULE): the null runs, sorted, and what they share."""
+    for run in runs:
+        if run["generator"] != "nulovy":
+            raise ValueError(f"run {run['name']} ({run['dir']}) is a run of the structured generator: the bound m comes "
+                             f"from the runs of the null generator alone ({kto}; BOUND_RULE)")
+    runs = _jedinecne(runs)
+    if len(runs) < MIN_RUNS:
+        raise ValueError(f"{len(runs)} null runs: the bound m is the 95th percentile on at least {MIN_RUNS} runs of the "
+                         "generator without structure (proposal 8.4 and 10.2; BOUND_RULE)")
+    for run in runs:
+        if run["exit_reasons"]:
+            raise ValueError(f"run {run['name']} ({run['dir']}) did not end with exit 0: "
+                             + "; ".join(run["exit_reasons"]) + " (EXIT_READING_RULE)")
+        if run["check_E_now"]["exit"] != 0:
+            raise ValueError(f"run {run['name']} ({run['dir']}): check E is not clean over its --out: "
+                             f"{run['check_E_now']['output']} (EXIT_READING_RULE)")
+        inserted = {sid: entry.get("marginal_changes") for sid, entry in
+                    ((run["generator_values"] or {}).get("sessions") or {}).items()
+                    if type(entry) is dict and entry.get("marginal_changes")}
+        if inserted:
+            raise ValueError(f"run {run['name']} ({run['dir']}): its generator.json inserted marginal changes into "
+                             f"{', '.join(sorted(inserted))} (NO_CHANGE_RULE)")
+    return runs, _rodina(runs)
+
+
+def hranice(behy, out, command):
+    """The command hranice (package C4a; EXIT_HRANICE_RULE): over the --out of the null runs `behy`, hranice_m.json,
+    nulove.json and the values file into the new directory `out`; returns (exit code, summary)."""
+    import shlex
+    out = Path(out).resolve()
+    if out.exists() or out.is_symlink():
+        raise FileExistsError(f"--out {out} exists; the command writes a new directory")
+    runs, family = _null_runs([nacitaj_beh(d) for d in behy], "hranice")
+    records = {run["name"]: run["record"] for run in runs}
+    bounds = hranice_m(records)  # BOUND_RULE; its own refusals (grids, mask, compare, nevyhodnotené) by name
+    m = bounds["m"]
+    lead = [{"claim": claim, "spread": bounds["claims"][claim]["spread"],
+             "spread_bound": bounds["claims"][claim]["spread_bound"],
+             "percentiles": {z: bounds["claims"][claim]["methods"][z]["percentile"]
+                             for z in bounds["claims"][claim]["compare"]},
+             "m": m[claim], "set_by": bounds["claims"][claim]["set_by"]} for claim in bounds["flag"]["claims"]]
+    null = _nulove(records, m)
+    out.mkdir(parents=True)
+    values_path = out / VALUES_FILE
+    writer = ["python", "-m", "tcn.hodnoty", "zapis", "G1", "--protocol", "config/collection-v5.json", "--values",
+              str(values_path), "--record", "data/results/hodnoty_G1_<YYYYMMDDTHHMMSSZ>.json"]
+    h_values = {"m": m, "bounds": bounds, "for_the_lead": lead,
+                "lead_check": {"raised": bool(lead), "exit": EXIT_LEAD if lead else 0, "rule": LEAD_RULE},
+                "runs": _behy_suhrn(runs), "family": family,
+                "values_file": {"path": str(values_path), "writer": shlex.join(writer), "rule": VALUES_FILE_RULE},
+                "rules": {"run": RUN_RULE, "exit_reading": EXIT_READING_RULE, "code": CODE_RULE, "family": FAMILY_RULE,
+                          "no_change": NO_CHANGE_RULE, "lead": LEAD_RULE, "exit": EXIT_HRANICE_RULE}}
+    h_path = _zapis(out / "hranice_m.json", hlavicka_e(SCHEMA_HRANICE, command, len(runs), h_values))
+    h_sha = _sha(h_path)
+    sources = [str(h_path), *(run["files"][key]["path"] for run in runs for key in ("zaznam", "final"))]
+    doc = {"stage": "G1", "values": {}, "note": (
+        f"the bounds m of G1 from the {len(runs)} null runs of the dry run, written by python -m tcn.suchy_beh "
+        f"hranice into {h_path} (sha256 {h_sha}); {VALUES_FILE_RULE}")}
+    for claim in CLAIMS:
+        found = bounds["claims"][claim]
+        per = "; ".join(f"{z} {found['methods'][z]['percentile']!r}" for z in found["compare"])
+        doc["values"][BOUND_PATHS[claim]] = {"value": m[claim], "sources": sources, "derivation": (
+            f"proposal 8.4 and 10.9 as the lead's answer to Q33 (2026-11-24T21:25Z) reads them: for every method of "
+            f"analysis.{claim}.compare ({', '.join(found['compare'])}) the 95th percentile (numpy {np.__version__} "
+            f"quantile {PERCENTILE}, method linear) of its {len(runs)} point estimates, one per null run (the mean over "
+            f"the run's boots of its values per boot of {found['statistic']}, final.json values.claims.{claim}.methods."
+            f"<method>.mean): {per}; m the maximum over the methods, {m[claim]!r}, set by {', '.join(found['set_by'])}; "
+            f"hranice_m.json values.bounds.claims.{claim} (sha256 {h_sha})")}
+    with values_path.open("x", encoding="utf-8") as stream:
+        stream.write(json.dumps(doc, indent=2, ensure_ascii=False, allow_nan=False) + "\n")
+    n_values = dict(null, hranice_m={"path": str(h_path), "sha256": h_sha},
+                    values_file={"path": str(values_path), "sha256": _sha(values_path)}, runs_files=_behy_suhrn(runs))
+    n_path = _zapis(out / "nulove.json", hlavicka_e(SCHEMA_NULOVE, command, len(runs), n_values))
+    check = kontrola_e(out, "nad --out príkazu hranice")
+    code = 1 if check["exit"] != 0 else EXIT_LEAD if lead else 0
+    return code, {"hranice_m": str(h_path), "nulove": str(n_path), "values_file": str(values_path), "m": m,
+                  "for_the_lead": [item["claim"] for item in lead], "null_generator": null["reading"]["holds"],
+                  "check_E": check["exit"], "exit": code}
+
+
+def _bez_textov(value):
+    """The value without the texts of the rules (keys rule and rules, at any depth): what tabulka compares with the
+    files of hranice, so that a later commit that only words a rule otherwise reads the same numbers."""
+    if type(value) is dict:
+        return {key: _bez_textov(item) for key, item in value.items() if key not in ("rule", "rules")}
+    if type(value) is list:
+        return [_bez_textov(item) for item in value]
+    return value
+
+
+def _riadok(criterion, passed, files, detail):
+    return {"criterion": criterion, "reading": READINGS[criterion], "verdict": "passed" if passed else "not passed",
+            "passed": bool(passed), "files": sorted(set(files)), "detail": detail}
+
+
+def _retaz_behu(run):
+    """The row chain_end_to_end of one run: its conditions (READINGS) and whether all hold."""
+    v = run["values"]
+    chain = (v.get("known_answers") or {}).get("chain_end_to_end") or {}
+    stages = ((v.get("copy") or {}).get("check") or {}).get("stages") or {}
+    gates = v.get("gates") if type(v.get("gates")) is list else []
+    prefixes = chain.get("group_prefixes") or {}
+    groups = prefixes.get("groups") or []
+    own = [prefixes.get(key) for key in ("campaign", "rehearsal")]
+    rehearsal, campaign = chain.get("rehearsal") or {}, chain.get("campaign") or {}
+
+    def count(item, key="occurrences"):
+        found = (item or {}).get(key)
+        return found if type(found) is int else 0
+    conditions = {
+        "exit_0": not run["exit_reasons"],
+        "check_E_now": run["check_E_now"]["exit"] == 0,
+        "record_of_stage_suchy": (chain.get("record") or {}).get("stage") == "suchy"
+                                 and (chain.get("record") or {}).get("status") == "complete",
+        "copy_with_the_hashes_of_the_file": all(type(stages.get(s)) is dict and stages[s].get("file")
+                                                and stages[s]["file"] == stages[s].get("copy") for s in ("G0", "G1")),
+        "gates_of_g1_passed": len(gates) >= 2 and all(type(g) is dict and g.get("passed") is True
+                                                      and g.get("stage") == "G1" for g in gates),
+        "two_vms": len(set(chain.get("vms") or [])) == 2,
+        "group_prefixes": all(type(p) is str and p and any(g.startswith(p) for g in groups) for p in own)
+                          and all(any(g.startswith(p) for p in own if type(p) is str and p) for g in groups),
+        "events": count(chain.get("events")) > 0,
+        "controls": count(chain.get("controls")) > 0,
+        "tolerated_invalid_rows": count(chain.get("tolerated_invalid_rows"), "rows") > 0,
+        "rehearsal_and_campaign": count(rehearsal, "sessions") > 0 and bool(rehearsal.get("ending"))
+                                  and bool(campaign.get("ending")) and count(campaign, "planned_sessions") > 0
+                                  and campaign.get("corpus_sessions") == campaign.get("planned_sessions"),
+        "replacement": count(campaign, "replacements_used") >= 1
+                       and len((chain.get("replacement") or {}).get("replaced") or []) >= 1,
+        "report": chain.get("report_exit") == 0}
+    return {"conditions": conditions, "holds": all(conditions.values()), "exit_reasons": run["exit_reasons"],
+            "check_E_now": run["check_E_now"]}
+
+
+def _chyby_behu(run):
+    """The row fault_injections of one run with --chyby (FAULTS_RULE)."""
+    from scripts.tests import vlozene_chyby as vc
+    faults = run["faults_values"] or {}
+    rows = faults.get("errors") if type(faults.get("errors")) is list else []
+    expected = [chyba.id for chyba in vc.vsetky()]
+    holds = ([row.get("id") for row in rows] == expected and all(row.get("equal") is True for row in rows)
+             and faults.get("refused_as_expected") == faults.get("of") == len(expected)
+             and faults.get("clean_admitted") is True)
+    return {"file": run["files"]["faults"], "ids": [row.get("id") for row in rows], "expected_ids": expected,
+            "refused_as_expected": faults.get("refused_as_expected"), "of": faults.get("of"),
+            "clean_admitted": faults.get("clean_admitted"), "holds": holds}
+
+
+def tabulka(behy, hranice_path, out, command):
+    """The command tabulka (package C4a; TABLE_RULE, EXIT_TABULKA_RULE): over the --out of all the runs `behy` and the
+    hranice_m.json `hranice_path` of hranice, the six files of the table into the new directory `out`; returns (exit
+    code, summary)."""
+    from scripts import gates
+    out = Path(out).resolve()
+    if out.exists() or out.is_symlink():
+        raise FileExistsError(f"--out {out} exists; the command writes a new directory")
+    h_path = Path(hranice_path).resolve()
+    h_doc = _citaj(h_path, "--hranice")
+    h_values = h_doc.get("values")
+    if h_doc.get("schema") != SCHEMA_HRANICE or type(h_values) is not dict:
+        raise ValueError(f"--hranice {h_path} is no hranice_m.json of python -m tcn.suchy_beh hranice (schema "
+                         f"{SCHEMA_HRANICE})")
+    m = _hranice_dane(h_values.get("m"))
+    n_path = h_path.parent / "nulove.json"
+    n_doc = _citaj(n_path, "--hranice")
+    if n_doc.get("schema") != SCHEMA_NULOVE or type(n_doc.get("values")) is not dict:
+        raise ValueError(f"{n_path} beside --hranice is no nulove.json of hranice (schema {SCHEMA_NULOVE})")
+    runs = _jedinecne([nacitaj_beh(d) for d in behy])
+    null = [run for run in runs if run["generator"] == "nulovy"]
+    structured = [run for run in runs if run["generator"] != "nulovy"]
+    named = h_values.get("runs") if type(h_values.get("runs")) is dict else {}
+    given = {run["name"]: run for run in null}
+    if set(given) != set(named):
+        raise ValueError(f"the null runs given are not those of {h_path}: missing {sorted(set(named) - set(given))}, "
+                         f"not in it {sorted(set(given) - set(named))} (TABLE_RULE)")
+    for name, run in given.items():
+        files = named[name].get("files") if type(named[name]) is dict else None
+        for key in ("zaznam", "final"):
+            recorded = files.get(key) if type(files) is dict else None
+            if run["files"][key]["sha256"] != (recorded.get("sha256") if type(recorded) is dict else None):
+                raise ValueError(f"run {name} ({run['dir']}): its {RUN_FILES.get(key, 'zaznam.json')} is not the one "
+                                 f"{h_path} names (sha256; TABLE_RULE)")
+    null, family = _null_runs(null, "tabulka")
+    records = {run["name"]: run["record"] for run in null}
+    bounds = _plain(hranice_m(records))
+    if _bez_textov(bounds) != _bez_textov(h_values.get("bounds")) or bounds["m"] != m:
+        raise ValueError(f"{h_path} is not what hranice computes from its null runs (values.bounds; TABLE_RULE)")
+    null_now = _plain(_nulove(records, m))
+    if _bez_textov({key: n_doc["values"].get(key) for key in null_now}) != _bez_textov(null_now):
+        raise ValueError(f"{n_path} is not what hranice computes from the null runs of {h_path} (TABLE_RULE)")
+    if len(structured) < MIN_STRUCTURED:
+        raise ValueError(f"{len(structured)} structured runs: the table reads at least {MIN_STRUCTURED} (the lead's "
+                         "answer to Q35; TABLE_RULE)")
+    s_family = _rodina(structured)
+    across = _identita(null[0]), _identita(structured[0])
+    for what, (a, b) in {"another hash of stage G0 of the protocol": (across[0]["protocol"]["g0_stage_sha256"],
+                                                                     across[1]["protocol"]["g0_stage_sha256"]),
+                         "other values of the working copy (all but analysis.columns)": (
+                             {k: v for k, v in across[0]["copy"]["values"].items() if k != COLUMNS},
+                             {k: v for k, v in across[1]["copy"]["values"].items() if k != COLUMNS})}.items():
+        if a != b:
+            raise ValueError(f"the structured run {structured[0]['name']} ran with {what} than the null run "
+                             f"{null[0]['name']}: {_rozdiel(b, a)} (FAMILY_RULE)")
+    measurement = _meracie_medzi(family["commit"], s_family["commit"])
+    if measurement:
+        raise ValueError(f"the structured runs (commit {s_family['commit']}) ran on other measurement code than the "
+                         f"null runs (commit {family['commit']}): {', '.join(measurement)} (CODE_RULE)")
+    for run in structured:
+        for claim in CLAIMS:
+            record_m = ((run["record"]["values"].get("claims") or {}).get(claim) or {}).get("m")
+            if record_m is not None and record_m != m[claim]:
+                raise ValueError(f"run {run['name']} ({run['dir']}) was decided at {BOUND_PATHS[claim]} {record_m!r}, "
+                                 f"{h_path} gives {m[claim]!r} (TABLE_RULE)")
+
+    def reader(run, name, read):
+        try:
+            return _plain(read())
+        except ValueError as error:
+            raise ValueError(f"run {run['name']} ({run['dir']}): the reader {name} refuses its record: {error}") from None
+    s_found = {run["name"]: reader(run, "strukturovane", lambda: strukturovane(run["record"], m)) for run in structured}
+    d_found = {run["name"]: reader(run, "diagnostiky", lambda: diagnostiky(run["record"])) for run in runs}
+    o_found = {run["name"]: reader(run, "okrajova_zmena", lambda: okrajova_zmena(run["record"],
+                                                                                 run["generator_values"]))
+               for run in structured}
+    o_null = {run["name"]: sum(len(entry.get("marginal_changes") or []) for entry in
+                               ((run["generator_values"] or {}).get("sessions") or {}).values() if type(entry) is dict)
+              for run in null}
+    u_found = {run["name"]: reader(run, "neskorovane", lambda: neskorovane(run["record"], run["generator_values"]))
+               for run in runs}
+    f_found = {run["name"]: _chyby_behu(run) for run in runs if run["chyby"]}
+    chain = {run["name"]: _retaz_behu(run) for run in runs}
+    final = {run["name"]: run["files"]["final"]["path"] for run in runs}
+    zaznam = {run["name"]: run["files"]["zaznam"]["path"] for run in runs}
+    generator = {run["name"]: run["files"]["generator"]["path"] for run in runs}
+    names = {"null": [run["name"] for run in null], "structured": [run["name"] for run in structured]}
+    out.mkdir(parents=True)
+    paths = {name: out / name for name in SCHEMA_TABLE}
+    s_holds = all(found["holds"] is True for found in s_found.values())
+    d_evaluated = {name: found["evaluated"] for name, found in d_found.items()}
+    d_unevaluated = [name for name in names["structured"] if not d_evaluated[name]]
+    d_holds = (all(found["holds"] is True for found in d_found.values() if found["evaluated"])
+               and not d_unevaluated)
+    o_holds = all(found["holds"] is True for found in o_found.values()) and not any(o_null.values())
+    u_holds = all(found["holds"] is True for found in u_found.values())
+    f_kinds = {kind: [run["name"] for run in runs if run["chyby"] and run["generator"] == kind] for kind in REZIMY}
+    f_holds = all(f_kinds.values()) and all(found["holds"] for found in f_found.values())
+    m_origin = {"path": str(h_path), "sha256": _sha(h_path)}
+    common = {"hranice_m": m_origin, "runs": _behy_suhrn(runs)}
+    contents = {
+        "strukturovane.json": dict(common, m=m, structured=s_found, holds=s_holds, rule=STRUCTURED_RULE),
+        "diagnostiky.json": dict(common, diagnostics=d_found, evaluated=d_evaluated,
+                                 structured_not_evaluated=d_unevaluated, holds=d_holds, rule=DIAGNOSTICS_RULE),
+        "okrajova_zmena.json": dict(common, structured=o_found, null_runs_changes=o_null, holds=o_holds,
+                                    rule=MARGINAL_RULE, no_change_rule=NO_CHANGE_RULE),
+        "neskorovane.json": dict(common, unscored=u_found, holds=u_holds, rule=UNSCORED_RULE),
+        "vlozene_chyby.json": dict(common, faults=f_found, runs_with_faults=f_kinds, holds=f_holds,
+                                   rule=FAULTS_RULE)}
+    written = {}
+    for name, values in contents.items():
+        _zapis(paths[name], hlavicka_e(SCHEMA_TABLE[name], command, len(runs), values))
+        written[name] = str(paths[name])
+    lead = h_values.get("for_the_lead") or []
+    attachments = [((final_record["values"].get("attachments") or {}).get("series") or {}).get("path")
+                   for final_record in (run["record"] for run in structured)]
+    rows = [
+        _riadok("chain_end_to_end", all(found["holds"] for found in chain.values()),
+                [*zaznam.values(), *final.values(), *(str(Path(run["dir"]) / "kontrola_E.log") for run in runs)],
+                {"runs": chain}),
+        _riadok("null_generator", null_now["reading"]["holds"],
+                [str(h_path), str(n_path), *(zaznam[n] for n in names["null"]), *(final[n] for n in names["null"])],
+                {"reading": null_now["reading"], "m": m, "for_the_lead": lead}),
+        _riadok("structured_generator", s_holds,
+                [written["strukturovane.json"], str(h_path), *(final[n] for n in names["structured"]),
+                 *(zaznam[n] for n in names["structured"])],
+                {name: {"holds": found["holds"], "claims": {c: found["claims"][c]["outcome"] for c in CLAIMS},
+                        "controls": {net: {c: claims[c]["outcome"] for c in CLAIMS}
+                                     for net, claims in found["controls"].items()}} for name, found in s_found.items()}),
+        _riadok("diagnostics_controls", d_holds, [written["diagnostiky.json"], *final.values()],
+                {"runs": {name: {"evaluated": found["evaluated"], "holds": found["holds"]}
+                          for name, found in d_found.items()},
+                 "structured_not_evaluated": d_unevaluated,
+                 **({"finding_for_the_lead": "the diagnostics are not evaluated in the structured runs "
+                     + ", ".join(d_unevaluated) + " (the lead's answer to Q41)"} if d_unevaluated else {})}),
+        _riadok("marginal_change", o_holds,
+                [written["okrajova_zmena.json"], *(final[n] for n in names["structured"]), *generator.values(),
+                 *(path for path in attachments if path)],
+                {"structured": {name: {"holds": found["holds"], "judged": found["judged"],
+                                       "listed_apart": len(found["listed_apart"]), "caught": found["caught"],
+                                       "z1": found["z1"]} for name, found in o_found.items()},
+                 "null_runs_changes": o_null}),
+        _riadok("unscored_spans", u_holds, [written["neskorovane.json"], *final.values(), *generator.values()],
+                {"runs": {name: found["holds"] for name, found in u_found.items()}}),
+        _riadok("fault_injections", f_holds,
+                [written["vlozene_chyby.json"], *(found["file"]["path"] for found in f_found.values()),
+                 *(zaznam[n] for n in f_found)],
+                {"runs": {name: {key: found[key] for key in ("refused_as_expected", "of", "clean_admitted", "holds")}
+                          for name, found in f_found.items()}, "runs_with_faults": f_kinds})]
+    if [row["criterion"] for row in rows] != list(gates.CRITERIA["G1"]):
+        raise AssertionError("the rows of the table are not the criteria of G1 in their order")
+    passed = all(row["passed"] for row in rows)
+    a_values = dict(common, rows=rows, passed=passed, criteria=list(gates.CRITERIA["G1"]), m=m,
+                    families={"null": family, "structured": s_family}, files=written,
+                    rules={"table": TABLE_RULE, "run": RUN_RULE, "exit_reading": EXIT_READING_RULE, "code": CODE_RULE,
+                           "family": FAMILY_RULE, "exit": EXIT_TABULKA_RULE})
+    _zapis(paths["znamy_odpovede.json"], hlavicka_e(SCHEMA_TABLE["znamy_odpovede.json"], command, len(runs), a_values))
+    written["znamy_odpovede.json"] = str(paths["znamy_odpovede.json"])
+    check = kontrola_e(out, "nad --out príkazu tabulka")
+    code = 0 if passed and check["exit"] == 0 else 1
+    return code, {"files": written, "rows": {row["criterion"]: row["passed"] for row in rows}, "passed": passed,
+                  "check_E": check["exit"], "exit": code}
+
+
 def main(argv=None):
-    """python -m tcn.suchy_beh beh ...: one run of the G1 dry run (Beh); --help prints the module docstring."""
+    """python -m tcn.suchy_beh beh|hranice|tabulka ...: one run of the G1 dry run (Beh), the bounds m from the null runs
+    (hranice) and the table of known answers (tabulka); --help prints the module docstring."""
     import argparse
     import shlex
     argv = list(sys.argv[1:] if argv is None else argv)
@@ -1753,11 +2483,36 @@ def main(argv=None):
     beh.add_argument("--vysledky", type=Path, default=VYSLEDKY,
                      help=f"the gate records scripts/gates.py require reads (default {VYSLEDKY.relative_to(REPO)})")
     beh.add_argument("--chyby", action="store_true", help="the nine injected errors on the run's targets")
+    bounds = sub.add_parser("hranice", help="the bounds m of G1 from the null runs (package C4a)")
+    bounds.add_argument("--behy", required=True, nargs="+", type=Path, help="the --out of every null run of beh")
+    bounds.add_argument("--out", required=True, type=Path,
+                        help=f"a new directory for hranice_m.json, nulove.json and {VALUES_FILE}")
+    table = sub.add_parser("tabulka", help="the table of the known answers over all the runs (package C4a)")
+    table.add_argument("--behy", required=True, nargs="+", type=Path,
+                       help="the --out of every run of beh, the null runs of --hranice and the structured runs")
+    table.add_argument("--hranice", required=True, type=Path,
+                       help="the hranice_m.json of hranice, with its nulove.json beside it")
+    table.add_argument("--out", required=True, type=Path, help="a new directory for the files of the table")
     try:
         a = parser.parse_args(argv)
     except SystemExit as exit_:
         return exit_.code if type(exit_.code) is int else 2
     command = shlex.join(["python", "-m", "tcn.suchy_beh", *argv])
+    if a.command in ("hranice", "tabulka"):
+        try:
+            if a.command == "hranice":
+                code, summary = hranice(a.behy, a.out, command)
+            else:
+                code, summary = tabulka(a.behy, a.hranice, a.out, command)
+        except (OSError, ValueError) as error:
+            print(f"tcn.suchy_beh {a.command}: {error}", file=sys.stderr)
+            return 2
+        if summary.get("for_the_lead"):
+            print(f"tcn.suchy_beh hranice: for the lead before m is written (LEAD_RULE, exit {EXIT_LEAD}): the "
+                  "percentiles of the methods of " + ", ".join(summary["for_the_lead"]) + " differ by more than "
+                  "SPREAD_BOUND; hranice_m.json for_the_lead", file=sys.stderr)
+        print(json.dumps(summary, ensure_ascii=False))
+        return code
     try:
         run = Beh(a.generator, a.seed, a.out, a.praca, a.cesta, protocol=a.protocol, vysledky=a.vysledky,
                   chyby=a.chyby, command=command)
