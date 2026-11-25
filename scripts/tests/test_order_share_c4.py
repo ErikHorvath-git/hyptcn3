@@ -3,9 +3,10 @@ point 1, 2026-11-25T21:20Z).
 
 The 16 sessions of profile eshop with three events of roles train and dev in the campaign plan of the dry run's working
 copy of config/collection-v5.json (tcn/suchy_beh.py hodnoty_kopie: the file's rates, written by Zápis 1 of G2), each
-built as the dry run builds it (scripts/tests/suchy_kampan.py postav_session: the real scripts/host_traffic.py on a
-simulated clock) and judged by scripts/traffic_log.py realism with its event windows as the log audit takes them
-(scripts/collection_logs.py event_window, the session's event_grace_s). C3b's check is the model
+built as the full path of the dry run builds it (scripts/tests/suchy_kampan.py postav_session with its traffic,
+prevadzka true: the real scripts/host_traffic.py on a simulated clock) and judged by scripts/traffic_log.py realism
+with its event windows as the log audit takes them (scripts/collection_logs.py event_window, the session's
+event_grace_s). C3b's check is the model
 (dokazy/G1/kod/skusky_c3b_c4a/test_order_share_realny.py), which found the share below its design value in 15 of
 the 16 under the reading by overlap, and at it in the 16th (0.050012 against 0.05). The lead's test: after the fix the
 share is centered in its tolerance, |z| < 1 in the mean, z = (share - design) / its standard error
@@ -55,7 +56,7 @@ def test_the_order_share_of_the_c4_pass_is_centered_in_its_tolerance(tmp_path, m
         qemu = {"pid": kv.FIRST_PID, "start_ticks": 1, "host_boot": kv.HOST_BOOT}
         session = sk.postav_session(tmp_path / "s", collection.for_vm(protokol, row["vm"]), path, row, "nulovy", 0,
                                     protokol, session_id="os_" + "_".join(map(str, key)),
-                                    prvy_riadok_unix=kv.Clock().now, guest=guest, qemu=qemu)
+                                    prvy_riadok_unix=kv.Clock().now, guest=guest, qemu=qemu, prevadzka=True)
         d = session.directory
         meta, own = (json.loads((d / name).read_text()) for name in ("session.json", "protocol.json"))
         windows = [collection_logs.event_window(e, meta["event_grace_s"])

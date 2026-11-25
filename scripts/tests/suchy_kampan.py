@@ -25,13 +25,23 @@ ledger, spies); nothing else is patched:
                         a simulated clock with the lab's answers of LAB_RULE and the arrivals of PRICHODY_RULE, whose
                         counts follow the planned offered load of suchy_generatory.ponukana_zataz, the load the
                         counts of the rows follow and Z4 reads (the lead's answer to Q72 point 2)
+    ponuka_relacii      the offered user sessions of a session from one function (ZATAZ_RULE, package C4b): the
+                        arrivals the full path's generator runs, counted into its summary intervals, and Ponuka.zataz,
+                        the offered load of every row as features/qualification.py offered_load weighs them; the full
+                        path checks its logs against it (over_zataz_logov), the shortened path reads it without logs
+    bez_prevadzky       the shortened path's session without traffic (SKRATENA_RULE, package C4b): no traffic log,
+                        no seal of the logs, and the session audit without its log audit (audit_logov_skratenej)
     zaznam_generatora   the readers' form of generator.json (tcn/suchy_beh.py GENERATOR_KEYS) of the sessions of a
                         corpus, from the records of suchy_generatory.zaznam (GENERATOR_MAP_RULE)
 
 A session named in Harness.reject is built with one read error (READ_ERROR_RULE), which the real audit refuses, so the
-campaign replaces it with its next attempt. Only mechanics on synthetic sessions (HONESTY P4).
+campaign replaces it with its next attempt. The shortened path of the command (python -m tcn.suchy_beh beh --cesta
+skratena) builds every session of its campaign and of its qualification pass without traffic (the lead's answer to Q73
+point 2, 2026-11-25T21:20Z: only seed 0 of the null generator writes and audits the traffic logs), with the fakes of
+FAKES_SKRATENA beside FAKES. Only mechanics on synthetic sessions (HONESTY P4).
 """
 import bisect
+import contextlib
 import copy
 import functools
 import hashlib
@@ -42,6 +52,8 @@ import random
 import subprocess
 import threading
 from types import SimpleNamespace
+
+import numpy as np
 
 from features.audit_policy import audit_bounds
 from scripts import collection
@@ -120,6 +132,29 @@ INFRASTRUCTURE = (
     {"what": "spies that record each call and make the real one", "patches": ["scripts.campaign.finish_corpus",
                                                                               "tcn.pecat.kontrola"]},
 )
+# What the shortened path of the dry run fakes beside FAKES (package C4b; the lead's answer to Q73 point 2,
+# 2026-11-25T21:20Z: the shortened path neither writes nor audits the traffic logs, only seed 0 of the null generator
+# does), each with the attributes it patches; a run of --cesta skratena names them in zaznam.json (fakes).
+FAKES_SKRATENA = (
+    {"fake": "the traffic of the shortened path", "what": "postav_session with prevadzka false (SKRATENA_RULE): the "
+     "capture writes no traffic, its generator does not run, and the offered load of the session's rows comes from "
+     "ponuka_relacii (ZATAZ_RULE), the function whose arrivals the full path's generator runs and whose values the "
+     "full path checks against the offered load of its logs", "why": "the lead's answer to Q73 point 2: the traffic "
+     "logs of the 22 runs of the shortened path would cost about 35 h of C4", "patches": []},
+    {"fake": "the log audit of the shortened path", "what": "scripts/collection.py audit_logs, the log audit the "
+     "session audit (collection.audit_session) runs: audit_logov_skratenej, which reads no log and whose record "
+     "admits the session (SKRATENA_RULE); features/quality.py require_log_audit, in the corpus build of "
+     "finish_corpus, in the production check of training and in train_bundle, then reads that record and repeats "
+     "nothing, since the session keeps no logs_manifest.json", "why": "the shortened path writes no traffic logs, "
+     "which the log audit reads (the lead's answer to Q73 point 2)", "patches": ["scripts.collection.audit_logs"]},
+)
+
+
+def fakes(prevadzka):
+    """The fakes a run names in zaznam.json: FAKES, and FAKES_SKRATENA beside them when its sessions are built without
+    traffic (prevadzka false, the shortened path)."""
+    return FAKES if prevadzka else (*FAKES, *FAKES_SKRATENA)
+
 
 SESSION_RULE = (
     "a session of the dry run as a capture leaves it, before its audit (the skeleton of G1, row C3): "
@@ -131,14 +166,15 @@ SESSION_RULE = (
     "ceil(cycles x interval_s) + 1 s after that), so that the traffic begins warmup_s before the measurement as "
     "scripts/collection.py capture_session starts it and suchy_generatory.LOAD_RULE plans it; the traffic of the whole "
     "session by the real generator (PREVADZKA_RULE, package C3b: its logs in place of those of "
-    "test_collection_logs.v5_traffic, which build_session writes first); session.json "
+    "test_collection_logs.v5_traffic, which build_session writes first), or in the shortened path no traffic and no "
+    "seal of the logs (SKRATENA_RULE, package C4b), the offered load of its rows from ZATAZ_RULE in both; session.json "
     "with the row's events and controls as the plan states them, the guest identity of the group's boot (the lab's, "
     "with the stack manifest of boundary_sessions) and the QEMU process of the group (every sidecar names its pid), "
     "and the fields of the capture of kampan_v5 (campaign, attempt, plan mode, commit); events.json the row's events "
     "that ran (host_start_unix the start of the generator's frame + start_s, host_stopped_unix 0.1 s after the stop, "
     "effect ok, the replies with test_collection_logs.SCRIPT_SHA256), controls.json of a session of test_controls "
-    "suchy_generatory.controls_json; the evidence sealed again; the rows of the extraction suchy_generatory.riadky in "
-    "the run's mode and seed in the generator's frame")
+    "suchy_generatory.controls_json; the evidence sealed again (the full path); the rows of the extraction "
+    "suchy_generatory.riadky in the run's mode and seed in the generator's frame")
 READ_ERROR_RULE = (
     "the rejection the dry run injects (the skeleton of G1, section 2, chain_end_to_end: one replacement at least, the "
     "rejection through Harness.reject): the session of a (group, scenario, attempt) in Harness.reject has one read "
@@ -206,6 +242,48 @@ LAB_RULE = (
     "a static file and a document of the seeded level with the size lab/seed.py gives it: static_files(0) by its "
     "name, generate(0) by its id (one PBKDF2 iteration, on which no size depends; seed 0, the executor's judgment), "
     "their content not built (the generator reads only its length)")
+ZATAZ_RULE = (
+    "the offered load of a session of the dry run from one function (package C4b; the lead's answer to Q73 point 2, "
+    "2026-11-25T21:20Z: 'Z4 dostane ponúkanú záťaž priamo z toho istého agregátora, ktorý z logov počíta "
+    "host_traffic.py (jedna funkcia)'): ponuka_relacii of the session directory, its row and the times of its rows "
+    "gives the arrivals of PRICHODY_RULE (prepare_v5 of the session's command line, scripts/collection.py "
+    "traffic_command, with the traffic block of its session.json, and its arrival plan with the counts placed in the "
+    "rows' main intervals), counted into the summary intervals of hranice_intervalov as host_traffic.py counts them "
+    "(SessionRecorder arrival: an arrival at t in the interval [start, end) that holds it), and Ponuka.zataz weighs "
+    "those counts into the interval (t - interval_s, t] of every row time t as features/qualification.py offered_load "
+    "weighs the summary intervals of traffic_intervals.jsonl (their start and end as the log writes them, rounded to "
+    "1 us, at the header's start_unix, the origin of the generator's clock; every interval adds its offered sessions "
+    "times the share of its length inside the row's interval; a list, or the reason why there is none, as "
+    "offered_load returns it); the full path (zapis_prevadzky) runs the generator on the arrivals of that function "
+    "and checks by name that its traffic_intervals.jsonl holds the function's bounds and counts and that offered_load "
+    "of it equals Ponuka.zataz at the time of every row (over_zataz_logov), so that the two paths cannot drift apart "
+    "unseen; the shortened path (SKRATENA_RULE) reads Ponuka.zataz without logs, in the qualification pass of "
+    "tcn/suchy_beh.py and in its final evaluation (tcn/suchy_beh.py ZATAZ_FINALNE_RULE)")
+# The files of the generator in a session directory (scripts/collection.py capture_session: the two logs and the status
+# of traffic_command, the child's log traffic.log, and traffic_before.json of check_warmup).
+TRAFFIC_FILES = ("traffic_requests.jsonl", "traffic_intervals.jsonl", "traffic.json", "traffic_before.json",
+                 "traffic.log")
+SKRATENA_RULE = (
+    "a session of the shortened path of the dry run (package C4b; the lead's answer to Q73 point 2, "
+    "2026-11-25T21:20Z: 'Skrátená cesta logy prevádzky nepíše ani neaudituje'; only seed 0 of the null generator "
+    "writes and audits them): postav_session with prevadzka false writes none of what zapis_prevadzky writes for the "
+    "traffic: the generator does not run, so the session holds no file of TRAFFIC_FILES (those "
+    "boundary_sessions.build_session wrote with test_collection_logs.build and v5_traffic are removed), end.json no "
+    "traffic_rc, and the nginx and journal segments no line of a request (the lines of the requests of build and "
+    "v5_traffic leave them); its logs are not sealed (no logs_manifest.json and no logs_manifest_sha256 in end.json: "
+    "the seal is read by the log audit, and features/quality.py require_log_audit repeats the log audit only where "
+    "the session keeps one); session.json keeps the traffic block of scripts/collection.py _v5_traffic, the session's "
+    "plan of its traffic, which ZATAZ_RULE reads; the session audit (scripts/collection.py audit_session, in the "
+    "campaign and in the qualification pass) runs without its log audit: audit_logs is audit_logov_skratenej, which "
+    "reads no log and returns a record of the log audit's schema with not_run naming this rule, its metadata section "
+    "(the sha256 of session.json and end.json, the measurement's times), no problem, nothing tolerated and accepted, "
+    "and which refuses a session that holds a file of TRAFFIC_FILES or a logs_manifest.json; the requirements of the "
+    "corpus (features/quality.py require_log_audit in the corpus build of finish_corpus, in the production check of "
+    "training and in train_bundle) read that record and repeat nothing (not repeated: no logs_manifest.json); every "
+    "other part of the session (session.json, end.json but traffic_rc and logs_manifest_sha256, events.json, "
+    "controls.json, the rows, the snapshots and their sidecars, the guest's states, its segments but the lines of "
+    "requests, the host monitor, the collector's log and the profile) is that of the full path; the faults' Session "
+    "target of --chyby is built with its traffic and its log audit in both paths (tcn/suchy_beh.py FAULTS_RULE)")
 STOP_AFTER_S = 0.5  # The runner stops the generator this long after the post phase begins (judgment; stop_child).
 MAX_PLACEMENTS = 1000  # Draws of an interval's arrivals until all lie inside it (judgment), then refused.
 MIDDLE = lambda p: p["full_every"] // 2  # noqa: E731 - the snapshot of READ_ERROR_RULE (as vlozene_chyby._middle).
@@ -443,6 +521,87 @@ def prichody(run, bounds, rows, interval_s, tolerance, rng):
                          "arrivals": len(out)}
 
 
+class Ponuka:
+    """The offered user sessions of one session as ponuka_relacii aggregates them (ZATAZ_RULE): origin, the unix time
+    of the generator's clock 0 (the header start_unix of its logs); bounds, the bounds of its summary intervals in
+    seconds of that clock (hranice_intervalov); offered, the arrivals in every interval; arrivals, the arrival times
+    of PRICHODY_RULE; record, the record of prichody."""
+    __slots__ = ("origin", "bounds", "offered", "arrivals", "record")
+
+    def __init__(self, origin, bounds, offered, arrivals, record):
+        self.origin, self.bounds, self.offered, self.arrivals, self.record = origin, bounds, offered, arrivals, record
+
+    def logged(self):
+        """The bounds as the log writes them (host_traffic Interval.record: rounded to 1 us)."""
+        return [round(b, 6) for b in self.bounds]
+
+    def zataz(self, times, interval_s):
+        """ZATAZ_RULE: the offered user sessions in the interval (t - interval_s, t] of every row time t (unix), as
+        features/qualification.py offered_load weighs the summary intervals of traffic_intervals.jsonl: a list, or the
+        reason why there is none (a text), as offered_load returns them."""
+        logged = self.logged()
+        start, end = self.origin + np.array(logged[:-1]), self.origin + np.array(logged[1:])
+        offered = np.array(self.offered, dtype=np.float64)
+        high = np.asarray(times, dtype=np.float64)[:, None]
+        overlap = np.clip(np.minimum(end, high) - np.maximum(start, high - interval_s), 0, None)
+        if not np.allclose(overlap.sum(axis=1), interval_s, rtol=0, atol=1e-6):
+            return "the summary intervals of suchy_kampan.ponuka_relacii do not cover the interval of every row"
+        return (overlap / (end - start) * offered).sum(axis=1).tolist()
+
+
+def ponuka_relacii(d, p, row, times):
+    """ZATAZ_RULE: (the generator's arguments, its V5Run with the arrivals of PRICHODY_RULE, the Ponuka) of the session
+    directory `d` (its session.json with the traffic block of scripts/collection.py _v5_traffic, its end.json with the
+    measurement's times, its protocol.json) of the planned row `row` under protocol `p` (the session's view of the
+    working copy), the times of its rows `times` (unix). The one function of the offered load of both paths: the full
+    path runs the generator on its arrivals, the shortened one reads Ponuka.zataz without logs."""
+    meta, end = read_json(d / "session.json"), read_json(d / "end.json")
+    if meta.get("scenario") != row["scenario"] or (meta.get("traffic") or {}).get("scenario") != row["scenario"]:
+        raise ValueError(f"{d.name}: session.json holds no traffic block of scenario {row['scenario']} (ZATAZ_RULE)")
+    args = argumenty(collection.traffic_command(p, meta, d))
+    run = ht.prepare_v5(args)
+    stream = random.Random(run.seeds["traffic_arrivals"])
+    if ht.arrival_times(run.envelope, run.rate, stream) != run.arrivals:
+        raise ValueError("the arrival plan of prepare_v5 is not arrival_times of the stream traffic_arrivals")
+    origin = end["measure_start_unix"] - run.warmup_s
+    measure, post = end["measure_start_unix"] - origin, end["measure_end_unix"] - origin
+    if measure != run.warmup_s:
+        raise ValueError("the measurement does not start warmup_s after the traffic (suchy_generatory.LOAD_RULE)")
+    bounds = hranice_intervalov((measure, post), post + STOP_AFTER_S, args.summary_interval_s)
+    tolerance = audit_bounds(p)["traffic"]["offered_load_tolerance"]
+    arrivals, record = prichody(run, bounds, [t - origin for t in times], p["interval_s"], tolerance, stream)
+    offered = [0] * (len(bounds) - 1)
+    for t in arrivals:  # As host_traffic SessionRecorder arrival counts it: in the interval [start, end) that holds t.
+        i = bisect.bisect_right(bounds, t) - 1
+        if not 0 <= i < len(offered):
+            raise ValueError(f"the arrival at {t} s lies outside the summary intervals (ZATAZ_RULE)")
+        offered[i] += 1
+    return args, ht.V5Run(**dict(vars(run), arrivals=arrivals)), Ponuka(origin, bounds, offered, arrivals, record)
+
+
+def over_zataz_logov(d, ponuka, times, interval_s):
+    """ZATAZ_RULE, the full path's check: the offered load features/qualification.py offered_load reads from the
+    session's traffic_intervals.jsonl at the times of its rows `times` equals Ponuka.zataz of `ponuka`, else a
+    ValueError names the first row that differs; returns the offered load."""
+    from features import qualification as fq
+    found, own = fq.offered_load(d / "traffic_intervals.jsonl", times, interval_s), ponuka.zataz(times, interval_s)
+    if type(found) is str or type(own) is str:
+        raise ValueError(f"{d.name}: no offered load to compare (offered_load: "
+                         f"{found if type(found) is str else 'read'}; ponuka_relacii: "
+                         f"{own if type(own) is str else 'read'}; ZATAZ_RULE)")
+    wrong = [i for i, (a, b) in enumerate(zip(found, own)) if a != b]
+    if len(found) != len(own) or wrong:
+        i = wrong[0] if wrong else min(len(found), len(own))
+
+        def at(values):
+            return values[i] if i < len(values) else None
+        raise ValueError(f"{d.name}: the offered load features/qualification.py offered_load reads from "
+                         f"traffic_intervals.jsonl differs from suchy_kampan.ponuka_relacii at the row of time "
+                         f"{at(times)!r} ({len(wrong)} rows differ, of {len(found)} and {len(own)}; the log "
+                         f"{at(found)!r}, the function {at(own)!r}; ZATAZ_RULE)")
+    return found
+
+
 def _stav(metrics, recorder, run, loop, args, clock, final):
     """The status file of the generator (host_traffic main_v5 save) at the time of the clock (PREVADZKA_RULE)."""
     result = metrics.snapshot()
@@ -489,36 +648,40 @@ def _hostovske_logy(d, requests, origin, old):
                       + journal)
 
 
-def zapis_prevadzky(d, p, row, times):
-    """PREVADZKA_RULE: the traffic of the session directory `d` (built by boundary_sessions.build_session, its
-    session.json and end.json final but the traffic) of the planned row `row` under protocol `p` (the session's view of
-    the working copy), the times of its rows `times` (unix). Returns the record of PRICHODY_RULE with the run id."""
+def _blok_prevadzky(d, p, row):
+    """The traffic block of session.json (scripts/collection.py _v5_traffic of the row, at the protocol's rate), as
+    the capture records it before the generator starts; written into the session directory `d`."""
     scenario = p["scenarios"][row["scenario"]]
     if scenario.get("rate") is None:
         raise ValueError(f"scenarios.{row['scenario']}.rate is null: a session of a planned role runs at the "
                          "protocol's rate (the working copy gives it)")
-    meta, end = read_json(d / "session.json"), read_json(d / "end.json")
+    meta = read_json(d / "session.json")
     seeds = {purpose: row["seeds"][purpose] for purpose in collection.traffic_purposes()}
     meta["traffic"] = collection._v5_traffic(SimpleNamespace(scenario=row["scenario"]), p, scenario["rate"],
                                              "protocol", seeds, meta["cycles"])
     evidence.write(d / "session.json", meta)
-    args = argumenty(collection.traffic_command(p, meta, d))
-    old = {r["rid"] for r in map(json.loads, (d / "traffic_requests.jsonl").read_text().splitlines())
-           if r.get("type") == "request"}
+
+
+def _poziadavky(d):
+    """The rids of the requests of the session's traffic_requests.jsonl."""
+    return {r["rid"] for r in map(json.loads, (d / "traffic_requests.jsonl").read_text().splitlines())
+            if r.get("type") == "request"}
+
+
+def zapis_prevadzky(d, p, row, times):
+    """PREVADZKA_RULE: the traffic of the session directory `d` (built by boundary_sessions.build_session, its
+    session.json and end.json final but the traffic) of the planned row `row` under protocol `p` (the session's view of
+    the working copy), the times of its rows `times` (unix), on the arrivals of ponuka_relacii (ZATAZ_RULE), whose
+    offered load its logs are checked to give (over_zataz_logov). Returns the Ponuka, its record of PRICHODY_RULE with
+    the run id."""
+    _blok_prevadzky(d, p, row)
+    end = read_json(d / "end.json")
+    old = _poziadavky(d)
+    args, run, ponuka = ponuka_relacii(d, p, row, times)
     for path in (args.requests_log, args.intervals_log, args.out, d / "traffic_before.json"):
         path.unlink()
-    run = ht.prepare_v5(args)
-    stream = random.Random(run.seeds["traffic_arrivals"])
-    if ht.arrival_times(run.envelope, run.rate, stream) != run.arrivals:
-        raise ValueError("the arrival plan of prepare_v5 is not arrival_times of the stream traffic_arrivals")
-    origin = end["measure_start_unix"] - run.warmup_s
+    origin = ponuka.origin
     measure, post = end["measure_start_unix"] - origin, end["measure_end_unix"] - origin
-    if measure != run.warmup_s:
-        raise ValueError("the measurement does not start warmup_s after the traffic (suchy_generatory.LOAD_RULE)")
-    bounds = hranice_intervalov((measure, post), post + STOP_AFTER_S, args.summary_interval_s)
-    tolerance = audit_bounds(p)["traffic"]["offered_load_tolerance"]
-    arrivals, record = prichody(run, bounds, [t - origin for t in times], p["interval_s"], tolerance, stream)
-    run = ht.V5Run(**dict(vars(run), arrivals=arrivals))
     stop, failures = threading.Event(), []
     clock = Hodiny(origin, post + STOP_AFTER_S, stop)
     files = {"requests": open(args.requests_log, "x"), "intervals": open(args.intervals_log, "x")}
@@ -548,20 +711,76 @@ def zapis_prevadzky(d, p, row, times):
         status["unexpected_results"] != 0 or status["ok"] <= 0)))
     intervals = [r for r in map(json.loads, args.intervals_log.read_text().splitlines()) if r["type"] == "interval"]
     found = [iv["mono_start"] for iv in intervals] + [intervals[-1]["mono_end"]]
-    expected = [round(b, 6) for b in bounds]
-    if found != expected or [iv["offered_sessions"] for iv in intervals] != [
-            sum(1 for t in arrivals if lo <= t < hi) for lo, hi in zip(bounds, bounds[1:])]:
-        raise ValueError("the summary intervals of the generator are not those PRICHODY_RULE placed the arrivals in")
+    if found != ponuka.logged() or [iv["offered_sessions"] for iv in intervals] != ponuka.offered:
+        raise ValueError("the summary intervals of the generator are not those of suchy_kampan.ponuka_relacii, which "
+                         "placed the arrivals in them (PRICHODY_RULE, ZATAZ_RULE)")
+    over_zataz_logov(d, ponuka, times, p["interval_s"])
     _hostovske_logy(d, recorder.poziadavky, origin, old)
-    return dict(record, run_id=recorder.run_id)
+    ponuka.record = dict(ponuka.record, run_id=recorder.run_id)
+    return ponuka
+
+
+def bez_prevadzky(d, p, row):
+    """SKRATENA_RULE: the session directory `d` (built by boundary_sessions.build_session, its session.json and end.json
+    final but the traffic) of the planned row `row` under protocol `p` without traffic: the traffic block of
+    session.json, no file of TRAFFIC_FILES, end.json without traffic_rc and logs_manifest_sha256, the nginx and journal
+    segments without the lines of the requests, no logs_manifest.json."""
+    _blok_prevadzky(d, p, row)
+    old = _poziadavky(d)
+    for name in TRAFFIC_FILES:
+        (d / name).unlink()
+    end = read_json(d / "end.json")
+    evidence.write(d / "end.json", {key: value for key, value in end.items()
+                                    if key not in ("traffic_rc", "logs_manifest_sha256")})
+    _hostovske_logy(d, [], None, old)
+    (d / "logs_manifest.json").unlink()
+
+
+def audit_logov_skratenej(directory, *, snapshot_times=(), archived_raw=False):
+    """SKRATENA_RULE: what the session audit of the shortened path reads in place of the log audit
+    (scripts/collection_logs.py audit_logs, the same arguments), which is not run: a record of its schema whose
+    not_run names the rule, with its metadata section, no problem, nothing tolerated and accepted; a session that holds
+    a file of TRAFFIC_FILES or a logs_manifest.json is refused by name (it is no session of the shortened path)."""
+    from scripts import collection_logs
+    directory = Path(directory).resolve()
+    end = read_json(directory / "end.json")
+    problems = [f"shortened_path_traffic_log:{name}" for name in TRAFFIC_FILES if (directory / name).exists()]
+    if (directory / "logs_manifest.json").exists():
+        problems.append("shortened_path_logs_manifest")
+    return {"schema": collection_logs.SCHEMA, "session_dir": str(directory),
+            "sections": {"metadata": {"session_sha256": collection_logs.digest(directory / "session.json"),
+                                      "end_sha256": collection_logs.digest(directory / "end.json"),
+                                      "measure_start_unix": end.get("measure_start_unix"),
+                                      "measure_end_unix": end.get("measure_end_unix")}},
+            "problems": problems, "problem_counts": dict.fromkeys(problems, 1), "accepted": not problems,
+            "tolerated": dict.fromkeys(collection_logs.LOG_EXCEPTIONS, 0), "not_run": SKRATENA_RULE,
+            "note": "Not run: the shortened path of the G1 dry run writes and audits no traffic logs (suchy_kampan "
+                    "SKRATENA_RULE)."}
+
+
+@contextlib.contextmanager
+def bez_auditu_logov():
+    """SKRATENA_RULE for the length of a block: the session audit (scripts/collection.py audit_session) without its log
+    audit (audit_logs is audit_logov_skratenej), restored after it."""
+    real = collection.audit_logs
+    collection.audit_logs = audit_logov_skratenej
+    try:
+        yield
+    finally:
+        collection.audit_logs = real
 
 
 def postav_session(root, p, protocol_path, row, rezim, seed, protokol, *, session_id, prvy_riadok_unix, guest, qemu,
-                   polia=None, chyba_citania=False):
+                   prevadzka, ponuky=None, polia=None, chyba_citania=False):
     """SESSION_RULE: the session `session_id` of `row` below `root`, as a boundary_sessions.Session (directory,
     protocol_path, result: the rows the audit's extraction returns). p: the protocol as the session's VM sees it
     (collection.for_vm of the copy), protokol: the copy itself (the generator reads its plans), guest: the identity of
-    the guest's boot, qemu: the QEMU process, polia: more fields of session.json, chyba_citania: READ_ERROR_RULE."""
+    the guest's boot, qemu: the QEMU process, prevadzka: with its traffic (PREVADZKA_RULE, the full path) or without
+    (SKRATENA_RULE, the shortened path), no default; ponuky: a mapping that receives the session's Ponuka (ZATAZ_RULE)
+    under its resolved directory, polia: more fields of session.json, chyba_citania: READ_ERROR_RULE."""
+    if type(prevadzka) is not bool:
+        raise ValueError("postav_session builds a session with its traffic (prevadzka true, the full path) or without "
+                         "it (false, the shortened path): no default")
     start = float(prvy_riadok_unix) - sg.FIRST_ROW_S  # The generator's frame: its events, controls and rows.
     base = start - 1  # test_collection_logs.build starts the measurement 1 s after its base (SESSION_RULE).
     items = {"events": copy.deepcopy(row.get("events", [])), "event_grace_s": protokol["events"]["grace_s"],
@@ -588,7 +807,13 @@ def postav_session(root, p, protocol_path, row, rezim, seed, protokol, *, sessio
         evidence.write(d / "controls.json", sg.controls_json(row, start))
     result = sg.riadky(row, rezim, seed, protokol)
     result["casy"] = [start + t for t in result["casy"]]
-    zapis_prevadzky(d, p, row, result["casy"])
+    if prevadzka:
+        ponuka = zapis_prevadzky(d, p, row, result["casy"])
+    else:
+        bez_prevadzky(d, p, row)
+        _, _, ponuka = ponuka_relacii(d, p, row, result["casy"])
+    if ponuky is not None:
+        ponuky[str(d.resolve())] = ponuka
     times = dict(zip(result["seq"], result["casy"]))
     for path in (d / "raw").glob("*.json"):
         side = json.loads(path.read_text())
@@ -598,7 +823,8 @@ def postav_session(root, p, protocol_path, row, rezim, seed, protokol, *, sessio
             evidence.write(path, side)
     if chyba_citania:
         _chyba_citania(result, d, p)
-    evidence.seal(d)
+    if prevadzka:  # SKRATENA_RULE: the logs of a session of the shortened path are not sealed.
+        evidence.seal(d)
     return bs.Session(d, Path(protocol_path), result)
 
 
@@ -631,17 +857,22 @@ class Laboratorium(kv.Lab):
 
 class Kampan(kv.Harness):
     """The harness of the dry run (module docstring) under `root`, patched through `patch` (a pytest.MonkeyPatch):
-    protokol the loaded working copy, rezim and seed those of the run, kniha the run's own ledger. captures and audits
-    are those of kampan_v5; riadky holds, per capture, what postav_session needs to build the session again
-    (SESSION_RULE: the row, the plan mode, the time of the first row, the guest, the QEMU process, the fields and the
-    injected read error), and vysledky its rows for the real audit."""
+    protokol the loaded working copy, rezim and seed those of the run, kniha the run's own ledger, prevadzka whether
+    its sessions are built with their traffic (the full path) or without it (the shortened path, SKRATENA_RULE, with
+    the fakes of FAKES_SKRATENA), no default. captures and audits are those of kampan_v5; riadky holds, per capture,
+    what postav_session needs to build the session again (SESSION_RULE: the row, the plan mode, the time of the first
+    row, the guest, the QEMU process, the fields and the injected read error), vysledky its rows for the real audit, and
+    ponuky (the mapping given, else a new one) the Ponuka of every capture under its resolved directory (ZATAZ_RULE)."""
 
-    def __init__(self, root, patch, *, protokol, rezim, seed, kniha):
+    def __init__(self, root, patch, *, protokol, rezim, seed, kniha, prevadzka, ponuky=None):
         from tcn import pecat
-        self.protokol, self.rezim, self.seed = protokol, rezim, seed
+        if type(prevadzka) is not bool:
+            raise ValueError("the harness of the dry run builds its sessions with their traffic (prevadzka true) or "
+                             "without it (false): no default")
+        self.protokol, self.rezim, self.seed, self.prevadzka = protokol, rezim, seed, prevadzka
         self.kniha, self.zaznam = Path(kniha), pecat.ZAZNAM
         self.real_audit_session = collection.audit_session
-        self.riadky, self.vysledky = [], {}
+        self.riadky, self.vysledky, self.ponuky = [], {}, {} if ponuky is None else ponuky
         super().__init__(root, patch)
 
     def patch(self):
@@ -652,6 +883,8 @@ class Kampan(kv.Harness):
         self.ledger = self.kniha
         super().patch()
         self.mp.setattr(pecat, "ZAZNAM", self.zaznam)  # STAGE_RULE: the run's ledger is not the ledger of record.
+        if not self.prevadzka:  # FAKES_SKRATENA: the session audit of the shortened path without its log audit.
+            self.mp.setattr(collection, "audit_logs", audit_logov_skratenej)
 
     def git(self, *args):
         """git of the campaign (FAKES): a clean tree at the real commit."""
@@ -692,7 +925,7 @@ class Kampan(kv.Harness):
         root.mkdir(parents=True, exist_ok=True)
         session = postav_session(root, p, a.protocol, row, self.rezim, self.seed, self.protokol,
                                  session_id=a.session_id, prvy_riadok_unix=t0, guest=identity, qemu=qemu,
-                                 polia=fields, chyba_citania=rejected)
+                                 prevadzka=self.prevadzka, ponuky=self.ponuky, polia=fields, chyba_citania=rejected)
         self.vysledky[str(session.directory.resolve())] = session.result
         self.riadky.append({"session": a.session_id, "campaign": a.campaign_id, "vm": vm, "row": row,
                             "plan_mode": a.mode, "first_row_unix": t0, "guest": identity, "qemu": qemu,

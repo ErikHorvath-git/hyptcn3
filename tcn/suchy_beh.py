@@ -7,12 +7,13 @@ and the column mask, Q34 m null at stage suchy, Q36 the marginal change in the s
 Q38 the mask of one qualification pass per generator, Q41 the diagnostics where they are evaluated), point 5 of his
 POKYNY_TEMPO_2026-11-25 (the shortened path), proposal 6.4, 7.5, 8.3, 8.4, 8.5, 10.2 and 10.9.
 
-THE COMMANDS (package C3: beh; package C4a: hranice and tabulka):
+THE COMMANDS (package C3: beh; package C4a: hranice and tabulka; package C4b: zhoda):
 
     python -m tcn.suchy_beh beh --generator G --seed S --out DIR --praca WORK --cesta plna|skratena
                                 [--protocol P] [--vysledky R] [--chyby]
     python -m tcn.suchy_beh hranice --behy DIR... --out OUT
     python -m tcn.suchy_beh tabulka --behy DIR... --hranice OUT/hranice_m.json --out TABLE
+    python -m tcn.suchy_beh zhoda --plna DIR --skratena DIR
 
 One run from the plan to the report (Beh.run): scripts/gates.py require of G1 on the protocol file P (default
 config/collection-v5.json; R, default data/results, holds its gate records) and on the working copy (COPY_RULE: the
@@ -22,7 +23,9 @@ on the harness of scripts/tests/suchy_kampan.py, whose fakes zaznam.json names (
 (scripts/tests/suchy_generatory.py) at the run's seed S and one rejection injected (READ_ERROR_RULE), so that the
 campaign replaces once; the real corpus index of finish_corpus; safeguard.training.train_bundle at every seed of
 analysis.seeds; tcn.finalne evaluate on the run's own ledger (stage suchy), by the full path or the shortened one
-(SHORT_RULE, --cesta, no default); the readers of the known answers; scripts/campaign_report.py campaign; with --chyby
+(SHORT_RULE, --cesta, no default; package C4b: the shortened path writes and audits no traffic logs,
+suchy_kampan.SKRATENA_RULE, and its qualification pass and Z4 read the offered load of suchy_kampan.ZATAZ_RULE,
+ZATAZ_FINALNE_RULE); the readers of the known answers; scripts/campaign_report.py campaign; with --chyby
 the nine injected errors on the run's own targets (FAULTS_RULE); the cleanup (CLEANUP_RULE); check E of
 scripts/check_claims.sh over DIR. DIR receives the records, each with the header of check E (zaznam.json,
 generator.json, kvalifikacia.json, final.json with its attachments, vlozene_chyby.json), and the logs, each with the
@@ -44,6 +47,10 @@ MIN_STRUCTURED structured runs (TABLE_RULE), and writes into TABLE, each with th
 strukturovane.json, diagnostiky.json, okrajova_zmena.json, neskorovane.json, vlozene_chyby.json (the readers of the
 pure part over the runs) and znamy_odpovede.json, one row per criterion of scripts/gates.py CRITERIA["G1"] with its
 reading (READINGS), its verdict and the paths of its files. Exit codes: EXIT_TABULKA_RULE.
+
+zhoda (package C4b) reads the --out of two runs of one generator and seed, by the full path and by the shortened one,
+and compares the alarms of Z4 by both its variants and I and D (K1, K2a, K2b) of their final.json (ZHODA_RULE), the
+lead's test of seed 0 (his answer to Q73 point 2); it writes nothing. Exit codes: EXIT_ZHODA_RULE.
 
 THE PURE PART (package C2):
 
@@ -830,16 +837,18 @@ COPY_RULE = (
     "calls scripts/gates.py require of G1 (a valid record of G0) on the file and on the copy")
 MASK_RULE = (
     "the column mask of the copy (the skeleton of G1, row C3 and section 6 point 7; the lead's answer to Q38): one "
-    "qualification pass per generator, always at seed 0 of the generator whatever the run's seed, so that every run of "
-    "a generator has the same mask (tcn.suchy_beh hranice_m refuses runs whose masks differ): the sessions of roles "
-    "train and dev of the campaign plan of the copy without the mask, built by suchy_kampan.postav_session (one boot "
-    "per group, each session in the plan's order one slot of a session's length and kampan_v5.SLOT_GAP_S after the one "
-    "before), each audited by the real audit (boundary_sessions.audit) and refused by name when the audit refuses it; "
-    "of every accepted audit the measured rows of its feature archive (features/qualification.py measured) and the "
-    "offered load of its traffic_intervals.jsonl (offered_load), then features/qualification.py qualify in plan mode "
-    "campaign (its roles train and dev; never from_index, which reads the index of a campaign only at stage final); "
-    "its proposed_columns are the copy's analysis.columns; the classes by construction of the generator "
-    "(suchy_generatory.TRIEDY) are written beside them, and a difference is a finding, not a failure")
+    "qualification pass per generator, always at seed 0 of the generator whatever the run's seed, so that every run "
+    "of a generator has the same mask (tcn.suchy_beh hranice_m refuses runs whose masks differ): the sessions of "
+    "roles train and dev of the campaign plan of the copy without the mask, built by suchy_kampan.postav_session (one "
+    "boot per group, each session in the plan's order one slot of a session's length and kampan_v5.SLOT_GAP_S after "
+    "the one before), each audited by the real audit (boundary_sessions.audit) and refused by name when the audit "
+    "refuses it; of every accepted audit the measured rows of its feature archive (features/qualification.py "
+    "measured) and the offered load of its traffic_intervals.jsonl (offered_load; in the shortened path, which writes "
+    "no traffic logs, suchy_kampan Ponuka.zataz of its session at the same rows, ZATAZ_RULE, and the audit without "
+    "its log audit, SKRATENA_RULE), then features/qualification.py qualify in plan mode campaign (its roles train and "
+    "dev; never from_index, which reads the index of a campaign only at stage final); its proposed_columns are the "
+    "copy's analysis.columns; the classes by construction of the generator (suchy_generatory.TRIEDY) are written "
+    "beside them, and a difference is a finding, not a failure")
 SHORT_RULE = (
     "the shortened path of the dry run (the lead's POKYNY_TEMPO_2026-11-25, point 5): the real tcn.finalne evaluate, "
     "so that I and D are computed by the same functions as in the full path (tcn/finalne.py k1_claim and k2_claims, "
@@ -851,8 +860,12 @@ SHORT_RULE = (
     "weights, which a run of the structured generator keeps (tcn/finalne.py STRUCTURE_CONTROLS) and a null run leaves "
     "out with their claims (opisné.diagnostics.claims names the rule); M at every seed of analysis.seeds, Z0 to Z5, "
     "the interventions, K1, K2a, K2b, the threshold-likeness of Z1 to Z3, the other diagnostics (the boot left out of "
-    "calibration, the alarm rules, the threshold from clean traffic), the replays, the metrics and the attachments are "
-    "those of the full path")
+    "calibration, the alarm rules, the threshold from clean traffic), the replays, the metrics and the attachments "
+    "are those of the full path; and the traffic (package C4b; the lead's answer to Q73 point 2, 2026-11-25T21:20Z): "
+    "the sessions of the qualification pass and of the campaign hold no traffic logs and no audit reads them "
+    "(suchy_kampan.SKRATENA_RULE), the offered load the qualification pass and Z4 read is that of the one function of "
+    "suchy_kampan.ZATAZ_RULE, whose values the full path checks against its logs, given to the final evaluation by "
+    "ZATAZ_FINALNE_RULE, and only the Session target of --chyby is built with its traffic (FAULTS_RULE)")
 KEPT_NETWORKS = {"nulovy": (), "strukturovany": ("shuffled context", "random weights")}  # tcn/finalne.py
 # STRUCTURE_CONTROLS, the networks structured_generator reads (the lead's list names M, Z1 to Z5 and the diagnostics
 # of Z1 to Z3; that the structured runs keep these two networks is the executor's reading, G1 preparation).
@@ -860,16 +873,19 @@ FAULTS_RULE = (
     "the nine injected errors of proposal 10.2 (scripts/tests/vlozene_chyby.py vsetky, in its order) on the run's own "
     "targets (deferred item G [12] of B10: each injection on a copy of its own): Session, the session of the campaign "
     "the run captured first with an event and without a tolerated invalid row, attempt 1, built again from "
-    "generator.json (values.captures, suchy_kampan.postav_session) before its audit, under the campaign's protocol; "
-    "Korpus, the accepted audits of the run's corpus in the order of its index, every session directory copied with "
-    "its audit record and its feature archive (every path of the session directory in the record, its session_dir, its "
-    "features and the paths of the log audit's sections, naming the copy, so that the log audit repeated in the copy "
-    "is the record's, features/quality.py require_log_audit); Pecat, a copy of the run's index and of its ledger after "
-    "its own final run (the branch 'consumed'), and a new directory; for each error expected = vloz(target) and got = "
-    "krok(target), equal or not; a clean target of each kind is admitted: a Session copy accepted by krok_audit and a "
-    "Korpus copy indexed by krok_korpus with no refusal, and of a Pecat the run's own final evaluation on its ledger "
-    "before it consumed the seal (complete) and the seal letting the replay of an archive of role train through "
-    "(tcn.pecat kontrola, allowed not_sealed)")
+    "generator.json (values.captures, suchy_kampan.postav_session) before its audit, under the campaign's protocol, "
+    "with its traffic and its log audit by both paths (package C4b: the campaign of the shortened path writes no "
+    "traffic, suchy_kampan.SKRATENA_RULE, but the error 'an event that did not run' is refused by the log audit, "
+    "which reads the traffic logs; the Korpus copies are those of the run's corpus as it is); Korpus, the accepted "
+    "audits of the run's corpus in the order of its index, every session directory copied with its audit record and "
+    "its feature archive (every path of the session directory in the record, its session_dir, its features and the "
+    "paths of the log audit's sections, naming the copy, so that the log audit repeated in the copy is the record's, "
+    "features/quality.py require_log_audit); Pecat, a copy of the run's index and of its ledger after its own final "
+    "run (the branch 'consumed'), and a new directory; for each error expected = vloz(target) and got = krok(target), "
+    "equal or not; a clean target of each kind is admitted: a Session copy accepted by krok_audit and a Korpus copy "
+    "indexed by krok_korpus with no refusal, and of a Pecat the run's own final evaluation on its ledger before it "
+    "consumed the seal (complete) and the seal letting the replay of an archive of role train through (tcn.pecat "
+    "kontrola, allowed not_sealed)")
 CLEANUP_RULE = (
     "after the run and its injected errors (the skeleton of G1, row C3: the session directories are deleted only after "
     "--chyby): the session directories of the campaign and of the qualification pass and the copies of the injected "
@@ -1118,7 +1134,25 @@ COMMAND_PATCHES = (
     {"what": "skratena_cesta, only with --cesta skratena (SHORT_RULE)",
      "patches": ["tcn.finalne.fit_methods", "tcn.finalne.diagnostic_fits", "tcn.finalne._variants",
                  "tcn.finalne.control_claims"]},
+    {"what": "zataz_skratenej_cesty, only with --cesta skratena, for the final evaluation (ZATAZ_FINALNE_RULE): the "
+     "offered load of every session from suchy_kampan.ZATAZ_RULE",
+     "patches": ["features.qualification.offered_load", "tcn.finalne.check_inputs"]},
+    {"what": "suchy_kampan bez_auditu_logov, only with --cesta skratena, for the audits of the qualification pass "
+     "(suchy_kampan.SKRATENA_RULE; the campaign's harness names it under fakes)", "patches": [
+        "scripts.collection.audit_logs"]},
 )
+ZATAZ_FINALNE_RULE = (
+    "the offered load of the final evaluation of the shortened path (package C4b; the lead's answer to Q73 point 2; "
+    "the brief of C4b: inside tcn/suchy_beh.py, as SHORT_RULE patches tcn.finalne, the final command has no option): "
+    "for the length of the final evaluation, tcn/finalne.py takes the offered load of every session of the run from "
+    "the one function of suchy_kampan.ZATAZ_RULE instead of its traffic_intervals.jsonl, which the shortened path "
+    "does not write: features/qualification.py offered_load, which tcn/finalne.py load_session imports when it runs, "
+    "gives Ponuka.zataz of the session at the times of its frames, the session named by the directory of the log it "
+    "is asked for, and for a session the run did not build without traffic it is the real offered_load, which then "
+    "names the missing log (LOAD_RULE); tcn/finalne.py check_inputs runs as it is, with only the "
+    "traffic_intervals.jsonl of exactly those sessions counted as present (tcn.finalne.Path, for the length of the "
+    "call, a path whose is_file is true for them), so that every other of its checks and its refusal of any other "
+    "session without the log stay; nothing else of the final evaluation changes")
 
 
 def bez_siete():
@@ -1203,22 +1237,63 @@ def skratena_cesta(rezim):
     return _Context(enter)
 
 
-def vyhodnot(index, bundles, *, campaign, replays, out, ledger, cesta, rezim, vysledky=VYSLEDKY):
+def zataz_skratenej_cesty(ponuky):
+    """ZATAZ_FINALNE_RULE for the length of a block: ponuky {the resolved directory of a session: its suchy_kampan
+    Ponuka}, the sessions the run built without traffic."""
+    from features import qualification as fq
+    from tcn import finalne
+    if type(ponuky) is not dict:
+        raise ValueError("the final evaluation of the shortened path reads the offered load of its sessions from "
+                         "suchy_kampan ponuka_relacii (ZATAZ_FINALNE_RULE): no mapping of them was given")
+    logs = {str(Path(directory) / "traffic_intervals.jsonl"): ponuka for directory, ponuka in ponuky.items()}
+
+    class Cesta(type(Path())):
+        """A path of tcn.finalne check_inputs whose is_file is true for the log of a session of `ponuky`."""
+
+        def is_file(self, **kwargs):
+            return str(self.resolve()) in logs or super().is_file(**kwargs)
+
+    def enter(patch):
+        offered_load, check_inputs = fq.offered_load, finalne.check_inputs
+
+        def load_short(intervals_path, times, interval_s):
+            ponuka = logs.get(str(Path(intervals_path).resolve()))
+            return offered_load(intervals_path, times, interval_s) if ponuka is None else ponuka.zataz(times,
+                                                                                                        interval_s)
+
+        def check_short(records):
+            inner = _Patch()
+            inner.set(finalne, "Path", Cesta)
+            try:
+                return check_inputs(records)
+            finally:
+                inner.undo()
+        patch.set(fq, "offered_load", load_short)
+        patch.set(finalne, "check_inputs", check_short)
+    return _Context(enter)
+
+
+def vyhodnot(index, bundles, *, campaign, replays, out, ledger, cesta, rezim, ponuky, vysledky=VYSLEDKY):
     """The final evaluation of the dry run: tcn.finalne evaluate on the run's own ledger (stage suchy), the gate
-    records of `vysledky`, by the full path or by the shortened one (SHORT_RULE). Returns the record."""
+    records of `vysledky`, by the full path or by the shortened one (SHORT_RULE, and ZATAZ_FINALNE_RULE with ponuky
+    {the resolved directory of a session: its suchy_kampan Ponuka}, which the full path does not read). Returns the
+    record."""
     from tcn import finalne
     if cesta not in CESTY:
         raise ValueError(f"the path of the dry run is {' or '.join(CESTY)}, not {cesta!r}")
     with vysledky_finalneho(vysledky):
         if cesta == "plna":
             return finalne.evaluate(index, bundles, campaign=campaign, replays=replays, out=out, ledger=ledger)
-        with skratena_cesta(rezim):
+        with skratena_cesta(rezim), zataz_skratenej_cesty(ponuky):
             return finalne.evaluate(index, bundles, campaign=campaign, replays=replays, out=out, ledger=ledger)
 
 
-def kvalifikacny_prechod(praca, kopia, protokol, rezim):
+def kvalifikacny_prechod(praca, kopia, protokol, rezim, cesta, ponuky):
     """MASK_RULE: (the values of kvalifikacia.json, the proposed columns) of the copy without the mask `kopia` (its
-    file) and `protokol` (the copy, loaded), the run's generator `rezim`, below the directory `praca`."""
+    file) and `protokol` (the copy, loaded), the run's generator `rezim`, below the directory `praca`, by the run's path
+    `cesta` (the shortened one builds its sessions without traffic, suchy_kampan.SKRATENA_RULE); ponuky receives the
+    Ponuka of every session (suchy_kampan.ZATAZ_RULE)."""
+    from contextlib import nullcontext
     from features import archive as feature_archive
     from features import qualification as fq
     from scripts import collection
@@ -1227,6 +1302,9 @@ def kvalifikacny_prechod(praca, kopia, protokol, rezim):
     from scripts.tests import kampan_v5 as kv
     from scripts.tests import suchy_generatory as sg
     from scripts.tests import suchy_kampan as sk
+    if cesta not in CESTY:
+        raise ValueError(f"the path of the dry run is {' or '.join(CESTY)}, not {cesta!r}")
+    prevadzka = cesta == "plna"
     roles = fq.ROLES_BY_MODE["campaign"]
     rows = [dict(s, attempt=1) for s in pv.plan(protokol, "campaign")["sessions"] if s["role"] in roles]
     span = protokol["cycles"] * protokol["interval_s"] + kv.SLOT_GAP_S
@@ -1241,9 +1319,11 @@ def kvalifikacny_prechod(praca, kopia, protokol, rezim):
         root = Path(praca) / "sessions" / row["vm"]
         root.mkdir(parents=True, exist_ok=True)
         session = sk.postav_session(root, p, kopia, row, rezim, 0, protokol, session_id=ident,
-                                    prvy_riadok_unix=kv.Clock().now + i * span, guest=guest, qemu=qemu)
+                                    prvy_riadok_unix=kv.Clock().now + i * span, guest=guest, qemu=qemu,
+                                    prevadzka=prevadzka, ponuky=ponuky)
         (Path(praca) / "audits").mkdir(exist_ok=True)
-        audit = bs.audit(session, p, output=Path(praca) / "audits" / f"{ident}.json")
+        with nullcontext() if prevadzka else sk.bez_auditu_logov():
+            audit = bs.audit(session, p, output=Path(praca) / "audits" / f"{ident}.json")
         if audit.code != 0:
             raise ValueError(f"the qualification pass: the audit refused session {ident}: {audit.values['reasons']}")
         data = feature_archive.load(audit.archive)
@@ -1253,8 +1333,11 @@ def kvalifikacny_prechod(praca, kopia, protokol, rezim):
         sessions.append({"id": ident, "role": row["role"], "group": row["group"], "vm": row["vm"],
                          "scenario": row["scenario"], "profile": protokol["scenarios"][row["scenario"]]["profile"],
                          "position": row["position"], "start": float(times[0])})
-        load[ident] = fq.offered_load(session.directory / "traffic_intervals.jsonl", times[mask],
-                                      protokol["interval_s"])
+        if prevadzka:
+            load[ident] = fq.offered_load(session.directory / "traffic_intervals.jsonl", times[mask],
+                                          protokol["interval_s"])
+        else:  # suchy_kampan.ZATAZ_RULE: the one function, whose values the full path checks against its logs.
+            load[ident] = ponuky[str(session.directory.resolve())].zataz(times[mask], protokol["interval_s"])
         audits.append({"session": ident, "role": row["role"], "group": row["group"], "vm": row["vm"],
                        "audit": str(audit.path), "audit_sha256": _sha(audit.path),
                        "features_sha256": audit.values["features_sha256"]})
@@ -1315,6 +1398,9 @@ class Beh:
         self.log = self.out / "suchy_beh.log"
         self.log.write_text(hlavicka_s2(command))
         self.kroky, self.facts, self.checks = [], {}, []
+        # suchy_kampan.ZATAZ_RULE: {the resolved directory of a session: its Ponuka}, of the qualification pass and of
+        # the campaign; the final evaluation of the shortened path reads it (ZATAZ_FINALNE_RULE).
+        self.ponuky = {}
 
     def zapis_log(self, text):
         with self.log.open("a") as stream:
@@ -1392,7 +1478,8 @@ class Beh:
             over_kopiu(self.protocol, self.kopia0)
             p0 = collection.protocol(self.kopia0)
         with self.krok("3 kvalifikacny prechod"):
-            values, proposed = kvalifikacny_prechod(self.praca / "kvalifikacia", self.kopia0, p0, self.generator)
+            values, proposed = kvalifikacny_prechod(self.praca / "kvalifikacia", self.kopia0, p0, self.generator,
+                                                    self.cesta, self.ponuky)
             self.kvalifikacia = _zapis(self.out / "kvalifikacia.json", hlavicka_e(
                 SCHEMA_QUALIFICATION, self.command, len(values["sessions"]), values))
             self.mask_finding = values["differences"]
@@ -1423,7 +1510,7 @@ class Beh:
             with pecat.vlastna_kniha(self.kniha):
                 self.record = vyhodnot(self.index, self.bundles, campaign=self.ending, replays=self.praca / "prehratia",
                                        out=self.final, ledger=self.kniha, cesta=self.cesta, rezim=self.generator,
-                                       vysledky=self.vysledky)
+                                       ponuky=self.ponuky, vysledky=self.vysledky)
             values = self.record["values"]
             self.kontrola("final_record", self.record.get("stage") == "suchy" and values.get("status") == "complete",
                           f"stage {self.record.get('stage')}, status {values.get('status')}")
@@ -1460,7 +1547,8 @@ class Beh:
         self.kniha = self.praca / "kniha" / "kniha_pecati.json"
         self.kniha.parent.mkdir()
         with pytest.MonkeyPatch.context() as mp:
-            h = sk.Kampan(self.praca / "kampan", mp, protokol=P, rezim=self.generator, seed=self.seed, kniha=self.kniha)
+            h = sk.Kampan(self.praca / "kampan", mp, protokol=P, rezim=self.generator, seed=self.seed, kniha=self.kniha,
+                          prevadzka=self.cesta == "plna", ponuky=self.ponuky)
             h.label = "rehearsal"
             self.rehearsal = h.init(self.kopia, "rehearsal", P["name"] + P["rehearsal"]["name_suffix"])
             h.run(self.rehearsal)
@@ -1570,9 +1658,11 @@ class Beh:
 
         def session(d):
             p = collection.for_vm(self.P, chosen["vm"])
+            # FAULTS_RULE: with its traffic by both paths, whose log audit refuses the event that did not run.
             built = sk.postav_session(d, p, protocol_path, chosen["row"], self.generator, self.seed, self.P,
                                       session_id=chosen["session"], prvy_riadok_unix=chosen["first_row_unix"],
-                                      guest=chosen["guest"], qemu=chosen["qemu"], polia=chosen["fields"])
+                                      guest=chosen["guest"], qemu=chosen["qemu"], prevadzka=True,
+                                      polia=chosen["fields"])
             return vc.Session(built.directory, protocol_path, p, built.result)
 
         def korpus(d):
@@ -1705,7 +1795,8 @@ class Beh:
                          "replacements_used": ending.get("replacements_used")},
             "replacement": {"injected": self.injected, "rejected": rejected,
                             "replaced": [r for r in ending.get("rejected_sessions") or [] if r.get("replacement")]},
-            "fakes": [f["fake"] for f in sk.FAKES], "check_E": self.check_e, "report_exit": self.sprava_code,
+            "fakes": [f["fake"] for f in sk.fakes(self.cesta == "plna")], "check_E": self.check_e,
+            "report_exit": self.sprava_code,
             "network": {"attempts": list(self.siet.attempts), "rule": "bez_siete: no connection of an internet socket"},
             "stages_asked_by_the_campaign": len(h.gates), "selftests_asked_by_the_campaign": len(h.selftests)}
 
@@ -1726,7 +1817,7 @@ class Beh:
                      "check": getattr(self, "copy_check", None), "rule": COPY_RULE,
                      "mask_rule": MASK_RULE, "mask_finding": getattr(self, "mask_finding", None)},
             "gates": getattr(self, "gates", []), "results": str(self.vysledky),
-            "fakes": list(sk.FAKES), "infrastructure": list(sk.INFRASTRUCTURE),
+            "fakes": list(sk.fakes(self.cesta == "plna")), "infrastructure": list(sk.INFRASTRUCTURE),
             "command_patches": list(COMMAND_PATCHES), "threads": getattr(self, "threads", None),
             "steps": list(self.kroky),
             "files": self._subory(), "checks": list(self.checks),
@@ -1734,7 +1825,8 @@ class Beh:
                                                              list(KEPT_NETWORKS[self.generator])},
             "cleanup": {"removed": getattr(self, "removed", []), "rule": CLEANUP_RULE},
             "rules": {"exit": EXIT_RULE, "faults": FAULTS_RULE, "short": SHORT_RULE, "copy": COPY_RULE,
-                      "mask": MASK_RULE, "session": sk.SESSION_RULE, "read_error": sk.READ_ERROR_RULE}}
+                      "mask": MASK_RULE, "session": sk.SESSION_RULE, "read_error": sk.READ_ERROR_RULE,
+                      "load": sk.ZATAZ_RULE, "short_traffic": sk.SKRATENA_RULE, "short_load": ZATAZ_FINALNE_RULE}}
         if ok:
             record = self.record["values"]
             claims = _riadky_tvrdeni(record)
@@ -2459,9 +2551,169 @@ def tabulka(behy, hranice_path, out, command):
                   "check_E": check["exit"], "exit": code}
 
 
+# ------------------------------------------------------------------ the command zhoda (package C4b)
+
+SCHEMA_ZHODA = "hyptcn3/g1-path-match/1"  # The summary zhoda prints.
+Z4_NAME = "Z4"  # tcn/metody.py Z4.name: the labels Z4:load and Z4:residual of its variants (Z4_VARIANTS).
+ZHODA_RULE = (
+    "the match of the two paths of one run (the lead's answer to Q73 point 2, 2026-11-25T21:20Z: 'test zhody na seede "
+    "0, plná proti skrátenej, chce zhodné alarmy Z4 a I/D'; package C4b): python -m tcn.suchy_beh zhoda --plna A "
+    "--skratena B reads the --out of two runs of beh as RUN_RULE reads them (nacitaj_beh, never changed), A by the "
+    "full path and B by the shortened one, of one generator and seed, each complete (else refused, exit 2), and "
+    "compares, in this order and stopping at the first difference, which it names: the commit (CODE_RULE), the "
+    "protocol file (its sha256 and the hashes of stages G0 and G1), every value the working copy fills (the column "
+    "mask of the qualification pass among them), the sessions of the corpus (generator.json corpus_sessions, in their "
+    "order), the alarms of Z4 by both its variants (the labels of name Z4 in the attachments series and copies of "
+    "final.json, tcn/finalne.py SERIES_RULE and COPIES_RULE, read at their paths with their sha256: the labels, the "
+    "rows they are given for, and per label its matched threshold and per row exceed, up and edge, the alarm k of n "
+    "and where it begins), and I and D (K1, K2a and K2b, final.json values.claims and conclusions: per claim its "
+    "status, statistic, compare, m and outcome, and per method of its compare its values per boot, their mean and its "
+    "interval); every value exactly, floats too, since the same seed computes the same rows by the same functions in "
+    "both paths; what the runs' records say of their end (EXIT_READING_RULE) and of check E now is reported beside, "
+    "not judged")
+EXIT_ZHODA_RULE = (
+    "zhoda exits 0 when every item of ZHODA_RULE is equal in both runs, 1 at the first difference (named on stderr "
+    "and in the summary), and 2 for a refusal: a run that cannot be read or did not complete (RUN_RULE), runs of "
+    "another path than --plna and --skratena name, or of two generators or seeds")
+
+
+def _rozdiel_poli(a, b, kde):
+    """Where two arrays of one shape differ: None when equal, else the count and the first place (`kde`(index))."""
+    a, b = np.asarray(a), np.asarray(b)
+    if a.shape != b.shape:
+        return f"of the shapes {a.shape} and {b.shape}"
+    if a.dtype.kind == "f" and b.dtype.kind == "f":
+        same = (a == b) | (np.isnan(a) & np.isnan(b))
+    else:
+        same = a == b
+    wrong = np.flatnonzero(~np.asarray(same).reshape(-1))
+    if not len(wrong):
+        return None
+    i = int(wrong[0])
+    return (f"at {len(wrong)} of {a.size} places, the first {kde(i)}: {a.reshape(-1)[i].item()!r} and "
+            f"{b.reshape(-1)[i].item()!r}")
+
+
+def _z4_priloha(run, name):
+    """(the arrays of the attachment `name` of the run's final.json, the indices of its labels of name Z4)."""
+    data = _priloha(run["record"]["values"], name)
+    z4 = [i for i, label in enumerate(data["label_name"]) if str(label) == Z4_NAME]
+    if not z4:
+        raise ValueError(f"run {run['name']} ({run['dir']}): its attachment {name} holds no label of {Z4_NAME} "
+                         "(ZHODA_RULE)")
+    return data, z4
+
+
+ROWS_OF = {"series": (("session_id", "row_session", "row_seq", "row_time"), "session_id", "row_session"),
+           "copies": (("intervention_id", "row_intervention", "row_seq", "row_time"), "intervention_id",
+                      "row_intervention")}  # tcn/finalne.py CONTENTS: what names the rows of each attachment.
+
+
+def _zhoda_z4(full, short, name):
+    """ZHODA_RULE, the alarms of Z4 in the attachment `name`: None when equal, else the first difference."""
+    (a, za), (b, zb) = _z4_priloha(full, name), _z4_priloha(short, name)
+    labels = ([str(a["label"][i]) for i in za], [str(b["label"][i]) for i in zb])
+    if labels[0] != labels[1]:
+        return f"the labels of {Z4_NAME}: {labels[0]} and {labels[1]}"
+    keys, owner_key, row_key = ROWS_OF[name]
+    for key in keys:
+        found = _rozdiel_poli(a[key], b[key], lambda i: f"index {i}")
+        if found is not None:
+            return f"the rows the attachment is given for ({key}) differ {found}"
+
+    def row(i):
+        return f"row {i} (seq {int(a['row_seq'][i])} of {str(a[owner_key][int(a[row_key][i])])})"
+    for label, i, j in zip(labels[0], za, zb):
+        if _rozdiel_poli(a["threshold"][i:i + 1], b["threshold"][j:j + 1], lambda _: "label") is not None:
+            return f"{label}: the matched threshold {float(a['threshold'][i])!r} and {float(b['threshold'][j])!r}"
+        for key in ("exceed", "up", "edge"):
+            found = _rozdiel_poli(a[key][i], b[key][j], row)
+            if found is not None:
+                return f"{label}: {key} differs {found}"
+    return None
+
+
+def _zhoda_tvrdenia(full, short, claim):
+    """ZHODA_RULE, I or D of one claim: None when equal, else the first difference."""
+    def parts(run):
+        values = run["record"]["values"]
+        record = (values.get("claims") or {}).get(claim)
+        conclusion = (values.get("conclusions") or {}).get(claim)
+        if type(record) is not dict or type(conclusion) is not dict:
+            raise ValueError(f"run {run['name']} ({run['dir']}): its final.json has no claim {claim} with its "
+                             "conclusion (ZHODA_RULE)")
+        return record, conclusion
+    (a, ca), (b, cb) = parts(full), parts(short)
+    for key, x, y in (("status", ca.get("status"), cb.get("status")), *((key, a.get(key), b.get(key)) for key in (
+            "statistic", "compare", "m", "outcome"))):
+        if x != y:
+            return f"its {key} {x!r} and {y!r}"
+    for z in a.get("compare") or []:
+        ma, mb = (a.get("methods") or {}).get(z) or {}, (b.get("methods") or {}).get(z) or {}
+        va, vb = ma.get("values") or {}, mb.get("values") or {}
+        if sorted(va) != sorted(vb):
+            return f"method {z}: the boots {sorted(va)[:5]}... and {sorted(vb)[:5]}... ({len(va)} and {len(vb)})"
+        for boot in sorted(va):
+            if va[boot] != vb[boot]:
+                return f"method {z}, boot {boot}: the value {va[boot]!r} and {vb[boot]!r}"
+        for key in ("mean", "interval"):
+            if ma.get(key) != mb.get(key):
+                return f"method {z}: its {key} {ma.get(key)!r} and {mb.get(key)!r}"
+    return None
+
+
+def porovnaj_cesty(full, short):
+    """ZHODA_RULE over two runs read by nacitaj_beh (the full path, the shortened one): {equal, first_difference
+    {item, detail} or None, compared [the items compared, in order, up to the first difference]}."""
+    ia, ib = _identita(full), _identita(short)
+    gen = [(run.get("generator_values") or {}).get("corpus_sessions") for run in (full, short)]
+    items = [
+        ("commit", lambda: None if ia["commit"] == ib["commit"] else f"{ia['commit']} and {ib['commit']}"),
+        ("protocol file", lambda: None if ia["protocol"] == ib["protocol"] else _rozdiel(ia["protocol"],
+                                                                                         ib["protocol"])),
+        ("working copy", lambda: None if ia["copy"]["values"] == ib["copy"]["values"] else _rozdiel(
+            ia["copy"]["values"], ib["copy"]["values"])),
+        ("corpus", lambda: None if gen[0] == gen[1] else (
+            f"generator.json corpus_sessions: {len(gen[0] or [])} and {len(gen[1] or [])} sessions, the first that "
+            "differs " + repr(next(((x, y) for x, y in zip(gen[0] or [], gen[1] or []) if x != y), None)))),
+        *((f"alarms of {Z4_NAME}, attachment {name}", lambda name=name: _zhoda_z4(full, short, name))
+          for name in ROWS_OF),
+        *((f"{claim} ({'I' if claim == 'k1' else 'D'})", lambda claim=claim: _zhoda_tvrdenia(full, short, claim))
+          for claim in CLAIMS)]
+    compared = []
+    for name, compare in items:
+        detail = compare()
+        compared.append(name)
+        if detail is not None:
+            return {"equal": False, "first_difference": {"item": name, "detail": detail}, "compared": compared}
+    return {"equal": True, "first_difference": None, "compared": compared}
+
+
+def zhoda(plna, skratena, command=None):
+    """The command zhoda (package C4b; ZHODA_RULE, EXIT_ZHODA_RULE): (exit code, summary) of the --out of a run by the
+    full path `plna` and of one by the shortened path `skratena`."""
+    runs = {"plna": nacitaj_beh(plna), "skratena": nacitaj_beh(skratena)}
+    for cesta, run in runs.items():
+        if run["cesta"] != cesta:
+            raise ValueError(f"--{cesta} {run['dir']} is a run of the path {run['cesta']!r}, not {cesta!r} "
+                             "(ZHODA_RULE)")
+    full, short = runs["plna"], runs["skratena"]
+    if (full["generator"], full["seed"]) != (short["generator"], short["seed"]):
+        raise ValueError(f"the runs are {full['name']} and {short['name']}: zhoda compares the two paths of one "
+                         "generator and seed (ZHODA_RULE)")
+    found = porovnaj_cesty(full, short)
+    code = 0 if found["equal"] else 1
+    return code, {"schema": SCHEMA_ZHODA, "command": command, "run": full["name"], **found,
+                  "runs": {cesta: {"dir": run["dir"], "commit": run["code"]["commit"], "files": run["files"],
+                                   "exit_reasons": run["exit_reasons"], "check_E_now": run["check_E_now"]["exit"]}
+                           for cesta, run in runs.items()},
+                  "rule": ZHODA_RULE, "exit": code}
+
+
 def main(argv=None):
-    """python -m tcn.suchy_beh beh|hranice|tabulka ...: one run of the G1 dry run (Beh), the bounds m from the null runs
-    (hranice) and the table of known answers (tabulka); --help prints the module docstring."""
+    """python -m tcn.suchy_beh beh|hranice|tabulka|zhoda ...: one run of the G1 dry run (Beh), the bounds m from the
+    null runs (hranice), the table of known answers (tabulka) and the match of the two paths of one run (zhoda); --help
+    prints the module docstring."""
     import argparse
     import shlex
     argv = list(sys.argv[1:] if argv is None else argv)
@@ -2477,7 +2729,8 @@ def main(argv=None):
     beh.add_argument("--praca", required=True, type=Path,
                      help="a new working directory (the campaign, the bundles, the replays), outside --out")
     beh.add_argument("--cesta", required=True, choices=CESTY,
-                     help="plna: the whole final evaluation; skratena: SHORT_RULE (POKYNY_TEMPO point 5)")
+                     help="plna: the whole final evaluation and the traffic logs; skratena: SHORT_RULE (POKYNY_TEMPO "
+                          "point 5), no traffic logs (the lead's answer to Q73 point 2)")
     beh.add_argument("--protocol", type=Path, default=PROTOKOL,
                      help=f"the protocol file of the run (default {PROTOKOL.relative_to(REPO)}, the real file)")
     beh.add_argument("--vysledky", type=Path, default=VYSLEDKY,
@@ -2493,11 +2746,25 @@ def main(argv=None):
     table.add_argument("--hranice", required=True, type=Path,
                        help="the hranice_m.json of hranice, with its nulove.json beside it")
     table.add_argument("--out", required=True, type=Path, help="a new directory for the files of the table")
+    match = sub.add_parser("zhoda", help="the alarms of Z4 and I and D of the two paths of one run (package C4b)")
+    match.add_argument("--plna", required=True, type=Path, help="the --out of the run by the full path")
+    match.add_argument("--skratena", required=True, type=Path, help="the --out of the run by the shortened path")
     try:
         a = parser.parse_args(argv)
     except SystemExit as exit_:
         return exit_.code if type(exit_.code) is int else 2
     command = shlex.join(["python", "-m", "tcn.suchy_beh", *argv])
+    if a.command == "zhoda":
+        try:
+            code, summary = zhoda(a.plna, a.skratena, command)
+        except (OSError, ValueError) as error:
+            print(f"tcn.suchy_beh zhoda: {error}", file=sys.stderr)
+            return 2
+        if summary["first_difference"] is not None:
+            print(f"tcn.suchy_beh zhoda: the first difference: {summary['first_difference']['item']}: "
+                  f"{summary['first_difference']['detail']} (ZHODA_RULE)", file=sys.stderr)
+        print(json.dumps(summary, ensure_ascii=False))
+        return code
     if a.command in ("hranice", "tabulka"):
         try:
             if a.command == "hranice":

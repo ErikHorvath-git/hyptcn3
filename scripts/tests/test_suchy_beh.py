@@ -14,11 +14,21 @@ Package C3b (the lead's answer to Q72 point 2) adds, as the coordinator's brief 
 6. for a session of each scenario at the rates of Zápis 1 of G2 (on a copy of the small protocol), the offered load
    Z4 reads equals the planned load the counts follow (suchy_generatory.ponukana_zataz) within the log audit's
    tolerance, the real audit accepting the clean session; the traffic logs are the generator's and reproducible.
+Package C4b (the lead's answer to Q73 point 2, 2026-11-25T21:20Z: the shortened path neither writes nor audits the
+traffic logs) adds, as the coordinator's brief of C4b lists it:
+7. no traffic log in a session of the shortened path, and the offered load of its rows equals that of the full path
+   for every row of a session of each scenario; no audit reads them in a whole shortened run, whose --chyby still
+   refuses all nine errors;
+8. the full path's check that the offered load of its logs is that of the one function (suchy_kampan.ZATAZ_RULE)
+   fires on a log whose offered user sessions differ from the function's, and in a capture;
+9. the match of the two paths on the small protocol for both generators: the same alarms of Z4 by both its variants
+   and the same I and D, read by the command zhoda (tcn/suchy_beh.py ZHODA_RULE), which names a difference.
 The real plan runs in C4 only. The small protocol takes the numbers its corpus can carry (as
 tcn/tests/test_finalne.py _protocol): they are the test's, no judgment of the protocol. Its record of G0 is the
 test's, in a directory of the test (--vysledky); no test writes data/results, the ledger of record or docs/. Only
 mechanics on synthetic sessions: no number here is a result of detection (HONESTY P4).
 """
+import contextlib
 import hashlib
 import json
 import os
@@ -234,7 +244,9 @@ def nulovy_skratena(svet):
 
 @pytest.fixture(scope="module")
 def strukturovany_skratena(svet):
-    return beh(svet, "strukturovany-skratena", "strukturovany", "skratena")
+    # Package C4b: with --chyby, as a structured run of C4 by the shortened path (tabulka reads --chyby of a structured
+    # run, tcn/suchy_beh.py READINGS fault_injections).
+    return beh(svet, "strukturovany-skratena", "strukturovany", "skratena", "--chyby")
 
 
 def _metody(claims):
@@ -251,8 +263,12 @@ def test_the_shortened_path_gives_the_i_d_and_intervals_of_the_full_one(generato
     diagnostics, the marginal change and the unscored stretches; in the structured run the claims of the model with
     shuffled context and of the network with random weights are the full path's too. What it left out is missing: the
     descriptive methods, the context truncation, and the networks of the diagnostics but those two in the structured
-    run (all of them in the null run)."""
-    from tcn import finalne, suchy_beh
+    run (all of them in the null run). Package C4b (the lead's answer to Q73 point 2: 'zhodné alarmy Z4 a I/D'): the
+    shortened path wrote and audited no traffic logs, and still Z4 by both its variants has the same matched thresholds
+    and the same alarms (exceed, up, edge of every row) in the attachments series and copies, so it read the same
+    offered load; the command zhoda finds the two paths equal (exit 0)."""
+    import numpy as np
+    from tcn import finalne, metody, suchy_beh
     full_run, short_run = request.getfixturevalue(generator), request.getfixturevalue(generator + "_skratena")
     assert short_run.code == 0, short_run.zaznam["values"].get("failure") or short_run.zaznam["values"]["checks"]
     values = short_run.zaznam["values"]
@@ -276,6 +292,19 @@ def test_the_shortened_path_gives_the_i_d_and_intervals_of_the_full_one(generato
             assert _metody(claims_short[name]["claims"]) == _metody(claims_full[name]["claims"])
     else:
         assert claims_short["not_computed"] == suchy_beh.SHORT_RULE
+    labels = [f"{metody.Z4.name}:{variant}" for variant in metody.Z4_VARIANTS]
+    for attachment in ("series", "copies"):
+        a, b = suchy_beh._priloha(full, attachment), suchy_beh._priloha(short, attachment)
+        za, zb = ([i for i, name in enumerate(found["label_name"]) if str(name) == "Z4"] for found in (a, b))
+        assert [str(a["label"][i]) for i in za] == [str(b["label"][i]) for i in zb] == labels
+        assert np.array_equal(a["row_seq"], b["row_seq"]) and np.array_equal(a["row_time"], b["row_time"])
+        for i, j in zip(za, zb):
+            assert a["threshold"][i] == b["threshold"][j], (attachment, a["label"][i])
+            for key in ("exceed", "up", "edge"):
+                assert np.array_equal(a[key][i], b[key][j]), (attachment, a["label"][i], key)
+    code, summary = suchy_beh.zhoda(full_run.out, short_run.out)
+    assert (code, summary["equal"], summary["first_difference"], summary["run"]) == (0, True, None, generator + "_0")
+    assert summary["compared"][-3:] == ["k1 (I)", "k2a (D)", "k2b (D)"] and len(summary["compared"]) == 9
 
 
 def test_the_shortened_path_replaces_only_what_the_criteria_do_not_read():
@@ -476,7 +505,8 @@ def test_the_fakes_are_named_and_nothing_else_is_patched(nulovy, svet, tmp_path)
     p = collection.protocol(copy_path)
     with pytest.MonkeyPatch.context() as mp:
         (tmp_path / "kniha").mkdir()
-        sk.Kampan(tmp_path / "kampan", mp, protokol=p, rezim="nulovy", seed=0, kniha=tmp_path / "kniha" / "k.json")
+        sk.Kampan(tmp_path / "kampan", mp, protokol=p, rezim="nulovy", seed=0, kniha=tmp_path / "kniha" / "k.json",
+                  prevadzka=True)
         changed = {f"{name}.{key}" for name, module in modules.items() for key, value in vars(module).items()
                    if before[name].get(key, before) is not value}
         env = {f"env {key}" for key in set(environment) | set(os.environ)
@@ -539,11 +569,13 @@ def _zapis_1(doc):
         params["max_concurrent"] = ZAPIS_1_CAP
 
 
-def _postav(svet, tmp_path, scenario, name="s", role=None):
+def _postav(svet, tmp_path, scenario, name="s", role=None, *, prevadzka=True, ponuky=None):
     """(row, the copy loaded, the Session, its real audit) of the planned session of the scenario (and the role, when
     given) with the most events (the first of them) in the campaign plan of the working copy of the small protocol at
     the rates of Zápis 1, built by the fake capture of the run (suchy_kampan.postav_session) and audited by the real
-    audit (boundary_sessions.audit), as tcn/suchy_beh.py kvalifikacny_prechod does."""
+    audit (boundary_sessions.audit), as tcn/suchy_beh.py kvalifikacny_prechod does: by the full path, or with prevadzka
+    false by the shortened one (suchy_kampan.SKRATENA_RULE: the audit without its log audit); ponuky receives the
+    session's Ponuka (suchy_kampan.ZATAZ_RULE)."""
     from scripts import collection, protocol_v5 as pv
     from scripts.tests import boundary_sessions as bs, kampan_v5 as kv, suchy_kampan as sk
     copy_path = _copy(svet, tmp_path, _zapis_1)
@@ -558,8 +590,11 @@ def _postav(svet, tmp_path, scenario, name="s", role=None):
     root = tmp_path / name
     root.mkdir()
     session = sk.postav_session(root, p, copy_path, row, "strukturovany", 0, protokol, session_id="c3b_" + scenario,
-                                prvy_riadok_unix=kv.Clock().now, guest=guest, qemu=qemu)
-    return row, protokol, session, bs.audit(session, p, output=tmp_path / f"{name}_audit.json")
+                                prvy_riadok_unix=kv.Clock().now, guest=guest, qemu=qemu, prevadzka=prevadzka,
+                                ponuky=ponuky)
+    with contextlib.nullcontext() if prevadzka else sk.bez_auditu_logov():
+        audit = bs.audit(session, p, output=tmp_path / f"{name}_audit.json")
+    return row, protokol, session, audit
 
 
 def _zaznamy(path):
@@ -676,6 +711,248 @@ def test_a_session_built_twice_has_the_same_traffic(svet, tmp_path):
     assert records(first.directory) == records(second.directory)
     assert records(first.directory)["traffic_requests.jsonl header"]["run_id"] == hashlib.sha256(
         b"c3b_corp_high").hexdigest()[:12]
+
+
+# ------------------------------------------------------------------ 7. to 9. the shortened path's traffic (package C4b)
+
+
+def _riadky_segmentu(d, name, suffix):
+    """The lines of the guest log segment guest/<name>-<suffix> of a session directory."""
+    import gzip
+    segment = json.loads((d / "guest" / f"{name}_segment.json").read_text())
+    entry = next(entry for entry in segment["files"] if entry["name"].endswith("-" + suffix))
+    return gzip.decompress((d / "guest" / entry["file"]).read_bytes()).decode().splitlines()
+
+
+@pytest.mark.parametrize("scenario", ["eshop_low", "eshop_high", "corp_low", "corp_high"])
+def test_a_session_of_the_shortened_path_holds_no_traffic_and_the_load_of_the_full_one(scenario, svet, tmp_path):
+    """Package C4b (the lead's answer to Q73 point 2; suchy_kampan.SKRATENA_RULE and ZATAZ_RULE): the same planned
+    session of each scenario of the small protocol at the rates of Zápis 1, built by the full path and by the
+    shortened one. The shortened session holds no traffic log, no status or log of the generator and no seal of the
+    logs (logs_manifest.json, and in end.json neither traffic_rc nor the manifest's sha256), its guest segments no line
+    of a request, while the full one holds all of them; its session.json keeps the same traffic block, its events, rows
+    and snapshots are those of the full session. The real audit without its log audit accepts it, its record of the
+    log audit names the rule and reads nothing. The offered load of every row from the one function equals that
+    features/qualification.py offered_load reads from the full session's log, exactly."""
+    from features import qualification as fq
+    from scripts import collection_logs
+    from scripts.tests import suchy_kampan as sk
+    ponuky = {}
+    _, protokol, full, full_audit = _postav(svet, tmp_path, scenario, "plna", ponuky=ponuky)
+    _, _, short, short_audit = _postav(svet, tmp_path, scenario, "skratena", prevadzka=False, ponuky=ponuky)
+    d, e = full.directory, short.directory
+    assert all((d / name).is_file() for name in (*sk.TRAFFIC_FILES, "logs_manifest.json"))
+    assert not any((e / name).exists() for name in (*sk.TRAFFIC_FILES, "logs_manifest.json"))
+    end_full, end_short = (json.loads((x / "end.json").read_text()) for x in (d, e))
+    assert {"traffic_rc", "logs_manifest_sha256"} <= set(end_full)
+    assert {key: value for key, value in end_full.items() if key not in ("traffic_rc", "logs_manifest_sha256")} == \
+        end_short
+    meta_full, meta_short = (json.loads((x / "session.json").read_text()) for x in (d, e))
+    assert meta_short == meta_full and meta_short["traffic"]["scenario"] == scenario
+    assert _riadky_segmentu(d, "session", "nginx-access.jsonl") and not _riadky_segmentu(e, "session",
+                                                                                          "nginx-access.jsonl")
+    assert not [line for line in _riadky_segmentu(e, "journal", "journal.txt") if " rid=" in line]
+    assert (e / "events.json").read_bytes() == (d / "events.json").read_bytes()
+    assert short.result == full.result
+    assert sorted((e / "raw").iterdir()) and [path.read_bytes() for path in sorted((e / "raw").glob("*.json"))] == [
+        path.read_bytes() for path in sorted((d / "raw").glob("*.json"))]
+    assert (full_audit.code, full_audit.values["reasons"]) == (0, [])
+    assert (short_audit.code, short_audit.values["reasons"]) == (0, [])
+    logs = short_audit.values["logs"]
+    assert (logs["schema"], logs["accepted"], logs["problems"], logs["not_run"]) == (
+        collection_logs.SCHEMA, True, [], sk.SKRATENA_RULE)
+    assert logs["sections"]["metadata"]["session_sha256"] == short_audit.values["session_sha256"]
+    assert "not_run" not in full_audit.values["logs"]
+    times = [float(t) for t in short.result["casy"]]
+    load = fq.offered_load(d / "traffic_intervals.jsonl", times, protokol["interval_s"])
+    assert type(load) is list and len(load) == len(times) == protokol["cycles"]
+    assert ponuky[str(e.resolve())].zataz(times, protokol["interval_s"]) == load
+    assert ponuky[str(d.resolve())].zataz(times, protokol["interval_s"]) == load
+
+
+def test_the_full_path_refuses_a_log_whose_offered_sessions_differ_from_the_function(svet, tmp_path, monkeypatch):
+    """ZATAZ_RULE: the full path checks by name that the offered load read from its traffic_intervals.jsonl
+    (features/qualification.py offered_load) equals that of the one function at the time of every row
+    (suchy_kampan.over_zataz_logov). The check holds on the session's log; one user session more offered in the summary
+    interval that holds most of a row's interval makes it name that row; and a capture whose function gives another
+    offered load than its log is refused by name."""
+    from scripts.tests import suchy_kampan as sk
+    ponuky = {}
+    _, protokol, session, _ = _postav(svet, tmp_path, "corp_high", "plna", ponuky=ponuky)
+    d, interval_s = session.directory, protokol["interval_s"]
+    ponuka = ponuky[str(d.resolve())]
+    times = [float(t) for t in session.result["casy"]]
+    assert sk.over_zataz_logov(d, ponuka, times, interval_s) == ponuka.zataz(times, interval_s)
+    records = _zaznamy(d / "traffic_intervals.jsonl")
+    intervals = [i for i, r in enumerate(records) if r.get("type") == "interval"]
+    row = 10
+    t = times[row] - ponuka.origin
+    held = max(intervals, key=lambda i: min(records[i]["mono_end"], t) - max(records[i]["mono_start"], t - interval_s))
+    records[held]["offered_sessions"] += 1
+    (d / "traffic_intervals.jsonl").write_text("".join(json.dumps(r) + "\n" for r in records))
+    first = next(i for i, ti in enumerate(times) if ti - ponuka.origin > records[held]["mono_start"])
+    with pytest.raises(ValueError, match=r"differs from suchy_kampan\.ponuka_relacii at the row of time "
+                                         + re.escape(repr(times[first])) + r" .*ZATAZ_RULE"):
+        sk.over_zataz_logov(d, ponuka, times, interval_s)
+    assert first <= row
+    real = sk.Ponuka.zataz
+    monkeypatch.setattr(sk.Ponuka, "zataz", lambda self, at, step: [x + 1 for x in real(self, at, step)])
+    with pytest.raises(ValueError, match=r"differs from suchy_kampan\.ponuka_relacii at the row of time .*ZATAZ_RULE"):
+        _postav(svet, tmp_path, "corp_high", "znova")
+
+
+# The files of the traffic generator in a session directory (scripts/collection.py capture_session: the two logs and
+# the status of traffic_command, the child's log, traffic_before.json of check_warmup), named here by the test.
+TRAFFIC_LOGS = ("traffic_requests.jsonl", "traffic_intervals.jsonl", "traffic.json", "traffic_before.json",
+                "traffic.log")
+
+
+def _korpus(run):
+    """The corpus index of the campaign of a run of beh (it stays in --praca, CLEANUP_RULE)."""
+    return json.loads(Path(run.zaznam["values"]["files"]["index"]["path"]).read_text())
+
+
+@pytest.mark.parametrize("name", ["nulovy_skratena", "strukturovany_skratena"])
+def test_the_shortened_run_writes_and_audits_no_traffic_log(name, request, nulovy):
+    """Package C4b (the lead's answer to Q73 point 2: the shortened path neither writes nor audits the traffic logs):
+    no session of a whole shortened run, in the archive of its rehearsal and campaign, holds a traffic log, a status or
+    log of the generator or a seal of the logs; the log audit of no session ran (its record names
+    suchy_kampan.SKRATENA_RULE), the corpus build repeated none (features/quality.py NOT_REPEATED no_logs, where the
+    full run repeated every one) and zaznam.json names the fakes of the shortened path. With --chyby (the structured
+    run) all nine errors are refused by their reasons: the event that did not run by the log audit of the Session
+    target, which is built with its traffic (FAULTS_RULE)."""
+    from features import quality
+    from scripts.tests import suchy_kampan as sk
+    run = request.getfixturevalue(name)
+    assert run.code == 0, run.zaznam["values"].get("failure") or run.zaznam["values"]["checks"]
+    archived = sorted(path.parent for path in (run.praca / "kampan" / "archive").rglob("session.json"))
+    assert len(archived) >= len(_korpus(run)["sessions"]) > 0
+    for d in archived:
+        assert [file for file in (*TRAFFIC_LOGS, "logs_manifest.json") if (d / file).exists()] == [], d
+    assert sk.TRAFFIC_FILES == TRAFFIC_LOGS
+    audits = [path for d in archived for path in d.glob("*audit*.json")]
+    assert {path.parent for path in audits} == set(archived)  # The campaign's audit records, archived with them.
+    for path in audits:
+        assert json.loads(path.read_text())["values"]["logs"]["not_run"] == sk.SKRATENA_RULE, path
+    assert {r["log_audit"] for r in _korpus(run)["sessions"]} == {quality.NOT_REPEATED["no_logs"]}
+    assert {r["log_audit"] for r in _korpus(nulovy)["sessions"]} == {quality.REPEATED}
+    values = run.zaznam["values"]
+    assert values["fakes"] == _plain(list(sk.fakes(False))) and values["rules"]["short_traffic"] == sk.SKRATENA_RULE
+    if values["chyby"]:
+        faults = json.loads((run.out / "vlozene_chyby.json").read_text())["values"]
+        assert (faults["refused_as_expected"], faults["of"], faults["clean_admitted"]) == (9, 9, True)
+        event = next(row for row in faults["errors"] if row["id"] == "neprebehnuta_udalost")
+        assert event["got"] == event["expected"] and event["got"][0].startswith("logs: event_not_executed:")
+
+
+def test_the_shortened_path_names_its_fakes_and_patches_nothing_else(nulovy, tmp_path):
+    """FAKES_SKRATENA: the harness of the shortened path (suchy_kampan.Kampan with prevadzka false) patches exactly the
+    attributes of FAKES, FAKES_SKRATENA and INFRASTRUCTURE, and the session audit without its log audit is restored
+    after the qualification pass's block (bez_auditu_logov)."""
+    import scripts.collection
+    import scripts.campaign
+    from scripts import collection
+    from scripts.tests import suchy_kampan as sk
+    modules = {"scripts.campaign": scripts.campaign, "scripts.collection": scripts.collection}
+    before = {name: dict(vars(module)) for name, module in modules.items()}
+    p = collection.protocol(Path(nulovy.zaznam["values"]["files"]["copy"]["path"]))
+    with pytest.MonkeyPatch.context() as mp:
+        (tmp_path / "kniha").mkdir()
+        h = sk.Kampan(tmp_path / "kampan", mp, protokol=p, rezim="nulovy", seed=0, kniha=tmp_path / "kniha" / "k.json",
+                      prevadzka=False)
+        changed = {f"{name}.{key}" for name, module in modules.items() for key, value in vars(module).items()
+                   if before[name].get(key, before) is not value}
+        assert collection.audit_logs is sk.audit_logov_skratenej and h.ponuky == {}
+    named = {patch for item in (*sk.FAKES, *sk.FAKES_SKRATENA, *sk.INFRASTRUCTURE) for patch in item["patches"]}
+    assert changed == {patch for patch in named if any(patch.startswith(module + ".") for module in modules)}
+    assert collection.audit_logs is before["scripts.collection"]["audit_logs"]
+    with sk.bez_auditu_logov():
+        assert collection.audit_logs is sk.audit_logov_skratenej
+    assert collection.audit_logs is before["scripts.collection"]["audit_logs"]
+    with pytest.raises(ValueError, match="no default"):
+        sk.Kampan(tmp_path / "bez", None, protokol=p, rezim="nulovy", seed=0, kniha=tmp_path / "k.json", prevadzka=None)
+
+
+def test_the_final_evaluation_of_the_shortened_path_reads_the_load_of_the_function(tmp_path):
+    """ZATAZ_FINALNE_RULE: inside zataz_skratenej_cesty, tcn/finalne.py check_inputs runs as it is with the
+    traffic_intervals.jsonl of exactly the sessions of the mapping counted as present, so it accepts them and still
+    refuses another session without the log by its own reason (LOAD_RULE), and features/qualification.py offered_load
+    gives Ponuka.zataz of those sessions and its own answer for any other; both are restored after the block."""
+    from features import qualification as fq
+    from scripts.tests import suchy_kampan as sk
+    from tcn import finalne, suchy_beh
+    records, ponuky = [], {}
+    for role in ("train", "dev", "calibration", "test_benign", "test_controls"):
+        d = tmp_path / role
+        d.mkdir()
+        (d / "session.json").write_text("{}")
+        (d / "events.json").write_text('{"events": []}')
+        record = {"id": "s-" + role, "role": role, "session": str(d / "session.json"), "events": str(d / "events.json"),
+                  "events_sha256": _digest(d / "events.json")}
+        if role == "test_controls":
+            (d / "controls.json").write_text('{"controls": []}')
+            record.update(controls=str(d / "controls.json"), controls_sha256=_digest(d / "controls.json"))
+        records.append(record)
+        ponuky[str(d.resolve())] = sk.Ponuka(1000.0, [0.0, 5.0, 10.0, 15.0], [2, 4, 6], [], {})
+    real_check, real_load = finalne.check_inputs, fq.offered_load
+    with pytest.raises(ValueError, match="session s-train has no traffic_intervals.jsonl"):
+        finalne.check_inputs(records)
+    log = tmp_path / "train" / "traffic_intervals.jsonl"
+    with suchy_beh.zataz_skratenej_cesty(ponuky):
+        assert finalne.check_inputs(records) is None
+        assert fq.offered_load(log, [1010.0, 1015.0], 5.0) == [4.0, 6.0] == ponuky[str(log.parent.resolve())].zataz(
+            [1010.0, 1015.0], 5.0)
+        assert fq.offered_load(tmp_path / "x" / "traffic_intervals.jsonl", [1010.0], 5.0) == \
+            "no traffic_intervals.jsonl in the session directory"
+        del ponuky[str((tmp_path / "dev").resolve())]
+    with suchy_beh.zataz_skratenej_cesty(ponuky):
+        with pytest.raises(ValueError, match="session s-dev has no traffic_intervals.jsonl: " + re.escape(
+                finalne.LOAD_RULE)):
+            finalne.check_inputs(records)
+    assert (finalne.check_inputs, fq.offered_load) == (real_check, real_load)
+    with pytest.raises(ValueError, match="no mapping"):
+        suchy_beh.zataz_skratenej_cesty(None)
+
+
+def test_zhoda_names_the_first_difference_and_refuses_what_is_no_pair(nulovy, nulovy_skratena, strukturovany_skratena,
+                                                                     tmp_path, capsys):
+    """ZHODA_RULE: python -m tcn.suchy_beh zhoda --plna --skratena exits 0 on the two paths of the null run at seed 0,
+    printing its summary; a value per boot of I changed in the shortened run's record, or an alarm of Z4 that begins
+    at another row of its attachment series, is the first difference, named by the claim, the method and the boot or by
+    the label, the row, its seq and session; the paths swapped, or two runs of two generators, are refused with exit
+    2."""
+    import copy
+    import numpy as np
+    from tcn import suchy_beh
+    assert suchy_beh.main(["zhoda", "--plna", str(nulovy.out), "--skratena", str(nulovy_skratena.out)]) == 0
+    printed = json.loads(capsys.readouterr().out)
+    assert (printed["schema"], printed["equal"], printed["run"]) == (suchy_beh.SCHEMA_ZHODA, True, "nulovy_0")
+    full, short = suchy_beh.nacitaj_beh(nulovy.out), suchy_beh.nacitaj_beh(nulovy_skratena.out)
+    changed = copy.deepcopy(short)
+    method = changed["record"]["values"]["claims"]["k1"]["compare"][0]
+    values = changed["record"]["values"]["claims"]["k1"]["methods"][method]["values"]
+    boot = sorted(values)[-1]
+    before = values[boot]
+    values[boot] += 1e-9
+    found = suchy_beh.porovnaj_cesty(full, changed)
+    assert found["equal"] is False and found["first_difference"] == {
+        "item": "k1 (I)", "detail": f"method {method}, boot {boot}: the value {before!r} and {values[boot]!r}"}
+    changed = copy.deepcopy(short)
+    item = changed["record"]["values"]["attachments"]["series"]
+    data = suchy_beh._priloha(changed["record"]["values"], "series")
+    z4 = [i for i, name in enumerate(data["label_name"]) if str(name) == "Z4"][1]
+    data["edge"][z4, 7] = not data["edge"][z4, 7]
+    item["path"] = str(tmp_path / "series.npz")
+    np.savez(item["path"], **data)
+    item["sha256"] = _digest(item["path"])
+    found = suchy_beh.porovnaj_cesty(full, changed)
+    assert found["first_difference"]["item"] == "alarms of Z4, attachment series"
+    assert found["first_difference"]["detail"].startswith(f"{data['label'][z4]}: edge differs at 1 of ")
+    assert f"row 7 (seq {int(data['row_seq'][7])} of " in found["first_difference"]["detail"]
+    assert suchy_beh.main(["zhoda", "--plna", str(nulovy_skratena.out), "--skratena", str(nulovy.out)]) == 2
+    assert "is a run of the path 'skratena', not 'plna'" in capsys.readouterr().err
+    assert suchy_beh.main(["zhoda", "--plna", str(nulovy.out), "--skratena", str(strukturovany_skratena.out)]) == 2
+    assert "zhoda compares the two paths of one generator and seed" in capsys.readouterr().err
 
 
 # ------------------------------------------------------------------ the command line
