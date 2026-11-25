@@ -1,0 +1,6 @@
+# probe sonda_8bdc2ae.py at 8bdc2ae (8bdc2ae Protocol v5, package B4: self-test record of the audit checks on the v5 protocol file), extra files {}
+# /home/eh/projects/hyptcn3/.venv/bin/python -B /home/eh/hyptcn3-logs/v5/dokazy/B10/pred_po/sondy/sonda_8bdc2ae.py /tmp/claude-1000/-home-eh-projects-hyptcn3/9a8a89c1-0c71-4e83-9fec-bd4ea2021d22/scratchpad/b10/c/lab/hyptcn-lab@.service
+# 2026-11-24T17:27:57Z
+{"Restart": "on-failure", "RestartSec": "3", "StartLimitBurst": "absent (default 5)", "StartLimitIntervalSec": "absent (default 10)", "ends_in_state_failed": false, "input": "the unit file of 8bdc2ae", "probe": "a unit that fails at once, restarted for one hour (LAB-02)", "row": 9, "starts_in_one_hour": 1201}
+{"Restart": "on-failure", "RestartSec": "3", "StartLimitBurst": "5", "StartLimitIntervalSec": "60", "ends_in_state_failed": true, "input": "today's unit file", "probe": "a unit that fails at once, restarted for one hour (LAB-02)", "row": 9, "starts_in_one_hour": 5}
+exit 0

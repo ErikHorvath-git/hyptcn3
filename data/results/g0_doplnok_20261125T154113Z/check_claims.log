@@ -1,0 +1,14 @@
+# commit d1fac503eaba3b1ae2672e853a882993978982ac
+# date 2026-11-25T15:41:13Z
+# host debian
+# git status --porcelain (only the evidence directories, when clean):
+#   ?? data/results/g0_20261125T144750Z/
+#   ?? data/results/g0_doplnok_20261125T154113Z/
+# command nice -n 19 bash scripts/check_claims.sh
+check_claims.sh: uplatnene vynimky (pole EXEMPT, pozri HONESTY.md kap. 3):
+  vmicollect/README.md: 1043.2 - vymysleny priklad JSON sidecaru v dokumentacii zo starsej vetvy (HONESTY kap. 3), nie meranie
+  vmicollect/README.md: 2,8 TB - ilustracny radovy odhad v dokumentacii zo starsej vetvy (HONESTY kap. 3), nie meranie; nahradit nameranym objemom
+  vmicollect/src/retention.c: 2.8 TB - ten isty radovy odhad v hlavicke zdrojaku zo starsej vetvy (HONESTY kap. 3)
+  vmicollect/src/writer_delta.c: 2.8 TB - ten isty radovy odhad v hlavicke zdrojaku zo starsej vetvy (HONESTY kap. 3)
+check_claims.sh: ciste (272 suborov)
+exit 0

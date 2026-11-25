@@ -1,0 +1,54 @@
+# probe test_sonda_ac95f01.py at ac95f01 (ac95f01 Protocol v5, package B7c: self-test record of the audit checks), extra files {}
+# /home/eh/projects/hyptcn3/.venv/bin/python -B -m pytest -q -p no:cacheprovider -rfE --basetemp <scratch>/sonda_tmp/ac95f01 -s scripts/tests/test_sonda_ac95f01.py
+# 2026-11-24T17:28:17Z
+{"updated_at": "2026-11-24T17:28:11.711688+00:00", "status": "running", "stage": "preflight", "message": null}
+{"updated_at": "2026-11-24T17:28:11.712111+00:00", "status": "running", "stage": "session-preflight", "session": "test-campaign_00", "message": null}
+{"updated_at": "2026-11-24T17:28:11.712650+00:00", "status": "running", "stage": "reboot", "session": "test-campaign_00", "message": null}
+{"updated_at": "2026-11-24T17:28:11.713333+00:00", "status": "running", "stage": "capture", "session": "test-campaign_00", "message": null}
+{"updated_at": "2026-11-24T17:28:11.714469+00:00", "status": "running", "stage": "audit", "session": "test-campaign_00", "message": null}
+{"updated_at": "2026-11-24T17:28:11.715597+00:00", "status": "running", "stage": "archive", "session": "test-campaign_00", "message": null}
+{"updated_at": "2026-11-24T17:28:11.720286+00:00", "status": "running", "stage": "session-complete", "session": "test-campaign_00", "message": null}
+{"updated_at": "2026-11-24T17:28:11.720682+00:00", "status": "running", "stage": "session-preflight", "session": "test-campaign_01", "message": null}
+{"updated_at": "2026-11-24T17:28:11.721130+00:00", "status": "running", "stage": "capture", "session": "test-campaign_01", "message": null}
+{"updated_at": "2026-11-24T17:28:11.722181+00:00", "status": "running", "stage": "audit", "session": "test-campaign_01", "message": null}
+{"updated_at": "2026-11-24T17:28:11.723287+00:00", "status": "running", "stage": "archive", "session": "test-campaign_01", "message": null}
+{"updated_at": "2026-11-24T17:28:11.728149+00:00", "status": "running", "stage": "session-complete", "session": "test-campaign_01", "message": null}
+{"updated_at": "2026-11-24T17:28:11.728552+00:00", "status": "running", "stage": "session-preflight", "session": "test-campaign_02", "message": null}
+{"updated_at": "2026-11-24T17:28:11.729062+00:00", "status": "running", "stage": "reboot", "session": "test-campaign_02", "message": null}
+{"updated_at": "2026-11-24T17:28:11.729874+00:00", "status": "running", "stage": "capture", "session": "test-campaign_02", "message": null}
+{"updated_at": "2026-11-24T17:28:11.730934+00:00", "status": "running", "stage": "audit", "session": "test-campaign_02", "message": null}
+{"updated_at": "2026-11-24T17:28:11.731998+00:00", "status": "running", "stage": "archive", "session": "test-campaign_02", "message": null}
+{"updated_at": "2026-11-24T17:28:11.736505+00:00", "status": "running", "stage": "session-complete", "session": "test-campaign_02", "message": null}
+{"updated_at": "2026-11-24T17:28:11.736882+00:00", "status": "running", "stage": "session-preflight", "session": "test-campaign_03", "message": null}
+{"updated_at": "2026-11-24T17:28:11.737369+00:00", "status": "running", "stage": "capture", "session": "test-campaign_03", "message": null}
+{"updated_at": "2026-11-24T17:28:11.738360+00:00", "status": "running", "stage": "audit", "session": "test-campaign_03", "message": null}
+{"updated_at": "2026-11-24T17:28:11.739422+00:00", "status": "running", "stage": "archive", "session": "test-campaign_03", "message": null}
+{"updated_at": "2026-11-24T17:28:11.743887+00:00", "status": "running", "stage": "session-complete", "session": "test-campaign_03", "message": null}
+{"updated_at": "2026-11-24T17:28:11.744271+00:00", "status": "running", "stage": "session-preflight", "session": "test-campaign_04", "message": null}
+{"updated_at": "2026-11-24T17:28:11.744765+00:00", "status": "running", "stage": "reboot", "session": "test-campaign_04", "message": null}
+{"updated_at": "2026-11-24T17:28:11.745669+00:00", "status": "running", "stage": "capture", "session": "test-campaign_04", "message": null}
+{"updated_at": "2026-11-24T17:28:11.746673+00:00", "status": "running", "stage": "audit", "session": "test-campaign_04", "message": null}
+{"updated_at": "2026-11-24T17:28:11.747744+00:00", "status": "running", "stage": "archive", "session": "test-campaign_04", "message": null}
+{"updated_at": "2026-11-24T17:28:11.752219+00:00", "status": "running", "stage": "session-complete", "session": "test-campaign_04", "message": null}
+{"updated_at": "2026-11-24T17:28:11.752598+00:00", "status": "running", "stage": "session-preflight", "session": "test-campaign_05", "message": null}
+{"updated_at": "2026-11-24T17:28:11.753032+00:00", "status": "running", "stage": "capture", "session": "test-campaign_05", "message": null}
+{"updated_at": "2026-11-24T17:28:11.754267+00:00", "status": "running", "stage": "audit", "session": "test-campaign_05", "message": null}
+{"updated_at": "2026-11-24T17:28:11.755323+00:00", "status": "running", "stage": "archive", "session": "test-campaign_05", "message": null}
+{"updated_at": "2026-11-24T17:28:11.759810+00:00", "status": "running", "stage": "session-complete", "session": "test-campaign_05", "message": null}
+{"updated_at": "2026-11-24T17:28:11.760191+00:00", "status": "running", "stage": "session-preflight", "session": "test-campaign_06", "message": null}
+{"updated_at": "2026-11-24T17:28:11.760687+00:00", "status": "running", "stage": "reboot", "session": "test-campaign_06", "message": null}
+{"updated_at": "2026-11-24T17:28:11.761740+00:00", "status": "running", "stage": "capture", "session": "test-campaign_06", "message": null}
+{"updated_at": "2026-11-24T17:28:11.762741+00:00", "status": "running", "stage": "audit", "session": "test-campaign_06", "message": null}
+{"updated_at": "2026-11-24T17:28:11.763807+00:00", "status": "running", "stage": "archive", "session": "test-campaign_06", "message": null}
+{"updated_at": "2026-11-24T17:28:11.768430+00:00", "status": "running", "stage": "session-complete", "session": "test-campaign_06", "message": null}
+{"updated_at": "2026-11-24T17:28:11.768812+00:00", "status": "running", "stage": "session-preflight", "session": "test-campaign_07", "message": null}
+{"updated_at": "2026-11-24T17:28:11.769254+00:00", "status": "running", "stage": "capture", "session": "test-campaign_07", "message": null}
+{"updated_at": "2026-11-24T17:28:11.770243+00:00", "status": "running", "stage": "audit", "session": "test-campaign_07", "message": null}
+{"updated_at": "2026-11-24T17:28:11.771302+00:00", "status": "running", "stage": "archive", "session": "test-campaign_07", "message": null}
+{"updated_at": "2026-11-24T17:28:11.775791+00:00", "status": "running", "stage": "session-complete", "session": "test-campaign_07", "message": null}
+{"updated_at": "2026-11-24T17:28:11.776139+00:00", "status": "complete", "stage": "complete", "session": "test-campaign_07", "message": null}
+{"corpus_indexes_built": [], "execute": 0, "probe": "the campaign fixture of scripts/tests/test_campaign.py (process R11)", "row": 18, "status": "complete"}
+.{"corpus": {"complete": false, "diagnostic": true}, "exit": 0, "groups": ["calibration-1", "dev-1", "test_benign-1", "train-1"], "probe": "python3 -m safeguard smoke, the verifier's own run (process R11)", "report": {"diagnostic": true, "input_errors": 0, "ok": true, "rows": 96, "scored": 80, "states": ["monitoring", "warming_up"]}, "row": 18}
+.
+2 passed in 5.54s
+exit 0

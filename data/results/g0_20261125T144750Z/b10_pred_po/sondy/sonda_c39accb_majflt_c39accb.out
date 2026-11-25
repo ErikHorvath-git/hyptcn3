@@ -1,0 +1,6 @@
+# probe sonda_c39accb_majflt.py at c39accb (c39accb Handbook: state date after package B2), extra files {}
+# /home/eh/projects/hyptcn3/.venv/bin/python -B /home/eh/hyptcn3-logs/v5/dokazy/B10/pred_po/sondy/sonda_c39accb_majflt.py <scratch>/sonda_tmp/c39accb
+# 2026-11-24T17:27:55Z
+{"accepted": true, "code": 0, "input": "none; 0 of 96 sidecars hold capture.rusage", "probe": "clean session of family S3 (control of the probe of major faults)", "reasons": [], "row": "-"}
+{"accepted": true, "code": 0, "input": "capture.rusage.majflt = 500 in each of the 96 sidecars", "probe": "500 collector major faults per cycle (capture R4)", "reasons": [], "row": 5}
+exit 0

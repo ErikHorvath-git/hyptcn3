@@ -1,0 +1,7 @@
+# probe test_sonda_f99b924.py at f99b924 (f99b924 Protocol v5, package B6a: self-test record of the audit checks), extra files {}
+# /home/eh/projects/hyptcn3/.venv/bin/python -B -m pytest -q -p no:cacheprovider -rfE --basetemp <scratch>/sonda_tmp/f99b924 -s tcn/tests/test_sonda_f99b924.py
+# 2026-11-24T17:28:03Z
+{"analysis_fpr": 0.01, "bundle_diagnostic": false, "calibration_fpr_design": 0.1, "command": "safeguard train --epochs 1 --batch-size 64 --fpr 0.1 (no --diagnostic)", "errors": "", "exit": 0, "probe": "a parameter of the analysis from the command line (model M9, evaluation R8)", "row": 12, "schema": "hyptcn3/collection-protocol/3"}
+.
+1 passed in 3.92s
+exit 0

@@ -1,0 +1,62 @@
+{
+ "schema": "hyptcn3/g0-copy/1",
+ "commit": "d1fac503eaba3b1ae2672e853a882993978982ac",
+ "date": "2026-11-25T16:42:40+00:00",
+ "host": "debian",
+ "guest": "none: the answer of the independent verifier of the G0 record",
+ "command": "dokazy/G0/overenie.py /home/eh/hyptcn3-logs/v5/dokazy/G0/overenie2/vysledok.json /home/eh/hyptcn3-logs/v5/dokazy/G0/overenie2.json data/results/overenie_G0_20261125T164240Z.json",
+ "n": 7,
+ "source": "/home/eh/hyptcn3-logs/v5/dokazy/G0/overenie2/vysledok.json",
+ "source_sha256": "29caa2f8eca38ca1dbc7c1fa613fee6288510d781d4019b60bdb857963898ee5",
+ "values": {
+  "model": "claude-opus-5-5",
+  "verdicts": {
+   "tests": "confirmed",
+   "protocol_selfcheck": "confirmed",
+   "audit_selftest": "confirmed",
+   "corpus_to_training": "confirmed",
+   "analysis_plan_bound": "confirmed",
+   "test_sealed": "confirmed",
+   "audit_probes_reproduced": "confirmed"
+  },
+  "findings": [
+   {
+    "criterion": "audit_selftest",
+    "severity": "should_fix",
+    "summary": "B12's window differs from the one the lead's answer to Q67 names. The lead wrote 'štart až stop + tail_s'. The code admits a restart from host start - 1 s to host stop done + event_grace_s, which is events.grace_s, 60 s. events.tail_s is 360 s. The proposal's table states this window and cites 'zmena vedúceho 2026-11-24, odpoveď na otázku Q67'. The reading is stricter than the lead's words, and it is the window every other event check uses. The docstring of collection_logs.py calls it a reading. It lets nothing extra through, and the by-design restarts of the lab trials all lie inside it. But the proposal presents the executor's reading as the lead's decision.",
+    "evidence": "scripts/collection_logs.py docstring: 'the lead's \"start to stop + tail_s\" names its tail, which is event_grace_s ... not the protocol's events.tail_s'. config/collection-v5.json events: grace_s 60, tail_s 360. OTAZKY_VEDUCEMU.md:1094: 'štart až stop + `tail_s`'. docs/NAVRH_PROTOKOL_V5.sk.md:366: 'okno udalosti (štart − 1 s až stop + `events.grace_s`) ... (zmena vedúceho 2026-11-24, odpoveď na otázku Q67)'. ov_praca/skripty/skutocne.py runs B12's journal pass over the 4 long lab-trial journals (dokazy/skuska_labu/behy/08, 15, 16, 17) with their events.json and a grace of 60 s. It admits catalog 33 and 32 lines (zla_konfiguracia_sluzby) and 6 units with 5 to 6 lines each (restart_databazy, twice). Outside: {}. Untimed: {}.",
+    "suggested_fix": "Mark the window in the row at NAVRH 6.2 as the executor's reading of Q67 (grace_s, not tail_s), or ask the lead in OTAZKY_VEDUCEMU.md. Keep the stricter window. No code change."
+   },
+   {
+    "criterion": "test_sealed",
+    "severity": "should_fix",
+    "summary": "tcn.eval far and udalosti still bind a replay by its bytes alone. In the addendum to his answer to Q31, the lead named 'kontrola(sha256=...) bez cesty' as a gap the content binding must close. tcn/eval.py _pecat_prehratia calls pecat.kontrola(sha256=archive_sha256) only. The replay's configuration.json, as safeguard replay --archive writes it, also names the archive's path ('archive'). So a replay of a re-extraction of a sealed session gets not_sealed there, while the same archive is refused by its content once its path is given. SEALED_RULE and GUARD_RULE state this choice, so the code matches its rule. What B7c guaranteed still holds: the bytes binding is unchanged and checked first, the replay guards bind by the path all three ways, and tcn.eval refuses a sealed role of a campaign index outside the final command (_rola_v5). This is the one sha256-only caller that has the path and does not pass it.",
+    "evidence": "ov_praca/sondy/test_sonda_pecat.py uses the fixtures of tcn/tests/test_pecat.py, with the ledger in tmp and KNIHA and ZAZNAM patched. test_s2: a re-extraction of tb-1 outside any session directory, and a replay directory whose configuration.json names {archive: its path, archive_sha256: f3e04f474fe5...}. tcn.eval._pecat_prehratia(dir, 'test_benign', 'far') gives allowed not_sealed, sealed False. pecat.kontrola(sha256=f3e04f47..., paths=[path]) raises Zapecatene: 'is sealed by its content'. test_s1: a byte copy of the sealed tb-1 in the directory of the unsealed session tr-1 is refused by its bytes. 2 passed.",
+    "suggested_fix": "In tcn/eval.py _pecat_prehratia, also pass paths=[konf['archive']] when it is a string. This is in tcn/, outside the measurement code, so G0 stays valid. Add the probe as a test, or tell the lead that this caller stays bound by bytes."
+   }
+  ],
+  "checked": [
+   "Provenance. All 14 logs of g0_20261125T144750Z and b10_pred_po/MANIFEST.log carry '# commit 3372df0'. Their git status --porcelain lists only that directory. Each ends in exit 0, except check_claims.log (exit 1), which no criterion names. The supplement's check_claims.log names d1fac50, lists only the two evidence directories, and ends in exit 0. Times: 06f421a was committed 14:43:22Z. The self-test record is dated 14:47:33Z (250.5 s). 3372df0 was committed 14:47:41Z. The evidence ran 14:47:50Z to 15:39:03Z. d1fac50 was committed 15:40:57Z. The supplement ran 15:41:13Z to about 16:04Z. The main repository's HEAD is d1fac50, and its tree is clean apart from the two evidence directories.",
+   "Diff. git diff 3372df0 d1fac50 changes only the date line of docs/PRIRUCKA.md. The measurement files changed since 35b3dc4 (collection.is_measurement) are scripts/collection_logs.py and scripts/protocol_v5.py, both in 06f421a. G2p (e1f323b) changed no measurement file, only the case file test_collection_logs.py. scripts/gates.py is unchanged.",
+   "Hashes in my tree (d1fac50). stage_binding at G0: 9165995c..., the first record's value (the protocol file is unchanged; its file sha is 8fe3eea1..., as in the selfcheck logs). measurement_sha256: 645bbf38..., equal to the self-test record and to measurement_sources() of the main repository (120 files, none differ). harness_sha256: 569d6d32..., as in the first record. cases_sha256: 60a44d32.... require_selftest accepts audit_selftest_20261125T144733Z.json (commit 06f421a, 239 cases, passed, clean session code 0, the new case logs:service_restarted_outside_event passed). gates.status refuses the first G0 record only for 'measurement code changed since the record'.",
+   "The record as written. gates.write_record G0 into a scratch results directory, with kriteria2.json and 7 confirmed verdicts on d1fac50: passed, problems [], protocol 9165995c..., measurement 645bbf38.... kriteria2.json lists exactly CRITERIA['G0'], each passed, and every named path exists. check_claims.sh --json-hlavicky with VMIC_RESULTS_DIR=/home/eh/projects/hyptcn3/data/results is clean, including the 3 wrapped JSON copies. The copies match their sources: MANIFEST.log, and source_sha256 recomputed. The evidence's g0_dokazy.sh and g0_doplnok.sh equal dokazy/G0/g0_dokazy2.sh and g0_doplnok2.sh.",
+   "tests. pytest.log on 3372df0: 5866 passed, 41 skipped (the same 41 skip reasons as in the first record), exit 0. check_claims on d1fac50 is clean, and its check F runs the whole suite: gen_prirucka.py pocet_testov runs python -m pytest -q, fails on a non-zero exit, and its regenerated handbook (5866 passed, 41 skipped) equals the committed one. The run took about 23 min. Writing the record on d1fac50 is sound: its measurement code and protocol are those of 06f421a and 3372df0.",
+   "B12 by code reading. events() appends windows and types together. guest() runs before correlation(). The keys of a unit that a type of the session restarts are judged in the journal pass. A line of that unit outside every window of a type that restarts it gives service_restarted_outside_event:<unit>. An unreadable time, or changed keys without a Started line, gives service_restarted:<unit>. Each (window, unit) counts one tolerance. A session without events is judged as before.",
+   "B12 probes (ov_praca/sondy/test_sonda_b12.py on the fixture of test_collection_logs.py). A loop of orders at 1.55, 1.65 and 1.75 s, past the window .45 to 1.7 s, is refused by name. A restart straddling the window's end is refused. orders restarting inside the window of a second occurrence of zamok_tabulky or zla_konfiguracia_sluzby is refused by name, and both sessions are accepted without that restart. restart_databazy with postgres, catalog and orders restarting inside its window is accepted, with event_unit_restarts 3 and one row for the window. catalog restarting again outside it is refused. worker with changed keys and only a 'Scheduled restart job' line gives service_restarted. A stamp without a timezone, or '@epoch', gives service_restarted. Times with a +01:00 offset are placed by their offset.",
+   "Journal forms. In the 4 long lab-trial journals, UNIT_LINE reads every systemd[1] line that names a REQUIRED_UNITS unit (catalog 79, each other app 10, postgres 12). The only exceptions are 4 'Configuration file ... is marked' lines, which are not restarts. The guest writes '+0000' offsets, and fromisoformat reads them. Not read: job lines that give only the description, and lines not in journalctl's short-iso-precise form ('date time host'). Neither can hide a real restart, because systemd also writes '<unit>.service:' lines at every stop.",
+   "Journal coverage. The segment starts --since created_unix, which is before state_before. It ends --until at the cut after the capture, a few seconds before state_after.",
+   "D [11]. ov_praca/skripty/d11.py on config/collection-v5.json, in both modes: replacement() raises OutsideDeck 'no replacement of v5-test_controls-1#0: role test_controls has events'. full_snapshot_guard, times and streams name it, and events gives 'role test_controls has events'. In selfcheck_errors.log, 112 passed, controls_session_with_an_event among them.",
+   "Probe table. reason_problems is [] on my tree. Rows, befores and the 57 ids equal ids.json from B10's merged tree. scripts/tests/test_audit_probes.py: 51 passed, with the 57 table tests in 63.1 s. The only table test in a non-case file that B12 changed ([null] of test_collector_warning_is_judged_by_the_allowed_patterns) uses the fixture without events, and its run before the fix failed by an assertion.",
+   "Seal (G2p2). The bytes binding is checked first. Any binding to a campaign archive outside the open run refuses. The snapshot guard still refuses an unreadable session.json by name. IDENTITY_RULE, spotrebuj and tcn/finalne.py are unchanged. The tracked ledger equals RULES and holds no archives and no runs.",
+   "Tests run by name on my tree (nice -n 19, basetemp in scratch, deleted after each run). 13 files for B12, D [11] and the seal: 791 passed. test_audit_probes.py: 51 passed. test_audit_selftest.py without the full case list but with every event and restart case: 79 passed. The 5 changed G2p and H1a files: 222 passed. test_finalne.py and test_odovzdanie_korpusu.py: 95 passed. My tree stayed clean."
+  ],
+  "unverified": [
+   "I did not run the whole suite, the full self-test or tcn/tests/test_prijatie_session.py, because of the G2 saturation series. For those I rely on pytest.log on 3372df0, the supplement's check_claims on d1fac50, and the self-test record that require_selftest accepts.",
+   "The 41 skipped tests ran nowhere.",
+   "I did not repeat B10's runs before each fix with today's test files. pred_po.py copies them into the old commits, and B12 changed three of them. The rows, befores and ids are unchanged.",
+   "As in the first verification, the 4 ids of row 4's later fix (f0506e8, B3 S1) never ran on f0506e8^. pred_later.json holds 1 id.",
+   "Whether the guest's systemd in the G2 sessions writes the same line forms. I infer it from the 4 long lab-trial journals.",
+   "The evidence directories are still untracked. The record's commit must hold them, as the first record's did. I did not check whether the heavy evidence runs overlapped a saturation row, which is a G2 matter."
+  ]
+ }
+}
