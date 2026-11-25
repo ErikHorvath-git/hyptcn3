@@ -49,6 +49,7 @@ import shlex
 import signal
 import subprocess
 import sys
+import threading
 import time
 from types import SimpleNamespace
 
@@ -60,6 +61,16 @@ RESULT_SCHEMA = "hyptcn3/lab-trial-run/1"
 RECORD_SCHEMA = "hyptcn3/lab-trial/1"
 PERIODS_SCHEMA = "hyptcn3/lab-trial-periods/1"
 STAGE = "skuska"  # Proposal 11.1: the stage of every record.
+# controls.baseline (proposal 7.4, skeleton B8 section 3, controls.note of the protocol): for processes and
+# MemAvailable_kb the band [low, high] of their change since the start of the session, the 1st to the 99th percentile
+# in a long lab trial without events. long --levels-every samples labctl levels during the run (the first sample before
+# the traffic starts, a last one after it ends); record pools the changes of every long run that sampled them and
+# proposes the band (numpy percentile, method linear). The quantities are those of lab/guest_state.py LEVEL_PARTS.
+LEVELS_LOG = "levels.jsonl"
+LEVEL_PARTS = {"processes": ("processes",), "MemAvailable_kb": ("meminfo_kb", "MemAvailable")}
+BASELINE_RULE = ("controls.note: the band [low, high] of the change of processes and of MemAvailable_kb since the start "
+                 "of the session, the 1st to the 99th percentile in a long lab trial without events; the changes of "
+                 "every long run of the record that sampled labctl levels (long --levels-every), pooled")
 # The lead's answer to Q64 (2026-11-24): the saturation series runs per VM and profile, one VM at a time, and one rate
 # holds for both VMs, so a profile's rate comes from the smaller served rate.
 SATURATION_COMBINE_RULE = ("Q64: the series of each VM and profile; a profile's proposed rate is that of the VM with "
@@ -1028,6 +1039,69 @@ def autovacuum_problems(found):
             f"[{found['bounds_s'][0]:g}, {found['bounds_s'][1]:g}] s (the lead's answer to Q9)"]
 
 
+class LevelSampler:
+    """labctl levels every `every_s` seconds while the traffic of a long run runs (BASELINE_RULE): one JSON line per
+    sample in the run's levels.jsonl, the first before the traffic starts and a last one after it ends. A sample that
+    fails is counted in errors, never invented."""
+
+    def __init__(self, pv, path, every_s):
+        self.pv, self.path, self.every_s, self.errors = pv, path, every_s, []
+        self.done = threading.Event()
+        self.thread = threading.Thread(target=self.loop, daemon=True)
+
+    def sample(self):
+        try:
+            doc = collection.lab_json(self.pv, "levels")
+        except (OSError, ValueError, subprocess.SubprocessError) as error:
+            self.errors.append(failure(error))
+            return
+        with self.path.open("a", encoding="utf-8") as stream:
+            stream.write(json.dumps(doc, sort_keys=True) + "\n")
+
+    def loop(self):
+        while not self.done.wait(self.every_s):
+            self.sample()
+
+    def start(self):
+        self.sample()
+        self.thread.start()
+
+    def stop(self):
+        self.done.set()
+        self.thread.join()
+        self.sample()
+
+
+def level_value(doc, path):
+    for key in path:
+        doc = doc.get(key) if type(doc) is dict else None
+    return doc if type(doc) in (int, float) and math.isfinite(doc) else None
+
+
+def level_changes(path):
+    """{quantity: [its change since the first sample, one per later sample]} of a run's levels.jsonl, or None when the
+    run sampled no levels; a sample without the quantity is left out of that quantity's changes."""
+    if not path.exists():
+        return None
+    samples = [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line.strip()]
+    if len(samples) < 2:
+        return {name: [] for name in LEVEL_PARTS}
+    out = {}
+    for name, keys in LEVEL_PARTS.items():
+        first = level_value(samples[0], keys)
+        out[name] = [] if first is None else [value - first for value in (level_value(s, keys) for s in samples[1:])
+                                              if value is not None]
+    return out
+
+
+def band(values):
+    """[1st, 99th percentile] (numpy, method linear) of `values`, None when there is none."""
+    if not values:
+        return None
+    import numpy
+    return [float(numpy.percentile(values, 1, method="linear")), float(numpy.percentile(values, 99, method="linear"))]
+
+
 def long_run(a, argv):
     raw, p = load(a.protocol)
     pv = for_vm(p, a.vm)
@@ -1057,10 +1131,20 @@ def long_run(a, argv):
                 debug1_on(pv, debug1)
             result["pre_segment"] = collection.lab_json(pv, "segment", "--label", out.name + "-pre", "--dest", guest)
             since = time.time()
+            sampler = LevelSampler(pv, out / LEVELS_LOG, a.levels_every) if a.levels_every else None
+            if sampler is not None:
+                sampler.start()
             try:
                 result["run"] = traffic_run(pv, out, t, DRAIN_S, runner)
             finally:
                 runner.close(out / "events.json")
+                if sampler is not None:
+                    sampler.stop()
+                    changes = level_changes(out / LEVELS_LOG) or {name: [] for name in LEVEL_PARTS}
+                    result["levels"] = {"every_s": a.levels_every, "file": LEVELS_LOG, "errors": sampler.errors,
+                                        "samples": sum(1 for _ in (out / LEVELS_LOG).open()) if (
+                                            out / LEVELS_LOG).exists() else 0,
+                                        "band": {name: band(values) for name, values in changes.items()}}
         finally:
             if debug1 is not None:  # Also when the set step or the run failed: back to what was there before.
                 debug1_off(pv, debug1)
@@ -1090,6 +1174,10 @@ def long_problems(r):
     if debug1 is not None:
         out += [f"PostgreSQL debug1 logging (--postgres-debug1): {problem}" for problem in debug1_problems(debug1)]
     out += autovacuum_problems(r.get("autovacuum_property"))
+    levels = r.get("levels")
+    if levels is not None and (levels["errors"] or levels["samples"] < 2):
+        out.append(f"labctl levels: {levels['samples']} samples, {len(levels['errors'])} failed"
+                   + (f", the first: {levels['errors'][0]}" if levels["errors"] else ""))
     for e in r.get("events", []):
         if e["executed"] is not True or e["effect_ok"] is not True:
             out.append(f"event {e['type']} at {e['start_s']:g} s: executed {e['executed']}, effect ok {e['effect_ok']}")
@@ -1289,6 +1377,26 @@ def proposed_max_concurrent(p, longs, problems):
     return out
 
 
+def proposed_baseline(longs, problems):
+    """BASELINE_RULE over the long runs `longs` ([(dir, result)]) that sampled levels: the pooled band of each quantity,
+    the runs it came from and the count of changes; a run of the record with events is left out by name (the rule
+    wants a trial without events)."""
+    pooled, used = {name: [] for name in LEVEL_PARTS}, []
+    for d, doc in longs:
+        changes = level_changes(d / LEVELS_LOG)
+        if changes is None:
+            continue
+        if doc.get("events_planned"):
+            problems.append(f"{d.name}: a long run with events sampled levels; its changes are left out of the "
+                            "proposed controls.baseline (BASELINE_RULE: a trial without events)")
+            continue
+        used.append(d.name)
+        for name in LEVEL_PARTS:
+            pooled[name] += changes[name]
+    return {"rule": BASELINE_RULE, "runs": used, "changes": {name: len(v) for name, v in pooled.items()},
+            "band": {name: band(values) for name, values in pooled.items()}}
+
+
 def read_result(d):
     try:
         doc = json.loads((Path(d) / "result.json").read_text())
@@ -1420,7 +1528,8 @@ def record(a, argv):
            "command": shlex.join(["scripts/lab_trial.py", *map(str, argv)]), "n": len(runs),
            "protocol": runs[0][1]["protocol"], "protocol_sha256": protocols[0],
            "values": {"runs": [{"dir": str(d), **doc} for d, doc in runs], "saturation": saturation,
-                      "proposed_rate": proposed, "proposed_max_concurrent": caps, "periods": pooled,
+                      "proposed_rate": proposed, "proposed_max_concurrent": caps,
+                      "proposed_baseline": proposed_baseline(steps["long"], problems), "periods": pooled,
                       "autovacuum_property": autovacuum, "judgment": judgment(), "lead": lead()},
            "problems": problems, "note": NOTE}
     write(target, doc)
@@ -1466,6 +1575,9 @@ def main(argv=None):
         q.add_argument("--minutes", type=float, required=True, help="the measured part, after the protocol's warmup")
         if name == "long":
             q.add_argument("--events", type=int, required=True, help="events of the run, a count of events.per_session")
+            q.add_argument("--levels-every", type=float, default=None,
+                           help="seconds between samples of labctl levels during the run (BASELINE_RULE: the band "
+                                "of controls.baseline); none when absent")
             q.add_argument("--postgres-debug1", action="store_true",
                            help="PostgreSQL in the guest logs at debug1 into the journal for this run only, so the "
                                 "worker starts of autovacuum are measured; reset after it (DEBUG1_RULE, recorded)")

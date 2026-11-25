@@ -131,6 +131,9 @@ def env(tmp_path, monkeypatch):
     def lab_json(p, *args, timeout=600):
         args = [str(x) for x in args]
         calls.append(args)
+        if args[0] == "levels":  # long --levels-every: the processes grow by 1 and MemAvailable falls by 100 kB a call
+            n = sum(c[0] == "levels" for c in calls)
+            return {"schema": "hyptcn3/guest-levels/1", "processes": 100 + n, "meminfo_kb": {"MemAvailable": 10 ** 6 - 100 * n}}
         if args[0] == "event":
             action, kind = args[2], args[3]
             if action == "start":
@@ -1027,3 +1030,32 @@ def test_a_record_of_both_vms_keeps_the_guest_and_the_saturation_of_each_vm(env,
     assert "no saturation run of profile corp on VM b: the rate needs a series on every VM" in doc["problems"]
     assert "no deploy run on VM a" not in doc["problems"] and "no deploy run" not in doc["problems"]
     assert "no long run of scenario eshop_high on VM b" in doc["problems"]
+
+
+# ------------------------------------------------------------------ stage G2: the levels of a long run, controls.baseline
+
+
+def test_long_samples_the_levels_and_record_proposes_the_band_of_controls_baseline(env):
+    """BASELINE_RULE (controls.note): long --levels-every samples labctl levels during the run, the first before the
+    traffic starts; record pools the changes since the first sample of every long run without events and proposes the
+    1st to the 99th percentile (numpy, linear) of each quantity."""
+    import numpy
+    from scripts import lab_trial
+    synthetic(env, "long-eshop_low", "eshop_low")
+    out = env.runs / "long-eshop_low"
+    assert run("long", "--protocol", V5, "--vm", "a", "--scenario", "eshop_low", "--rate", "1.5", "--minutes", "60",
+               "--events", "0", "--levels-every", "0.01", "--out", out) == 0
+    r = result(out)
+    samples = [json.loads(line) for line in (out / lab_trial.LEVELS_LOG).read_text().splitlines()]
+    assert len(samples) >= 2 and r["levels"]["samples"] == len(samples) and r["levels"]["errors"] == []
+    processes = [s["processes"] - samples[0]["processes"] for s in samples[1:]]
+    memory = [s["meminfo_kb"]["MemAvailable"] - samples[0]["meminfo_kb"]["MemAvailable"] for s in samples[1:]]
+    expected = {"processes": [float(numpy.percentile(processes, q, method="linear")) for q in (1, 99)],
+                "MemAvailable_kb": [float(numpy.percentile(memory, q, method="linear")) for q in (1, 99)]}
+    assert r["levels"]["band"] == expected
+    target = env.tmp / "results/skuska_labu_20261125T150000Z.json"
+    target.parent.mkdir()
+    assert run("record", "--out-record", target, out) == 0
+    baseline = json.loads(target.read_text())["values"]["proposed_baseline"]
+    assert (baseline["runs"], baseline["band"]) == (["long-eshop_low"], expected)
+    assert baseline["changes"] == {"processes": len(processes), "MemAvailable_kb": len(memory)}
