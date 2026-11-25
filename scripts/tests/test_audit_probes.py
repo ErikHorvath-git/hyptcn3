@@ -69,6 +69,12 @@ DEFERRED = re.compile(rf"(?P<package>{PACKAGE}) {FINDING}|{FINDING} of (?P<of>{P
 ANSWER = re.compile(r"Q[1-9]\d*")
 
 
+def _part_of(package, skeleton):
+    """A package of a fix is the skeleton's package or a part of it (B5 -> B5a, B4 -> B4b), never a longer number (B1 is
+    not B11; N1b of dokazy/G2p/odlozene_G2p.md, C0 of G1)."""
+    return re.fullmatch(re.escape(skeleton) + r"[a-z]?", package) is not None
+
+
 def later_item(item):
     """The package of the item of a later fix when it is a deferred item, "" when it is the lead's answer, and None
     when it is neither (the forms of problems())."""
@@ -98,7 +104,10 @@ def problems(record, classes, rows, skeleton):
         "V2 of B11");
       - every question of the lead is a heading "## Q<number> (...)", Q1 to Q30, so the lead's answer is Q and its
         number, ANSWER: "Q29".
-    A bare id ("V1", "G1"), a package alone ("B10") or a word ("agent") is none of these. The package of a deferred
+    A bare id ("V1", "G1"), a package alone ("B10") or a word ("agent") is none of these. The brief of N1 named "V1"
+    among its examples; a bare id is refused all the same, because an id repeats across the lists, and a subject that
+    lists ids after one package ("B3 S1, S3, S4") records each of them only in a form that names its package (the
+    executor's judgment, G2 preparation; F3 of the G2p verification, C0 of G1). The package of a deferred
     item is the package of another fix of its row (the executor's judgment, G2 preparation: B10 makes the deferred
     fixes of the closed packages, design B10 decision 6, so a later fix completes what a package that fixed the row
     left for later; B5b F4 on row 4, a probe of N1, is of B5b, which fixed nothing of row 4). The lead's answer is of
@@ -126,8 +135,8 @@ def problems(record, classes, rows, skeleton):
             out.append(f"row {match[0].number} holds row {n} of the skeleton ({_name(risks)})")
         named = [entry[0] for entry in match[0].fixed]
         fixed = [package for package in named if package != table.LATER]  # A later fix of B10 stands beside them.
-        if not (all(any(p.startswith(s) for s in packages) for p in fixed)
-                and all(any(p.startswith(s) for p in fixed) for s in packages)):
+        if not (all(any(_part_of(p, s) for s in packages) for p in fixed)
+                and all(any(_part_of(p, s) for p in fixed) for s in packages)):
             out.append(f"row {match[0].number}: packages {', '.join(named)} are not the skeleton's "
                        f"{', '.join(packages)}")
     rows_of_skeleton = [set(risks) for risks, _ in skeleton]
@@ -259,12 +268,15 @@ def _version(git, sha, path):
 
 
 def _definitions(body, names):
-    """(first line, last line) of each function at the path names (its classes, then its name) among the statements
-    body; a definition runs from its first decorator to its last line."""
+    """(first line, last line) of the head of each function at the path names (its classes, then its name) among the
+    statements body: from its first decorator to the line before its body, so its decorators and its signature. A
+    commit is tied to a test by a line it adds there (it defines the test or its cases), not by a line inside an
+    existing function's body (F2 of the G2p verification, C0 of G1: a446043 added setup lines inside row 3's test)."""
     *classes, function = names
     for name in classes:
         body = [stmt for node in body if isinstance(node, ast.ClassDef) and node.name == name for stmt in node.body]
-    return [(min([node.lineno, *(decorator.lineno for decorator in node.decorator_list)]), node.end_lineno)
+    return [(min([node.lineno, *(decorator.lineno for decorator in node.decorator_list)]),
+             node.body[0].lineno - 1 if node.body and node.body[0].lineno > node.lineno else node.lineno)
             for node in body if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and node.name == function]
 
 
@@ -458,8 +470,11 @@ UNTIED = "adds no line of the row's test functions, case ids or reasons"
      []),
     (4, ("B10", "cdfebae", "G1"), [f"row 4: item 'G1' {NO_FORM}"],
      ["row 4: commit cdfebae changes none of the row's test files"]),
+    # F2 of the G2p verification: a446043 added setup lines inside row 3's existing test, which tied nothing.
+    (3, ("B10", "a446043", "Q29"), [], [f"row 3: commit a446043 {UNTIED}"]),
 ], ids=["row_5_names_the_fix_of_row_4", "row_5_names_the_merge_of_its_fix", "item_is_the_word_b10",
-        "item_is_the_word_agent", "row_4_names_another_item_of_its_commit", "row_4_names_the_injected_errors_of_g1"])
+        "item_is_the_word_agent", "row_4_names_another_item_of_its_commit", "row_4_names_the_injected_errors_of_g1",
+        "row_3_names_q29_by_lines_inside_its_test"])
 def test_each_wrong_later_fix_of_the_probe_is_refused_by_name(record, number, entry, by_problems, by_commits):
     """The six wrong later fixes of the verifier's probe of N1, which problems() and commit_problems() both passed at
     ecbc04a: D's fix of row 4 named on row 5, the merge 1044114 that carries agent Q's a446043, the items "B10" and
@@ -523,9 +538,9 @@ REASON = ("refused for a reason", "src/code.py:7")
 
 @pytest.mark.parametrize("tests, changed, added, expected", [
     ((TIE_FILE + "::test_one[three]",), [TIE_FILE], {TIE_FILE: {8: "@pytest..."}}, None),
-    ((TIE_FILE + "::test_p[locked_to_grid]",), [TIE_FILE], {TIE_FILE: {5: "    return doc"}}, None),
+    ((TIE_FILE + "::test_p[locked_to_grid]",), [TIE_FILE], {TIE_FILE: {4: "def locked_to_grid(doc):"}}, None),
     ((TIE_FILE + "::test_one[zero]",), [TIE_FILE], {TIE_FILE: {3: 'CASES = ["zero", "three"]'}}, None),
-    ((TIE_FILE + "::TestGroup::test_two",), [TIE_FILE], {TIE_FILE: {13: "        assert True"}}, None),
+    ((TIE_FILE + "::TestGroup::test_two",), [TIE_FILE], {TIE_FILE: {12: "    def test_two(self):"}}, None),
     ((TIE_FILE + "::test_one",), [TIE_FILE, "src/code.py"],
      {TIE_FILE: {2: "import pytest"}, "src/code.py": {7: '    raise ValueError("refused for a reason")'}}, None),
     ((TIE_FILE + "::test_one",), [TIE_FILE], {TIE_FILE: {2: "import pytest"}}, UNTIED),
@@ -536,9 +551,14 @@ REASON = ("refused for a reason", "src/code.py:7")
      {TIE_FILE: {2: "import pytest"}, "src/other.py": {7: '    raise ValueError("refused for a reason")'}}, UNTIED),
     ((TIE_FILE + "::test_one",), ["src/code.py"], {"src/code.py": {7: '    raise ValueError("refused for a reason")'}},
      "changes none of the row's test files"),
+    # F2 of the G2p verification (C0 of G1): a line inside the body of an existing test or case function ties nothing.
+    ((TIE_FILE + "::test_p[locked_to_grid]",), [TIE_FILE], {TIE_FILE: {5: "    return doc"}}, UNTIED),
+    ((TIE_FILE + "::test_one[three]",), [TIE_FILE], {TIE_FILE: {10: "    assert cap is not None"}}, UNTIED),
+    ((TIE_FILE + "::TestGroup::test_two",), [TIE_FILE], {TIE_FILE: {13: "        assert True"}}, UNTIED),
 ], ids=["decorator_of_its_test", "function_of_its_case", "table_of_its_case", "method_of_its_test_class",
         "line_of_its_reason", "other_line_of_its_test_file", "string_of_its_case_in_another_function",
-        "case_of_another_test_file", "reason_in_another_file", "reason_without_a_test_file"])
+        "case_of_another_test_file", "reason_in_another_file", "reason_without_a_test_file",
+        "body_of_its_case_function", "body_of_its_test", "body_of_its_method"])
 def test_a_later_fix_is_tied_to_its_row_by_a_line_its_commit_adds(tests, changed, added, expected):
     """Mutant killers of condition 3 of commit_problems(), on a synthetic row and commit (tie_problem() takes the
     changed paths, the added lines and the commit's version of the file, so no git runs). A line of the test's
@@ -608,3 +628,16 @@ def test_every_test_of_the_table_exists_and_passes(tmp_path, request):
     print(f"the {len(ids)} tests of the table ran in {seconds} s")
     passed = sorted(line[len("PASSED "):] for line in run.stdout.splitlines() if line.startswith("PASSED "))
     assert (run.returncode, passed) == (0, sorted(ids)), run.stdout[-5000:]
+
+
+def test_a_package_of_the_skeleton_covers_its_parts_and_no_longer_number(record):
+    """N1b (dokazy/G2p/odlozene_G2p.md, C0 of G1): the check of the packages matched by prefix, so B1 of the skeleton
+    covered B11 (row 13 with an entry of B11 passed); it now admits the package and its parts only."""
+    table = _table()
+    row = next(r for r in table.ROWS if r.number == 13)
+    rows = tuple(r._replace(fixed=r.fixed + (("B11", "966ff9b"),)) if r.number == 13 else r for r in table.ROWS)
+    named = ", ".join(entry[0] for entry in row.fixed + (("B11", "966ff9b"),))
+    assert f"row 13: packages {named} are not the skeleton's B1" in problems(record, table.CLASSES, rows,
+                                                                            table.SKELETON)
+    assert _part_of("B5a", "B5") and _part_of("B4b", "B4") and _part_of("B1", "B1")
+    assert not _part_of("B11", "B1") and not _part_of("B10", "B1") and not _part_of("B5ab", "B5")
