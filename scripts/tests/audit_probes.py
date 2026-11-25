@@ -43,8 +43,9 @@ A risk of class P sits in exactly one row, and so does every risk SKELETON names
 The test of the table is scripts/tests/test_audit_probes.py. The test ids and the line numbers are facts of the tree at
 the merge of B10: agent A wrote them at base 966ff9b; the merge moved the lines that agent C's and agent Q's commits
 shift, added agent D's tests of the numeric cap to row 4, and gave row 5 agent Q's test and reason of the
-collector's major faults (Q29); the fix round names those two fixes of B10 in `fixed` of rows 4 and 5. A merge that
-moves a line or renames a test changes this table with it.
+collector's major faults (Q29); the fix round names those two fixes of B10 in `fixed` of rows 4 and 5. The merge of
+C0 to C3 (G1 preparation) moved the lines of tcn/eval.py in rows 10 and 11 that the fix of its seal of a replay
+shifts. A merge that moves a line or renames a test changes this table with it.
 Only a table: no number here is a measurement.
 """
 from collections import namedtuple
@@ -282,7 +283,7 @@ ROWS = (
           "tcn/pecat.py:1245"),
          ("the seal of the corpus cannot be consumed on the ledger ", "tcn/finalne.py:518"),
          ("the final evaluation of stage final needs git and a committed tree of code: ", "tcn/finalne.py:684"),
-         ("sealed role {rola} (design B7c 1.1): only the final command evaluates it ", "tcn/eval.py:1795"),
+         ("sealed role {rola} (design B7c 1.1): only the final command evaluates it ", "tcn/eval.py:1801"),
          ("{purpose}: refused, {what} is sealed (sha256 {sha}; session {entry.get('session')} of role ",
           "tcn/pecat.py:814")),
         ("an index of protocol schema 1 or 2 keeps the mark beside the index (tcn/eval.py --final), so the record's "
@@ -292,7 +293,7 @@ ROWS = (
         ("tcn/tests/test_eval_v5.py::test_an_occurrence_is_evaluable_at_half_of_its_first_60_s_scored[7-False]",
          "tcn/tests/test_eval_v5.py::test_an_unscored_stretch_is_nevyhodnotene_in_the_output"),
         (("B7c", "576aa4b"),), "062178d", "status",
-        (("nevyhodnotené", "tcn/eval.py:960"),),
+        (("nevyhodnotené", "tcn/eval.py:966"),),
         ()),
     Row(12, (("model", "M9"), ("evaluation", "R8")),
         "a parameter of the analysis overridden from the command line (the record ran no probe)",
