@@ -3,14 +3,22 @@
 No test touches a VM, runs as root, trains a model, runs safeguard watch or replay for real, or writes outside
 tmp_path (checked after every test for data/results, data/diagnostics, data/collections and docs/MERANIA.md).
 """
+import contextlib
 import hashlib
 import inspect
-import time
+import io
+import json
 from pathlib import Path
+import shutil
+import threading
+import time
 
+import numpy as np
 import pytest
 
-from skuska import parita
+from scripts import collection, gates, protocol_v5
+from skuska import g2, parita
+from skuska.tests.test_g2 import FakeLab
 
 ROOT = Path(__file__).resolve().parents[2]
 WATCHED = [ROOT / "data/results", ROOT / "data/diagnostics", ROOT / "data/collections"]
@@ -71,14 +79,6 @@ def test_a_score_agrees_within_the_relative_tolerance_and_abs_tol_0(live, replay
 
 
 # ------------------------------------------------------------------ the bundle (Q61)
-
-import json  # noqa: E402
-import shutil  # noqa: E402
-
-import numpy as np  # noqa: E402
-
-from scripts import collection, gates  # noqa: E402
-from skuska import g2  # noqa: E402
 
 # The layout of the hyptcn-lab VMs as an audit records it (a tracked audit record of a pilot session, read only):
 # 130 bins, 128 of 4096 pages, one of 1 page and one of 64 pages.
@@ -404,3 +404,362 @@ def test_the_command_line_of_the_bundle(tmp_path, monkeypatch, capsys):
         parita.main([*argv[:-1], "0"])
     monkeypatch.setattr(parita, "make_bundles", lambda *a, **k: (_ for _ in ()).throw(parita.Refused("no")))
     assert parita.main(argv) == 2 and "skuska.parita: Refused: no" in capsys.readouterr().err
+
+
+# ------------------------------------------------------------------ the parity sessions, watch beside them, the block
+
+REAL = ROOT / "config/collection-v5.json"  # The protocol with the rates of Zápis 1, as the blocks of G2 read it.
+P = collection.protocol(REAL)
+
+
+def parity_rows(n=6):
+    """The rows of one path: warming up, then scored with the rule channel's alarm up from seq 3, its hold failed."""
+    out = []
+    for seq in range(n):
+        alarm = seq >= 3
+        out.append({"seq": seq, "score": 0.5 + seq if seq >= 2 else None,
+                    "model_state": "monitoring" if seq >= 2 else "warming_up",
+                    "reason": "scored" if seq >= 2 else "warming_up", "alarm": alarm, "alarm_event": seq == 3,
+                    "alarm_sources": ["rule_anomaly"] if seq == 3 else [], "model_alarm": False, "rule_alarm": alarm,
+                    "integrity_alarm": False, "channel": ["rule"] if alarm else [],
+                    "evidence": {"status": "error" if alarm else "not_requested"}, "snapshot_age_ms": 800.0})
+    return out
+
+
+def write_output(directory, configuration, rows, status):
+    directory.mkdir(parents=True)
+    (directory / "configuration.json").write_text(json.dumps(configuration))
+    (directory / "events.jsonl").write_text("".join(json.dumps(r) + "\n" for r in rows))
+    (directory / "status.json").write_text(json.dumps(status))
+
+
+class FakeWatchProcess:
+    """safeguard watch without a model: at its end it writes the output run_directory writes, with `rows`."""
+
+    def __init__(self, a, rows, forever):
+        self.a, self.rows, self.forever, self.stop, self.pid = a, rows, forever, threading.Event(), 4321
+
+    def wait(self, timeout=None):
+        if self.forever:
+            self.stop.wait(30)
+        manifest = json.loads((self.a.bundle / "manifest.json").read_text())
+        write_output(self.a.out, {"bundle_manifest": manifest, "snapshots": str(self.a.snapshots.resolve()),
+                                  "profile": str(self.a.profile.resolve()), "follow": True, "preserve": True,
+                                  "idle_timeout": self.a.idle_timeout}, self.rows,
+                     {"stop_reason": "stop_requested" if self.forever else "idle_timeout",
+                      "processed": len(self.rows), "evidence_errors": 3, "ok": False})
+        return -15 if self.forever else 2
+
+
+class FakeEnv:
+    """The hook's host without a process: start() parses the command line with safeguard's parser and records whether
+    raw/ and profile/ of the session existed when watch started."""
+
+    def __init__(self, rows=None, forever=False):
+        self.rows, self.forever, self.started, self.calls, self.ended = rows, forever, threading.Event(), [], []
+
+    def now(self):
+        return time.time()
+
+    def wait(self, event, seconds):
+        return event.wait(seconds)
+
+    def start(self, command, log):
+        a, prefix = safeguard_args(command)
+        self.calls.append({"args": a, "prefix": prefix, "raw": a.snapshots.is_dir(), "profile": a.profile.is_dir(),
+                           "command": command})
+        Path(log).write_text("watch\n")
+        self.process = FakeWatchProcess(a, parity_rows() if self.rows is None else self.rows, self.forever)
+        self.started.set()
+        return self.process
+
+    def end(self, process, grace):
+        self.ended.append((process, grace))
+        process.stop.set()
+        return -15
+
+
+class ParityLab(FakeLab):
+    """FakeLab whose run makes profile/ before raw/ (as scripts/collection.py run does) and lasts until watch beside
+    it started; the replay writes the output replay_directory writes, and the comparison is the real mode of
+    scripts/campaign_report.py in this process."""
+
+    def __init__(self, protocol_path, *, replay_rows=None, run_wait=5, **options):
+        super().__init__(protocol_path, **options)
+        self.replay_rows, self.replays, self.comparisons, self.env = replay_rows, [], [], None
+        self.run_wait = run_wait
+
+    def child(self, command, log, *, timeout, lock_fd=None):
+        command = [str(x) for x in command]
+        if "safeguard" in command and "replay" in command:
+            a, prefix = safeguard_args(command)
+            self.events.append(("replay", a.archive.name))
+            self.replays.append((a, prefix, timeout))
+            manifest = json.loads((a.bundle / "manifest.json").read_text())
+            write_output(a.out, {"bundle_manifest": manifest, "archive": str(a.archive),
+                                 "archive_sha256": sha(a.archive), "follow": False, "preserve": False},
+                         parity_rows() if self.replay_rows is None else self.replay_rows,
+                         {"stop_reason": "replay_complete"})
+            log.write_text("replay\n")
+            return 0
+        if any(Path(x).name == "campaign_report.py" for x in command):
+            from scripts import campaign_report
+            i = next(i for i, x in enumerate(command) if Path(x).name == "campaign_report.py")
+            self.events.append(("parity",))
+            self.comparisons.append(command)
+            out, err = io.StringIO(), io.StringIO()
+            with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+                code = campaign_report.main(command[i + 1:])
+            log.write_text(out.getvalue() + err.getvalue())
+            return code
+        if "--session-id" in command:
+            sid = command[command.index("--session-id") + 1]
+            if sid not in self.no_directory:
+                (Path(command[command.index("--collections-dir") + 1]) / sid / "profile").mkdir(parents=True)
+            code = super().child(command, log, timeout=timeout, lock_fd=lock_fd)
+            self.env.started.wait(self.run_wait)  # The run lasts until watch beside it started (or run_wait s).
+            return code
+        return super().child(command, log, timeout=timeout, lock_fd=lock_fd)
+
+
+def fake_bundle(root, vms=("a", "b")):
+    """A bundle directory without weights and its record as python -m skuska.parita zvazok writes it."""
+    d = Path(root) / "zvazky" / "zvazok_a_b"
+    d.mkdir(parents=True)
+    (d / "manifest.json").write_text(json.dumps({"schema": "hyptcn3/safeguard-bundle/1", "diagnostic": True}))
+    (d / "predictor.pt").write_bytes(b"p")
+    (d / "classifier.pt").write_bytes(b"c")
+    files = parita.bundle_files(d)
+    path = d.parent / parita.BUNDLE_RECORD
+    path.write_text(json.dumps({"schema": parita.BUNDLE_SCHEMA, "values": {
+        "vms": {vm: d.name for vm in vms}, "bundles": [{"name": d.name, "dir": str(d), "files": files,
+                                                        "sha256": parita._canonical(files)}]}}))
+    return path, d
+
+
+@pytest.fixture
+def deck_file(tmp_path):
+    path = tmp_path / "balicek.json"
+    g2.write_deck(REAL, path, "python -m skuska.g2 deck --protocol config/collection-v5.json --out balicek.json")
+    return path
+
+
+@pytest.fixture
+def fast(monkeypatch):
+    monkeypatch.setattr(parita, "POLL_S", 0.01)
+
+
+def parity_block(tmp_path, deck_file, *, lab=None, env=None, zvazok=None, seal=lambda: None, **options):
+    lab = lab or ParityLab(REAL)
+    lab.env = env = env or FakeEnv()
+    zvazok = zvazok or fake_bundle(tmp_path)[0]
+    places = g2.Places(tmp_path / "G2", diagnostics=tmp_path / "diag")
+    b = parita.ParityBlock(REAL, deck_file, "a", zvazok=zvazok, env_factory=lambda: env, seal=seal,
+                           other_vm=options.pop("other_vm", "g2"), places=places, lab=lab,
+                           command="python -m skuska.parita block --vm a", **options)
+    return b, lab, env
+
+
+def session_record(b, sid="g2-a-w01-1"):
+    return json.loads((b.places.records / f"{sid}.json").read_text())
+
+
+def test_the_parity_plan_is_one_session_at_rate_high_on_each_vm():
+    """PLAN_RULE: w01 on VM a (corp_high) and w02 on VM b (eshop_high), the protocol's cycles, no events, seeds of
+    their own group, none of a stream of the plan or of the deck."""
+    sessions = parita.plan(P)
+    assert [(s["id"], s["vm"], s["scenario"], s["cycles"], s["events"]) for s in sessions] == [
+        ("w01", "a", "corp_high", 720, None), ("w02", "b", "eshop_high", 720, None)]
+    assert [s["seed"] for s in sessions] == [protocol_v5.seed(P["name"], "traffic", f"G2/w0{n}", n, 1) for n in (1, 2)]
+    used = {seed for mode in protocol_v5.MODES for s in protocol_v5.plan(P, mode)["sessions"]
+            for seed in s["seeds"].values()}
+    used |= {seed for s in g2.draw_deck(P)["sessions"] for seed in s["seeds"].values()}
+    assert not {s["seed"] for s in sessions} & used
+    assert parita.excluded(P) == [*parita.EXCLUDED_CRITERIA, *P["determined_at"]["G2"]]
+
+
+def test_a_parity_session_runs_watch_beside_after_raw_then_the_replay_and_the_comparison(tmp_path, deck_file, fast):
+    """WATCH_RULE and REPLAY_RULE with fakes: watch starts once raw/ and profile/ exist, with safeguard's own command
+    line (--threads 1 as the replay, the session's raw/ and profile/, --idle-timeout 60, the VM's bundle,
+    --allow-diagnostic, nice 19), its output outside the session's directory; after the audit the replay of the
+    audit's feature archive and the real comparison; nothing goes into the session's directory; the record says that
+    watch ran beside the run and which tables leave the session out."""
+    b, lab, env = parity_block(tmp_path, deck_file)
+    summary = b.run()
+    assert summary["stopped"] is None and [s["session_id"] for s in summary["sessions"]] == ["g2-a-w01-1"]
+    session = tmp_path / "diag" / "a" / "g2-a-w01-1"
+    base = tmp_path / "G2" / "parita" / "g2-a-w01-1"
+    (call,) = env.calls
+    a = call["args"]
+    assert call["raw"] and call["profile"] and call["prefix"][:3] == ["nice", "-n", "19"]
+    assert (a.command, a.threads, a.allow_diagnostic, a.idle_timeout) == ("watch", 1, True, 60.0)
+    assert (a.bundle, a.snapshots, a.profile, a.out) == (
+        tmp_path / "zvazky" / "zvazok_a_b", session / "raw", session / "profile", base / "watch")
+    (replay, prefix, _), = lab.replays
+    assert (replay.command, replay.threads, replay.allow_diagnostic, replay.bundle) == ("replay", a.threads, True,
+                                                                                          a.bundle)
+    assert replay.archive.parent == session and replay.archive.suffix == ".npz" and replay.out == base / "replay"
+    assert prefix[:3] == ["nice", "-n", "19"]
+    (compare,) = lab.comparisons
+    assert compare[compare.index(str(ROOT / "scripts/campaign_report.py")) + 1:] == [
+        "parity", str(base / "watch"), str(base / "replay"), "--out", str(base / "parita.json")]
+    order = [e[0] for e in lab.events if e[0] in ("run", "levels", "audit", "replay", "parity", "archive")]
+    assert order == ["run", "levels", "audit", "replay", "parity", "archive"]
+    names = sorted(str(p.relative_to(session)) for p in session.rglob("*"))
+    audit = next(n for n in names if n.endswith(".json") and n.startswith("audit_"))
+    assert names == sorted(["end.json", "profile", "protocol.json", "raw", "raw/000001.vmicd", "session.json", audit,
+                            audit[:-5] + ".npz"])
+    assert sorted(p.name for p in base.iterdir()) == ["parita.json", "replay", "watch", "watch.json", "watch.log"]
+    doc = session_record(b)
+    v = doc["values"]
+    assert {"commit", "date", "host", "guest", "command", "n", "values"} <= set(doc) and v["kind"] == parita.KIND
+    assert v["done"] is True and v["deck"]["item"]["id"] == "w01" and v["deck"]["item"]["rule"] == parita.PLAN_RULE
+    assert v["excluded"] == {"criteria": parita.excluded(P), "rule": parita.EXCLUDED_RULE}
+    hook = next(x for x in v["beside"] if x["hook"] == parita.KIND)
+    assert (hook["started"], hook["exit_code"], hook["terminated"], hook["error_free"], hook["g2_values"]) == (
+        True, 2, False, False, False)
+    assert hook["record"] == str(base / "watch.json") and hook["sha256"] == sha(base / "watch.json")
+    watch = json.loads((base / "watch.json").read_text())
+    assert {"commit", "date", "host", "guest", "command", "n", "values"} <= set(watch)
+    w = watch["values"]
+    assert w["command"] == call["command"] and w["status"]["stop_reason"] == "idle_timeout" and watch["n"] == 6
+    assert w["times"]["raw_seen_unix"] <= w["times"]["watch_started_unix"] <= w["times"]["watch_ended_unix"]
+    assert w["bundle"]["sha256"] == b.bundle["sha256"] and w["error_free"] is False
+    steps = {s["step"]: s for s in v["steps"]}
+    assert steps["replay"]["exit_code"] == 0 and steps["parity"]["exit_code"] == 0
+    assert steps["parity"]["holds"] is True and steps["parity"]["rows"] == 6
+    assert steps["parity"]["alarms"] == {"watch": {"alarm_rows": 3, "alarm_events": 1},
+                                         "replay": {"alarm_rows": 3, "alarm_events": 1}}
+    table = json.loads((base / "parita.json").read_text())
+    assert table["values"]["holds"] and table["values"]["failed_holds"]["rows"] == 3
+    assert b.done(v) and v["exit_codes"]["replay"] == 0
+
+
+def test_a_finding_of_the_comparison_is_recorded_and_the_block_goes_on(tmp_path, deck_file, fast):
+    """A row the replay has and watch lacks: the comparison exits 1 and names it, the session is done (the comparison
+    was written) and the block is not stopped."""
+    b, lab, env = parity_block(tmp_path, deck_file, env=FakeEnv(rows=parity_rows()[:-1]))
+    summary = b.run()
+    assert summary["stopped"] is None
+    steps = {s["step"]: s for s in session_record(b)["values"]["steps"]}
+    assert steps["parity"]["exit_code"] == 1 and steps["parity"]["holds"] is False
+    assert steps["parity"]["findings_by_kind"] == {"only_replay": 1}
+    with pytest.raises(g2.Refused, match="every parity session of VM a is done"):
+        parity_block(tmp_path, deck_file, zvazok=b.zvazok_path)[0].specs()
+    again = parity_block(tmp_path, deck_file, zvazok=b.zvazok_path, only=["w01"])[0].specs()
+    assert [(s["session_id"], s["attempt"]) for s in again] == [("g2-a-w01-2", 2)]
+
+
+def test_watch_that_outlasts_its_wait_is_ended_by_name(tmp_path, deck_file, fast, monkeypatch):
+    """WATCH_RULE: after the run the hook waits WATCH_WAIT_S for watch to end by its idle timeout, then ends the exact
+    process group of its own child and says so."""
+    monkeypatch.setattr(parita, "WATCH_WAIT_S", 0.2)
+    b, lab, env = parity_block(tmp_path, deck_file, env=FakeEnv(forever=True))
+    b.run()
+    (ended, grace), = env.ended
+    assert ended is env.process and grace == parita.TERM_GRACE_S
+    hook = next(x for x in session_record(b)["values"]["beside"] if x["hook"] == parita.KIND)
+    assert (hook["terminated"], hook["exit_code"]) == (True, -15)
+    watch = json.loads((tmp_path / "G2" / "parita" / "g2-a-w01-1" / "watch.json").read_text())["values"]
+    assert watch["terminated"] is True and watch["status"]["stop_reason"] == "stop_requested"
+
+
+def test_a_run_that_makes_no_raw_starts_no_watch_and_no_replay(tmp_path, deck_file, fast):
+    """WATCH_RULE: a run that ends before raw/ and profile/ exist leaves watch unstarted, by name; no audit, no
+    replay, no comparison; the session is not done."""
+    b, lab, env = parity_block(tmp_path, deck_file, lab=ParityLab(REAL, no_directory={"g2-a-w01-1"}, rc={
+        "g2-a-w01-1": 1}, run_wait=0))
+    b.run()
+    assert env.calls == [] and not any(e[0] in ("replay", "parity") for e in lab.events)
+    v = session_record(b)["values"]
+    hook = next(x for x in v["beside"] if x["hook"] == parita.KIND)
+    assert hook["started"] is False and "watch never started" in hook["why_not"] and v["done"] is False
+
+
+def test_the_replay_is_skipped_by_name_when_watch_wrote_nothing(tmp_path, deck_file, fast):
+    """REPLAY_RULE: no output of watch, no replay and no comparison; the record says why."""
+    b, lab, env = parity_block(tmp_path, deck_file)
+    real_start = env.start
+
+    def failing(command, log):
+        process = real_start(command, log)
+        process.wait = lambda timeout=None: 1
+        return process
+    env.start = failing
+    b.run()
+    steps = session_record(b)["values"]["steps"]
+    assert {"step": "replay", "skipped": "safeguard watch wrote no output"} in steps
+    assert not any(e[0] in ("replay", "parity") for e in lab.events)
+
+
+def test_the_parity_block_refuses_a_foreign_bundle_a_bundle_unlike_its_record_and_an_unreadable_ledger(
+        tmp_path, deck_file):
+    """PARITY_BLOCK_RULE: no bundle for the VM, a bundle file that differs from its record, a seal ledger the guard
+    cannot read, and a record of no bundles refuse the block before anything starts."""
+    record, d = fake_bundle(tmp_path / "x", vms=("b",))
+    b, _, _ = parity_block(tmp_path, deck_file, zvazok=record)
+    with pytest.raises(g2.Refused, match="has no bundle for VM a"):
+        b.run()
+    record, d = fake_bundle(tmp_path / "y")
+    (d / "predictor.pt").write_bytes(b"other")
+    b, _, _ = parity_block(tmp_path, deck_file, zvazok=record)
+    with pytest.raises(g2.Refused, match="differs from its record"):
+        b.run()
+
+    def unreadable():
+        raise ValueError("the seal ledger is malformed")
+    record, d = fake_bundle(tmp_path / "z")
+    b, lab, _ = parity_block(tmp_path, deck_file, zvazok=record, seal=unreadable)
+    with pytest.raises(g2.Refused, match="safeguard's guard cannot read it"):
+        b.run()
+    (tmp_path / "none.json").write_text("{}")
+    b, lab, _ = parity_block(tmp_path, deck_file, zvazok=tmp_path / "none.json")
+    with pytest.raises(g2.Refused, match="is no record of python -m skuska.parita zvazok"):
+        b.run()
+    assert not [e for e in lab.events if e[0] in ("run", "lock")]
+
+
+def test_a_parity_directory_inside_the_session_or_of_another_run_gets_no_file(tmp_path, deck_file, fast):
+    """WATCH_RULE: a parity directory that exists (a session id runs once) starts no watch and writes nothing there."""
+    b, lab, env = parity_block(tmp_path, deck_file, lab=ParityLab(REAL, run_wait=0))
+    base = tmp_path / "G2" / "parita" / "g2-a-w01-1"
+    base.mkdir(parents=True)
+    (base / "other").write_text("of another run")
+    b.run()
+    assert env.calls == [] and sorted(p.name for p in base.iterdir()) == ["other"]
+    hook = next(x for x in session_record(b)["values"]["beside"] if x["hook"] == parita.KIND)
+    assert "exists: a session id runs once" in hook["why_not"] and hook["record"] is None
+    watch = parita.Watch(b, {"session_id": "s"}, {"session": tmp_path / "G2" / "s"}, FakeEnv())
+    watch.dir = tmp_path / "G2" / "s" / "parita"
+    watch.start()
+    assert "lies inside the session's directory" in watch.why_not and watch.stop()["record"] is None
+    assert not (tmp_path / "G2" / "s").exists()
+
+
+def test_the_dry_run_and_the_command_line_of_the_block(tmp_path, deck_file, monkeypatch, capsys):
+    """The dry run starts nothing and gives the commands of watch, the replay and the comparison; main builds the
+    block from its options."""
+    b, lab, env = parity_block(tmp_path, deck_file)
+    out = b.plan()
+    (row,) = out["sessions"]
+    assert row["session_id"] == "g2-a-w01-1" and safeguard_args(row["watch"])[0].command == "watch"
+    assert safeguard_args(row["replay"])[0].archive == Path("<the feature archive of the session's audit>")
+    assert out["bundle"]["name"] == "zvazok_a_b" and out["rules"]["watch"] == parita.WATCH_RULE
+    assert env.calls == [] and not [e for e in lab.events if e[0] in ("run", "lock")]
+    seen = {}
+
+    class Stub:
+        def __init__(self, *args, **kwargs):
+            seen.update(args=args, kwargs=kwargs)
+
+        def plan(self):
+            return {"refusals": []}
+    monkeypatch.setattr(parita, "ParityBlock", Stub)
+    assert parita.main(["block", "--protocol", "P", "--deck", "D", "--zvazok", "Z", "--vm", "b", "--other-vm", "g2",
+                        "--only", "w02", "--dry-run"]) == 0
+    assert seen["args"] == (Path("P"), Path("D"), "b") and seen["kwargs"]["zvazok"] == Path("Z")
+    assert seen["kwargs"]["only"] == ["w02"] and seen["kwargs"]["other_vm"] == "g2"
+    capsys.readouterr()
+    assert parita.main(["plan", "--protocol", str(REAL)]) == 0
+    printed = json.loads(capsys.readouterr().out)
+    assert printed["sessions"] == parita.plan(P) and printed["rule"] == parita.PLAN_RULE

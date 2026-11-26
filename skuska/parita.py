@@ -4,6 +4,9 @@ comparison of safeguard watch with the replay of the same session's archive.
 
     python -m skuska.parita zvazok --protocol P --audit AUDIT.json [--audit AUDIT.json ...] --praca WORK --out DIR
                                    --epochs N|plan [--vysledky R]
+    python -m skuska.parita plan   --protocol P
+    python -m skuska.parita block  --protocol P --deck DECK.json --zvazok DIR/zvazok.json --vm a --other-vm g2|idle
+                                   [--only w01] [--rate SCENARIO=R ...] [--g2-dir DIR] [--dry-run]
     .venv/bin/python scripts/campaign_report.py parity WATCH_DIR REPLAY_DIR --out F    (parity_table, COMPARE_RULE)
 
 Binding texts: the lead's G2 skeleton dokazy/G2/kostra/KOSTRA.md (rows H1 and H3, the criterion live_archive_parity,
@@ -25,6 +28,14 @@ scripts/tests/suchy_kampan.py, with the rows of scripts/tests/suchy_generatory.p
 training through the real command line, python -m safeguard train --diagnostic. DIR receives the bundles and their
 record zvazok.json (check E's header) with the sha256 of every file of each bundle.
 
+plan prints the parity sessions (PLAN_RULE): one on each VM, 2 in all, at rate high and without events. block runs the
+sessions of one VM through skuska/g2.py Block, as root through one pcc-sudo call as the deck's blocks (ParityBlock,
+PARITY_BLOCK_RULE): safeguard watch beside every run, a hook of Block.beside that starts it once raw/ exists
+(WATCH_RULE), and after the audit the replay of its feature archive and the comparison (REPLAY_RULE), everything of
+them in <G2 dir>/parita/<session>/, outside the session's directory. The record of such a session says in its entry
+of beside that watch ran beside it (Q60: no error-free run) and in values.excluded which tables of G2 leave it out
+(EXCLUDED_RULE: no value of G2, Q61).
+
 The comparison (COMPARE_RULE) is the mode parity of scripts/campaign_report.py, which runs parity_table: by seq, the
 score within the tolerance written before it (TOLERANCE_RULE), the fields of the alarm exactly, model_state and reason
 of the unscored rows, a row of one path only named; it counts the alarms of both paths.
@@ -39,6 +50,7 @@ from pathlib import Path
 import shlex
 import subprocess
 import sys
+import threading
 import time
 
 import numpy as np
@@ -720,6 +732,389 @@ def parity_table(watch_dir, replay_dir, out, command):
     return 0 if values["holds"] else 1
 
 
+# ------------------------------------------------------------------ the parity sessions, watch beside them, the block
+
+KIND = "parita"  # The kind of a parity session's spec and record (skuska/g2.py values.kind).
+BESIDE = "parita"  # <G2 dir>/parita/<session>/: everything of a parity session outside its directory.
+WATCH_SCHEMA = "hyptcn3/g2-parity-watch/1"
+IDLE_TIMEOUT_S = 60  # Map row 11: safeguard watch --idle-timeout 60.
+POLL_S = 0.5  # The executor's judgment: how often the hook looks for raw/ and profile/ of the session.
+# The executor's judgment: after the run, watch reads its backlog and ends 60 s after its last snapshot; the hook waits
+# this long before it ends watch (a watch that lags more than half an hour behind the collector is a finding anyway).
+WATCH_WAIT_S = IDLE_TIMEOUT_S + 1800
+TERM_GRACE_S = 30  # As campaign.run_child: SIGTERM to the child's group, SIGKILL after this.
+REPLAY_TIMEOUT_S = 3600  # The executor's judgment: the replay of 720 rows takes seconds.
+COMPARE_TIMEOUT_S = 600
+PLAN_RULE = (
+    "the criterion live_archive_parity needs at least one parity session on each VM: the live path reads the "
+    "collector's raw/ of that VM with the bundle of that VM's layout (Q61), and one session holds every kind of row "
+    "the criterion compares (the warmup at the start, a full snapshot at seq 0 and at full_every, the measured rows, "
+    "a row the collector marks invalid when one occurs); so 2 sessions, w01 on the protocol's first VM and w02 on its "
+    "second, of the scenarios of intensity high in the order of skuska/g2.py scenario_cycle, one each (corp_high on "
+    "VM a, eshop_high on VM b: rate high loads the collector and the live reader most, and the two profiles differ), "
+    "without events (the deck of events and the draw of the controls are not drawn again; the live path needs none), "
+    "of the protocol's cycles, the traffic seed protocol_v5.seed(the protocol's name, traffic, G2/<id>, its number, "
+    "1), a group no other stream of G2 has (skuska/g2.py STREAMS_RULE); a session run again keeps its plan item; a "
+    "finding of the comparison names its rows, and a parity session runs again only after the cause is known")
+EXCLUDED_CRITERIA = ("marked_rows_per_event", "profiles_load", "traffic_realism")
+EXCLUDED_RULE = (
+    "the lead's answers to Q61 (parity sessions give no values of G2) and Q60 (a run beside watch is no error-free "
+    "run): a parity session counts for no path of determined_at.G2 of its protocol (invalid_rows.max, "
+    "min_score_coverage, the rates, audit.warnings_allowed and audit.collector_majflt_max, which only error-free runs "
+    "give, controls.baseline, max_concurrent), and the tables of three criteria leave it out, whose rows the load of "
+    "watch beside the run can change (the executor's judgment): marked_rows_per_event (a late or invalid row under "
+    "that load; its rate gives invalid_rows.max), profiles_load (the levels after the session are read once watch "
+    "has ended, up to WATCH_WAIT_S later than after another session) and traffic_realism (the generator beside that "
+    "load); it counts for live_archive_parity and guest_matches_repository; a table of G2 reads "
+    "values.excluded.criteria of the session's record (skuska/g2.py)")
+WATCH_RULE = (
+    "map row 11 and the lead's answers Q60 and Q61: beside every run of a parity block (skuska/g2.py Block.beside) a "
+    "thread of the block, started before the run, waits until raw/ and profile/ of the session exist (every POLL_S; "
+    "scripts/collection.py run_session copies profile/ before the warmup and the collector makes raw/ when it "
+    "starts), then starts python -m safeguard --threads 1 watch --bundle <the VM's bundle> --allow-diagnostic "
+    "--snapshots S/raw --profile S/profile --idle-timeout 60 --out <G2 dir>/parita/<session>/watch, as the VM's owner "
+    "with nice 19 and ionice (scripts/collection.py background_command of user_command: the audit's priority and, as "
+    "root, its scope, whose memory is capped and never swapped, so the page cache of the snapshots watch reads pushes "
+    "no QEMU to swap), with the same --threads as the replay; its output goes to <G2 dir>/parita/<session>/watch.log. "
+    "Nothing is written into the session's directory: the parity directory lies outside it (refused otherwise), and "
+    "watch holds evidence in raw/ only where it may write, which the owner may not in the collector's raw/ of root, "
+    "so the hold fails, by name in the row's evidence (Q61: no parity error). After the run the hook waits for watch "
+    "to end by its idle timeout, at most WATCH_WAIT_S, then ends it (SIGTERM to the exact process group of its own "
+    "child, SIGKILL after TERM_GRACE_S, as campaign.run_child) and says so; its record <G2 dir>/parita/<session>/"
+    "watch.json (check E's header) holds the command, when the hook began, raw/ appeared, watch started and ended, its "
+    "exit code (2 when a hold failed or a row was an input error: not judged here), its status.json and whether the "
+    "hook ended it; the hook's entry in the session's record says that watch ran beside the run, so the session is no "
+    "error-free run and gives no value of G2 (Q60, Q61)")
+REPLAY_RULE = (
+    "map row 11: after the session's audit, inside the host's audit lock and before the archive (skuska/g2.py step "
+    "3), python -m safeguard --threads 1 replay --bundle <the bundle of watch> --allow-diagnostic --archive <the "
+    "audit's feature archive> --out <G2 dir>/parita/<session>/replay, then scripts/campaign_report.py parity <the "
+    "output of watch> <the output of the replay> --out <G2 dir>/parita/<session>/parita.json (COMPARE_RULE), each as "
+    "the VM's owner with background_command, a child of the block whose step, log and exit code the session's record "
+    "holds; neither runs when watch wrote no output and the comparison not when the replay wrote none (the record "
+    "says why); a replay or a comparison that exits non-zero is recorded and the block goes on")
+PARITY_BLOCK_RULE = (
+    "a block of the parity plan on one VM (PLAN_RULE): skuska/g2.py Block (BLOCK_RULE) with the plan's sessions of "
+    "the VM, the bundle of the VM from the record of python -m skuska.parita zvazok, watch beside each run "
+    "(WATCH_RULE) and the replay and the comparison after the audit (REPLAY_RULE); refused before it, beside the "
+    "refusals of Block: no record of the bundles, no bundle for the VM, a bundle whose files differ from the sha256 "
+    "its record holds, and a seal ledger that safeguard's guard cannot read (tcn.pecat.kontrola, which watch and "
+    "replay ask first). Run it on both VMs at the same time (--other-vm g2 on each), so that no session of the deck "
+    "runs beside a watch")
+PARITY_DONE_RULE = ("a parity session is done when a record of it is done by skuska/g2.py DONE_RULE and holds the "
+                    "written comparison (its step parity with the exit code 0 or 1); without --only the block takes "
+                    "every plan session of its VM that is not done, each as its next attempt")
+
+
+def plan(p):
+    """The parity sessions of the protocol `p` (PLAN_RULE): [{id, number, vm, scenario, cycles, seed, events}]."""
+    vms = [row["name"] for row in p.get("vms", [])]
+    high = [name for name in g2.scenario_cycle(p) if p["scenarios"][name].get("intensity") == "high"]
+    if not vms or not high:
+        raise ValueError("the parity plan needs the VMs of the protocol and a scenario of intensity high")
+    from scripts import protocol_v5
+    out = []
+    for i, vm in enumerate(vms):
+        ident, number = f"w{i + 1:02d}", i + 1
+        out.append({"id": ident, "number": number, "vm": vm, "scenario": high[i % len(high)], "cycles": p["cycles"],
+                    "seed": protocol_v5.seed(p["name"], "traffic", f"G2/{ident}", number, 1), "events": None})
+    return out
+
+
+def excluded(p):
+    """The criteria and values whose tables leave a parity session out (EXCLUDED_RULE)."""
+    return [*EXCLUDED_CRITERIA, *((p.get("determined_at") or {}).get(g2.STAGE) or [])]
+
+
+def parity_dir(g2_dir, session_id):
+    """<G2 dir>/parita/<session>/: the outputs of watch, the replay and the comparison of a parity session."""
+    return Path(g2_dir).absolute() / BESIDE / session_id
+
+
+def niced(command):
+    """A command with nice -n 19, as background_command gives it where nice and ionice exist (WATCH_RULE)."""
+    command = [str(x) for x in command]
+    return command if any(command[i:i + 3] == ["nice", "-n", "19"] for i in range(len(command))) else [
+        "nice", "-n", "19", *command]
+
+
+def _as_owner(argv):
+    return niced(collection.background_command(collection.user_command(argv)))
+
+
+def watch_command(bundle, session_dir, out):
+    """WATCH_RULE: python -m safeguard --threads 1 watch beside the session, as the VM's owner, nice 19."""
+    session_dir = Path(session_dir)
+    return _as_owner([sys.executable, "-m", "safeguard", "--threads", str(THREADS), "watch", "--bundle", str(bundle),
+                      "--allow-diagnostic", "--snapshots", str(session_dir / "raw"), "--profile",
+                      str(session_dir / "profile"), "--idle-timeout", str(IDLE_TIMEOUT_S), "--out", str(out)])
+
+
+def replay_command(bundle, archive, out):
+    """REPLAY_RULE: python -m safeguard --threads 1 replay --archive of the audit's feature archive."""
+    return _as_owner([sys.executable, "-m", "safeguard", "--threads", str(THREADS), "replay", "--bundle", str(bundle),
+                      "--allow-diagnostic", "--archive", str(archive), "--out", str(out)])
+
+
+def compare_command(watch_out, replay_out, out):
+    """REPLAY_RULE: the comparison, scripts/campaign_report.py parity."""
+    return _as_owner([sys.executable, str(ROOT / "scripts/campaign_report.py"), "parity", str(watch_out),
+                      str(replay_out), "--out", str(out)])
+
+
+class Env:
+    """The hook's clock, its waits and its child on the real host; a test gives a fake with the same methods."""
+
+    def now(self):
+        return time.time()
+
+    def wait(self, event, seconds):
+        return event.wait(seconds)
+
+    def start(self, command, log):
+        """The child, its output into the new file `log`, in its own session and process group."""
+        with Path(log).open("x") as stream:
+            return subprocess.Popen([str(x) for x in command], cwd=ROOT, stdout=stream, stderr=subprocess.STDOUT,
+                                    start_new_session=True)
+
+    def end(self, process, grace):
+        """SIGTERM to the exact process group of the hook's own child, SIGKILL after `grace`; its exit code."""
+        import signal
+        for sig in (signal.SIGTERM, signal.SIGKILL):
+            try:
+                os.killpg(process.pid, sig)
+            except ProcessLookupError:
+                pass
+            try:
+                return process.wait(timeout=grace)
+            except subprocess.TimeoutExpired:
+                continue
+        return process.wait()
+
+
+class Watch:
+    """safeguard watch beside one parity session (WATCH_RULE): start() and stop() as the hooks of skuska/g2.py
+    Block.beside; neither raises, a refusal or an error is in the record."""
+
+    def __init__(self, block, spec, paths, env):
+        self.block, self.spec, self.env = block, spec, env
+        self.session = Path(paths["session"]).absolute()
+        self.dir = parity_dir(block.places.root, spec["session_id"])
+        self.out, self.log, self.path = self.dir / "watch", self.dir / "watch.log", self.dir / "watch.json"
+        self.command = watch_command(block.bundle_dir, self.session, self.out)
+        self.ended = threading.Event()
+        self.times = dict.fromkeys(("hook_started_unix", "raw_seen_unix", "watch_started_unix", "watch_ended_unix"))
+        self.process, self.exit_code, self.terminated, self.why_not, self.error = None, None, False, None, None
+        self.owned = False  # The hook made the parity directory, so its record may go there.
+        self._thread = threading.Thread(target=self._loop, name="g2-parity-watch", daemon=True)
+
+    def start(self):
+        try:
+            if Path(os.path.realpath(self.dir)).is_relative_to(os.path.realpath(self.session)):
+                self.why_not = f"the parity directory {self.dir} lies inside the session's directory {self.session}"
+            elif self.dir.exists() or self.dir.is_symlink():
+                self.why_not = f"the parity directory {self.dir} exists: a session id runs once"
+            else:
+                self.block.mkdirs([self.dir])
+                self.owned = True
+                self.times["hook_started_unix"] = self.env.now()
+                self._thread.start()
+        except Exception as error:  # noqa: BLE001 - the session's record names it; the session goes on
+            self.error = f"{type(error).__name__}: {error}"
+        return self
+
+    def _loop(self):
+        try:
+            while not ((self.session / "raw").is_dir() and (self.session / "profile").is_dir()):
+                if self.ended.is_set():
+                    self.why_not = "the run ended before raw/ and profile/ of the session existed: watch never started"
+                    return
+                self.env.wait(self.ended, POLL_S)
+            self.times["raw_seen_unix"] = self.env.now()
+            self.process = self.env.start(self.command, self.log)
+            self.times["watch_started_unix"] = self.env.now()
+            self.exit_code = self.process.wait()
+            self.times["watch_ended_unix"] = self.env.now()
+        except Exception as error:  # noqa: BLE001 - the session's record names it
+            self.error = f"{type(error).__name__}: {error}"
+
+    def stop(self):
+        """After the run: wait for watch to end by its idle timeout, end it after WATCH_WAIT_S; its record
+        watch.json and its entry of the session's record."""
+        self.ended.set()
+        if self._thread.ident is not None:
+            self._thread.join(WATCH_WAIT_S)
+            if self._thread.is_alive() and self.process is not None:
+                self.terminated = True
+                self.exit_code = self.env.end(self.process, TERM_GRACE_S)
+                self.times["watch_ended_unix"] = self.env.now()
+            self._thread.join(TERM_GRACE_S)
+            if self._thread.is_alive():
+                self.error = self.error or "the hook's thread did not end"
+        status_path = self.out / "status.json"
+        try:
+            status = json.loads(status_path.read_text()) if status_path.is_file() else None
+        except (OSError, ValueError) as error:
+            status = {"unreadable": f"{type(error).__name__}: {error}"}
+        bundle = self.block.bundle or {}
+        values = {"stage": g2.STAGE, "session_id": self.spec["session_id"], "vm": self.block.vm,
+                  "session_dir": str(self.session), "dir": str(self.dir), "out": str(self.out), "log": str(self.log),
+                  "command": self.command, "times": dict(self.times), "exit_code": self.exit_code,
+                  "terminated": self.terminated, "why_not": self.why_not, "error": self.error,
+                  "status": None if status is None else {k: status.get(k) for k in (
+                      "stop_reason", "processed", "scored", "input_errors", "alarm_events", "evidence_errors",
+                      "fatal", "ok", "unreadable") if k in status},
+                  "bundle": {k: bundle.get(k) for k in ("name", "dir", "sha256")},
+                  "bundle_record": {"path": str(self.block.zvazok_path), "sha256": self.block.zvazok_sha256},
+                  "error_free": False, "g2_values": False, "rules": {"watch": WATCH_RULE, "excluded": EXCLUDED_RULE}}
+        out = {"hook": KIND, "dir": str(self.dir), "out": str(self.out), "record": None, "sha256": None,
+               "exit_code": self.exit_code, "terminated": self.terminated, "why_not": self.why_not,
+               "error": self.error, "started": self.times["watch_started_unix"] is not None,
+               "error_free": False, "g2_values": False,
+               "note": "Q60 and Q61: watch ran beside this run, so it is no error-free run and gives no value of G2"}
+        if not self.owned:
+            return out  # No parity directory of this run (another run's, or one inside the session): nothing written.
+        try:
+            doc = g2.header(WATCH_SCHEMA, self.block.command, (status or {}).get("processed") or 0, values,
+                            guest={"vm": self.block.vm, "domain": self.block.p["domain"]})
+            doc["note"] = ("Stage G2 (proposal 10.3): safeguard watch beside a parity session, whose data never "
+                           "become a dataset. Written by skuska/parita.py.")
+            g2.write_new(self.path, doc)
+            self.block.chown([self.dir, self.path, self.log])
+            out.update(record=str(self.path), sha256=_sha(self.path))
+        except Exception as error:  # noqa: BLE001 - the session's record names it
+            out["error"] = f"the hook's record was not written: {type(error).__name__}: {error}"
+        return out
+
+
+def bundle_of(zvazok, vm):
+    """(the bundle of `vm` in the record of python -m skuska.parita zvazok, the record's sha256); Refused by name."""
+    doc = _json(zvazok, "the record of the bundles")
+    if type(doc) is not dict or doc.get("schema") != BUNDLE_SCHEMA or type(doc.get("values")) is not dict:
+        raise Refused(f"{zvazok} is no record of python -m skuska.parita zvazok ({BUNDLE_SCHEMA})")
+    name = (doc["values"].get("vms") or {}).get(vm)
+    found = [b for b in doc["values"].get("bundles") or [] if type(b) is dict and b.get("name") == name]
+    if name is None or len(found) != 1:
+        raise Refused(f"the record {zvazok} has no bundle for VM {vm}: the bundles serve the VMs of their audits")
+    return found[0], _sha(zvazok)
+
+
+def seal_readable():
+    """The seal ledger as safeguard's guard reads it before watch and replay (tcn.pecat.kontrola): ValueError when it
+    is missing or malformed."""
+    from tcn import pecat
+    pecat.kontrola(sha256="0" * 64, purpose="skuska.parita: the seal ledger before a parity block")
+
+
+class ParityBlock(g2.Block):
+    """A block of the parity plan on one VM (PARITY_BLOCK_RULE)."""
+
+    def __init__(self, protocol_path, deck_path, vm, *, zvazok, env_factory=Env, seal=seal_readable, **options):
+        super().__init__(protocol_path, deck_path, vm, **options)
+        self.zvazok_path = Path(zvazok).absolute()
+        self.env_factory, self.seal, self.watch = env_factory, seal, None
+        self.parity_plan = plan(self.full)
+        try:
+            self.bundle, self.zvazok_sha256 = bundle_of(self.zvazok_path, vm)
+            self.bundle_dir, self.bundle_problem = Path(self.bundle["dir"]), None
+        except Refused as refusal:
+            self.bundle = self.zvazok_sha256 = self.bundle_dir = None
+            self.bundle_problem = str(refusal)
+        self.beside = [*self.beside, self.watch_hook]
+
+    def watch_hook(self, block, spec, paths):
+        """The hook of Block.beside: watch beside the session's run (Watch)."""
+        self.watch = Watch(self, spec, paths, self.env_factory())
+        return self.watch.start()
+
+    def done(self, record):
+        """PARITY_DONE_RULE for the values of a session record."""
+        return record.get("done") is True and any(
+            type(s) is dict and s.get("step") == "parity" and s.get("exit_code") in (0, 1) and s.get("record")
+            for s in record.get("steps") or [])
+
+    def specs(self):
+        """The parity sessions of the block's VM (PARITY_DONE_RULE): {kind, id, deck, scenario, seed, events, attempt,
+        session_id, excluded} each; deck holds the plan's item."""
+        items = [s for s in self.parity_plan if s["vm"] == self.vm]
+        if self.only is not None:
+            unknown = [x for x in self.only if x not in {s["id"] for s in items}]
+            if unknown or not self.only or len(set(self.only)) != len(self.only):
+                raise g2.Refused(f"--only names parity sessions of VM {self.vm}, each once; not of it: "
+                                 + ", ".join(unknown))
+            chosen = [s for s in items if s["id"] in self.only]
+        else:
+            done = {r["deck_session"] for r in self.records() if self.done(r)}
+            chosen = [s for s in items if s["id"] not in done]
+            if not chosen:
+                raise g2.Refused(f"every parity session of VM {self.vm} is done")
+        specs = []
+        for item in chosen:
+            attempt = self.attempt(item["id"])
+            specs.append({"kind": KIND, "id": item["id"], "deck": {**item, "rule": PLAN_RULE},
+                          "scenario": item["scenario"], "seed": item["seed"], "events": None, "attempt": attempt,
+                          "session_id": f"g2-{self.vm}-{item['id']}-{attempt}",
+                          "excluded": {"criteria": excluded(self.full), "rule": EXCLUDED_RULE}})
+        return specs
+
+    def checks(self, specs):
+        """The refusals of Block.checks and of PARITY_BLOCK_RULE."""
+        problems = super().checks(specs)
+        if self.bundle_problem is not None:
+            problems.append(self.bundle_problem)
+        elif not self.bundle_dir.is_dir() or bundle_files(self.bundle_dir) != self.bundle.get("files"):
+            problems.append(f"the bundle {self.bundle_dir} differs from its record {self.zvazok_path} (the sha256 of "
+                            "its files)")
+        try:
+            self.seal()
+        except (ValueError, OSError) as error:
+            problems.append(f"the seal ledger: safeguard's guard cannot read it ({type(error).__name__}: {error})")
+        return problems
+
+    def audit(self, session_dir, steps):
+        """Block.audit (step 3), then the replay of its feature archive and the comparison (REPLAY_RULE)."""
+        result = super().audit(session_dir, steps)
+        self.parity(Path(session_dir), result, steps)
+        return result
+
+    def parity(self, session_dir, result, steps):
+        base = parity_dir(self.places.root, session_dir.name)
+        watch_out, replay_out, table = base / "watch", base / "replay", base / "parita.json"
+        if not watch_out.is_dir():
+            why = (self.watch.why_not or self.watch.error) if self.watch is not None else None
+            steps.append({"step": "replay", "skipped": "safeguard watch wrote no output" + (f": {why}" if why else "")})
+            return
+        step, _ = self.child("replay", replay_command(self.bundle_dir, result["features"], replay_out), steps,
+                             timeout=REPLAY_TIMEOUT_S)
+        step["out"] = str(replay_out)
+        if not replay_out.is_dir():
+            steps.append({"step": "parity", "skipped": "safeguard replay wrote no output"})
+            return
+        step, _ = self.child("parity", compare_command(watch_out, replay_out, table), steps, timeout=COMPARE_TIMEOUT_S)
+        if table.is_file():
+            v = g2.read_json(table)["values"]
+            step.update(record=str(table), sha256=_sha(table), holds=v["holds"],
+                        findings_by_kind={k: n for k, n in v["findings_by_kind"].items() if n},
+                        alarms={path: {k: v["alarms"][path][k] for k in ("alarm_rows", "alarm_events")}
+                                for path in ("watch", "replay")}, rows=v["compared"]["seq_both"])
+        self.chown([base, *(p for p in base.rglob("*"))])
+
+    def plan(self):
+        """The dry run: Block.plan with the commands of watch, the replay and the comparison of every session."""
+        out = super().plan()
+        for row in out["sessions"]:
+            session_dir = self.base / row["session_id"]
+            base = parity_dir(self.places.root, row["session_id"])
+            row.update(watch=None if self.bundle_dir is None else watch_command(self.bundle_dir, session_dir,
+                                                                                base / "watch"),
+                       replay=None if self.bundle_dir is None else replay_command(
+                           self.bundle_dir, "<the feature archive of the session's audit>", base / "replay"),
+                       compare=compare_command(base / "watch", base / "replay", base / "parita.json"))
+        out.update(bundle=None if self.bundle is None else {k: self.bundle.get(k) for k in ("name", "dir", "sha256")},
+                   rules={**out["rules"], "watch": WATCH_RULE, "replay": REPLAY_RULE, "block": PARITY_BLOCK_RULE})
+        return out
+
+
 # ------------------------------------------------------------------ the command line
 
 def _epochs(text):
@@ -749,9 +1144,37 @@ def main(argv=None):
                     help=f"N: a diagnostic override of analysis.stopping.max_epochs; {EPOCHS_PLAN}: the plan's")
     zv.add_argument("--vysledky", type=Path, default=ROOT / "data/results",
                     help="the gate records the chain requires G0 from (scripts/gates.py require G1)")
+    shown = sub.add_parser("plan", help="print the parity sessions of the protocol (PLAN_RULE)")
+    shown.add_argument("--protocol", type=Path, required=True)
+    block = sub.add_parser("block", help="run the parity sessions of one VM with watch beside them (as root via sudo)")
+    block.add_argument("--protocol", type=Path, required=True)
+    block.add_argument("--deck", type=Path, required=True, help="the deck of events of G2 (skuska/g2.py Block reads "
+                                                                "it)")
+    block.add_argument("--zvazok", type=Path, required=True, help="the record zvazok.json of python -m skuska.parita "
+                                                                  "zvazok")
+    block.add_argument("--vm", required=True)
+    block.add_argument("--only", help="these parity sessions (ids, comma-separated), each as its next attempt")
+    block.add_argument("--other-vm", choices=g2.OTHER_VM, required=True,
+                       help="what the block's plan lets the other VM run: nothing, or its own G2 block")
+    block.add_argument("--rate", action="append", default=[], metavar="SCENARIO=R",
+                       help="the rate of a scenario whose rate is null in the protocol (refused otherwise)")
+    block.add_argument("--g2-dir", type=Path, default=g2.G2_DIR, help="the G2 directory: zaznamy/, zataz/, session/, "
+                                                                      "parita/")
+    block.add_argument("--dry-run", action="store_true", help="the checks and the commands; nothing is started")
     a = parser.parse_args(argv)
     line = shlex.join(["python", "-m", "skuska.parita", *argv])
     try:
+        if a.action == "plan":
+            print(json.dumps({"rule": PLAN_RULE, "excluded": excluded(collection.protocol(a.protocol)),
+                              "sessions": plan(collection.protocol(a.protocol))}, indent=2, ensure_ascii=False))
+            return 0
+        if a.action == "block":
+            b = ParityBlock(a.protocol, a.deck, a.vm, zvazok=a.zvazok, other_vm=a.other_vm,
+                            only=None if a.only is None else a.only.split(","), rates=g2.parse_rates(a.rate),
+                            places=g2.Places(a.g2_dir), command=line)
+            result = b.plan() if a.dry_run else b.run()
+            print(json.dumps(result, indent=2, ensure_ascii=False))
+            return 2 if result.get("refusals") or result.get("stopped") else 0
         doc = make_bundles(a.protocol, a.audit, a.praca, a.out, a.epochs, vysledky=a.vysledky, command=line)
         print(json.dumps({"record": str(Path(a.out).absolute() / BUNDLE_RECORD), "vms": doc["values"]["vms"],
                           "bundles": [{k: b[k] for k in ("name", "dir", "sha256", "seconds")}
