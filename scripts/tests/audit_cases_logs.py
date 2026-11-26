@@ -724,6 +724,11 @@ _V5_CASES = [
     # here every user session of the measure phase (windows_after_user_sessions); before B13 it kept them all.
     ("traffic_realism:order_share:start", steps(traffic("eshop"), windows_after_user_sessions),
      logs("traffic_realism:order_share")),
+    # Package B14 (Q77, the executor's decision): it also leaves out a user session that starts less than D_max before
+    # the generator's stop, the request log's end record; here every user session of the measure phase (v5_traffic
+    # cut: the end records where build() puts them, every arrival after the end less D_max): there is no share to
+    # judge. Before B14 it kept them all.
+    ("traffic_realism:order_share:stop", traffic("eshop", cut=True), logs("traffic_realism:order_share")),
     ("traffic_realism:object_concentration", traffic("eshop", sessions=_distinct(E.ESHOP)),
      logs("traffic_realism:object_concentration")),
     ("traffic_realism:success_rate", traffic("eshop", sessions=tuple(  # No deliberate error: 100 %.

@@ -734,14 +734,24 @@ def realism(requests_path, intervals_path, protocol, scenario, *, windows=()):
                             deviation over sqrt(n)) of profiles.eshop.think_s.mean, their maximum at most think_s.max
                             plus THINK_LAG_S
       order_share (eshop)   of the admitted user sessions that arrived in the measure phase and did not start in
-                            [window start - D_max, window end] of any window, the share that place an order (POST
-                            /api/orders without an intended status), within order_share_tolerance_se standard errors
-                            (sqrt(p (1 - p) / n)) of p = profiles.eshop.order_share[<intensity>]; D_max is
-                            order_share_session_max_s, an upper bound of a user session's duration, one for every
-                            kind of user session (package B13, the lead's answer to Q73 point 1): a user session is
-                            left out by its start, its arrival, alone, whatever its later requests touch, because a
-                            selection by overlap with a window depends on the length of a user session, and an
-                            ordering one is longer
+                            [window start - D_max, window end] of any window nor in [stop - D_max, stop], the share
+                            that place an order (POST /api/orders without an intended status), within
+                            order_share_tolerance_se standard errors (sqrt(p (1 - p) / n)) of
+                            p = profiles.eshop.order_share[<intensity>]; D_max is order_share_session_max_s, an upper
+                            bound of a user session's duration, one for every kind of user session (package B13, the
+                            lead's answer to Q73 point 1): a user session is left out by its start, its arrival,
+                            alone, whatever its later requests touch, because a selection by overlap with a window
+                            depends on the length of a user session, and an ordering one is longer. The stop is the
+                            generator's (package B14, Q77, the executor's decision): the time of the request log's end
+                            record, start_unix + its end_mono. scripts/collection.py stops the generator right after
+                            the measure phase, so a buyer that starts less than D_max before the stop may be cut
+                            before its order; it is left out as one that starts less than D_max before a window is.
+                            A request log that does not end with an end record with a finite end_mono gives no share
+                            (value None, ok False). The numbers behind the rule, on the 16 eshop sessions of the C4
+                            pass (scripts/tests/test_order_share_c4.py; the executor's in OTAZKY_VEDUCEMU.md, "K Q77
+                            a Q78", 2026-11-26): the mean z of the share is -0.892 under B13's rule and +0.198 with
+                            the stop at the file's rates, -1.689 and -0.032 at the eshop rates of G2; with the stop
+                            the z of every session equals the z of the buyers its seeds draw
       object_concentration  the requests that name an object (object not null; an object is its kind by route and
                             its id): the most requested top_objects_share of the distinct objects (rounded up) get at
                             least top_objects_min_requests of these requests
@@ -849,15 +859,30 @@ def realism(requests_path, intervals_path, protocol, scenario, *, windows=()):
             if r["user_session"] in sessions:
                 sessions[r["user_session"]]["orders"] += (r["method"] == "POST" and r["route"] == "/api/orders"
                                                           and r["intended_status"] is None)
-        kept = [s for s in sessions.values() if not any(lo - d_max <= s["start"] <= hi for lo, hi in windows)]
+        outside_windows = [s for s in sessions.values()
+                           if not any(lo - d_max <= s["start"] <= hi for lo, hi in windows)]
+        # Package B14 (Q77, the executor's decision): the same rule at the generator's stop. scripts/collection.py sends
+        # SIGUSR2 and at once stops the generator (stop_child) after the measure phase, so a buyer that starts in its
+        # last minutes is cut before the order. The stop is the request log's end record: its end_mono, the
+        # generator's monotonic time, placed through start_unix as the intervals of the offered load below; without
+        # it there is no share to judge.
+        end = records[-1] if records[-1].get("type") == "end" else None
+        stop = origin + end["end_mono"] if end is not None and _finite(end.get("end_mono")) else None
+        kept = [] if stop is None else [s for s in outside_windows if not stop - d_max <= s["start"] <= stop]
         share = sum(1 for s in kept if s["orders"]) / len(kept) if kept else None
         tolerance = (limit["order_share_tolerance_se"] * math.sqrt(share_design * (1 - share_design) / len(kept))
                      if kept else None)
+        if stop is None:
+            note = (f"no share: the request log does not end with an end record with a finite end_mono, so the "
+                    f"generator's stop is unknown (intensity {intensity}); none of the {len(sessions)} user sessions "
+                    "judged")
+        else:
+            note = (f"{sum(1 for s in kept if s['orders'])} of {len(kept)} user sessions ordered (intensity "
+                    f"{intensity}); {len(sessions) - len(outside_windows)} starting in a window or less than D_max "
+                    f"{d_max:g} s before one, and {len(outside_windows) - len(kept)} more starting less than D_max "
+                    "before the generator's stop (the request log's end record), left out")
         out.append(_requirement("order_share", _round(share), {"share": share_design, "tolerance": _round(tolerance)},
-                                share is not None and abs(share - share_design) <= tolerance,
-                                f"{sum(1 for s in kept if s['orders'])} of {len(kept)} user sessions ordered "
-                                f"(intensity {intensity}); {len(sessions) - len(kept)} starting in a window or less "
-                                f"than D_max {d_max:g} s before one left out"))
+                                share is not None and abs(share - share_design) <= tolerance, note))
 
     counts = Counter((object_kind(r["route"]), json.dumps(r["object"])) for r in requests if r["object"] is not None)
     total = sum(counts.values())

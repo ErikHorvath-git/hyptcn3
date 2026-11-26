@@ -366,7 +366,113 @@ def test_the_order_share_leaves_a_user_session_out_by_its_start_and_not_by_its_l
     assert (found["value"], found["ok"]) == (round(3 / 15, 6), True)
     assert found["bound"] == {"share": .2, "tolerance": round(4 * math.sqrt(.2 * .8 / 15), 6)}
     assert found["note"] == ("3 of 15 user sessions ordered (intensity high); 10 starting in a window or less than "
-                             "D_max 41 s before one left out")
+                             "D_max 41 s before one, and 0 more starting less than D_max before the generator's stop "
+                             "(the request log's end record), left out")  # Package B14: the stop's count.
+
+
+def test_the_order_share_leaves_out_the_user_sessions_the_generators_stop_cuts(tmp_path, p):
+    """Package B14 (Q77, the executor's decision): 25 user sessions 20.96 s apart, every fifth one a buyer. The buyer
+    that starts less than D_max before the end record of the request log, the generator's stop, is cut before its
+    order (its funnel without the order), as the stop of scripts/collection.py right after the measure phase cuts the
+    buyers of its last minutes. D_max reaches from the end record back to the middle between user sessions 19 and 20.
+    B13's rule, which knows no stop, keeps all 25, and 4 of them ordered: 0.16, low. B14's rule leaves out the five
+    that start less than D_max before the stop: 4 of 20, the design share 0.2. No window."""
+    e = evidence
+    buyer, cut, other = [e.HOME, e.DETAIL, e.CART_ADD, e.CART, e.ORDER], [e.HOME, e.DETAIL, e.CART_ADD, e.CART], [
+        e.HOME, e.DETAIL]
+    d = session(tmp_path, p, "bursty", sessions=tuple((cut if k == 20 else buyer) if k % 5 == 0 else other
+                                                      for k in range(25)),
+                spacings=(1.,) * 24, thinks=(10.,), flat=True, measure_s=600, snapshots=600)
+    rows = records(d)
+    end = rows[-1]["end_mono"]  # The stop, after the generator's origin start_unix (the arrivals' t_mono alike).
+    users = sorted((a["t_mono"], a["user_session"]) for a in rows if a.get("type") == "arrival"
+                   and a["phase"] == "measure")
+    ordering = {r["user_session"] for r in rows if r.get("type") == "request" and r["step"] == "order"
+                and r["user_session"] in {uid for _, uid in users}}  # Not build()'s order of the warmup.
+    starts = [start for start, _ in users]
+    assert len(users) == 25 and {users[k][1] for k in (0, 5, 10, 15)} == ordering  # User session 20: no order.
+    assert {round(b - a, 2) for a, b in zip(starts, starts[1:])} == {20.96}
+    d_max = round(end - (starts[19] + starts[20]) / 2)
+    assert starts[19] + 10 < end - d_max < starts[20] - 10
+    q = copy.deepcopy(p)
+    q["audit"]["traffic"]["order_share_session_max_s"] = d_max
+    by_b13 = users  # No window: the start rule of B13 keeps every one.
+    by_b14 = [u for u in users if not end - d_max <= u[0] <= end]
+    share = [sum(uid in ordering for _, uid in kept) / len(kept) for kept in (by_b13, by_b14)]
+    assert (len(by_b13), len(by_b14), share) == (25, 20, [4 / 25, 4 / 20]) and share[1] == .2
+    found = requirement(realism(d, q), "order_share")
+    assert (found["value"], found["ok"]) == (round(4 / 20, 6), True)
+    assert found["bound"] == {"share": .2, "tolerance": round(4 * math.sqrt(.2 * .8 / 20), 6)}
+    assert found["note"] == (f"4 of 20 user sessions ordered (intensity high); 0 starting in a window or less than "
+                             f"D_max {d_max} s before one, and 5 more starting less than D_max before the generator's "
+                             "stop (the request log's end record), left out")
+
+
+@pytest.mark.parametrize("change", ["no end record", "end_mono not a number"])
+def test_a_request_log_without_the_time_of_its_end_record_gives_no_order_share(tmp_path, p, change):
+    """Package B14 (Q77, the executor's decision): without the generator's stop no user session can be judged, so the
+    order share has no value and fails, the stricter side, with the reason in its note; every other requirement is
+    judged as before. The log audit already refuses a request log without its end record (summarize:
+    requests:end_missing); an end record whose end_mono is no number only the order share refuses."""
+    d = session(tmp_path, p, "steady")
+    rows = records(d)
+    if change == "no end record":
+        rows.pop()
+    else:
+        rows[-1]["end_mono"] = None
+    evidence.jsonl(d / "traffic_requests.jsonl", rows)
+    evidence.seal(d)
+    found = realism(d, p)
+    share = requirement(found, "order_share")
+    assert (share["value"], share["ok"], share["bound"]) == (None, False, {"share": .05, "tolerance": None})
+    assert share["note"] == ("no share: the request log does not end with an end record with a finite end_mono, so "
+                             "the generator's stop is unknown (intensity low); none of the 10 user sessions judged")
+    assert all(r["ok"] for r in found["requirements"] if r["name"] != "order_share") and found["offered_load"]["ok"]
+    assert audit(d)["problems"] == {"no end record": ["traffic:requests:end_missing", "traffic_realism:order_share"],
+                                    "end_mono not a number": ["traffic_realism:order_share"]}[change]
+
+
+def test_the_synthetic_logs_end_at_least_d_max_after_their_last_user_session_starts(tmp_path, p):
+    """Package B14: v5_traffic moves the end records to D_max and one second after the arrival of the last user session
+    of the measure phase, on the grid of build()'s intervals (the post phase in intervals of 1 s from its marker, the
+    last one closed half a second in), so the stop leaves out none of them and the clean session keeps its order share
+    of 1 in 10. build()'s end stays where it lies late enough (600 s of measure phase). A session of 10 cycles, whose
+    planned run of 130 s ends before its moved logs, under a protocol rate: the envelope's level 1 lies at D with a
+    knot at the end of the measure phase, every warmup and measure interval plans what the null rate plans, and the
+    log audit finds nothing, as under the null rate."""
+    d_max = p["audit"]["traffic"]["order_share_session_max_s"]
+
+    def timeline(d):
+        rows, ivs = records(d), records(d, "traffic_intervals.jsonl")
+        last = max(a["t_mono"] for a in rows if a.get("type") == "arrival" and a["phase"] == "measure")
+        stop = next(r["t_mono"] for r in rows if r.get("type") == "phase" and r["phase"] == "post")
+        post = [(iv["mono_start"], iv["mono_end"]) for iv in ivs if iv.get("type") == "interval"
+                and iv["phase"] == "post"]
+        return last, stop, rows[-1]["end_mono"], ivs[-1]["end_mono"], post
+    short = session(tmp_path / "short", p, "steady")
+    last, stop, end, end_i, post = timeline(short)
+    assert d_max + 1 <= end - last < d_max + 2 and end == end_i and end - stop == len(post) - .5
+    assert post == [(stop + k, min(stop + k + 1, end)) for k in range(len(post))]
+    share = requirement(realism(short, p), "order_share")
+    assert (share["value"], share["ok"]) == (round(1 / 10, 6), True) and "and 0 more" in share["note"]
+    long_last, long_stop, long_end, _, long_post = timeline(session(tmp_path / "long", p, "steady", measure_s=600,
+                                                                    snapshots=600))
+    assert (long_end - long_stop, long_post, long_end - long_last > d_max + 1) == (evidence.POST_S,
+                                                                                   [(long_stop, long_end)], True)
+    rated = copy.deepcopy(p)
+    for scenario in rated["scenarios"].values():
+        scenario["rate"] = 3.7
+    at = session(tmp_path / "rated", rated, "steady")
+    a, b = records(short), records(at)
+    t_s, level = a[0]["envelope"]["t_s"], a[0]["envelope"]["level"]
+    assert b[1:] == a[1:] and end > t_s[-1] == 130  # The moved logs run past D.
+    scale = a[0]["rate"] / 3.7
+    assert b[0]["envelope"] == {"t_s": [*t_s[:-1], round(stop, 6), t_s[-1]],
+                                "level": [*(scale * x for x in level), 1]}
+    ivs = [[r for r in records(x, "traffic_intervals.jsonl") if r.get("type") == "interval"] for x in (short, at)]
+    planned = [[iv["planned_sessions"] for iv in x if iv["phase"] != "post"] for x in ivs]
+    assert planned[1] == pytest.approx(planned[0], abs=1e-6) and len(planned[0]) == int(stop)
+    assert audit(at)["problems"] == audit(short)["problems"] == []
 
 
 def test_the_cv_is_computed_on_spacings_rescaled_by_the_envelope(tmp_path, p):
@@ -901,12 +1007,16 @@ def test_under_a_rate_of_the_protocol_the_helper_keeps_the_plan_of_the_null_rate
     marker and end record, and every interval with its planned count. The envelope's level is the null one scaled by
     its rate over 3.7, and its level 1 lies after the logs end. So the log audit gives the problems of the null rate:
     none, peak_to_mean alone for the flat envelope, the offered load alone for the plan of twice the offered user
-    sessions. A protocol rate 1 % below the null rate (the scale above 1) raises."""
+    sessions. A protocol rate 1 % below the null rate (the scale above 1) raises. Package B14: the sessions plan 200
+    cycles, a planned run of 320 s, which holds their logs, whose end v5_traffic moves to D_max and a second after the
+    last user session of the measure phase (276 to 283 s); the logs of fewer cycles that run past D are
+    test_the_synthetic_logs_end_at_least_d_max_after_their_last_user_session_starts."""
     def rated(rate):
         doc = copy.deepcopy(p)
         for scenario in doc["scenarios"].values():
             scenario["rate"] = rate
         return doc
+    variant = dict(variant, snapshots=200)
     null = session(tmp_path / "null", p, "steady", **variant)
     at = session(tmp_path / "rated", rated(3.7), "steady", **variant)
     a, b = records(null), records(at)
@@ -920,8 +1030,10 @@ def test_under_a_rate_of_the_protocol_the_helper_keeps_the_plan_of_the_null_rate
     scale, envelope = a[0]["rate"] / 3.7, a[0]["envelope"]
     assert b[0]["envelope"] == {"t_s": [*envelope["t_s"][:-1], round(b[-1]["end_mono"], 6), envelope["t_s"][-1]],
                                 "level": [*(scale * x for x in envelope["level"]), 1]}
+    assert round(b[-1]["end_mono"], 6) < envelope["t_s"][-1]  # The logs end before D (package B14).
     expected = {"flat": ["traffic_realism:peak_to_mean"], "rate_factor": ["offered_load_differs_from_plan"]}
-    assert audit(at)["problems"] == audit(null)["problems"] == next((expected[k] for k in variant), [])
+    assert audit(at)["problems"] == audit(null)["problems"] == next((expected[k] for k in variant if k in expected),
+                                                                    [])
     with pytest.raises(ValueError, match="^the protocol's rate is too low for this session's measure phase$"):
         session(tmp_path / "too_low", rated(a[0]["rate"] * .99), "steady", **variant)
 

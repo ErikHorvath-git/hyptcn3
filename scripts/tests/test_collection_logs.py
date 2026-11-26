@@ -53,6 +53,7 @@ ORDERS_RESTART_S = 1.46  # build(event=True): lab/udalosti.py restarts orders in
 # SHA-256 of lab/udalosti.py in session.json and in both replies of the event script.
 SCRIPT_SHA256 = hashlib.sha256(b"synthetic lab/udalosti.py").hexdigest()
 QEMU_PID = 4242  # The session VM's QEMU in every host monitor sample (label qemu), never swapped.
+POST_S = .5  # build(): the post phase lasts half a second, its interval and both end records end at stop + POST_S.
 
 
 def restart_lines(unit, offset, base=BASE, messages=RESTART_MESSAGES):
@@ -107,12 +108,12 @@ def build(tmp_path, event=False, *, session_name="synthetic-session", base=BASE,
     heads = [dict(sample.header(schema, d.name), config=config, start_utc=at(0), start_unix=base)
              for schema in (tl.REQUEST_SCHEMA, tl.INTERVAL_SCHEMA)]
     rs = [heads[0], reqs[0], marks[0], *reqs[1:4], marks[1], reqs[4]]
-    ivs = [dict(sample.interval(i, phase, float(i), float(i + 1) if i < stop else stop + .5,
+    ivs = [dict(sample.interval(i, phase, float(i), float(i + 1) if i < stop else stop + POST_S,
                                 [r for r in reqs if r["interval"] == i]), t_start_utc=start, t_end_utc=start)
            for i, phase in enumerate(("warmup", *["measure"] * measure_s, "post"))]
     iv = [heads[1], ivs[0], marks[0], *ivs[1:stop], marks[1], ivs[stop]]
-    rs.append(dict(sample.end(reqs, len(rs), end_mono=stop + .5), end_utc=start))
-    iv.append(dict(sample.end(reqs, len(iv), end_mono=stop + .5), end_utc=start))
+    rs.append(dict(sample.end(reqs, len(rs), end_mono=stop + POST_S), end_utc=start))
+    iv.append(dict(sample.end(reqs, len(iv), end_mono=stop + POST_S), end_utc=start))
     sample.write(d / "traffic_requests.jsonl", tl.REQUEST_SCHEMA, rs)
     sample.write(d / "traffic_intervals.jsonl", tl.INTERVAL_SCHEMA, iv)
     write(d / "traffic_before.json", {"run_id": sample.RUN, "started_at": at(0)})
@@ -296,7 +297,7 @@ def _filter_segment(d, name, suffix, keep):
 
 
 def v5_traffic(d, p, *, scenario=None, sessions=None, spacings=SPACINGS, thinks=THINKS, flat=False, rate_factor=1,
-               legacy=LEGACY):
+               legacy=LEGACY, cut=False):
     """Give the session directory d (built by build(), its protocol.json and session.json already final, sealed or
     not) the traffic of a v5 profile under protocol p: logs of schema /2 (design B5b 1.4) and everything that counts
     or serves their requests (nginx and journal segments, traffic.json, the exit code in end.json, the traffic block
@@ -321,7 +322,20 @@ def v5_traffic(d, p, *, scenario=None, sessions=None, spacings=SPACINGS, thinks=
       the arrivals of the measure phase together (above about 2.38 user sessions a second two of them in interval 2).
     - A protocol rate below the rate without it (the scale would be above 1) is too low for the session's measure
       phase: ValueError.
+    Package B14 (Q77, the executor's decision): the log audit's order share leaves out a user session that starts less
+    than D_max (audit.traffic.order_share_session_max_s of p) before the end record of the request log, the
+    generator's stop. So the end records lie at least D_max and one second after the arrival of the last user session
+    of the measure phase: the post phase runs on in intervals of 1 s (build()'s summary interval) from the post
+    marker, the last one closed half a second in, as build()'s one interval of it is; where build()'s end lies late
+    enough it stays. A short session's moved end may lie after D (its planned run of warmup_s and cycles intervals
+    ends before it, as a generator that runs on after its envelope logs); under the protocol's rate its envelope's
+    level 1 then lies at D with a knot at the end of the measure phase instead of the logs' end, so the plan of every
+    interval of the warmup and measure phases is still the one without the rate, and only the post phase before D,
+    where nothing arrives and no plan is compared with offered user sessions, plans more.
     scenario: another scenario of p for the session (session.json follows).
+    cut: every user session of the measure phase arrives less than D_max before the end records, which stay where
+    build() puts them: the generator's stop cuts them all (package B14). Where the measure phase reaches back that far,
+    the first one arrives D_max less one second before the end, else as without cut.
     """
     if "profiles" not in p:
         return None
@@ -347,12 +361,15 @@ def v5_traffic(d, p, *, scenario=None, sessions=None, spacings=SPACINGS, thinks=
                         lambda line: not any(f"rid={rid} " in line for rid in gone))
     base = log_r[0]["start_unix"]
     stop = next(r["t_mono"] for r in log_r if r.get("type") == "phase" and r["phase"] == "post")
-    end_mono = log_r[-1]["end_mono"]
+    built = stop + POST_S  # The end of build()'s logs, also when the traffic of an earlier run moved it.
+    d_max = p["audit"]["traffic"]["order_share_session_max_s"]  # Package B14: D_max of the order share.
     windows = []
     if meta.get("events") and (d / "events.json").exists():
         windows = [(e["host_start_unix"] - 1 - base, e["host_stopped_unix"] + meta["event_grace_s"] - base)
                    for e in logs.read_json(d / "events.json")["events"] if "host_stopped_unix" in e]
     first = max([2.01, *(hi + .01 for _, hi in windows)])  # After the first interval and every window.
+    if cut:  # Every user session of the measure phase less than D_max before the end records (package B14).
+        first = max(first, built - d_max + 1)
     # The think times of each user session in turn, and its length: 1 ms a request and its think times.
     turns = [sum(len(steps) - 1 for steps in sessions[:k]) for k in range(len(sessions))]
     gaps = [[thinks[(turns[k] + j) % len(thinks)] for j in range(len(steps) - 1)] for k, steps in enumerate(sessions)]
@@ -364,7 +381,7 @@ def v5_traffic(d, p, *, scenario=None, sessions=None, spacings=SPACINGS, thinks=
     # D: the envelope spans [0, D], the planned run of the protocol (collection._v5_traffic: warmup_s and cycles
     # intervals), which the log audit binds since package B10 (finding F3 of B5b); warmup_s < D.
     span = warmup + meta["cycles"] * p["interval_s"]
-    if span <= max(end_mono, warmup):
+    if span <= max(built, warmup):
         raise ValueError("the planned run of the protocol ends before the logs of build() do")
     # Peak-to-mean twice the bound: a triangle of width (measure length / bound); flat: level 1 everywhere.
     width = min(last - first, (stop - 1) / p["scenario_rule"]["min_peak_to_mean"])
@@ -377,6 +394,13 @@ def v5_traffic(d, p, *, scenario=None, sessions=None, spacings=SPACINGS, thinks=
     unit = total / sum(spacings)
     cumulative = [start_area + unit * sum(spacings[:k]) for k in range(len(sessions))]
     arrive = [round(first, 6)] + [_inverse(t_s, level, c, first, last) for c in cumulative[1:]]
+    # Package B14: the end records at least D_max and a second after the last arrival of the measure phase, in the
+    # post phase's intervals of 1 s, its last one closed POST_S in; build()'s end where it lies late enough, and cut.
+    need = max(arrive) + d_max + 1
+    end_mono = built if cut or need <= built else stop + math.ceil(need - stop - POST_S) + POST_S
+    log_i = [*(r for r in log_i[:-1] if not (r.get("type") == "interval" and r["phase"] == "post")),
+             *(sample.interval(int(stop) + k, "post", stop + k, min(stop + k + 1, end_mono), [])  # As build() has them.
+               for k in range(math.ceil(end_mono - stop))), log_i[-1]]
 
     # The user sessions: (arrival time, the requests in time order).
     requests = [r for r in log_r if r.get("type") == "request"]
@@ -442,11 +466,12 @@ def v5_traffic(d, p, *, scenario=None, sessions=None, spacings=SPACINGS, thinks=
         scale = plan / rate
         if scale > 1:
             raise ValueError("the protocol's rate is too low for this session's measure phase")
-        if scale < 1:  # Either envelope is constant on its last segment: a knot at the logs' end, then 1 at D.
-            at_end = round(end_mono, 6)
-            if level[-2] != level[-1] or not t_s[-2] < at_end < t_s[-1]:
-                raise ValueError("the envelope cannot reach its level 1 after the logs end")
-            t_s, level = [*t_s[:-1], at_end, t_s[-1]], [*(scale * x for x in level), 1]
+        if scale < 1:  # Either envelope is constant on its last segment: a knot at the logs' end, then 1 at D;
+            # where the logs run past D (package B14, see the docstring) the knot lies at the end of the measure phase.
+            knot = round(end_mono if end_mono < t_s[-1] else stop, 6)
+            if level[-2] != level[-1] or not t_s[-2] < knot < t_s[-1]:
+                raise ValueError("the envelope cannot reach its level 1 after the measure phase")
+            t_s, level = [*t_s[:-1], knot, t_s[-1]], [*(scale * x for x in level), 1]
     for iv in ivs:
         lo, hi = iv["mono_start"], iv["mono_end"]
         members = [r for r in requests if r["interval"] == iv["interval"]]
