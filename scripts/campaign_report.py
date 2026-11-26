@@ -6,6 +6,9 @@
   .venv/bin/python scripts/campaign_report.py envelope SESSION [SESSION ...] --protocol P --out NEW_FILE
   .venv/bin/python scripts/campaign_report.py majflt AUDIT [AUDIT ...] --protocol P --out NEW_FILE
   .venv/bin/python scripts/campaign_report.py timing RECORD [RECORD ...] [--others AUDIT ...] --out NEW_FILE
+  .venv/bin/python scripts/campaign_report.py guest SESSION [SESSION ...] [--g2-dir DIR] --out NEW_FILE
+  .venv/bin/python scripts/campaign_report.py events SESSION [SESSION ...] --protocol P [--g2-dir DIR] --out NEW_FILE
+  .venv/bin/python scripts/campaign_report.py restarts SESSION [SESSION ...] --protocol P [--g2-dir DIR] --out NEW_FILE
   .venv/bin/python scripts/campaign_report.py controls SESSION [SESSION ...] --out NEW_FILE
   .venv/bin/python scripts/campaign_report.py faults SESSION [SESSION ...] --records DIR --out NEW_FILE
   .venv/bin/python scripts/campaign_report.py parity WATCH_DIR REPLAY_DIR --out NEW_FILE
@@ -55,6 +58,34 @@ RAM image, with the definitions of skuska/cas.py, which only this mode
 imports. It writes NEW_FILE, a new JSON record with the provenance header of
 check E. Exit 0 = the criterion is met without a finding, 1 = a finding (the
 record names it), 2 = usage or data error (nothing written).
+
+The modes guest, events and restarts (package H1b6a; the criteria
+guest_matches_repository, event_effects and restart_loops_bounded of G2,
+map rows 1 to 3, the lead's answers Q43 and Q50 to Q53; GUEST_RULE,
+EVENTS_RULE with NO_EFFECT_RULE and PHASE_RULE, RESTARTS_RULE with
+ASSIGN_RULE, FITS_RULE, BOUNDED_RULE, ELSEWHERE_RULE and PERIODS_RULE) are
+the tables of the G2 sessions given: guest compares the deployed files of
+lab/ in each session's guest_before with git show <commit>:lab/<file> of
+its commit and the dpkg lists and timers between the VMs; events lists
+every occurrence (session, VM, type, the host times of its start and stop,
+their real phases against the collector's grid, the predicate, for
+naprazdno the rule of Q50) and counts each type on both VMs and on each
+(Q43); restarts assigns the restart loops of the guests' journals to the
+occurrences of zla_konfiguracia_sluzby and to the kill of the service of
+skuska/poruchy.py, judges them by the rules of Q52 and names every period
+the register lab/periods.json does not. Each reads the session directory,
+its audit record and the records of the G2 driver in --g2-dir (zaznamy/,
+and poruchy/ for restarts), honours what they say of a session (G2_SELECTION:
+values.excluded, the kinds of H4, the load rule), names every file it reads
+with its SHA-256 and writes NEW_FILE, a new JSON record with the provenance
+header of check E and the stage G2. Exit 0 = the criterion is met, 1 = it is
+not (the record names every finding and missing minimum), 2 = usage or data
+error (nothing written). Only they import, inside their functions,
+scripts/gates.py (the binding of the protocol), skuska/g2.py, skuska/cas.py
+and skuska/poruchy.py (the records' schemas and kinds), scripts/collection.py
+(deployed_paths), scripts/collection_logs.py (the event window and the lines
+of the log audit) and scripts/lab_trial.py (the journal, the restart loops,
+periods_of and autovacuum_property; Q53).
 
 The mode controls (the criterion controls_paired of G2, the lead's answers
 to Q46 to Q48; CONTROLS_RULE) is the table of shifts of the controls on the
@@ -4997,6 +5028,1403 @@ def timing(args, command):
     return 0 if criterion["met"] and not findings else 1
 
 
+# ---------------------------------------------------------------- G2 tables: guest, events, restarts (package H1b6a)
+# The criteria guest_matches_repository, event_effects and restart_loops_bounded of G2 (the lead's G2 skeleton, map
+# rows 1 to 3, the lead's answers Q43 and Q50 to Q53). The three modes read saved files only: the G2 session
+# directory (never its raw/), its audit record, the records of the G2 driver (skuska/g2.py,
+# <g2-dir>/zaznamy/<session>.json) and of the fault injector (skuska/poruchy.py, <g2-dir>/poruchy/<session>.json).
+
+GUEST_TABLE_SCHEMA = "hyptcn3/g2-guest-table/1"
+EVENTS_TABLE_SCHEMA = "hyptcn3/g2-events-table/1"
+RESTARTS_TABLE_SCHEMA = "hyptcn3/g2-restarts-table/1"
+GUEST_REPOSITORY = ROOT  # The git repository whose commits the mode guest reads: this script's own.
+G2_SESSION_EVENTS = "hyptcn3/session-events/1"  # scripts/collection.py Events.close: the schema of events.json.
+G2_JOURNAL_SEGMENT = "hyptcn3/guest-journal-segment/1"  # lab/guest_state.py journal: guest/journal_segment.json.
+G2_LOG_SEGMENT = "hyptcn3/guest-log-segment/1"  # lab/guest_state.py segment: guest/session_segment.json.
+EMPTY_EVENT = "naprazdno"  # Decision D8: the empty event, its predicate none by definition (lab/udalosti.py).
+RESTART_TYPE = "zla_konfiguracia_sluzby"  # The event type whose occurrences restart_loops_bounded names.
+KILL_FAULT = "zabita_sluzba"  # skuska/poruchy.py FAULTS: the killed guest service outside an event (H4).
+# lab/udalosti.py unit_states: APPS, nginx and DATABASE, the units of the reply of every start and stop of an event.
+NO_EFFECT_UNITS = ("hyptcn-lab@auth", "hyptcn-lab@catalog", "hyptcn-lab@orders", "hyptcn-lab@docs",
+                   "hyptcn-lab@worker", "nginx", "postgresql@15-main")
+FITS_S = (3.0, 3.5)  # Q52: every spacing of a loop (and at the kill every delay) lies here; the lab: 3.2488-3.2517 s.
+START_LIMIT_BURST = 5  # lab/hyptcn-lab@.service StartLimitBurst (Q52).
+START_LIMIT_INTERVAL_S = 60  # lab/hyptcn-lab@.service StartLimitIntervalSec (Q52).
+GUEST_CLOCK_S = 1.0  # The log audit's bound of the guest clock's offset (scripts/collection_logs.py guest_clock).
+PERIOD_SPACINGS = 5  # Q52: a group of journal lines with at least 5 spacings ...
+PERIOD_CV = 0.1  # ... and a coefficient of variation of them below 0.1 is periodic.
+KILLS_NEEDED = 1  # The fault plan (skuska/poruchy.py PLAN_RULE): the killed service once on each VM.
+# A line of systemd (PID 1) about a hyptcn-lab@ unit that a restart loop leaves: its unit and what it says.
+G2_UNIT_LINE = re.compile(r"systemd\[1\]: (hyptcn-lab@[\w.-]+)\.service: (Scheduled restart job|Failed with result|"
+                          r"Start request repeated too quickly)")
+G2_SYSTEMD_LINE = re.compile(r"^\S+ \S+ systemd\[1\]: (.*)$")
+G2_SYSTEMD_TROUBLE = re.compile(r"(?i)fail|Scheduled restart job|Start request repeated too quickly")
+G2_JOURNAL_FORM = re.compile(r"^\S+ \S+ ([^\s\[:]+)(?:\[\d+\])?: (.*)$")  # <time> <host> <identifier>[<pid>]: ...
+GUEST_FILE_LINE = re.compile(r"([0-9a-f]{64})  (/\S+)")  # A sha256sum line of collection.guest_identity.
+G2_SELECTION = (
+    "the sessions of a table (the executor's judgment, G2 preparation, from the records of H1a to H1b4): a session "
+    "whose driver's record names the criterion in values.excluded.criteria is left out by name (skuska/g2.py "
+    "Block.record: the ground truth of H1b1 and the worst case of time of H1b4 name event_effects, "
+    "marked_rows_per_event and invalid_rows.max), and so is, where the criterion's rule says so, a session of H4 or "
+    "one the driver's record names no audit of; where the rule reads the load, a session whose record says counted "
+    "false (skuska/g2.py LOAD_RULE: a heavy process or a run outside the block's plan in its measured phase; the "
+    "skeleton, section 0: nothing that goes into the values or criteria of G2 is measured beside one) counts towards "
+    "no minimum, but what it shows is judged and a finding in it is a finding (Q51: an invalid predicate is never "
+    "left out); every other session counts")
+
+
+def _g2_digest(path):
+    with open(path, "rb") as stream:
+        return hashlib.file_digest(stream, "sha256").hexdigest()
+
+
+class G2TableSession:
+    """One G2 session directory as the modes guest, events and restarts read it: session.json, protocol.json (the
+    file session.json binds) and the driver's record <g2-dir>/zaznamy/<session>.json (bound by its session_id, vm,
+    stage, session_dir and session_json_sha256), every file read listed with its sha256; a DataError by name."""
+
+    def __init__(self, path, g2_dir):
+        from skuska import g2  # The driver's record: its schema and stage.
+        self.dir = Path(os.path.abspath(path))
+        self.files = []
+        if not self.dir.is_dir():
+            raise DataError(f"{self.dir}: not a session directory")
+        self.meta, self.meta_sha = self.read("session.json")
+        self.id, self.vm = self.meta.get("session_id"), self.meta.get("vm")
+        if not isinstance(self.id, str) or not isinstance(self.vm, str) or self.id != self.dir.name:
+            raise DataError(f"{self.dir}: session.json names the session {_shown(_get(self.meta, 'session_id'), 80)} "
+                            f"on VM {_shown(_get(self.meta, 'vm'), 20)}, not the directory's session on a VM")
+        if self.meta.get("role") != CONTROLS_ROLE:
+            raise DataError(f"{self.dir}: session.json names the role {_shown(_get(self.meta, 'role'), 40)}, not "
+                            f"{CONTROLS_ROLE} (the sessions of G2 are diagnostic runs)")
+        self.protocol, self.protocol_sha = self.read("protocol.json")
+        if self.meta.get("protocol_sha256") != self.protocol_sha:
+            raise DataError(f"{self.dir}: protocol.json has the sha256 {self.protocol_sha}, session.json binds "
+                            f"{_shown(_get(self.meta, 'protocol_sha256'), 80)}")
+        self.record_path = Path(os.path.abspath(g2_dir)) / "zaznamy" / f"{self.id}.json"
+        record, self.record_sha = self.read("record", self.record_path, g2.SESSION_SCHEMA)
+        v = record.get("values")
+        if (not isinstance(v, dict) or v.get("stage") != g2.STAGE or v.get("session_id") != self.id
+                or v.get("vm") != self.vm or not isinstance(v.get("session_dir"), str)
+                or os.path.realpath(v["session_dir"]) != os.path.realpath(self.dir)
+                or v.get("session_json_sha256") != self.meta_sha):
+            raise DataError(f"{self.record_path}: the driver's record is not of this session (its stage, session_id, "
+                            "vm, session_dir or session_json_sha256)")
+        self.values, self.kind = v, v.get("kind")
+        excluded = v.get("excluded")
+        if excluded is None:
+            self.excluded, self.excluded_rule = [], None
+        elif (isinstance(excluded, dict) and isinstance(excluded.get("criteria"), list)
+              and all(isinstance(name, str) for name in excluded["criteria"])):
+            self.excluded, self.excluded_rule = excluded["criteria"], excluded.get("rule")
+        else:
+            raise DataError(f"{self.record_path}: values.excluded is {_shown(excluded, 80)}, neither null nor "
+                            "{criteria: [...], rule}")
+        vms = [row.get("name") for row in self.protocol.get("vms") or [] if isinstance(row, dict)]
+        self.vms = vms if vms and all(isinstance(name, str) for name in vms) else None
+
+    def read(self, name, path=None, schema=None):
+        """(the JSON object, its sha256) of a file of the session, listed in files."""
+        path = Path(path) if path is not None else self.dir / name
+        doc, sha = _controls_file(path, schema)
+        self.listed(name, path, sha)
+        return doc, sha
+
+    def listed(self, name, path, sha):
+        self.files.append({"name": name, "path": str(path), "sha256": sha})
+
+    def bind(self, protocol):
+        """A DataError unless the session's protocol.json agrees with --protocol outside the paths of G1 and later
+        stages (gates.stage_sha256 of stage G0, the hash a record of G0 binds) and --protocol names the session's
+        VM."""
+        from scripts import gates
+        try:
+            mine = gates.stage_sha256(self.dir / "protocol.json", "G0")
+        except ValueError as error:
+            raise DataError(f"{self.dir}/protocol.json: {error}") from None
+        if mine != protocol["binding_G0"]:
+            raise DataError(f"{self.dir}: its protocol.json differs from --protocol {protocol['path']} outside the "
+                            f"paths of G1 and later stages (gates.stage_sha256 G0 {mine}, not {protocol['binding_G0']})")
+        if self.vm not in protocol["vms"]:
+            raise DataError(f"{self.dir}: a session of VM {self.vm}, which --protocol does not name")
+
+    def audit(self):
+        """The values of the audit record the driver's record names (values.audit.report, bound by its sha256 and by
+        its session_dir, session_sha256 and protocol_sha256); None when it names none."""
+        named = self.values.get("audit")
+        if named is None:
+            return None
+        if not isinstance(named, dict) or not isinstance(named.get("report"), str):
+            raise DataError(f"{self.record_path}: values.audit names no audit record")
+        doc, sha = self.read("audit", named["report"], AUDIT_SCHEMA)
+        values = doc.get("values")
+        if (sha != named.get("sha256") or not isinstance(values, dict)
+                or not isinstance(values.get("session_dir"), str)
+                or os.path.realpath(values["session_dir"]) != os.path.realpath(self.dir)
+                or values.get("session_sha256") != self.meta_sha or values.get("protocol_sha256") != self.protocol_sha):
+            raise DataError(f"{named['report']}: not the audit record of this session that the driver's record names "
+                            "(its sha256, session_dir, session_sha256 or protocol_sha256)")
+        return values
+
+    def selection(self, criterion, h4=(), audited=True, load=True):
+        """(status, why) of the session for the criterion by G2_SELECTION: left_out, load or counted."""
+        if criterion in self.excluded:
+            return "left_out", f"its record leaves it out of {criterion} (values.excluded: {self.excluded_rule})"
+        if self.kind in h4:
+            return "left_out", f"a session of H4 (its record's kind {self.kind})"
+        if not audited:
+            return "left_out", "the driver's record names no audit of it"
+        if load and self.values.get("counted") is not True:
+            summary = (self.values.get("load") or {}).get("summary") if isinstance(self.values.get("load"), dict) \
+                else None
+            reasons = summary.get("reasons") if isinstance(summary, dict) else None
+            return "load", ("its record says counted false (skuska/g2.py LOAD_RULE)"
+                            + (": " + "; ".join(map(str, reasons)) if reasons else ""))
+        return "counted", None
+
+    def entry(self, status=None, why=None):
+        return {"session_id": self.id, "vm": self.vm, "kind": self.kind, "scenario": self.meta.get("scenario"),
+                "path": str(self.dir), "status": status, "why": why,
+                "record": {"path": str(self.record_path), "sha256": self.record_sha}, "files": self.files}
+
+    def planned(self):
+        """(the planned events of session.json, the records of events.json or None when it is absent); a DataError
+        by name."""
+        planned = self.meta.get("events")
+        if not isinstance(planned, list) or not all(isinstance(item, dict) and isinstance(item.get("type"), str)
+                                                    for item in planned):
+            raise DataError(f"{self.dir}: session.json events is no list of planned events with a type")
+        records = None
+        if planned and (self.dir / "events.json").exists():
+            doc, _ = self.read("events.json", schema=G2_SESSION_EVENTS)
+            records = doc.get("events")
+            if not isinstance(records, list):
+                raise DataError(f"{self.dir}/events.json holds no list of events")
+        return planned, records
+
+
+def _g2_protocol(path):
+    """--protocol of the modes events and restarts: {path, sha256, binding_G0, binding_rule, types, vms, interval_s};
+    a DataError, a usage error before any session is read, when it is no protocol of schema 3 with events.types, vms
+    and interval_s."""
+    from scripts import gates
+    try:
+        raw = Path(path).read_bytes()
+        doc = json.loads(raw)
+    except (OSError, ValueError) as error:
+        raise DataError(f"cannot read protocol {path}: {error}") from None
+    events = doc.get("events") if isinstance(doc, dict) else None
+    types = events.get("types") if isinstance(events, dict) else None
+    vms = [row.get("name") for row in doc.get("vms") or [] if isinstance(row, dict)] if isinstance(doc, dict) else []
+    if (not isinstance(doc, dict) or doc.get("schema") != protocol_v5.SCHEMA or not isinstance(types, dict) or not types
+            or not vms or not all(isinstance(name, str) for name in vms) or not _number(doc.get("interval_s"))
+            or doc["interval_s"] <= 0):
+        raise DataError(f"protocol {path}: no protocol of schema {protocol_v5.SCHEMA} with events.types, vms and "
+                        "interval_s")
+    try:
+        binding = gates.stage_sha256(path, "G0")
+    except ValueError as error:
+        raise DataError(f"protocol {path}: {error}") from None
+    return {"path": os.path.abspath(path), "sha256": hashlib.sha256(raw).hexdigest(), "binding_G0": binding,
+            "binding_rule": "gates.stage_sha256 of stage G0 (the hash a record of G0 binds): the protocol without the "
+                            "paths determined_at gives G1 and later stages", "types": sorted(types), "vms": vms,
+            "interval_s": doc["interval_s"]}
+
+
+def _g2_start(args, mode):
+    """(out, session paths) of a mode; an error line on stderr and None when --out exists or a directory is named
+    twice (nothing read)."""
+    out = Path(os.path.abspath(args.out))
+    if out.exists() or out.is_symlink():
+        print(f"campaign_report: --out already exists, nothing was read or written: {out}", file=sys.stderr)
+        return None
+    paths = [os.path.abspath(path) for path in args.session_dirs]
+    real = [os.path.realpath(path) for path in paths]
+    twice = sorted({path for path, r in zip(paths, real) if real.count(r) > 1})
+    if twice:
+        print(f"campaign_report: {mode}: a session directory is named more than once: " + ", ".join(twice),
+              file=sys.stderr)
+        return None
+    return out, paths
+
+
+def _g2_dir(args):
+    from skuska import g2  # The default G2 directory of the driver (the lead's G2 skeleton, section 5).
+    return Path(os.path.abspath(args.g2_dir)) if args.g2_dir is not None else g2.G2_DIR
+
+
+def _g2_refusals(mode, out, sessions, refused):
+    """The refusals of a mode, an --out inside a session directory among them, printed; True when there are any."""
+    target = Path(os.path.realpath(out.parent))
+    refused = refused + [f"refusing to write {out} inside the session directory {s.dir}" for s in sessions
+                         if target == Path(os.path.realpath(s.dir)) or target.is_relative_to(os.path.realpath(s.dir))]
+    if refused or not sessions:
+        for why in refused or ["no session"]:
+            print(f"campaign_report: {mode}: {one_line(why)}", file=sys.stderr)
+        print(f"campaign_report: {mode}: {len(refused)} refusal(s): no table, nothing written", file=sys.stderr)
+        return True
+    return False
+
+
+def _g2_record(schema, guest, command, n, values, note):
+    """A new record with check E's header (commit, date, host, guest, command, n) and values with the stage G2."""
+    identity = git_identity()
+    return {"schema": schema, "commit": identity["commit"], "commit_dirty": identity["dirty"],
+            "date": datetime.now(timezone.utc).isoformat(timespec="seconds"), "host": platform.platform(),
+            "guest": guest, "command": command, "n": n, "values": {"stage": "G2", **values}, "note": note}
+
+
+def _g2_write(out, record):
+    """Write the new record exclusively; 0, or 2 with the error on stderr."""
+    text = json.dumps(record, indent=1, ensure_ascii=False, allow_nan=False) + "\n"
+    try:
+        out.parent.mkdir(parents=True, exist_ok=True)
+        stream = open(out, "x", encoding="utf-8")
+    except FileExistsError:
+        print(f"campaign_report: --out appeared meanwhile, nothing was overwritten: {out}", file=sys.stderr)
+        return 2
+    except OSError as error:
+        print(f"campaign_report: cannot create {out}: {type(error).__name__}: {error}", file=sys.stderr)
+        return 2
+    try:
+        with stream:
+            stream.write(text)
+    except OSError as error:
+        out.unlink(missing_ok=True)
+        print(f"campaign_report: cannot write {out}: {type(error).__name__}: {error}", file=sys.stderr)
+        return 2
+    return 0
+
+
+def _g2_segment_file(s, name, schema, suffix):
+    """(path, None) of the file of guest/<name> whose entry's name ends in -<suffix>, its bytes bound by the entry's
+    gz_sha256, or (None, why); a segment record that is no JSON object is a DataError."""
+    if not (s.dir / "guest" / name).exists():
+        return None, f"guest/{name} is missing (a capture that did not complete fetches none)"
+    doc, _ = s.read(f"guest/{name}")
+    if doc.get("schema") != schema:
+        return None, f"guest/{name} has the schema {_shown(_get(doc, 'schema'), 60)}, not {schema}"
+    entries = [e for e in doc.get("files") or [] if isinstance(e, dict) and isinstance(e.get("name"), str)
+               and e["name"].endswith("-" + suffix)]
+    if len(entries) != 1:
+        return None, f"guest/{name} lists {len(entries)} files whose name ends in -{suffix}, not one"
+    file = entries[0].get("file")
+    if not isinstance(file, str) or not file or "/" in file or file in (".", ".."):
+        return None, f"guest/{name} names no file of guest/ for its -{suffix}"
+    path = s.dir / "guest" / file
+    try:
+        sha = _g2_digest(path)
+    except OSError as error:
+        return None, f"guest/{file} cannot be read ({type(error).__name__}: {error})"
+    if sha != entries[0].get("gz_sha256"):
+        return None, f"guest/{file} is not the file guest/{name} binds (its gz_sha256)"
+    s.listed(f"guest/{file}", path, sha)
+    return path, None
+
+
+def _g2_journal(s):
+    """(path, [(unix time, line)]) of the session's guest journal (lab_trial.journal_lines), or (None, why)."""
+    from scripts import lab_trial  # The lab test's reader of a fetched journal (Q53).
+    path, why = _g2_segment_file(s, "journal_segment.json", G2_JOURNAL_SEGMENT, "journal.txt")
+    if path is None:
+        return None, why
+    try:
+        return path, list(lab_trial.journal_lines(path))
+    except (OSError, EOFError, ValueError) as error:
+        raise DataError(f"{path}: the journal its segment binds cannot be read ({type(error).__name__}: "
+                        f"{error})") from None
+
+
+def _g2_window(window):
+    """A window [start, end] of host times as a table shows it, or None."""
+    return None if window is None else {"start_unix": round(window[0], 6), "end_unix": round(window[1], 6),
+                                        "start_utc": utc(window[0]), "end_utc": utc(window[1])}
+
+
+# ------------------------------------------------ the mode guest (criterion guest_matches_repository)
+
+GUEST_GUEST = ("none: the mode guest reads saved session files and the records of the G2 driver, and the files of "
+               "lab/ of each session's commit through git; no VM is contacted")
+GUEST_RULE = (
+    "The criterion guest_matches_repository of G2 (the lead's G2 skeleton, map row 1, the lead's answer to Q53): the "
+    "sha256 of the deployed files of lab/ on both VMs are those of the files of lab/ in the commit. Of each G2 session "
+    "directory given the mode reads session.json (commit, commit_dirty, vm, guest_before: the identity "
+    "collection.guest_identity took before the capture, whose stack_manifest holds a sha256sum line of every path of "
+    "the deployed set, the dpkg-query lines of nginx, postgresql, python3 and python3-psycopg2 and the line of the "
+    "active timers; lab_sha256, the lab/ of the tree that ran the session), protocol.json (the session's copy, the "
+    "file session.json protocol_sha256 binds; its vms name the VMs) and the driver's record "
+    "<g2-dir>/zaznamy/<session>.json (G2TableSession). The files of a commit come from the repository of this script "
+    "and never from its working tree: git rev-parse --verify <commit>^{commit} must give the commit back, git ls-tree "
+    "-z <commit> lab/ lists the top-level entries of lab/ (a blob of mode 100644 or 100755 is a deployed file; a tree "
+    "such as lab/tests is not, as collection.lab_files takes files only), and the sha256 of a file is that of the "
+    "bytes of git show <commit>:lab/<file>, checked against the blob's object id in the listing (git's hash of "
+    "'blob <size>' and a NUL before the bytes), so no filter or text conversion passes unseen; the deployed set of the "
+    "commit is collection.deployed_paths of its files (/opt/hyptcn-lab/<file> and the two copies lab/install.sh "
+    "installs). Per session: its VM and the kind of its record, the commit and commit_dirty, and per guest path the "
+    "guest's sha256, the commit's and whether they are equal (a path of the commit's set without a line, or a line of "
+    "a path the set lacks, differs too); whether session.json lab_sha256 equals the commit's lab/ (else the session's "
+    "own check, collection.guest_mismatch against the working tree, compared another lab/); the dpkg lines and the "
+    "timers of the manifest. Per VM the distinct dpkg and timers values over its sessions, and whether the VMs agree. "
+    "A session whose record names guest_matches_repository in values.excluded.criteria is left out by name "
+    "(G2_SELECTION); every other session counts, of every kind, verdict and load (the guest is one for every table of "
+    "G2). The criterion is met when every VM of the protocol has a session, the guest of every session equals its "
+    "commit's lab/ and so does its lab_sha256, and each VM shows one dpkg and one timers value over its sessions, the "
+    "same on every VM; every other outcome is a finding by name. Limits, no finding: the manifest holds the deployed "
+    "set of the session's own tree only, so a stale file an older deployment left in /opt/hyptcn-lab is not seen; that "
+    "only labctl deploy deployed is the evidence of lab_trial deploy (map row 1, P4), not of this table. Refused by "
+    "name, each a data error: a directory without session.json or protocol.json, a session of another role than "
+    "diagnostic, a protocol.json other than the one session.json binds, a driver's record missing or of another "
+    "session, a session.json without a stack_manifest of lines or a lab_sha256, a commit that is no full object name "
+    "or not in the repository, an entry of lab/ at the commit that is no regular file or whose bytes do not give its "
+    "object id, sessions whose protocols name other VMs or a VM the protocol does not name, a directory named twice, "
+    "and an --out that exists (refused before anything is read) or lies inside a session directory. Exit 0: the table "
+    "is written to --out, a new JSON record with the provenance header of check E and the stage G2, and the criterion "
+    "is met; 1: the table is written and the criterion is not met, every finding named; 2: a usage or data error, "
+    "every refusal named on stderr and nothing written.")
+
+
+def _git(repository, *args):
+    try:
+        return subprocess.run(["git", "-C", str(repository), *args], capture_output=True, timeout=120)
+    except (OSError, subprocess.SubprocessError) as error:
+        raise DataError(f"git {args[0]} cannot run in {repository}: {type(error).__name__}: {error}") from None
+
+
+def guest_commit_files(repository, commit):
+    """{lab/<file>: sha256} of the top-level files of lab/ in `commit` of the git repository `repository`
+    (GUEST_RULE), from git and never from a working tree; a DataError by name."""
+    if not isinstance(commit, str) or not re.fullmatch(r"[0-9a-f]{40}|[0-9a-f]{64}", commit):
+        raise DataError(f"the commit {_shown(commit, 80)} is no full object name")
+    done = _git(repository, "rev-parse", "--verify", "--quiet", f"{commit}^{{commit}}")
+    if done.returncode or done.stdout.decode(errors="replace").strip() != commit:
+        raise DataError(f"the commit {commit} is not in the repository {repository}")
+    done = _git(repository, "ls-tree", "-z", commit, "lab/")
+    if done.returncode:
+        raise DataError(f"git ls-tree {commit} lab/ failed in {repository}: "
+                        + done.stderr.decode(errors="replace").strip()[:200])
+    files = {}
+    for item in done.stdout.split(b"\0"):
+        if not item:
+            continue
+        head, _, raw_name = item.partition(b"\t")
+        mode, kind, oid = head.decode(errors="replace").split(" ")
+        name = raw_name.decode(errors="replace")
+        if kind != "blob":
+            continue  # A tree (lab/tests) is no deployed file: collection.lab_files takes the files of lab/ only.
+        if mode not in ("100644", "100755"):
+            raise DataError(f"{name} at the commit {commit} is a blob of mode {mode}, no regular file")
+        shown = _git(repository, "show", f"{commit}:{name}")
+        if shown.returncode:
+            raise DataError(f"git show {commit}:{name} failed in {repository}: "
+                            + shown.stderr.decode(errors="replace").strip()[:200])
+        data = shown.stdout
+        object_hash = hashlib.sha1 if len(oid) == 40 else hashlib.sha256
+        if object_hash(b"blob %d\x00" % len(data) + data).hexdigest() != oid:
+            raise DataError(f"the bytes git show gives of {commit}:{name} are not its blob {oid} of git ls-tree")
+        files[name] = hashlib.sha256(data).hexdigest()
+    if not files:
+        raise DataError(f"lab/ holds no file at the commit {commit}")
+    return files
+
+
+def guest_manifest(identity):
+    """{files: {guest path: sha256}, packages: [dpkg line], timers: [timer] or None} of a guest identity's
+    stack_manifest (collection.guest_identity: sha256sum lines, dpkg-query lines, the line 'timers: ...'), or None
+    when it has no list of lines."""
+    manifest = identity.get("stack_manifest") if isinstance(identity, dict) else None
+    if not isinstance(manifest, list) or not all(isinstance(line, str) for line in manifest):
+        return None
+    files, packages, timers = {}, [], None
+    for line in manifest:
+        found = GUEST_FILE_LINE.fullmatch(line)
+        if found:
+            files[found[2]] = found[1]
+        elif line.startswith("timers:"):
+            timers = sorted(line[len("timers:"):].split())
+        else:
+            packages.append(line)
+    return {"files": files, "packages": sorted(packages), "timers": timers}
+
+
+def guest_row(s, commits, repository):
+    """The row of one session by GUEST_RULE; `commits` caches guest_commit_files by commit."""
+    from scripts import collection  # The deployed set of a list of lab/ files (deployed_paths).
+    manifest = guest_manifest(s.meta.get("guest_before"))
+    if manifest is None:
+        raise DataError(f"{s.dir}: session.json guest_before has no stack_manifest of lines")
+    session_lab = s.meta.get("lab_sha256")
+    if not isinstance(session_lab, dict):
+        raise DataError(f"{s.dir}: session.json has no lab_sha256")
+    commit = s.meta.get("commit")
+    if commit not in commits:
+        commits[commit] = guest_commit_files(repository, commit)
+    lab = commits[commit]
+    deployed = collection.deployed_paths(lab)
+    files = []
+    for path in sorted(set(deployed) | set(manifest["files"])):
+        source = deployed.get(path)
+        mine, theirs = manifest["files"].get(path), lab.get(source) if source is not None else None
+        files.append({"path": path, "source": source, "guest_sha256": mine, "commit_sha256": theirs,
+                      "equal": mine is not None and mine == theirs})
+    lab_differ = sorted(name for name in set(lab) | set(session_lab) if session_lab.get(name) != lab.get(name))
+    identity = s.meta["guest_before"]
+    return {"session": s.id, "vm": s.vm, "kind": s.kind, "commit": commit, "commit_dirty": s.meta.get("commit_dirty"),
+            "kernel": identity.get("kernel"), "boot_id": identity.get("boot_id"),
+            "stack_sha256": identity.get("stack_sha256"), "files": files,
+            "differ": [row["path"] for row in files if not row["equal"]],
+            "matches_commit": all(row["equal"] for row in files),
+            "lab_sha256_matches_commit": not lab_differ, "lab_sha256_differ": lab_differ,
+            "packages": manifest["packages"], "timers": manifest["timers"]}
+
+
+def guest_findings(rows, vms):
+    """(by_vm, agree, findings) of the rows by GUEST_RULE."""
+    findings = [f"VM {vm}: no session of it" for vm in vms if not any(row["vm"] == vm for row in rows)]
+    findings += [f"{row['session']} (VM {row['vm']}): the deployed guest differs from lab/ of the commit "
+                 f"{row['commit']}: " + ", ".join(row["differ"]) for row in rows if not row["matches_commit"]]
+    findings += [f"{row['session']} (VM {row['vm']}): session.json lab_sha256 differs from lab/ of its commit "
+                 f"{row['commit']} (commit_dirty {row['commit_dirty']}): " + ", ".join(row["lab_sha256_differ"])
+                 for row in rows if not row["lab_sha256_matches_commit"]]
+    by_vm = {}
+    for vm in vms:
+        mine = [row for row in rows if row["vm"] == vm]
+        packages = [list(x) for x in sorted({tuple(row["packages"]) for row in mine})]
+        timers = [None if x is None else list(x) for x in sorted(
+            {None if row["timers"] is None else tuple(row["timers"]) for row in mine},
+            key=lambda x: (x is not None, x or ()))]
+        by_vm[vm] = {"sessions": [row["session"] for row in mine], "packages": packages, "timers": timers}
+        findings += [f"VM {vm}: {len(values)} different {what} over its sessions: " + _shown(values, 400)
+                     for what, values in (("dpkg lists", packages), ("timers", timers)) if len(values) > 1]
+    present = {vm: v for vm, v in by_vm.items() if v["sessions"]}
+    agree = {}
+    for what, words in (("packages", "dpkg lists"), ("timers", "timers")):
+        seen = {json.dumps(v[what], sort_keys=True) for v in present.values()}
+        agree[what] = len(seen) <= 1 and all(len(v[what]) == 1 for v in present.values())
+        if len(seen) > 1:
+            findings.append(f"the VMs differ in their {words}: "
+                            + "; ".join(f"VM {vm} {_shown(v[what], 300)}" for vm, v in present.items()))
+    return by_vm, agree, findings
+
+
+def guest_table(args, command):
+    """The mode guest (GUEST_RULE): writes the new record, prints one line per session and the criterion, and returns
+    the exit code."""
+    started = _g2_start(args, "guest")
+    if started is None:
+        return 2
+    out, paths = started
+    g2_dir, repository = _g2_dir(args), GUEST_REPOSITORY
+    sessions, entries, rows, refused, commits, vms = [], [], [], [], {}, None
+    for path in paths:
+        try:
+            s = G2TableSession(path, g2_dir)
+            if s.vms is None:
+                raise DataError(f"{s.dir}: protocol.json names no VMs")
+            if vms is not None and s.vms != vms:
+                raise DataError(f"{s.dir}: its protocol names the VMs {s.vms}, not {vms}")
+            if s.vm not in s.vms:
+                raise DataError(f"{s.dir}: a session of VM {s.vm}, which its protocol does not name")
+            vms = s.vms
+            status, why = s.selection("guest_matches_repository", load=False)
+            row = guest_row(s, commits, repository) if status == "counted" else None
+        except DataError as error:
+            refused.append(str(error))
+            continue
+        sessions.append(s)
+        entries.append(s.entry(status, why))
+        if row is not None:
+            rows.append(row)
+    if _g2_refusals("guest", out, sessions, refused):
+        return 2
+    by_vm, agree, findings = guest_findings(rows, vms)
+    criterion = {"met": not findings, "vms": vms, "sessions_counted": len(rows),
+                 "left_out": sum(e["status"] == "left_out" for e in entries), "vms_agree": agree}
+    record = _g2_record(GUEST_TABLE_SCHEMA, GUEST_GUEST, command, len(rows), {
+        "criterion": "guest_matches_repository",
+        "repository": {"path": str(repository), "how": "git rev-parse --verify <commit>^{commit}, git ls-tree -z "
+                                                       "<commit> lab/ and git show <commit>:lab/<file>, its bytes "
+                                                       "checked against the blob's object id (GUEST_RULE)"},
+        "commits": {commit: {"lab": files} for commit, files in commits.items()}, "sessions": entries,
+        "table": rows, "by_vm": by_vm, "result": criterion, "findings": findings, "selection": G2_SELECTION,
+        "rule": GUEST_RULE},
+        "The deployed files of lab/ on the VMs against the commit of each G2 session (criterion "
+        "guest_matches_repository of G2); nothing is scored or detected.")
+    code = _g2_write(out, record)
+    if code:
+        return code
+    for row in rows:
+        print(f"{row['session']} vm {row['vm']} commit {row['commit']}: "
+              + ("matches" if row["matches_commit"] else "differs: " + ", ".join(row["differ"]))
+              + ("" if row["lab_sha256_matches_commit"] else "; lab_sha256 differs from the commit"))
+    print("guest_matches_repository: " + ("met" if criterion["met"] else "not met") + f"; {len(rows)} session(s), "
+          f"{criterion['left_out']} left out, {len(findings)} finding(s)", flush=True)
+    print(f"campaign_report: guest: {len(sessions)} session(s); record {out}", file=sys.stderr)
+    return 0 if criterion["met"] else 1
+
+
+# ------------------------------------------------ the mode events (criterion event_effects)
+
+EVENTS_GUEST = ("none: the mode events reads saved session files, audit records and the records of the G2 driver; no "
+                "VM is contacted and no RAM image is opened")
+EVENTS_H4 = ("the kinds fault and fault_clean of skuska/poruchy.py and cas of skuska/cas.py")
+NO_EFFECT_RULE = (
+    "the lead's answer to Q50 (map question 5), written before the data: an occurrence of naprazdno has no effect "
+    "when (1) its start and its stop reply (events.json start and stop, lab/udalosti.py) both carry health 200 and the "
+    "units of lab/udalosti.py unit_states (the five applications, nginx and postgresql@15-main) with ActiveState "
+    "active, and each unit's NRestarts and ExecMainPID are the same in the two replies; and in the window of the "
+    "occurrence (scripts/collection_logs.py event_window: host start - 1 s to host stop done + the session's "
+    "event_grace_s) (2) no request of traffic_requests.jsonl whose start or end lies in it is outside its intended "
+    "state, as the log audit judges a request outside every window (a deliberate client error with another status "
+    "than its intended_status, any other request not ok or without a 2xx status), (3) the guest's journal "
+    "(guest/journal_segment.json, its file bound by gz_sha256) holds no restart or failure in systemd: no line of "
+    "systemd[1] with a job Stopping, Stopped, Starting or Started of a unit of collection_logs.REQUIRED_UNITS "
+    "(collection_logs.UNIT_LINE), and none whose message says fail (any case), 'Scheduled restart job' or 'Start "
+    "request repeated too quickly' of any unit, (4) no traceback or worker error (the log audit's 'Traceback (most "
+    "recent call last)' and collection_logs.WORKER_ERROR) and (5) no line of the session's nginx error log "
+    "(guest/session_segment.json, its file of -nginx-error.log bound by gz_sha256) at a time in the window (its "
+    "second or the next, as the log audit reads it); every violation is named and is a finding; evidence that cannot "
+    "be read or placed in time (a file missing or not the one its segment binds, a line without a time) is a "
+    "violation by name, never a pass")
+PHASE_RULE = (
+    "the real phase of a boundary against the collector's grid is (t - grid_phase_s) mod interval_s, t the host time "
+    "at which the call of the start (host_start_unix) or of the stop (host_stop_unix) began and grid_phase_s the "
+    "audit's values.timing.grid_phase_s (the deadline of frame 0 modulo interval_s, scripts/collection.py "
+    "audit_session), with its tenth of the interval (protocol_v5.tenth) beside the planned phase and tenths; null with "
+    "why when the audit has no grid phase or the occurrence no such time; the table counts the real starts and stops "
+    "of the counted occurrences per tenth (proposal 10.3: phases spread over the cycle of the collection, which Q51 "
+    "covers by these columns and which has no criterion of its own)")
+EVENTS_RULE = (
+    "The criterion event_effects of G2 (the lead's G2 skeleton, map row 2, the lead's answers Q43, Q50, Q51 and Q53): "
+    "every type of events.types of --protocol, naprazdno included, at least 19 occurrences on both VMs together and "
+    "at least 8 on each (Q43; skuska/g2.py OCCURRENCES and MIN_PER_VM), and the effect predicate holds at every "
+    "occurrence but naprazdno's, where no effect may be (NO_EFFECT_RULE). Of each G2 session directory given the mode "
+    "reads session.json (its planned events, event_grace_s), protocol.json (bound by session.json protocol_sha256; it "
+    "must agree with --protocol outside the paths determined_at gives G1 and later stages, gates.stage_sha256 of "
+    "stage G0, the hash the record of G0 binds, so the copies before and after a value of G1 or G2 is written are one "
+    "protocol, the one G0 recorded), events.json (schema "
+    "hyptcn3/session-events/1), the driver's record <g2-dir>/zaznamy/<session>.json (G2TableSession), the audit "
+    "record it names and, for an occurrence of naprazdno, the evidence of NO_EFFECT_RULE; raw/ never. Which sessions "
+    "count (Q51, G2_SELECTION): every audited session of H3, accepted or refused; left out by name and listed: a "
+    "session whose record names event_effects in values.excluded.criteria (the ground truth, Q62, and the worst case "
+    "of time), a session of H4 (" + EVENTS_H4 + ") and a session whose record names no audit; a session whose record "
+    "says counted false counts towards no minimum, but its occurrences are judged and an invalid one is a finding. "
+    "An occurrence is a planned event of session.json with its record of events.json at the same place (the log "
+    "audit's rule, events_differ_from_plan); its row holds the session, the VM, the type, the planned times and "
+    "phases, the host times of its start and stop calls, the real phases (PHASE_RULE), executed, the guest's effect "
+    "predicate and for naprazdno NO_EFFECT_RULE. It is valid when its record is the plan's, it was executed "
+    "(scripts/collection.py Events: both calls ok and health 200 after the stop) and the guest's effect is ok, for "
+    "naprazdno when it was executed and NO_EFFECT_RULE holds. The counts per type on both VMs together and on each "
+    "take every occurrence of a counted session, valid or not (Q51: an invalid predicate is never left out, it is a "
+    "finding beside the count). The criterion is met when every type has its minimums and no occurrence of a counted "
+    "session or of one counted false is invalid. Refused by name, each a data error: a directory without "
+    "session.json or protocol.json, a session of another role than diagnostic, a protocol.json other than the one "
+    "session.json binds or not --protocol outside the paths of G1 and later stages, a VM --protocol does not name, a "
+    "driver's record missing or of another session, an audit record other than the one it names or not of the "
+    "session, an events.json of another schema or without a list, planned events that are no list of objects with a "
+    "type, a segment record that is no JSON object, a directory named twice, and an --out that exists (refused "
+    "before anything is read) or lies inside a session directory. Exit 0: the table is written to --out, a new JSON "
+    "record with the provenance header of check E and the stage G2, and the criterion is met; 1: the table is written "
+    "and the criterion is not met (a minimum missing or an invalid occurrence, each named); 2: a usage or data error, "
+    "every refusal named on stderr and nothing written.")
+
+
+def _g2_unexpected(row):
+    """A request outside its intended state, as the log audit judges one outside every window (collection_logs)."""
+    if row.get("intended_status") is not None:
+        return row.get("status") != row["intended_status"]
+    return not (row.get("outcome") == "ok" and type(row.get("status")) is int and 200 <= row["status"] < 300)
+
+
+def _g2_systemd_trouble(line):
+    """The restart or failure in systemd a journal line shows (NO_EFFECT_RULE (3)), or None."""
+    from scripts import collection_logs
+    message = G2_SYSTEMD_LINE.match(line)
+    if message is None:
+        return None
+    job = collection_logs.UNIT_LINE.match(line)
+    if job and job[2] in ("Stopping", "Stopped", "Starting", "Started") and job[3] in collection_logs.REQUIRED_UNITS:
+        return f"{job[2]} {job[3]}"
+    trouble = G2_SYSTEMD_TROUBLE.search(message[1])
+    return None if trouble is None else f"says {trouble[0]}"
+
+
+def events_evidence(s, windows):
+    """{index: [violation]} of the windows of the occurrences of naprazdno (NO_EFFECT_RULE (2) to (5)), each file read
+    once and listed in the session's files."""
+    import gzip  # The guest's segment files are gzip copies (lab/guest_state.py describe).
+    from scripts import collection_logs
+    found = {i: [] for i in windows}
+
+    def inside(*times):
+        return [i for i, (lo, hi) in windows.items() if any(lo <= t <= hi for t in times)]
+
+    def every(text):
+        for i in found:
+            found[i].append(text)
+
+    requests = s.dir / "traffic_requests.jsonl"
+    try:
+        sha = hashlib.sha256()
+        with open(requests, "rb") as stream:
+            for raw in stream:
+                sha.update(raw)
+                try:
+                    row = json.loads(raw)
+                except ValueError:
+                    every("traffic_requests.jsonl: a line is no JSON (a request that cannot be placed)")
+                    continue
+                if not isinstance(row, dict) or row.get("type") != "request":
+                    continue
+                times = (unix_of(row.get("t_start_utc")), unix_of(row.get("t_end_utc")))
+                if None in times:
+                    every(f"request {_shown(row.get('rid'), 60)} has no readable time (cannot be placed)")
+                    continue
+                if _g2_unexpected(row):
+                    for i in inside(*times):
+                        found[i].append(f"request {row.get('rid')} {row.get('method')} {row.get('route')} at "
+                                        f"{row.get('t_start_utc')}: outcome {row.get('outcome')}, status "
+                                        f"{row.get('status')}" + (f", intended {row['intended_status']}"
+                                                                  if row.get("intended_status") is not None else ""))
+        s.listed("traffic_requests.jsonl", requests, sha.hexdigest())
+    except OSError as error:
+        every(f"traffic_requests.jsonl cannot be read ({type(error).__name__}: {error})")
+    path, got = _g2_journal(s)
+    if path is None:
+        every(f"the journal: {got}")
+    else:
+        for t, line in got:
+            trouble = _g2_systemd_trouble(line)
+            traceback = "Traceback (most recent call last)" in line or collection_logs.WORKER_ERROR in line
+            for i in inside(t) if trouble or traceback else ():
+                found[i].append(("systemd " + trouble if trouble else "traceback or worker error") + ": "
+                                + one_line(line)[:200])
+    path, why = _g2_segment_file(s, "session_segment.json", G2_LOG_SEGMENT, "nginx-error.log")
+    if path is None:
+        every(f"the nginx error log: {why}")
+        return found
+    try:
+        with gzip.open(path, "rt", errors="replace") as stream:
+            lines = [line.rstrip("\n") for line in stream if line.strip()]
+    except (OSError, EOFError) as error:
+        every(f"the nginx error log cannot be read ({type(error).__name__}: {error})")
+        return found
+    for line in lines:
+        stamp = collection_logs.NGINX_TIME.match(line)
+        if stamp is None:
+            every("an nginx error line without a time (cannot be placed): " + one_line(line)[:200])
+            continue
+        t = datetime.strptime(stamp[1], "%Y/%m/%d %H:%M:%S").replace(tzinfo=timezone.utc).timestamp()
+        for i in inside(t, t + 1):
+            found[i].append("nginx error: " + one_line(line)[:200])
+    return found
+
+
+def events_no_effect(record, window, evidence):
+    """NO_EFFECT_RULE of one occurrence of naprazdno: {ok, violations}."""
+    violations, units = [], {}
+    for name in ("start", "stop"):
+        reply = record.get(name) if isinstance(record, dict) else None
+        if not isinstance(reply, dict):
+            violations.append(f"no {name} reply in events.json")
+            continue
+        units[name] = reply.get("units") if isinstance(reply.get("units"), dict) else {}
+        if reply.get("health") != 200:
+            violations.append(f"{name}: health {_shown(reply.get('health'), 40)}, not 200")
+        for unit in NO_EFFECT_UNITS:
+            state = units[name].get(unit)
+            if not isinstance(state, dict):
+                violations.append(f"{name}: no state of {unit}")
+            elif state.get("ActiveState") != "active":
+                violations.append(f"{name}: {unit} ActiveState {_shown(state.get('ActiveState'), 40)}, not active")
+    if len(units) == 2:
+        for unit in NO_EFFECT_UNITS:
+            a, b = units["start"].get(unit), units["stop"].get(unit)
+            if isinstance(a, dict) and isinstance(b, dict):
+                violations += [f"{unit}: {key} {_shown(a.get(key), 30)} at the start, {_shown(b.get(key), 30)} at the "
+                               "stop" for key in ("NRestarts", "ExecMainPID") if a.get(key) != b.get(key)]
+    if window is None:
+        violations.append("no window (no host start or no host stop done)")
+    else:
+        violations += evidence or []
+    return {"ok": not violations, "violations": violations}
+
+
+def _g2_phase(t, grid, interval):
+    """(phase, tenth) of the host time t against the grid (PHASE_RULE), or (None, None)."""
+    if not _number(t) or not _number(grid):
+        return None, None
+    phase = round((t - grid) % interval, 6)
+    interval_ms = int(round(interval * 1000))
+    return phase, protocol_v5.tenth(min(int(phase * 1000), interval_ms - 1), interval_ms)
+
+
+def events_rows(s, status, accepted, grid, interval):
+    """The rows of the occurrences of one session (EVENTS_RULE)."""
+    from scripts import collection_logs
+    planned, records = s.planned()
+    grace = s.meta.get("event_grace_s")
+    rows, windows = [], {}
+    for index, item in enumerate(planned):
+        record = records[index] if records is not None and index < len(records) else None
+        record = record if isinstance(record, dict) else None
+        why, window = [], None
+        if record is None:
+            why.append("no record of it in events.json" if records is not None else "events.json is missing")
+        else:
+            if len(records) != len(planned) or not all(key in record and _equal(record[key], item[key])
+                                                       for key in item):
+                why.append("its record in events.json differs from the plan (the log audit's events_differ_from_plan)")
+            if "host_start_unix" not in record:
+                why.append("not started: no host start (the session ended before its time; Q51: a finding, never left "
+                           "out)")
+            elif record.get("executed") is not True:
+                why.append("not executed (scripts/collection.py Events: a call failed or health was not 200 after "
+                           "the stop)")
+            try:
+                window = collection_logs.event_window(record, grace)
+            except ValueError as error:
+                why.append(f"no window: {error}")
+        effect = record.get("effect") if record else None
+        effect = {"ok": effect.get("ok"), "predicate": effect.get("predicate")} if isinstance(effect, dict) else None
+        if item["type"] != EMPTY_EVENT and record is not None and (effect or {}).get("ok") is not True:
+            why.append("the guest's effect predicate did not hold"
+                       + (f" ({effect['predicate']})" if effect and effect.get("predicate") else " (no effect)"))
+        times = {key: (record or {}).get(key) for key in ("host_start_unix", "host_started_unix", "host_stop_unix",
+                                                          "host_stopped_unix")}
+        start, start_tenth = _g2_phase(times["host_start_unix"], grid, interval)
+        stop, stop_tenth = _g2_phase(times["host_stop_unix"], grid, interval)
+        tenths = (list(protocol_v5.item_tenths({"interval_s": interval}, item))
+                  if _number(item.get("start_s")) and _number(item.get("duration_s")) else None)
+        rows.append({"session": s.id, "vm": s.vm, "scenario": s.meta.get("scenario"), "kind": s.kind,
+                     "status": status, "counted": status == "counted", "audit_accepted": accepted, "index": index,
+                     "type": item["type"], "class": item.get("class"),
+                     "planned": {**{key: item.get(key) for key in ("start_s", "duration_s", "start_phase_s",
+                                                                   "stop_phase_s")}, "tenths": tenths},
+                     "times": {**times, **{key.replace("_unix", "_utc"): utc(value) if _number(value) else None
+                                           for key, value in times.items()}},
+                     "window": _g2_window(window),
+                     "phase": {"grid_phase_s": grid, "start_s": start, "start_tenth": start_tenth, "stop_s": stop,
+                               "stop_tenth": stop_tenth,
+                               "why": None if grid is not None else "the audit has no values.timing.grid_phase_s"},
+                     "executed": None if record is None else record.get("executed"), "effect": effect,
+                     "no_effect": None, "why": why})
+        if item["type"] == EMPTY_EVENT and window is not None:
+            windows[index] = window
+    evidence = events_evidence(s, windows) if windows else {}
+    for row in rows:
+        if row["type"] == EMPTY_EVENT:
+            record = records[row["index"]] if records is not None and row["index"] < len(records) else None
+            row["no_effect"] = events_no_effect(record if isinstance(record, dict) else None,
+                                                windows.get(row["index"]), evidence.get(row["index"]))
+            row["why"] += [f"an effect of naprazdno (NO_EFFECT_RULE): {text}"
+                           for text in row["no_effect"]["violations"]]
+        row["valid"] = not row["why"]
+    return rows
+
+
+def events_counts(rows, protocol, needed, per_vm):
+    """({type: counts}, missing) of the counted occurrences by EVENTS_RULE (Q43)."""
+    counts, missing = {}, []
+    for name in protocol["types"]:
+        mine = [row for row in rows if row["type"] == name and row["counted"]]
+        counts[name] = {"occurrences": len(mine), "valid": sum(row["valid"] for row in mine), "needed": needed,
+                        "needed_per_vm": per_vm,
+                        "by_vm": {vm: {"occurrences": sum(row["vm"] == vm for row in mine),
+                                       "valid": sum(row["vm"] == vm and row["valid"] for row in mine)}
+                                  for vm in protocol["vms"]}}
+        if len(mine) < needed:
+            missing.append(f"{name}: {len(mine)} occurrence(s) on both VMs together, fewer than {needed} "
+                           f"({needed - len(mine)} missing)")
+        missing += [f"{name} on VM {vm}: {n['occurrences']} occurrence(s), fewer than {per_vm}"
+                    for vm, n in counts[name]["by_vm"].items() if n["occurrences"] < per_vm]
+    return counts, missing
+
+
+def events_table(args, command):
+    """The mode events (EVENTS_RULE): writes the new record, prints one line per type and the criterion, and returns
+    the exit code."""
+    started = _g2_start(args, "events")
+    if started is None:
+        return 2
+    out, paths = started
+    try:
+        protocol = _g2_protocol(args.protocol)
+    except DataError as error:
+        print(f"campaign_report: {error}", file=sys.stderr)
+        return 2
+    from skuska import cas, g2, poruchy  # The kinds of H4 and the minimums of Q43 (the deck's).
+    h4 = (poruchy.KIND_FAULT, poruchy.KIND_CLEAN, cas.KIND)
+    g2_dir, interval = _g2_dir(args), protocol["interval_s"]
+    sessions, entries, rows, refused = [], [], [], []
+    for path in paths:
+        try:
+            s = G2TableSession(path, g2_dir)
+            s.bind(protocol)
+            out_of = "event_effects" in s.excluded or s.kind in h4
+            audit = None if out_of else s.audit()
+            status, why = s.selection("event_effects", h4, audited=out_of or audit is not None)
+            mine = []
+            if status != "left_out":
+                timing = audit.get("timing") if isinstance(audit.get("timing"), dict) else {}
+                grid = timing.get("grid_phase_s") if _number(timing.get("grid_phase_s")) else None
+                mine = events_rows(s, status, audit.get("accepted"), grid, interval)
+        except DataError as error:
+            refused.append(str(error))
+            continue
+        entry = s.entry(status, why)
+        planned = s.meta.get("events")
+        entry.update(audit=None if audit is None else {"report": s.values["audit"]["report"],
+                                                       "sha256": s.values["audit"].get("sha256"),
+                                                       "accepted": audit.get("accepted"),
+                                                       "reasons": audit.get("reasons")},
+                     occurrences=len(planned) if isinstance(planned, list) else None)
+        sessions.append(s)
+        entries.append(entry)
+        rows += mine
+    if _g2_refusals("events", out, sessions, refused):
+        return 2
+    counts, missing = events_counts(rows, protocol, g2.OCCURRENCES, g2.MIN_PER_VM)
+    stray = sorted({row["type"] for row in rows} - set(protocol["types"]))
+    findings = [f"{row['session']} #{row['index']} {row['type']} (VM {row['vm']}"
+                + (", its session counted false" if row["status"] == "load" else "") + "): " + "; ".join(row["why"])
+                for row in rows if not row["valid"]]
+    findings += [f"type {name} is not one of the events.types of --protocol" for name in stray]
+    tenths = {"starts": [0] * protocol_v5.TENTHS, "stops": [0] * protocol_v5.TENTHS}
+    for row in rows:
+        for key, field in (("starts", "start_tenth"), ("stops", "stop_tenth")):
+            if row["counted"] and row["phase"][field] is not None:
+                tenths[key][row["phase"][field]] += 1
+    criterion = {"met": not missing and not findings, "minimums_met": not missing,
+                 "invalid": sum(not row["valid"] for row in rows)}
+    record = _g2_record(EVENTS_TABLE_SCHEMA, EVENTS_GUEST, command, len(rows), {
+        "criterion": "event_effects", "protocol": {k: v for k, v in protocol.items() if k != "types"},
+        "types": protocol["types"], "needed": g2.OCCURRENCES, "needed_per_vm": g2.MIN_PER_VM, "sessions": entries,
+        "occurrences": rows, "counts": counts, "minimums_met": not missing, "missing": missing, "findings": findings,
+        "phases_per_tenth": tenths, "result": criterion, "selection": G2_SELECTION,
+        "rules": {"events": EVENTS_RULE, "no_effect": NO_EFFECT_RULE, "phase": PHASE_RULE}},
+        "The table of the occurrences of the events of G2 and their predicates (criterion event_effects of G2); "
+        "nothing is scored or detected.")
+    code = _g2_write(out, record)
+    if code:
+        return code
+    for name in protocol["types"]:
+        c = counts[name]
+        print(f"{name}: {c['occurrences']}/{g2.OCCURRENCES} ("
+              + ", ".join(f"{vm} {c['by_vm'][vm]['occurrences']}/{g2.MIN_PER_VM}" for vm in protocol["vms"])
+              + f"), {c['occurrences'] - c['valid']} invalid")
+    print("event_effects: " + ("met" if criterion["met"] else "not met") + f"; {len(missing)} minimum(s) missing, "
+          f"{len(findings)} finding(s)", flush=True)
+    print(f"campaign_report: events: {len(sessions)} session(s), {len(rows)} occurrence(s); record {out}",
+          file=sys.stderr)
+    return 0 if criterion["met"] else 1
+
+
+# ------------------------------------------------ the mode restarts (criterion restart_loops_bounded)
+
+RESTARTS_GUEST = ("none: the mode restarts reads saved guest journals, session files, the records of the G2 driver and "
+                  "of the fault injector, and lab/periods.json; no VM is contacted and no RAM image is opened")
+ASSIGN_RULE = (
+    "a loop is the times of the systemd lines 'Scheduled restart job' of one hyptcn-lab@ unit (lab_trial.RESTART_LINE) "
+    "split where two lie more than RESTART_WINDOW_S = 60 s apart (lab_trial._restarts; lab/hyptcn-lab@.service "
+    "StartLimitIntervalSec); it belongs to the occurrence of zla_konfiguracia_sluzby of its session whose window "
+    "(collection_logs.event_window: host start - 1 s to host stop done + event_grace_s) holds its first restart, when "
+    "the type restarts its unit (collection_logs.EVENT_UNITS: hyptcn-lab@catalog), or to the kill of the service in "
+    "its session (skuska/poruchy.py zabita_sluzba, the injector's record with the fault induced; its unit "
+    "hyptcn-lab@docs) when its unit is the killed one and its first restart lies from 1 s before the injector's "
+    "labctl exec of the kill to RESTART_WINDOW_S after it returned; every other loop is a loop elsewhere")
+FITS_RULE = (
+    "Q52, written before the data: a loop fits lab/periods.json ('hyptcn-lab@ restart loop', period_s 3.25: "
+    "RestartSec=3 and the start of python3; the lab's records 3.2488 to 3.2517 s) when every spacing of its "
+    "consecutive restarts lies in [3.0, 3.5] s and, at the kill and at a loop elsewhere, every delay from the last "
+    "line 'Failed with result' of the unit before a restart (since the previous restart, for the first one since the "
+    "kill began or 60 s before it) to that restart lies in [3.0, 3.5] s too; a loop with nothing to measure (a single "
+    "restart at an occurrence of zla_konfiguracia_sluzby, no line 'Failed with result' before a restart of the kill) "
+    "does not fit")
+BOUNDED_RULE = (
+    "Q52, written before the data: a loop is bounded when at most StartLimitBurst = 5 of its restarts lie within any "
+    "StartLimitIntervalSec = 60 s (lab/hyptcn-lab@.service) and it ends: at an occurrence of zla_konfiguracia_sluzby, "
+    "whose drop-in keeps the service failing until the stop, the line 'Start request repeated too quickly.' of the "
+    "unit follows the loop's last restart before the stop call began (host_stop_unix + 1 s for the guest's clock) and "
+    "no restart of the unit follows that line in the occurrence's window (none in the loop and no second loop of it); "
+    "at the kill no restart of the unit follows the loop in the session's journal (the unit runs again); a loop "
+    "elsewhere by the burst alone")
+ELSEWHERE_RULE = (
+    "a loop elsewhere is listed with FITS_RULE and BOUNDED_RULE and, when it lies in the window of an occurrence of a "
+    "type that restarts its unit by design (collection_logs.EVENT_UNITS, where the log audit admits a restart too), "
+    "with that occurrence; it is a finding when it does not fit or is not bounded (a period the register does not "
+    "name) or lies outside every such window (a restart loop no event and no fault explains: the crash loop that "
+    "ended campaign v4)")
+PERIODS_RULE = (
+    "Q52, written before the data: a period the register does not name is a group of lines of one session's guest "
+    "journal (lab_trial.journal_lines: the lines with a time) with at least 5 spacings between consecutive lines and "
+    "a coefficient of variation of the spacings (their population standard deviation over their mean) below 0.1 that "
+    "no entry of lab/periods.json covers; a group holds the lines of one source and one form: the syslog identifier "
+    "without its [pid] and, for a message that is a JSON object, its service and its sorted keys, for any other "
+    "message its text with every run of digits replaced by N; the request lines of the services "
+    "(collection_logs.SERVICE_LINE: the generator's requests, traffic and no process of the guest) form no group; "
+    "covered: a line of systemd that names a hyptcn-lab@ unit by 'hyptcn-lab@ restart loop' (its loops are judged by "
+    "FITS_RULE and BOUNDED_RULE), the udrzba run's line (lab_trial.UDRZBA_LINE) and a line of systemd that names "
+    "hyptcn-lab-udrzba by 'hyptcn-lab-udrzba.timer', a JSON line of the service worker (lab_trial.WORKER_LINE among "
+    "them) and the worker's error line (collection_logs.WORKER_ERROR: a round that ends in the statement timeout "
+    "during zamok_tabulky, about 4 s apart) by 'worker loop', the line of a worker start of autovacuum "
+    "(lab_trial.AUTOVACUUM_LINE) by 'PostgreSQL autovacuum launcher' and a line of postgres about a checkpoint by "
+    "'PostgreSQL checkpointer' (both in the journal only at debug1 logging); a loop that does not fit FITS_RULE is a "
+    "period the register does not name as well. The coverage was checked on the journals of the lab test before G2 "
+    "(dokazy/skuska_labu/behy 08, 15, 16, 17 and dokazy/B11/okno_VM 03), the data of no criterion of G2: every "
+    "periodic group there is covered but postgres's STATEMENT lines of the worker's statements that hit the statement "
+    "timeout during zamok_tabulky in the two runs with debug1 logging, which no G2 session sets (the executor's "
+    "judgment: they stay a finding should they appear). Limits "
+    "(no finding): a process that leaves no line in the journal is not seen (Q52); a period that holds for a part of "
+    "the session only hides among the lines of its form elsewhere; the lines of one process in different forms fall "
+    "into different groups")
+AUTOVACUUM_RULE_G2 = (
+    "Q52: PostgreSQL logs a worker start of the autovacuum launcher into the journal only at log_min_messages debug1 "
+    "(lab_trial JOURNAL), which no G2 session sets, so the table takes over the window's measurement of "
+    "lab/periods.json (its entry's measured.after, with the property of Q9 the lead accepted); when the journals of a "
+    "VM do hold such lines, lab_trial.autovacuum_property judges them and a property that fails is a finding")
+RESTARTS_RULE = (
+    "The criterion restart_loops_bounded of G2 (the lead's G2 skeleton, map row 3, the lead's answers Q43, Q52 and "
+    "Q53): the period of the restarts in the guest's journal at every occurrence of zla_konfiguracia_sluzby and at "
+    "the killed service (H4) fits lab/periods.json and is bounded (StartLimitBurst), and no other process has a period "
+    "the register does not name. Of each G2 session directory given the mode reads session.json (its planned events, "
+    "event_grace_s, lab_sha256), protocol.json (bound as by the mode events, against --protocol), events.json, the "
+    "driver's record <g2-dir>/zaznamy/<session>.json (G2TableSession), for a fault session the injector's record "
+    "<g2-dir>/poruchy/<session>.json (schema hyptcn3/g2-fault/1, bound by its session_id, session_dir and vm) and the "
+    "guest's journal (guest/journal_segment.json, its file bound by gz_sha256, read by lab_trial.journal_lines); and "
+    "lab/periods.json of this tree, whose sha256 must be that of session.json lab_sha256 (the register deployed in "
+    "the session's guest). It calls the functions of scripts/lab_trial.py (Q53): journal_lines, RESTART_LINE and "
+    "_restarts for the loops, periods_of for the measured spacings of every entry of the register per VM, spacing, and "
+    "autovacuum_property; the measured spacings go into this record and never into lab/periods.json, which is "
+    "measurement code (Q27). Which sessions count (G2_SELECTION): every session given, of H3 and of H4 (the killed "
+    "service is an H4 fault), accepted or refused, audited or not (the journal is the evidence); a session whose "
+    "record names restart_loops_bounded in values.excluded.criteria is left out by name (no record names it today, so "
+    "the ground truth and the worst case of time count here) and one counted false counts towards no minimum but is "
+    "judged. The occurrences: every planned event of zla_konfiguracia_sluzby (its record of events.json at the same "
+    "place) and the kill of the service of every fault session of zabita_sluzba whose injector induced it; their "
+    "loops by ASSIGN_RULE, each judged by FITS_RULE and BOUNDED_RULE; an occurrence without a loop, without a window "
+    "or without a journal is not judged, a finding; the loops elsewhere by ELSEWHERE_RULE; the periods by "
+    "PERIODS_RULE and AUTOVACUUM_RULE_G2. The minimums: the occurrences of zla_konfiguracia_sluzby of counted sessions "
+    "as Q43 asks of every type, 19 on both VMs together and 8 on each (the executor's judgment: the criterion names "
+    "every occurrence, and these are the occurrences the deck deals), and the kill of the service once on each VM (the "
+    "fault plan). The criterion is met when the minimums are met and there is no finding. Refused by name, each a data "
+    "error: what the mode events refuses, a session.json without lab_sha256 or whose lab/periods.json is not this "
+    "tree's, an injector's record of another session or schema, guest journal files other than the one the segment "
+    "binds, and a journal that cannot be read. Exit 0: the table is written to --out, a new JSON record with the "
+    "provenance header of check E and the stage G2, and the criterion is met; 1: the table is written and the "
+    "criterion is not met, every finding and missing minimum named; 2: a usage or data error, every refusal named on "
+    "stderr and nothing written.")
+
+
+def restarts_units(lines):
+    """{unit: {restart: [(t, line)], failed: [t], limit: [t]}} of the hyptcn-lab@ units in the journal lines
+    (G2_UNIT_LINE; the restarts as lab_trial.RESTART_LINE finds them)."""
+    from scripts import lab_trial
+    keys = {"Scheduled restart job": "restart", "Failed with result": "failed",
+            "Start request repeated too quickly": "limit"}
+    out = defaultdict(lambda: {"restart": [], "failed": [], "limit": []})
+    for t, line in lines:
+        found = G2_UNIT_LINE.search(line)
+        if found is None:
+            continue
+        key = keys[found[2]]
+        if key != "restart":
+            out[found[1]][key].append(t)
+        elif lab_trial.RESTART_LINE.search(line):
+            out[found[1]]["restart"].append((t, line))
+    return out
+
+
+def restarts_judge(times, unit_lines, kind, floor, stop=None, later=()):
+    """FITS_RULE and BOUNDED_RULE of one loop (`times`, its restarts): {restarts, spacings, delays, start_limit,
+    burst, fits, bounded, why_not_fits, why_not_bounded}. `kind` is event, kill or elsewhere; `floor` the time since
+    which a line 'Failed with result' counts for the first delay; `stop` the host time the stop call of the event
+    began; `later` the restarts of the unit after the loop that BOUNDED_RULE reads (of a second loop in the event's
+    window, or the journal's after the kill)."""
+    low, high = FITS_S
+    spacings = [round(b - a, 6) for a, b in zip(times, times[1:])]
+    delays = []
+    for i, restart in enumerate(times):
+        since = times[i - 1] if i else floor
+        failed = [t for t in unit_lines["failed"] if since <= t <= restart]
+        delays.append(round(restart - failed[-1], 6) if failed else None)
+    why = []
+    measured = spacings + ([d for d in delays if d is not None] if kind != "event" else [])
+    if kind != "event" and None in delays:
+        why.append("no line 'Failed with result' of the unit before a restart, so its delay cannot be measured")
+    if not measured:
+        why.append("nothing to measure (a single restart)")
+    why += [f"{value:.6g} s outside [{low:g}, {high:g}] s" for value in measured if not low <= value <= high]
+    bound = []
+    burst = max(sum(1 for u in times if t <= u <= t + START_LIMIT_INTERVAL_S) for t in times)
+    if burst > START_LIMIT_BURST:
+        bound.append(f"{burst} restarts within {START_LIMIT_INTERVAL_S} s, more than StartLimitBurst "
+                     f"{START_LIMIT_BURST}")
+    limit = None
+    if kind == "event":
+        limits = ([t for t in unit_lines["limit"] if times[-1] <= t <= stop + GUEST_CLOCK_S]
+                  if stop is not None else [])
+        limit = limits[0] if limits else None
+        if limit is None:
+            bound.append("no line 'Start request repeated too quickly.' of the unit after its last restart before "
+                         "the stop call")
+        else:
+            after = [t for t in times if t > limit] + [t for t in later if t > limit]
+            if after:
+                bound.append(f"{len(after)} restart(s) of the unit after 'Start request repeated too quickly.' in the "
+                             "occurrence's window")
+        if later and limit is None:
+            bound.append(f"{len(later)} restart(s) of a second loop of the unit in the occurrence's window")
+    elif kind == "kill" and later:
+        bound.append(f"{len(later)} later restart(s) of the unit in the session's journal (it did not run again)")
+    return {"restarts": [{"unix": round(t, 6), "utc": utc(t)} for t in times], "spacings": spacings,
+            "delays": delays, "start_limit": None if limit is None else {"unix": round(limit, 6), "utc": utc(limit)},
+            "burst": burst, "fits": not why, "bounded": not bound, "why_not_fits": why, "why_not_bounded": bound}
+
+
+def restarts_form(line):
+    """The group of a journal line by PERIODS_RULE: (source, json, service, keys, text), or None for a line of no
+    group (a request line of the services, a line of another shape)."""
+    from scripts import collection_logs
+    found = G2_JOURNAL_FORM.match(line)
+    if found is None or collection_logs.SERVICE_LINE.search(line):
+        return None
+    source, message = found[1], found[2]
+    try:
+        doc = json.loads(message)
+    except ValueError:
+        doc = None
+    if isinstance(doc, dict):
+        return (source, True, doc.get("service") if isinstance(doc.get("service"), str) else None,
+                tuple(sorted(doc)), None)
+    return (source, False, None, None, re.sub(r"\d+", "N", message))
+
+
+def restarts_cover(form, line):
+    """The entry of lab/periods.json that covers a group of lines (PERIODS_RULE), or None."""
+    from scripts import collection_logs, lab_trial
+    source, is_json, service, _, text = form
+    if source == "systemd" and "hyptcn-lab@" in (text or ""):
+        return "hyptcn-lab@ restart loop"
+    if (source == "systemd" and "hyptcn-lab-udrzba" in (text or "")) or lab_trial.UDRZBA_LINE.search(line):
+        return "hyptcn-lab-udrzba.timer"
+    if (is_json and service == "worker") or collection_logs.WORKER_ERROR in line:
+        return "worker loop"
+    if lab_trial.AUTOVACUUM_LINE.search(line):
+        return lab_trial.AUTOVACUUM
+    if source == "postgres" and "checkpoint" in (text or ""):
+        return "PostgreSQL checkpointer"
+    return None
+
+
+def restarts_periodic(lines):
+    """The periodic groups of one journal (PERIODS_RULE): [{source, form, lines, spacings, cv, covered_by, first}]."""
+    from scripts import lab_trial
+    groups = defaultdict(list)
+    for t, line in lines:
+        form = restarts_form(line)
+        if form is not None:
+            groups[form].append((t, line))
+    out = []
+    for form, rows in groups.items():
+        if len(rows) < PERIOD_SPACINGS + 1:
+            continue
+        times = sorted(t for t, _ in rows)
+        spacings = [b - a for a, b in zip(times, times[1:])]
+        mean = math.fsum(spacings) / len(spacings)
+        if mean <= 0:
+            continue
+        cv = math.sqrt(math.fsum((x - mean) ** 2 for x in spacings) / len(spacings)) / mean
+        if cv < PERIOD_CV:
+            source, is_json, service, keys, text = form
+            out.append({"source": source, "form": f"JSON service={service} keys={','.join(keys)}" if is_json else text,
+                        "lines": len(rows), "spacings": lab_trial.spacing(spacings), "cv": round(cv, 6),
+                        "covered_by": restarts_cover(form, rows[0][1]),
+                        "first": {"unix": round(times[0], 6), "utc": utc(times[0])}})
+    return sorted(out, key=lambda row: (row["source"], row["form"]))
+
+
+def restarts_kill(s, g2_dir):
+    """The kill of the service of a fault session of zabita_sluzba (skuska/poruchy.py): {unit, induced, why_not,
+    call, done, record}, or None for any other session; a DataError by name."""
+    from skuska import poruchy
+    if s.kind != poruchy.KIND_FAULT:
+        return None
+    path = Path(os.path.abspath(g2_dir)) / poruchy.BESIDE / f"{s.id}.json"
+    doc, _ = s.read("injector", path, poruchy.FAULT_SCHEMA)
+    v = doc.get("values") if isinstance(doc.get("values"), dict) else {}
+    if (v.get("session_id") != s.id or v.get("vm") != s.vm or not isinstance(v.get("session_dir"), str)
+            or os.path.realpath(v["session_dir"]) != os.path.realpath(s.dir)):
+        raise DataError(f"{path}: the injector's record is not of this session (its session_id, session_dir or vm)")
+    if v.get("fault") != KILL_FAULT:
+        return None
+    unit = (v.get("parameters") or {}).get("unit") or poruchy.FAULTS[KILL_FAULT]["parameters"]["unit"]
+    actions = [a for a in v.get("actions") or [] if isinstance(a, dict) and _number(a.get("unix"))]
+    command = poruchy.KILL_COMMAND.format(unit=unit)
+    call = next((a["unix"] for a in actions if a.get("what") == "labctl exec" and a.get("guest_command") == command),
+                None)
+    done = next((a["unix"] for a in actions if a.get("what") == "labctl exec done"
+                 and (call is None or a["unix"] >= call)), None)
+    window = v.get("window") if isinstance(v.get("window"), list) and len(v["window"]) == 2 else None
+    if call is None and window and _number(window[0]):
+        call = window[0]
+    if done is None and window and _number(window[1]):
+        done = window[1]
+    return {"unit": unit, "induced": v.get("induced") is True, "why_not": v.get("why_not"), "call": call,
+            "done": done, "record": str(path)}
+
+
+def restarts_session(s, status, g2_dir):
+    """The occurrences, the loops elsewhere and the periodic groups of one session (RESTARTS_RULE)."""
+    from scripts import collection_logs, lab_trial
+    planned, records = s.planned()
+    grace = s.meta.get("event_grace_s")
+    windows, occurrences = [], []
+    for index, item in enumerate(planned):
+        record = records[index] if records is not None and index < len(records) else None
+        record = record if isinstance(record, dict) else None
+        try:
+            window = collection_logs.event_window(record, grace) if record is not None else None
+        except ValueError:
+            window = None
+        windows.append((item["type"], window))
+        if item["type"] == RESTART_TYPE:
+            stop = record.get("host_stop_unix") if record is not None and _number(record.get("host_stop_unix")) \
+                else None
+            occurrences.append({"session": s.id, "vm": s.vm, "status": status, "counted": status == "counted",
+                                "occurrence": "event", "type": RESTART_TYPE, "index": index,
+                                "unit": collection_logs.EVENT_UNITS[RESTART_TYPE][0], "induced": None,
+                                "window": window, "assign": window, "stop": stop, "loops": [],
+                                "why": [] if window is not None else
+                                ["no window (no record in events.json, no host start or no host stop done)"]})
+    kill = restarts_kill(s, g2_dir)
+    if kill is not None:
+        timed = kill["induced"] and kill["call"] is not None and kill["done"] is not None
+        occurrences.append({"session": s.id, "vm": s.vm, "status": status,
+                            "counted": status == "counted" and kill["induced"], "occurrence": "kill",
+                            "type": KILL_FAULT, "index": None, "unit": kill["unit"], "induced": kill["induced"],
+                            "window": (kill["call"], kill["done"]) if timed else None,
+                            "assign": (kill["call"] - 1, kill["done"] + START_LIMIT_INTERVAL_S) if timed else None,
+                            "stop": None, "loops": [],
+                            "why": [] if timed else [f"the fault was not induced ({kill['why_not']})" if not
+                                                     kill["induced"] else "the injector's record has no time of the "
+                                                                          "kill"]})
+    path, lines = _g2_journal(s)
+    elsewhere = []
+    if path is None:
+        for occ in occurrences:
+            occ["why"].append(f"not judged: {lines}")
+    else:
+        units = restarts_units(lines)
+        for unit, found in sorted(units.items()):
+            for times in lab_trial._restarts(found["restart"]):
+                owner = next((occ for occ in occurrences if occ["unit"] == unit and occ["assign"] is not None
+                              and occ["assign"][0] <= times[0] <= occ["assign"][1]), None)
+                if owner is not None:
+                    owner["loops"].append(times)
+                    continue
+                design = next(((kind, i) for i, (kind, window) in enumerate(windows) if window is not None
+                               and unit in collection_logs.EVENT_UNITS.get(kind, ())
+                               and window[0] <= times[0] <= window[1]), None)
+                row = restarts_judge(times, found, "elsewhere", times[0] - START_LIMIT_INTERVAL_S)
+                row.update(session=s.id, vm=s.vm, unit=unit, status=status,
+                           by_design=None if design is None else {"type": design[0], "index": design[1]})
+                row["finding"] = not row["fits"] or not row["bounded"] or design is None
+                elsewhere.append(row)
+        for occ in occurrences:
+            if occ["assign"] is None:
+                continue
+            found = units.get(occ["unit"], {"restart": [], "failed": [], "limit": []})
+            if not occ["loops"]:
+                occ["why"].append("no restart loop of the unit in the journal "
+                                  + ("in the occurrence's window" if occ["occurrence"] == "event" else
+                                     "after the kill"))
+                continue
+            first, *more = occ["loops"]
+            if occ["occurrence"] == "event":
+                judged = restarts_judge(first, found, "event", occ["window"][0], stop=occ["stop"],
+                                        later=[t for loop in more for t in loop])
+            else:
+                judged = restarts_judge(first, found, "kill", occ["assign"][0],
+                                        later=[t for t, _ in found["restart"] if t > first[-1]])
+            occ["loop"] = judged
+            occ["why"] += ([f"does not fit: {text}" for text in judged["why_not_fits"]]
+                           + [f"not bounded: {text}" for text in judged["why_not_bounded"]])
+    for occ in occurrences:
+        occ.update(fits=(occ.get("loop") or {}).get("fits"), bounded=(occ.get("loop") or {}).get("bounded"),
+                   ok=not occ["why"], window=_g2_window(occ["window"]), assign=_g2_window(occ["assign"]),
+                   stop=None if occ["stop"] is None else {"unix": occ["stop"], "utc": utc(occ["stop"])},
+                   loops=len(occ["loops"]))
+    return {"journal": None if path is None else str(path), "journal_why": None if path is not None else lines,
+            "occurrences": occurrences, "elsewhere": elsewhere,
+            "periodic": [] if path is None else restarts_periodic(lines),
+            "lines": 0 if path is None else len(lines)}
+
+
+def restarts_by_vm(vm, sessions, results, occurrences, elsewhere, periodic, interval, taken):
+    """The summary of one VM (RESTARTS_RULE): its counts, the register's entries measured over its journals
+    (lab_trial.periods_of), the autovacuum (AUTOVACUUM_RULE_G2) and the periods the register does not name."""
+    from scripts import lab_trial
+    dirs = [s.dir for s, r in zip(sessions, results) if s.vm == vm and r and r["journal"]]
+    measured = lab_trial.periods_of(dirs) if dirs else []
+    autovacuum = (lab_trial.autovacuum_property(measured, interval) if dirs else
+                  {"rule": lab_trial.AUTOVACUUM_RULE, "ok": None, "why": "no journal of this VM"})
+    if autovacuum["ok"] is None:
+        autovacuum["taken_over"] = {"rule": AUTOVACUUM_RULE_G2, "measured": (taken or {}).get("after")}
+    events = [o for o in occurrences if o["vm"] == vm and o["occurrence"] == "event"]
+    kills = [o for o in occurrences if o["vm"] == vm and o["occurrence"] == "kill"]
+    return {"sessions": [s.id for s in sessions if s.vm == vm], "journals": len(dirs),
+            "events": {"occurrences": len(events), "counted": sum(o["counted"] for o in events),
+                       "ok": sum(o["ok"] for o in events)},
+            "kills": {"occurrences": len(kills), "counted": sum(o["counted"] for o in kills),
+                      "ok": sum(o["ok"] for o in kills)},
+            "periods": measured, "autovacuum": autovacuum,
+            "unregistered": [row for row in periodic if row["vm"] == vm and row["covered_by"] is None],
+            "loops_elsewhere": sum(row["vm"] == vm for row in elsewhere)}
+
+
+def restarts_findings(occurrences, elsewhere, periodic, by_vm):
+    """The findings of RESTARTS_RULE, each named."""
+    findings = [f"VM {vm}: the autovacuum launcher's spacing fails the property of Q9: its median "
+                f"{v['autovacuum']['median_s']} s lies {v['autovacuum']['remainder_s']} s past a multiple of interval_s"
+                for vm, v in by_vm.items() if v["autovacuum"]["ok"] is False]
+    findings += [f"{o['session']} {o['type']}" + (f" #{o['index']}" if o["index"] is not None else "")
+                 + f" (VM {o['vm']}" + (", its session counted false" if o["status"] == "load" else "") + "): "
+                 + "; ".join(o["why"]) for o in occurrences
+                 if not o["ok"] and (o["occurrence"] == "event" or o["induced"])]
+    findings += [f"{row['session']} (VM {row['vm']}): a restart loop of {row['unit']} at {row['restarts'][0]['utc']} "
+                 + ("outside every window of an event that restarts it by design" if row["by_design"] is None
+                    else f"in the window of {row['by_design']['type']} #{row['by_design']['index']}")
+                 + ("" if row["fits"] else ", does not fit: " + "; ".join(row["why_not_fits"]))
+                 + ("" if row["bounded"] else ", not bounded: " + "; ".join(row["why_not_bounded"]))
+                 for row in elsewhere if row["finding"]]
+    findings += [f"{row['session']} (VM {row['vm']}): a period the register does not name: {row['source']}: "
+                 f"{row['form'][:160]} ({row['lines']} lines, median spacing {row['spacings']['median']} s, cv "
+                 f"{row['cv']})" for row in periodic if row["covered_by"] is None]
+    return findings
+
+
+def restarts_table(args, command):
+    """The mode restarts (RESTARTS_RULE): writes the new record, prints one line per VM and the criterion, and
+    returns the exit code."""
+    started = _g2_start(args, "restarts")
+    if started is None:
+        return 2
+    out, paths = started
+    try:
+        protocol = _g2_protocol(args.protocol)
+    except DataError as error:
+        print(f"campaign_report: {error}", file=sys.stderr)
+        return 2
+    from scripts import lab_trial
+    from skuska import g2
+    register = ROOT / "lab/periods.json"
+    register_sha = _g2_digest(register)
+    g2_dir = _g2_dir(args)
+    sessions, entries, results, refused = [], [], [], []
+    for path in paths:
+        try:
+            s = G2TableSession(path, g2_dir)
+            s.bind(protocol)
+            lab = s.meta.get("lab_sha256")
+            if not isinstance(lab, dict) or lab.get("lab/periods.json") != register_sha:
+                raise DataError(f"{s.dir}: session.json lab_sha256 names "
+                                f"{_shown(lab.get('lab/periods.json') if isinstance(lab, dict) else lab, 80)} for "
+                                f"lab/periods.json, not {register_sha} of {register} (run this mode from the "
+                                "session's commit)")
+            status, why = s.selection("restart_loops_bounded")
+            result = restarts_session(s, status, g2_dir) if status != "left_out" else None
+            if result is not None and result["journal"] is not None:
+                found = sorted((s.dir / "guest").glob("*-journal.txt.gz"))
+                if found != [Path(result["journal"])]:
+                    raise DataError(f"{s.dir}/guest holds the journal files {[f.name for f in found]}, not only the "
+                                    "one its segment binds (lab_trial.periods_of reads every *-journal.txt.gz)")
+        except DataError as error:
+            refused.append(str(error))
+            continue
+        entry = s.entry(status, why)
+        if result is not None:
+            entry.update(journal=result["journal"], journal_why=result["journal_why"], journal_lines=result["lines"])
+        sessions.append(s)
+        entries.append(entry)
+        results.append(result)
+    if _g2_refusals("restarts", out, sessions, refused):
+        return 2
+    occurrences = [occ for r in results if r for occ in r["occurrences"]]
+    elsewhere = [row for r in results if r for row in r["elsewhere"]]
+    periodic = [{"session": s.id, "vm": s.vm, **row} for s, r in zip(sessions, results) if r for row in r["periodic"]]
+    taken = next((e for e in json.loads(register.read_text())["periods"] if e.get("name") == lab_trial.AUTOVACUUM),
+                 {}).get("measured")
+    by_vm = {vm: restarts_by_vm(vm, sessions, results, occurrences, elsewhere, periodic, protocol["interval_s"], taken)
+             for vm in protocol["vms"]}
+    missing = []
+    total = sum(o["counted"] for o in occurrences if o["occurrence"] == "event")
+    if total < g2.OCCURRENCES:
+        missing.append(f"{RESTART_TYPE}: {total} occurrence(s) of counted sessions on both VMs together, fewer than "
+                       f"{g2.OCCURRENCES}")
+    for vm, v in by_vm.items():
+        if v["events"]["counted"] < g2.MIN_PER_VM:
+            missing.append(f"{RESTART_TYPE} on VM {vm}: {v['events']['counted']} occurrence(s) of counted sessions, "
+                           f"fewer than {g2.MIN_PER_VM}")
+        if v["kills"]["counted"] < KILLS_NEEDED:
+            missing.append(f"the killed service on VM {vm}: {v['kills']['counted']} induced kill(s) in counted "
+                           f"sessions, fewer than {KILLS_NEEDED}")
+    findings = restarts_findings(occurrences, elsewhere, periodic, by_vm)
+    criterion = {"met": not missing and not findings, "minimums_met": not missing}
+    record = _g2_record(RESTARTS_TABLE_SCHEMA, RESTARTS_GUEST, command, len(occurrences), {
+        "criterion": "restart_loops_bounded", "protocol": {k: v for k, v in protocol.items() if k != "types"},
+        "register": {"path": str(register), "sha256": register_sha}, "needed": g2.OCCURRENCES,
+        "needed_per_vm": g2.MIN_PER_VM, "kills_needed_per_vm": KILLS_NEEDED,
+        "constants": {"fits_s": list(FITS_S), "start_limit_burst": START_LIMIT_BURST,
+                      "start_limit_interval_s": START_LIMIT_INTERVAL_S, "restart_window_s": lab_trial.RESTART_WINDOW_S,
+                      "guest_clock_s": GUEST_CLOCK_S, "period_spacings": PERIOD_SPACINGS, "period_cv": PERIOD_CV},
+        "sessions": entries, "occurrences": occurrences, "loops_elsewhere": elsewhere, "periodic": periodic,
+        "by_vm": by_vm, "minimums_met": not missing, "missing": missing, "findings": findings, "result": criterion,
+        "selection": G2_SELECTION,
+        "rules": {"restarts": RESTARTS_RULE, "assign": ASSIGN_RULE, "fits": FITS_RULE, "bounded": BOUNDED_RULE,
+                  "elsewhere": ELSEWHERE_RULE, "periods": PERIODS_RULE, "autovacuum": AUTOVACUUM_RULE_G2}},
+        "The restart loops and the periods of the guests' journals of G2 against lab/periods.json (criterion "
+        "restart_loops_bounded of G2); the spacings measured here never go into lab/periods.json.")
+    code = _g2_write(out, record)
+    if code:
+        return code
+    for vm, v in by_vm.items():
+        print(f"vm {vm}: {RESTART_TYPE} {v['events']['ok']}/{v['events']['occurrences']} fit and bounded "
+              f"({v['events']['counted']}/{g2.MIN_PER_VM} counted), kills {v['kills']['ok']}/"
+              f"{v['kills']['occurrences']} ({v['kills']['counted']}/{KILLS_NEEDED} counted), "
+              f"{v['loops_elsewhere']} loop(s) elsewhere, {len(v['unregistered'])} period(s) the register does not "
+              "name")
+    print("restart_loops_bounded: " + ("met" if criterion["met"] else "not met") + f"; {len(missing)} minimum(s) "
+          f"missing, {len(findings)} finding(s)", flush=True)
+    print(f"campaign_report: restarts: {len(sessions)} session(s), {len(occurrences)} occurrence(s); record {out}",
+          file=sys.stderr)
+    return 0 if criterion["met"] else 1
+
+
+def g2_table_parsers(modes):
+    """The parsers of the modes guest, events and restarts (package H1b6a), in one place."""
+    g2_dir = ("the G2 directory: zaznamy/ holds the driver's records (skuska/g2.py), poruchy/ the injector's "
+              "(default: skuska/g2.py G2_DIR)")
+    guest = modes.add_parser("guest", help="the deployed files of lab/ on the VMs against the commit of each G2 "
+                                           "session (criterion guest_matches_repository; GUEST_RULE)")
+    events = modes.add_parser("events", help="the occurrences of the events of G2 sessions and their predicates "
+                                             "(criterion event_effects; EVENTS_RULE, NO_EFFECT_RULE)")
+    restarts = modes.add_parser("restarts", help="the restart loops and periods of the guests' journals of G2 "
+                                                 "against lab/periods.json (criterion restart_loops_bounded; "
+                                                 "RESTARTS_RULE)")
+    for mode in (guest, events, restarts):
+        mode.add_argument("session_dirs", type=Path, nargs="+",
+                          help="G2 session directories (data/diagnostics/G2/<vm>/<session>)")
+        if mode is not guest:
+            mode.add_argument("--protocol", type=Path, required=True,
+                              help="the protocol file the sessions ran under (their protocol.json must agree with it "
+                                   "outside the paths of G1 and later stages: gates.stage_sha256 of stage G0)")
+        mode.add_argument("--g2-dir", type=Path, help=g2_dir)
+        mode.add_argument("--out", type=Path, required=True, help="new JSON record (must not exist)")
+
+
+G2_TABLE_MODES = {"guest": guest_table, "events": events_table, "restarts": restarts_table}
+
+
 CONTROLS_TABLE_SCHEMA = "hyptcn3/g2-controls-table/1"
 # The criterion controls_paired of stage G2 (scripts/gates.py CRITERIA, the lead's answer to Q47): 3 occurrences of the
 # control and 3 of its paired negative per kind of controls.kinds.
@@ -5586,6 +7014,7 @@ def main(argv=None):
     timing_mode.add_argument("--others", type=Path, nargs="+", default=[],
                              help="the audit records of the other error-free G2 runs the G2 record names (Q59)")
     timing_mode.add_argument("--out", type=Path, required=True, help="new JSON record (must not exist)")
+    g2_table_parsers(modes)  # The modes guest, events and restarts (package H1b6a).
     controls_mode = modes.add_parser("controls", help="the table of shifts of the controls of G2 sessions and their "
                                                       "paired negatives (criterion controls_paired; CONTROLS_RULE)")
     controls_mode.add_argument("session_dirs", type=Path, nargs="+",
@@ -5612,6 +7041,8 @@ def main(argv=None):
         return majflt(args, command)
     if args.mode == "timing":
         return timing(args, command)
+    if args.mode in G2_TABLE_MODES:  # Package H1b6a: guest, events, restarts.
+        return G2_TABLE_MODES[args.mode](args, command)
     if args.mode == "controls":
         return controls_table(args, command)
     if args.mode == "faults":
