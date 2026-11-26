@@ -6,6 +6,7 @@
   .venv/bin/python scripts/campaign_report.py envelope SESSION [SESSION ...] --protocol P --out NEW_FILE
   .venv/bin/python scripts/campaign_report.py majflt AUDIT [AUDIT ...] --protocol P --out NEW_FILE
   .venv/bin/python scripts/campaign_report.py controls SESSION [SESSION ...] --out NEW_FILE
+  .venv/bin/python scripts/campaign_report.py faults SESSION [SESSION ...] --records DIR --out NEW_FILE
 
 The report reads saved evidence only: session, end, audit and archive
 metadata, the request and interval logs, the host monitor, snapshot sidecars
@@ -53,11 +54,27 @@ new JSON record with the provenance header of check E. Exit 0 = every kind
 has its minimum, 1 = a minimum is missing (the record names it), 2 = usage or
 data error (nothing written).
 
+The mode faults (the criterion live_fault_injections of G2, the lead's
+answers Q56, Q57 and Q60; FAULTS_RULE) is the table of the faults injected
+beside G2 sessions (skuska/poruchy.py): per fault and VM its session, the
+names expected (skuska/poruchy.py FAULTS, committed before the runs), the
+reasons received (end.json's error as scripts/campaign.py incomplete_reasons
+gives it, and the audit's reasons), the other reasons, whether the refusal
+was loud and named, and the count per fault and VM against the minimum of 1;
+beside them the clean session of each VM. It reads session.json,
+protocol.json, end.json, the audit record and the injector's record
+(--records, <G2 directory>/poruchy). It writes NEW_FILE, a new JSON record
+with the provenance header of check E. Exit 0 = every fault has its minimum
+on every VM, 1 = a minimum is missing (the record names it), 2 = usage or
+data error (nothing written).
+
 A reporting tool, not part of capture, audit or archival (collection.py lists
 it in NOT_MEASUREMENT). Only the standard library and NumPy are used, but by
 the mode controls, which imports scripts/controls.py (the outcomes of package
 B8) and features/archive.py (the loader of a feature archive) inside its
-function; plots are hand-written SVG.
+function, and by the mode faults, which imports scripts/campaign.py
+(incomplete_reasons) and skuska/poruchy.py (FAULTS) inside its functions;
+plots are hand-written SVG.
 """
 import argparse
 from array import array
@@ -4920,6 +4937,241 @@ def controls_table(args, command):
     return 0 if not missing else 1
 
 
+FAULTS_TABLE_SCHEMA = "hyptcn3/g2-faults-table/1"
+FAULT_RECORD_SCHEMA = "hyptcn3/g2-fault/1"  # skuska/poruchy.py FAULT_SCHEMA: the injector's record of a session.
+FAULTS_NEEDED = 1  # The criterion live_fault_injections: every fault at least once on each VM.
+FAULTS_GUEST = ("none: the mode faults reads saved session files, audit records and the injector's records; no VM is "
+                "contacted and no RAM image is opened")
+FAULTS_RULE = (
+    "The criterion live_fault_injections of stage G2 (scripts/gates.py CRITERIA, the lead's G2 skeleton): the six "
+    "faults of proposal 10.3, each at least once on each VM, each ending in a loud refusal with the name expected and "
+    "written before the run (the lead's answer to Q56: skuska/poruchy.py FAULTS, committed before the first fault "
+    "session), in a table: fault, VM, expected reason, received reason. The mode reads, of each G2 session directory "
+    "given (a "
+    "diagnostic run of the fault plan, skuska/poruchy.py PLAN_RULE): session.json, protocol.json (the session's copy, "
+    "the file session.json protocol_sha256 binds; its vms name the VMs counted), end.json when there is one, the "
+    "session's audit record when there is one (of the audit_*.json in the directory whose values.session_dir is the "
+    "directory and whose values.session_sha256 is the sha256 of session.json the newest by name; it must have audited "
+    "under protocol.json) and the injector's record <--records>/<session id>.json (schema hyptcn3/g2-fault/1), whose "
+    "session, directory and VM must be the session's and whose fault, expected names and faults_sha256 must be those "
+    "of skuska/poruchy.py FAULTS. The reasons received are, in this order, the error of a capture that did not "
+    "complete (no end.json, end.json without completed true, or with an error) as scripts/campaign.py "
+    "incomplete_reasons gives it, the campaign's name for an incomplete capture, and the reasons of the audit's "
+    "verdict (values.reasons). A "
+    "refusal is loud when the capture did not complete (with the campaign's name for why) or the audit refused the "
+    "session; a session the audit "
+    "accepted is not refused (for a fault that was induced a finding: the guards absorbed it, map question 11), and "
+    "neither is one without an error and without an audit (no verdict). It is named when every expected name of its "
+    "fault is among the reasons received, exactly; the other reasons are the rest, and those not among the reasons of "
+    "the clean session of the same VM and length (a clean session of the plan given beside) are shown apart. A fault "
+    "session counts towards its fault's minimum on its VM when the injector's record says the fault was induced, the "
+    "refusal was loud and it was named; one that was refused with other names counts not and is shown with what it "
+    "received. The counts per fault and VM show the minimum, 1, and name every one missing. Refused by name, each a "
+    "data error: a directory without session.json or protocol.json, a session of another role than diagnostic, a "
+    "protocol.json other than the one session.json binds, an audit under another protocol, no injector's record or "
+    "one of another schema, session, directory, VM, fault or names, sessions whose protocols name other VMs, a "
+    "directory named twice, and an --out that exists (refused before anything is read) or lies inside a session "
+    "directory. Exit 0: the table is written to --out, a new JSON record with the provenance header of check E, and "
+    "every fault has its minimum on every VM; 1: the table is written and a minimum is missing, named; 2: a usage or "
+    "data error, every refusal named on stderr and nothing written.")
+
+
+def faults_session(path, records_dir, faults, faults_sha):
+    """One session directory by FAULTS_RULE: its row (the fault's or the clean session's), or a DataError."""
+    from scripts.campaign import incomplete_reasons  # The campaign's name for a capture that did not complete.
+    directory = Path(os.path.abspath(path))
+    if not directory.is_dir():
+        raise DataError(f"{directory}: not a session directory")
+    meta, meta_sha = _controls_file(directory / "session.json")
+    if meta.get("role") != CONTROLS_ROLE:
+        raise DataError(f"{directory}: session.json names the role {_shown(_get(meta, 'role'), 40)}, not "
+                        f"{CONTROLS_ROLE} (the sessions of G2 are diagnostic runs)")
+    sid, vm = meta.get("session_id"), meta.get("vm")
+    if not isinstance(sid, str) or not isinstance(vm, str):
+        raise DataError(f"{directory}: session.json names no session_id or no vm")
+    protocol, protocol_sha = _controls_file(directory / "protocol.json")
+    if meta.get("protocol_sha256") != protocol_sha:
+        raise DataError(f"{directory}: protocol.json has the sha256 {protocol_sha}, session.json binds "
+                        f"{_shown(_get(meta, 'protocol_sha256'), 80)}")
+    vms = [row.get("name") for row in protocol.get("vms") or [] if isinstance(row, dict)]
+    record_path = Path(records_dir) / f"{sid}.json"
+    record, record_sha = _controls_file(record_path, FAULT_RECORD_SCHEMA)
+    v = record.get("values") if isinstance(record.get("values"), dict) else {}
+    fault = v.get("fault")
+    if (v.get("session_id") != sid or not isinstance(v.get("session_dir"), str)
+            or os.path.realpath(v["session_dir"]) != os.path.realpath(directory) or v.get("vm") != vm):
+        raise DataError(f"{record_path}: the injector's record is of the session {_shown(_get(v, 'session_id'), 80)} "
+                        f"in {_shown(_get(v, 'session_dir'))} on VM {_shown(_get(v, 'vm'), 20)}, not of {sid} in "
+                        f"{directory} on VM {vm}")
+    if fault is not None and fault not in faults:
+        raise DataError(f"{record_path}: the fault {_shown(fault, 60)} is not one of skuska/poruchy.py FAULTS")
+    expected = [] if fault is None else faults[fault]["expected"]
+    if v.get("expected") != expected or v.get("faults_sha256") != faults_sha:
+        raise DataError(f"{record_path}: its expected names {_shown(_get(v, 'expected'))} or faults_sha256 differ from "
+                        "skuska/poruchy.py FAULTS, the names committed before the runs (Q56)")
+    end_path = directory / "end.json"
+    end = _controls_file(end_path)[0] if end_path.exists() else None
+    incomplete = end is None or end.get("completed") is not True or "error" in end
+    capture = incomplete_reasons(directory) if incomplete else []
+    try:
+        audit_path, audit, ignored = controls_audit(directory, meta_sha)
+    except DataError:
+        audit_path = audit = None
+        ignored = []
+    audit_entry, audit_reasons = None, []
+    if audit is not None:
+        values = audit["values"]
+        if values.get("protocol_sha256") != protocol_sha:
+            raise DataError(f"{audit_path}: audited under the protocol {_shown(_get(values, 'protocol_sha256'), 80)}, "
+                            f"not the session's protocol.json {protocol_sha}")
+        audit_reasons = [str(x) for x in values.get("reasons") or []]
+        audit_entry = {"path": str(audit_path), "sha256": hashlib.sha256(audit_path.read_bytes()).hexdigest(),
+                       "accepted": values.get("accepted"), "reasons": audit_reasons, "ignored": ignored}
+    received = list(dict.fromkeys([*capture, *audit_reasons]))
+    loud = bool(capture) or (audit is not None and audit["values"].get("accepted") is False)
+    named = fault is not None and all(name in received for name in expected)
+    measured = v.get("measured") if isinstance(v.get("measured"), dict) else {}
+    row = {"session": sid, "vm": vm, "fault": fault,
+           "fault_text": None if fault is None else faults[fault]["fault"], "scenario": meta.get("scenario"),
+           "cycles": meta.get("cycles"), "expected": expected, "received": received,
+           "expected_received": {name: name in received for name in expected},
+           "other_reasons": [x for x in received if x not in expected], "other_reasons_not_in_clean": None,
+           "capture": {"completed": None if end is None else end.get("completed"),
+                       "error": None if end is None else end.get("error"), "incomplete_reasons": capture},
+           "audit": audit_entry, "induced": v.get("induced"), "why_not_induced": v.get("why_not"),
+           "fault_window": v.get("window"), "fault_inside_measured_phase": measured.get("fault_inside"),
+           "loud": loud, "named": named,
+           "record": {"path": str(record_path), "sha256": record_sha}, "session_dir": str(directory),
+           "session_json_sha256": meta_sha, "protocol_sha256": protocol_sha}
+    why = None
+    if fault is not None:
+        missing = [name for name in expected if name not in received]
+        why = (f"the fault was not induced: {v.get('why_not')}" if v.get("induced") is not True
+               else "the session was not refused: the audit accepted it (the guards absorbed the fault, a finding)"
+               if audit is not None and audit["values"].get("accepted") is True and not capture
+               else "the session was not refused: no error of the capture and no audit (no verdict)" if not loud
+               else "refused without the expected name(s): " + "; ".join(missing) if missing else None)
+    row.update(counted=fault is not None and why is None, why_not_counted=why)
+    return row, vms
+
+
+def faults_counts(rows, faults, vms):
+    """({fault: {vm: {counted, sessions, needed, missing}}}, the counts missing) by FAULTS_RULE."""
+    counts, missing = {}, []
+    for fault in faults:
+        counts[fault] = {}
+        for vm in vms:
+            mine = [row for row in rows if row["fault"] == fault and row["vm"] == vm]
+            counted = [row["session"] for row in mine if row["counted"]]
+            counts[fault][vm] = {"counted": len(counted), "sessions": [row["session"] for row in mine],
+                                 "counted_sessions": counted, "needed": FAULTS_NEEDED,
+                                 "missing": max(0, FAULTS_NEEDED - len(counted))}
+            if len(counted) < FAULTS_NEEDED:
+                missing.append(f"{fault} on VM {vm}: {len(counted)} of {FAULTS_NEEDED} refused by its names "
+                               f"({len(mine)} session(s): " + (", ".join(f"{row['session']}: {row['why_not_counted']}"
+                                                                         for row in mine) or "none") + ")")
+    return counts, missing
+
+
+def faults_table(args, command):
+    """The mode faults (FAULTS_RULE): refuses an --out that exists before it reads anything and a directory named
+    twice, then reads every session; writes the new record, prints one line per fault, and returns the exit code."""
+    out = Path(os.path.abspath(args.out))
+    if out.exists() or out.is_symlink():
+        print(f"campaign_report: --out already exists, nothing was read or written: {out}", file=sys.stderr)
+        return 2
+    paths = [os.path.abspath(path) for path in args.session_dirs]
+    real = [os.path.realpath(path) for path in paths]
+    twice = sorted({path for path, r in zip(paths, real) if real.count(r) > 1})
+    if twice:
+        print("campaign_report: faults: a session directory is named more than once: " + ", ".join(twice),
+              file=sys.stderr)
+        return 2
+    from skuska.poruchy import FAULTS, faults_sha256  # The forms and names committed before the runs (Q56).
+    faults, faults_sha = FAULTS, faults_sha256()
+    rows, refused, vms = [], [], None
+    for path in paths:
+        try:
+            row, theirs = faults_session(path, args.records, faults, faults_sha)
+        except DataError as error:
+            refused.append(str(error))
+            continue
+        if vms is None:
+            vms = theirs
+        elif theirs != vms:
+            refused.append(f"{path}: its protocol names the VMs {theirs}, not {vms} of {rows[0]['session_dir']}")
+            continue
+        rows.append(row)
+    target = Path(os.path.realpath(out.parent))
+    refused += [f"refusing to write {out} inside the session directory {row['session_dir']}" for row in rows
+                if target == Path(os.path.realpath(row["session_dir"]))
+                or target.is_relative_to(os.path.realpath(row["session_dir"]))]
+    if refused or not rows:
+        for why in refused or ["no session"]:
+            print(f"campaign_report: faults: {one_line(why)}", file=sys.stderr)
+        print(f"campaign_report: faults: {len(refused)} refusal(s): no table, nothing written", file=sys.stderr)
+        return 2
+    clean = {}
+    for row in rows:
+        if row["fault"] is None:
+            clean.setdefault((row["vm"], row["cycles"]), row)
+    for row in rows:
+        twin = clean.get((row["vm"], row["cycles"]))
+        if row["fault"] is not None and twin is not None:
+            row["other_reasons_not_in_clean"] = [x for x in row["other_reasons"] if x not in twin["received"]]
+            row["clean_session"] = twin["session"]
+    fault_rows = [row for row in rows if row["fault"] is not None]
+    counts, missing = faults_counts(fault_rows, list(faults), vms)
+    absorbed = [f"{row['fault']} on VM {row['vm']} ({row['session']}): induced, and the audit accepted the session"
+                for row in fault_rows if row["induced"] is True and not row["loud"]
+                and (row["audit"] or {}).get("accepted") is True]
+    other_names = [f"{row['fault']} on VM {row['vm']} ({row['session']}): refused with "
+                   + ("; ".join(row["received"]) or "no reason") + ", not with " + "; ".join(row["expected"])
+                   for row in fault_rows if row["induced"] is True and row["loud"] and not row["named"]]
+    shapes = {(row["vm"], row["cycles"]) for row in fault_rows}
+    without_clean = sorted(f"VM {vm}, {cycles} cycles" for vm, cycles in shapes if (vm, cycles) not in clean)
+    table = [{key: row[key] for key in ("fault", "vm", "session", "expected", "received", "other_reasons", "loud",
+                                        "named", "counted")} for row in fault_rows]
+    identity = git_identity()
+    record = {"schema": FAULTS_TABLE_SCHEMA, "commit": identity["commit"], "commit_dirty": identity["dirty"],
+              "date": datetime.now(timezone.utc).isoformat(timespec="seconds"), "host": platform.platform(),
+              "guest": FAULTS_GUEST, "command": command, "n": len(fault_rows),
+              "values": {"stage": "G2", "criterion": "live_fault_injections", "needed": FAULTS_NEEDED,
+                         "faults": list(faults), "faults_sha256": faults_sha, "vms": vms, "table": table,
+                         "sessions": fault_rows, "clean_sessions": [row for row in rows if row["fault"] is None],
+                         "shapes_without_clean_session": without_clean, "counts": counts,
+                         "minimums_met": not missing, "missing": missing, "absorbed": absorbed,
+                         "other_names": other_names, "g2_values": False,
+                         "g2_values_note": ("the lead's answer to Q60: a session with an induced fault never counts "
+                                            "for the values of G2"), "rule": FAULTS_RULE},
+              "note": "The table of the faults injected beside G2 sessions (criterion live_fault_injections of G2): "
+                      "expected and received reasons; nothing is scored or detected."}
+    text = json.dumps(record, indent=1, ensure_ascii=False, allow_nan=False) + "\n"
+    try:
+        out.parent.mkdir(parents=True, exist_ok=True)
+        stream = open(out, "x", encoding="utf-8")
+    except FileExistsError:
+        print(f"campaign_report: --out appeared meanwhile, nothing was overwritten: {out}", file=sys.stderr)
+        return 2
+    except OSError as error:
+        print(f"campaign_report: cannot create {out}: {type(error).__name__}: {error}", file=sys.stderr)
+        return 2
+    try:
+        with stream:
+            stream.write(text)
+    except OSError as error:
+        out.unlink(missing_ok=True)
+        print(f"campaign_report: cannot write {out}: {type(error).__name__}: {error}", file=sys.stderr)
+        return 2
+    for fault in faults:
+        print(f"{fault}: " + ", ".join(f"VM {vm} {counts[fault][vm]['counted']}/{FAULTS_NEEDED}" for vm in vms))
+    print("live_fault_injections minimums: " + ("met" if not missing else "missing: " + "; ".join(missing))
+          + f"; {len(absorbed)} absorbed, {len(other_names)} refused with other names", flush=True)
+    print(f"campaign_report: faults: {len(rows)} session(s), {len(fault_rows)} with a fault; record {out}",
+          file=sys.stderr)
+    return 0 if not missing else 1
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     modes = parser.add_subparsers(dest="mode", required=True)
@@ -4956,6 +5208,13 @@ def main(argv=None):
     controls_mode.add_argument("session_dirs", type=Path, nargs="+",
                                help="G2 session directories with controls (diagnostic runs of skuska/kontroly.py)")
     controls_mode.add_argument("--out", type=Path, required=True, help="new JSON record (must not exist)")
+    faults_mode = modes.add_parser("faults", help="the table of the faults injected beside G2 sessions (criterion "
+                                                  "live_fault_injections; FAULTS_RULE)")
+    faults_mode.add_argument("session_dirs", type=Path, nargs="+",
+                             help="G2 session directories of the fault plan (skuska/poruchy.py), clean ones included")
+    faults_mode.add_argument("--records", type=Path, required=True,
+                             help="the injector's records, <G2 directory>/poruchy (<session id>.json each)")
+    faults_mode.add_argument("--out", type=Path, required=True, help="new JSON record (must not exist)")
     args = parser.parse_args(argv)
     command = shlex.join([str(Path(sys.argv[0])) if argv is None else "scripts/campaign_report.py",
                           *(sys.argv[1:] if argv is None else argv)])
@@ -4965,6 +5224,8 @@ def main(argv=None):
         return majflt(args, command)
     if args.mode == "controls":
         return controls_table(args, command)
+    if args.mode == "faults":
+        return faults_table(args, command)
     out = args.out.absolute()
     if out.exists() or out.is_symlink():
         print(f"campaign_report: output directory already exists: {out}", file=sys.stderr)
