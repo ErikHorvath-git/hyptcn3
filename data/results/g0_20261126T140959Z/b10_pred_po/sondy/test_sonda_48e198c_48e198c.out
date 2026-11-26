@@ -1,0 +1,8 @@
+# probe test_sonda_48e198c.py at 48e198c (48e198c Protocol v5: proposal with decisions, readiness-stage harness, first fixes), extra files {'tcn/tests/test_odovzdanie_korpusu.py': 'a41973e'}
+# /home/eh/projects/hyptcn3/.venv/bin/python -B -m pytest -q -p no:cacheprovider -rfE --basetemp <scratch>/sonda_tmp/48e198c -s tcn/tests/test_sonda_48e198c.py
+# 2026-11-24T17:28:06Z
+{"input": "a closed campaign of 16 sessions, groups v5-<role>-<n>", "probe": "the production check of training on the groups of prefix v5- (process R1, GF-8)", "row": 13, "validate_index": "refused: incomplete planned allocation"}
+{"input": "the same corpus without a group prefix; in each role two sessions carry one invalid row the rule tolerates", "probe": "training on sessions with one tolerated invalid row (process R1, M4)", "row": 13, "train_bundle": "refused: accepted corpus archive contains invalid model rows", "validate_index": "accepted"}
+.
+1 passed in 2.63s
+exit 0
