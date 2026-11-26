@@ -5,4 +5,6 @@ reopens G0 (map dokazy/G2/mapa.md point E). The data of G2 never become a datase
 
   g2.py   the deck of events of G2 and the driver of a block of G2 sessions on one VM (package H1a)
   kontroly.py  the draw of the controls of G2, the controls wrapper of Q46 and the block with controls (package H1b2)
+  pozemna_pravda.py  the ground truth under load: the dedicated sessions, the sampler beside them, the comparison
+          on a restored copy and the table of matches (package H1b1)
 """

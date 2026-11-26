@@ -1095,6 +1095,9 @@ class Block:
             "counted": summary["counted"],
             "done": bool(run and run["exit_code"] == 0 and audit is not None and archived is not None),
             "stop": stop, "error": error, "other_vm": self.other_vm,
+            # Package H1b1 (Q62): the G2 criteria and values whose tables leave the session out, with the rule, or
+            # None (a deck session leaves out none), and the draw its events come from when it is not the deck.
+            "excluded": spec.get("excluded"), "draw": spec.get("draw"),
             "rules": {"block": BLOCK_RULE, "run": RUN_RULE, "load": LOAD_RULE, "done": DONE_RULE}}
         path = self.places.records / f"{spec['session_id']}.json"
         write_new(path, header(SESSION_SCHEMA, self.command, len(steps), values, guest=guest))
