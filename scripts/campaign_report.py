@@ -3,6 +3,10 @@
 
   .venv/bin/python scripts/campaign_report.py campaign data/campaigns/<id> --out NEW_DIR
   .venv/bin/python scripts/campaign_report.py sessions SESSION [SESSION ...] --out NEW_DIR
+  .venv/bin/python scripts/campaign_report.py marked AUDIT [AUDIT ...] --protocol P [--g2-dir DIR] --out NEW_FILE
+  .venv/bin/python scripts/campaign_report.py load SESSION [SESSION ...] [--final-protocol P] [--g2-dir DIR]
+                                              --out NEW_FILE
+  .venv/bin/python scripts/campaign_report.py realism SESSION [SESSION ...] [--g2-dir DIR] --out NEW_FILE
   .venv/bin/python scripts/campaign_report.py envelope SESSION [SESSION ...] --protocol P --out NEW_FILE
   .venv/bin/python scripts/campaign_report.py majflt AUDIT [AUDIT ...] --protocol P --out NEW_FILE
   .venv/bin/python scripts/campaign_report.py timing RECORD [RECORD ...] [--others AUDIT ...] --out NEW_FILE
@@ -21,6 +25,28 @@ from a file listed with its SHA-256 (sources.csv, summary.json); absent
 evidence becomes null with a stated reason (column `missing`; fields that do
 not apply to a session are explained in `not_applicable`), never an estimate.
 NEW_DIR must not exist. Exit 0 = report written, 2 = usage or data error.
+
+The modes marked, load and realism (package H1b6b of stage G2, map rows 4 to 6 and 14) are tables of G2 sessions
+that honour the records of the G2 driver (G2T_RECORDS_RULE: a session the record of skuska/g2.py leaves out of a
+table, or one the host load does not count, is listed and never counted). The mode marked (criterion
+marked_rows_per_event and the value invalid_rows.max, the lead's answer to Q49; MARKED_RULE, MARKED_MODEL_RULE)
+counts, per occurrence of an event, the rows the rule marks, invalid and closed by a parser rule apart, at its
+start and at its stop, with the phase of each boundary against the collector's grid, sums them by type over both
+VMs, and proposes invalid_rows.max and min_score_coverage by the model written before the data; it reads the audit
+records, their feature archives (numpy.load with allow_pickle=False), session files and the records, and writes
+nothing into the protocol. The mode load (criterion profiles_load, the lead's answer to Q63; LOAD_RULE) gives per
+scenario and VM the offered and delivered load, the load delivered in the event windows, the drop reasons and the
+return to the defined state; it reads the /2 traffic logs through scripts/traffic_log.py. The mode realism
+(criterion traffic_realism, the lead's answer to Q65; REALISM_RULE) gives per scenario and VM the value, bound and
+result of every requirement of the audit's section realism, the maintenance timer of corp from the guest journal,
+the sessions with a fault apart, and runs P1 (the mode envelope) grouped by the sha256 of each session's
+protocol.json. Each writes NEW_FILE, a new JSON record with the provenance header of check E and the stage G2, which
+names every file it read with its sha256. Exit 0 = the criterion's minimums are met, 1 = one is not (the record
+names it), 2 = usage or data error (nothing written). They import inside their functions skuska/g2.py (the G2
+directory and the numbers of Q43 and of the skeleton's section 3), scripts/gates.py (the G0 binding),
+features/acceptance.py (marked: the marked rows by type and the gate interval), features/quality.py,
+scripts/collection_logs.py (the event window and the required units) and scripts/lab_trial.py (realism: the lines
+of the guest journal).
 
 The mode envelope (the lead's answer to Q30, 2026-11-24; ENVELOPE_RULE) draws
 the traffic envelope of each session again from the protocol P and the traffic
@@ -4378,6 +4404,1453 @@ def envelope(args, command):
     return code
 
 
+# ---------------------------------------------------------------- G2 tables of map rows 4 to 6 and 14 (package H1b6b)
+# The modes marked, load and realism (criteria marked_rows_per_event, profiles_load and traffic_realism of stage G2 and
+# the value invalid_rows.max): the readers they share, then each mode. All three honour the records of skuska/g2.py.
+
+G2T_RECORD_SCHEMA = "hyptcn3/g2-session/1"  # skuska/g2.py SESSION_SCHEMA: the record of one G2 session.
+G2T_ROLE = "diagnostic"  # skuska/g2.py ROLE: every session of G2 is a diagnostic run (map point A).
+G2T_H4_KINDS = ("cas", "fault", "fault_clean")  # skuska/cas.py KIND, skuska/poruchy.py KIND_FAULT and KIND_CLEAN.
+G2T_FAULT_KIND = "fault"  # skuska/poruchy.py KIND_FAULT: a session of the fault plan with its fault.
+G2T_RECORDS_RULE = (
+    "The records of the G2 driver decide which session a table counts (packages H1a to H1b5, the lead's answers Q49 "
+    "and Q60 to Q62). Every session the mode reads is a diagnostic run whose record <--g2-dir>/zaznamy/<session "
+    "id>.json (schema hyptcn3/g2-session/1, skuska/g2.py Block.record; --g2-dir defaults to skuska/g2.py G2_DIR) names "
+    "it by its session_id, its directory (values.session_dir, as real paths), its VM and the sha256 of its "
+    "session.json (values.session_json_sha256); a session without that record, or with the record of another "
+    "session, is a data error. Of the record the mode reads values.kind, values.excluded.criteria (null, or the "
+    "criteria and values of G2 whose tables leave the session out, written by the tool that planned it: the "
+    "ground-truth sessions, Q62; the timing sessions of H4, Q49 and Q51; the parity sessions, Q61), values.counted "
+    "with values.load.summary.reasons (map point B, skuska/g2.py LOAD_RULE: a session whose measured phase held a "
+    "heavy process or a run outside its block's plan, or whose samples do not cover it, counts for no table), "
+    "values.done (skuska/g2.py DONE_RULE), values.beside (the fault hook of skuska/poruchy.py, with the fault and "
+    "whether it was induced, and any hook that says g2_values false: no value of G2, Q60 and Q61), values.audit, "
+    "values.group and values.levels_after. A session a rule leaves out of a table is listed with the rule's words "
+    "and never counted.")
+
+
+def _g2t_read(path, files, name):
+    """The bytes of a file a G2 table reads, listed in `files` with its path, size and sha256; a DataError by name."""
+    try:
+        raw = Path(path).read_bytes()
+    except OSError as error:
+        raise DataError(f"{path}: cannot be read ({type(error).__name__}: {error})") from None
+    files.append({"name": name, "path": str(path), "bytes": len(raw), "sha256": hashlib.sha256(raw).hexdigest()})
+    return raw
+
+
+def _g2t_json(path, files, name, schema=None):
+    """(the JSON object of a file a G2 table reads, its sha256), the file listed in `files`; a DataError by name."""
+    raw = _g2t_read(path, files, name)
+    try:
+        doc = json.loads(raw)
+    except ValueError as error:
+        raise DataError(f"{path}: not JSON ({error})") from None
+    if not isinstance(doc, dict):
+        raise DataError(f"{path}: not a JSON object")
+    if schema is not None and doc.get("schema") != schema:
+        raise DataError(f"{path}: its schema is {_shown(_get(doc, 'schema'), 60)}, not {schema}")
+    return doc, files[-1]["sha256"]
+
+
+def _g2t_hash(path, files, name):
+    """A large file a G2 table reads through another module (a traffic log), listed in `files` with its sha256."""
+    try:
+        with open(path, "rb") as stream:
+            digest = hashlib.file_digest(stream, "sha256").hexdigest()
+            size = stream.tell()
+    except OSError as error:
+        raise DataError(f"{path}: cannot be read ({type(error).__name__}: {error})") from None
+    files.append({"name": name, "path": str(path), "bytes": size, "sha256": digest})
+
+
+def g2t_record(g2_dir, directory, meta, meta_sha, files):
+    """The G2 record of the session in `directory` (G2T_RECORDS_RULE) and what it says of the session: {path, sha256,
+    kind, excluded, excluded_rule, counted, load_reasons, fault, induced, g2_values, done, values}."""
+    sid = meta.get("session_id")
+    path = Path(g2_dir) / "zaznamy" / f"{sid}.json"
+    if not path.is_file():
+        raise DataError(f"{directory}: no G2 record of the session ({path}): the tables of G2 count only sessions "
+                        "whose records say whether they count")
+    doc, sha = _g2t_json(path, files, "G2 record", G2T_RECORD_SCHEMA)
+    v = doc.get("values")
+    if (not isinstance(v, dict) or v.get("session_id") != sid or not isinstance(v.get("session_dir"), str)
+            or os.path.realpath(v["session_dir"]) != os.path.realpath(directory) or v.get("vm") != meta.get("vm")
+            or v.get("session_json_sha256") != meta_sha):
+        v = v if isinstance(v, dict) else {}
+        raise DataError(f"{path}: the G2 record is of the session {_shown(_get(v, 'session_id'), 80)} in "
+                        f"{_shown(_get(v, 'session_dir'))} on VM {_shown(_get(v, 'vm'), 20)} with the session.json "
+                        f"{_shown(_get(v, 'session_json_sha256'), 80)}, not of {sid} in {directory} on VM "
+                        f"{meta.get('vm')} with {meta_sha}")
+    excluded = v.get("excluded")
+    criteria = excluded.get("criteria") if isinstance(excluded, dict) else None
+    if excluded is not None and not (isinstance(criteria, list) and all(isinstance(c, str) for c in criteria)):
+        raise DataError(f"{path}: values.excluded is neither null nor {{criteria: [names], rule}}")
+    beside = [b for b in v.get("beside") or [] if isinstance(b, dict)]
+    fault = next((b for b in beside if b.get("hook") == "fault"), None)
+    load = v.get("load") if isinstance(v.get("load"), dict) else {}
+    reasons = load.get("summary", {}).get("reasons") if isinstance(load.get("summary"), dict) else None
+    return {"path": str(path), "sha256": sha, "kind": v.get("kind"), "excluded": criteria or [],
+            "excluded_rule": excluded.get("rule") if isinstance(excluded, dict) else None,
+            "counted": v.get("counted") is True,
+            "load_reasons": ([one_line(str(r)) for r in reasons] if isinstance(reasons, list)
+                             else ["the record holds no summary of the host load (values.load.summary)"]),
+            "fault": None if fault is None else fault.get("fault"),
+            "induced": None if fault is None else fault.get("induced"),
+            "g2_values": not any(b.get("g2_values") is False for b in beside), "done": v.get("done") is True,
+            "values": v}
+
+
+def g2t_left_out(record, names, *, h4=False):
+    """Why the record leaves its session out of a table of the criterion and values `names` (G2T_RECORDS_RULE), None
+    when it does not; h4: a table of Q49, which counts no session of H4 and none that gives no value of G2."""
+    named = [name for name in names if name in record["excluded"]]
+    if named:
+        return (f"its record leaves it out of {', '.join(named)} (values.excluded"
+                + (f": {one_line(record['excluded_rule'])}" if record["excluded_rule"] else "") + ")")
+    if h4 and record["kind"] in G2T_H4_KINDS:
+        return f"a session of H4 (kind {record['kind']}): Q49 counts none"
+    if h4 and not record["g2_values"]:
+        return "a hook beside its run says that it gives no value of G2 (values.beside, g2_values false)"
+    if not record["counted"]:
+        return "not counted by the host load (skuska/g2.py LOAD_RULE): " + "; ".join(record["load_reasons"])
+    return None
+
+
+def g2t_session(path, g2_dir):
+    """A session directory of a G2 table: {path, session_id, vm, scenario, meta, meta_sha, protocol, protocol_sha,
+    binding, record, files}, its session.json and protocol.json read and its record bound; a DataError by name."""
+    from scripts import gates
+    directory = Path(os.path.abspath(path))
+    if not directory.is_dir():
+        raise DataError(f"{directory}: not a session directory")
+    files = []
+    meta, meta_sha = _g2t_json(directory / "session.json", files, "session.json")
+    sid, vm = meta.get("session_id"), meta.get("vm")
+    if not isinstance(sid, str) or not SAFE_ID.fullmatch(sid) or not isinstance(vm, str):
+        raise DataError(f"{directory}: session.json names no session_id or no vm")
+    if meta.get("role") != G2T_ROLE:
+        raise DataError(f"{directory}: session.json names the role {_shown(_get(meta, 'role'), 40)}, not {G2T_ROLE} "
+                        "(the sessions of G2 are diagnostic runs)")
+    protocol, protocol_sha = _g2t_json(directory / "protocol.json", files, "protocol.json")
+    if meta.get("protocol_sha256") != protocol_sha:
+        raise DataError(f"{directory}: protocol.json has the sha256 {protocol_sha}, session.json binds "
+                        f"{_shown(_get(meta, 'protocol_sha256'), 80)}")
+    if protocol.get("schema") != protocol_v5.SCHEMA:
+        raise DataError(f"{directory}: protocol.json is no protocol of schema {protocol_v5.SCHEMA}")
+    try:
+        binding = gates.stage_binding(directory / "protocol.json", "G0")[0]
+    except ValueError as error:
+        raise DataError(f"{directory}: protocol.json has no G0 binding ({error})") from None
+    record = g2t_record(g2_dir, directory, meta, meta_sha, files)
+    return {"path": str(directory), "session_id": sid, "vm": vm, "scenario": meta.get("scenario"), "meta": meta,
+            "meta_sha": meta_sha, "protocol": protocol, "protocol_sha": protocol_sha, "binding": binding,
+            "record": record, "files": files}
+
+
+def g2t_windows(directory, meta, files):
+    """The event windows of a session as its log audit takes them (scripts/collection_logs.py event_window, with the
+    session's event_grace_s): (records of events.json, [(index, record, low, high)], [{index, type, why}] of the
+    occurrences without a window, why there are none or None); a DataError for an unreadable events.json."""
+    from scripts.collection_logs import event_window
+    if not meta.get("events"):
+        return [], [], [], "the session plans no events"
+    path = Path(directory) / "events.json"
+    if not path.is_file():
+        return [], [], [], "session.json plans events and the session has no events.json"
+    doc, _ = _g2t_json(path, files, "events.json", "hyptcn3/session-events/1")
+    records = doc.get("events")
+    if not isinstance(records, list) or not all(isinstance(r, dict) for r in records):
+        raise DataError(f"{path}: events is no list of records")
+    windows, unwindowed = [], []
+    for index, record in enumerate(records):
+        try:
+            window = event_window(record, meta.get("event_grace_s"))
+        except (ValueError, TypeError) as error:
+            raise DataError(f"{path}: occurrence {index} cannot be windowed ({error})") from None
+        if window is None:
+            unwindowed.append({"index": index, "type": record.get("type"),
+                               "why": "no host start" if "host_start_unix" not in record else "no host stop done"})
+        else:
+            windows.append((index, record, *window))
+    return records, windows, unwindowed, None if windows else "no occurrence was started and stopped"
+
+
+def _g2t_ratio(numerator, denominator):
+    """numerator / denominator rounded to 6 decimals; None when the denominator is 0 or either is no number."""
+    return (round(numerator / denominator, 6) if _number(numerator) and _number(denominator) and denominator
+            else None)
+
+
+def g2t_distribution(values):
+    """distribution() of the numbers among `values` (n, min, nearest-rank median, max, as the per-session values of
+    the summary of this report)."""
+    return distribution([v for v in values if _number(v)])
+
+
+def g2t_write(out, record):
+    """Write the new record `out` (refused when it appeared meanwhile); None, or why it was not written."""
+    text = json.dumps(record, indent=1, ensure_ascii=False, allow_nan=False) + "\n"
+    try:
+        out.parent.mkdir(parents=True, exist_ok=True)
+        stream = open(out, "x", encoding="utf-8")
+    except FileExistsError:
+        return f"--out appeared meanwhile, nothing was overwritten: {out}"
+    except OSError as error:
+        return f"cannot create {out}: {type(error).__name__}: {error}"
+    try:
+        with stream:
+            stream.write(text)
+    except OSError as error:
+        out.unlink(missing_ok=True)
+        return f"cannot write {out}: {type(error).__name__}: {error}"
+    return None
+
+
+def g2t_header(schema, command, n, guest, values, note):
+    """A record with the provenance header of check E of scripts/check_claims.sh and the stage G2."""
+    identity = git_identity()
+    return {"schema": schema, "commit": identity["commit"], "commit_dirty": identity["dirty"],
+            "date": datetime.now(timezone.utc).isoformat(timespec="seconds"), "host": platform.platform(),
+            "guest": guest, "command": command, "n": n, "values": {"stage": "G2", **values}, "note": note}
+
+
+def g2t_inputs(paths, what):
+    """The absolute paths of the inputs, or why they are refused: one named twice (as real paths)."""
+    paths = [os.path.abspath(path) for path in paths]
+    real = [os.path.realpath(path) for path in paths]
+    twice = sorted({path for path, r in zip(paths, real) if real.count(r) > 1})
+    return paths, (f"{what} is named more than once: " + ", ".join(twice) if twice else None)
+
+
+def g2t_inside(out, directories):
+    """The refusals of an --out inside a session directory."""
+    target = Path(os.path.realpath(out.parent))
+    return [f"refusing to write {out} inside the session directory {d}" for d in directories
+            if target == Path(os.path.realpath(d)) or target.is_relative_to(os.path.realpath(d))]
+
+
+def g2t_g2_dir(args):
+    """--g2-dir, or skuska/g2.py G2_DIR, the G2 directory of the stage's evidence (its zaznamy/ holds the records)."""
+    if args.g2_dir is not None:
+        return Path(os.path.abspath(args.g2_dir))
+    from skuska import g2
+    return g2.G2_DIR
+
+
+# ---------------------------------------------------------------- marked mode (marked_rows_per_event, invalid_rows.max)
+
+MARKED_TABLE_SCHEMA = "hyptcn3/g2-marked-table/1"
+MARKED_CRITERION, MARKED_VALUE = "marked_rows_per_event", "invalid_rows.max"
+# The model of the lead's answer to Q49 (map question 4), constants written before the data.
+MARKED_ALPHA = 0.01  # P(N > k) below 1 % (proposal 10.9).
+MARKED_CAP = 6  # At most 6 (proposal 10.9, decision D4; scripts/protocol_v5.py MAX_INVALID_ROWS).
+MARKED_PER_OCCURRENCE = 2  # The boundaries of an occurrence: its start and its stop.
+MARKED_PER_SESSION = 6  # N ~ Poisson(6 lambda): the six boundaries of a session with three events.
+MARKED_ABOVE = 3  # Skeleton section 4: above 3, min_score_coverage falls below 557/720 (SULAD_S_TEXTOM_PRACE.md).
+MARKED_GUEST = ("none: the mode marked reads saved audit records, their feature archives (numpy.load with "
+                "allow_pickle=False), session files and the records of G2; no VM is contacted and no RAM image is "
+                "opened")
+MARKED_MODEL_RULE = (
+    "The lead's answer to Q49 (map question 4, 2026-11-24, with his addition for lambda = 0), written before the "
+    "data: lambda = the invalid rows with the traversal processes (a traversal of invalid_rows.traversals of the "
+    "protocol among the row's truncated_traversals) inside the windows of the occurrences / (2 x the occurrences with "
+    "a window, all six types of events.types with naprazdno), over the sessions this table counts on both VMs; N ~ "
+    "Poisson(6 lambda), the invalid rows of one session with three events; invalid_rows.max = the smallest k <= 6 "
+    "with P(N > k) < 0.01 (strictly, as proposal 10.9 says; features/audit_policy.py poisson_quantile tests "
+    "P(X <= b) >= 0.99, which differs only at equality); no such k is a finding and gives no value. Beside it, "
+    "descriptive only: the rate per type (lambda_T = the rows inside the windows of type T / (2 x its occurrences), "
+    "and the k it would give) and a variant with a background term (N ~ Poisson(6 lambda + beta), beta = the invalid "
+    "rows with processes outside every window of the counted sessions / the counted sessions, and its k). Invalid "
+    "rows outside every window are a finding to explain before any write (harness 5.1). At lambda = 0 it is a "
+    "finding (the condition under which decision D4 is reopened, proposal 12) and also a write: max 0. "
+    "min_score_coverage follows from max by the inequality of invalid_rows.note, (ideal - 33 (max + 1)) / cycles < "
+    "gate <= (ideal - 33 max) / cycles, its upper end (as 557/720 for today's max 3): features/acceptance.py "
+    "gate_interval of --protocol with that max, the code with which the protocol's self-check judges the gate. Above "
+    "3 the skeleton's section 4 asks for an entry in SULAD_S_TEXTOM_PRACE.md (a finding). The rows a parser rule "
+    "closed are valid rows: the table counts them and they go only to G3b (audit.rule_closed_rows_max, "
+    "audit.early_stop), never into lambda. The mode proposes the values and writes nothing into the protocol.")
+MARKED_RULE = (
+    "The criterion marked_rows_per_event of stage G2 (scripts/gates.py CRITERIA, the lead's G2 skeleton: the rows the "
+    "rule marks per occurrence, by type, and from them the rate per event boundary for invalid_rows.max) and the "
+    "value invalid_rows.max (map rows 4 and 14). The mode reads each audit record given (scripts/collection.py "
+    "audit, schema hyptcn3/collection-audit/1), each once and one per session, and of it: the session's session.json "
+    "(the one values.session_sha256 binds) and protocol.json (values.protocol_sha256), whose G0 binding "
+    "(scripts/gates.py stage_binding: the protocol without the paths of later stages, which the writes of G2 change) "
+    "must be that of --protocol, its events.json, the feature archive the audit wrote (values.features, with the "
+    "sha256 values.features_sha256, read with numpy.load(allow_pickle=False): seq, casy, valid and quality_json, whose "
+    "invalid rows and rows closed by a parser rule must be those of values.acceptance.facts) and the session's G2 "
+    "record (G2T_RECORDS_RULE). The marked rows are those of features/acceptance.py MARKED_ROWS_RULE: the invalid "
+    "rows (with the traversal processes, or invalid otherwise) and the rows a parser rule closed (quality "
+    "process_walk prev, tail or meet), each at its snapshot time; the windows are those of the log audit "
+    "(scripts/collection_logs.py event_window: host_start_unix - 1 s to host_stopped_unix + the session's "
+    "event_grace_s), and the counts by type must equal the audit's values.marked_rows_by_type, "
+    "event_occurrences_by_type and marked_rows_outside_events (when the audit counted none, the session is not "
+    "counted and the audit's marked_rows_note says why). Per occurrence with a window: its session, VM, scenario, "
+    "type, planned times and phases, host times, window, the phase of each boundary against the collector's grid "
+    "((host_start_unix - grid_phase_s) mod interval_s for the start, host_stop_unix for the stop, grid_phase_s of the "
+    "audit's values.timing), and the rows inside its window, invalid with processes, invalid otherwise and closed by "
+    "a rule, each at the start or at the stop: a row belongs to the start when its time lies at or before the middle "
+    "of host_start_unix and host_stop_unix, else to the stop (the executor's judgment). The sums by type are made "
+    "over the sessions of both VMs that the table counts, each VM also apart. A session counts (Q49) when it is an "
+    "audited session of H3 with events, accepted or refused: its record leaves it out of neither "
+    "marked_rows_per_event nor invalid_rows.max (values.excluded), it is no session of H4 (kind cas, fault or "
+    "fault_clean), no hook says that it gives no value of G2, the host load counts it (values.counted), and it has an "
+    "occurrence with a window; every other session is listed with why. The minimum (the occurrences of Q43, which "
+    "the deck of skuska/g2.py deals and which event_effects counts as well): every type of events.types with at "
+    "least 19 counted occurrences with a window on both VMs together and at least 8 on each VM of --protocol; each "
+    "one missing is named. Findings, none a refusal: invalid rows outside every window of a counted session, invalid "
+    "rows of a cause the rule does not tolerate (a traversal outside invalid_rows.traversals, read errors, zeroed "
+    "bytes), a row inside two windows, and those of MARKED_MODEL_RULE. Refused by name, each a data error: an audit "
+    "record named twice, two audits of one session, a file missing, unreadable or of another schema, a feature "
+    "archive or a session file other than the audit's, a protocol.json whose G0 binding is not that of --protocol, no "
+    "G2 record of the session, counts that differ from the audit's, a marked row without a time, and an --out that "
+    "exists (refused before anything is read) or lies inside a session directory. Exit 0: the table is written to "
+    "--out, a new JSON record with the provenance header of check E, and every minimum is met; 1: the table is "
+    "written and a minimum is missing, named; 2: a usage or data error, every refusal named on stderr and nothing "
+    "written.")
+MARKED_PARTS = ("invalid_processes", "invalid_other", "rule_closed")
+
+
+def marked_protocol(path):
+    """(sha256, document, G0 binding, event types, VMs, the traversals of invalid_rows) of --protocol of the mode
+    marked; a DataError before any audit is read."""
+    from features.acceptance import gate_interval
+    from features.quality import invalid_rows_rule
+    from scripts import gates
+    try:
+        raw = Path(path).read_bytes()
+        doc = json.loads(raw)
+    except (OSError, ValueError) as error:
+        raise DataError(f"cannot read protocol {path}: {error}") from None
+    if type(doc) is not dict or doc.get("schema") != protocol_v5.SCHEMA:
+        raise DataError(f"protocol {path}: protocol schema is not {protocol_v5.SCHEMA}")
+    try:
+        rule = invalid_rows_rule(doc)
+        types = sorted(doc["events"]["types"])
+        vms = [row["name"] for row in doc["vms"]]
+        if rule is None or not _number(doc["interval_s"]) or doc["interval_s"] <= 0 or len(vms) < 2:
+            raise ValueError("no invalid_rows rule, no interval_s above 0 or fewer than two VMs")
+        gate_interval(doc)  # The gate of the proposal is computed by it; a protocol it cannot judge is refused now.
+        binding = gates.stage_binding(path, "G0")[0]
+    except (ValueError, KeyError, TypeError) as error:
+        raise DataError(f"protocol {path}: not a protocol the table can judge ({type(error).__name__}: "
+                        f"{error})") from None
+    return (hashlib.sha256(raw).hexdigest(), doc, binding, types, vms,
+            [str(name) for name in rule["traversals"]])
+
+
+def _marked_archive(raw, path, facts):
+    """[(seq, time, valid, quality)] of the rows of a feature archive (numpy.load with allow_pickle=False), whose
+    invalid rows and rows closed by a parser rule must be those of the audit's facts; a DataError by name."""
+    from features.acceptance import RULE_CLOSED_WALKS
+    try:
+        with np.load(io.BytesIO(raw), allow_pickle=False) as data:
+            seq = [int(s) for s in data["seq"]]
+            times = [float(t) for t in data["casy"]]
+            valid = [bool(x) for x in data["valid"]]
+            quality = json.loads(str(data["quality_json"]))
+    except (OSError, ValueError, KeyError, TypeError) as error:
+        raise DataError(f"{path}: the feature archive cannot be read ({type(error).__name__}: {error})") from None
+    if not isinstance(quality, list) or not len(seq) == len(times) == len(valid) == len(quality):
+        raise DataError(f"{path}: seq, casy, valid and quality_json of the feature archive differ in length")
+    if not all(math.isfinite(t) for t in times):
+        raise DataError(f"{path}: a row of the feature archive has no finite time")
+    rows = list(zip(seq, times, valid, quality))
+    invalid = sorted(s for s, _, good, _ in rows if not good)
+    closed = sorted(s for s, _, _, q in rows if isinstance(q, dict) and q.get("process_walk") in RULE_CLOSED_WALKS)
+    try:
+        listed = sorted(int(row["seq"]) for row in facts["invalid_rows"])
+        listed_closed = sorted(int(s) for s in facts["rule_closed_seq"])
+    except (KeyError, TypeError, ValueError):
+        raise DataError(f"{path}: the audit's values.acceptance.facts hold no invalid_rows and "
+                        "rule_closed_seq") from None
+    if invalid != listed or closed != listed_closed:
+        raise DataError(f"{path}: the invalid rows or the rows closed by a parser rule of the feature archive differ "
+                        "from the audit's values.acceptance.facts")
+    return rows
+
+
+def _marked_class(quality, traversals):
+    """(the part of an invalid row: invalid_processes or invalid_other, whether the rule would tolerate its cause)."""
+    names = quality.get("truncated_traversals") if isinstance(quality, dict) else None
+    names = [str(n) for n in names] if isinstance(names, list) else []
+    tolerated = (bool(names) and set(names) <= set(traversals) and type(quality.get("read_errors")) is int
+                 and not quality["read_errors"] and type(quality.get("filled_zero")) is int
+                 and not quality["filled_zero"])
+    return ("invalid_processes" if any(n in traversals for n in names) else "invalid_other"), tolerated
+
+
+def marked_audit(path, binding, types, traversals, g2_dir):
+    """One audit record by MARKED_RULE: (its session's entry, its occurrence rows); a DataError by name."""
+    from features.acceptance import RULE_CLOSED_WALKS, marked_rows_by_type
+    from scripts import gates
+    files = []
+    audit, audit_sha = _g2t_json(path, files, "audit record", AUDIT_SCHEMA)
+    v = audit.get("values")
+    if not isinstance(v, dict) or not isinstance(v.get("session_dir"), str):
+        raise DataError(f"{path}: an audit record without values.session_dir")
+    directory = Path(v["session_dir"])
+    meta, meta_sha = _g2t_json(directory / "session.json", files, "session.json")
+    if meta_sha != v.get("session_sha256"):
+        raise DataError(f"{path}: {directory / 'session.json'} is not the session.json the audit read (its sha256 "
+                        f"{meta_sha}, values.session_sha256 {_shown(_get(v, 'session_sha256'), 80)})")
+    sid, vm = meta.get("session_id"), meta.get("vm")
+    if not isinstance(sid, str) or not SAFE_ID.fullmatch(sid) or not isinstance(vm, str):
+        raise DataError(f"{directory}: session.json names no session_id or no vm")
+    if meta.get("role") != G2T_ROLE:
+        raise DataError(f"{directory}: session.json names the role {_shown(_get(meta, 'role'), 40)}, not {G2T_ROLE} "
+                        "(the sessions of G2 are diagnostic runs)")
+    protocol, protocol_sha = _g2t_json(directory / "protocol.json", files, "protocol.json")
+    if protocol_sha != v.get("protocol_sha256") or protocol_sha != meta.get("protocol_sha256"):
+        raise DataError(f"{path}: {directory / 'protocol.json'} (sha256 {protocol_sha}) is not the protocol the audit "
+                        f"read ({_shown(_get(v, 'protocol_sha256'), 80)}) or the one session.json binds")
+    try:
+        mine = gates.stage_binding(directory / "protocol.json", "G0")[0]
+    except ValueError as error:
+        raise DataError(f"{directory}: protocol.json has no G0 binding ({error})") from None
+    if mine != binding:
+        raise DataError(f"{directory}: protocol.json has the G0 binding {mine}, --protocol {binding}: another "
+                        "protocol, not one that differs only in the values of later stages")
+    record = g2t_record(g2_dir, directory, meta, meta_sha, files)
+    features = v.get("features")
+    if not isinstance(features, str):
+        raise DataError(f"{path}: values.features names no feature archive")
+    raw = _g2t_read(features, files, "feature archive")
+    if files[-1]["sha256"] != v.get("features_sha256"):
+        raise DataError(f"{features}: its sha256 is {files[-1]['sha256']}, the audit's values.features_sha256 "
+                        f"{_shown(_get(v, 'features_sha256'), 80)}")
+    rows = _marked_archive(raw, features, _get(v, "acceptance.facts"))
+    _, windows, unwindowed, none = g2t_windows(directory, meta, files)
+    interval = protocol.get("interval_s")
+    if not _number(interval) or interval <= 0:
+        raise DataError(f"{directory}: protocol.json has no interval_s above 0")
+    grid = _get(v, "timing.grid_phase_s")
+    grid = grid if _number(grid) else None
+    marked = []  # (seq, time, part, whether the rule would tolerate its cause)
+    for seq, t, good, quality in rows:
+        if not good:
+            marked.append((seq, t, *_marked_class(quality, traversals)))
+        if isinstance(quality, dict) and quality.get("process_walk") in RULE_CLOSED_WALKS:
+            marked.append((seq, t, "rule_closed", True))
+    # The audit's own counts by type, made again from the same rows and windows (MARKED_ROWS_RULE).
+    counts = {key: v.get(key) for key in ("marked_rows_by_type", "event_occurrences_by_type",
+                                          "marked_rows_outside_events")}
+    if all(value is not None for value in counts.values()):
+        flagged = sorted({seq for seq, _, _, _ in marked})
+        again = marked_rows_by_type(flagged, {seq: t for seq, t, _, _ in rows},
+                                    [(str(r.get("type")), lo, hi) for _, r, lo, hi in windows], types)
+        if list(again) != [counts["marked_rows_by_type"], counts["event_occurrences_by_type"],
+                           counts["marked_rows_outside_events"]]:
+            raise DataError(f"{path}: the marked rows by type counted again ({again[0]}, {again[1]}, outside "
+                            f"{again[2]}) differ from the audit's values ({counts['marked_rows_by_type']}, "
+                            f"{counts['event_occurrences_by_type']}, outside {counts['marked_rows_outside_events']})")
+
+    def phase(unix):
+        return None if grid is None or not _number(unix) else round((unix - grid) % interval, 6)
+
+    occurrences, inside = [], defaultdict(list)
+    for index, r, lo, hi in windows:
+        start = r["host_start_unix"]
+        stop = r.get("host_stop_unix") if _number(r.get("host_stop_unix")) else r["host_stopped_unix"]
+        middle = (start + stop) / 2
+        parts = {"start": {part: [] for part in MARKED_PARTS}, "stop": {part: [] for part in MARKED_PARTS}}
+        for seq, t, part, _ in marked:
+            if lo <= t <= hi:
+                parts["start" if t <= middle else "stop"][part].append(seq)
+                inside[(seq, part)].append(index)
+        occurrences.append({
+            "session_id": sid, "vm": vm, "scenario": meta.get("scenario"), "index": index, "type": r.get("type"),
+            "planned": {key: r.get(key) for key in ("start_s", "duration_s", "start_phase_s", "stop_phase_s")},
+            "host": {key: r.get(key) for key in ("host_start_unix", "host_started_unix", "host_stop_unix",
+                                                 "host_stopped_unix")},
+            "window": [lo, hi], "middle_unix": middle,
+            "phase_s": {"start": phase(start), "stop": phase(stop), "interval_s": interval, "grid_phase_s": grid},
+            "executed": r.get("executed"), "effect_ok": (r.get("effect") or {}).get("ok")
+            if isinstance(r.get("effect"), dict) else None, **parts})
+    outside = {part: [{"seq": seq, "time_unix": t} for seq, t, p, _ in marked if p == part and (seq, p) not in inside]
+               for part in MARKED_PARTS}
+    why = g2t_left_out(record, (MARKED_CRITERION, MARKED_VALUE), h4=True)
+    if why is None and not all(value is not None for value in counts.values()):
+        why = "the audit counted no marked rows by type: " + one_line(str(v.get("marked_rows_note")))
+    if why is None and not windows:
+        why = none
+    entry = {"session_id": sid, "vm": vm, "scenario": meta.get("scenario"), "kind": record["kind"],
+             "path": str(directory),
+             "audit": {"path": os.path.abspath(path), "sha256": audit_sha, "accepted": v.get("accepted"),
+                       "reasons": v.get("reasons")},
+             "record": {"path": record["path"], "sha256": record["sha256"]},
+             "protocol_sha256": protocol_sha, "grid_phase_s": grid, "occurrences": len(windows),
+             "unwindowed": unwindowed, "audit_counts": counts,
+             "rows": {part: sum(p == part for _, _, p, _ in marked) for part in MARKED_PARTS},
+             "rows_in_windows": {part: len({seq for seq, p in inside if p == part}) for part in MARKED_PARTS},
+             "outside": outside,
+             "outside_rule": sorted({seq for seq, _, part, tolerated in marked
+                                     if part != "rule_closed" and not tolerated}),
+             "in_two_windows": sorted({seq for (seq, _), where in inside.items() if len(where) > 1}),
+             "counted": why is None, "why_not_counted": why, "files": files}
+    for row in occurrences:
+        row["counted"] = entry["counted"]
+    return entry, occurrences
+
+
+def marked_sums(occurrences, types, vms):
+    """The sums by type over the counted occurrences (MARKED_RULE): per type the occurrences and the rows of each part
+    at the start and at the stop, both VMs together and each apart, the rows per occurrence and per boundary."""
+    out = {}
+    for kind in types:
+        mine = [row for row in occurrences if row["counted"] and row["type"] == kind]
+        n = len(mine)
+        entry = {"occurrences": {"both": n, "by_vm": {vm: sum(row["vm"] == vm for row in mine) for vm in vms}}}
+        for part in MARKED_PARTS:
+            start, stop = (sum(len(row[end][part]) for row in mine) for end in ("start", "stop"))
+            entry[part] = {"start": start, "stop": stop, "total": start + stop,
+                           "by_vm": {vm: sum(len(row[end][part]) for row in mine if row["vm"] == vm
+                                             for end in ("start", "stop")) for vm in vms}}
+        entry["per_occurrence"] = {part: _g2t_ratio(entry[part]["total"], n) for part in MARKED_PARTS}
+        entry["per_boundary"] = _g2t_ratio(entry["invalid_processes"]["total"], MARKED_PER_OCCURRENCE * n)
+        out[kind] = entry
+    return out
+
+
+def poisson_above(mu, k):
+    """P(N > k) for N ~ Poisson(mu), mu >= 0 (MARKED_MODEL_RULE)."""
+    if mu == 0:
+        return 0.0
+    term = total = math.exp(-mu)
+    for i in range(1, k + 1):
+        term *= mu / i
+        total += term
+    return max(0.0, 1.0 - total)
+
+
+def marked_k(mu):
+    """The smallest k <= MARKED_CAP with P(N > k) < MARKED_ALPHA for N ~ Poisson(mu); None when there is none."""
+    return next((k for k in range(MARKED_CAP + 1) if poisson_above(mu, k) < MARKED_ALPHA), None)
+
+
+def marked_gate(protocol, k):
+    """The coverage gates that admit exactly k isolated invalid rows, features/acceptance.py gate_interval of the
+    protocol with invalid_rows.max k (the inequality of invalid_rows.note): {low, high, low_windows, high_windows,
+    cycles}; min_score_coverage is the upper end."""
+    from features.acceptance import gate_interval
+    doc = json.loads(json.dumps(protocol))
+    doc["invalid_rows"]["max"] = k
+    low, high = gate_interval(doc)
+    cycles = doc["cycles"]
+    return {"low": low, "high": high, "low_windows": round(low * cycles, 6), "high_windows": round(high * cycles, 6),
+            "cycles": cycles}
+
+
+def marked_model(rows, occurrences, by_type, outside, sessions, protocol):
+    """MARKED_MODEL_RULE over `rows` invalid rows with processes inside the windows of `occurrences` counted
+    occurrences (by_type: {type: (rows, occurrences)}), `outside` such rows outside every window of `sessions` counted
+    sessions: the rate per boundary, the proposal of invalid_rows.max and min_score_coverage, the variants beside it
+    and the findings of the rule."""
+    boundaries = MARKED_PER_OCCURRENCE * occurrences
+    lam = rows / boundaries if boundaries else None
+    mu = None if lam is None else MARKED_PER_SESSION * lam
+    k = None if mu is None else marked_k(mu)
+    out = {"rule": MARKED_MODEL_RULE,
+           "constants": {"alpha": MARKED_ALPHA, "cap": MARKED_CAP, "boundaries_per_occurrence": MARKED_PER_OCCURRENCE,
+                         "boundaries_per_session": MARKED_PER_SESSION},
+           "rows_in_windows": rows, "occurrences": occurrences, "boundaries": boundaries, "lambda": lam, "mu": mu,
+           "p_above": None if mu is None else [poisson_above(mu, j) for j in range(MARKED_CAP + 1)],
+           "proposal": None, "per_type": {}, "background": None, "findings": []}
+    for kind, (mine, n) in by_type.items():
+        rate = mine / (MARKED_PER_OCCURRENCE * n) if n else None
+        out["per_type"][kind] = {"rows": mine, "occurrences": n, "lambda": rate,
+                                 "k": None if rate is None else marked_k(MARKED_PER_SESSION * rate)}
+    beta = outside / sessions if sessions else None
+    if mu is not None and beta is not None:
+        out["background"] = {"rows_outside": outside, "sessions": sessions, "beta": beta, "mu": mu + beta,
+                             "k": marked_k(mu + beta)}
+    if mu is None:
+        out["findings"].append("no counted occurrence with a window: no rate per boundary and no proposal")
+        return out
+    if k is None:
+        out["findings"].append(f"no k <= {MARKED_CAP} has P(N > k) < {MARKED_ALPHA:g} at lambda {lam:.6g} (N ~ "
+                               f"Poisson({mu:.6g}), P(N > {MARKED_CAP}) = {poisson_above(mu, MARKED_CAP):.6g}): no "
+                               "value of invalid_rows.max by the rule")
+        return out
+    gate = marked_gate(protocol, k)
+    out["proposal"] = {MARKED_VALUE: k, "min_score_coverage": gate["high"], "gate_interval": gate,
+                       "p_above": poisson_above(mu, k),
+                       "writes": "nothing: the mode proposes; tcn/hodnoty.py writes the values of G2 (package H5)"}
+    if rows == 0:
+        out["findings"].append("lambda = 0: no invalid row with processes inside a window, the condition under which "
+                               "decision D4 is reopened (proposal 12), a finding and also a write: invalid_rows.max 0 "
+                               f"and min_score_coverage {gate['high']:.10g} ({gate['high_windows']:g}/{gate['cycles']} "
+                               "windows) by the inequality of invalid_rows.note (the lead's addition to Q49)")
+    if k > MARKED_ABOVE:
+        out["findings"].append(f"invalid_rows.max {k} is above {MARKED_ABOVE}: min_score_coverage falls to "
+                               f"{gate['high_windows']:g}/{gate['cycles']}, below 557/720, and the sentence of the "
+                               "thesis on 85 % (3.2.3) holds even less: an entry in SULAD_S_TEXTOM_PRACE.md and in the "
+                               "report (skeleton section 4); the decision stays")
+    return out
+
+
+def marked_line(kind, row):
+    """The line of one event type on stdout."""
+    n = row["occurrences"]
+    parts = ", ".join(f"{part.replace('_', ' ')} {row[part]['start']}/{row[part]['stop']}" for part in MARKED_PARTS)
+    return (f"{kind}: {n['both']} occurrence(s) (" + ", ".join(f"VM {vm} {c}" for vm, c in n["by_vm"].items())
+            + f"); rows at the start/stop: {parts}; per boundary {row['per_boundary']}")
+
+
+def marked_table(args, command):
+    """The mode marked (MARKED_RULE): refuses an --out that exists before it reads anything and an audit named twice,
+    then reads the protocol and every audit; writes the new record, prints one line per type and the proposal, and
+    returns the exit code."""
+    from skuska import g2
+    out = Path(os.path.abspath(args.out))
+    if out.exists() or out.is_symlink():
+        print(f"campaign_report: --out already exists, nothing was read or written: {out}", file=sys.stderr)
+        return 2
+    paths, twice = g2t_inputs(args.audits, "an audit record")
+    if twice:
+        print(f"campaign_report: marked: {twice}", file=sys.stderr)
+        return 2
+    try:
+        protocol_sha, protocol, binding, types, vms, traversals = marked_protocol(args.protocol)
+    except DataError as error:
+        print(f"campaign_report: marked: {error}", file=sys.stderr)
+        return 2
+    g2_dir = g2t_g2_dir(args)
+    entries, occurrences, refused = [], [], []
+    for path in paths:
+        try:
+            entry, rows = marked_audit(path, binding, types, traversals, g2_dir)
+        except DataError as error:
+            refused.append(str(error))
+            continue
+        entries.append(entry)
+        occurrences += rows
+    by_session = defaultdict(list)
+    for entry in entries:
+        by_session[os.path.realpath(entry["path"])].append(entry["audit"]["path"])
+    refused += [f"{len(audits)} audit records name one session, {directory}: " + ", ".join(audits)
+                + " (a session counts once)" for directory, audits in by_session.items() if len(audits) > 1]
+    refused += g2t_inside(out, [entry["path"] for entry in entries])
+    if refused or not entries:
+        for why in refused or ["no audit record"]:
+            print(f"campaign_report: marked: {one_line(why)}", file=sys.stderr)
+        print(f"campaign_report: marked: {len(refused)} refusal(s): no table, nothing written", file=sys.stderr)
+        return 2
+    counted = [entry for entry in entries if entry["counted"]]
+    sums = marked_sums(occurrences, types, vms)
+    missing = []
+    for kind in types:
+        n = sums[kind]["occurrences"]
+        if n["both"] < g2.OCCURRENCES:
+            missing.append(f"{kind}: {n['both']} of {g2.OCCURRENCES} occurrences counted on both VMs together "
+                           f"({g2.OCCURRENCES - n['both']} missing)")
+        missing += [f"{kind}: {c} of {g2.MIN_PER_VM} occurrences counted on VM {vm} ({g2.MIN_PER_VM - c} missing)"
+                    for vm, c in n["by_vm"].items() if c < g2.MIN_PER_VM]
+    model = marked_model(sum(e["rows_in_windows"]["invalid_processes"] for e in counted),
+                         sum(e["occurrences"] for e in counted),
+                         {kind: (sums[kind]["invalid_processes"]["total"], sums[kind]["occurrences"]["both"])
+                          for kind in types},
+                         sum(len(e["outside"]["invalid_processes"]) for e in counted), len(counted), protocol)
+    findings = [f"{e['session_id']}: {len(e['outside'][part])} invalid row(s) "
+                f"({'with processes' if part == 'invalid_processes' else 'of another cause'}) outside every event "
+                "window, seq " + ", ".join(str(row["seq"]) for row in e["outside"][part])
+                + ": to explain before any write (Q49)" for e in counted
+                for part in ("invalid_processes", "invalid_other") if e["outside"][part]]
+    findings += [f"{e['session_id']}: invalid row(s) of a cause the rule does not tolerate, seq "
+                 + ", ".join(map(str, e["outside_rule"])) for e in counted if e["outside_rule"]]
+    findings += [f"{e['session_id']}: row(s) inside two event windows, seq " + ", ".join(map(str, e["in_two_windows"]))
+                 for e in counted if e["in_two_windows"]]
+    findings += model["findings"]
+    record = g2t_header(
+        MARKED_TABLE_SCHEMA, command, len(occurrences), MARKED_GUEST,
+        {"criterion": MARKED_CRITERION, "value": MARKED_VALUE,
+         "protocol": {"path": os.path.abspath(args.protocol), "sha256": protocol_sha, "g0_binding": binding,
+                      "invalid_rows": protocol["invalid_rows"]},
+         "g2_dir": str(g2_dir), "types": types, "vms": vms,
+         "needed": {"both_vms": g2.OCCURRENCES, "per_vm": g2.MIN_PER_VM},
+         "sessions": entries, "counted_sessions": [e["session_id"] for e in counted],
+         "left_out": [{"session_id": e["session_id"], "why": e["why_not_counted"]} for e in entries
+                      if not e["counted"]],
+         "occurrences": occurrences, "by_type": sums, "model": model, "minimums_met": not missing,
+         "missing": missing, "findings": findings,
+         "rules": {"table": MARKED_RULE, "model": MARKED_MODEL_RULE, "records": G2T_RECORDS_RULE}},
+        "The table of the rows the rule marks per occurrence and the rate per event boundary of G2, with the proposal "
+        "of invalid_rows.max and min_score_coverage (Q49); the protocol is not written, no score is read and nothing "
+        "is detected.")
+    problem = g2t_write(out, record)
+    if problem:
+        print(f"campaign_report: marked: {problem}", file=sys.stderr)
+        return 2
+    for kind in types:
+        print(marked_line(kind, sums[kind]))
+    proposal = model["proposal"]
+    if proposal is None:
+        print("invalid_rows.max proposal: none (" + "; ".join(model["findings"][:1]) + ")")
+    else:
+        gate = proposal["gate_interval"]
+        print(f"invalid_rows.max proposal: {proposal[MARKED_VALUE]} (lambda {model['lambda']:.6g} over "
+              f"{model['boundaries']} boundaries, N ~ Poisson({model['mu']:.6g}), P(N > {proposal[MARKED_VALUE]}) = "
+              f"{proposal['p_above']:.6g}); min_score_coverage {gate['high']:.10g} ({gate['high_windows']:g}/"
+              f"{gate['cycles']} windows)")
+    print("marked_rows_per_event minimums: " + ("met" if not missing else "missing: " + "; ".join(missing))
+          + f"; {len(counted)} of {len(entries)} session(s) counted, {len(findings)} finding(s)", flush=True)
+    print(f"campaign_report: marked: {len(entries)} audit(s), {len(occurrences)} occurrence(s); record {out}",
+          file=sys.stderr)
+    return 0 if not missing else 1
+
+
+# ---------------------------------------------------------------- load mode (profiles_load)
+
+LOAD_TABLE_SCHEMA = "hyptcn3/g2-load-table/1"
+LOAD_CRITERION = "profiles_load"
+LOAD_GROUP_SCHEMA = "hyptcn3/campaign-group/1"  # scripts/campaign.py start_steps: the record of a group's start.
+LOAD_RESET_SCHEMA = "hyptcn3/guest-reset/1"  # lab/guest_state.py reset.
+LOAD_LEVELS_SCHEMA = "hyptcn3/guest-levels/1"  # lab/guest_state.py levels.
+LOAD_RESET_TIMES = ("started_unix", "finished_unix")  # The only fields in which the resets of two groups may differ.
+# Q63 (a): the levels after a reset match it. The counts of the reset that no step between it and the levels of the
+# group's first session writes, and those the preflight check of that session (scripts/lab_smoke.py, run by every
+# capture before its levels) changes by one order of one product.
+LOAD_RESET_SAME = ("products", "customers", "employees", "documents", "cart_items")
+LOAD_PREFLIGHT = {"orders": 1, "order_items": 1}
+LOAD_DRIFT_H = 18  # Q63: a group longer than about 18 h drifts from the seeded level by itself.
+LOAD_GUEST = ("none: the mode load reads saved session files, the traffic logs through scripts/traffic_log.py, the "
+              "records of G2 and of the starts of their groups; no VM is contacted")
+LOAD_RULE = (
+    "The criterion profiles_load of stage G2 (scripts/gates.py CRITERIA, the lead's G2 skeleton: per profile and "
+    "intensity, the four scenarios, the offered and the delivered load, the user sessions dropped, and the return to "
+    "the defined state after the session) and map row 5 with the lead's answer to Q63 (map question 18). Of each "
+    "session directory given (G2T_RECORDS_RULE) the mode reads session.json, protocol.json, its G2 record, and of a "
+    "session the table considers events.json, guest/levels_before.json, guest/state_after.json, the group "
+    "record its G2 record names (values.group, bound by its sha256) and both traffic logs of schema /2 through "
+    "scripts/traffic_log.py (summarize and read_jsonl: the mode sessions reads only /1). Per session over the measure "
+    "phase of the logs (the generator's phase): the offered load (the arrivals of user sessions, per second, against "
+    "the planned ones of the measure intervals), the delivered load (the admitted user sessions, the requests and "
+    "those answered ok, per second), the load delivered in the event windows of the log audit (proposal 5.3 asks "
+    "that it be shown: the requests whose start or end lies in a window, scripts/collection_logs.py event_window, "
+    "and the arrivals in a window, against the window seconds within the measure phase) and outside them, the counts "
+    "of the drop reasons (scripts/traffic_log.py DROP_REASONS) by phase, and the problems summarize names. The "
+    "return (Q63): (a) every group of the counted sessions starts from the same reset (the hyptcn3/guest-reset/1 "
+    "output of the step reset of its start, equal in every field but the times), and the levels of the group's "
+    "first session (guest/levels_before.json; the first by the start of its run among the G2 records of the group in "
+    "<--g2-dir>/zaznamy) match it: products, customers, employees, documents and cart_items equal to the reset's "
+    "counts, orders and order_items one above them (the order of one product of scripts/lab_smoke.py, the preflight "
+    "check of every capture before its levels), the document files counts.documents with documents_bytes bytes; (b) "
+    "the growth of every numeric level from guest/levels_before.json to the levels after the session "
+    "(values.levels_after of the record: labctl levels right after the run), per session and per scenario (minimum, "
+    "median and maximum); (c) the state of the units of the guest at the end of the segment, guest/state_after.json, "
+    "every unit of scripts/collection_logs.py REQUIRED_UNITS active with the result success, as the log audit judges "
+    "it. With --final-protocol (the protocol file that holds the final caps, profiles.*.max_concurrent of the second "
+    "write of G2, map point C, with the G0 binding of the sessions) a session ran after the final cap when its "
+    "protocol.json holds that cap for its profile; a user session that a counted session dropped after the final "
+    "cap, max_concurrent or all_customers_held, is a finding, while the drops of the sessions before it and of the "
+    "sessions apart are shown apart; without --final-protocol no drop is judged. A session is considered when it is "
+    "done (skuska/g2.py DONE_RULE) and its record does not leave it out of profiles_load (values.excluded); a "
+    "session of the fault plan with its fault is shown apart and counts for no "
+    "minimum; the others count when the host load counts them (values.counted). Per scenario and VM the sums of the "
+    "counted sessions. The minimums: every scenario of the protocol with at least 8 counted sessions on both VMs "
+    "together (the skeleton's section 3, as Q65 for realism) and at least one on each VM; (a) for every group of the "
+    "counted sessions (a group whose first session is not among the inputs is not judged, which is named); (c) for "
+    "every counted session. Findings, none a refusal: drops after the final cap, problems summarize names in a "
+    "counted session, a group longer than 18 h (Q63's risk: it drifts from the seeded level by itself), a session "
+    "that is not done (listed, its files beyond its record not read). Refused by "
+    "name, each a data error: a directory named twice, a file missing or unreadable, a group record other than the "
+    "one the G2 record names or without its reset, sessions of protocols with another G0 binding (or a "
+    "--final-protocol), and an --out that exists (refused before anything is read) or lies inside a session "
+    "directory. Exit 0: the table is written to --out, a new JSON record with the provenance header of check E, and "
+    "every minimum is met; 1: the table is written and a minimum is missing, named; 2: a usage or data error, every "
+    "refusal named on stderr and nothing written.")
+
+
+def _load_leaves(doc, prefix=""):
+    """{dotted key: number} of the numeric leaves of a levels document (its time utc_unix left out)."""
+    out = {}
+    for key, value in (doc.items() if isinstance(doc, dict) else ()):
+        name = f"{prefix}{key}"
+        if isinstance(value, dict):
+            out.update(_load_leaves(value, name + "."))
+        elif _number(value) and name != "utc_unix":
+            out[name] = value
+    return out
+
+
+def load_traffic(directory, sid, windows, files):
+    """The load of a session's measure phase from its /2 traffic logs, read through scripts/traffic_log.py
+    (LOAD_RULE)."""
+    requests_path, intervals_path = directory / "traffic_requests.jsonl", directory / "traffic_intervals.jsonl"
+    _g2t_hash(requests_path, files, "traffic_requests.jsonl")
+    _g2t_hash(intervals_path, files, "traffic_intervals.jsonl")
+    try:
+        summary = traffic_log.summarize(requests_path, intervals_path, session_id=sid,
+                                        schema=traffic_log.REQUEST_SCHEMA_2)
+        records, _ = traffic_log.read_jsonl(requests_path)
+        intervals, _ = traffic_log.read_jsonl(intervals_path)
+    except (OSError, ValueError) as error:
+        raise DataError(f"{directory}: the traffic logs cannot be read ({type(error).__name__}: {error})") from None
+    header = records[0] if records and records[0].get("type") == "header" else {}
+    origin = header.get("start_unix")
+    measure = [iv for iv in intervals if iv.get("type") == "interval" and iv.get("phase") == "measure"]
+    if not _number(origin) or not measure or not all(_number(iv.get(k)) for iv in measure
+                                                     for k in ("mono_start", "mono_end", "planned_sessions")):
+        raise DataError(f"{requests_path}: no header with start_unix or no measure intervals with their times and "
+                        "planned sessions (a log of schema /2 of a v5 profile)")
+    seconds = sum(iv["mono_end"] - iv["mono_start"] for iv in measure)
+    span = (origin + min(iv["mono_start"] for iv in measure), origin + max(iv["mono_end"] for iv in measure))
+    clipped = sorted((max(lo, span[0]), min(hi, span[1])) for lo, hi in windows if hi > span[0] and lo < span[1])
+    window_s, end = 0.0, None
+    for lo, hi in clipped:  # The union of the windows within the measure phase.
+        lo = lo if end is None else max(lo, end)
+        window_s += max(0.0, hi - lo)
+        end = hi if end is None else max(end, hi)
+
+    def inside(*times):
+        return any(t is not None and lo <= t <= hi for t in times for lo, hi in windows)
+
+    arrivals = [r for r in records if r.get("type") == "arrival"]
+    measured = [a for a in arrivals if a.get("phase") == "measure"]
+    requests = [r for r in records if r.get("type") == "request" and r.get("phase") == "measure"]
+    in_window = [r for r in requests if inside(unix_of(r.get("t_start_utc")), unix_of(r.get("t_end_utc")))]
+    windowed = [a for a in measured if inside(unix_of(a.get("t_utc")))]
+    by_phase = {phase: dict(Counter(str(a.get("drop_reason")) for a in arrivals
+                                    if a.get("phase") == phase and a.get("admitted") is False))
+                for phase in traffic_log.PHASES}
+    ok = sum(r.get("outcome") == "ok" for r in requests)
+    ok_in = sum(r.get("outcome") == "ok" for r in in_window)
+    planned = sum(iv["planned_sessions"] for iv in measure)
+    outside_s = seconds - window_s
+    return {"run_id": header.get("run_id"), "rate": header.get("rate"), "rate_source": header.get("rate_source"),
+            "measure_s": round(seconds, 6),
+            "offered": {"user_sessions": len(measured), "per_s": _g2t_ratio(len(measured), seconds),
+                        "planned": round(planned, 6), "ratio": _g2t_ratio(len(measured), planned)},
+            "delivered": {"admitted_user_sessions": sum(a.get("admitted") is True for a in measured),
+                          "requests": len(requests), "ok": ok, "per_s": _g2t_ratio(len(requests), seconds),
+                          "ok_per_s": _g2t_ratio(ok, seconds), "ok_share": _g2t_ratio(ok, len(requests))},
+            "event_windows": {"windows": len(windows), "seconds": round(window_s, 6), "requests": len(in_window),
+                              "ok": ok_in, "per_s": _g2t_ratio(len(in_window), window_s),
+                              "ok_per_s": _g2t_ratio(ok_in, window_s), "ok_share": _g2t_ratio(ok_in, len(in_window)),
+                              "arrivals": {"offered": len(windowed),
+                                           "admitted": sum(a.get("admitted") is True for a in windowed),
+                                           "dropped": sum(a.get("admitted") is False for a in windowed)}},
+            "outside_windows": {"seconds": round(outside_s, 6), "requests": len(requests) - len(in_window),
+                                "ok": ok - ok_in, "per_s": _g2t_ratio(len(requests) - len(in_window), outside_s),
+                                "ok_per_s": _g2t_ratio(ok - ok_in, outside_s),
+                                "ok_share": _g2t_ratio(ok - ok_in, len(requests) - len(in_window))},
+            "dropped": {"measure": by_phase["measure"], "by_phase": by_phase,
+                        "all": dict(Counter(str(a.get("drop_reason")) for a in arrivals
+                                            if a.get("admitted") is False))},
+            "arrivals": summary.get("arrivals"), "log_problems": summary.get("problems") or []}
+
+
+def load_session(path, g2_dir, final_caps):
+    """One session directory by LOAD_RULE: its entry (status counted, left_out, fault or not_done, the load, the levels,
+    the units at the end, the group); a DataError by name."""
+    from scripts.collection_logs import REQUIRED_UNITS
+    s = g2t_session(path, g2_dir)
+    directory, record, files, meta = Path(s["path"]), s["record"], s["files"], s["meta"]
+    scenario = (s["protocol"].get("scenarios") or {}).get(s["scenario"])
+    if not isinstance(scenario, dict):
+        raise DataError(f"{directory}: session.json names the scenario {_shown(s['scenario'], 40)}, which its protocol "
+                        "does not have")
+    entry = {"session_id": s["session_id"], "vm": s["vm"], "scenario": s["scenario"],
+             "profile": scenario.get("profile"), "intensity": scenario.get("intensity"), "kind": record["kind"],
+             "path": str(directory), "record": {"path": record["path"], "sha256": record["sha256"]},
+             "protocol_sha256": s["protocol_sha"], "binding": s["binding"], "status": None, "why": None,
+             "fault": record["fault"], "induced": record["induced"], "files": files}
+    named = g2t_left_out(dict(record, counted=True), (LOAD_CRITERION,))
+    if not record["done"]:
+        v = record["values"]
+        entry.update(status="not_done", why="not done (skuska/g2.py DONE_RULE): " + one_line(str(
+            v.get("stop") or v.get("error") or f"exit codes {v.get('exit_codes')}, audit "
+                                               f"{'present' if v.get('audit') else 'none'}")))
+        return entry
+    if named is not None:
+        entry.update(status="left_out", why=named)
+        return entry
+    _, windows, _, _ = g2t_windows(directory, meta, files)
+    entry["load"] = load_traffic(directory, s["session_id"], [(lo, hi) for _, _, lo, hi in windows], files)
+    cap = (s["protocol"].get("profiles") or {}).get(entry["profile"], {}).get("max_concurrent")
+    entry["cap"] = {"max_concurrent": cap,
+                    "final": None if final_caps is None else cap == final_caps.get(entry["profile"])}
+    before, _ = _g2t_json(directory / "guest" / "levels_before.json", files, "guest/levels_before.json",
+                          LOAD_LEVELS_SCHEMA)
+    after = record["values"].get("levels_after")
+    entry["levels_before"] = before
+    if isinstance(after, dict) and after.get("schema") == LOAD_LEVELS_SCHEMA:
+        a, b = _load_leaves(after), _load_leaves(before)
+        entry["growth"] = {key: a[key] - b[key] for key in sorted(set(a) & set(b))}
+        entry["growth_seconds"] = (round(after["utc_unix"] - before["utc_unix"], 3)
+                                   if _number(after.get("utc_unix")) and _number(before.get("utc_unix")) else None)
+        entry["modules"] = {"added": sorted(set(after.get("modules") or []) - set(before.get("modules") or [])),
+                            "removed": sorted(set(before.get("modules") or []) - set(after.get("modules") or []))}
+    else:
+        entry.update(growth=None, growth_why="the record holds no levels after the session (values.levels_after of "
+                                             "labctl levels)")
+    state, _ = _g2t_json(directory / "guest" / "state_after.json", files, "guest/state_after.json",
+                         "hyptcn3/guest-state/1")
+    units = state.get("units") if isinstance(state.get("units"), dict) else {}
+    shown = {unit: {key: (units.get(unit) or {}).get(key) for key in ("ActiveState", "SubState", "Result",
+                                                                       "NRestarts")} for unit in sorted(units)}
+    bad = [f"{unit} {(units.get(unit) or {}).get('ActiveState')}/{(units.get(unit) or {}).get('Result')}"
+           for unit in REQUIRED_UNITS if (units.get(unit) or {}).get("ActiveState") != "active"
+           or (units.get(unit) or {}).get("Result") != "success"]
+    entry["units_end"] = {"ok": not bad, "not_ok": bad, "units": shown}
+    group = record["values"].get("group")
+    if not isinstance(group, dict) or not all(isinstance(group.get(k), str) for k in ("name", "record", "sha256")):
+        raise DataError(f"{record['path']}: names no group with its record and sha256 (values.group)")
+    doc, sha = _g2t_json(group["record"], files, "group record", LOAD_GROUP_SCHEMA)
+    if sha != group["sha256"] or doc.get("group") != group["name"]:
+        raise DataError(f"{group['record']}: not the record of group {group['name']} that the G2 record names (its "
+                        f"sha256 {sha}, the G2 record's {group['sha256']})")
+    steps = (doc.get("start") or {}).get("steps") if isinstance(doc.get("start"), dict) else None
+    reset = next((step.get("output") for step in steps or [] if isinstance(step, dict) and step.get("step") == "reset"),
+                 None)
+    if not isinstance(reset, dict) or reset.get("schema") != LOAD_RESET_SCHEMA:
+        raise DataError(f"{group['record']}: its start holds no reset output of schema {LOAD_RESET_SCHEMA}")
+    entry["group"] = {"name": group["name"], "record": group["record"], "sha256": sha, "reset": reset}
+    if record["kind"] == G2T_FAULT_KIND:
+        entry.update(status="fault", why=f"a session of the fault plan with its fault ({record['fault']}, induced "
+                                         f"{record['induced']}): shown apart")
+    elif not record["counted"]:
+        entry.update(status="left_out", why=g2t_left_out(record, (LOAD_CRITERION,)))
+    else:
+        entry["status"] = "counted"
+    return entry
+
+
+def load_first_sessions(g2_dir, names):
+    """{group: {first, records, span_h}} for the groups `names`, from the G2 records in <g2_dir>/zaznamy: the session
+    id of its first session, the first by the start of its run (the step run of values.steps), the group's records
+    with their sha256, and the span from the first start to the last end of a run, in hours."""
+    found = defaultdict(list)
+    for path in sorted((Path(g2_dir) / "zaznamy").glob("*.json")):
+        try:
+            raw = path.read_bytes()
+            doc = json.loads(raw)
+        except (OSError, ValueError):
+            continue
+        v = doc.get("values") if isinstance(doc, dict) and doc.get("schema") == G2T_RECORD_SCHEMA else None
+        group = v.get("group") if isinstance(v, dict) else None
+        if not isinstance(group, dict) or group.get("name") not in names:
+            continue
+        run = next((step for step in v.get("steps") or [] if isinstance(step, dict) and step.get("step") == "run"),
+                   {})
+        found[group["name"]].append({"session_id": v.get("session_id"), "path": str(path),
+                                     "sha256": hashlib.sha256(raw).hexdigest(), "started": run.get("started"),
+                                     "ended": run.get("ended")})
+    out = {}
+    for name in names:
+        rows = sorted(found.get(name, []), key=lambda r: (str(r["started"] or "~"), str(r["session_id"])))
+        starts = [t for t in (unix_of(r["started"]) for r in rows) if t is not None]
+        ends = [t for t in (unix_of(r["ended"]) for r in rows) if t is not None]
+        out[name] = {"first": rows[0]["session_id"] if rows else None, "records": rows,
+                     "span_h": round((max(ends) - min(starts)) / 3600, 3) if starts and ends else None}
+    return out
+
+
+def load_reset_check(groups, first, entries):
+    """Q63 (a) over the groups of the counted sessions: (rows per group, what is missing)."""
+    rows, missing = [], []
+    by_id = {e["session_id"]: e for e in entries}
+    names = sorted(groups)
+    reference = None
+    for name in names:
+        reset = groups[name]
+        same = {k: x for k, x in reset.items() if k not in LOAD_RESET_TIMES}
+        row = {"group": name, "reset": reset, "first_session": first[name]["first"], "span_h": first[name]["span_h"],
+               "records": first[name]["records"], "differs_from": None, "levels": None, "levels_ok": None}
+        if reference is None:
+            reference = (name, same)
+        elif same != reference[1]:
+            keys = sorted(k for k in set(same) | set(reference[1]) if same.get(k) != reference[1].get(k))
+            row["differs_from"] = {"group": reference[0], "keys": keys}
+            missing.append(f"group {name}: its reset differs from that of group {reference[0]} in " + ", ".join(keys))
+        session = by_id.get(first[name]["first"])
+        levels = None if session is None else session.get("levels_before")
+        if levels is None:
+            missing.append(f"group {name}: the levels after its reset are not judged: its first session "
+                           f"{first[name]['first']} " + ("is not among the sessions read" if session is None else
+                                                         f"is {session['status']}, its levels not read"))
+        else:
+            counts, database = reset.get("counts") or {}, levels.get("database") or {}
+            docs = (levels.get("files") or {}).get("documents") or {}
+            expected = {**{key: counts.get(key) for key in LOAD_RESET_SAME},
+                        **{key: (counts.get(key) + extra if type(counts.get(key)) is int else None)
+                           for key, extra in LOAD_PREFLIGHT.items()}}
+            found = {key: database.get(key) for key in expected}
+            expected.update({"files.documents.files": counts.get("documents"),
+                             "files.documents.bytes": reset.get("documents_bytes")})
+            found.update({"files.documents.files": docs.get("files"), "files.documents.bytes": docs.get("bytes")})
+            differ = [key for key in expected if expected[key] is None or found[key] != expected[key]]
+            row.update(levels={"session": session["session_id"], "expected": expected, "found": found},
+                       levels_ok=not differ)
+            if differ:
+                missing.append(f"group {name}: the levels of its first session {session['session_id']} do not match "
+                               "its reset in " + ", ".join(f"{key} {found[key]} (expected {expected[key]})"
+                                                           for key in differ))
+        rows.append(row)
+    return rows, missing
+
+
+def load_aggregate(rows):
+    """The sums of the counted sessions of one scenario (and VM) by LOAD_RULE."""
+    def summed(path):
+        return sum(_get(r["load"], path) or 0 for r in rows)
+    seconds, window_s = summed("measure_s"), summed("event_windows.seconds")
+    reasons = Counter()
+    for r in rows:
+        reasons.update(r["load"]["dropped"]["measure"])
+    growth = defaultdict(list)
+    for r in rows:
+        for key, value in (r.get("growth") or {}).items():
+            growth[key].append(value)
+    return {"sessions": [r["session_id"] for r in rows], "measure_s": round(seconds, 6),
+            "offered": {"user_sessions": summed("offered.user_sessions"),
+                        "planned": round(summed("offered.planned"), 6),
+                        "per_s": _g2t_ratio(summed("offered.user_sessions"), seconds),
+                        "ratio": _g2t_ratio(summed("offered.user_sessions"), summed("offered.planned")),
+                        "ratio_per_session": g2t_distribution([r["load"]["offered"]["ratio"] for r in rows])},
+            "delivered": {"admitted_user_sessions": summed("delivered.admitted_user_sessions"),
+                          "requests": summed("delivered.requests"), "ok": summed("delivered.ok"),
+                          "per_s": _g2t_ratio(summed("delivered.requests"), seconds),
+                          "ok_per_s": _g2t_ratio(summed("delivered.ok"), seconds)},
+            "event_windows": {"seconds": round(window_s, 6), "requests": summed("event_windows.requests"),
+                              "ok": summed("event_windows.ok"),
+                              "per_s": _g2t_ratio(summed("event_windows.requests"), window_s),
+                              "ok_share": _g2t_ratio(summed("event_windows.ok"), summed("event_windows.requests"))},
+            "outside_windows": {"seconds": round(seconds - window_s, 6),
+                                "requests": summed("outside_windows.requests"), "ok": summed("outside_windows.ok"),
+                                "per_s": _g2t_ratio(summed("outside_windows.requests"), seconds - window_s)},
+            "dropped_measure": dict(sorted(reasons.items())),
+            "growth": {key: g2t_distribution(values) for key, values in sorted(growth.items())}}
+
+
+def load_table(args, command):
+    """The mode load (LOAD_RULE): refuses an --out that exists before it reads anything and a directory named twice,
+    then reads every session; writes the new record, prints one line per scenario and VM, and returns the exit
+    code."""
+    from scripts import gates
+    from skuska import g2
+    out = Path(os.path.abspath(args.out))
+    if out.exists() or out.is_symlink():
+        print(f"campaign_report: --out already exists, nothing was read or written: {out}", file=sys.stderr)
+        return 2
+    paths, twice = g2t_inputs(args.session_dirs, "a session directory")
+    if twice:
+        print(f"campaign_report: load: {twice}", file=sys.stderr)
+        return 2
+    g2_dir, final, final_caps, refused = g2t_g2_dir(args), None, None, []
+    if args.final_protocol is not None:
+        try:
+            raw = Path(args.final_protocol).read_bytes()
+            doc = json.loads(raw)
+            final_caps = {name: row["max_concurrent"] for name, row in doc["profiles"].items()}
+            final = {"path": os.path.abspath(args.final_protocol), "sha256": hashlib.sha256(raw).hexdigest(),
+                     "caps": final_caps, "g0_binding": gates.stage_binding(args.final_protocol, "G0")[0]}
+        except (OSError, ValueError, KeyError, TypeError, AttributeError) as error:
+            print(f"campaign_report: load: --final-protocol {args.final_protocol}: no protocol with the caps of its "
+                  f"profiles ({type(error).__name__}: {error})", file=sys.stderr)
+            return 2
+    entries = []
+    for path in paths:
+        try:
+            entries.append(load_session(path, g2_dir, final_caps))
+        except DataError as error:
+            refused.append(str(error))
+    bindings = sorted({e["binding"] for e in entries} | ({final["g0_binding"]} if final else set()))
+    if len(bindings) > 1:
+        refused.append("the sessions (and --final-protocol) are of protocols with different G0 bindings ("
+                       + ", ".join(bindings) + "): one table takes one protocol up to the values of later stages")
+    refused += g2t_inside(out, [e["path"] for e in entries])
+    if refused or not entries:
+        for why in refused or ["no session"]:
+            print(f"campaign_report: load: {one_line(why)}", file=sys.stderr)
+        print(f"campaign_report: load: {len(refused)} refusal(s): no table, nothing written", file=sys.stderr)
+        return 2
+    protocol = json.loads(Path(entries[0]["path"], "protocol.json").read_text())
+    scenarios, vms = sorted(protocol.get("scenarios") or {}), [row["name"] for row in protocol.get("vms") or []]
+    counted = [e for e in entries if e["status"] == "counted"]
+    groups = {e["group"]["name"]: e["group"]["reset"] for e in counted}
+    first = load_first_sessions(g2_dir, set(groups))
+    group_rows, missing = load_reset_check(groups, first, entries)
+    by_scenario, by_scenario_vm = {}, {}
+    for name in scenarios:
+        mine = [e for e in counted if e["scenario"] == name]
+        by_scenario[name] = load_aggregate(mine)
+        by_scenario_vm[name] = {vm: load_aggregate([e for e in mine if e["vm"] == vm]) for vm in vms}
+        if len(mine) < g2.MIN_PER_SCENARIO:
+            missing.append(f"scenario {name}: {len(mine)} of {g2.MIN_PER_SCENARIO} sessions counted on both VMs "
+                           f"together ({g2.MIN_PER_SCENARIO - len(mine)} missing)")
+        missing += [f"scenario {name}: no session counted on VM {vm}" for vm in vms
+                    if not any(e["vm"] == vm for e in mine)]
+    missing += [f"session {e['session_id']}: at the end of its segment " + ", ".join(e["units_end"]["not_ok"])
+                for e in counted if not e["units_end"]["ok"]]
+    findings = []
+    for e in counted:
+        drops = e["load"]["dropped"]["all"]
+        if drops and e["cap"]["final"] is True:
+            findings.append(f"session {e['session_id']} ran after the final cap {e['cap']['max_concurrent']} of "
+                            f"{e['profile']} and dropped user sessions: " + ", ".join(f"{k} {n}" for k, n in
+                                                                                     sorted(drops.items())))
+    findings += [f"session {e['session_id']}: summarize names {len(e['load']['log_problems'])} problem(s) of its "
+                 "traffic logs, the first " + one_line(str(e["load"]["log_problems"][0]))
+                 for e in counted if e["load"]["log_problems"]]
+    findings += [f"group {row['group']} spans {row['span_h']} h, more than {LOAD_DRIFT_H} h: it drifts from the "
+                 "seeded level by itself (Q63)" for row in group_rows
+                 if row["span_h"] is not None and row["span_h"] > LOAD_DRIFT_H]
+    findings += [f"session {e['session_id']}: {e['why']}" for e in entries if e["status"] == "not_done"]
+    before_final = [{"session_id": e["session_id"], "status": e["status"], "cap": e["cap"],
+                     "dropped": e["load"]["dropped"]} for e in entries if "load" in e and e["load"]["dropped"]["all"]
+                    and (e["cap"]["final"] is not True or e["status"] != "counted")]
+    record = g2t_header(
+        LOAD_TABLE_SCHEMA, command, len(entries), LOAD_GUEST,
+        {"criterion": LOAD_CRITERION, "g2_dir": str(g2_dir), "scenarios": scenarios, "vms": vms,
+         "needed": {"per_scenario": g2.MIN_PER_SCENARIO, "per_scenario_and_vm": 1}, "final_caps": final,
+         "sessions": entries, "counted_sessions": [e["session_id"] for e in counted],
+         "apart": [{"session_id": e["session_id"], "status": e["status"], "why": e["why"]} for e in entries
+                   if e["status"] != "counted"],
+         "by_scenario": by_scenario, "by_scenario_and_vm": by_scenario_vm, "groups": group_rows,
+         "drops_not_judged": before_final, "minimums_met": not missing, "missing": missing,
+         "findings": findings, "rules": {"table": LOAD_RULE, "records": G2T_RECORDS_RULE}},
+        "The table of the offered and delivered load of the G2 sessions per scenario and VM, the drops and the return "
+        "to the defined state (criterion profiles_load of G2); nothing is scored or detected.")
+    problem = g2t_write(out, record)
+    if problem:
+        print(f"campaign_report: load: {problem}", file=sys.stderr)
+        return 2
+    for name in scenarios:
+        for vm in vms:
+            row = by_scenario_vm[name][vm]
+            print(f"{name} VM {vm}: {len(row['sessions'])} session(s); offered {row['offered']['per_s']} user "
+                  f"sessions/s (ratio to the plan {row['offered']['ratio']}), delivered {row['delivered']['per_s']} "
+                  f"requests/s ({row['delivered']['ok_per_s']} ok), in event windows {row['event_windows']['per_s']}"
+                  f" requests/s; dropped {row['dropped_measure'] or 'none'}")
+    print("profiles_load minimums: " + ("met" if not missing else "missing: " + "; ".join(missing))
+          + f"; {len(counted)} of {len(entries)} session(s) counted, {len(group_rows)} group(s), {len(findings)} "
+          "finding(s)", flush=True)
+    print(f"campaign_report: load: {len(entries)} session(s); record {out}", file=sys.stderr)
+    return 0 if not missing else 1
+
+
+# ---------------------------------------------------------------- realism mode (traffic_realism)
+
+REALISM_TABLE_SCHEMA = "hyptcn3/g2-realism-table/1"
+REALISM_CRITERION = "traffic_realism"
+REALISM_TIMER = "hyptcn-lab-udrzba.timer"  # The entry of the maintenance timer in lab/periods.json.
+REALISM_TIMER_RUNS = 2  # The executor's judgment: at least two runs in the measured phase, so a spacing is judged.
+# The executor's judgment: the start of a run is the time of its journal line less the seconds it states
+# (scripts/lab_trial.py periods), which leaves out the start of python3 before services.py udrzba measures them.
+REALISM_TIMER_TOLERANCE_S = 2.0
+REALISM_GUEST = ("none: the mode realism reads saved session files, audit records, guest journals and the records of "
+                 "G2, and the first lines of the traffic logs for the envelope; no VM is contacted")
+REALISM_RULE = (
+    "The criterion traffic_realism of stage G2 (scripts/gates.py CRITERIA, the lead's G2 skeleton: the requirements "
+    "of proposal 5.7 in every scenario, and P1, the envelope, over every G2 session without a mismatch) and map row "
+    "6 with the lead's answer to Q65 (map question 20: every G2 session without a fault passes the section realism, "
+    "every scenario has at least 8 such sessions, and the table shows the minimum, the median and the maximum of "
+    "every requirement). Of each session directory given (G2T_RECORDS_RULE) the mode reads session.json, "
+    "protocol.json and its G2 record, and of a session it considers the audit record the G2 record names "
+    "(values.audit, bound by its sha256, its values.session_sha256 that of session.json and its "
+    "values.protocol_sha256 that of protocol.json), end.json and, for a session of the profile corp, the guest "
+    "journal of its segment (guest/journal_segment.json and the file it names). Per session: the value, the bound "
+    "and the result of every requirement of the audit's section realism (values.logs.sections.realism, "
+    "scripts/traffic_log.py realism as the log audit ran it: arrival_cv, think_time, order_share, "
+    "object_concentration, success_rate, response_sizes, peak_to_mean, background) and of the offered-load check of "
+    "proposal 5.3 beside them; a session whose audit has no such section has no values (a missing minimum when it "
+    "counts). The corp background of proposal 5.7 is also the periodic task with a random delay of the guest, the "
+    "maintenance timer, which the traffic log does not hold and which comes from the journal only: the requirement "
+    "maintenance_timer takes the runs of hyptcn-lab-udrzba.timer whose start lies in the measured phase of end.json "
+    "(the line {\"service\": \"udrzba\", ...} of lab/services.py udrzba, its time less its seconds, as "
+    "scripts/lab_trial.py periods reads it) and needs at least 2 runs and every spacing of consecutive runs within "
+    "period_s - (the span of random_s) and period_s + (the span of random_s) of its entry in lab/periods.json of this "
+    "tree, 2 s either way (the executor's judgment). P1 (the mode envelope, ENVELOPE_RULE) runs over every session "
+    "the mode considers, grouped by the sha256 of each session's protocol.json, since every write of a value of G2 "
+    "changes those bytes and P1 calls another protocol a data error: each group's protocol is the protocol.json of "
+    "its sessions, and the generator is this tree's scripts/host_traffic.py, which must be the sessions' own. A "
+    "session is considered when it is done (skuska/g2.py DONE_RULE) and its record does not leave it out of "
+    "traffic_realism (values.excluded); a session of the fault plan with its fault is shown apart (its values and "
+    "its P1), and the others count when the host load counts them (values.counted); a session that is not done is "
+    "listed, a finding, and neither its audit nor its logs are read. Per scenario, and per scenario "
+    "and VM, of the counted sessions: for every requirement the sessions, those that pass and fail, and the minimum, "
+    "median (nearest rank, as scripts/traffic_log.py percentile) and maximum of its value (of each number of a value "
+    "that is an object) with the bounds. The minimums: every scenario of the protocol with at least 8 counted "
+    "sessions with values; every requirement, the offered load and (corp) maintenance_timer passed in every counted "
+    "session; P1 a match in every considered session. A failure is also a finding for the lead first, since a "
+    "change of the lab or of scripts/traffic_log.py is a new G0 (Q65). Refused by name, each a data error: a "
+    "directory named twice, a file missing or unreadable, an audit record other than the one the G2 record names or "
+    "that does not bind the session, sessions of protocols with different G0 bindings, and an --out that exists "
+    "(refused before anything is read) or lies inside a session directory. Exit 0: the table is written to --out, a "
+    "new JSON record with the provenance header of check E, and every minimum is met; 1: the table is written and a "
+    "minimum is missing, named; 2: a usage or data error, every refusal named on stderr and nothing written.")
+
+
+def realism_register():
+    """(the entry of REALISM_TIMER in lab/periods.json of this tree, the file with its sha256); a DataError."""
+    path = ROOT / "lab/periods.json"
+    files = []
+    doc, _ = _g2t_json(path, files, "lab/periods.json")
+    entry = next((row for row in doc.get("periods") or [] if isinstance(row, dict)
+                  and row.get("name") == REALISM_TIMER), None)
+    random_s = entry.get("random_s") if entry else None
+    if (entry is None or not _number(entry.get("period_s")) or not isinstance(random_s, list) or len(random_s) != 2
+            or not all(map(_number, random_s))):
+        raise DataError(f"{path}: no entry {REALISM_TIMER} with period_s and random_s [low, high]")
+    span = random_s[1] - random_s[0]
+    entry = dict(entry, band_s=[entry["period_s"] - span - REALISM_TIMER_TOLERANCE_S,
+                                entry["period_s"] + span + REALISM_TIMER_TOLERANCE_S])
+    return entry, files[0]
+
+
+def realism_timer(directory, end, files, register):
+    """The requirement maintenance_timer of a corp session from its guest journal (REALISM_RULE)."""
+    from scripts import lab_trial
+    doc, _ = _g2t_json(directory / "guest" / "journal_segment.json", files, "guest/journal_segment.json",
+                       "hyptcn3/guest-journal-segment/1")
+    entry = next((f for f in doc.get("files") or [] if isinstance(f, dict) and isinstance(f.get("name"), str)
+                  and f["name"].endswith("-journal.txt")), None)
+    name = entry.get("file") if entry else None
+    if not isinstance(name, str) or Path(name).name != name:
+        raise DataError(f"{directory}: guest/journal_segment.json names no journal file of the segment")
+    path = directory / "guest" / name
+    _g2t_read(path, files, "guest journal")
+    try:
+        starts = lab_trial._udrzba(list(lab_trial.journal_lines(path)))[0]
+    except (OSError, EOFError, ValueError) as error:
+        raise DataError(f"{path}: the guest journal cannot be read ({type(error).__name__}: {error})") from None
+    low, high = end.get("measure_start_unix"), end.get("measure_end_unix")
+    if not _number(low) or not _number(high):
+        raise DataError(f"{directory}: end.json has no measure_start_unix and measure_end_unix")
+    runs = sorted(t for t in starts if low <= t <= high)
+    spacings = [round(b - a, 6) for a, b in zip(runs, runs[1:])]
+    band = register["band_s"]
+    outside = [s for s in spacings if not band[0] <= s <= band[1]]
+    return {"name": "maintenance_timer",
+            "value": {"runs": len(runs), "spacings_s": g2t_distribution(spacings), "starts_unix": runs},
+            "bound": {"runs_min": REALISM_TIMER_RUNS, "spacing_s": band, "period_s": register["period_s"],
+                      "random_s": register["random_s"]},
+            "ok": len(runs) >= REALISM_TIMER_RUNS and not outside,
+            "note": (f"{len(runs)} run(s) of {REALISM_TIMER} in the measured phase from the guest journal; "
+                     + (f"spacings outside the band: {outside}" if outside else "every spacing within the band"))}
+
+
+def realism_session(path, g2_dir, register):
+    """One session directory by REALISM_RULE: its entry (status counted, left_out, fault or not_done; the requirements
+    and the offered load of its audit, the maintenance timer of corp); a DataError by name."""
+    s = g2t_session(path, g2_dir)
+    directory, record, files = Path(s["path"]), s["record"], s["files"]
+    scenario = (s["protocol"].get("scenarios") or {}).get(s["scenario"])
+    if not isinstance(scenario, dict):
+        raise DataError(f"{directory}: session.json names the scenario {_shown(s['scenario'], 40)}, which its protocol "
+                        "does not have")
+    entry = {"session_id": s["session_id"], "vm": s["vm"], "scenario": s["scenario"],
+             "profile": scenario.get("profile"), "intensity": scenario.get("intensity"), "kind": record["kind"],
+             "path": str(directory), "record": {"path": record["path"], "sha256": record["sha256"]},
+             "protocol": str(directory / "protocol.json"), "protocol_sha256": s["protocol_sha"],
+             "binding": s["binding"], "status": None, "why": None, "fault": record["fault"],
+             "induced": record["induced"], "audit": None, "requirements": None, "offered_load": None,
+             "no_values": None, "envelope": None, "files": files}
+    named = g2t_left_out(dict(record, counted=True), (REALISM_CRITERION,))
+    if not record["done"]:
+        v = record["values"]
+        entry.update(status="not_done", why="not done (skuska/g2.py DONE_RULE): " + one_line(str(
+            v.get("stop") or v.get("error") or f"exit codes {v.get('exit_codes')}, audit "
+                                               f"{'present' if v.get('audit') else 'none'}")))
+        return entry
+    if named is not None:
+        entry.update(status="left_out", why=named)
+        return entry
+    entry["considered"] = True  # Done and not left out by name: its values are read and P1 runs over it.
+    named_audit = record["values"].get("audit")
+    if not isinstance(named_audit, dict) or not isinstance(named_audit.get("report"), str):
+        raise DataError(f"{record['path']}: a done session whose record names no audit (values.audit.report)")
+    audit, sha = _g2t_json(named_audit["report"], files, "audit record", AUDIT_SCHEMA)
+    v = audit.get("values") if isinstance(audit.get("values"), dict) else {}
+    if (sha != named_audit.get("sha256") or v.get("session_sha256") != s["meta_sha"]
+            or v.get("protocol_sha256") != s["protocol_sha"]):
+        raise DataError(f"{named_audit['report']}: not the audit the G2 record names or not one of this session (its "
+                        "sha256, values.session_sha256 or values.protocol_sha256)")
+    entry["audit"] = {"path": named_audit["report"], "sha256": sha, "accepted": v.get("accepted"),
+                      "reasons": v.get("reasons")}
+    section = _get(v, "logs.sections.realism")
+    if (isinstance(section, dict) and isinstance(section.get("requirements"), list)
+            and all(isinstance(r, dict) and isinstance(r.get("name"), str) for r in section["requirements"])
+            and isinstance(section.get("offered_load"), dict)):
+        entry["requirements"] = [{key: r.get(key) for key in ("name", "value", "bound", "ok", "note")}
+                                 for r in section["requirements"]]
+        entry["offered_load"] = section["offered_load"]
+    else:
+        problems = [str(p) for p in _get(v, "logs.problems") or [] if str(p).startswith("realism")] \
+            if isinstance(_get(v, "logs.problems"), list) else []
+        entry["no_values"] = ("the audit has no section realism" + (": " + "; ".join(map(one_line, problems))
+                                                                     if problems else ""))
+    if entry["profile"] == "corp":
+        end, _ = _g2t_json(directory / "end.json", files, "end.json")
+        timer = realism_timer(directory, end, files, register)
+        entry["requirements"] = None if entry["requirements"] is None else [*entry["requirements"], timer]
+        entry["timer"] = timer
+    if record["kind"] == G2T_FAULT_KIND:
+        entry.update(status="fault", why=f"a session of the fault plan with its fault ({record['fault']}, induced "
+                                         f"{record['induced']}): shown apart")
+    elif not record["counted"]:
+        entry.update(status="left_out", why=g2t_left_out(record, (REALISM_CRITERION,)))
+    else:
+        entry["status"] = "counted"
+    return entry
+
+
+def realism_failures(entry):
+    """What a session with values fails: its requirements, the offered load, its P1."""
+    out = [f"{r['name']} {_shown(r['value'], 160)} against {_shown(r['bound'], 160)}" for r in entry["requirements"]
+           if r.get("ok") is not True]
+    if entry["offered_load"].get("ok") is not True:
+        out.append(f"offered_load {_shown(entry['offered_load'], 160)}")
+    return out
+
+
+def realism_aggregate(rows):
+    """Per requirement of the counted sessions `rows`: the sessions, those that pass and fail, the distribution of
+    each number of its value and the bounds (REALISM_RULE)."""
+    out = {}
+    names = list(dict.fromkeys(r["name"] for e in rows for r in e["requirements"]))
+    for name in [*names, "offered_load"]:
+        found = ([(e["session_id"], {"value": e["offered_load"].get("ratio"), "ok": e["offered_load"].get("ok"),
+                                     "bound": "within offered_load_tolerance of 1"}) for e in rows]
+                 if name == "offered_load" else
+                 [(e["session_id"], r) for e in rows for r in e["requirements"] if r["name"] == name])
+        values = defaultdict(list)
+        for _, r in found:
+            value = r.get("value")
+            if isinstance(value, dict):
+                for key, x in value.items():
+                    x = x.get("median") if isinstance(x, dict) and "median" in x else x
+                    if _number(x):
+                        values[key].append(x)
+            elif _number(value):
+                values["value"].append(value)
+        bounds = list(dict.fromkeys(json.dumps(r.get("bound"), sort_keys=True) for _, r in found))
+        out[name] = {"sessions": len(found), "passed": sum(r.get("ok") is True for _, r in found),
+                     "failed": [sid for sid, r in found if r.get("ok") is not True],
+                     "values": {key: g2t_distribution(xs) for key, xs in values.items()},
+                     "bounds": [json.loads(b) for b in bounds]}
+    return out
+
+
+def realism_table(args, command):
+    """The mode realism (REALISM_RULE): refuses an --out that exists before it reads anything and a directory named
+    twice, then reads every session and runs P1 per protocol; writes the new record, prints one line per scenario,
+    and returns the exit code."""
+    from skuska import g2
+    out = Path(os.path.abspath(args.out))
+    if out.exists() or out.is_symlink():
+        print(f"campaign_report: --out already exists, nothing was read or written: {out}", file=sys.stderr)
+        return 2
+    paths, twice = g2t_inputs(args.session_dirs, "a session directory")
+    if twice:
+        print(f"campaign_report: realism: {twice}", file=sys.stderr)
+        return 2
+    g2_dir, entries, refused = g2t_g2_dir(args), [], []
+    try:
+        register, register_file = realism_register()
+    except DataError as error:
+        print(f"campaign_report: realism: {error}", file=sys.stderr)
+        return 2
+    for path in paths:
+        try:
+            entries.append(realism_session(path, g2_dir, register))
+        except DataError as error:
+            refused.append(str(error))
+    bindings = sorted({e["binding"] for e in entries})
+    if len(bindings) > 1:
+        refused.append("the sessions are of protocols with different G0 bindings (" + ", ".join(bindings)
+                       + "): one table takes one protocol up to the values of later stages")
+    refused += g2t_inside(out, [e["path"] for e in entries])
+    if refused or not entries:
+        for why in refused or ["no session"]:
+            print(f"campaign_report: realism: {one_line(why)}", file=sys.stderr)
+        print(f"campaign_report: realism: {len(refused)} refusal(s): no table, nothing written", file=sys.stderr)
+        return 2
+    # P1 per protocol.json bytes (REALISM_RULE): the generator of this tree draws, as in the mode envelope.
+    generator = os.path.abspath(host_traffic.__file__)
+    with open(generator, "rb") as stream:
+        generator_sha = hashlib.file_digest(stream, "sha256").hexdigest()
+    considered = [e for e in entries if e.get("considered")]
+    groups = defaultdict(list)
+    for e in considered:
+        groups[e["protocol_sha256"]].append(e)
+    envelope_groups = []
+    for sha, members in sorted(groups.items()):
+        try:
+            protocol_sha, protocol = envelope_protocol(members[0]["protocol"])
+        except DataError as error:
+            protocol_sha, protocol, problem = None, None, str(error)
+        for e in members:
+            if protocol is None:
+                e["envelope"] = {"result": "data_error", "reasons": [problem]}
+            else:
+                found = envelope_session(e["path"], protocol_sha, protocol, generator_sha)
+                e["envelope"] = {key: found[key] for key in ("result", "reasons", "draws", "knots", "files")}
+        envelope_groups.append({"protocol_sha256": sha, "protocol": members[0]["protocol"],
+                                "sessions": [e["session_id"] for e in members],
+                                "counts": {result: sum(e["envelope"]["result"] == result for e in members)
+                                           for result in ENVELOPE_RESULTS}})
+    protocol = json.loads(Path(entries[0]["protocol"]).read_text())
+    scenarios, vms = sorted(protocol.get("scenarios") or {}), [row["name"] for row in protocol.get("vms") or []]
+    counted = [e for e in entries if e["status"] == "counted"]
+    valued = [e for e in counted if e["requirements"] is not None]
+    missing = [f"session {e['session_id']}: no values of the requirements ({e['no_values']})" for e in counted
+               if e["requirements"] is None]
+    for e in valued:
+        missing += [f"session {e['session_id']} ({e['scenario']}, VM {e['vm']}): fails {text}"
+                    for text in realism_failures(e)]
+    missing += [f"session {e['session_id']}: P1 {e['envelope']['result']}: "
+                + "; ".join(map(one_line, e["envelope"]["reasons"])) for e in considered
+                if e["envelope"]["result"] != "match"]
+    by_scenario, by_scenario_vm = {}, {}
+    for name in scenarios:
+        mine = [e for e in valued if e["scenario"] == name]
+        by_scenario[name] = {"sessions": [e["session_id"] for e in mine], "requirements": realism_aggregate(mine)}
+        by_scenario_vm[name] = {vm: {"sessions": [e["session_id"] for e in mine if e["vm"] == vm],
+                                     "requirements": realism_aggregate([e for e in mine if e["vm"] == vm])}
+                                for vm in vms}
+        if len(mine) < g2.MIN_PER_SCENARIO:
+            missing.insert(0, f"scenario {name}: {len(mine)} of {g2.MIN_PER_SCENARIO} sessions without a fault "
+                              f"counted with values ({g2.MIN_PER_SCENARIO - len(mine)} missing)")
+    faults = [{"session_id": e["session_id"], "vm": e["vm"], "scenario": e["scenario"], "fault": e["fault"],
+               "induced": e["induced"],
+               "failed": None if e["requirements"] is None else realism_failures(e),
+               "envelope": e["envelope"]["result"]} for e in entries if e["status"] == "fault"]
+    findings = [f"for the lead first (Q65): {text}" for text in missing if text.startswith("session ")]
+    findings += [f"session {e['session_id']}: {e['why']}" for e in entries if e["status"] == "not_done"]
+    record = g2t_header(
+        REALISM_TABLE_SCHEMA, command, len(entries), REALISM_GUEST,
+        {"criterion": REALISM_CRITERION, "g2_dir": str(g2_dir), "scenarios": scenarios, "vms": vms,
+         "needed": {"per_scenario": g2.MIN_PER_SCENARIO},
+         "register": {**register_file, "entry": register},
+         "sessions": entries, "counted_sessions": [e["session_id"] for e in counted],
+         "apart": [{"session_id": e["session_id"], "status": e["status"], "why": e["why"]} for e in entries
+                   if e["status"] != "counted"],
+         "by_scenario": by_scenario, "by_scenario_and_vm": by_scenario_vm, "faults": faults,
+         "envelope": {"generator": {"path": generator, "sha256": generator_sha}, "groups": envelope_groups},
+         "minimums_met": not missing, "missing": missing, "findings": findings,
+         "rules": {"table": REALISM_RULE, "envelope": ENVELOPE_RULE, "records": G2T_RECORDS_RULE}},
+        "The table of the realism requirements of proposal 5.7 over the G2 sessions per scenario and VM, with P1 per "
+        "protocol (criterion traffic_realism of G2); nothing is scored or detected.")
+    problem = g2t_write(out, record)
+    if problem:
+        print(f"campaign_report: realism: {problem}", file=sys.stderr)
+        return 2
+    for name in scenarios:
+        row = by_scenario[name]["requirements"]
+        print(f"{name}: {len(by_scenario[name]['sessions'])} session(s) with values; "
+              + ", ".join(f"{req} {row[req]['passed']}/{row[req]['sessions']}" for req in row))
+    print("P1: " + "; ".join(f"protocol {group['protocol_sha256'][:12]}: " + ", ".join(
+        f"{n} {result}" for result, n in group["counts"].items() if n) for group in envelope_groups))
+    print("traffic_realism minimums: " + ("met" if not missing else "missing: " + "; ".join(missing))
+          + f"; {len(counted)} of {len(entries)} session(s) counted, {len(faults)} with a fault apart", flush=True)
+    print(f"campaign_report: realism: {len(entries)} session(s), {len(envelope_groups)} protocol(s); record {out}",
+          file=sys.stderr)
+    return 0 if not missing else 1
+
+
 # ---------------------------------------------------------------- majflt mode (the lead's answer to Q29)
 
 MAJFLT_SCHEMA = "hyptcn3/collector-majflt-bound/1"
@@ -6990,6 +8463,33 @@ def main(argv=None):
     sessions = modes.add_parser("sessions", help="explicit session directories")
     sessions.add_argument("session_dirs", type=Path, nargs="+")
     sessions.add_argument("--out", type=Path, required=True, help="new output directory (must not exist)")
+    # Package H1b6b: the tables of map rows 4 to 6 and 14 of G2 (G2T_RECORDS_RULE), their parsers together.
+    g2_dir_help = "the G2 directory whose zaznamy/ holds the records of the sessions (default: skuska/g2.py G2_DIR)"
+    marked_mode = modes.add_parser("marked", help="the rows the rule marks per occurrence of G2 sessions and the "
+                                                  "proposal of invalid_rows.max (criterion marked_rows_per_event, "
+                                                  "Q49; MARKED_RULE)")
+    marked_mode.add_argument("audits", type=Path, nargs="+",
+                             help="the audit records of the G2 sessions (audit_<UTC stamp>.json), one per session")
+    marked_mode.add_argument("--protocol", type=Path, required=True,
+                             help="the protocol file whose invalid_rows.max the table proposes (the sessions' copies "
+                                  "may differ from it only in the values of later stages: its G0 binding)")
+    marked_mode.add_argument("--g2-dir", type=Path, help=g2_dir_help)
+    marked_mode.add_argument("--out", type=Path, required=True, help="new JSON record (must not exist)")
+    load_mode = modes.add_parser("load", help="the offered and delivered load of G2 sessions per scenario and VM, the "
+                                              "drops and the return to the defined state (criterion profiles_load, "
+                                              "Q63; LOAD_RULE)")
+    load_mode.add_argument("session_dirs", type=Path, nargs="+", help="G2 session directories")
+    load_mode.add_argument("--g2-dir", type=Path, help=g2_dir_help)
+    load_mode.add_argument("--final-protocol", type=Path,
+                           help="the protocol file with the final caps profiles.*.max_concurrent (the second write of "
+                                "G2); without it no drop is judged against the final cap")
+    load_mode.add_argument("--out", type=Path, required=True, help="new JSON record (must not exist)")
+    realism_mode = modes.add_parser("realism", help="the realism requirements of proposal 5.7 over G2 sessions per "
+                                                    "scenario and VM, with P1 per protocol (criterion traffic_realism, "
+                                                    "Q65; REALISM_RULE)")
+    realism_mode.add_argument("session_dirs", type=Path, nargs="+", help="G2 session directories")
+    realism_mode.add_argument("--g2-dir", type=Path, help=g2_dir_help)
+    realism_mode.add_argument("--out", type=Path, required=True, help="new JSON record (must not exist)")
     envelope_mode = modes.add_parser("envelope", help="the traffic envelope of session directories drawn again from "
                                                       "the protocol (the lead's answer to Q30; ENVELOPE_RULE)")
     envelope_mode.add_argument("session_dirs", type=Path, nargs="+")
@@ -7035,6 +8535,8 @@ def main(argv=None):
     args = parser.parse_args(argv)
     command = shlex.join([str(Path(sys.argv[0])) if argv is None else "scripts/campaign_report.py",
                           *(sys.argv[1:] if argv is None else argv)])
+    if args.mode in ("marked", "load", "realism"):  # Package H1b6b: the tables of map rows 4 to 6 and 14 of G2.
+        return {"marked": marked_table, "load": load_table, "realism": realism_table}[args.mode](args, command)
     if args.mode == "envelope":
         return envelope(args, command)
     if args.mode == "majflt":
