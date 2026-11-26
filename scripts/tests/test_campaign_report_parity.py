@@ -206,3 +206,10 @@ def test_the_comparison_reads_the_fields_the_runtime_writes():
         assert f'"{field}"' in finish or f"{field}=" in finish, field
     assert copy.deepcopy(parita.EXACT) == ("alarm", "alarm_event", "alarm_sources", "model_alarm", "rule_alarm",
                                            "integrity_alarm", "channel")
+
+
+def test_the_mode_is_in_the_usage_of_the_report_and_no_measurement_code():
+    from scripts import collection
+    assert "scripts/campaign_report.py parity WATCH_DIR REPLAY_DIR --out NEW_FILE" in campaign_report.__doc__
+    assert not collection.is_measurement("scripts/campaign_report.py")
+    assert not collection.is_measurement("skuska/parita.py")

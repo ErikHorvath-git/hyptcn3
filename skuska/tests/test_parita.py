@@ -287,6 +287,30 @@ def test_the_bundle_of_the_real_chain_holds_the_layout_of_the_audits(small, made
           f"sessions in the corpus, {bundle['chain']['captures']} captures, --praca {v['praca_bytes']} bytes")
 
 
+class BeforeTheFirstEpoch(Exception):
+    """Raised where safeguard/training.py train_bundle would start to train the predictor."""
+
+
+def test_the_corpus_of_the_chain_passes_every_check_of_training_before_its_first_epoch(small, made, monkeypatch):
+    """The real train_bundle --diagnostic on the corpus of the chain up to the training of the predictor, which is not
+    run: validate_index, every fitted archive accepted again (require_accepted), every frame against the contract of
+    the first, the normalizer fitted over the 128 scored bins of the layout, the windows and the calibration count;
+    no model is trained and nothing is written."""
+    from safeguard import training
+
+    def stop(config, datasets, parameters):
+        raise BeforeTheFirstEpoch(config, {role: len(d.indices) for role, d in datasets.items()})
+    monkeypatch.setattr(training, "_train_predictor", stop)
+    (bundle,) = made["doc"]["values"]["bundles"]
+    target = small["root"] / "never"
+    with pytest.raises(BeforeTheFirstEpoch) as reached:
+        training.train_bundle(bundle["corpus"]["index"], target, window_rows=8, max_gap_s=7.5, epochs=2,
+                              diagnostic=True)
+    config, windows = reached.value.args
+    assert config["global_features"] >= 1 and windows["train"] > 0 and windows["calibration"] >= 20
+    assert not target.exists()
+
+
 class FakeChain:
     """The chain of G1 without the harness: a corpus index that names the layout it was asked for."""
 
@@ -763,3 +787,19 @@ def test_the_dry_run_and_the_command_line_of_the_block(tmp_path, deck_file, monk
     assert parita.main(["plan", "--protocol", str(REAL)]) == 0
     printed = json.loads(capsys.readouterr().out)
     assert printed["sessions"] == parita.plan(P) and printed["rule"] == parita.PLAN_RULE
+
+
+def test_the_logs_of_the_training_and_of_watch_begin_with_the_s2_header(tmp_path):
+    """run_logged and Env.start write the S2 header (commit, date, host, git status, the command) before the child's
+    output; the children here end by themselves."""
+    import sys
+    argv = [sys.executable, "-c", "print('the child')"]
+    assert parita.run_logged(argv, tmp_path / "trening.log", 60) == 0
+    text = (tmp_path / "trening.log").read_text()
+    assert text.startswith("# commit ") and "# command " in text and text.endswith("the child\n")
+    process = parita.Env().start(argv, tmp_path / "watch.log")
+    assert process.wait(timeout=60) == 0
+    text = (tmp_path / "watch.log").read_text()
+    assert text.startswith("# commit ") and text.endswith("the child\n")
+    with pytest.raises(FileExistsError):
+        parita.run_logged(argv, tmp_path / "trening.log", 60)

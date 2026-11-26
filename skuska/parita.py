@@ -163,7 +163,8 @@ BUNDLE_RULE = (
     "real command line of a diagnostic training, python -m safeguard --threads 2 train --corpus <the corpus> --out "
     "<--out>/<bundle> --diagnostic, with --epochs N when --epochs N is given (a diagnostic override of "
     "analysis.stopping.max_epochs, which the manifest lists; --epochs plan keeps the plan's stopping rule), nice 19 "
-    "(scripts/collection.py background_command), its output in <--out>/<bundle>.trening.log; the bundle must be "
+    "(scripts/collection.py background_command), its output in <--out>/<bundle>.trening.log after the S2 header; the "
+    "bundle must be "
     "diagnostic, hold the layout and the bins of its audits in its feature contract and the protocol's "
     "min_bin_pages in its normalizer; the record <--out>/zvazok.json (check E's header) names the audits, every "
     "bundle with the sha256 of each of its files and of their list, the VMs it serves, its corpus, the chain's steps "
@@ -350,9 +351,17 @@ def train_command(index, out, epochs):
     return collection.background_command(argv)
 
 
+def s2_header(command):
+    """The full header of S2 of a log (tcn/suchy_beh.py hlavicka_s2: commit, date, host, git status, the command)."""
+    from tcn.suchy_beh import hlavicka_s2
+    return hlavicka_s2(shlex.join([str(x) for x in command]))
+
+
 def run_logged(argv, log, timeout):
-    """A child into the new file `log`; its exit code, None at a timeout."""
+    """A child into the new file `log` after the S2 header; its exit code, None at a timeout."""
     with Path(log).open("x") as stream:
+        stream.write(s2_header(argv))
+        stream.flush()
         try:
             return subprocess.run([str(a) for a in argv], cwd=ROOT, stdout=stream, stderr=subprocess.STDOUT,
                                   timeout=timeout).returncode
@@ -492,7 +501,8 @@ def make_bundles(protocol, audits, praca, out, epochs, *, vysledky, command, cha
                                      "seconds": train_s},
                         "seconds": {"chain": chain_s, "training": train_s}})
     values = {"stage": g2.STAGE, "rule": BUNDLE_RULE, "layout_rule": LAYOUT_RULE, "protocol": str(protocol),
-              "protocol_sha256": _sha(protocol), "protocol_g0_binding": gates.stage_sha256(protocol, "G0"),
+              "protocol_schema": p.get("schema"), "protocol_sha256": _sha(protocol),
+              "protocol_g0_binding": gates.stage_sha256(protocol, "G0"),
               "min_bin_pages": minimum, "epochs": epochs, "generator": {"mode": GENERATOR, "seed": GENERATOR_SEED,
                                                                         "path": PATH},
               "audits": [{k: v for k, v in a.items() if k not in ("layout", "biny")} for a in found],
@@ -775,7 +785,8 @@ WATCH_RULE = (
     "--snapshots S/raw --profile S/profile --idle-timeout 60 --out <G2 dir>/parita/<session>/watch, as the VM's owner "
     "with nice 19 and ionice (scripts/collection.py background_command of user_command: the audit's priority and, as "
     "root, its scope, whose memory is capped and never swapped, so the page cache of the snapshots watch reads pushes "
-    "no QEMU to swap), with the same --threads as the replay; its output goes to <G2 dir>/parita/<session>/watch.log. "
+    "no QEMU to swap), with the same --threads as the replay; its output goes to <G2 dir>/parita/<session>/watch.log "
+    "after the S2 header. "
     "Nothing is written into the session's directory: the parity directory lies outside it (refused otherwise), and "
     "watch holds evidence in raw/ only where it may write, which the owner may not in the collector's raw/ of root, "
     "so the hold fails, by name in the row's evidence (Q61: no parity error). After the run the hook waits for watch "
@@ -872,8 +883,11 @@ class Env:
         return event.wait(seconds)
 
     def start(self, command, log):
-        """The child, its output into the new file `log`, in its own session and process group."""
+        """The child, its output into the new file `log` after the S2 header, in its own session and process
+        group."""
         with Path(log).open("x") as stream:
+            stream.write(s2_header(command))
+            stream.flush()
             return subprocess.Popen([str(x) for x in command], cwd=ROOT, stdout=stream, stderr=subprocess.STDOUT,
                                     start_new_session=True)
 
