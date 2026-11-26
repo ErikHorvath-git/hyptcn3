@@ -1,0 +1,16 @@
+# probe sonda_c39accb.py at c39accb (c39accb Handbook: state date after package B2), extra files {}
+# /home/eh/projects/hyptcn3/.venv/bin/python -B /home/eh/hyptcn3-logs/v5/dokazy/B10/pred_po/sondy/sonda_c39accb.py <scratch>/sonda_tmp/c39accb
+# 2026-11-24T17:27:54Z
+{"accepted": true, "code": 0, "input": "none", "probe": "clean session of family S3 (control)", "reasons": [], "row": "-"}
+{"accepted": true, "code": 0, "input": "the clean session: 0 of 96 sidecars hold capture.queue_wait_ms", "probe": "sidecars without capture.queue_wait_ms (capture R11)", "reasons": [], "row": 17}
+{"accepted": true, "code": 0, "input": "the clean session: 0 of 102 records of host_monitor.jsonl hold procs or memory", "probe": "a host monitor file without any process or memory data (capture R4)", "reasons": [], "row": 5}
+{"accepted": true, "code": 0, "input": "sched.lateness_s = 4.0 in each of the 96 sidecars", "probe": "lateness 4.0 s in every sidecar (capture R5)", "reasons": [], "row": 1}
+{"accepted": true, "code": 0, "input": "seq 10 to 19: process_walk prev, behavior valid", "probe": "10 rows closed by rule prev (capture R3)", "reasons": [], "row": 4}
+{"accepted": true, "code": 0, "input": "session.json host_context.memory: qemu_swap_max 'max', qemu_swap_kb 4", "probe": "QEMU swap not forbidden and QEMU memory in swap before start (capture R4, process R5)", "reasons": [], "row": 5}
+{"accepted": true, "code": 0, "input": "procs.qemu swap_kb 26832, 53664, ... in every sample", "probe": "a swap storm in the host monitor (capture R4)", "reasons": [], "row": 5}
+{"accepted": false, "code": 2, "input": "every row from seq 32 on one interval later", "probe": "the gate of the timestamp gap (capture R8: the verifier's probe found that it fires)", "reasons": ["timestamp gap"], "row": 16}
+{"accepted": true, "input": "test_collection_logs.build(event=True)", "probe": "session with one executed event (control of the log probes)", "problems": [], "row": "-"}
+{"accepted": true, "input": "events.json: executed false, start ok false", "probe": "an event that did not run (capture R7)", "problems": [], "row": 2}
+{"accepted": true, "input": "events.json: effect {ok: false}", "probe": "an event without effect (LAB-04)", "problems": [], "row": 2}
+{"accepted": true, "input": "raw/collect.log: two lines ' WARN '", "probe": "two WARN lines of the collector (capture R6)", "problems": [], "row": 3}
+exit 0

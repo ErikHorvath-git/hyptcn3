@@ -1,0 +1,21 @@
+{
+ "schema": "hyptcn3/g0-copy/1",
+ "commit": "8367b057669dfeed3411a152126c2e2c739537e9",
+ "date": "2026-11-26T03:44:32+00:00",
+ "host": "debian",
+ "guest": "none: a machine record of B10's before and after, made without a VM",
+ "command": "dokazy/G0/g0_dokazy3.sh: a copy of /home/eh/hyptcn3-logs/v5/dokazy/B10/pred_po_zlucene/pred_later.json",
+ "n": 1,
+ "source": "/home/eh/hyptcn3-logs/v5/dokazy/B10/pred_po_zlucene/pred_later.json",
+ "source_sha256": "b0158d3f5453eecd2d1c88d6a44abc5c48c1b9c503cf9d2895f820f6344f5066",
+ "source_made_by": "dokazy/B10/pred_po/pred_po.py --tree <merge clone of B10 at e5f7954>",
+ "values": {
+  "scripts/tests/test_collector_majflt.py::test_a_bound_refuses_one_cycle_above_it_and_accepts_a_cycle_at_it[zero]": {
+   "fix": "a446043",
+   "commit": "7eb6ac2",
+   "exit": 1,
+   "outcome": "error",
+   "message": "failed on setup with \"ValueError: invalid audit bounds\""
+  }
+ }
+}

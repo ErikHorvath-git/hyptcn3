@@ -1,0 +1,8 @@
+# probe test_sonda_bae0ee8.py at bae0ee8 (bae0ee8 Protocol v5, package B9a: self-test record of the audit checks), extra files {}
+# /home/eh/projects/hyptcn3/.venv/bin/python -B -m pytest -q -p no:cacheprovider -rfE --basetemp <scratch>/sonda_tmp/bae0ee8 -s scripts/tests/test_sonda_bae0ee8.py
+# 2026-11-24T17:28:11Z
+{"corpus_index": true, "data_results_changed": [], "files_written": 509, "outside_the_campaign_its_archive_and_its_sessions": ["ledger/kniha_pecati.json"], "probe": "the complete ending of a rehearsal (process R9)", "records_of_an_ending": [], "row": 15, "status": {"a": "complete", "b": "complete"}}
+{"data_results_changed": [], "probe": "a campaign the operator closes after one session (process R9)", "records_of_an_ending": [], "row": 15, "status": {"a": "closed", "b": "closed"}, "written_by_close": ["second/archive/campaigns/plan-b6a-test-generalka/closed.json", "second/campaigns/plan-b6a-test-generalka/closed.json", "second/campaigns/plan-b6a-test-generalka/events/20261124T172811086698Z_c92fc74c.json", "second/campaigns/plan-b6a-test-generalka/events/20261124T172811087016Z_997aa801.json", "second/collections/.lock-hyptcn-test-b"]}
+.
+1 passed in 3.26s
+exit 0
