@@ -8,6 +8,7 @@
   .venv/bin/python scripts/campaign_report.py timing RECORD [RECORD ...] [--others AUDIT ...] --out NEW_FILE
   .venv/bin/python scripts/campaign_report.py controls SESSION [SESSION ...] --out NEW_FILE
   .venv/bin/python scripts/campaign_report.py faults SESSION [SESSION ...] --records DIR --out NEW_FILE
+  .venv/bin/python scripts/campaign_report.py parity WATCH_DIR REPLAY_DIR --out NEW_FILE
 
 The report reads saved evidence only: session, end, audit and archive
 metadata, the request and interval logs, the host monitor, snapshot sidecars
@@ -83,15 +84,28 @@ with the provenance header of check E. Exit 0 = every fault has its minimum
 on every VM, 1 = a minimum is missing (the record names it), 2 = usage or
 data error (nothing written).
 
+The mode parity (the criterion live_archive_parity of G2, the lead's answers
+Q45 and Q61; skuska/parita.py COMPARE_RULE, with the tolerance written there
+before any comparison) compares, row by row by seq, the output of safeguard
+watch beside a G2 session with the output of safeguard replay of that
+session's feature archive: the score within the tolerance, the fields of the
+alarm exactly, model_state and reason of the unscored rows, a row of one path
+only named; it counts the alarms of both paths. It reads both outputs, the
+audit record beside the archive and the session.json it names, no RAM image.
+It writes NEW_FILE, a new JSON record with the provenance header of check E.
+Exit 0 = parity holds, 1 = a finding (the record names each), 2 = usage or
+data error (nothing written).
+
 A reporting tool, not part of capture, audit or archival (collection.py lists
 it in NOT_MEASUREMENT). Only the standard library and NumPy are used, but by
 the mode controls, which imports scripts/controls.py (the outcomes of package
 B8) and features/archive.py (the loader of a feature archive) inside its
 function, by the mode faults, which imports scripts/campaign.py
 (incomplete_reasons) and skuska/poruchy.py (FAULTS) inside its functions,
-and by the mode timing, which imports skuska/cas.py (the definitions of
-the worst case of time) and scripts/campaign_grids.py inside its function;
-plots are hand-written SVG.
+by the mode timing, which imports skuska/cas.py (the definitions of
+the worst case of time) and scripts/campaign_grids.py inside its function,
+and by the mode parity, which runs skuska/parita.py parity_table inside its
+function; plots are hand-written SVG.
 """
 import argparse
 from array import array
@@ -5584,6 +5598,11 @@ def main(argv=None):
     faults_mode.add_argument("--records", type=Path, required=True,
                              help="the injector's records, <G2 directory>/poruchy (<session id>.json each)")
     faults_mode.add_argument("--out", type=Path, required=True, help="new JSON record (must not exist)")
+    parity_mode = modes.add_parser("parity", help="safeguard watch beside a G2 session against the replay of its "
+                                                  "archive (criterion live_archive_parity; skuska/parita.py)")
+    parity_mode.add_argument("watch_dir", type=Path, help="the --out of safeguard watch beside the session")
+    parity_mode.add_argument("replay_dir", type=Path, help="the --out of safeguard replay --archive of its audit")
+    parity_mode.add_argument("--out", type=Path, required=True, help="new JSON record (must not exist)")
     args = parser.parse_args(argv)
     command = shlex.join([str(Path(sys.argv[0])) if argv is None else "scripts/campaign_report.py",
                           *(sys.argv[1:] if argv is None else argv)])
@@ -5597,6 +5616,9 @@ def main(argv=None):
         return controls_table(args, command)
     if args.mode == "faults":
         return faults_table(args, command)
+    if args.mode == "parity":
+        from skuska.parita import parity_table  # The comparison and the tolerance written before it (Q45).
+        return parity_table(args.watch_dir, args.replay_dir, args.out, command)
     out = args.out.absolute()
     if out.exists() or out.is_symlink():
         print(f"campaign_report: output directory already exists: {out}", file=sys.stderr)

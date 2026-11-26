@@ -1,8 +1,10 @@
 """The live/archive parity of stage G2 (protocol v5, package H1b5): the tolerance of the criterion live_archive_parity,
-written from the precision the code computes in before any comparison, and the diagnostic bundle of the parity.
+written from the precision the code computes in before any comparison, the diagnostic bundle of the parity and the
+comparison of safeguard watch with the replay of the same session's archive.
 
     python -m skuska.parita zvazok --protocol P --audit AUDIT.json [--audit AUDIT.json ...] --praca WORK --out DIR
                                    --epochs N|plan [--vysledky R]
+    .venv/bin/python scripts/campaign_report.py parity WATCH_DIR REPLAY_DIR --out F    (parity_table, COMPARE_RULE)
 
 Binding texts: the lead's G2 skeleton dokazy/G2/kostra/KOSTRA.md (rows H1 and H3, the criterion live_archive_parity,
 section 6 point 4), the map dokazy/G2/mapa.md (row 11, points A, B, D and E, its questions 15 and 16) and the lead's
@@ -22,6 +24,10 @@ Beh: the gates, the working copies, the qualification pass and the rehearsal and
 scripts/tests/suchy_kampan.py, with the rows of scripts/tests/suchy_generatory.py in that layout) and a diagnostic
 training through the real command line, python -m safeguard train --diagnostic. DIR receives the bundles and their
 record zvazok.json (check E's header) with the sha256 of every file of each bundle.
+
+The comparison (COMPARE_RULE) is the mode parity of scripts/campaign_report.py, which runs parity_table: by seq, the
+score within the tolerance written before it (TOLERANCE_RULE), the fields of the alarm exactly, model_state and reason
+of the unscored rows, a row of one path only named; it counts the alarms of both paths.
 """
 import contextlib
 import copy
@@ -129,8 +135,9 @@ LAYOUT_RULE = (
     "with the audits (safeguard/training.py train_bundle)")
 BUNDLE_RULE = (
     "the lead's decision on map question 16 (Q61): refused by name before anything is made, an --out or a --praca that "
-    "exists or lies in the other, a --praca on a tmpfs (the lead's answer to Q73), an audit that is no audit of a real G2 session or whose layout breaks LAYOUT_RULE, "
-    "two audits of one VM, a VM the protocol has not, a session whose protocol extracts the memory columns from other "
+    "exists or lies in the other, a --praca on a tmpfs (the lead's answer to Q73), an audit that is no audit of a "
+    "real G2 session or whose layout breaks LAYOUT_RULE, two audits of one VM, a VM the protocol has not, a session "
+    "whose protocol extracts the memory columns from other "
     "bins than the protocol of the bundle (analysis.scale.min_bin_pages: the live run extracts with its bundle's, the "
     "audit extracted the archive the replay reads with the session's), and a host that is not quiet (a collector of a "
     "VM of the protocol, a collection.py run, a lab trial on a VM, a block of G2: the chain and the training are heavy "
@@ -138,8 +145,8 @@ BUNDLE_RULE = (
     "share it share the bundle) the chain of G1 up to its corpus, in --praca/<bundle>: tcn/suchy_beh.py Beh with the "
     "generator nulovy at seed 0 by the shortened path, its steps 1 to 5 as Beh._chain runs them (the gate of G1 on the "
     "protocol file and on the working copies, the copy without the mask, the qualification pass, the copy with its "
-    "mask, the rehearsal and the campaign on the harness of scripts/tests/suchy_kampan.py with one injected rejection), "
-    "under its threads, its refusal of the network and of a write of the ledger of record, every row of "
+    "mask, the rehearsal and the campaign on the harness of scripts/tests/suchy_kampan.py with one injected "
+    "rejection), under its threads, its refusal of the network and of a write of the ledger of record, every row of "
     "suchy_generatory.riadky in the layout (LAYOUT_RULE), every session of the corpus audited in that layout; then the "
     "real command line of a diagnostic training, python -m safeguard --threads 2 train --corpus <the corpus> --out "
     "<--out>/<bundle> --diagnostic, with --epochs N when --epochs N is given (a diagnostic override of "
@@ -488,6 +495,229 @@ def make_bundles(protocol, audits, praca, out, epochs, *, vysledky, command, cha
                    "dataset. Written by python -m skuska.parita zvazok.")
     g2.write_new(out / BUNDLE_RECORD, doc)
     return doc
+
+
+# ------------------------------------------------------------------ the comparison (scripts/campaign_report.py parity)
+
+TABLE_SCHEMA = "hyptcn3/g2-parity/1"
+EXACT = ("alarm", "alarm_event", "alarm_sources", "model_alarm", "rule_alarm", "integrity_alarm", "channel")
+UNSCORED = ("model_state", "reason")  # Compared exactly on a row neither path scored.
+FINDING_KINDS = ("only_watch", "only_replay", "no_seq", "duplicate_seq", "scored_on_one_path",
+                 "score_outside_tolerance", "alarm_field", "unscored_field")
+PARITY_GUEST = ("none: the mode parity reads the saved outputs of safeguard watch and safeguard replay, the audit "
+                "record beside the replayed archive and the session.json it names; no VM is contacted and no RAM image "
+                "is opened")
+FAILED_HOLD_NOTE = ("the lead's decision on map question 16 (Q61): a failed hold as the user is no parity error; watch "
+                    "runs as the VM's owner and the collector's raw/ belongs to root, so vmicollect hold fails there "
+                    "and the row's evidence names the error; the evidence of a row is never compared")
+COMPARE_RULE = (
+    "the criterion live_archive_parity of stage G2 (the lead's G2 skeleton, map row 11, Q45, Q61): safeguard watch "
+    "beside the collection gives on every row the same score and alarm as the replay of the same session's archive. "
+    "The mode reads WATCH_DIR, the --out of python -m safeguard watch --snapshots S/raw, and REPLAY_DIR, the --out of "
+    "python -m safeguard replay --archive <the audit's feature archive>: of each configuration.json, events.jsonl and "
+    "status.json, and the audit record beside the archive (the same name with .json) with the session.json of its "
+    "values.session_dir. Refused by name, each a data error and nothing written: a directory that is no output of "
+    "watch (follow true, snapshots) or of replay --archive (archive, archive_sha256), a file of them that cannot be "
+    "read, two bundles (their bundle_manifest differs), an archive without its audit record or one whose features or "
+    "features_sha256 are not the replayed archive, a watch whose snapshots are not raw/ of the session the audit "
+    "names, and code other than the code the tolerance was read from (PRECISION_SOURCES: the precision must then be "
+    "found out again, Q45). The rows of both paths are compared by seq: a seq only one path has is a finding "
+    "(only_watch, only_replay), and so are a row without seq (no_seq) and a seq a path holds twice (duplicate_seq); "
+    "of a seq both have, the first row of each: a score present on one path only (scored_on_one_path); two scores "
+    "outside TOLERANCE_RULE, math.isclose(watch, replay, rel_tol=SCORE_REL_TOL, abs_tol=SCORE_ABS_TOL) "
+    "(score_outside_tolerance); every field of EXACT that differs (alarm_field: alarm, alarm_event, alarm_sources, "
+    "model_alarm, rule_alarm, integrity_alarm, channel), each a finding even when the score agrees (Q45); and on a row "
+    "neither path scored model_state and reason (unscored_field). The record counts the alarms of both paths (rows "
+    "with alarm, alarm events by source, rows by channel and the seq of every alarm event) and says whether the "
+    "sequences of the alarms are the same; it gives the largest relative difference of the scores compared, the "
+    "failed holds of watch (FAILED_HOLD_NOTE, no finding) and the lag of watch behind the collector (snapshot_age_ms "
+    "of its rows, recorded only). Parity holds when there is no finding. A parity session gives no value of G2 (Q61). "
+    "Exit 0: the record is written to --out (a new JSON file with check E's header) and parity holds; 1: the record "
+    "is written and names every finding; 2: a usage or data error, nothing written")
+
+
+def _read_rows(path):
+    try:
+        rows = [json.loads(line) for line in Path(path).read_text().splitlines() if line.strip()]
+    except (OSError, ValueError) as error:
+        raise Refused(f"{path} cannot be read: {type(error).__name__}: {error}") from None
+    if not all(type(row) is dict for row in rows):
+        raise Refused(f"{path} holds a line that is no JSON object")
+    return rows
+
+
+def read_output(directory, kind):
+    """The output of safeguard watch (kind watch) or safeguard replay --archive (kind replay) in `directory`:
+    {dir, configuration, configuration_sha256, rows, events_sha256, status, status_sha256}; Refused by name."""
+    directory = Path(os.path.abspath(directory))
+    if not directory.is_dir():
+        raise Refused(f"{directory}: no output directory of safeguard {kind}")
+    out = {"dir": str(directory)}
+    for name in ("configuration", "status"):
+        doc = _json(directory / f"{name}.json", f"the {name}.json of safeguard {kind}:")
+        if type(doc) is not dict:
+            raise Refused(f"{directory / (name + '.json')} is no JSON object")
+        out[name], out[f"{name}_sha256"] = doc, _sha(directory / f"{name}.json")
+    out["rows"], out["events_sha256"] = _read_rows(directory / "events.jsonl"), _sha(directory / "events.jsonl")
+    c = out["configuration"]
+    ok = (c.get("follow") is True and isinstance(c.get("snapshots"), str) if kind == "watch" else
+          c.get("follow") is False and isinstance(c.get("archive"), str) and isinstance(c.get("archive_sha256"), str))
+    if not ok or type(c.get("bundle_manifest")) is not dict:
+        raise Refused(f"{directory}: its configuration.json is no configuration of safeguard {kind}"
+                      + (" (follow true and the snapshots)" if kind == "watch"
+                         else " --archive (follow false, the archive and its sha256)"))
+    return out
+
+
+def _counts(rows):
+    """The alarms of the rows of one path: rows with alarm, alarm events by source, rows by channel, the seq of every
+    alarm event, and the sequence of the alarms [(seq, channels)] of the rows with alarm, in their order."""
+    sources, channels = {}, {}
+    for row in rows:
+        for source in row.get("alarm_sources") or []:
+            sources[source] = sources.get(source, 0) + 1
+        for channel in row.get("channel") or []:
+            channels[channel] = channels.get(channel, 0) + 1
+    return {"rows": len(rows), "alarm_rows": sum(row.get("alarm") is True for row in rows),
+            "alarm_events": sum(row.get("alarm_event") is True for row in rows), "events_by_source": sources,
+            "alarm_rows_by_channel": channels,
+            "event_seq": [row.get("seq") for row in rows if row.get("alarm_event") is True],
+            "sequence": [[row.get("seq"), list(row.get("channel") or [])] for row in rows if row.get("alarm") is True]}
+
+
+def _short(row):
+    return {key: row.get(key) for key in ("seq", "model_state", "reason", "score", "alarm")}
+
+
+def _number(value):
+    return isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value)
+
+
+def compare(watch_dir, replay_dir):
+    """COMPARE_RULE: the values of the record of the comparison of the two outputs; Refused for a data error."""
+    sources = {name: _sha(ROOT / name) for name in PRECISION_SOURCES}
+    if sources != PRECISION_SOURCES:
+        raise Refused("the code differs from the code the tolerance was read from (PRECISION_SOURCES: "
+                      + ", ".join(name for name in sources if sources[name] != PRECISION_SOURCES[name])
+                      + "): find out the precision again before a comparison (Q45)")
+    watch, replay = read_output(watch_dir, "watch"), read_output(replay_dir, "replay")
+    bundle = {path: _canonical(out["configuration"]["bundle_manifest"]) for path, out in (("watch", watch),
+                                                                                           ("replay", replay))}
+    if bundle["watch"] != bundle["replay"]:
+        raise Refused("the two outputs scored with two bundles: their bundle_manifest differs")
+    archive = Path(replay["configuration"]["archive"])
+    audit_path = archive.with_suffix(".json")
+    audit = _json(audit_path, "the audit record beside the replayed archive:")
+    v = audit.get("values") if type(audit) is dict and audit.get("schema") == AUDIT_SCHEMA else None
+    if type(v) is not dict:
+        raise Refused(f"{audit_path} is no audit record ({AUDIT_SCHEMA})")
+    if (os.path.realpath(str(v.get("features") or "")) != os.path.realpath(archive)
+            or v.get("features_sha256") != replay["configuration"]["archive_sha256"]):
+        raise Refused(f"the replay read {archive} ({replay['configuration']['archive_sha256']}), not the feature "
+                      f"archive its audit {audit_path} wrote")
+    session_dir = Path(str(v.get("session_dir") or ""))
+    snapshots = Path(watch["configuration"]["snapshots"])
+    if os.path.realpath(snapshots) != os.path.realpath(session_dir / "raw"):
+        raise Refused(f"watch read {snapshots}, not raw/ of the session {session_dir} whose archive the replay read")
+    meta = _json(session_dir / "session.json", "the session.json of the audited session:")
+    findings, compared, scored, largest = [], 0, 0, 0.0
+    by_seq = {}
+    for path, out in (("watch", watch), ("replay", replay)):
+        table = by_seq[path] = {}
+        for row in out["rows"]:
+            seq = row.get("seq")
+            if type(seq) is not int:
+                findings.append({"kind": "no_seq", "path": path, "row": _short(row)})
+                continue
+            table.setdefault(seq, []).append(row)
+        findings += [{"kind": "duplicate_seq", "path": path, "seq": seq, "rows": len(rows),
+                      "reasons": [row.get("reason") for row in rows]} for seq, rows in sorted(table.items())
+                     if len(rows) > 1]
+    for seq in sorted(set(by_seq["watch"]) | set(by_seq["replay"])):
+        if seq not in by_seq["replay"]:
+            findings.append({"kind": "only_watch", "seq": seq, "row": _short(by_seq["watch"][seq][0])})
+            continue
+        if seq not in by_seq["watch"]:
+            findings.append({"kind": "only_replay", "seq": seq, "row": _short(by_seq["replay"][seq][0])})
+            continue
+        w, r = by_seq["watch"][seq][0], by_seq["replay"][seq][0]
+        compared += 1
+        sw, sr = w.get("score"), r.get("score")
+        if (sw is None) != (sr is None) or (sw is not None and not (_number(sw) and _number(sr))):
+            findings.append({"kind": "scored_on_one_path", "seq": seq, "watch": _short(w), "replay": _short(r)})
+        elif sw is not None:
+            scored += 1
+            difference = abs(sw - sr)
+            relative = difference / max(abs(sw), abs(sr)) if difference else 0.0
+            largest = max(largest, relative)
+            if not score_agrees(sw, sr):
+                findings.append({"kind": "score_outside_tolerance", "seq": seq, "watch": sw, "replay": sr,
+                                 "difference": difference, "relative": relative})
+        findings += [{"kind": "alarm_field", "seq": seq, "field": field, "watch": w.get(field),
+                      "replay": r.get(field)} for field in EXACT if w.get(field) != r.get(field)]
+        if sw is None and sr is None:
+            findings += [{"kind": "unscored_field", "seq": seq, "field": field, "watch": w.get(field),
+                          "replay": r.get(field)} for field in UNSCORED if w.get(field) != r.get(field)]
+    alarms = {"watch": _counts(watch["rows"]), "replay": _counts(replay["rows"])}
+    alarms["sequence_equal"] = alarms["watch"]["sequence"] == alarms["replay"]["sequence"]
+    alarms["event_seq_equal"] = alarms["watch"]["event_seq"] == alarms["replay"]["event_seq"]
+    failed = [row.get("seq") for row in watch["rows"] if (row.get("evidence") or {}).get("status") == "error"]
+    ages = sorted(row["snapshot_age_ms"] for row in watch["rows"] if _number(row.get("snapshot_age_ms")))
+    by_kind = {kind: sum(f["kind"] == kind for f in findings) for kind in FINDING_KINDS}
+    summary = lambda out: {k: out[k] for k in ("dir", "configuration_sha256", "events_sha256", "status_sha256")} | {
+        "rows": len(out["rows"]), "status": {k: out["status"].get(k) for k in (
+            "stop_reason", "processed", "scored", "input_errors", "alarm_events", "evidence_errors", "fatal", "ok")}}
+    return {"stage": g2.STAGE, "criterion": "live_archive_parity",
+            "session": {"session_id": meta.get("session_id"), "vm": meta.get("vm"), "scenario": meta.get("scenario"),
+                        "session_dir": str(session_dir)},
+            "watch": {**summary(watch), "snapshots": str(snapshots)},
+            "replay": {**summary(replay), "archive": str(archive),
+                       "archive_sha256": replay["configuration"]["archive_sha256"],
+                       "audit": {"path": str(audit_path), "sha256": _sha(audit_path), "accepted": v.get("accepted"),
+                                 "reasons": v.get("reasons")}},
+            "bundle": {"manifest_sha256": bundle["watch"], "diagnostic": watch["configuration"]["bundle_manifest"].get(
+                "diagnostic")},
+            "tolerance": {"score_rel_tol": SCORE_REL_TOL, "score_abs_tol": SCORE_ABS_TOL, "network": NETWORK_DTYPE,
+                          "batch": BATCH, "threads": THREADS, "sources": PRECISION_SOURCES, "rule": TOLERANCE_RULE},
+            "compared": {"seq_watch": len(by_seq["watch"]), "seq_replay": len(by_seq["replay"]), "seq_both": compared,
+                         "scored_both": scored, "largest_relative_difference": largest},
+            "alarms": alarms, "findings": findings, "findings_by_kind": by_kind, "holds": not findings,
+            "failed_holds": {"rows": len(failed), "seq": failed, "note": FAILED_HOLD_NOTE},
+            "lag_ms": None if not ages else {"max": ages[-1], "p95": ages[-(-95 * len(ages) // 100) - 1],
+                                             "rows": len(ages)},
+            "g2_values": False, "rule": COMPARE_RULE}
+
+
+def parity_table(watch_dir, replay_dir, out, command):
+    """The mode parity of scripts/campaign_report.py (COMPARE_RULE): its exit code; the record is a new JSON file
+    with check E's header, and a refusal or a data error is printed on stderr with nothing written."""
+    out = Path(os.path.abspath(out))
+    if out.exists() or out.is_symlink():
+        print(f"campaign_report: parity: --out already exists, nothing was read or written: {out}", file=sys.stderr)
+        return 2
+    try:
+        values = compare(watch_dir, replay_dir)
+        inputs = [values["watch"]["dir"], values["replay"]["dir"], values["session"]["session_dir"]]
+        inside = [d for d in inputs if Path(os.path.realpath(out.parent)).is_relative_to(os.path.realpath(d))]
+        if inside:
+            raise Refused(f"refusing to write {out} inside the input directory {inside[0]}")
+        doc = g2.header(TABLE_SCHEMA, command, values["compared"]["seq_both"], values,
+                        guest=PARITY_GUEST)
+        doc["note"] = ("The comparison of safeguard watch beside a G2 session with the replay of its archive "
+                       "(criterion live_archive_parity of G2); a diagnostic bundle, nothing is detected.")
+        out.parent.mkdir(parents=True, exist_ok=True)
+        g2.write_new(out, doc)
+    except (Refused, OSError) as error:
+        print(f"campaign_report: parity: {' '.join(str(error).split())}", file=sys.stderr)
+        return 2
+    a = values["alarms"]
+    print(f"live_archive_parity {values['session']['session_id']}: "
+          + ("holds" if values["holds"] else f"{len(values['findings'])} finding(s): " + ", ".join(
+              f"{k} {n}" for k, n in values["findings_by_kind"].items() if n))
+          + f"; {values['compared']['seq_both']} rows compared, alarms watch {a['watch']['alarm_rows']} rows "
+          f"({a['watch']['alarm_events']} events), replay {a['replay']['alarm_rows']} rows "
+          f"({a['replay']['alarm_events']} events); record {out}", flush=True)
+    return 0 if values["holds"] else 1
 
 
 # ------------------------------------------------------------------ the command line
