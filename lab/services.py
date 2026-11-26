@@ -40,6 +40,12 @@ POOL = None  # The Pool of the service's process (main).
 DATABASE_TIMEOUT_S = 3
 STATEMENT_TIMEOUT = f"SET LOCAL statement_timeout = '{DATABASE_TIMEOUT_S}s'"
 POOL_SIZE, WORKER_POOL_SIZE = 12, 1  # The connections of a service's process, and of the worker's.
+# The listen backlog of every service's server (package B15, Q80, the executor's decision without the lead): what the
+# busiest service gets in the generator's client timeout at its peak, 189 requests in a second (the catalog, long run 17
+# of G2) x 10 s (scripts/host_traffic.py TIMEOUT_S), rounded up to a power of two; the guests' somaxconn is 4096.
+# Python's socketserver default of 5 overflowed in runs 17 and 18: nginx connected only after 1 s, then timed out or
+# got a reset.
+LISTEN_BACKLOG = 2048
 # Journal line of a worker round that failed on a statement timeout; scripts/collection_logs.py
 # admits it only inside an event window, like a traceback. A failed report stage prints the same prefix.
 WORKER_ERROR = "worker dependency error: "
@@ -686,7 +692,9 @@ def main():
         if service == "worker":
             worker()
         else:
-            server = ThreadingHTTPServer(("127.0.0.1", PORTS[service]), Handler)
+            # The constructor listens, so the backlog is the class's (socketserver.TCPServer.request_queue_size).
+            server_class = type("Server", (ThreadingHTTPServer,), {"request_queue_size": LISTEN_BACKLOG})
+            server = server_class(("127.0.0.1", PORTS[service]), Handler)
             server.service = service
             server.serve_forever()
     finally:

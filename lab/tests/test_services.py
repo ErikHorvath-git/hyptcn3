@@ -620,6 +620,7 @@ def served(monkeypatch, service, scenario):
     class Server:
         def __init__(self, address, handler):
             self.address = address
+            s.listened = (address, getattr(type(self), "request_queue_size", None))  # The backlog it listens with.
 
         def serve_forever(self):
             scenario(s, made[0])
@@ -630,6 +631,15 @@ def served(monkeypatch, service, scenario):
     monkeypatch.setattr(sys, "argv", ["services.py", service])
     s.main()
     return s, made[0]
+
+
+def test_every_http_service_listens_with_the_backlog_of_package_b15(monkeypatch):
+    """Package B15 (Q80): the server of every HTTP service listens with LISTEN_BACKLOG queued connections, not the 5 of
+    Python's socketserver, which overflowed in long run 17 of G2 at eshop_high (the catalog's port 8081)."""
+    for service, port in (("catalog", 8081), ("auth", 8082), ("orders", 8083), ("docs", 8084)):
+        s, _ = served(monkeypatch, service, lambda s, connections: None)
+        assert s.listened == (("127.0.0.1", port), s.LISTEN_BACKLOG)
+    assert s.LISTEN_BACKLOG == 2048
 
 
 class Holding:
