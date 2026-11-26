@@ -5,6 +5,7 @@
   .venv/bin/python scripts/campaign_report.py sessions SESSION [SESSION ...] --out NEW_DIR
   .venv/bin/python scripts/campaign_report.py envelope SESSION [SESSION ...] --protocol P --out NEW_FILE
   .venv/bin/python scripts/campaign_report.py majflt AUDIT [AUDIT ...] --protocol P --out NEW_FILE
+  .venv/bin/python scripts/campaign_report.py controls SESSION [SESSION ...] --out NEW_FILE
 
 The report reads saved evidence only: session, end, audit and archive
 metadata, the request and interval logs, the host monitor, snapshot sidecars
@@ -38,9 +39,25 @@ the proposal, and writes NEW_FILE, a new JSON record with the provenance
 header of check E. Exit 0 = proposal made, 2 = usage or data error (nothing
 written).
 
+The mode controls (the criterion controls_paired of G2, the lead's answers
+to Q46 to Q48; CONTROLS_RULE) is the table of shifts of the controls on the
+VMs and their paired negatives: per occurrence of each G2 session with
+controls (skuska/kontroly.py) its VM, session, kind, polarity, effect and
+cleanup, the outcomes of scripts/controls.py (parser_saw, column_moved per
+column against controls.kinds.<kind>.expect, sensor_scored) and
+channel_reacted as not judged in G2, and the counts per kind and polarity
+against the criterion's minimum of 3, every missing occurrence named by the
+count. It reads controls.json, session.json, protocol.json, the audit record
+and the feature archive the audit wrote, no RAM image. It writes NEW_FILE, a
+new JSON record with the provenance header of check E. Exit 0 = every kind
+has its minimum, 1 = a minimum is missing (the record names it), 2 = usage or
+data error (nothing written).
+
 A reporting tool, not part of capture, audit or archival (collection.py lists
-it in NOT_MEASUREMENT). Only the standard library and NumPy are used; plots
-are hand-written SVG.
+it in NOT_MEASUREMENT). Only the standard library and NumPy are used, but by
+the mode controls, which imports scripts/controls.py (the outcomes of package
+B8) and features/archive.py (the loader of a feature archive) inside its
+function; plots are hand-written SVG.
 """
 import argparse
 from array import array
@@ -4587,6 +4604,322 @@ def majflt(args, command):
     return 0
 
 
+CONTROLS_TABLE_SCHEMA = "hyptcn3/g2-controls-table/1"
+# The criterion controls_paired of stage G2 (scripts/gates.py CRITERIA, the lead's answer to Q47): 3 occurrences of the
+# control and 3 of its paired negative per kind of controls.kinds.
+CONTROLS_NEEDED = 3
+CONTROLS_POLARITIES = ("control", "negative")
+CONTROLS_ROLE = "diagnostic"  # The role of every session of G2 (dokazy/G2/mapa.md point A; skuska/g2.py ROLE).
+CONTROLS_STAGE = "skuska"  # scripts/controls.py STAGES: the stage of a record of G2 (proposal 11.1).
+CHANNEL_NOT_JUDGED = ("not judged in G2: the lead's answer to Q47 judges channel_reacted only descriptively with the "
+                      "bundle of the parity check, and protocol v5 has no bundle before G3a")
+CONTROLS_GUEST = ("none: the mode controls reads saved session files, audit records and feature archives; no VM is "
+                  "contacted and no RAM image is opened")
+CONTROLS_RULE = (
+    "The criterion controls_paired of stage G2 (scripts/gates.py CRITERIA, the lead's G2 skeleton) and the lead's "
+    "answers Q46 to Q48 and Q20: every kind of controls.kinds with its paired negative, 3 occurrences of the control "
+    "and 3 of the negative per kind, and the shift of the columns against controls.kinds.<kind>.expect, in a table of "
+    "shifts. The mode reads, of each G2 session directory given (a diagnostic run whose session.json lists the "
+    "controls the wrapper of Q46 inserted, skuska/kontroly.py WRAP_RULE): session.json, protocol.json (the session's "
+    "copy, the file session.json protocol_sha256 binds), controls.json (schema hyptcn3/session-controls/1), the "
+    "session's audit record (of the audit_*.json in the directory whose values.session_dir is the directory and whose "
+    "values.session_sha256 is the sha256 of session.json the newest by name, its UTC stamp; it must have audited "
+    "under protocol.json, values.protocol_sha256; the others are listed) and the feature archive that audit wrote "
+    "(values.features, with the sha256 values.features_sha256), never a RAM image. Of every record of controls.json "
+    "in its order: VM, session, kind, polarity, class, dose, times, executed, the guest's effect and cleanup, and the "
+    "outcomes of scripts/controls.py outcomes (role diagnostic, stage skuska; the lead's answer to Q47): parser_saw, "
+    "column_moved per column of the kind (the shift of the mean of the measured rows wholly inside against the mean of "
+    "the measured rows among the 12 before the start, the expected shift and direction, reached or not) and "
+    "sensor_scored; channel_reacted is not judged in G2 (Q47: only descriptively with the bundle of the parity check, "
+    "and protocol v5 has no bundle before G3a). An occurrence counts towards the minimum when its outcomes were "
+    "computed (it ran: executed, the return predicate held, ordered host times, its rows in the archive) and the "
+    "guest's effect and cleanup predicates held (the executor's judgment, G2 preparation: a faultless occurrence by "
+    "the guest, as the section controls of the log audit asks); the session's verdict does not decide it and is "
+    "shown with each occurrence (as the lead accepted for the occurrences of events, Q51). The counts per kind and "
+    "polarity show the criterion's minimum, 3, and name every occurrence missing by the count; an expectation missed "
+    "(a control's column below its expected shift, a negative's reaching it) is a finding for the lead (Q20), and so "
+    "are a parser_saw that is not ok and an occurrence without a scored row in its horizon (the sensor did not score, "
+    "O4); none of them is a refusal. Refused by name, each a data error: a directory without one of these files or "
+    "with a file of another schema, a session of another role than diagnostic or without controls in session.json, a "
+    "protocol.json other than the one session.json binds or not of schema 3, no audit record of the session, an audit "
+    "under another protocol, a feature archive missing, other than the audit's or unreadable, sessions whose protocols "
+    "differ in controls.kinds, a directory named twice, and an --out that exists (refused before anything is read) or "
+    "lies inside a session directory. Exit 0: the table is written to --out, a new JSON record with the provenance "
+    "header of check E, and every kind has its minimum; 1: the table is written and a minimum is missing, named; 2: a "
+    "usage or data error, every refusal named on stderr and nothing written.")
+
+
+def _controls_file(path, schema=None):
+    """(the JSON object of the file, its sha256), or a DataError that names the file and why."""
+    try:
+        raw = Path(path).read_bytes()
+    except OSError as error:
+        raise DataError(f"{path}: cannot be read ({type(error).__name__}: {error})") from None
+    try:
+        doc = json.loads(raw)
+    except ValueError as error:
+        raise DataError(f"{path}: not JSON ({error})") from None
+    if not isinstance(doc, dict):
+        raise DataError(f"{path}: not a JSON object")
+    if schema is not None and doc.get("schema") != schema:
+        raise DataError(f"{path}: its schema is {_shown(_get(doc, 'schema'), 60)}, not {schema}")
+    return doc, hashlib.sha256(raw).hexdigest()
+
+
+def controls_audit(directory, session_sha):
+    """(path, record, the other records of the session) of the audit record CONTROLS_RULE takes: of the
+    audit_*.json in `directory` that bind its session.json (values.session_dir and values.session_sha256) the newest by
+    name; a DataError when there is none."""
+    found = []
+    for path in sorted(Path(directory).glob("audit_*.json")):
+        try:
+            doc, _ = _controls_file(path, AUDIT_SCHEMA)
+        except DataError:
+            continue
+        values = doc.get("values")
+        if (isinstance(values, dict) and isinstance(values.get("session_dir"), str)
+                and os.path.realpath(values["session_dir"]) == os.path.realpath(directory)
+                and values.get("session_sha256") == session_sha):
+            found.append((path, doc))
+    if not found:
+        raise DataError(f"{directory}: no audit record of the session (an audit_*.json of schema {AUDIT_SCHEMA} whose "
+                        "values.session_dir is the directory and whose values.session_sha256 is the sha256 of its "
+                        "session.json)")
+    path, doc = found[-1]
+    return path, doc, [str(other) for other, _ in found[:-1]]
+
+
+def _controls_ok(predicate):
+    """The guest's predicate of a record (effect or cleanup) as the table shows it: its ok, None when absent."""
+    return {"ok": predicate.get("ok")} if isinstance(predicate, dict) else None
+
+
+def controls_row(meta, verdict, index, record, outcome, error):
+    """One occurrence of the table (CONTROLS_RULE): the record's identity, the guest's predicates, the outcomes of
+    scripts/controls.py (or why there are none) and whether it counts towards the minimum."""
+    record = record if isinstance(record, dict) else {}
+    row = {"vm": meta.get("vm"), "session": meta.get("session_id"), "scenario": meta.get("scenario"), "index": index,
+           **{key: record.get(key) for key in ("kind", "polarity", "kind_class", "dose", "start_s", "duration_s",
+                                                "executed")},
+           "effect": _controls_ok(record.get("effect")), "cleanup": _controls_ok(record.get("cleanup")),
+           "parser_saw": None, "column_moved": None, "sensor_scored": None, "channel_reacted": CHANNEL_NOT_JUDGED,
+           "window": None, "outcome_error": error, "audit_accepted": verdict}
+    if outcome is not None:
+        saw, moved = outcome["parser_saw"], outcome["column_moved"]
+        row.update(parser_saw={"ok": saw["ok"], "why": saw["why"], "rows": len(saw["rows"]),
+                               "showing": len(saw["showing"]), "object": saw["object"]},
+                   column_moved={"ok": moved["ok"], "why": moved["why"], "reference_rows": len(moved["reference"]),
+                                 "columns": moved["columns"]},
+                   sensor_scored=outcome["sensor_scored"],
+                   window={name: len(outcome["window"][name]) for name in ("before", "inside", "horizon", "scored")})
+    why = (f"its outcomes were not computed: {error}" if outcome is None
+           else "the guest's effect predicate did not hold" if (row["effect"] or {}).get("ok") is not True
+           else "the guest's cleanup did not hold" if (row["cleanup"] or {}).get("ok") is not True else None)
+    row.update(counted=why is None, why_not_counted=why)
+    return row
+
+
+def controls_session(path, outcomes, load):
+    """One session directory by CONTROLS_RULE: (its entry, its rows, its protocol), or a DataError. `outcomes` is
+    scripts/controls.py outcomes and `load` features.archive.load (imported by the mode)."""
+    directory = Path(os.path.abspath(path))
+    if not directory.is_dir():
+        raise DataError(f"{directory}: not a session directory")
+    meta, meta_sha = _controls_file(directory / "session.json")
+    if meta.get("role") != CONTROLS_ROLE:
+        raise DataError(f"{directory}: session.json names the role {_shown(_get(meta, 'role'), 40)}, not "
+                        f"{CONTROLS_ROLE} (the sessions of G2 are diagnostic runs; a session of the sealed role "
+                        "test_controls is the final evaluation's)")
+    if not isinstance(meta.get("controls"), list) or not meta["controls"]:
+        raise DataError(f"{directory}: session.json lists no controls (no session with controls: skuska/kontroly.py "
+                        "WRAP_RULE)")
+    if not isinstance(meta.get("session_id"), str) or not isinstance(meta.get("vm"), str):
+        raise DataError(f"{directory}: session.json names no session_id or no vm")
+    protocol, protocol_sha = _controls_file(directory / "protocol.json")
+    if meta.get("protocol_sha256") != protocol_sha:
+        raise DataError(f"{directory}: protocol.json has the sha256 {protocol_sha}, session.json binds "
+                        f"{_shown(_get(meta, 'protocol_sha256'), 80)}")
+    if protocol.get("schema") != protocol_v5.SCHEMA or not isinstance((protocol.get("controls") or {}).get("kinds"),
+                                                                       dict):
+        raise DataError(f"{directory}: protocol.json is no protocol of schema {protocol_v5.SCHEMA} with "
+                        "controls.kinds")
+    doc, controls_sha = _controls_file(directory / "controls.json", protocol_v5.CONTROLS_SCHEMA)
+    records = doc.get("controls")
+    if not isinstance(records, list):
+        raise DataError(f"{directory}: controls.json holds no list of controls")
+    audit_path, audit, ignored = controls_audit(directory, meta_sha)
+    values = audit["values"]
+    if values.get("protocol_sha256") != protocol_sha:
+        raise DataError(f"{audit_path}: audited under the protocol {_shown(_get(values, 'protocol_sha256'), 80)}, not "
+                        f"the session's protocol.json {protocol_sha}")
+    features = values.get("features")
+    if not isinstance(features, str) or not Path(features).is_file():
+        raise DataError(f"{audit_path}: values.features names no feature archive: {_shown(_get(values, 'features'))}")
+    features_sha = hashlib.sha256(Path(features).read_bytes()).hexdigest()
+    if features_sha != values.get("features_sha256"):
+        raise DataError(f"{features}: its sha256 is {features_sha}, the audit's values.features_sha256 "
+                        f"{_shown(_get(values, 'features_sha256'), 80)}")
+    try:
+        result = load(features)
+    except (OSError, ValueError, KeyError) as error:
+        raise DataError(f"{features}: the feature archive cannot be loaded ({type(error).__name__}: {error})") from None
+    verdict = values.get("accepted")
+    rows = []
+    for index, record in enumerate(records):
+        outcome = error = None
+        try:
+            outcome = outcomes(record, result, protocol, role=CONTROLS_ROLE, archive=features, stage=CONTROLS_STAGE)
+        except (ValueError, KeyError, TypeError, AttributeError) as exc:
+            error = one_line(f"{type(exc).__name__}: {exc}" if not isinstance(exc, ValueError) else str(exc))
+        rows.append(controls_row(meta, verdict, index, record, outcome, error))
+    guest = meta.get("guest_before") if isinstance(meta.get("guest_before"), dict) else {}
+    entry = {"path": str(directory), "session_id": meta["session_id"], "vm": meta["vm"],
+             "scenario": meta.get("scenario"), "role": meta["role"], "session_json_sha256": meta_sha,
+             "protocol_sha256": protocol_sha, "controls_json_sha256": controls_sha,
+             "guest": {key: guest.get(key) for key in ("kernel", "boot_id")},
+             "audit": {"path": str(audit_path), "sha256": hashlib.sha256(audit_path.read_bytes()).hexdigest(),
+                       "accepted": verdict, "reasons": values.get("reasons"), "ignored": ignored},
+             "features": {"path": features, "sha256": features_sha}, "occurrences": len(records)}
+    return entry, rows, protocol
+
+
+def controls_counts(rows, kinds, vms):
+    """({kind: {polarity: counted, occurrences, needed, missing, by_vm}}, the occurrences missing by the count) by
+    CONTROLS_RULE."""
+    counts, missing = {}, []
+    for kind in kinds:
+        counts[kind] = {}
+        for polarity in CONTROLS_POLARITIES:
+            mine = [row for row in rows if row["kind"] == kind and row["polarity"] == polarity]
+            counted = [row for row in mine if row["counted"]]
+            counts[kind][polarity] = {"counted": len(counted), "occurrences": len(mine), "needed": CONTROLS_NEEDED,
+                                      "missing": max(0, CONTROLS_NEEDED - len(counted)),
+                                      "by_vm": {vm: sum(row["vm"] == vm for row in counted) for vm in vms}}
+            if len(counted) < CONTROLS_NEEDED:
+                missing.append(f"{kind}: {len(counted)} of {CONTROLS_NEEDED} {polarity}s counted "
+                               f"({CONTROLS_NEEDED - len(counted)} missing; {len(mine)} recorded)")
+    return counts, missing
+
+
+def controls_shifts(rows, kinds, protocol):
+    """The table of shifts per kind and column of the counted occurrences, and the findings of CONTROLS_RULE."""
+    shifts, expect, parser, unscored = {}, [], [], []
+    for kind in kinds:
+        columns = protocol["controls"]["kinds"][kind].get("columns") or []
+        shifts[kind] = {column: [] for column in columns}
+    for row in rows:
+        if not row["counted"]:
+            continue
+        name = f"{row['kind']} {row['polarity']} in {row['session']} (#{row['index']})"
+        for column, moved in (row["column_moved"]["columns"] or {}).items():
+            shifts.get(row["kind"], {}).setdefault(column, []).append(
+                {"session": row["session"], "vm": row["vm"], "polarity": row["polarity"], "dose": row["dose"],
+                 **{key: moved[key] for key in ("reference_mean", "inside_mean", "shift", "expect", "direction",
+                                                "reached")}})
+            if moved["reached"] is (row["polarity"] != "control"):
+                expect.append(f"{name}: {column} moved {moved['shift']:.6g} against the expected {moved['expect']:g} "
+                              f"{moved['direction']}" + ("" if row["polarity"] == "control" else
+                                                         ", the shift its control is expected to reach"))
+        if row["column_moved"]["ok"] is None:
+            expect.append(f"{name}: column_moved not judged ({row['column_moved']['why']})")
+        if row["parser_saw"]["ok"] is not True:
+            parser.append(f"{name}: parser_saw {row['parser_saw']['ok']}"
+                          + (f" ({row['parser_saw']['why']})" if row["parser_saw"]["why"] else ""))
+        if row["sensor_scored"] is not True:
+            unscored.append(f"{name}: no scored row within the horizon (sensor did not score, O4)")
+    return shifts, expect, parser, unscored
+
+
+def controls_line(kind, row):
+    """The line of one kind on stdout: its counted controls and negatives against the minimum."""
+    parts = [f"{polarity}s {row[polarity]['counted']}/{row[polarity]['needed']}"
+             + (f" ({row[polarity]['missing']} missing)" if row[polarity]["missing"] else "")
+             for polarity in CONTROLS_POLARITIES]
+    return f"{kind}: " + ", ".join(parts)
+
+
+def controls_table(args, command):
+    """The mode controls (CONTROLS_RULE): refuses an --out that exists before it reads anything and a directory named
+    twice, then reads every session; writes the new record, prints one line per kind, and returns the exit code."""
+    out = Path(os.path.abspath(args.out))
+    if out.exists() or out.is_symlink():
+        print(f"campaign_report: --out already exists, nothing was read or written: {out}", file=sys.stderr)
+        return 2
+    paths = [os.path.abspath(path) for path in args.session_dirs]
+    real = [os.path.realpath(path) for path in paths]
+    twice = sorted({path for path, r in zip(paths, real) if real.count(r) > 1})
+    if twice:
+        print("campaign_report: controls: a session directory is named more than once: " + ", ".join(twice),
+              file=sys.stderr)
+        return 2
+    # The outcomes of package B8 and the loader of a feature archive: only this mode imports them (no RAM image).
+    from features.archive import load
+    from scripts.controls import outcomes
+    entries, rows, refused, kinds = [], [], [], None
+    for path in paths:
+        try:
+            entry, mine, protocol = controls_session(path, outcomes, load)
+        except DataError as error:
+            refused.append(str(error))
+            continue
+        spec = json.dumps(protocol["controls"]["kinds"], sort_keys=True)
+        if kinds is None:
+            kinds, first, kinds_spec = sorted(protocol["controls"]["kinds"]), protocol, spec
+        elif spec != kinds_spec:
+            refused.append(f"{path}: its protocol's controls.kinds differ from those of {entries[0]['path']}: the "
+                           "table takes the expectations of one protocol")
+            continue
+        entries.append(entry)
+        rows += mine
+    target = Path(os.path.realpath(out.parent))
+    refused += [f"refusing to write {out} inside the session directory {entry['path']}" for entry in entries
+                if target == Path(os.path.realpath(entry["path"]))
+                or target.is_relative_to(os.path.realpath(entry["path"]))]
+    if refused or not entries:
+        for why in refused or ["no session"]:
+            print(f"campaign_report: controls: {one_line(why)}", file=sys.stderr)
+        print(f"campaign_report: controls: {len(refused)} refusal(s): no table, nothing written", file=sys.stderr)
+        return 2
+    vms = sorted({entry["vm"] for entry in entries})
+    counts, missing = controls_counts(rows, kinds, vms)
+    shifts, expect, parser, unscored = controls_shifts(rows, kinds, first)
+    identity = git_identity()
+    record = {"schema": CONTROLS_TABLE_SCHEMA, "commit": identity["commit"], "commit_dirty": identity["dirty"],
+              "date": datetime.now(timezone.utc).isoformat(timespec="seconds"), "host": platform.platform(),
+              "guest": CONTROLS_GUEST, "command": command, "n": len(rows),
+              "values": {"stage": "G2", "criterion": "controls_paired", "needed": CONTROLS_NEEDED, "kinds": kinds,
+                         "sessions": entries, "occurrences": rows, "counts": counts, "minimums_met": not missing,
+                         "missing": missing, "shifts": shifts, "expect_findings": expect, "parser_findings": parser,
+                         "unscored": unscored, "channel_reacted": CHANNEL_NOT_JUDGED, "rule": CONTROLS_RULE},
+              "note": "The table of shifts of the controls on the VMs and their paired negatives (criterion "
+                      "controls_paired of G2); no score is read and nothing is detected."}
+    text = json.dumps(record, indent=1, ensure_ascii=False, allow_nan=False) + "\n"
+    try:
+        out.parent.mkdir(parents=True, exist_ok=True)
+        stream = open(out, "x", encoding="utf-8")
+    except FileExistsError:
+        print(f"campaign_report: --out appeared meanwhile, nothing was overwritten: {out}", file=sys.stderr)
+        return 2
+    except OSError as error:
+        print(f"campaign_report: cannot create {out}: {type(error).__name__}: {error}", file=sys.stderr)
+        return 2
+    try:
+        with stream:
+            stream.write(text)
+    except OSError as error:
+        out.unlink(missing_ok=True)
+        print(f"campaign_report: cannot write {out}: {type(error).__name__}: {error}", file=sys.stderr)
+        return 2
+    for kind in kinds:
+        print(controls_line(kind, counts[kind]))
+    print("controls_paired minimums: " + ("met" if not missing else "missing: " + "; ".join(missing))
+          + f"; {len(expect)} expectation finding(s), {len(parser)} parser finding(s), {len(unscored)} unscored",
+          flush=True)
+    print(f"campaign_report: controls: {len(entries)} session(s), {len(rows)} occurrence(s); record {out}",
+          file=sys.stderr)
+    return 0 if not missing else 1
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     modes = parser.add_subparsers(dest="mode", required=True)
@@ -4618,6 +4951,11 @@ def main(argv=None):
                              help="the protocol file the sessions were audited under (its sha256 is their "
                                   "values.protocol_sha256)")
     majflt_mode.add_argument("--out", type=Path, required=True, help="new JSON record (must not exist)")
+    controls_mode = modes.add_parser("controls", help="the table of shifts of the controls of G2 sessions and their "
+                                                      "paired negatives (criterion controls_paired; CONTROLS_RULE)")
+    controls_mode.add_argument("session_dirs", type=Path, nargs="+",
+                               help="G2 session directories with controls (diagnostic runs of skuska/kontroly.py)")
+    controls_mode.add_argument("--out", type=Path, required=True, help="new JSON record (must not exist)")
     args = parser.parse_args(argv)
     command = shlex.join([str(Path(sys.argv[0])) if argv is None else "scripts/campaign_report.py",
                           *(sys.argv[1:] if argv is None else argv)])
@@ -4625,6 +4963,8 @@ def main(argv=None):
         return envelope(args, command)
     if args.mode == "majflt":
         return majflt(args, command)
+    if args.mode == "controls":
+        return controls_table(args, command)
     out = args.out.absolute()
     if out.exists() or out.is_symlink():
         print(f"campaign_report: output directory already exists: {out}", file=sys.stderr)
