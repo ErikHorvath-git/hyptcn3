@@ -929,7 +929,13 @@ class Block:
         return self.group
 
     def run_command(self, spec, group):
-        """The capture's command line (RUN_RULE); the hook the controls wrapper of H1b replaces."""
+        """The capture's command line (RUN_RULE); the hook the controls wrapper of H1b replaces: a spec with controls
+        (package H1b2) runs the same command line through the wrapper of Q46 (skuska/kontroly.py WRAP_RULE), which
+        writes its record beside the session in kontroly/<session>.json of the G2 directory."""
+        if spec.get("controls") is not None:
+            from skuska import kontroly  # Package H1b2; imported here, since skuska/kontroly.py imports this module.
+            return kontroly.wrapper_command(self.run_command(dict(spec, controls=None), group), spec["controls"],
+                                            kontroly.beside_path(self.places.root, spec["session_id"]))
         rate, source = self.rate(spec["scenario"])
         qemu = group["qemu"] if type(group["qemu"]) is str else json.dumps(group["qemu"])
         return [sys.executable, str(ROOT / "scripts/collection.py"), "--protocol", str(self.protocol_path), "run",
