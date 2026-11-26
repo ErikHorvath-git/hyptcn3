@@ -1,0 +1,241 @@
+{
+ "schema": "hyptcn3/stage-values/1",
+ "commit": "1f880be9253072a9207a2a5a9355ab3a91e3dcb4",
+ "commit_dirty": true,
+ "date": "2026-11-26T16:39:13+00:00",
+ "host": "debian",
+ "guest": null,
+ "command": "python -m tcn.hodnoty zapis G2 --protocol config/collection-v5.json --values /home/eh/hyptcn3-logs/v5/dokazy/G2/zapis1b_20261126T163911Z/hodnoty_zapis1.json --record data/results/hodnoty_G2_20261126T163911Z.json --partial",
+ "n": 6,
+ "values": {
+  "stage": "G2",
+  "partial": true,
+  "protocol": "/home/eh/projects/hyptcn3/config/collection-v5.json",
+  "protocol_sha256_before": "508dd41bb304ff7bb5eccc7b433c7e5e08e0d928f3adf5e476d7a49a1427414e",
+  "protocol_sha256_after": "d6ea944ceae3ee8789687670758a132f60e030230062aadbba80eea48f54d376",
+  "earlier_bindings": {
+   "G0": {
+    "sha256": "fc50f3899e9c7f5c2d396ca782a5c2538de3dedb355753cb8b154a864dcb3f17",
+    "rule": "sha256 of the UTF-8 of json.dumps(sort_keys=True, separators=(',', ':'), ensure_ascii=False) of the protocol without the paths that determined_at assigns to stages after G0"
+   },
+   "G1": {
+    "sha256": "deda881de4eb1e417ca66e1801b31504649554056759a935d143c4f904ff311a",
+    "rule": "sha256 of the UTF-8 of json.dumps(sort_keys=True, separators=(',', ':'), ensure_ascii=False) of the protocol without the paths that determined_at assigns to stages after G1"
+   }
+  },
+  "stage_binding_after": {
+   "sha256": "76d15cc6c6b9da5ddb4a9e9dc86f4cd37225e06053e214836006089f7d140dc9",
+   "rule": "sha256 of the UTF-8 of json.dumps(sort_keys=True, separators=(',', ':'), ensure_ascii=False) of the protocol without the paths that determined_at assigns to stages after G2"
+  },
+  "paths": [
+   {
+    "path": "profiles.corp.max_concurrent",
+    "pattern": "profiles.*.max_concurrent",
+    "old": 2818,
+    "new": 3984,
+    "rule": [
+     {
+      "source": "protocol:profiles.corp.note",
+      "text": "Profile corp (proposal 5.2): an employee logs in with a password (lab/seed.py employee_password), then takes a number of document actions drawn uniformly from actions, each drawn by shares: a document list page (drawn Zipf over the pages of page_size documents), a download (drawn Zipf over the seeded documents), an upload (document_sizes) or a report request, which the worker runs as three subprocesses and whose status the employee checks once. Zipf has the exponent zipf_s. The login wave is arrivals.peak_at wave_start. actions, shares, page_size and zipf_s are the author's judgment. max_concurrent 250 is preliminary until G2 (determined_at G2; the lead's answer to Q5, 2026-11-24): G2 sets it to twice the largest number of user sessions in progress at rate high in its long run, after a cap that does not bind for that run; 250 is the author's judgment of the first value, and the lab test on the VM measured that it binds at 8 user sessions per second. The saturation series of G2 runs on a copy whose max_concurrent is at least 4 x 60 x its highest rate (scenario_rule.basis)."
+     },
+     {
+      "source": "docs/NAVRH_PROTOKOL_V5.sk.md 10.9",
+      "sha256": "c883556d3d32061b38581236b70849d213ab9379abe4d2d6e11151819459bb14",
+      "text": "| strop súbežnosti profilov (`profiles.*.max_concurrent`) | G2 | dvojnásobok najväčšieho počtu súbežných relácií pri `rate` high v dlhom behu (kap. 10.3); do G2 platia predbežné hodnoty 500 a 250 (vedúci 2026-11-24, Q5) |",
+      "cells": {
+       "value": "strop súbežnosti profilov (`profiles.*.max_concurrent`)",
+       "stage": "G2",
+       "rule": "dvojnásobok najväčšieho počtu súbežných relácií pri `rate` high v dlhom behu (kap. 10.3); do G2 platia predbežné hodnoty 500 a 250 (vedúci 2026-11-24, Q5)"
+      }
+     }
+    ],
+    "sources": [
+     {
+      "path": "data/results/skuska_20261126T163911Z.json",
+      "resolved": "/home/eh/projects/hyptcn3/data/results/skuska_20261126T163911Z.json",
+      "size": 156107,
+      "sha256": "212378936b2d2c946a49c80353fc35893a07c95b8af3c3ba7ffda27e84cc3330"
+     }
+    ],
+    "derivation": "the preliminary cap that does not bind (scenario_rule.note; map H0 point C): ceil(240 x the rate 16.5992 of corp_high) = 3984, the factor CAP_FACTOR_S of scripts/lab_trial.py the saturation series ran their copies with (4 x 60 s); Zápis 2 replaces it by twice the most concurrent user sessions of the long runs at rate high (MAX_CONCURRENT_RULE)"
+   },
+   {
+    "path": "profiles.eshop.max_concurrent",
+    "pattern": "profiles.*.max_concurrent",
+    "old": 2818,
+    "new": 7307,
+    "rule": [
+     {
+      "source": "protocol:profiles.eshop.note",
+      "text": "Profile eshop (proposal 5.2): customers' user sessions as a funnel against the catalog, the cart, the orders and the static files of the lab (lab/services.py, lab/nginx.conf; objects of lab/seed.py). order_share is proposal 5.7, zipf_s skeleton section 2. max_concurrent 500 is preliminary until G2 (determined_at G2; the lead's answer to Q5, 2026-11-24): G2 sets it to twice the largest number of user sessions in progress at rate high in its long run, after a cap that does not bind for that run; 500 is the author's judgment of the first value (a user session of about 9 requests lasts about a minute, so about 60 x rate are in progress at the peak), and the lab test on the VM measured that it binds at 8 user sessions per second. The saturation series of G2 runs on a copy whose max_concurrent is at least 4 x 60 x its highest rate (scenario_rule.basis)."
+     },
+     {
+      "source": "docs/NAVRH_PROTOKOL_V5.sk.md 10.9",
+      "sha256": "c883556d3d32061b38581236b70849d213ab9379abe4d2d6e11151819459bb14",
+      "text": "| strop súbežnosti profilov (`profiles.*.max_concurrent`) | G2 | dvojnásobok najväčšieho počtu súbežných relácií pri `rate` high v dlhom behu (kap. 10.3); do G2 platia predbežné hodnoty 500 a 250 (vedúci 2026-11-24, Q5) |",
+      "cells": {
+       "value": "strop súbežnosti profilov (`profiles.*.max_concurrent`)",
+       "stage": "G2",
+       "rule": "dvojnásobok najväčšieho počtu súbežných relácií pri `rate` high v dlhom behu (kap. 10.3); do G2 platia predbežné hodnoty 500 a 250 (vedúci 2026-11-24, Q5)"
+      }
+     }
+    ],
+    "sources": [
+     {
+      "path": "data/results/skuska_20261126T163911Z.json",
+      "resolved": "/home/eh/projects/hyptcn3/data/results/skuska_20261126T163911Z.json",
+      "size": 156107,
+      "sha256": "212378936b2d2c946a49c80353fc35893a07c95b8af3c3ba7ffda27e84cc3330"
+     }
+    ],
+    "derivation": "the preliminary cap that does not bind (scenario_rule.note; map H0 point C): ceil(240 x the rate 30.444 of eshop_high) = 7307, the factor CAP_FACTOR_S of scripts/lab_trial.py the saturation series ran their copies with (4 x 60 s); Zápis 2 replaces it by twice the most concurrent user sessions of the long runs at rate high (MAX_CONCURRENT_RULE)"
+   },
+   {
+    "path": "scenarios.corp_high.rate",
+    "pattern": "scenarios.*.rate",
+    "old": 11.7376,
+    "new": 16.5992,
+    "rule": [
+     {
+      "source": "protocol:scenario_rule.basis",
+      "text": "rate is the peak of the arrival envelope: the share peak_share of the server's throughput measured at saturation in G2 for the scenario's intensity; the mean follows from the envelope. The throughput (the lead's answer to Q5, 2026-11-24) comes from a diagnostic series per profile, no session, on a copy of this file whose max_concurrent does not bind (at least 4 x 60 x the highest rate of the series): a step fails on the server when a request of its peak lacks its expected result or the p95 latency of the peak is at least 1000 ms (the lab-test tool's judgment, scripts/lab_trial.py LATENCY_P95_BOUND_MS, no value of this file); a step with a user session dropped or without a peak is invalid (finding F1 of the B5c verification); after the first failed step the boundary is bisected (the lead's answer to Q5) at the geometric midpoint, rounded to three decimals (the executor's judgment, package B11), until the failed rate is less than 1.15 times the served one (the executor's reading, package B11, of the lead's \"until neighbouring steps are closer than 15 %\"); the throughput is the highest served rate."
+     },
+     {
+      "source": "protocol:scenario_rule.note",
+      "text": "Peak shares 0.3 and 0.8 are the author's judgment (skeleton section 1); the peak-to-mean ratio of at least 2 is proposal 5.7 (author's proposal, judgment). The lab test on the VM after B5 checks the rule before G2 fixes rate. In G2 rate high must also hold the bounds of the cycle time (audit.cycle_ms_max) and the size of a session against the disk estimate of decision D12; if it does not, that is a finding for the lead, and peak_share 0.8 does not change by itself (the lead's answer to Q5, 2026-11-24). The order in G2: a cap that does not bind is set before the runs at rate high (profiles.*.max_concurrent is a value of G2), then the long runs at rate high, then twice their largest number of user sessions in progress."
+     }
+    ],
+    "sources": [
+     {
+      "path": "data/results/skuska_20261126T163911Z.json",
+      "resolved": "/home/eh/projects/hyptcn3/data/results/skuska_20261126T163911Z.json",
+      "size": 156107,
+      "sha256": "212378936b2d2c946a49c80353fc35893a07c95b8af3c3ba7ffda27e84cc3330"
+     },
+     {
+      "path": "data/results/zataz_H2_20261126T163911Z.json",
+      "resolved": "/home/eh/projects/hyptcn3/data/results/zataz_H2_20261126T163911Z.json",
+      "size": 403545,
+      "sha256": "3228af382e4645d392415761f3544c9d9ecf75d40f5964f292bd207e74191621"
+     }
+    ],
+    "derivation": "peak_share 0.8 (high, scenario_rule.peak_share) x the throughput 20.749 sessions/s of profile corp = 16.5992, rounded to four decimals as lab_trial.py proposes it; the throughput is that of VM a, the smaller served rate of the two VMs (Q64): VM a served 20.749 with the bracket [20.749, 22.627] (run 15-saturation-a-corp, load beside it quiet, Q70); VM b served 20.749 with the bracket [20.749, 22.627] (run 16-saturation-b-corp, load beside it quiet, Q70)"
+   },
+   {
+    "path": "scenarios.corp_low.rate",
+    "pattern": "scenarios.*.rate",
+    "old": 4.4016,
+    "new": 6.2247,
+    "rule": [
+     {
+      "source": "protocol:scenario_rule.basis",
+      "text": "rate is the peak of the arrival envelope: the share peak_share of the server's throughput measured at saturation in G2 for the scenario's intensity; the mean follows from the envelope. The throughput (the lead's answer to Q5, 2026-11-24) comes from a diagnostic series per profile, no session, on a copy of this file whose max_concurrent does not bind (at least 4 x 60 x the highest rate of the series): a step fails on the server when a request of its peak lacks its expected result or the p95 latency of the peak is at least 1000 ms (the lab-test tool's judgment, scripts/lab_trial.py LATENCY_P95_BOUND_MS, no value of this file); a step with a user session dropped or without a peak is invalid (finding F1 of the B5c verification); after the first failed step the boundary is bisected (the lead's answer to Q5) at the geometric midpoint, rounded to three decimals (the executor's judgment, package B11), until the failed rate is less than 1.15 times the served one (the executor's reading, package B11, of the lead's \"until neighbouring steps are closer than 15 %\"); the throughput is the highest served rate."
+     },
+     {
+      "source": "protocol:scenario_rule.note",
+      "text": "Peak shares 0.3 and 0.8 are the author's judgment (skeleton section 1); the peak-to-mean ratio of at least 2 is proposal 5.7 (author's proposal, judgment). The lab test on the VM after B5 checks the rule before G2 fixes rate. In G2 rate high must also hold the bounds of the cycle time (audit.cycle_ms_max) and the size of a session against the disk estimate of decision D12; if it does not, that is a finding for the lead, and peak_share 0.8 does not change by itself (the lead's answer to Q5, 2026-11-24). The order in G2: a cap that does not bind is set before the runs at rate high (profiles.*.max_concurrent is a value of G2), then the long runs at rate high, then twice their largest number of user sessions in progress."
+     }
+    ],
+    "sources": [
+     {
+      "path": "data/results/skuska_20261126T163911Z.json",
+      "resolved": "/home/eh/projects/hyptcn3/data/results/skuska_20261126T163911Z.json",
+      "size": 156107,
+      "sha256": "212378936b2d2c946a49c80353fc35893a07c95b8af3c3ba7ffda27e84cc3330"
+     },
+     {
+      "path": "data/results/zataz_H2_20261126T163911Z.json",
+      "resolved": "/home/eh/projects/hyptcn3/data/results/zataz_H2_20261126T163911Z.json",
+      "size": 403545,
+      "sha256": "3228af382e4645d392415761f3544c9d9ecf75d40f5964f292bd207e74191621"
+     }
+    ],
+    "derivation": "peak_share 0.3 (low, scenario_rule.peak_share) x the throughput 20.749 sessions/s of profile corp = 6.2247, rounded to four decimals as lab_trial.py proposes it; the throughput is that of VM a, the smaller served rate of the two VMs (Q64): VM a served 20.749 with the bracket [20.749, 22.627] (run 15-saturation-a-corp, load beside it quiet, Q70); VM b served 20.749 with the bracket [20.749, 22.627] (run 16-saturation-b-corp, load beside it quiet, Q70)"
+   },
+   {
+    "path": "scenarios.eshop_high.rate",
+    "pattern": "scenarios.*.rate",
+    "old": 11.7376,
+    "new": 30.444,
+    "rule": [
+     {
+      "source": "protocol:scenario_rule.basis",
+      "text": "rate is the peak of the arrival envelope: the share peak_share of the server's throughput measured at saturation in G2 for the scenario's intensity; the mean follows from the envelope. The throughput (the lead's answer to Q5, 2026-11-24) comes from a diagnostic series per profile, no session, on a copy of this file whose max_concurrent does not bind (at least 4 x 60 x the highest rate of the series): a step fails on the server when a request of its peak lacks its expected result or the p95 latency of the peak is at least 1000 ms (the lab-test tool's judgment, scripts/lab_trial.py LATENCY_P95_BOUND_MS, no value of this file); a step with a user session dropped or without a peak is invalid (finding F1 of the B5c verification); after the first failed step the boundary is bisected (the lead's answer to Q5) at the geometric midpoint, rounded to three decimals (the executor's judgment, package B11), until the failed rate is less than 1.15 times the served one (the executor's reading, package B11, of the lead's \"until neighbouring steps are closer than 15 %\"); the throughput is the highest served rate."
+     },
+     {
+      "source": "protocol:scenario_rule.note",
+      "text": "Peak shares 0.3 and 0.8 are the author's judgment (skeleton section 1); the peak-to-mean ratio of at least 2 is proposal 5.7 (author's proposal, judgment). The lab test on the VM after B5 checks the rule before G2 fixes rate. In G2 rate high must also hold the bounds of the cycle time (audit.cycle_ms_max) and the size of a session against the disk estimate of decision D12; if it does not, that is a finding for the lead, and peak_share 0.8 does not change by itself (the lead's answer to Q5, 2026-11-24). The order in G2: a cap that does not bind is set before the runs at rate high (profiles.*.max_concurrent is a value of G2), then the long runs at rate high, then twice their largest number of user sessions in progress."
+     }
+    ],
+    "sources": [
+     {
+      "path": "data/results/skuska_20261126T163911Z.json",
+      "resolved": "/home/eh/projects/hyptcn3/data/results/skuska_20261126T163911Z.json",
+      "size": 156107,
+      "sha256": "212378936b2d2c946a49c80353fc35893a07c95b8af3c3ba7ffda27e84cc3330"
+     },
+     {
+      "path": "data/results/zataz_H2_20261126T163911Z.json",
+      "resolved": "/home/eh/projects/hyptcn3/data/results/zataz_H2_20261126T163911Z.json",
+      "size": 403545,
+      "sha256": "3228af382e4645d392415761f3544c9d9ecf75d40f5964f292bd207e74191621"
+     }
+    ],
+    "derivation": "peak_share 0.8 (high, scenario_rule.peak_share) x the throughput 38.055 sessions/s of profile eshop = 30.444, rounded to four decimals as lab_trial.py proposes it; the throughput is that of VM a, the smaller served rate of the two VMs (Q64): VM a served 38.055 with the bracket [38.055, 41.499] (run 12-saturation-a-eshop, load beside it quiet, Q70); VM b served 38.055 with the bracket [38.055, 41.499] (run 13-saturation-b-eshop, load beside it quiet, Q70)"
+   },
+   {
+    "path": "scenarios.eshop_low.rate",
+    "pattern": "scenarios.*.rate",
+    "old": 4.4016,
+    "new": 11.4165,
+    "rule": [
+     {
+      "source": "protocol:scenario_rule.basis",
+      "text": "rate is the peak of the arrival envelope: the share peak_share of the server's throughput measured at saturation in G2 for the scenario's intensity; the mean follows from the envelope. The throughput (the lead's answer to Q5, 2026-11-24) comes from a diagnostic series per profile, no session, on a copy of this file whose max_concurrent does not bind (at least 4 x 60 x the highest rate of the series): a step fails on the server when a request of its peak lacks its expected result or the p95 latency of the peak is at least 1000 ms (the lab-test tool's judgment, scripts/lab_trial.py LATENCY_P95_BOUND_MS, no value of this file); a step with a user session dropped or without a peak is invalid (finding F1 of the B5c verification); after the first failed step the boundary is bisected (the lead's answer to Q5) at the geometric midpoint, rounded to three decimals (the executor's judgment, package B11), until the failed rate is less than 1.15 times the served one (the executor's reading, package B11, of the lead's \"until neighbouring steps are closer than 15 %\"); the throughput is the highest served rate."
+     },
+     {
+      "source": "protocol:scenario_rule.note",
+      "text": "Peak shares 0.3 and 0.8 are the author's judgment (skeleton section 1); the peak-to-mean ratio of at least 2 is proposal 5.7 (author's proposal, judgment). The lab test on the VM after B5 checks the rule before G2 fixes rate. In G2 rate high must also hold the bounds of the cycle time (audit.cycle_ms_max) and the size of a session against the disk estimate of decision D12; if it does not, that is a finding for the lead, and peak_share 0.8 does not change by itself (the lead's answer to Q5, 2026-11-24). The order in G2: a cap that does not bind is set before the runs at rate high (profiles.*.max_concurrent is a value of G2), then the long runs at rate high, then twice their largest number of user sessions in progress."
+     }
+    ],
+    "sources": [
+     {
+      "path": "data/results/skuska_20261126T163911Z.json",
+      "resolved": "/home/eh/projects/hyptcn3/data/results/skuska_20261126T163911Z.json",
+      "size": 156107,
+      "sha256": "212378936b2d2c946a49c80353fc35893a07c95b8af3c3ba7ffda27e84cc3330"
+     },
+     {
+      "path": "data/results/zataz_H2_20261126T163911Z.json",
+      "resolved": "/home/eh/projects/hyptcn3/data/results/zataz_H2_20261126T163911Z.json",
+      "size": 403545,
+      "sha256": "3228af382e4645d392415761f3544c9d9ecf75d40f5964f292bd207e74191621"
+     }
+    ],
+    "derivation": "peak_share 0.3 (low, scenario_rule.peak_share) x the throughput 38.055 sessions/s of profile eshop = 11.4165, rounded to four decimals as lab_trial.py proposes it; the throughput is that of VM a, the smaller served rate of the two VMs (Q64): VM a served 38.055 with the bracket [38.055, 41.499] (run 12-saturation-a-eshop, load beside it quiet, Q70); VM b served 38.055 with the bracket [38.055, 41.499] (run 13-saturation-b-eshop, load beside it quiet, Q70)"
+   }
+  ],
+  "values_file": {
+   "path": "/home/eh/hyptcn3-logs/v5/dokazy/G2/zapis1b_20261126T163911Z/hodnoty_zapis1.json",
+   "resolved": "/home/eh/hyptcn3-logs/v5/dokazy/G2/zapis1b_20261126T163911Z/hodnoty_zapis1.json",
+   "sha256": "642da83e7701c0118d2983a035d09006c119227f346788935a2288eb2d73d1ae",
+   "note": "Zápis 1 of G2 (map H0 point C): the four rates and the preliminary caps, a partial write; made by dokazy/G2/zapis1.py from the records named in the sources."
+  },
+  "checks": {
+   "loader": "collection.protocol accepted the new file",
+   "selfcheck": {
+    "stage": "G0",
+    "modes": [
+     "campaign",
+     "rehearsal"
+    ],
+    "passed": true
+   },
+   "form": "json.dumps(doc, indent=2) + newline, the form of config/collection-v5.json and scripts/lab_trial.py copies",
+   "earlier_bindings": "equal before and after"
+  },
+  "selftest_due": "the bytes of the protocol file changed: before the next capture a new record of the audit self-test is due (python3 scripts/audit_selftest.py --protocol P; scripts/audit_selftest.py require_selftest binds the file's sha256 and scripts/collection.py run refuses a capture without a passed record for it)",
+  "rule": "the lead's answer to Q66 (one writer for every stage): only the concrete paths of determined_at.<stage> are written, a wildcard expanded to the keys of the file; any other path is refused by name before anything is written, and a final write names every path of the stage; gates.stage_binding of every earlier stage is equal before and after; the loader and protocol_v5.selfcheck in both plan modes pass on the new file, at stage G0 for a partial write and at the stage for a final one; the bytes keep FORM_RULE; the protocol and the record go to temporary files, the record is linked to its name (refused when it exists) and the protocol renamed over the file; no value has a default"
+ },
+ "note": "Provenance of values a stage after G0 determines (proposal 10.9), written by python -m tcn.hodnoty zapis; not a measurement, the sources hold the measurements."
+}
