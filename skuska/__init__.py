@@ -9,4 +9,6 @@ reopens G0 (map dokazy/G2/mapa.md point E). The data of G2 never become a datase
           on a restored copy and the table of matches (package H1b1)
   poruchy.py  the six faults of G2, their injector beside a session and the block of the fault plan (package H1b3)
   cas.py  the worst case of time: the driver of two VMs, its four pairs and their judgment (package H1b4)
+  parita.py  the live/archive parity: its tolerance, the diagnostic bundle, safeguard watch beside a parity
+          session, the replay and the comparison (package H1b5)
 """
