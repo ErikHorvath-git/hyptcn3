@@ -5,6 +5,7 @@
   .venv/bin/python scripts/campaign_report.py sessions SESSION [SESSION ...] --out NEW_DIR
   .venv/bin/python scripts/campaign_report.py envelope SESSION [SESSION ...] --protocol P --out NEW_FILE
   .venv/bin/python scripts/campaign_report.py majflt AUDIT [AUDIT ...] --protocol P --out NEW_FILE
+  .venv/bin/python scripts/campaign_report.py timing RECORD [RECORD ...] [--others AUDIT ...] --out NEW_FILE
   .venv/bin/python scripts/campaign_report.py controls SESSION [SESSION ...] --out NEW_FILE
   .venv/bin/python scripts/campaign_report.py faults SESSION [SESSION ...] --records DIR --out NEW_FILE
 
@@ -40,6 +41,20 @@ the proposal, and writes NEW_FILE, a new JSON record with the provenance
 header of check E. Exit 0 = proposal made, 2 = usage or data error (nothing
 written).
 
+The mode timing (the criterion worst_case_timing of G2, the lead's answers
+to Q58 to Q60; TIMING_RULE) is the report of the worst case of time: per
+attempt of a pair of skuska/cas.py the shift of the full snapshots and of
+the grids, the mode it met, whether the target full snapshot fell into the
+other session's audit, its archive and the zataz_pamate window, the maxima
+of the audit's values.timing against the protocol's bounds, and the major
+faults per VM through the mode majflt with the largest count of the other
+error-free runs (--others) beside them. It reads the G2 session records, the
+session files, the sidecars of the full snapshots and the audit records, no
+RAM image, with the definitions of skuska/cas.py, which only this mode
+imports. It writes NEW_FILE, a new JSON record with the provenance header of
+check E. Exit 0 = the criterion is met without a finding, 1 = a finding (the
+record names it), 2 = usage or data error (nothing written).
+
 The mode controls (the criterion controls_paired of G2, the lead's answers
 to Q46 to Q48; CONTROLS_RULE) is the table of shifts of the controls on the
 VMs and their paired negatives: per occurrence of each G2 session with
@@ -72,8 +87,10 @@ A reporting tool, not part of capture, audit or archival (collection.py lists
 it in NOT_MEASUREMENT). Only the standard library and NumPy are used, but by
 the mode controls, which imports scripts/controls.py (the outcomes of package
 B8) and features/archive.py (the loader of a feature archive) inside its
-function, and by the mode faults, which imports scripts/campaign.py
-(incomplete_reasons) and skuska/poruchy.py (FAULTS) inside its functions;
+function, by the mode faults, which imports scripts/campaign.py
+(incomplete_reasons) and skuska/poruchy.py (FAULTS) inside its functions,
+and by the mode timing, which imports skuska/cas.py (the definitions of
+the worst case of time) and scripts/campaign_grids.py inside its function;
 plots are hand-written SVG.
 """
 import argparse
@@ -4621,6 +4638,351 @@ def majflt(args, command):
     return 0
 
 
+# ---------------------------------------------------------------- timing mode (criterion worst_case_timing of G2)
+
+TIMING_SCHEMA = "hyptcn3/g2-timing-report/1"
+TIMING_RECORD_SCHEMA = "hyptcn3/g2-session/1"  # skuska/g2.py SESSION_SCHEMA: the record of one G2 session.
+TIMING_KIND = "cas"  # skuska/cas.py KIND: the kind of a session of the worst case of time.
+TIMING_PAIRS_NEEDED = 2  # The lead's answer to Q58: 2 pairs per mode.
+TIMING_MODES = ("at_once", "shifted")  # skuska/cas.py AT_ONCE and SHIFTED.
+TIMING_GUEST = ("none: the mode timing reads saved G2 session records, session files, the sidecars of the full "
+                "snapshots, audit records and protocol copies; no VM is contacted")
+TIMING_RULE = (
+    "The criterion worst_case_timing of G2 (the lead's G2 skeleton, map row 10, the lead's answers Q58 to Q60). "
+    "The mode reads the records of the timing sessions that skuska/cas.py block wrote (<g2-dir>/zaznamy/<session>.json "
+    "of schema hyptcn3/g2-session/1 and kind cas), each once, and of each the session directory it names: "
+    "session.json (bound by the record's session_json_sha256), protocol.json (the audit's bounds, the protocol of "
+    "P2), end.json, events.json, the sidecars of the full snapshots in raw/ (through the archive's link after the "
+    "reclaim; JSON only, never a RAM image) and the audit record the record names (bound by its sha256, its "
+    "values.protocol_sha256 that of protocol.json and its values.session_sha256 that of session.json). It pairs the "
+    "records by their pair and attempt (values.draw.item of skuska/cas.py) and judges each attempt both of whose "
+    "sessions were audited with the definitions written before the runs, imported from skuska/cas.py (MODES_RULE, "
+    "WINDOWS_RULE, judge): the shift of the full snapshots, the mode measured and whether it is the planned one, "
+    "where the target full snapshot fell (the audit, the archive, the zataz_pamate window), and the shift of the "
+    "grids from campaign_grids.grid_pairs over the two sessions; an attempt stopped by skuska/cas.py RESTART_RULE (1) "
+    "is listed and not judged. Per session it sets values.timing of the audit (lateness_s_max, delta_ms_max, "
+    "full_ms_max) against the bounds of its protocol (audit.lateness_max_s, audit.cycle_ms_max) and gives "
+    "values.collector_majflt, and whether P2 (the mode majflt: majflt_protocol and majflt_audit) counts its audit. "
+    "With --others, the audit records of the other error-free runs that the G2 record names (the lead's answer to "
+    "Q59), it gives beside them per VM P2's largest count over those runs, and names the VM where the worst case sets "
+    "the maximum (a count above that of every other run P2 counts) and whether it sets the value P2 proposes over "
+    "both VMs; the rule of Q29 stays. The criterion is met when every mode has at least 2 pairs with an attempt that "
+    "met its plan, both sessions done and counted (skuska/g2.py LOAD_RULE), each VM collected the target full "
+    "snapshot of a met shifted pair during the other's audit and archive, and no session of a judged attempt has a "
+    "maximum above its bound or none. Findings: a maximum above its bound or missing, a mode short of 2 met pairs, a "
+    "VM that never collected during the other's audit and archive, an attempt with a session record missing, and an "
+    "attempt that failed (a run that exited non-zero, a stop or an error of the driver other than RESTART_RULE's); a "
+    "judged attempt that missed its plan is "
+    "listed with its reasons (RESTART_RULE (2) runs it again) and is no finding by itself. "
+    "Refused by name, each a data error: a record named twice, a record that is no timing record, a session file "
+    "that differs from the record or cannot be read, an audit record that does not bind the session, sessions under "
+    "different protocols, and an --out inside a session directory. Exit 0: the criterion is met and there is no "
+    "finding; 1: a finding (the record names each); 2: a usage or data error, nothing written.")
+
+
+def _timing_read(path, what):
+    """(the raw bytes, the parsed JSON) of a file the mode reads; a DataError by name."""
+    try:
+        raw = Path(path).read_bytes()
+        return raw, json.loads(raw)
+    except OSError as error:
+        raise DataError(f"{what} {path} cannot be read ({type(error).__name__}: {error})") from None
+    except ValueError as error:
+        raise DataError(f"{what} {path} is not JSON ({error})") from None
+
+
+def timing_session(path, cas):
+    """One record of a timing session by TIMING_RULE: its entry (vm, session, pair, attempt, files, audit, windows,
+    full cycles, bounds); a DataError by name."""
+    raw, doc = _timing_read(path, "the record")
+    v = doc.get("values") if isinstance(doc, dict) else None
+    if not isinstance(v, dict) or doc.get("schema") != TIMING_RECORD_SCHEMA or v.get("kind") != TIMING_KIND:
+        raise DataError(f"{path}: no record of a timing session (schema {TIMING_RECORD_SCHEMA}, values.kind "
+                        f"{TIMING_KIND})")
+    item = (v.get("draw") or {}).get("item") if isinstance(v.get("draw"), dict) else None
+    if (not isinstance(item, dict) or item.get("mode") not in TIMING_MODES or not isinstance(item.get("pair"), str)
+            or type(v.get("attempt")) is not int or not isinstance(v.get("vm"), str)
+            or not isinstance(v.get("session_dir"), str)):
+        raise DataError(f"{path}: names no pair, mode, attempt, VM or session directory (values.draw.item of "
+                        "skuska/cas.py)")
+    directory = Path(v["session_dir"])
+    entry = {"path": os.path.abspath(path), "sha256": hashlib.sha256(raw).hexdigest(), "vm": v["vm"],
+             "session": v.get("session_id"), "session_dir": str(directory), "pair": item["pair"],
+             "attempt": v["attempt"], "mode": item["mode"], "role": item.get("role"), "target": item.get("target"),
+             "order": item.get("order"), "done": v.get("done") is True, "counted": v.get("counted") is True,
+             "stop": v.get("stop"), "error": v.get("error"), "restarted": str(v.get("error") or "").startswith(
+                 "Restart: "), "audit": None, "steps": v.get("steps") or [],
+             "run_exit": (v.get("exit_codes") or {}).get("run") if isinstance(v.get("exit_codes"), dict) else None}
+    if v.get("session_json_sha256") is None:
+        return entry  # The session never wrote its session.json (it did not start): listed, nothing more to read.
+    meta_raw, meta = _timing_read(directory / "session.json", "the session file")
+    if hashlib.sha256(meta_raw).hexdigest() != v["session_json_sha256"]:
+        raise DataError(f"{path}: {directory}/session.json is not the one the record names (session_json_sha256)")
+    proto_raw, protocol = _timing_read(directory / "protocol.json", "the protocol copy")
+    entry.update(protocol=str(directory / "protocol.json"), protocol_sha256=hashlib.sha256(proto_raw).hexdigest())
+    try:
+        entry["bounds"] = {"lateness_s_max": protocol["audit"]["lateness_max_s"],
+                           "delta_ms_max": protocol["audit"]["cycle_ms_max"]["delta"],
+                           "full_ms_max": protocol["audit"]["cycle_ms_max"]["full"]}
+        full_every, cycles = protocol["full_every"], protocol["cycles"]
+    except (KeyError, TypeError):
+        raise DataError(f"{directory}/protocol.json has no audit.lateness_max_s, audit.cycle_ms_max, full_every or "
+                        "cycles") from None
+    events = directory / "events.json"
+    try:
+        entry["full"] = cas.full_cycles(directory / "raw", full_every, cycles)
+    except ValueError as error:
+        raise DataError(f"{path}: {error}") from None
+    entry.update(load=cas.load_window(_timing_read(events, "the events file")[1] if events.exists() else None),
+                 audit_window=cas.step_window(entry["steps"], "audit"),
+                 archive_window=cas.step_window(entry["steps"], "archive"), full_every=full_every)
+    audit = v.get("audit")
+    if isinstance(audit, dict) and audit.get("report"):
+        report_raw, report = _timing_read(audit["report"], "the audit record")
+        values = report.get("values") if isinstance(report, dict) else None
+        if (hashlib.sha256(report_raw).hexdigest() != audit.get("sha256") or not isinstance(values, dict)
+                or report.get("schema") != AUDIT_SCHEMA or values.get("protocol_sha256") != entry["protocol_sha256"]
+                or values.get("session_sha256") != v["session_json_sha256"]):
+            raise DataError(f"{path}: the audit record {audit['report']} does not bind the session (its sha256, "
+                            "schema, protocol_sha256 or session_sha256)")
+        timing = values.get("timing") if isinstance(values.get("timing"), dict) else {}
+        entry["audit"] = {"report": audit["report"], "accepted": values.get("accepted"),
+                          "reasons": values.get("reasons"),
+                          "timing": {key: timing.get(key) for key in entry["bounds"]},
+                          "grid_phase_s": timing.get("grid_phase_s"),
+                          "collector_majflt": values.get("collector_majflt")}
+        entry["over_bounds"] = [
+            f"{key} missing from values.timing" if number(entry["audit"]["timing"][key]) is None
+            else f"{key} {entry['audit']['timing'][key]} above {bound}" for key, bound in entry["bounds"].items()
+            if number(entry["audit"]["timing"][key]) is None
+            or number(bound) is not None and entry["audit"]["timing"][key] > bound]
+    return entry
+
+
+def timing_attempt(entries, cas, grids):
+    """The row of one attempt of a pair (TIMING_RULE): its status (judged, restarted, failed or incomplete), the
+    judgment of skuska/cas.py, the shift of the grids, the maxima and the major faults per session."""
+    first = entries[0]
+    pair = {"id": first["pair"], "mode": first["mode"], "target": first["target"], "order": first["order"]}
+    row = {"pair": pair["id"], "attempt": first["attempt"], "planned_mode": pair["mode"], "target": pair["target"],
+           "order": pair["order"], "sessions": {}, "met": False, "why": []}
+    for e in entries:
+        row["sessions"][e["vm"]] = {
+            "session": e["session"], "record": e["path"], "role": e["role"], "done": e["done"],
+            "counted": e["counted"], "stop": e["stop"], "error": e["error"],
+            **({"audit": e["audit"]["report"], "accepted": e["audit"]["accepted"], "reasons": e["audit"]["reasons"],
+                "timing": e["audit"]["timing"], "bounds": e["bounds"], "over_bounds": e["over_bounds"],
+                "collector_majflt": e["audit"]["collector_majflt"]} if e["audit"] else {})}
+    vms = sorted(e["vm"] for e in entries)
+    if not isinstance(pair["order"], list) or sorted(pair["order"]) != vms or len(vms) != 2:
+        row.update(status="incomplete", why=[f"pair {pair['id']} attempt {row['attempt']}: the records name VM(s) "
+                                             f"{', '.join(vms)}, the pair {pair['order']}"])
+        return row
+    if any(e["restarted"] for e in entries):
+        row.update(status="restarted", why=[next(e["error"] for e in entries if e["restarted"])])
+        return row
+    if not all(e["audit"] for e in entries) or any(e["run_exit"] != 0 for e in entries):
+        row.update(status="failed", why=[f"VM {e['vm']}: " + str(e["stop"] or e["error"] or (
+            "no audit" if not e["audit"] else f"the run exited {e['run_exit']}"))
+            for e in entries if not e["audit"] or e["run_exit"] != 0])
+        return row
+    judgment = cas.judge(pair, {e["vm"]: {"full": e["full"], "load": e["load"], "audit": e["audit_window"],
+                                          "archive": e["archive_window"]} for e in entries}, first["full_every"])
+    try:
+        rows = [grids.grid_session(e["session_dir"], e["audit"]["report"])
+                for e in sorted(entries, key=lambda e: e["vm"])]
+        pairs = grids.grid_pairs([r for r in rows if r is not None]) if all(r is not None for r in rows) else []
+    except (OSError, ValueError) as error:
+        rows, pairs = None, []
+        row["grid_error"] = f"{type(error).__name__}: {error}"
+    over = [f"VM {e['vm']}: {text}" for e in entries for text in e["over_bounds"]]
+    done = all(e["done"] and e["counted"] for e in entries)
+    row.update(status="judged", judgment=judgment,
+               full_snapshots={"shift_s": judgment["shift_full_s"], "target": judgment["target"],
+                               "nearest": judgment["nearest"], "overlaps": judgment["overlaps"]},
+               grids=pairs[0] if pairs else {"shift_s": None, "why": "the two sessions' measured phases do not "
+                                                                    "overlap or a session has none"},
+               mode={"measured": judgment["mode"], "met": judgment["met_mode"]}, windows=judgment["windows"],
+               over_bounds=over, met=judgment["met"] and done,
+               why=judgment["why"] + ([] if done else ["a session is not done or not counted (skuska/g2.py "
+                                                       "DONE_RULE, LOAD_RULE)"]))
+    return row
+
+
+def timing_majflt(sessions, others, protocol_path, vms):
+    """The major faults by Q59 through P2: per VM the largest count of the judged timing sessions and whether P2
+    counts it, beside P2's largest count over the other error-free runs; where the worst case sets the maximum."""
+    worst = {}
+    for e in sessions:
+        faults = e["audit"]["collector_majflt"]
+        if _majflt_shape(faults) and (e["vm"] not in worst or faults["max"] > worst[e["vm"]]["max"]):
+            worst[e["vm"]] = {"max": faults["max"], "seq": faults["max_seq"], "session": e["session"],
+                              "audit": e["audit"]["report"]}
+    out = {"timing": worst, "others": {}, "others_given": len(others), "others_refused": [], "sets_maximum": [],
+           "p2": None}
+    try:
+        sha, p2_vms, full_every, _ = majflt_protocol(protocol_path)
+    except DataError as error:
+        out["p2"] = f"refused: {error}"
+        return out
+    out["p2"] = "applied"
+    for vm, top in worst.items():
+        _, why = majflt_audit(top["audit"], sha, p2_vms, full_every)
+        top["counted_by_p2"] = why is None
+        if why:
+            top["p2_refusal"] = why
+    mine = {os.path.realpath(e["session_dir"]) for e in sessions}
+    for path in others:
+        entry, why = majflt_audit(os.path.abspath(path), sha, p2_vms, full_every)
+        if entry is not None and os.path.realpath(entry["session_dir"]) in mine:
+            entry, why = None, f"{path}: the audit of a timing session, not of another run"
+        if entry is None:
+            out["others_refused"].append(why)
+            continue
+        best = out["others"].get(entry["vm"])
+        if best is None or entry["collector_majflt"]["max"] > best["max"]:
+            out["others"][entry["vm"]] = {"max": entry["collector_majflt"]["max"],
+                                          "seq": entry["collector_majflt"]["max_seq"], "session": entry["session"],
+                                          "audit": entry["path"]}
+    for vm in vms:
+        top, rest = worst.get(vm), out["others"].get(vm)
+        if top and top.get("counted_by_p2") and (rest is None or top["max"] > rest["max"]) and others:
+            out["sets_maximum"].append(f"VM {vm}: the worst case sets the maximum, {top['max']} in session "
+                                       f"{top['session']} seq {top['seq']}"
+                                       + (f" (the other runs: {rest['max']})" if rest else " (no other run of it)"))
+    counted = [t["max"] for t in worst.values() if t.get("counted_by_p2")]
+    rest = [r["max"] for r in out["others"].values()]
+    if others and counted and (not rest or max(counted) > max(rest)):
+        out["sets_maximum"].append(f"both VMs: the worst case sets the value P2 proposes, {max(counted)} (the other "
+                                   f"runs: {max(rest) if rest else 'none'})")
+    return out
+
+
+def timing_line(row):
+    """The line of one attempt on stdout."""
+    head = f"{row['pair']} attempt {row['attempt']} ({row['planned_mode']}"
+    head += f", target {row['target']})" if row["target"] else ")"
+    if row["status"] != "judged":
+        return f"{head}: {row['status']}: " + "; ".join(map(one_line, row["why"]))
+    full = row["full_snapshots"]["shift_s"]
+    grid = row["grids"].get("shift_s")
+    maxima = ", ".join(f"{vm} full {s['timing']['full_ms_max']}/{s['bounds']['full_ms_max']} ms delta "
+                       f"{s['timing']['delta_ms_max']}/{s['bounds']['delta_ms_max']} ms lateness "
+                       f"{s['timing']['lateness_s_max']}/{s['bounds']['lateness_s_max']} s"
+                       for vm, s in sorted(row["sessions"].items()))
+    return (f"{head}: {'met' if row['met'] else 'missed'}, measured {row['mode']['measured']}, shift of the full "
+            f"snapshots {full if full is None else f'{full:+.3f}'} s, of the grids {grid} s; {maxima}"
+            + ("" if row["met"] else "; " + "; ".join(map(one_line, row["why"]))))
+
+
+def timing(args, command):
+    """The mode timing (TIMING_RULE): refuses an --out that exists before it reads anything and a record named twice,
+    then reads every record; writes the new record, prints one line per attempt and the criterion, and returns the
+    exit code."""
+    out = Path(os.path.abspath(args.out))
+    if out.exists() or out.is_symlink():
+        print(f"campaign_report: --out already exists, nothing was read or written: {out}", file=sys.stderr)
+        return 2
+    paths = [os.path.abspath(path) for path in args.records]
+    real = [os.path.realpath(path) for path in paths]
+    twice = sorted({path for path, r in zip(paths, real) if real.count(r) > 1})
+    if twice:
+        print("campaign_report: timing: a record is named more than once: " + ", ".join(twice), file=sys.stderr)
+        return 2
+    # The definitions written before the runs live in the driver (skuska/cas.py); only this mode imports it.
+    from scripts import campaign_grids
+    from skuska import cas
+    entries, refused = [], []
+    for path in paths:
+        try:
+            entries.append(timing_session(path, cas))
+        except DataError as error:
+            refused.append(str(error))
+    protocols = sorted({e["protocol_sha256"] for e in entries if "protocol_sha256" in e})
+    if len(protocols) > 1:
+        refused.append("the timing sessions ran under different protocols (sha256 " + ", ".join(protocols) + ")")
+    target = Path(os.path.realpath(out.parent))
+    refused += [f"refusing to write {out} inside the session directory {e['session_dir']}" for e in entries
+                if target == Path(os.path.realpath(e["session_dir"]))
+                or target.is_relative_to(os.path.realpath(e["session_dir"]))]
+    if refused or not entries:
+        for why in refused or ["no record"]:
+            print(f"campaign_report: timing: {one_line(why)}", file=sys.stderr)
+        print(f"campaign_report: timing: {len(refused)} refusal(s): no report, nothing written", file=sys.stderr)
+        return 2
+    groups = defaultdict(list)
+    for e in entries:
+        groups[(e["pair"], e["attempt"])].append(e)
+    rows = [timing_attempt(sorted(group, key=lambda e: e["vm"]), cas, campaign_grids)
+            for _, group in sorted(groups.items())]
+    vms = sorted({e["vm"] for e in entries})
+    met = {mode: sorted({r["pair"] for r in rows if r["met"] and r["planned_mode"] == mode}) for mode in TIMING_MODES}
+    collected = sorted({r["judgment"]["collecting"] for r in rows if r["met"] and r["planned_mode"] == "shifted"})
+    over = [f"{r['pair']} attempt {r['attempt']}: {text}" for r in rows if r["status"] == "judged"
+            for text in r["over_bounds"]]
+    findings = list(over)
+    findings += [f"mode {mode}: {len(met[mode])} pair(s) met their plan, fewer than {TIMING_PAIRS_NEEDED}"
+                 for mode in TIMING_MODES if len(met[mode]) < TIMING_PAIRS_NEEDED]
+    findings += [f"VM {vm} never collected the target full snapshot of a met shifted pair during the other VM's "
+                 "audit and archive" for vm in vms if vm not in collected]
+    findings += [f"{r['pair']} attempt {r['attempt']}: {r['status']}: " + "; ".join(map(one_line, r["why"]))
+                 for r in rows if r["status"] in ("incomplete", "failed")]
+    judged = [e for e in entries if e["audit"] and any(r["status"] == "judged" and r["pair"] == e["pair"]
+                                                        and r["attempt"] == e["attempt"] for r in rows)]
+    protocol = next((e["protocol"] for e in entries if "protocol" in e), None)
+    majflt = (timing_majflt(judged, args.others or [], protocol, vms) if protocol is not None else
+              {"timing": {}, "others": {}, "others_given": len(args.others or []), "others_refused": [],
+               "sets_maximum": [], "p2": "not applied: no timing session wrote its session.json"})
+    criterion = {"met_pairs": met, "needed_per_mode": TIMING_PAIRS_NEEDED, "collecting_vms": collected,
+                 "over_bounds": over,
+                 "met": all(len(met[m]) >= TIMING_PAIRS_NEEDED for m in TIMING_MODES) and not over
+                 and all(vm in collected for vm in vms)}
+    identity = git_identity()
+    record = {"schema": TIMING_SCHEMA, "commit": identity["commit"], "commit_dirty": identity["dirty"],
+              "date": datetime.now(timezone.utc).isoformat(timespec="seconds"), "host": platform.platform(),
+              "guest": TIMING_GUEST, "command": command, "n": len(rows),
+              "values": {"stage": "G2", "criterion": "worst_case_timing",
+                         "definitions": {"modes": cas.MODES_RULE, "windows": cas.WINDOWS_RULE},
+                         "protocol": {"path": protocol, "sha256": protocols[0] if protocols else None},
+                         "records": [{k: e[k] for k in ("path", "sha256", "vm", "session", "pair", "attempt")}
+                                     for e in entries],
+                         "attempts": rows, "result": criterion, "majflt": majflt, "findings": findings,
+                         "rule": TIMING_RULE},
+              "note": "The report of the worst case of time of G2 from saved files; no RAM image or score is read and "
+                      "nothing is detected."}
+    text = json.dumps(record, indent=1, ensure_ascii=False, allow_nan=False) + "\n"
+    try:
+        out.parent.mkdir(parents=True, exist_ok=True)
+        stream = open(out, "x", encoding="utf-8")
+    except FileExistsError:
+        print(f"campaign_report: --out appeared meanwhile, nothing was overwritten: {out}", file=sys.stderr)
+        return 2
+    except OSError as error:
+        print(f"campaign_report: cannot create {out}: {type(error).__name__}: {error}", file=sys.stderr)
+        return 2
+    try:
+        with stream:
+            stream.write(text)
+    except OSError as error:
+        out.unlink(missing_ok=True)
+        print(f"campaign_report: cannot write {out}: {type(error).__name__}: {error}", file=sys.stderr)
+        return 2
+    for row in rows:
+        print(timing_line(row))
+    for vm in vms:
+        top, rest = majflt["timing"].get(vm), majflt["others"].get(vm)
+        print(f"majflt vm {vm}: worst case {top['max'] if top else None}"
+              + (f" (session {top['session']} seq {top['seq']})" if top else "")
+              + f", other error-free runs {rest['max'] if rest else None}")
+    for text in majflt["sets_maximum"]:
+        print("majflt: " + text)
+    print("worst_case_timing: " + ("met" if criterion["met"] else "not met") + "; "
+          + "; ".join(f"{mode} {len(met[mode])}/{TIMING_PAIRS_NEEDED} pair(s)" for mode in TIMING_MODES)
+          + f"; {len(findings)} finding(s)", flush=True)
+    print(f"campaign_report: timing: {len(entries)} record(s), {len(rows)} attempt(s); record {out}", file=sys.stderr)
+    return 0 if criterion["met"] and not findings else 1
+
+
 CONTROLS_TABLE_SCHEMA = "hyptcn3/g2-controls-table/1"
 # The criterion controls_paired of stage G2 (scripts/gates.py CRITERIA, the lead's answer to Q47): 3 occurrences of the
 # control and 3 of its paired negative per kind of controls.kinds.
@@ -5203,6 +5565,13 @@ def main(argv=None):
                              help="the protocol file the sessions were audited under (its sha256 is their "
                                   "values.protocol_sha256)")
     majflt_mode.add_argument("--out", type=Path, required=True, help="new JSON record (must not exist)")
+    timing_mode = modes.add_parser("timing", help="the report of the worst case of time of G2 from the records of "
+                                                  "skuska/cas.py (criterion worst_case_timing; TIMING_RULE)")
+    timing_mode.add_argument("records", type=Path, nargs="+",
+                             help="the G2 session records of the timing sessions (<g2-dir>/zaznamy/<session>.json)")
+    timing_mode.add_argument("--others", type=Path, nargs="+", default=[],
+                             help="the audit records of the other error-free G2 runs the G2 record names (Q59)")
+    timing_mode.add_argument("--out", type=Path, required=True, help="new JSON record (must not exist)")
     controls_mode = modes.add_parser("controls", help="the table of shifts of the controls of G2 sessions and their "
                                                       "paired negatives (criterion controls_paired; CONTROLS_RULE)")
     controls_mode.add_argument("session_dirs", type=Path, nargs="+",
@@ -5222,6 +5591,8 @@ def main(argv=None):
         return envelope(args, command)
     if args.mode == "majflt":
         return majflt(args, command)
+    if args.mode == "timing":
+        return timing(args, command)
     if args.mode == "controls":
         return controls_table(args, command)
     if args.mode == "faults":
