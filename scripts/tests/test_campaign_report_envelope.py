@@ -108,11 +108,17 @@ def make_session(base, name, scenario="eshop_low", seeds=SEEDS, protocol=V5):
         "source_sha256": {"scripts/host_traffic.py": sha(GENERATOR)},  # run_session records every source file.
         "traffic": collection._v5_traffic(SimpleNamespace(scenario=scenario), p, rate, source, dict(seeds),
                                           p["cycles"])})
+    write_headers(d)
+    return d
+
+
+def write_headers(d):
+    """The header (the first line) of both traffic logs of d, as the generator writes them for the command line that
+    run_session makes from its session.json (SessionRecorder.header)."""
     args, run = start(command_line(d))
     recorder = ht.SessionRecorder(args, run, threading.Event())
     for log, (key, schema) in LOGS.items():
         (d / log).write_text(json.dumps({"schema": schema, "n": 0, **recorder.header(key)}) + "\n")
-    return d
 
 
 def header(d, log):
@@ -300,6 +306,55 @@ def test_a_boolean_in_a_header_is_no_number(tmp_path):
     code, record = envelope(tmp_path, d)
     assert code == 1 and only(record)["reasons"] == [
         f"header of {log}: seeds.traffic is true, session.json traffic.seeds.traffic is 1" for log in LOGS]
+
+
+# Finding F1 of the verification of G2p (dokazy/G2p/odlozene_G2p.md): one case for each pair of ENVELOPE_BINDINGS, the
+# header's field changed in both headers to a value of its type that session.json does not hold, so that the binding
+# alone names it (the two headers still agree, and the envelope is drawn from session.json); the expected reasons are
+# written out here, so a mode without the pair gives no reason and the case fails.
+@pytest.mark.parametrize("field, value, own, theirs", [
+    ("session_id", "another", "session_id", '"s1"'),
+    ("profile", "corp", "traffic.profile", '"eshop"'),
+    ("config.profile", "corp", "traffic.profile", '"eshop"'),
+    ("scenario", "eshop_high", "traffic.scenario", '"eshop_low"'),
+    ("config.scenario", "eshop_high", "traffic.scenario", '"eshop_low"'),
+    ("seeds.traffic", 12, "traffic.seeds.traffic", "11"),
+    ("config.seed", 12, "traffic.seeds.traffic", "11"),
+    ("config.dur", 3600.0, "traffic.dur_s", "3720"),
+    ("warmup_s", 119.0, "traffic.warmup_s", "120"),
+    ("config.warmup_s", 119.0, "traffic.warmup_s", "120"),
+], ids=["session_id", "profile", "config.profile", "scenario", "config.scenario", "seeds.traffic", "config.seed",
+        "config.dur", "warmup_s", "config.warmup_s"])
+def test_each_binding_of_a_header_to_session_json_is_a_mismatch_of_its_own(tmp_path, field, value, own, theirs):
+    d = make_session(tmp_path, "s1")
+
+    def change(doc):
+        *path, key = field.split(".")
+        for part in path:
+            doc = doc[part]
+        assert key in doc and doc[key] != value  # The header holds the field, with another value.
+        doc[key] = value
+    for log in LOGS:
+        edit_header(d, log, change)
+    code, record = envelope(tmp_path, d)
+    entry = only(record)
+    assert (code, entry["result"], record["values"]["mismatch"]) == (1, "mismatch", ["s1"])
+    assert entry["reasons"] == [f"header of {log}: {field} is {json.dumps(value)}, session.json {own} is {theirs}"
+                                for log in LOGS]
+
+
+def test_a_warmup_of_session_json_that_is_not_the_protocols_is_a_mismatch(tmp_path):
+    """Finding F1 of G2p: session.json's traffic.warmup_s against the protocol's warmup_s. The headers are written
+    again for the warmup of 150 s that session.json now plans (the generator's own header of that run, its envelope
+    drawn with it), so the comparison with the protocol is the only one that differs."""
+    d = make_session(tmp_path, "s1")
+    edit_session(d, lambda meta: meta["traffic"].update(warmup_s=150))
+    write_headers(d)
+    assert header(d, REQUESTS)["warmup_s"] == header(d, INTERVALS)["config"]["warmup_s"] == 150.0
+    code, record = envelope(tmp_path, d)
+    entry = only(record)
+    assert (code, entry["result"], entry["inputs"]["warmup_s"]) == (1, "mismatch", 150)
+    assert entry["reasons"] == ["session.json: traffic.warmup_s is 150, the protocol's warmup_s is 120"]
 
 
 @pytest.mark.parametrize("field, value, own, theirs", [
