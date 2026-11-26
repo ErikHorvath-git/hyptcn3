@@ -668,6 +668,13 @@ def summarize(requests_path, intervals_path, *, session_id=None, schema=None):
 
     v5 = schema == REQUEST_SCHEMA_2
     arrivals = _v5_problems(problems, header_r, header_i, requests, reqs, ivs, end_r) if v5 else None
+    # Package B15 (should_fix 1 of the fourth G0 verification): realism takes the generator's stop from the request
+    # log's end record, and intervals_not_to_end binds only the interval log's copy of end_mono. host_traffic.py
+    # (Writer.finish) writes one record into both logs, so the two copies must be equal.
+    if v5 and end_r is not None and end_i is not None and not (
+            _finite(end_r.get("end_mono")) and _finite(end_i.get("end_mono"))
+            and abs(end_r["end_mono"] - end_i["end_mono"]) <= 1e-9):
+        problems.add("requests:end_mono_mismatch")
     clean = all(end is not None and end.get("clean") and not end.get("write_errors") for end in (end_r, end_i))
     return {"schema": SUMMARY_SCHEMA, "log_schema": schema, "requests_path": str(requests_path),
             "intervals_path": str(intervals_path),
@@ -742,16 +749,22 @@ def realism(requests_path, intervals_path, protocol, scenario, *, windows=()):
                             lead's answer to Q73 point 1): a user session is left out by its start, its arrival,
                             alone, whatever its later requests touch, because a selection by overlap with a window
                             depends on the length of a user session, and an ordering one is longer. The stop is the
-                            generator's (package B14, Q77, the executor's decision): the time of the request log's end
-                            record, start_unix + its end_mono. scripts/collection.py stops the generator right after
-                            the measure phase, so a buyer that starts less than D_max before the stop may be cut
+                            generator's (package B14, Q77: the executor's decision, approved by the lead on
+                            2026-11-26): the request log's end record. scripts/collection.py stops the generator right
+                            after the measure phase, so a buyer that starts less than D_max before the stop may be cut
                             before its order; it is left out as one that starts less than D_max before a window is.
-                            A request log that does not end with an end record with a finite end_mono gives no share
+                            The stop and the starts are compared in the generator's monotonic time, the end record's
+                            end_mono against each arrival's t_mono (package B15, should_fix 1 of the fourth G0
+                            verification), and summarize refuses a pair whose two copies of end_mono differ. A
+                            request log that does not end with an end record with a finite end_mono gives no share
                             (value None, ok False). The numbers behind the rule, on the 16 eshop sessions of the C4
                             pass (scripts/tests/test_order_share_c4.py; the executor's in OTAZKY_VEDUCEMU.md, "K Q77
                             a Q78", 2026-11-26): the mean z of the share is -0.892 under B13's rule and +0.198 with
-                            the stop at the file's rates, -1.689 and -0.032 at the eshop rates of G2; with the stop
-                            the z of every session equals the z of the buyers its seeds draw
+                            the stop at the rates of the first Zápis 1 of G2 (26e49ab), -1.689 and -0.032 at those
+                            of the second (3ce9b72), the file's since. With the stop the z of the orders equals the z
+                            of the buyers its seeds draw in all 16 sessions at the second rates, and in 15 of 16 at
+                            the first, where the stop cuts one buyer of the D_max tail before its order (should_fix 2
+                            of the fourth G0 verification)
       object_concentration  the requests that name an object (object not null; an object is its kind by route and
                             its id): the most requested top_objects_share of the distinct objects (rounded up) get at
                             least top_objects_min_requests of these requests
@@ -854,21 +867,23 @@ def realism(requests_path, intervals_path, protocol, scenario, *, windows=()):
         # touched a window with its arrival or a request was left out, so an ordering user session, which lasts
         # longer, was left out more often (the C4 pass, dokazy/G1/kod/vysledok_C3b.json: 15 of 16 shares low).
         d_max = limit["order_share_session_max_s"]
-        sessions = {a["user_session"]: {"start": _unix(a["t_utc"]), "orders": 0} for a in arrivals if a["admitted"]}
+        sessions = {a["user_session"]: {"start": _unix(a["t_utc"]), "start_mono": a["t_mono"], "orders": 0}
+                    for a in arrivals if a["admitted"]}
         for r in every:
             if r["user_session"] in sessions:
                 sessions[r["user_session"]]["orders"] += (r["method"] == "POST" and r["route"] == "/api/orders"
                                                           and r["intended_status"] is None)
         outside_windows = [s for s in sessions.values()
                            if not any(lo - d_max <= s["start"] <= hi for lo, hi in windows)]
-        # Package B14 (Q77, the executor's decision): the same rule at the generator's stop. scripts/collection.py sends
-        # SIGUSR2 and at once stops the generator (stop_child) after the measure phase, so a buyer that starts in its
-        # last minutes is cut before the order. The stop is the request log's end record: its end_mono, the
-        # generator's monotonic time, placed through start_unix as the intervals of the offered load below; without
-        # it there is no share to judge.
+        # Package B14 (Q77: the executor's decision, approved by the lead on 2026-11-26): the same rule at the
+        # generator's stop. scripts/collection.py sends SIGUSR2 and at once stops the generator (stop_child) after the
+        # measure phase, so a buyer that starts in its last minutes is cut before the order. The stop is the request
+        # log's end record: its end_mono against each arrival's t_mono, both in the generator's monotonic time, so
+        # start_unix does not place it (package B15, should_fix 1 of the fourth G0 verification; summarize refuses a
+        # pair whose two copies of end_mono differ). Without it there is no share to judge.
         end = records[-1] if records[-1].get("type") == "end" else None
-        stop = origin + end["end_mono"] if end is not None and _finite(end.get("end_mono")) else None
-        kept = [] if stop is None else [s for s in outside_windows if not stop - d_max <= s["start"] <= stop]
+        stop = end["end_mono"] if end is not None and _finite(end.get("end_mono")) else None
+        kept = [] if stop is None else [s for s in outside_windows if not stop - d_max <= s["start_mono"] <= stop]
         share = sum(1 for s in kept if s["orders"]) / len(kept) if kept else None
         tolerance = (limit["order_share_tolerance_se"] * math.sqrt(share_design * (1 - share_design) / len(kept))
                      if kept else None)

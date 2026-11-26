@@ -370,19 +370,27 @@ def test_the_order_share_leaves_a_user_session_out_by_its_start_and_not_by_its_l
                              "(the request log's end record), left out")  # Package B14: the stop's count.
 
 
-def test_the_order_share_leaves_out_the_user_sessions_the_generators_stop_cuts(tmp_path, p):
-    """Package B14 (Q77, the executor's decision): 25 user sessions 20.96 s apart, every fifth one a buyer. The buyer
-    that starts less than D_max before the end record of the request log, the generator's stop, is cut before its
-    order (its funnel without the order), as the stop of scripts/collection.py right after the measure phase cuts the
-    buyers of its last minutes. D_max reaches from the end record back to the middle between user sessions 19 and 20.
-    B13's rule, which knows no stop, keeps all 25, and 4 of them ordered: 0.16, low. B14's rule leaves out the five
-    that start less than D_max before the stop: 4 of 20, the design share 0.2. No window."""
+@pytest.mark.parametrize("shift", [0, 5000])
+def test_the_order_share_leaves_out_the_user_sessions_the_generators_stop_cuts(tmp_path, p, shift):
+    """Package B14 (Q77: the executor's decision, approved by the lead on 2026-11-26): 25 user sessions 20.96 s apart,
+    every fifth one a buyer. The buyer that starts less than D_max before the end record of the request log, the
+    generator's stop, is cut before its order (its funnel without the order), as the stop of scripts/collection.py
+    right after the measure phase cuts the buyers of its last minutes. D_max reaches from the end record back to the
+    middle between user sessions 19 and 20. B13's rule, which knows no stop, keeps all 25, and 4 of them ordered:
+    0.16, low. B14's rule leaves out the five that start less than D_max before the stop: 4 of 20, the design share
+    0.2. No window. Package B15 (should_fix 1 of the fourth G0 verification): the stop is compared with the starts in
+    the generator's monotonic time, so start_unix 5000 s later in both headers leaves the same five out; B14 placed
+    the stop at start_unix + end_mono against the arrivals' t_utc, and then left out none, 4 of 25."""
     e = evidence
     buyer, cut, other = [e.HOME, e.DETAIL, e.CART_ADD, e.CART, e.ORDER], [e.HOME, e.DETAIL, e.CART_ADD, e.CART], [
         e.HOME, e.DETAIL]
     d = session(tmp_path, p, "bursty", sessions=tuple((cut if k == 20 else buyer) if k % 5 == 0 else other
                                                       for k in range(25)),
                 spacings=(1.,) * 24, thinks=(10.,), flat=True, measure_s=600, snapshots=600)
+    for name in ("traffic_requests.jsonl", "traffic_intervals.jsonl"):  # Only start_unix moves, nothing else.
+        moved = records(d, name)
+        moved[0]["start_unix"] += shift
+        evidence.jsonl(d / name, moved)
     rows = records(d)
     end = rows[-1]["end_mono"]  # The stop, after the generator's origin start_unix (the arrivals' t_mono alike).
     users = sorted((a["t_mono"], a["user_session"]) for a in rows if a.get("type") == "arrival"
@@ -410,10 +418,11 @@ def test_the_order_share_leaves_out_the_user_sessions_the_generators_stop_cuts(t
 
 @pytest.mark.parametrize("change", ["no end record", "end_mono not a number"])
 def test_a_request_log_without_the_time_of_its_end_record_gives_no_order_share(tmp_path, p, change):
-    """Package B14 (Q77, the executor's decision): without the generator's stop no user session can be judged, so the
-    order share has no value and fails, the stricter side, with the reason in its note; every other requirement is
-    judged as before. The log audit already refuses a request log without its end record (summarize:
-    requests:end_missing); an end record whose end_mono is no number only the order share refuses."""
+    """Package B14 (Q77: the executor's decision, approved by the lead on 2026-11-26): without the generator's stop no
+    user session can be judged, so the order share has no value and fails, the stricter side, with the reason in its
+    note; every other requirement is judged as before. The log audit already refuses a request log without its end
+    record (summarize: requests:end_missing). Since package B15 it also refuses an end record whose end_mono is no
+    number, because that end_mono differs from the interval log's (summarize: requests:end_mono_mismatch)."""
     d = session(tmp_path, p, "steady")
     rows = records(d)
     if change == "no end record":
@@ -429,7 +438,8 @@ def test_a_request_log_without_the_time_of_its_end_record_gives_no_order_share(t
                              "the generator's stop is unknown (intensity low); none of the 10 user sessions judged")
     assert all(r["ok"] for r in found["requirements"] if r["name"] != "order_share") and found["offered_load"]["ok"]
     assert audit(d)["problems"] == {"no end record": ["traffic:requests:end_missing", "traffic_realism:order_share"],
-                                    "end_mono not a number": ["traffic_realism:order_share"]}[change]
+                                    "end_mono not a number": ["traffic:requests:end_mono_mismatch",
+                                                              "traffic_realism:order_share"]}[change]
 
 
 def test_the_synthetic_logs_end_at_least_d_max_after_their_last_user_session_starts(tmp_path, p):
@@ -791,6 +801,11 @@ def m_end_arrivals(r, i, p):
 def m_end_user_sessions(r, i, p):
     r[-1]["user_sessions_completed"] -= 1
     return ["requests:end_user_sessions_mismatch"]
+
+
+def m_end_mono(r, i, p):
+    r[-1]["end_mono"] += 1000  # Package B15: the request log's copy of the stop, which the order share reads.
+    return ["requests:end_mono_mismatch"]
 
 
 MUTATIONS = {name[2:]: function for name, function in sorted(globals().items()) if name.startswith("m_")}

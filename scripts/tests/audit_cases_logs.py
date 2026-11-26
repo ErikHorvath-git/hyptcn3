@@ -842,6 +842,10 @@ _V5_CASES = [
     ("traffic:end_user_sessions_mismatch", traffic_rows(lambda r, i: r[-1].update(
         user_sessions_completed=r[-1]["user_sessions_completed"] - 1)),
      logs("traffic:requests:end_user_sessions_mismatch")),
+    # Package B15 (should_fix 1 of the fourth G0 verification): the order share reads the generator's stop from the
+    # request log's end record, so its end_mono must be the interval log's. Moved later, it would cut no buyer.
+    ("traffic:end_mono_mismatch", traffic_rows(lambda r, i: r[-1].update(end_mono=r[-1]["end_mono"] + 1000)),
+     logs("traffic:requests:end_mono_mismatch")),
     ("traffic:interval_sessions", traffic_rows(lambda r, i: _first_iv(i).update(admitted_sessions=0,
                                                                                  dropped_sessions=1)),
      logs("traffic:interval_sessions:2:admitted_sessions:0!=1", "traffic:interval_sessions:2:dropped_sessions:1!=0")),
