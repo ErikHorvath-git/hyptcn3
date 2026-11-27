@@ -175,7 +175,7 @@ ROWS = (
         "sidecar)",
         (CASE + "[lateness]",),
         (("B3", "0b3c276"),), "c39accb", "refusal",
-        (("cycle start later than the audit bound", "scripts/collection.py:1923"),),
+        (("cycle start later than the audit bound", "scripts/collection.py:1931"),),
         ()),
     Row(2, (("capture", "R7"), ("lab", "LAB-04")),
         "an event that did not run or had no effect was accepted (the auditor's probe: an unexecuted event accepted "
@@ -190,15 +190,15 @@ ROWS = (
          "lab/tests/test_udalosti_effect.py::test_predicate_is_true_with_the_effect_and_false_without"
          "[zataz_pamate-none-14]"),
         (("B3", "0b3c276"), ("B5a", "2a95852")), "c39accb", "refusal",
-        (("event_not_executed", "scripts/collection_logs.py:692"),
-         ("event_without_effect", "scripts/collection_logs.py:695")),
+        (("event_not_executed", "scripts/collection_logs.py:711"),
+         ("event_without_effect", "scripts/collection_logs.py:714")),
         ()),
     Row(3, (("capture", "R6"),),
         "a collector warning did not reject the session (the verifier's probe: two WARN lines accepted)",
         ("scripts/tests/test_collection_logs.py::test_collector_warning_is_judged_by_the_allowed_patterns[null]",
          CASE + "[logs:collector_warning_unlisted]"),
         (("B3", "0b3c276"),), "c39accb", "refusal",
-        (("collector_warning_unlisted", "scripts/collection_logs.py:675"),),
+        (("collector_warning_unlisted", "scripts/collection_logs.py:694"),),
         ()),
     Row(4, (("capture", "R3"),),
         "rows closed by a parser rule were accepted without a limit, a test with a numeric cap (the verifier's probe: "
@@ -222,12 +222,12 @@ ROWS = (
          "scripts/tests/test_collector_majflt.py::test_a_bound_refuses_one_cycle_above_it_and_accepts_a_cycle_at_it"
          "[zero]"),
         (("B3", "0b3c276"), ("B5a", "2a95852"), (LATER, "a446043", "Q29")), "c39accb", "refusal",
-        (("QEMU swap was not disabled before start: memory.swap.max is ", "scripts/collection.py:1177"),
-         ("QEMU memory was swapped before start: qemu_swap_kb is ", "scripts/collection.py:1181"),
-         ("QEMU swap was not disabled before start", "scripts/collection.py:1857"),
-         ("QEMU memory was swapped before start", "scripts/collection.py:1861"),
-         ("qemu_swap", "scripts/collection_logs.py:645"),
-         ("collector major faults per cycle above the audit bound", "scripts/collection.py:1951")),
+        (("QEMU swap was not disabled before start: memory.swap.max is ", "scripts/collection.py:1185"),
+         ("QEMU memory was swapped before start: qemu_swap_kb is ", "scripts/collection.py:1189"),
+         ("QEMU swap was not disabled before start", "scripts/collection.py:1865"),
+         ("QEMU memory was swapped before start", "scripts/collection.py:1869"),
+         ("qemu_swap", "scripts/collection_logs.py:664"),
+         ("collector major faults per cycle above the audit bound", "scripts/collection.py:1959")),
         ("audit.collector_majflt_max is null in config/collection-v5.json until G2 (proposal 10.9, the lead's answer "
          "to Q29; the fix of B10, agent Q), so under the G0 file the probe of 500 collector major faults per cycle is "
          "still accepted: the audit records and prints the counts (values.collector_majflt) and they are never a "
@@ -258,7 +258,7 @@ ROWS = (
          "[offered_load_differs_from_plan]",
          CASE + "[logs:offered_load_differs_from_plan]"),
         (("B5b", "e64e619"),), "11319ee", "refusal",
-        (("offered_load_differs_from_plan", "scripts/collection_logs.py:817"),),
+        (("offered_load_differs_from_plan", "scripts/collection_logs.py:836"),),
         ()),
     Row(9, (("lab", "LAB-02"),),
         "a loop of restarts without end (the record ran no probe of the code: the verifier computed the gaps by "
@@ -328,7 +328,7 @@ ROWS = (
         (("B2", "7a459eb"), ("B4", "9e7e43c")), "432dd2e", "refusal",
         (("incomplete model inputs under ", "features/acceptance.py:245"),
          ("pilot is not accepted for this protocol: ", "scripts/campaign.py:654"),
-         ("invalid_rows.max is unreachable under the score coverage gate", "scripts/collection.py:195"),
+         ("invalid_rows.max is unreachable under the score coverage gate", "scripts/collection.py:203"),
          ("score coverage gate outside the interval bound to invalid_rows.max", "scripts/protocol_v5.py:1880")),
         ()),
     Row(15, (("process", "R9"),),
@@ -360,7 +360,7 @@ ROWS = (
         "capture R11)",
         (CASE + "[missing_key:frame3.json:capture.queue_wait_ms]",),
         (("B3", "0b3c276"),), "c39accb", "refusal",
-        (("missing key: {name}:{path}", "scripts/collection.py:1736"),),
+        (("missing key: {name}:{path}", "scripts/collection.py:1744"),),
         ("the collector still writes no effective interval, jitter, full_every or build into its sidecars, which "
          "capture R11's control asked for; docs/NAVRH_PROTOKOL_V5_SLEDOVATELNOST.sk.md marks R11 partly done "
          "(a change of the collector binary)",)),
