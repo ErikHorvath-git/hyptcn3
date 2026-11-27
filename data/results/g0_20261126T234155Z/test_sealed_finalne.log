@@ -1,0 +1,9 @@
+# commit 10c94ca3e8df12f31e5ea52b9bb3081ddfdee566
+# date 2026-11-27T01:17:06Z
+# host debian
+# git status --porcelain (only this evidence directory, when clean):
+#   ?? data/results/g0_20261126T234155Z/
+# command nice -n 19 .venv/bin/python -B -m pytest -q -p no:cacheprovider tcn/tests/test_finalne.py
+...................................                                      [100%]
+35 passed in 194.60s (0:03:14)
+exit 0

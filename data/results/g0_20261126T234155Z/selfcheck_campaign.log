@@ -1,0 +1,473 @@
+# commit 10c94ca3e8df12f31e5ea52b9bb3081ddfdee566
+# date 2026-11-27T01:15:08Z
+# host debian
+# git status --porcelain (only this evidence directory, when clean):
+#   ?? data/results/g0_20261126T234155Z/
+# command nice -n 19 .venv/bin/python -B scripts/collection.py --protocol config/collection-v5.json selfcheck --mode campaign --stage G0
+{
+  "protocol": "/home/eh/projects/hyptcn3/config/collection-v5.json",
+  "protocol_sha256": "d6ea944ceae3ee8789687670758a132f60e030230062aadbba80eea48f54d376",
+  "mode": "campaign",
+  "stage": "G0",
+  "checks": [
+    {
+      "check": "keys",
+      "result": "passed",
+      "reasons": []
+    },
+    {
+      "check": "loader",
+      "result": "passed",
+      "reasons": []
+    },
+    {
+      "check": "reachability",
+      "result": "passed",
+      "reasons": []
+    },
+    {
+      "check": "role_sizes",
+      "result": "passed",
+      "reasons": []
+    },
+    {
+      "check": "scenario_balance",
+      "result": "passed",
+      "reasons": []
+    },
+    {
+      "check": "events",
+      "result": "passed",
+      "reasons": []
+    },
+    {
+      "check": "controls",
+      "result": "passed",
+      "reasons": []
+    },
+    {
+      "check": "full_snapshot_guard",
+      "result": "passed",
+      "reasons": []
+    },
+    {
+      "check": "times",
+      "result": "passed",
+      "reasons": []
+    },
+    {
+      "check": "phases",
+      "result": "passed",
+      "reasons": []
+    },
+    {
+      "check": "streams",
+      "result": "passed",
+      "reasons": []
+    },
+    {
+      "check": "role_order",
+      "result": "passed",
+      "reasons": []
+    },
+    {
+      "check": "analysis",
+      "result": "passed",
+      "reasons": []
+    },
+    {
+      "check": "rehearsal",
+      "result": "passed",
+      "reasons": []
+    },
+    {
+      "check": "lab_register",
+      "result": "passed",
+      "reasons": []
+    }
+  ],
+  "summary": {
+    "event_types_by_place_in_session": {
+      "train": {
+        "naprazdno": [
+          4,
+          5,
+          3
+        ],
+        "restart_databazy": [
+          4,
+          3,
+          5
+        ],
+        "udrzba_zaloha": [
+          4,
+          3,
+          5
+        ],
+        "zamok_tabulky": [
+          5,
+          4,
+          3
+        ],
+        "zataz_pamate": [
+          4,
+          4,
+          4
+        ],
+        "zla_konfiguracia_sluzby": [
+          3,
+          5,
+          4
+        ]
+      },
+      "dev": {
+        "naprazdno": [
+          2,
+          2,
+          0
+        ],
+        "restart_databazy": [
+          1,
+          2,
+          1
+        ],
+        "udrzba_zaloha": [
+          0,
+          2,
+          2
+        ],
+        "zamok_tabulky": [
+          3,
+          0,
+          1
+        ],
+        "zataz_pamate": [
+          1,
+          1,
+          2
+        ],
+        "zla_konfiguracia_sluzby": [
+          1,
+          1,
+          2
+        ]
+      },
+      "calibration": {
+        "naprazdno": [
+          2,
+          3,
+          3
+        ],
+        "restart_databazy": [
+          2,
+          4,
+          2
+        ],
+        "udrzba_zaloha": [
+          1,
+          3,
+          4
+        ],
+        "zamok_tabulky": [
+          4,
+          1,
+          3
+        ],
+        "zataz_pamate": [
+          3,
+          4,
+          1
+        ],
+        "zla_konfiguracia_sluzby": [
+          4,
+          1,
+          3
+        ]
+      },
+      "test_benign": {
+        "naprazdno": [
+          6,
+          3,
+          3
+        ],
+        "restart_databazy": [
+          4,
+          3,
+          5
+        ],
+        "udrzba_zaloha": [
+          6,
+          3,
+          3
+        ],
+        "zamok_tabulky": [
+          3,
+          4,
+          5
+        ],
+        "zataz_pamate": [
+          2,
+          5,
+          5
+        ],
+        "zla_konfiguracia_sluzby": [
+          3,
+          6,
+          3
+        ]
+      }
+    },
+    "event_types_by_vm": {
+      "train": {
+        "naprazdno": {
+          "a": 6,
+          "b": 6
+        },
+        "restart_databazy": {
+          "a": 6,
+          "b": 6
+        },
+        "udrzba_zaloha": {
+          "a": 6,
+          "b": 6
+        },
+        "zamok_tabulky": {
+          "a": 6,
+          "b": 6
+        },
+        "zataz_pamate": {
+          "a": 6,
+          "b": 6
+        },
+        "zla_konfiguracia_sluzby": {
+          "a": 6,
+          "b": 6
+        }
+      },
+      "dev": {
+        "naprazdno": {
+          "a": 2,
+          "b": 2
+        },
+        "restart_databazy": {
+          "a": 2,
+          "b": 2
+        },
+        "udrzba_zaloha": {
+          "a": 2,
+          "b": 2
+        },
+        "zamok_tabulky": {
+          "a": 2,
+          "b": 2
+        },
+        "zataz_pamate": {
+          "a": 2,
+          "b": 2
+        },
+        "zla_konfiguracia_sluzby": {
+          "a": 2,
+          "b": 2
+        }
+      },
+      "calibration": {
+        "naprazdno": {
+          "a": 4,
+          "b": 4
+        },
+        "restart_databazy": {
+          "a": 4,
+          "b": 4
+        },
+        "udrzba_zaloha": {
+          "a": 4,
+          "b": 4
+        },
+        "zamok_tabulky": {
+          "a": 4,
+          "b": 4
+        },
+        "zataz_pamate": {
+          "a": 4,
+          "b": 4
+        },
+        "zla_konfiguracia_sluzby": {
+          "a": 4,
+          "b": 4
+        }
+      },
+      "test_benign": {
+        "naprazdno": {
+          "a": 6,
+          "b": 6
+        },
+        "restart_databazy": {
+          "a": 6,
+          "b": 6
+        },
+        "udrzba_zaloha": {
+          "a": 6,
+          "b": 6
+        },
+        "zamok_tabulky": {
+          "a": 6,
+          "b": 6
+        },
+        "zataz_pamate": {
+          "a": 6,
+          "b": 6
+        },
+        "zla_konfiguracia_sluzby": {
+          "a": 6,
+          "b": 6
+        }
+      }
+    },
+    "phase_tenths": {
+      "train": {
+        "starts": [
+          7,
+          7,
+          8,
+          7,
+          7,
+          7,
+          8,
+          7,
+          7,
+          7
+        ],
+        "stops": [
+          7,
+          7,
+          7,
+          7,
+          7,
+          8,
+          7,
+          8,
+          7,
+          7
+        ]
+      },
+      "dev": {
+        "starts": [
+          3,
+          3,
+          2,
+          2,
+          2,
+          3,
+          2,
+          2,
+          2,
+          3
+        ],
+        "stops": [
+          3,
+          2,
+          3,
+          3,
+          2,
+          2,
+          2,
+          2,
+          3,
+          2
+        ]
+      },
+      "calibration": {
+        "starts": [
+          5,
+          5,
+          4,
+          5,
+          5,
+          4,
+          5,
+          5,
+          5,
+          5
+        ],
+        "stops": [
+          5,
+          5,
+          5,
+          5,
+          4,
+          5,
+          5,
+          5,
+          5,
+          4
+        ]
+      },
+      "test_benign": {
+        "starts": [
+          8,
+          7,
+          7,
+          7,
+          7,
+          7,
+          7,
+          7,
+          8,
+          7
+        ],
+        "stops": [
+          7,
+          7,
+          8,
+          7,
+          7,
+          7,
+          7,
+          7,
+          8,
+          7
+        ]
+      },
+      "test_controls": {
+        "starts": [
+          7,
+          7,
+          7,
+          7,
+          7,
+          7,
+          7,
+          7,
+          7,
+          7
+        ],
+        "stops": [
+          7,
+          7,
+          7,
+          7,
+          7,
+          7,
+          7,
+          7,
+          7,
+          7
+        ]
+      }
+    },
+    "start_phases_ks": {
+      "starts": 286,
+      "distance": 0.0209,
+      "critical": 0.0797,
+      "level": 0.05
+    },
+    "stop_phases_ks": {
+      "stops": 286,
+      "distance": 0.0273,
+      "critical": 0.0797,
+      "level": 0.05
+    }
+  },
+  "passed": true
+}
+exit 0

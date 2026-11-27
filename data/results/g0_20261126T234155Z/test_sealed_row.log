@@ -1,0 +1,9 @@
+# commit 10c94ca3e8df12f31e5ea52b9bb3081ddfdee566
+# date 2026-11-27T01:15:46Z
+# host debian
+# git status --porcelain (only this evidence directory, when clean):
+#   ?? data/results/g0_20261126T234155Z/
+# command nice -n 19 .venv/bin/python -B -m pytest -q -p no:cacheprovider tcn/tests/test_pecat.py::test_a_second_final_run_is_refused[copy_of_the_index] tcn/tests/test_finalne.py::test_a_second_run_is_refused[copy_elsewhere] tcn/tests/test_finalne.py::test_a_refusal_before_the_seal_consumes_nothing[dirty_tree] tcn/tests/test_eval_v5.py::test_a_sealed_role_is_evaluated_by_the_final_command_or_in_a_rehearsal[campaign-False-False-sealed role test_benign] tcn/tests/test_pecat.py::test_replay_of_a_sealed_archive_is_refused[safeguard.runtime.replay_archive]
+.....                                                                    [100%]
+5 passed in 3.63s
+exit 0

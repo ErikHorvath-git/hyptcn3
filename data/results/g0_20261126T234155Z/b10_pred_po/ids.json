@@ -1,0 +1,484 @@
+{
+ "schema": "hyptcn3/g0-copy/1",
+ "commit": "10c94ca3e8df12f31e5ea52b9bb3081ddfdee566",
+ "date": "2026-11-27T01:21:28+00:00",
+ "host": "debian",
+ "guest": "none: a machine record of B10's before and after, made without a VM",
+ "command": "dokazy/G0/g0_dokazy5.sh: a copy of /home/eh/hyptcn3-logs/v5/dokazy/B10/pred_po_zlucene/ids.json",
+ "n": 4,
+ "source": "/home/eh/hyptcn3-logs/v5/dokazy/B10/pred_po_zlucene/ids.json",
+ "source_sha256": "5de31910dc905874746f69bfa35f8fab5128df06b3c3f96f10388b7a8b716b78",
+ "source_made_by": "dokazy/B10/pred_po/pred_po.py --tree <merge clone of B10 at e5f7954>",
+ "values": {
+  "tree": "/tmp/claude-1000/-home-eh-projects-hyptcn3/9a8a89c1-0c71-4e83-9fec-bd4ea2021d22/scratchpad/b10/c",
+  "head": "e5f7954c529e8828c6d6dd6bbce26f20f9714f1a",
+  "work": "/tmp/claude-1000/-home-eh-projects-hyptcn3/9a8a89c1-0c71-4e83-9fec-bd4ea2021d22/scratchpad/b10/c_praca/m/pp",
+  "rows": [
+   {
+    "number": 1,
+    "risks": [
+     [
+      "capture",
+      "R5"
+     ]
+    ],
+    "fixed": [
+     [
+      "B3",
+      "0b3c276"
+     ]
+    ],
+    "before": "c39accb",
+    "kind": "refusal",
+    "tests": [
+     "scripts/tests/test_audit_selftest.py::test_bad_session_is_refused_with_exactly_its_reasons[lateness]"
+    ]
+   },
+   {
+    "number": 2,
+    "risks": [
+     [
+      "capture",
+      "R7"
+     ],
+     [
+      "lab",
+      "LAB-04"
+     ]
+    ],
+    "fixed": [
+     [
+      "B3",
+      "0b3c276"
+     ],
+     [
+      "B5a",
+      "2a95852"
+     ]
+    ],
+    "before": "c39accb",
+    "kind": "refusal",
+    "tests": [
+     "scripts/tests/test_audit_selftest.py::test_bad_session_is_refused_with_exactly_its_reasons[logs:event_not_executed]",
+     "scripts/tests/test_audit_selftest.py::test_bad_session_is_refused_with_exactly_its_reasons[logs:event_without_effect]",
+     "scripts/tests/test_effect_contract.py::test_event_record_without_a_true_ok_is_refused_for_exactly_that[ok_false]",
+     "lab/tests/test_udalosti_effect.py::test_predicate_is_true_with_the_effect_and_false_without[zamok_tabulky-none-9]",
+     "lab/tests/test_udalosti_effect.py::test_predicate_is_true_with_the_effect_and_false_without[udrzba_zaloha-none-11]",
+     "lab/tests/test_udalosti_effect.py::test_predicate_is_true_with_the_effect_and_false_without[zataz_pamate-none-14]"
+    ]
+   },
+   {
+    "number": 3,
+    "risks": [
+     [
+      "capture",
+      "R6"
+     ]
+    ],
+    "fixed": [
+     [
+      "B3",
+      "0b3c276"
+     ]
+    ],
+    "before": "c39accb",
+    "kind": "refusal",
+    "tests": [
+     "scripts/tests/test_collection_logs.py::test_collector_warning_is_judged_by_the_allowed_patterns[null]",
+     "scripts/tests/test_audit_selftest.py::test_bad_session_is_refused_with_exactly_its_reasons[logs:collector_warning_unlisted]"
+    ]
+   },
+   {
+    "number": 4,
+    "risks": [
+     [
+      "capture",
+      "R3"
+     ]
+    ],
+    "fixed": [
+     [
+      "B3",
+      "0b3c276"
+     ],
+     [
+      "B10",
+      "f0506e8",
+      "B3 S1"
+     ]
+    ],
+    "before": "c39accb",
+    "kind": "refusal",
+    "tests": [
+     "scripts/tests/test_audit_selftest.py::test_cap_of_rule_closed_rows_once_it_is_set[above]",
+     "scripts/tests/test_audit_selftest.py::test_the_self_test_builds_the_case_of_the_cap_once_the_cap_is_a_number[zero]",
+     "scripts/tests/test_audit_selftest.py::test_the_self_test_builds_the_case_of_the_cap_once_the_cap_is_a_number[three]",
+     "scripts/tests/test_audit_selftest.py::test_the_self_test_builds_the_case_of_the_cap_once_the_cap_is_a_number[four]",
+     "scripts/tests/test_audit_selftest.py::test_the_self_test_builds_the_case_of_the_cap_once_the_cap_is_a_number[every_row]"
+    ]
+   },
+   {
+    "number": 5,
+    "risks": [
+     [
+      "capture",
+      "R4"
+     ],
+     [
+      "process",
+      "R5"
+     ]
+    ],
+    "fixed": [
+     [
+      "B3",
+      "0b3c276"
+     ],
+     [
+      "B5a",
+      "2a95852"
+     ],
+     [
+      "B10",
+      "a446043",
+      "Q29"
+     ]
+    ],
+    "before": "c39accb",
+    "kind": "refusal",
+    "tests": [
+     "scripts/tests/test_audit_selftest.py::test_bad_session_is_refused_with_exactly_its_reasons[logs:qemu_swap]",
+     "scripts/tests/test_audit_selftest.py::test_bad_session_is_refused_with_exactly_its_reasons[logs:qemu_swap:absent]",
+     "scripts/tests/test_audit_selftest.py::test_bad_session_is_refused_with_exactly_its_reasons[qemu_swap]",
+     "scripts/tests/test_audit_selftest.py::test_bad_session_is_refused_with_exactly_its_reasons[qemu_swapped]",
+     "scripts/tests/test_audit_selftest.py::test_run_session_refuses_qemu_swap_that_is_not_forbidden[max]",
+     "scripts/tests/test_audit_selftest.py::test_run_session_refuses_qemu_memory_that_was_swapped_before_start[8592]",
+     "scripts/tests/test_collector_majflt.py::test_a_bound_refuses_one_cycle_above_it_and_accepts_a_cycle_at_it[zero]"
+    ]
+   },
+   {
+    "number": 6,
+    "risks": [
+     [
+      "capture",
+      "R1"
+     ],
+     [
+      "lab",
+      "LAB-01"
+     ]
+    ],
+    "fixed": [
+     [
+      "B4",
+      "9e7e43c"
+     ],
+     [
+      "B4b",
+      "fd021b1"
+     ]
+    ],
+    "before": "8ae9f39",
+    "kind": "refusal",
+    "tests": [
+     "scripts/tests/test_protocol_v5.py::test_selfcheck_passes_the_file_and_fails_each_deliberate_error[locked_to_grid]",
+     "scripts/tests/test_protocol_v5.py::test_selfcheck_passes_the_file_and_fails_each_deliberate_error[phases_at_tenth_edges]"
+    ]
+   },
+   {
+    "number": 7,
+    "risks": [
+     [
+      "lab",
+      "LAB-11"
+     ]
+    ],
+    "fixed": [
+     [
+      "B4",
+      "9e7e43c"
+     ]
+    ],
+    "before": "8ae9f39",
+    "kind": "refusal",
+    "tests": [
+     "scripts/tests/test_protocol_v5.py::test_selfcheck_passes_the_file_and_fails_each_deliberate_error[common_seed]"
+    ]
+   },
+   {
+    "number": 8,
+    "risks": [
+     [
+      "lab",
+      "LAB-12"
+     ]
+    ],
+    "fixed": [
+     [
+      "B5b",
+      "e64e619"
+     ]
+    ],
+    "before": "11319ee",
+    "kind": "refusal",
+    "tests": [
+     "scripts/tests/test_traffic_realism.py::test_a_log_that_breaks_one_requirement_is_refused_with_its_name[offered_load_differs_from_plan]",
+     "scripts/tests/test_audit_selftest.py::test_bad_session_is_refused_with_exactly_its_reasons[logs:offered_load_differs_from_plan]"
+    ]
+   },
+   {
+    "number": 9,
+    "risks": [
+     [
+      "lab",
+      "LAB-02"
+     ]
+    ],
+    "fixed": [
+     [
+      "B5a",
+      "2a95852"
+     ]
+    ],
+    "before": "8bdc2ae",
+    "kind": "limit",
+    "tests": [
+     "lab/tests/test_periods.py::test_entries_are_complete_and_process_creating_ones_are_bounded_or_random",
+     "lab/tests/test_periods.py::test_bounds_and_random_delays_of_the_register_are_those_of_the_source"
+    ]
+   },
+   {
+    "number": 10,
+    "risks": [
+     [
+      "model",
+      "M5"
+     ],
+     [
+      "evaluation",
+      "R2"
+     ],
+     [
+      "process",
+      "R8"
+     ]
+    ],
+    "fixed": [
+     [
+      "B7c",
+      "576aa4b"
+     ]
+    ],
+    "before": "062178d",
+    "kind": "refusal",
+    "tests": [
+     "tcn/tests/test_pecat.py::test_a_second_final_run_is_refused[copy_of_the_index]",
+     "tcn/tests/test_finalne.py::test_a_second_run_is_refused[copy_elsewhere]",
+     "tcn/tests/test_finalne.py::test_a_refusal_before_the_seal_consumes_nothing[dirty_tree]",
+     "tcn/tests/test_eval_v5.py::test_a_sealed_role_is_evaluated_by_the_final_command_or_in_a_rehearsal[campaign-False-False-sealed role test_benign]",
+     "tcn/tests/test_pecat.py::test_replay_of_a_sealed_archive_is_refused[safeguard.runtime.replay_archive]"
+    ]
+   },
+   {
+    "number": 11,
+    "risks": [
+     [
+      "evaluation",
+      "R7"
+     ]
+    ],
+    "fixed": [
+     [
+      "B7c",
+      "576aa4b"
+     ]
+    ],
+    "before": "062178d",
+    "kind": "status",
+    "tests": [
+     "tcn/tests/test_eval_v5.py::test_an_occurrence_is_evaluable_at_half_of_its_first_60_s_scored[7-False]",
+     "tcn/tests/test_eval_v5.py::test_an_unscored_stretch_is_nevyhodnotene_in_the_output"
+    ]
+   },
+   {
+    "number": 12,
+    "risks": [
+     [
+      "model",
+      "M9"
+     ],
+     [
+      "evaluation",
+      "R8"
+     ]
+    ],
+    "fixed": [
+     [
+      "B6b",
+      "dea37ca"
+     ],
+     [
+      "B7c",
+      "576aa4b"
+     ]
+    ],
+    "before": "f99b924",
+    "kind": "refusal",
+    "tests": [
+     "safeguard/tests/test_training.py::test_analysis_parameters_are_refused_by_name[fpr_outside_diagnostic]",
+     "tcn/tests/test_odovzdanie_korpusu.py::test_parameter_analyzy_z_prikazoveho_riadka_iba_s_diagnostikou",
+     "tcn/tests/test_porovnanie.py::test_fit_pod_schemou_3_odmietne_parameter_analyzy[fpr]"
+    ]
+   },
+   {
+    "number": 13,
+    "risks": [
+     [
+      "process",
+      "R1"
+     ],
+     [
+      "features",
+      "GF-8"
+     ],
+     [
+      "model",
+      "M4"
+     ]
+    ],
+    "fixed": [
+     [
+      "B1",
+      "a41973e"
+     ]
+    ],
+    "before": "48e198c",
+    "kind": "refusal",
+    "tests": [
+     "tcn/tests/test_odovzdanie_korpusu.py::test_ostra_kontrola_indexu_prijme_predponu_skupin",
+     "tcn/tests/test_odovzdanie_korpusu.py::test_ostra_kontrola_indexu_odmietne_skupinu_bez_predpony",
+     "tcn/tests/test_odovzdanie_korpusu.py::test_trening_prijme_tolerovany_riadok",
+     "tcn/tests/test_odovzdanie_korpusu.py::test_kazda_metoda_prijme_tolerovany_riadok",
+     "tcn/tests/test_odovzdanie_korpusu.py::test_prehratie_s_tolerovanym_riadkom_konci_nulou",
+     "tcn/tests/test_odovzdanie_korpusu.py::test_trening_a_metody_odmietnu_riadok_mimo_pravidla[nad_pocet-prva-train]"
+    ]
+   },
+   {
+    "number": 14,
+    "risks": [
+     [
+      "process",
+      "R7"
+     ],
+     [
+      "capture",
+      "R10"
+     ]
+    ],
+    "fixed": [
+     [
+      "B2",
+      "7a459eb"
+     ],
+     [
+      "B4",
+      "9e7e43c"
+     ]
+    ],
+    "before": "432dd2e",
+    "kind": "refusal",
+    "tests": [
+     "scripts/tests/test_pilot_gate.py::test_pilot_cell_audit_decision[V4-one_row]",
+     "scripts/tests/test_pilot_gate.py::test_pilot_gate_follows_the_audit[V4-one_row-honest]",
+     "scripts/tests/test_protocol_v5.py::test_selfcheck_passes_the_file_and_fails_each_deliberate_error[gate_085]"
+    ]
+   },
+   {
+    "number": 15,
+    "risks": [
+     [
+      "process",
+      "R9"
+     ]
+    ],
+    "fixed": [
+     [
+      "B9b",
+      "f700204"
+     ]
+    ],
+    "before": "bae0ee8",
+    "kind": "refusal",
+    "tests": [
+     "scripts/tests/test_campaign_v5.py::test_finish_corpus_without_the_record_of_the_complete_ending_fails",
+     "scripts/tests/test_campaign_endings.py::test_the_record_of_a_closing_ending_carries_the_entry_of_the_measurement_log",
+     "scripts/tests/test_campaign_endings.py::test_a_hash_that_changes_during_a_run_makes_the_campaign_invalid[measurement]"
+    ]
+   },
+   {
+    "number": 16,
+    "risks": [
+     [
+      "capture",
+      "R8"
+     ]
+    ],
+    "fixed": [
+     [
+      "B3",
+      "0b3c276"
+     ]
+    ],
+    "before": "c39accb",
+    "kind": "refusal",
+    "tests": [
+     "scripts/tests/test_audit_selftest.py::test_every_reason_of_the_audit_and_the_verdict_has_a_case",
+     "scripts/tests/test_audit_cases_logs.py::test_cases_cover_every_problem_key_of_the_log_audit",
+     "scripts/tests/test_audit_selftest.py::test_require_selftest_refuses_without_a_valid_record[absent]",
+     "scripts/tests/test_audit_selftest.py::test_bad_session_is_refused_with_exactly_its_reasons[timestamp_gap]"
+    ]
+   },
+   {
+    "number": 17,
+    "risks": [
+     [
+      "capture",
+      "R11"
+     ]
+    ],
+    "fixed": [
+     [
+      "B3",
+      "0b3c276"
+     ]
+    ],
+    "before": "c39accb",
+    "kind": "refusal",
+    "tests": [
+     "scripts/tests/test_audit_selftest.py::test_bad_session_is_refused_with_exactly_its_reasons[missing_key:frame3.json:capture.queue_wait_ms]"
+    ]
+   },
+   {
+    "number": 18,
+    "risks": [
+     [
+      "process",
+      "R11"
+     ]
+    ],
+    "fixed": [
+     [
+      "B9a",
+      "a0bfa61"
+     ]
+    ],
+    "before": "ac95f01",
+    "kind": "refusal",
+    "tests": [
+     "scripts/tests/test_campaign.py::test_finish_corpus_keeps_the_error_text_of_the_production_check",
+     "scripts/tests/test_campaign_v5.py::test_a_small_campaign_runs_from_initialize_to_finish_corpus"
+    ]
+   }
+  ]
+ }
+}

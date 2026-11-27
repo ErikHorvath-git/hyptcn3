@@ -1,0 +1,209 @@
+# commit 10c94ca3e8df12f31e5ea52b9bb3081ddfdee566
+# date 2026-11-26T23:41:55Z
+# host debian
+# git status --porcelain (only this evidence directory, when clean):
+#   ?? data/results/g0_20261126T234155Z/
+# command nice -n 19 .venv/bin/python -m pytest -q -p no:cacheprovider
+....ss.s................................................................ [  1%]
+........................................................................ [  2%]
+........................................................................ [  3%]
+........................................................................ [  4%]
+........................................................................ [  5%]
+........................................................................ [  6%]
+........................................................................ [  8%]
+...........................................................sss.......... [  9%]
+........................................................................ [ 10%]
+........................................................................ [ 11%]
+...............ssssss................................................... [ 12%]
+.............ss.....ssss.........s...................................... [ 13%]
+.............................................sss........................ [ 14%]
+..sss.......................ssss..........s.sssssssssss................. [ 16%]
+........................................................................ [ 17%]
+........................................................................ [ 18%]
+........................................................................ [ 19%]
+........................................................................ [ 20%]
+........................................................................ [ 21%]
+........................................................................ [ 22%]
+........................................................................ [ 24%]
+........................................................................ [ 25%]
+........................................................................ [ 26%]
+........................................................................ [ 27%]
+........................................................................ [ 28%]
+........................................................................ [ 29%]
+........................................................................ [ 31%]
+........................................................................ [ 32%]
+........................................................................ [ 33%]
+........................................................................ [ 34%]
+........................................................................ [ 35%]
+........................................................................ [ 36%]
+........................................................................ [ 37%]
+........................................................................ [ 39%]
+........................................................................ [ 40%]
+........................................................................ [ 41%]
+........................................................................ [ 42%]
+........................................................................ [ 43%]
+........................................................................ [ 44%]
+........................................................................ [ 45%]
+........................................................................ [ 47%]
+........................................................................ [ 48%]
+........................................................................ [ 49%]
+........................................................................ [ 50%]
+........................................................................ [ 51%]
+........................................................................ [ 52%]
+........................................................................ [ 53%]
+........................................................................ [ 55%]
+........................................................................ [ 56%]
+........................................................................ [ 57%]
+........................................................................ [ 58%]
+........................................................................ [ 59%]
+........................................................................ [ 60%]
+........................................................................ [ 62%]
+........................................................................ [ 63%]
+........................................................................ [ 64%]
+........................................................................ [ 65%]
+........................................................................ [ 66%]
+........................................................................ [ 67%]
+........................................................................ [ 68%]
+........................................................................ [ 70%]
+........................................................................ [ 71%]
+........................................................................ [ 72%]
+................................F....................................... [ 73%]
+........................................................................ [ 74%]
+........................................................................ [ 75%]
+........................................................................ [ 76%]
+........................................................................ [ 78%]
+........................................................................ [ 79%]
+........................................................................ [ 80%]
+........................................................................ [ 81%]
+........................................................................ [ 82%]
+........................................................................ [ 83%]
+........................................................................ [ 84%]
+........................................................................ [ 86%]
+........................................................................ [ 87%]
+........................................................................ [ 88%]
+........................................................................ [ 89%]
+........................................................................ [ 90%]
+........................................................................ [ 91%]
+........................................................................ [ 93%]
+........................................................................ [ 94%]
+........................................................................ [ 95%]
+........................................................................ [ 96%]
+........................................................................ [ 97%]
+........................................F............................... [ 98%]
+........................................................................ [ 99%]
+......                                                                   [100%]
+=================================== FAILURES ===================================
+_ test_the_snapshots_restored_from_the_archive_of_a_sealed_session_are_refused_by_name _
+
+sealed = (PosixPath('/tmp/pytest-of-eh/pytest-0/test_the_snapshots_restored_fr0/corpus/corpus.json'), {'tb-1': {'features': '/t...es_sha256': 'd6bd95cd19b4cdb4b769defa221c68cf04866858c11fe1be318c8dd5d0ea7f77', 'group': 'g-tr-1', 'id': 'tr-1', ...}})
+ledger = PosixPath('/tmp/pytest-of-eh/pytest-0/test_the_snapshots_restored_fr0/ledger/kniha_pecati.json')
+tmp_path = PosixPath('/tmp/pytest-of-eh/pytest-0/test_the_snapshots_restored_fr0')
+
+    def test_the_snapshots_restored_from_the_archive_of_a_sealed_session_are_refused_by_name(sealed, ledger, tmp_path):
+        """The lead's answer to question Q19 (finding N1 of the B7c confirmation, package B10):
+        scripts/collection_archive.py restore_raw writes into the new directory the marker restored_from.json, which names
+        the session of the archive's session.json (its session_id and campaign_id), the archive and its sha256 as the
+        receipt states it (the sha256 of the manifest) and the sha256 of the session.json; the snapshot guard reads it as a
+        session.json, so the raw snapshots of a sealed session restored from its archive are refused by name, at the guard
+        and at an entry point, before anything is written. A restored raw/ of a session the ledger does not hold is not
+        sealed and names its marker; a marker without a session_id is refused by name, as a session.json without one."""
+        from safeguard.runtime import run_directory
+        from scripts import collection_archive as arc
+        from tcn import pecat
+        _, records = sealed
+>       archive, meta = archived_session(tmp_path, "tb-1")
+
+tcn/tests/test_pecat.py:559: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+tcn/tests/test_pecat.py:543: in archived_session
+    arc.archive_session(source, archive, lambda: None)
+scripts/collection_archive.py:458: in archive_session
+    doc = publish_archive(source, destination, guard, reserve_bytes, compress=compress)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+source = PosixPath('/tmp/pytest-of-eh/pytest-0/test_the_snapshots_restored_fr0/sessions/tb-1')
+destination = PosixPath('/tmp/pytest-of-eh/pytest-0/test_the_snapshots_restored_fr0/archive/tb-1')
+guard = <function archived_session.<locals>.<lambda> at 0x7f6653dfb600>
+reserve_bytes = 1073741824, compress = None
+
+    def publish_archive(source, destination, guard, reserve_bytes, compress=None):
+        """Resume only proven staged members; publish only after two-sided checks."""
+        source, destination = Path(source).absolute(), Path(destination).absolute()
+        guard()
+        if destination.exists():
+            return verify_archive(destination, source)
+        if (source / RECEIPT).exists() or (source / PENDING).exists():
+            raise ValueError("archive missing after local reclamation was started")
+        info = codec_info(compress) if compress is not None else None
+        expected = inventory(source)
+        if (MANIFEST in expected or RECEIPT in expected
+                or any(n.endswith(".copying") or n.startswith("." + MANIFEST + ".") for n in expected)):
+            raise ValueError("reserved archive metadata in source")
+        files = plan_storage(expected, compress)
+        stored = {v.get("stored", n): n for n, v in files.items()}
+        needed = sum(v["size"] for v in expected.values())
+        mkdir_durable(destination.parent)
+        partial = destination.with_name(".partial-" + destination.name)
+        if partial.is_symlink():
+            raise ValueError("archive staging directory is a symlink")
+        mkdir_durable(partial)
+        staged = files_in(partial)
+        for name in list(staged):
+            # A kill between fsync(temp) and publication may leave this scratch file.
+            if re.fullmatch(r"\.archive-manifest\.json\.[0-9a-f]{32}\.tmp", name):
+                staged.pop(name).unlink()
+        allowed = set(stored) | {MANIFEST} | {n + ".copying" for n in stored}
+        if set(staged) - allowed:
+            raise ValueError("unexpected file in archive staging directory")
+        # Remaining original bytes bound the work; compressed sizes are unknown in advance.
+        copied = sum(v["size"] for n, v in files.items() if (partial / v.get("stored", n)).is_file())
+        if shutil.disk_usage(partial).free < max(0, needed - copied) + reserve_bytes:
+>           raise ValueError("insufficient archive disk space")
+E           ValueError: insufficient archive disk space
+
+scripts/collection_archive.py:330: ValueError
+___________ test_both_commands_run_end_to_end_on_the_records_of_beh ____________
+
+nulovy = namespace(code=2, out=PosixPath('/tmp/pytest-of-eh/pytest-0/suchy1/nulovy/out'), praca=PosixPath('/tmp/pytest-of-eh/py...its checks and its refusal of any other session without the log stay; nothing else of the final evaluation changes"}}})
+strukturovany = namespace(code=2, out=PosixPath('/tmp/pytest-of-eh/pytest-0/suchy1/strukturovany/out'), praca=PosixPath('/tmp/pytest-o...its checks and its refusal of any other session without the log stay; nothing else of the final evaluation changes"}}})
+tmp_path = PosixPath('/tmp/pytest-of-eh/pytest-0/test_both_commands_run_end_to_0')
+capsys = <_pytest.capture.CaptureFixture object at 0x7f6696f0de10>
+
+    def test_both_commands_run_end_to_end_on_the_records_of_beh(nulovy, strukturovany, tmp_path, capsys):
+        """The small-protocol runs of scripts/tests/test_suchy_beh.py (the null one with --chyby), twenty copies of the
+        null run and three of the structured run: hranice writes its files and exits 3 exactly when it names a claim for
+        the lead, m being the maximum over the methods of the run's point estimates (twenty equal values); tabulka writes
+        the six files with one row per criterion of G1 in its order, the chain passing in every run; on the small protocol
+        the known answers need not hold (C3: max_epochs 1), and fault_injections cannot, with no structured run with
+        --chyby, so it exits 1. The readers' answers in the table are the runs' own (zaznam.json known_answers); check E is
+        clean on both --out; tcn.hodnoty zapis G1 takes the values file on a copy of config/collection-v5.json, writing the
+        three m and keeping the binding of stage G0."""
+        from scripts import gates
+        from tcn import hodnoty
+>       assert nulovy.code == 0 and strukturovany.code == 0
+E       assert (2 == 0)
+E        +  where 2 = namespace(code=2, out=PosixPath('/tmp/pytest-of-eh/pytest-0/suchy1/nulovy/out'), praca=PosixPath('/tmp/pytest-of-eh/py...its checks and its refusal of any other session without the log stay; nothing else of the final evaluation changes"}}}).code
+
+tcn/tests/test_suchy_beh_tabulka.py:727: AssertionError
+---------------------------- Captured stdout setup -----------------------------
+{"zaznam": "/tmp/pytest-of-eh/pytest-0/suchy1/nulovy/out/zaznam.json", "exit": 2, "checks": {}}
+{"zaznam": "/tmp/pytest-of-eh/pytest-0/suchy1/strukturovany/out/zaznam.json", "exit": 2, "checks": {}}
+---------------------------- Captured stderr setup -----------------------------
+tcn.suchy_beh: ValueError: insufficient archive space for the sessions still to capture: 264009023 bytes needed (scripts/campaign.py DISK_RULE)
+tcn.suchy_beh: ValueError: insufficient archive space for the sessions still to capture: 278284773 bytes needed (scripts/campaign.py DISK_RULE)
+
+POZOR: preskocilo sa 41 testov - preskoceny test NIE JE presiel.
+   19x Skipped: chyba validacna snimka /var/tmp/vmic-val (nastav GUESTPARSE_VAL)
+    7x Skipped: chyba snimka z ineho bootu: /home/eh/projects/hyptcn3/data/sessions/20260918T154914Z_validate/snap/hyptcn-guest_000000_20260918T154916673Z.vmicd
+    6x Skipped: v /home/eh/projects/hyptcn3/data/raw nie je retazec aspon dvoch snimok so sidecarmi s blokom 'features'
+    2x Skipped: matplotlib je volitelny (iba TCN-gui), v requirements.txt nie je
+    2x Skipped: retazec delta snimok nie je na tomto stroji: /var/tmp/vmic-delta
+    2x Skipped: chyba delta retazec /var/tmp/vmic-delta (nastav GUESTPARSE_DELTA)
+    1x Skipped: bez grafického displeja
+    1x Skipped: realna plna snimka nie je na tomto stroji (skusane: /home/eh/projects/hyptcn3/data/sessions/20260918_validate2/snap, /var/tmp/vmic-val)
+    1x Skipped: mini snimka neobsahuje ziadnu stranku textu jadra
+=========================== short test summary info ============================
+FAILED tcn/tests/test_pecat.py::test_the_snapshots_restored_from_the_archive_of_a_sealed_session_are_refused_by_name
+FAILED tcn/tests/test_suchy_beh_tabulka.py::test_both_commands_run_end_to_end_on_the_records_of_beh
+2 failed, 6227 passed, 41 skipped in 2738.46s (0:45:38)
+exit 1
