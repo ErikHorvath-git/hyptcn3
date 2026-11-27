@@ -5174,20 +5174,71 @@ def _load_leaves(doc, prefix=""):
     return out
 
 
+class _LoadScan:
+    """Package B18 (Q87): what load_traffic reads of the request log, from its records as they stream by: the counts of
+    the arrivals and of the requests of the measure phase, in the event windows and outside them, and the counts of the
+    drop reasons by phase, never the records (the first exception is raised where load_traffic raised it)."""
+
+    def __init__(self, windows):
+        self.windows, self.error = windows, None
+        self.measured = self.admitted = self.requests = self.ok = self.in_window = self.ok_in = 0
+        self.windowed = {"offered": 0, "admitted": 0, "dropped": 0}
+        self.by_phase = {phase: Counter() for phase in traffic_log.PHASES}
+        self.dropped = Counter()
+
+    def inside(self, *times):
+        return any(t is not None and lo <= t <= hi for t in times for lo, hi in self.windows)
+
+    def feed(self, r):
+        if self.error is None:
+            try:
+                self._feed(r)
+            except Exception as error:  # noqa: BLE001 - raised after the logs are read, as before
+                self.error = error
+
+    def _feed(self, r):
+        kind = r.get("type")
+        if kind == "arrival":
+            phase, admitted = r.get("phase"), r.get("admitted")
+            for name in traffic_log.PHASES:
+                if phase == name and admitted is False:
+                    self.by_phase[name][str(r.get("drop_reason"))] += 1
+            if admitted is False:
+                self.dropped[str(r.get("drop_reason"))] += 1
+            if phase == "measure":
+                self.measured += 1
+                self.admitted += admitted is True
+                if self.inside(unix_of(r.get("t_utc"))):
+                    self.windowed["offered"] += 1
+                    self.windowed["admitted"] += admitted is True
+                    self.windowed["dropped"] += admitted is False
+        elif kind == "request" and r.get("phase") == "measure":
+            self.requests += 1
+            ok = r.get("outcome") == "ok"
+            self.ok += ok
+            if self.inside(unix_of(r.get("t_start_utc")), unix_of(r.get("t_end_utc"))):
+                self.in_window += 1
+                self.ok_in += ok
+
+
 def load_traffic(directory, sid, windows, files):
     """The load of a session's measure phase from its /2 traffic logs, read through scripts/traffic_log.py
-    (LOAD_RULE)."""
+    (LOAD_RULE). Package B18 (Q87): the request log read as a stream (scripts/traffic_log.py LogPair, _LoadScan), only
+    counts held; the interval log whole; the table as before."""
     requests_path, intervals_path = directory / "traffic_requests.jsonl", directory / "traffic_intervals.jsonl"
     _g2t_hash(requests_path, files, "traffic_requests.jsonl")
     _g2t_hash(intervals_path, files, "traffic_intervals.jsonl")
+    scan = _LoadScan(windows)
     try:
         summary = traffic_log.summarize(requests_path, intervals_path, session_id=sid,
                                         schema=traffic_log.REQUEST_SCHEMA_2)
-        records, _ = traffic_log.read_jsonl(requests_path)
-        intervals, _ = traffic_log.read_jsonl(intervals_path)
+        pair = traffic_log.LogPair(requests_path, intervals_path)
+        for record in pair.records():
+            scan.feed(record)
+        log, intervals = pair.requests, pair.intervals
     except (OSError, ValueError) as error:
         raise DataError(f"{directory}: the traffic logs cannot be read ({type(error).__name__}: {error})") from None
-    header = records[0] if records and records[0].get("type") == "header" else {}
+    header = log.header if log.records and log.header.get("type") == "header" else {}
     origin = header.get("start_unix")
     measure = [iv for iv in intervals if iv.get("type") == "interval" and iv.get("phase") == "measure"]
     if not _number(origin) or not measure or not all(_number(iv.get(k)) for iv in measure
@@ -5203,41 +5254,28 @@ def load_traffic(directory, sid, windows, files):
         window_s += max(0.0, hi - lo)
         end = hi if end is None else max(end, hi)
 
-    def inside(*times):
-        return any(t is not None and lo <= t <= hi for t in times for lo, hi in windows)
-
-    arrivals = [r for r in records if r.get("type") == "arrival"]
-    measured = [a for a in arrivals if a.get("phase") == "measure"]
-    requests = [r for r in records if r.get("type") == "request" and r.get("phase") == "measure"]
-    in_window = [r for r in requests if inside(unix_of(r.get("t_start_utc")), unix_of(r.get("t_end_utc")))]
-    windowed = [a for a in measured if inside(unix_of(a.get("t_utc")))]
-    by_phase = {phase: dict(Counter(str(a.get("drop_reason")) for a in arrivals
-                                    if a.get("phase") == phase and a.get("admitted") is False))
-                for phase in traffic_log.PHASES}
-    ok = sum(r.get("outcome") == "ok" for r in requests)
-    ok_in = sum(r.get("outcome") == "ok" for r in in_window)
+    if scan.error is not None:
+        raise scan.error
+    measured, requests, in_window, ok, ok_in = scan.measured, scan.requests, scan.in_window, scan.ok, scan.ok_in
+    by_phase = {phase: dict(scan.by_phase[phase]) for phase in traffic_log.PHASES}
     planned = sum(iv["planned_sessions"] for iv in measure)
     outside_s = seconds - window_s
     return {"run_id": header.get("run_id"), "rate": header.get("rate"), "rate_source": header.get("rate_source"),
             "measure_s": round(seconds, 6),
-            "offered": {"user_sessions": len(measured), "per_s": _g2t_ratio(len(measured), seconds),
-                        "planned": round(planned, 6), "ratio": _g2t_ratio(len(measured), planned)},
-            "delivered": {"admitted_user_sessions": sum(a.get("admitted") is True for a in measured),
-                          "requests": len(requests), "ok": ok, "per_s": _g2t_ratio(len(requests), seconds),
-                          "ok_per_s": _g2t_ratio(ok, seconds), "ok_share": _g2t_ratio(ok, len(requests))},
-            "event_windows": {"windows": len(windows), "seconds": round(window_s, 6), "requests": len(in_window),
-                              "ok": ok_in, "per_s": _g2t_ratio(len(in_window), window_s),
-                              "ok_per_s": _g2t_ratio(ok_in, window_s), "ok_share": _g2t_ratio(ok_in, len(in_window)),
-                              "arrivals": {"offered": len(windowed),
-                                           "admitted": sum(a.get("admitted") is True for a in windowed),
-                                           "dropped": sum(a.get("admitted") is False for a in windowed)}},
-            "outside_windows": {"seconds": round(outside_s, 6), "requests": len(requests) - len(in_window),
-                                "ok": ok - ok_in, "per_s": _g2t_ratio(len(requests) - len(in_window), outside_s),
+            "offered": {"user_sessions": measured, "per_s": _g2t_ratio(measured, seconds),
+                        "planned": round(planned, 6), "ratio": _g2t_ratio(measured, planned)},
+            "delivered": {"admitted_user_sessions": scan.admitted,
+                          "requests": requests, "ok": ok, "per_s": _g2t_ratio(requests, seconds),
+                          "ok_per_s": _g2t_ratio(ok, seconds), "ok_share": _g2t_ratio(ok, requests)},
+            "event_windows": {"windows": len(windows), "seconds": round(window_s, 6), "requests": in_window,
+                              "ok": ok_in, "per_s": _g2t_ratio(in_window, window_s),
+                              "ok_per_s": _g2t_ratio(ok_in, window_s), "ok_share": _g2t_ratio(ok_in, in_window),
+                              "arrivals": dict(scan.windowed)},
+            "outside_windows": {"seconds": round(outside_s, 6), "requests": requests - in_window,
+                                "ok": ok - ok_in, "per_s": _g2t_ratio(requests - in_window, outside_s),
                                 "ok_per_s": _g2t_ratio(ok - ok_in, outside_s),
-                                "ok_share": _g2t_ratio(ok - ok_in, len(requests) - len(in_window))},
-            "dropped": {"measure": by_phase["measure"], "by_phase": by_phase,
-                        "all": dict(Counter(str(a.get("drop_reason")) for a in arrivals
-                                            if a.get("admitted") is False))},
+                                "ok_share": _g2t_ratio(ok - ok_in, requests - in_window)},
+            "dropped": {"measure": by_phase["measure"], "by_phase": by_phase, "all": dict(scan.dropped)},
             "arrivals": summary.get("arrivals"), "log_problems": summary.get("problems") or []}
 
 

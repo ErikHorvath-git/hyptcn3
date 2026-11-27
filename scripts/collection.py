@@ -42,7 +42,7 @@ from features.coverage import ideal_windows, scorable_windows
 from features.acceptance import assignment, flagged_seq, judge, periodic_run, protocol_reachability, spacing_mode
 from features.audit_policy import audit_bounds, event_types, exceptions_record, register, tolerate
 from features.qualification import column_summary
-from scripts.collection_logs import audit_logs, event_window
+from scripts.collection_logs import audit_logs, event_window, line_count
 from scripts import protocol_v5
 from lab.udalosti import CONTROLS as CONTROL_TYPES, TYPES as EVENT_TYPES
 
@@ -792,10 +792,11 @@ def file_record(path):
         sha = hashlib.file_digest(stream, "sha256").hexdigest()
     record = {"size": path.stat().st_size, "sha256": sha}
     if path.suffix in (".jsonl", ".log"):
-        with path.open("rb") as stream:
-            data = stream.read()
-        record["lines"] = data.count(b"\n")
-        record["terminated"] = not data or data.endswith(b"\n")
+        # Package B18 (Q87): the lines counted in chunks, never read whole (a request log of eshop_high holds about
+        # 700 MB), as the log audit's check of the manifest counts them (scripts/collection_logs.py line_count).
+        lines, size, ends = line_count(path)
+        record["lines"] = lines
+        record["terminated"] = not size or ends
     return record
 
 

@@ -421,11 +421,19 @@ def traffic_run(pv, run, t, drain_s, events=None):
 def measure_phase(run):
     """(the reasons of the drops, the most concurrent user sessions) of the run's measure phase: {drop_reason: count}
     of its dropped arrival records (NO_DROP_REASON for one that names none), and the largest active_max of its
-    intervals (None without one)."""
-    records, _ = traffic_log.read_jsonl(run / REQUESTS)
-    intervals, _ = traffic_log.read_jsonl(run / INTERVALS)
-    reasons = Counter(r.get("drop_reason") or NO_DROP_REASON for r in records
-                      if r.get("type") == "arrival" and r.get("phase") == "measure" and r.get("admitted") is False)
+    intervals (None without one). Package B18 (Q87): the request log read as a stream (scripts/traffic_log.py
+    LogPair), only the Counter held; the interval log whole; results and exceptions as before."""
+    pair = traffic_log.LogPair(run / REQUESTS, run / INTERVALS)
+    reasons, error = Counter(), None
+    for r in pair.records():
+        if error is None and r.get("type") == "arrival" and r.get("phase") == "measure" and r.get("admitted") is False:
+            try:
+                reasons[r.get("drop_reason") or NO_DROP_REASON] += 1
+            except Exception as found:  # noqa: BLE001 - an unhashable reason, raised after both logs as before
+                error = found
+    intervals = pair.intervals
+    if error is not None:
+        raise error
     active = [iv["active_max"] for iv in intervals if iv.get("type") == "interval" and iv.get("phase") == "measure"]
     return dict(sorted(reasons.items())), max(active, default=None)
 
@@ -614,30 +622,90 @@ def drop_reasons(records, intervals, ids):
     return dict(sorted(found.items()))
 
 
+def _peak_intervals(header, intervals):
+    """(the intervals of the measure phase whose planned level, the envelope of `header`, is 1 over all of them, their
+    ids): the peak of peak_of."""
+    envelope = traffic_log.Envelope(header["envelope"])
+    peaks = [iv for iv in intervals if iv.get("type") == "interval" and iv.get("phase") == "measure"
+             and iv["mono_end"] > iv["mono_start"] and envelope.integral(iv["mono_start"], iv["mono_end"])
+             >= (iv["mono_end"] - iv["mono_start"]) * (1 - PEAK_TOLERANCE)]
+    return peaks, {iv["interval"] for iv in peaks}
+
+
 def peak_of(run):
     """The peak of one step's logs: the intervals of the measure phase whose planned level (the header's envelope)
     is 1 over all of them, with the user sessions offered, admitted and dropped there (the interval log) and the
     reasons of the drops (drop_reasons), the requests that started in them, how many lacked their expected result,
-    their p95 latency (exact nearest rank), and the delivered user sessions and requests per second of the peak."""
-    records, _ = traffic_log.read_jsonl(run / REQUESTS)
-    intervals, _ = traffic_log.read_jsonl(run / INTERVALS)
-    envelope = traffic_log.Envelope(next(r for r in records if r.get("type") == "header")["envelope"])
-    peaks = [iv for iv in intervals if iv.get("type") == "interval" and iv.get("phase") == "measure"
-             and iv["mono_end"] > iv["mono_start"] and envelope.integral(iv["mono_start"], iv["mono_end"])
-             >= (iv["mono_end"] - iv["mono_start"]) * (1 - PEAK_TOLERANCE)]
-    ids = {iv["interval"] for iv in peaks}
-    requests = [r for r in records if r.get("type") == "request" and r.get("interval") in ids]
+    their p95 latency (exact nearest rank), and the delivered user sessions and requests per second of the peak.
+
+    Package B18 (Q87): the request log read as a stream (scripts/traffic_log.py LogPair), the interval log whole. Held:
+    the first header record, one small record per arrival (type, t_mono, admitted and drop_reason, the keys it has,
+    for drop_reasons) and of the requests of the peak their durations (scripts/traffic_log.py Values) and how many
+    lacked their expected result; the requests before the first header record (none in an honest log), whose peak
+    is known only after it, waiting. Results and exceptions as before, each at its place."""
+    pair = traffic_log.LogPair(run / REQUESTS, run / INTERVALS)
+    header, peak, peak_error, waiting, arrivals = None, None, None, [], []
+    chosen, chosen_error, durations, unexpected = 0, None, traffic_log.Values(), 0
+
+    def choose(r):
+        """r of [r for r in records if r.get("type") == "request" and r.get("interval") in ids]."""
+        nonlocal chosen, chosen_error, unexpected
+        if chosen_error is None:
+            try:
+                inside = r.get("interval") in peak[1]
+            except Exception as error:  # noqa: BLE001 - an unhashable interval, raised at its place
+                chosen_error = error
+                return
+            if inside:
+                chosen += 1
+                unexpected += not expected(r)
+                durations.append(r.get("duration_ms", traffic_log.MISSING))
+    for r in pair.records():
+        kind = r.get("type")
+        if kind == "header" and header is None:
+            header = r
+            try:
+                peak = _peak_intervals(header, pair.intervals)
+            except Exception as error:  # noqa: BLE001 - raised at its place, after both logs are read
+                peak_error = error
+            for early in waiting:
+                if peak_error is None:
+                    choose(early)
+            waiting = []
+        elif kind == "arrival":
+            arrivals.append({key: r[key] for key in ("type", "t_mono", "admitted", "drop_reason") if key in r})
+        elif kind == "request":
+            if header is None:
+                waiting.append(r)
+            elif peak_error is None:
+                choose(r)
+    intervals = pair.intervals
+    if header is None:
+        raise StopIteration  # next(r for r in records if r.get("type") == "header") of the logs read whole
+    if peak_error is not None:
+        raise peak_error
+    peaks, ids = peak
+    if chosen_error is not None:
+        raise chosen_error
     seconds = sum(iv["mono_end"] - iv["mono_start"] for iv in peaks)
     admitted = sum(iv["admitted_sessions"] for iv in peaks)
     return {"intervals": len(peaks), "seconds": round(seconds, 6),
             "offered": sum(iv["offered_sessions"] for iv in peaks), "admitted": admitted,
             "dropped": sum(iv["dropped_sessions"] for iv in peaks),
-            "drop_reasons": drop_reasons(records, intervals, ids),
-            "active_max": max((iv["active_max"] for iv in peaks), default=None), "requests": len(requests),
-            "unexpected": sum(not expected(r) for r in requests),
-            "p95_ms": traffic_log.percentile(sorted(r["duration_ms"] for r in requests), .95),
+            "drop_reasons": drop_reasons(arrivals, intervals, ids),
+            "active_max": max((iv["active_max"] for iv in peaks), default=None), "requests": chosen,
+            "unexpected": unexpected,
+            "p95_ms": traffic_log.percentile(_sorted_or_raise(durations, "duration_ms"), .95),
             "sessions_per_s": round(admitted / seconds, 6) if seconds else None,
-            "requests_per_s": round(len(requests) / seconds, 6) if seconds else None}
+            "requests_per_s": round(chosen / seconds, 6) if seconds else None}
+
+
+def _sorted_or_raise(values, key):
+    """sorted(r[key] for r in records) of the records whose values are `values` (scripts/traffic_log.py Values): its
+    KeyError where one lacks the key."""
+    if values.missing:
+        raise KeyError(key)
+    return sorted(values)
 
 
 def named_drops(dropped, reasons):

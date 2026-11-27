@@ -46,8 +46,21 @@ time is never admitted (fail closed): a line of the unit whose time cannot be re
 without a start line of the unit in the segment, is service_restarted, as a restart of a unit no event restarts. The
 count of the admitted restarts, event_unit_restarts, is one per window and unit it admitted, and the section
 correlation lists them per window.
+
+Package B18 (Q87: the executor's decision, for the lead's review; the lead's rule to Q86): the audit reads the traffic
+logs and the guest segments as streams. Before B18 it read the request log four times whole (the generator's exit code,
+the section traffic, summarize, realism), held every request record and the decoded nginx and journal segments for the
+correlation, and peaked at 8.8 GB on one session of eshop_high at the protocol file's rate beside two lab VMs; the bound
+is 1.5 GB. Now the request log is read once into a RequestIndex (only the fields the checks read, in compact columns)
+that serves the exit code, the checks of each request and the correlation by rid; summarize and realism read it as a
+stream themselves (scripts/traffic_log.py); the segments are verified in chunks (scan_segment) and read line by line
+(segment_lines); the manifest counts lines in chunks (line_count). Every check, its order, its problems and its
+exceptions are the code's before B18 (scripts/tests/traffic_log_pred_b18.py holds it frozen,
+scripts/tests/test_traffic_stream_b18.py compares).
 """
 import argparse
+from array import array
+import codecs
 from collections import Counter, defaultdict
 from datetime import datetime, timezone
 import gzip
@@ -218,6 +231,164 @@ def qemu_unswapped(sample):
             and all(type(e) is dict and type(e.get("swap_kb")) is int and e["swap_kb"] == 0 for e in entries))
 
 
+CHUNK_BYTES = 1 << 20  # Package B18: the piece of a file read at a time where only its bytes are counted.
+
+
+class _Unreadable:
+    """A wall time of a request that unix() cannot read, kept as it is: RequestIndex's view reads it again, raising."""
+    __slots__ = ("value",)
+
+    def __init__(self, value):
+        self.value = value
+
+
+class RequestIndex:
+    """Package B18 (Q87: the executor's decision, for the lead's review): the request log as the session audit reads
+    it, from one pass over it as a stream (scripts/traffic_log.py JsonlStream): of every request record only the fields
+    the audit reads (OBJECT_FIELDS, NUMBER_FIELDS, and the unix times of TIME_FIELDS as unix() gives them, or the value
+    unix() cannot read), in compact columns, the repeated values shared; beside them the first record of the log and its
+    phase markers, which the section traffic compares, and the count of its records. Never the records: about 190 bytes
+    a request, some 210 MB for the 1.1 million of a session of eshop_high at the rate of the protocol file (the records
+    held 8.8 GB before B18; the bound is 1.5 GB). Built once per audit, on the first read (the exit code of the
+    generator, else the section traffic), it serves the exit code, the checks of every request with the event windows
+    and the correlation by rid. rows() are views of the requests that read as the records do (Row), so every check is
+    the code before B18 and gives its results and exceptions; opening or reading the log raises as read_jsonl does."""
+    OBJECT_FIELDS = ("rid", "session_id", "run_id", "intended_status", "status", "outcome", "method", "route")
+    NUMBER_FIELDS = ("t_start_mono", "t_end_mono", "duration_ms")
+    TIME_FIELDS = ("t_start_utc", "t_end_utc")
+
+    def __init__(self, path):
+        stream = traffic_log.JsonlStream(path)
+        self.first, self.phases, shared = None, [], {}
+        self.columns = {name: [] for name in self.OBJECT_FIELDS}
+        self.columns.update((name, traffic_log.Values()) for name in self.NUMBER_FIELDS + self.TIME_FIELDS)
+        objects = [self.columns[name] for name in self.OBJECT_FIELDS]
+        numbers = [self.columns[name] for name in self.NUMBER_FIELDS]
+        times = [self.columns[name] for name in self.TIME_FIELDS]
+        missing = traffic_log.MISSING
+        for _, record in stream:
+            if self.first is None:
+                self.first = record
+            kind = record.get("type")
+            if kind == "phase":
+                self.phases.append(record)
+            if kind != "request":
+                continue
+            for name, column in zip(self.OBJECT_FIELDS, objects):
+                value = record.get(name, missing)
+                if name != "rid" and type(value) in (str, int, bool, type(None)):
+                    value = shared.setdefault((type(value), value), value)
+                column.append(value)
+            for name, column in zip(self.NUMBER_FIELDS, numbers):
+                column.append(record.get(name, missing))
+            for name, column in zip(self.TIME_FIELDS, times):
+                value = record.get(name, missing)
+                if value is not missing:
+                    try:
+                        value = unix(value)
+                    except Exception:  # noqa: BLE001 - Row.unix reads it again, raising as the check did
+                        value = _Unreadable(value)
+                column.append(value)
+        self.records = stream.records
+
+    def __len__(self):
+        return len(self.columns["rid"])
+
+    def __getitem__(self, i):
+        return Row(self, i)
+
+    def __iter__(self):
+        return (Row(self, i) for i in range(len(self)))
+
+
+class Row:
+    """One request of a RequestIndex as the audit's checks read a request record: row[key] (KeyError where the record
+    lacks it), row.get(key) and row.unix(key), which is unix(row[key]) of the code before B18 for t_start_utc and
+    t_end_utc: the time unix() gave, or the KeyError or the exception of unix() raised again."""
+    __slots__ = ("index", "i")
+
+    def __init__(self, index, i):
+        self.index, self.i = index, i
+
+    def __getitem__(self, key):
+        value = self.index.columns[key][self.i]
+        if value is traffic_log.MISSING:
+            raise KeyError(key)
+        return value
+
+    def get(self, key, default=None):
+        value = self.index.columns[key][self.i]
+        return default if value is traffic_log.MISSING else value
+
+    def unix(self, key):
+        value = self[key]
+        return unix(value.value) if type(value) is _Unreadable else value
+
+
+def segment_lines(path):
+    """Package B18: the lines of a guest segment the section segments verified (a gzip file of UTF-8 text) as
+    str.splitlines() of its decoded text gives them, read one line at a time instead of the text whole: each piece up
+    to a newline decoded and split, so a carriage return or another line boundary of str.splitlines() inside a line
+    splits it as it did."""
+    with gzip.open(path, "rb") as stream:
+        for line in stream:
+            yield from line.decode("utf-8").splitlines()
+
+
+class _DecodeError(UnicodeDecodeError):
+    """The UnicodeDecodeError of bytes.decode("utf-8") of a whole segment, from its decoding piece by piece: the same
+    text, its position counted from the start of the segment (package B18; the audit names it)."""
+
+    def __init__(self, error, offset):
+        super().__init__(error.encoding, error.object, error.start, error.end, error.reason)
+        start, end = offset + error.start, offset + error.end
+        self.text = (f"'{error.encoding}' codec can't decode byte 0x{error.object[error.start]:02x} in position "
+                     f"{start}: {error.reason}" if end == start + 1 else
+                     f"'{error.encoding}' codec can't decode bytes in position {start}-{end - 1}: {error.reason}")
+
+    def __str__(self):
+        return self.text
+
+
+_DecodeError.__name__ = _DecodeError.__qualname__ = "UnicodeDecodeError"  # The name the audit shows, as before B18.
+
+
+def scan_segment(path, text):
+    """Package B18: (bytes, sha256, newlines, whether it ends with one, the decode error) of the decompressed content of
+    a gzip file, read in chunks of CHUNK_BYTES, never whole; with text the content is decoded as UTF-8 on the way and
+    the error is the UnicodeDecodeError decoding it whole raises (None when it decodes). A gzip error raises as
+    reading it whole raised it."""
+    digest_, size, newlines, last, error = hashlib.sha256(), 0, 0, b"", None
+    decoder = codecs.getincrementaldecoder("utf-8")() if text else None
+    with gzip.open(path, "rb") as stream:
+        while chunk := stream.read(CHUNK_BYTES):
+            digest_.update(chunk)
+            if decoder is not None and error is None:
+                offset = size - len(decoder.getstate()[0])
+                try:
+                    decoder.decode(chunk)
+                except UnicodeDecodeError as found:
+                    error = _DecodeError(found, offset)
+            size, newlines, last = size + len(chunk), newlines + chunk.count(b"\n"), chunk[-1:]
+    if decoder is not None and error is None:
+        offset = size - len(decoder.getstate()[0])
+        try:
+            decoder.decode(b"", final=True)
+        except UnicodeDecodeError as found:
+            error = _DecodeError(found, offset)
+    return size, digest_.hexdigest(), newlines, last == b"\n", error
+
+
+def line_count(path):
+    """Package B18: (newlines, bytes, whether the file ends with a newline) of a file read in chunks of
+    CHUNK_BYTES."""
+    newlines, size, last = 0, 0, b""
+    with open(path, "rb") as stream:
+        while chunk := stream.read(CHUNK_BYTES):
+            newlines, size, last = newlines + chunk.count(b"\n"), size + len(chunk), chunk[-1:]
+    return newlines, size, last == b"\n"
+
+
 def audit_logs(directory, *, snapshot_times=(), archived_raw=False):
     """The log audit of a session directory. archived_raw: the session's raw/ is the link scripts/collection_archive.py
     reclaim_raw leaves to the verified archive copy, and the evidence under raw/ is read through it (the repeat of
@@ -244,6 +415,15 @@ def audit_logs(directory, *, snapshot_times=(), archived_raw=False):
     # bounds are unknown and admit nothing. v5: a schema-3 protocol with the profiles section, whose sessions run
     # the open-loop profiles (traffic logs /2).
     protocol, limits, limits_read, v5 = {}, None, False, False
+    # Package B18 (Q87): the request log read once as a stream into its RequestIndex, on its first read (the exit code
+    # of the generator in metadata, else the section traffic); a log that cannot be read is tried again there.
+    request_log = None
+
+    def request_index():
+        nonlocal request_log
+        if request_log is None:
+            request_log = RequestIndex(directory / "traffic_requests.jsonl")
+        return request_log
 
     def in_window(*times):
         return any(lo <= t <= hi for t in times for lo, hi in windows)
@@ -301,12 +481,11 @@ def audit_logs(directory, *, snapshot_times=(), archived_raw=False):
                 # Under v5 host_traffic.py exits 1 when a request did not get its expected result (a 2xx, or the
                 # status a deliberate client error intends, proposal 5.3) or no request succeeded, so the code must
                 # be the one its request log implies; traffic() judges every such request (inside an event window
-                # it is admitted, elsewhere refused).
-                logged = traffic_log.read_jsonl(directory / "traffic_requests.jsonl")[0]
-                rows = [r for r in logged if r.get("type") == "request"]
-                unexpected = [r for r in rows if (r.get("outcome") != "ok" if r.get("intended_status") is None
-                                                  else r.get("status") != r.get("intended_status"))]
-                implied = 0 if rows and not unexpected and any(r.get("outcome") == "ok" for r in rows) else 1
+                # it is admitted, elsewhere refused). Package B18: its requests are the rows of the RequestIndex.
+                rows = request_index()
+                unexpected = sum(1 for r in rows if (r.get("outcome") != "ok" if r.get("intended_status") is None
+                                                     else r.get("status") != r.get("intended_status")))
+                implied = 0 if len(rows) and not unexpected and any(r.get("outcome") == "ok" for r in rows) else 1
                 check(type(rc) is int and rc == implied, "child_exit", f"{name}:{rc}")
                 continue
             # host_traffic exits 1 after any failed request; outside the event windows those still fail below.
@@ -336,12 +515,14 @@ def audit_logs(directory, *, snapshot_times=(), archived_raw=False):
                 path = local_file(directory, name, raw_target)
                 check(path.stat().st_size == expected["size"] and digest(path) == expected["sha256"],
                       "evidence_hash", name)
-                # write_logs_manifest records lines and termination of every .jsonl and .log file.
+                # write_logs_manifest records lines and termination of every .jsonl and .log file. Package B18: counted
+                # in chunks (line_count), never read whole.
                 if name.endswith((".jsonl", ".log")) or "lines" in expected or "terminated" in expected:
-                    data = path.read_bytes()
-                    check(data.count(b"\n") == expected.get("lines") and (not data or data.endswith(b"\n"))
-                          == expected.get("terminated"), "evidence_lines", name)
-                    check(not data or data.endswith(b"\n"), "torn_evidence", name)
+                    lines, size, ends = line_count(path)
+                    terminated = not size or ends
+                    check(lines == expected.get("lines") and terminated == expected.get("terminated"),
+                          "evidence_lines", name)
+                    check(terminated, "torn_evidence", name)
                 verified += 1
             except (OSError, ValueError, KeyError, TypeError) as exc:
                 problems.add("evidence_unreadable", f"{name}:{exc}")
@@ -380,6 +561,9 @@ def audit_logs(directory, *, snapshot_times=(), archived_raw=False):
                 "units_timed": timed}
 
     def segments():
+        """Package B18 (Q87): each segment file read in chunks (scan_segment), never whole: its size, hash, lines and,
+        for a file the correlation reads, that it decodes as UTF-8; files maps each of these to its path, which the
+        correlation reads line by line (segment_lines)."""
         files, counts = {}, {}
         for name, schema in (("pre", "hyptcn3/guest-log-segment/1"),
                              ("session", "hyptcn3/guest-log-segment/1"),
@@ -394,36 +578,38 @@ def audit_logs(directory, *, snapshot_times=(), archived_raw=False):
                 path = local_file(directory, "guest/" + entry["file"])
                 check(digest(path) == entry["gz_sha256"] == entry["file_sha256"] and
                       path.stat().st_size == entry["gz_bytes"], "segment_compressed_hash", entry["file"])
-                with gzip.open(path, "rb") as stream:
-                    content = stream.read()
-                check(len(content) == entry["bytes"] and hashlib.sha256(content).hexdigest() == entry["sha256"],
-                      "segment_content_hash", entry["file"])
-                check(content.count(b"\n") == entry["lines"] and (not content or content.endswith(b"\n"))
-                      and entry["terminated"] is True, "segment_lines", entry["file"])
                 suffix = next((suffix for suffix in expected_suffixes if entry["name"].endswith("-" + suffix)), None)
+                size, sha256, lines, ends, undecodable = scan_segment(path, suffix is not None)
+                check(size == entry["bytes"] and sha256 == entry["sha256"], "segment_content_hash", entry["file"])
+                check(lines == entry["lines"] and (not size or ends) and entry["terminated"] is True,
+                      "segment_lines", entry["file"])
                 if suffix:
-                    files[name + ":" + suffix] = content.decode("utf-8")
+                    if undecodable is not None:
+                        raise undecodable  # content.decode("utf-8") of the code before B18
+                    files[name + ":" + suffix] = path
                 counts[entry["file"]] = entry["lines"]
         return files, counts
 
     def traffic():
         nonlocal requests
         meta, end = read_json(directory / "session.json"), read_json(directory / "end.json")
-        records, _ = traffic_log.read_jsonl(directory / "traffic_requests.jsonl")
-        requests = [r for r in records if r.get("type") == "request"]
+        # Package B18 (Q87): the request log's RequestIndex in place of its records, its rows in place of the request
+        # records; of the other records the first and the phase markers.
+        index = request_index()
+        requests = index
         # The protocol decides the schema (/2 for the v5 profiles, /1 otherwise); summarize refuses the other one.
         schema = traffic_log.REQUEST_SCHEMA_2 if v5 else traffic_log.REQUEST_SCHEMA
         summary = traffic_log.summarize(directory / "traffic_requests.jsonl", directory / "traffic_intervals.jsonl",
                                         session_id=directory.name, schema=schema)
         for problem in summary["problems"]:
             problems.add("traffic", problem)
-        header = records[0]
+        header = ([index.first] if index.records else [])[0]  # records[0], an IndexError without one
         intervals, _ = traffic_log.read_jsonl(directory / "traffic_intervals.jsonl")
         check("config" in header and "start_unix" in header and intervals[0].get("config") == header["config"]
               and intervals[0].get("start_unix") == header["start_unix"], "traffic_headers_disagree")
         phase_fields = lambda rows: [{k: v for k, v in r.items() if k not in ("schema", "n")}
                                      for r in rows if r.get("type") == "phase"]
-        check(phase_fields(records) == phase_fields(intervals), "traffic_phase_times_disagree")
+        check(phase_fields(index.phases) == phase_fields(intervals), "traffic_phase_times_disagree")
         if v5:
             # The generator's header against the protocol and session.json (design B5b 1.3 and 1.4): the scenario
             # with its profile, intensity and rate (from the protocol, or from the command line where the protocol
@@ -495,8 +681,8 @@ def audit_logs(directory, *, snapshot_times=(), archived_raw=False):
             check(isinstance(row.get("rid"), str) and bool(row["rid"]), "request_id_missing")
             check(0 <= finite(row["t_start_mono"]) <= finite(row["t_end_mono"]) and finite(row["duration_ms"]) >= 0,
                   "request_timing", row.get("rid"))
-            check(unix(row["t_start_utc"]) <= unix(row["t_end_utc"]), "request_wall_clock", row.get("rid"))
-            if in_window(unix(row["t_start_utc"]), unix(row["t_end_utc"])):
+            check(row.unix("t_start_utc") <= row.unix("t_end_utc"), "request_wall_clock", row.get("rid"))
+            if in_window(row.unix("t_start_utc"), row.unix("t_end_utc")):
                 tolerate(counts, "event_window_requests")  # May fail; nginx and services are not correlated.
                 during.add(row.get("rid"))
                 continue
@@ -521,9 +707,17 @@ def audit_logs(directory, *, snapshot_times=(), archived_raw=False):
         return summary, reqs
 
     def correlation(contents, requests):
-        expected = {r["rid"]: r for r in requests}
-        matched, tolerated = Counter(), Counter()
-        for line in contents["session:nginx-access.jsonl"].splitlines():
+        """Package B18 (Q87): the requests are the rows of the RequestIndex (an empty list where the section traffic
+        could not read the request log), the segments are read line by line (segment_lines). Held besides: the last
+        row of each rid (expected), and per row in compact arrays the nginx lines of its rid and the journal lines of
+        the service calls the checks below count for it (its service, the token check of auth, the catalog call of
+        an order, the health checks), never the lines; of the preflight segment the statuses of the smoke checks'
+        rids only. The checks, their order, their problems and their exceptions are the code's before B18."""
+        expected = {}  # {r["rid"]: r for r in requests}, as the index of that request
+        for i, r in enumerate(requests):
+            expected[r["rid"]] = i
+        matched, tolerated = array("q", [0]) * len(requests), Counter()
+        for line in segment_lines(contents["session:nginx-access.jsonl"]):
             row = json.loads(line)
             check(row.get("schema") == "hyptcn3/nginx-access/1", "nginx_schema")
             rid = row["rid"]
@@ -536,40 +730,82 @@ def audit_logs(directory, *, snapshot_times=(), archived_raw=False):
             if rid not in expected:
                 problems.add("nginx_unknown_request", rid)
                 continue
-            req = expected[rid]
-            matched[rid] += 1
+            i = expected[rid]
+            req = requests[i]
+            matched[i] += 1
             if rid in during:
                 continue  # A client timeout leaves nginx 499 and a late timestamp.
             check(row["forwarded_rid"] == rid and row["status"] == req["status"] and
                   row["method"] == req["method"] and row["uri"] == req["route"], "nginx_mismatch", rid)
-            check(unix(req["t_start_utc"]) - 1 <= finite(row["msec"]) <= unix(req["t_end_utc"]) + 1,
+            check(req.unix("t_start_utc") - 1 <= finite(row["msec"]) <= req.unix("t_end_utc") + 1,
                   "nginx_timestamp", rid)
-        for rid in expected:
-            check(matched[rid] == 1, "nginx_request_count", f"{rid}:{matched[rid]}")
+        for rid, i in expected.items():
+            check(matched[i] == 1, "nginx_request_count", f"{rid}:{matched[i]}")
         smoke = read_json(directory / "preflight_smoke.json")
         check(smoke.get("schema") == "hyptcn3/lab-smoke/1" and smoke["values"].get("order_completed") is True
               and bool(smoke["values"]["checks"]), "preflight_incomplete")
-        pre = defaultdict(list)
-        for line in contents["pre:nginx-access.jsonl"].splitlines():
+        wanted = {}  # The rids of the smoke checks: the statuses of only these are kept (pre[rid] below).
+        try:
+            for row in smoke["values"]["checks"]:
+                if type(row) is dict and "rid" in row:
+                    wanted[row["rid"]] = None
+        except Exception:  # noqa: BLE001 - the loop over the smoke checks below raises it at its place
+            pass
+        pre = {}
+        for line in segment_lines(contents["pre:nginx-access.jsonl"]):
             row = json.loads(line)
-            pre[row["rid"]].append(row["status"])
+            rid = row["rid"]
+            keep = rid in wanted  # pre[row["rid"]], an unhashable rid raising as there
+            status = row["status"]
+            if keep:
+                pre.setdefault(rid, []).append(status)
         for row in smoke["values"]["checks"]:
             check("expected" in row and row["status"] == row["expected"], "preflight_failed", row["rid"])
-            check(pre[row["rid"]] == [row["status"]], "preflight_correlation", row["rid"])
+            check(pre.get(row["rid"], []) == [row["status"]], "preflight_correlation", row["rid"])
         pids = {name: known_pids[name] for name in SERVICES}
-        service, catalog_calls = Counter(), Counter()
+        # Package B18: served(rid, name, method, route, status), the journal lines of a service under one of its pids
+        # with that call, read by the checks below for each request in turn: these calls counted per row as the lines
+        # go by (in place of a Counter of every line): the request's own call by its service (main), the token check
+        # (auth), the catalog call of an order (catalog_calls) and the two health checks of /healthz (health).
+        main, auth, catalog_calls, health, service_records = (array("q", [0]) * len(requests),
+                                                              array("q", [0]) * len(requests),
+                                                              array("q", [0]) * len(requests), Counter(), 0)
+
+        def count_call(i, pid, method, path, status):
+            """The served() calls of the checks below that the line (pid, method, path, status) of request i is."""
+            req = requests[i]
+            try:
+                route, own_method, own_status = req["route"], req["method"], req["status"]
+                if method == own_method and path == route and status == own_status:
+                    name = upstream(route) if v5 else (
+                        "auth" if route.startswith("/api/auth/") else "catalog" if route.startswith("/api/catalog")
+                        else None if route == "/" else "orders")
+                    if name is not None and pid in pids[name]:
+                        main[i] += 1
+                if (method == "GET" and path == "/api/auth/check" and pid in pids["auth"]
+                        and status == (401 if v5 and own_status == 401 else 200)):
+                    auth[i] += 1
+            except Exception:  # noqa: BLE001 - the checks below raise it for this request, before they read a count
+                pass
+            if method == "GET" and path == "/healthz" and status == 200:
+                for dependency in ("auth", "catalog"):
+                    if pid in pids[dependency]:
+                        health[(i, dependency)] += 1
+
         # Package B12: the systemd lines of each unit an event type of the session restarts by design, by the window
         # that admits them (an index of windows), outside every window of a type that restarts it, or without a time;
         # and the units with a start line.
         timed = timed_units()
         admitted, outside, untimed, started = defaultdict(Counter), Counter(), Counter(), set()
-        journal = contents["journal:journal.txt"]
-        for line in journal.splitlines():
+        for line in segment_lines(contents["journal:journal.txt"]):
             m = SERVICE_LINE.search(line)
             if m and m[2] in expected:
-                service[(m[2], m[1], m[3], m[4], int(m[5]))] += 1
+                i = expected[m[2]]
+                status = int(m[5])
+                service_records += 1
+                count_call(i, m[1], m[3], m[4], status)
                 if m[1] in pids["catalog"] and m[3] == "GET" and m[4].startswith("/api/catalog/") and m[5] == "200":
-                    catalog_calls[m[2]] += 1
+                    catalog_calls[i] += 1
             if re.search(r"Suppressed \d+ messages|Missed \d+ journal messages", line):
                 problems.add("journal_error_or_loss", line[:180])
             elif "Traceback (most recent call last)" in line or WORKER_ERROR in line:
@@ -605,9 +841,14 @@ def audit_logs(directory, *, snapshot_times=(), archived_raw=False):
             for unit in admitted[where]:
                 tolerate(counts, "event_unit_restarts")
 
-        def served(rid, name, method, route, status):
-            return sum(service[(rid, pid, method, route, status)] for pid in pids[name])
-        for rid, req in expected.items():
+        def served(rid, name, method, route, status, calls):
+            """served() of the code before B18 from the counts above: the sum of its Counter over the service's pids,
+            whose first lookup of an unhashable call raised a TypeError."""
+            if pids[name]:
+                hash((rid, next(iter(pids[name])), method, route, status))
+            return calls
+        for rid, i in expected.items():
+            req = requests[i]
             route, method, status = req["route"], req["method"], req["status"]
             if v5:  # Every route of lab/nginx.conf; nginx alone answers /, /static/ and the paths it does not pass.
                 name = upstream(route)
@@ -620,18 +861,18 @@ def audit_logs(directory, *, snapshot_times=(), archived_raw=False):
                 tolerated["requests_in_events"] += 1
                 tolerated["failed_in_events"] += req["outcome"] != "ok" or not 200 <= req["status"] < 300
                 continue
-            check(served(rid, name, method, route, status) == 1, "service_request_count", rid)
+            check(served(rid, name, method, route, status, main[i]) == 1, "service_request_count", rid)
             # orders and docs ask auth about the token first (lab/services.py); a token it refuses is answered 401.
             if (auth_checked(method, route) if v5 else route == "/api/orders"):
-                check(served(rid, "auth", "GET", "/api/auth/check", 401 if v5 and status == 401 else 200) == 1,
-                      "service_auth_call", rid)
+                check(served(rid, "auth", "GET", "/api/auth/check", 401 if v5 and status == 401 else 200,
+                             auth[i]) == 1, "service_auth_call", rid)
             if route == "/api/orders" and method == "POST" and status == 201:
-                check(catalog_calls[rid] == 1, "service_catalog_call", rid)
+                check(catalog_calls[i] == 1, "service_catalog_call", rid)
             if route == "/healthz":
                 for dependency in ("auth", "catalog"):
-                    check(served(rid, dependency, "GET", "/healthz", 200) == 1,
+                    check(served(rid, dependency, "GET", "/healthz", 200, health[(i, dependency)]) == 1,
                           "service_health_call", f"{rid}:{dependency}")
-        for line in contents["session:nginx-error.log"].splitlines():
+        for line in segment_lines(contents["session:nginx-error.log"]):
             # nginx writes guest local time; the lab guest runs in UTC.
             m = NGINX_TIME.match(line)
             stamp = m and datetime.strptime(m[1], "%Y/%m/%d %H:%M:%S").replace(tzinfo=timezone.utc).timestamp()
@@ -640,8 +881,8 @@ def audit_logs(directory, *, snapshot_times=(), archived_raw=False):
                 tolerate(counts, "event_window_nginx_errors")
             elif line.strip():
                 problems.add("nginx_error_log_nonempty", line[:180])
-        return {"requests": len(expected), "nginx_matched_once": sum(matched[rid] == 1 for rid in expected),
-                "service_records": sum(service.values()), "preflight_requests": len(smoke["values"]["checks"]),
+        return {"requests": len(expected), "nginx_matched_once": sum(matched[i] == 1 for i in expected.values()),
+                "service_records": service_records, "preflight_requests": len(smoke["values"]["checks"]),
                 **({"tolerated_in_events": dict(tolerated)} if windows or calls else {}),
                 # Package B12: per window that admitted a restart, its type and the systemd lines of each unit in it.
                 **({"event_unit_restarts": [{"window": where, "type": event_types[where],
