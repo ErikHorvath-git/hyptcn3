@@ -1,0 +1,9 @@
+# commit 3def9b577040db23b55469beca8538d43d12f0eb
+# date 2026-11-27T03:17:05Z
+# host debian
+# git status --porcelain (only this evidence directory, when clean):
+#   ?? data/results/g0_20261127T013615Z/
+# command nice -n 19 .venv/bin/python -B -m pytest -q -p no:cacheprovider safeguard/tests/test_training.py::test_analysis_parameters_are_refused_by_name[fpr_outside_diagnostic] tcn/tests/test_odovzdanie_korpusu.py::test_parameter_analyzy_z_prikazoveho_riadka_iba_s_diagnostikou tcn/tests/test_porovnanie.py::test_fit_pod_schemou_3_odmietne_parameter_analyzy[fpr]
+...                                                                      [100%]
+3 passed in 6.23s
+exit 0

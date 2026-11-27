@@ -1,0 +1,8 @@
+# commit 3def9b577040db23b55469beca8538d43d12f0eb
+# date 2026-11-27T03:16:46Z
+# host debian
+# git status --porcelain (only this evidence directory, when clean):
+#   ?? data/results/g0_20261127T013615Z/
+# command nice -n 19 .venv/bin/python -B -c from scripts.audit_selftest import require_selftest; d = require_selftest("config/collection-v5.json"); print({k: d[k] for k in ("date", "commit", "n", "passed", "protocol_sha256", "measurement_sha256", "cases_sha256")})
+{'date': '2026-11-26T19:25:04+00:00', 'commit': '9a70cdf6f893ab5516300f532fe5d44c669f8db7', 'n': 242, 'passed': True, 'protocol_sha256': 'd6ea944ceae3ee8789687670758a132f60e030230062aadbba80eea48f54d376', 'measurement_sha256': '603bc5eb45fc1e85358b2f7862a81ed36632be79823c4d667e4576d11b770a3d', 'cases_sha256': '5a27a4851315d5b33295467215f2ba090267a323d8671bc2e46b0dd3b65e22e1'}
+exit 0

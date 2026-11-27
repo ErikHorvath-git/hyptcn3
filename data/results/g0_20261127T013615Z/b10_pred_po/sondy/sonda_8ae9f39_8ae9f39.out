@@ -1,0 +1,6 @@
+# probe sonda_8ae9f39.py at 8ae9f39 (8ae9f39 Protocol v5, package B3: self-test record of the audit checks), extra files {}
+# /home/eh/projects/hyptcn3/.venv/bin/python -B /home/eh/hyptcn3-logs/v5/dokazy/B10/pred_po/sondy/sonda_8ae9f39.py <scratch>/sonda_tmp/8ae9f39
+# 2026-11-24T17:27:56Z
+{"input": "plan() of config/collection-v4.json: 96 sessions, 238 events", "interval_s": 5, "probe": "event starts and stops on multiples of the capture interval (capture R1, LAB-01)", "row": 6, "start_phases_s": [0], "starts_modulo_30_s": [0], "stop_phases_s": [0]}
+{"event_schedule_draws_from": "random.Random(session seed)", "input": "plan() of config/collection-v4.json and of a copy under another name", "probe": "one seed for two purposes, and the same seeds under another protocol (LAB-11)", "row": 7, "same_seeds_under_another_name": true, "seed_keys_of_a_session": ["seed"], "traffic_generator_gets": ["\"--dur\", \"0\", \"--seed\", str(metadata[\"seed\"]), \"--vlakien\", str(s[\"workers\"]),"]}
+exit 0

@@ -1,0 +1,1208 @@
+<?xml version='1.0' encoding='utf-8'?>
+<testsuites><testsuite name="pred c39accb scripts/tests/test_audit_selftest.py::test_bad_session_is_refused_with_exactly_its_reasons[lateness]" errors="0" failures="0" skipped="0" tests="0" time="0.284" timestamp="2026-11-24T11:25:41.658070-06:00" hostname="debian" /><testsuite name="pred c39accb scripts/tests/test_audit_selftest.py::test_bad_session_is_refused_with_exactly_its_reasons[logs:event_not_executed]" errors="0" failures="0" skipped="0" tests="0" time="0.290" timestamp="2026-11-24T11:25:42.889956-06:00" hostname="debian" /><testsuite name="pred c39accb scripts/tests/test_audit_selftest.py::test_bad_session_is_refused_with_exactly_its_reasons[logs:event_without_effect]" errors="0" failures="0" skipped="0" tests="0" time="0.289" timestamp="2026-11-24T11:25:44.136913-06:00" hostname="debian" /><testsuite name="pred c39accb scripts/tests/test_effect_contract.py::test_event_record_without_a_true_ok_is_refused_for_exactly_that[ok_false]" errors="0" failures="1" skipped="0" tests="1" time="0.251" timestamp="2026-11-24T11:25:45.374124-06:00" hostname="debian"><testcase classname="scripts.tests.test_effect_contract" name="test_event_record_without_a_true_ok_is_refused_for_exactly_that[ok_false]" time="0.021"><failure message="assert not True">tmp_path = PosixPath('/tmp/claude-1000/-home-eh-projects-hyptcn3/9a8a89c1-0c71-4e83-9fec-bd4ea2021d22/scratchpad/b10/c_praca/m/pp/pt/test_event_record_without_a_tr0')
+effect = {'evidence': {}, 'ok': False}
+
+    @pytest.mark.parametrize("effect", [
+        {"predicate": "a predicate", "evidence": {"MainPID": "4200"}},
+        {"ok": None, "evidence": {}},
+        {"ok": "true", "evidence": {}},
+        {"ok": 1, "evidence": {}},
+        {"ok": False, "evidence": {}},
+        [True],
+        None,
+        MISSING,
+    ], ids=["without_ok", "ok_null", "ok_string", "ok_one", "ok_false", "list", "null", "missing"])
+    def test_event_record_without_a_true_ok_is_refused_for_exactly_that(tmp_path, effect):
+        result = audited(tmp_path, effect)
+&gt;       assert not result["accepted"]
+E       assert not True
+
+scripts/tests/test_effect_contract.py:43: AssertionError</failure></testcase></testsuite><testsuite name="pred c39accb lab/tests/test_udalosti_effect.py::test_predicate_is_true_with_the_effect_and_false_without[zamok_tabulky-none-9]" errors="1" failures="0" skipped="0" tests="1" time="0.067" timestamp="2026-11-24T11:25:45.768091-06:00" hostname="debian"><testcase classname="lab.tests.test_udalosti_effect" name="test_predicate_is_true_with_the_effect_and_false_without[zamok_tabulky-none-9]" time="0.001"><error message="failed on setup with &quot;AttributeError: &lt;module 'udalosti' from '/tmp/claude-1000/-home-eh-projects-hyptcn3/9a8a89c1-0c71-4e83-9fec-bd4ea2021d22/scratchpad/b10/c_praca/m/pp/pred_c39accb/lab/udalosti.py'&gt; has no attribute 'http'&quot;">tmp_path = PosixPath('/tmp/claude-1000/-home-eh-projects-hyptcn3/9a8a89c1-0c71-4e83-9fec-bd4ea2021d22/scratchpad/b10/c_praca/m/pp/pt/test_predicate_is_true_with_th0')
+monkeypatch = &lt;_pytest.monkeypatch.MonkeyPatch object at 0x7fdc65524e90&gt;
+
+    @pytest.fixture
+    def guest(tmp_path, monkeypatch):
+        """A fake guest: unit properties, the lock count psql reports and the replies of the service ports."""
+        fake = SimpleNamespace(units={}, locks=0, http={}, calls=[], proc=tmp_path / "proc", state=tmp_path / "state")
+    
+        def run(*args, check=True, timeout=90):
+            fake.calls.append(args)
+            if args[:2] == ("systemctl", "show"):
+                return subprocess.CompletedProcess(args, 0, fake.units.get((args[2], args[4]), "") + "\n", "")
+            if "psql" in args:
+                return subprocess.CompletedProcess(args, 0, f"{fake.locks}\n", "")
+            if args[0] in ("systemctl", "rm", "nginx"):
+                return subprocess.CompletedProcess(args, 0, "", "")
+            raise AssertionError(f"unexpected guest command {args}")
+    
+        def http(method, url, body=None, token=None, timeout=10):
+            fake.calls.append((method, url))
+            return fake.http.get((method, url), REFUSED)
+    
+        for name, value in (("run", run), ("http", http), ("STATE", fake.state), ("PROC", fake.proc),
+                            ("BACKUPS", tmp_path / "backups"), ("NGINX", tmp_path / "nginx.conf"),
+                            ("DROPIN", tmp_path / "dropin/zla-konfiguracia.conf"), ("health", lambda: 200)):
+&gt;           monkeypatch.setattr(udalosti, name, value)
+E           AttributeError: &lt;module 'udalosti' from '/tmp/claude-1000/-home-eh-projects-hyptcn3/9a8a89c1-0c71-4e83-9fec-bd4ea2021d22/scratchpad/b10/c_praca/m/pp/pred_c39accb/lab/udalosti.py'&gt; has no attribute 'http'
+
+lab/tests/test_udalosti_effect.py:44: AttributeError</error></testcase></testsuite><testsuite name="pred c39accb lab/tests/test_udalosti_effect.py::test_predicate_is_true_with_the_effect_and_false_without[udrzba_zaloha-none-11]" errors="1" failures="0" skipped="0" tests="1" time="0.067" timestamp="2026-11-24T11:25:45.970168-06:00" hostname="debian"><testcase classname="lab.tests.test_udalosti_effect" name="test_predicate_is_true_with_the_effect_and_false_without[udrzba_zaloha-none-11]" time="0.001"><error message="failed on setup with &quot;AttributeError: &lt;module 'udalosti' from '/tmp/claude-1000/-home-eh-projects-hyptcn3/9a8a89c1-0c71-4e83-9fec-bd4ea2021d22/scratchpad/b10/c_praca/m/pp/pred_c39accb/lab/udalosti.py'&gt; has no attribute 'http'&quot;">tmp_path = PosixPath('/tmp/claude-1000/-home-eh-projects-hyptcn3/9a8a89c1-0c71-4e83-9fec-bd4ea2021d22/scratchpad/b10/c_praca/m/pp/pt/test_predicate_is_true_with_th0')
+monkeypatch = &lt;_pytest.monkeypatch.MonkeyPatch object at 0x7fefdcff0e90&gt;
+
+    @pytest.fixture
+    def guest(tmp_path, monkeypatch):
+        """A fake guest: unit properties, the lock count psql reports and the replies of the service ports."""
+        fake = SimpleNamespace(units={}, locks=0, http={}, calls=[], proc=tmp_path / "proc", state=tmp_path / "state")
+    
+        def run(*args, check=True, timeout=90):
+            fake.calls.append(args)
+            if args[:2] == ("systemctl", "show"):
+                return subprocess.CompletedProcess(args, 0, fake.units.get((args[2], args[4]), "") + "\n", "")
+            if "psql" in args:
+                return subprocess.CompletedProcess(args, 0, f"{fake.locks}\n", "")
+            if args[0] in ("systemctl", "rm", "nginx"):
+                return subprocess.CompletedProcess(args, 0, "", "")
+            raise AssertionError(f"unexpected guest command {args}")
+    
+        def http(method, url, body=None, token=None, timeout=10):
+            fake.calls.append((method, url))
+            return fake.http.get((method, url), REFUSED)
+    
+        for name, value in (("run", run), ("http", http), ("STATE", fake.state), ("PROC", fake.proc),
+                            ("BACKUPS", tmp_path / "backups"), ("NGINX", tmp_path / "nginx.conf"),
+                            ("DROPIN", tmp_path / "dropin/zla-konfiguracia.conf"), ("health", lambda: 200)):
+&gt;           monkeypatch.setattr(udalosti, name, value)
+E           AttributeError: &lt;module 'udalosti' from '/tmp/claude-1000/-home-eh-projects-hyptcn3/9a8a89c1-0c71-4e83-9fec-bd4ea2021d22/scratchpad/b10/c_praca/m/pp/pred_c39accb/lab/udalosti.py'&gt; has no attribute 'http'
+
+lab/tests/test_udalosti_effect.py:44: AttributeError</error></testcase></testsuite><testsuite name="pred c39accb lab/tests/test_udalosti_effect.py::test_predicate_is_true_with_the_effect_and_false_without[zataz_pamate-none-14]" errors="1" failures="0" skipped="0" tests="1" time="0.067" timestamp="2026-11-24T11:25:46.170479-06:00" hostname="debian"><testcase classname="lab.tests.test_udalosti_effect" name="test_predicate_is_true_with_the_effect_and_false_without[zataz_pamate-none-14]" time="0.001"><error message="failed on setup with &quot;AttributeError: &lt;module 'udalosti' from '/tmp/claude-1000/-home-eh-projects-hyptcn3/9a8a89c1-0c71-4e83-9fec-bd4ea2021d22/scratchpad/b10/c_praca/m/pp/pred_c39accb/lab/udalosti.py'&gt; has no attribute 'http'&quot;">tmp_path = PosixPath('/tmp/claude-1000/-home-eh-projects-hyptcn3/9a8a89c1-0c71-4e83-9fec-bd4ea2021d22/scratchpad/b10/c_praca/m/pp/pt/test_predicate_is_true_with_th0')
+monkeypatch = &lt;_pytest.monkeypatch.MonkeyPatch object at 0x7f4358e50e90&gt;
+
+    @pytest.fixture
+    def guest(tmp_path, monkeypatch):
+        """A fake guest: unit properties, the lock count psql reports and the replies of the service ports."""
+        fake = SimpleNamespace(units={}, locks=0, http={}, calls=[], proc=tmp_path / "proc", state=tmp_path / "state")
+    
+        def run(*args, check=True, timeout=90):
+            fake.calls.append(args)
+            if args[:2] == ("systemctl", "show"):
+                return subprocess.CompletedProcess(args, 0, fake.units.get((args[2], args[4]), "") + "\n", "")
+            if "psql" in args:
+                return subprocess.CompletedProcess(args, 0, f"{fake.locks}\n", "")
+            if args[0] in ("systemctl", "rm", "nginx"):
+                return subprocess.CompletedProcess(args, 0, "", "")
+            raise AssertionError(f"unexpected guest command {args}")
+    
+        def http(method, url, body=None, token=None, timeout=10):
+            fake.calls.append((method, url))
+            return fake.http.get((method, url), REFUSED)
+    
+        for name, value in (("run", run), ("http", http), ("STATE", fake.state), ("PROC", fake.proc),
+                            ("BACKUPS", tmp_path / "backups"), ("NGINX", tmp_path / "nginx.conf"),
+                            ("DROPIN", tmp_path / "dropin/zla-konfiguracia.conf"), ("health", lambda: 200)):
+&gt;           monkeypatch.setattr(udalosti, name, value)
+E           AttributeError: &lt;module 'udalosti' from '/tmp/claude-1000/-home-eh-projects-hyptcn3/9a8a89c1-0c71-4e83-9fec-bd4ea2021d22/scratchpad/b10/c_praca/m/pp/pred_c39accb/lab/udalosti.py'&gt; has no attribute 'http'
+
+lab/tests/test_udalosti_effect.py:44: AttributeError</error></testcase></testsuite><testsuite name="pred c39accb scripts/tests/test_collection_logs.py::test_collector_warning_is_judged_by_the_allowed_patterns[null]" errors="0" failures="1" skipped="0" tests="1" time="0.267" timestamp="2026-11-24T11:25:46.369828-06:00" hostname="debian"><testcase classname="scripts.tests.test_collection_logs" name="test_collector_warning_is_judged_by_the_allowed_patterns[null]" time="0.019"><failure message="AssertionError: assert [] == ['collector_w...oda 5.000 s)']&#10;  &#10;  Right contains one more item: 'collector_warning_unlisted:planovac: cyklus 7 trval 5.200 s (perioda 5.000 s)'&#10;  Use -v to get more diff">session = PosixPath('/tmp/claude-1000/-home-eh-projects-hyptcn3/9a8a89c1-0c71-4e83-9fec-bd4ea2021d22/scratchpad/b10/c_praca/m/pp/pt/test_collector_warning_is_judg0/synthetic-session')
+schema = 3, allowed = None, unlisted = True
+
+    @pytest.mark.parametrize("schema,allowed,unlisted", [
+        (3, None, True),                                   # null until G2: no warning is allowed
+        (3, [r"planovac: cyklus \d+ trval [0-9.]+ s \(perioda [0-9.]+ s\)"], False),
+        (3, ["planovac: cyklus"], True),                   # a pattern must match the whole message
+        (2, None, False),                                  # no audit bounds: warnings are recorded only
+    ], ids=["null", "full_match", "partial_match", "schema2"])
+    def test_collector_warning_is_judged_by_the_allowed_patterns(session, schema, allowed, unlisted):
+        doc = {"schema": f"hyptcn3/collection-protocol/{schema}", "interval_s": 5}
+        if schema == 3:  # Since package B5b the audit section also holds the traffic bounds (from the v5 file).
+            bounds = json.loads((logs.ROOT / "config/collection-v5.json").read_text())["audit"]
+            # Package B9b: and the early stop of the v5 file; this protocol has no events section, so no type to bound.
+            early_stop = dict(bounds["early_stop"], marked_rows_rate_per_type={})
+            # Q29: and the bound of the collector's major faults per cycle with its note (null until G2).
+            doc["audit"] = {"lateness_max_s": .5, "cycle_ms_max": {"delta": 1500, "full": 3500},
+                            "periodicity": {"equal_spacings": 3, "min_spacing_rows": 2, "note": "test"},
+                            "warnings_allowed": allowed, "rule_closed_rows_max": None,
+                            "collector_majflt_max": bounds["collector_majflt_max"],
+                            "collector_majflt_note": bounds["collector_majflt_note"], "traffic": bounds["traffic"],
+                            "early_stop": early_stop}
+        write(session / "protocol.json", doc)
+        meta = logs.read_json(session / "session.json")
+        write(session / "session.json", dict(meta, protocol_sha256=logs.digest(session / "protocol.json")))
+        with (session / "raw/collect.log").open("a") as stream:
+            stream.write(WARN_LINE + "\n")
+        seal(session)
+        result = logs.audit_logs(session)
+        message = WARN_LINE.split("WARN  ", 1)[1]
+&gt;       assert result["problems"] == (["collector_warning_unlisted:" + message] if unlisted else [])
+E       AssertionError: assert [] == ['collector_w...oda 5.000 s)']
+E         
+E         Right contains one more item: 'collector_warning_unlisted:planovac: cyklus 7 trval 5.200 s (perioda 5.000 s)'
+E         Use -v to get more diff
+
+scripts/tests/test_collection_logs.py:756: AssertionError</failure></testcase></testsuite><testsuite name="pred c39accb scripts/tests/test_audit_selftest.py::test_bad_session_is_refused_with_exactly_its_reasons[logs:collector_warning_unlisted]" errors="0" failures="0" skipped="0" tests="0" time="0.287" timestamp="2026-11-24T11:25:46.779948-06:00" hostname="debian" /><testsuite name="pred c39accb scripts/tests/test_audit_selftest.py::test_cap_of_rule_closed_rows_once_it_is_set[above]" errors="1" failures="0" skipped="0" tests="1" time="0.327" timestamp="2026-11-24T11:25:48.018388-06:00" hostname="debian"><testcase classname="scripts.tests.test_audit_selftest" name="test_cap_of_rule_closed_rows_once_it_is_set[above]" time="0.002"><error message="failed on setup with &quot;ImportError: cannot import name 'audit_policy' from 'features' (/tmp/claude-1000/-home-eh-projects-hyptcn3/9a8a89c1-0c71-4e83-9fec-bd4ea2021d22/scratchpad/b10/c_praca/m/pp/pred_c39accb/features/__init__.py)&quot;">tmp_path_factory = TempPathFactory(_given_basetemp=PosixPath('/tmp/claude-1000/-home-eh-projects-hyptcn3/9a8a89c1-0c71-4e83-9fec-bd4ea202...cn3/9a8a89c1-0c71-4e83-9fec-bd4ea2021d22/scratchpad/b10/c_praca/m/pp/pt'), _retention_count=3, _retention_policy='all')
+
+    @pytest.fixture(scope="module")
+    def small(tmp_path_factory):
+        """(protocol, its path, a work directory) of the small schema-3 protocol."""
+        from scripts import collection
+        from scripts.tests import boundary_sessions as bs
+        root = tmp_path_factory.mktemp("selftest")
+&gt;       path = bs.write_protocol(root / "protocol.json", small_doc(bs.profile_dir(root / "profile")))
+
+scripts/tests/test_audit_selftest.py:57: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+scripts/tests/test_audit_selftest.py:44: in small_doc
+    doc = bs.protocol_doc(profile, schema="hyptcn3/collection-protocol/3", cycles=96, pilot_cycles=80,
+scripts/tests/boundary_sessions.py:393: in protocol_doc
+    **audit_sections(doc["interval_s"]))
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+interval_s = 1, min_spacing_rows = 2
+
+    def audit_sections(interval_s, min_spacing_rows=2):
+        """The audit and exceptions sections of a schema-3 test protocol (features/audit_policy.py).
+    
+        The bounds of proposal 6.2 for an interval of 5 s scaled to `interval_s`: the cycle starts at most a tenth of
+        the interval late, a delta cycle takes at most 30 % of it and a full one 70 %. Periodicity: 3 equal spacings in
+        a row between the starts of bursts, each of at least `min_spacing_rows` rows (the author's judgment in G0). No
+        collector warning is allowed and the cap of rule-closed rows is not set, as until G2 and G3b; nor is the bound of
+        the collector's major faults per cycle, whose null and note are those of config/collection-v5.json (the lead's
+        answer to Q29, collector_majflt_bounds: null until G2). The bounds of the
+        traffic's realism (package B5b) are those of config/collection-v5.json (traffic_bounds), and so is the rule of the
+        early stop (package B9b, early_stop_bounds: a rate per event type of the file, null until G3b). Every TOLERATED
+        id is registered (REGISTER), with no expected count.
+        """
+&gt;       from features import audit_policy  # A module of package B3: imported here, so this file collects before it.
+E       ImportError: cannot import name 'audit_policy' from 'features' (/tmp/claude-1000/-home-eh-projects-hyptcn3/9a8a89c1-0c71-4e83-9fec-bd4ea2021d22/scratchpad/b10/c_praca/m/pp/pred_c39accb/features/__init__.py)
+
+scripts/tests/boundary_sessions.py:271: ImportError</error></testcase></testsuite><testsuite name="pred c39accb scripts/tests/test_audit_selftest.py::test_the_self_test_builds_the_case_of_the_cap_once_the_cap_is_a_number[zero]" errors="1" failures="0" skipped="0" tests="1" time="0.330" timestamp="2026-11-24T11:25:48.487947-06:00" hostname="debian"><testcase classname="scripts.tests.test_audit_selftest" name="test_the_self_test_builds_the_case_of_the_cap_once_the_cap_is_a_number[zero]" time="0.002"><error message="failed on setup with &quot;ImportError: cannot import name 'audit_policy' from 'features' (/tmp/claude-1000/-home-eh-projects-hyptcn3/9a8a89c1-0c71-4e83-9fec-bd4ea2021d22/scratchpad/b10/c_praca/m/pp/pred_c39accb/features/__init__.py)&quot;">tmp_path_factory = TempPathFactory(_given_basetemp=PosixPath('/tmp/claude-1000/-home-eh-projects-hyptcn3/9a8a89c1-0c71-4e83-9fec-bd4ea202...cn3/9a8a89c1-0c71-4e83-9fec-bd4ea2021d22/scratchpad/b10/c_praca/m/pp/pt'), _retention_count=3, _retention_policy='all')
+
+    @pytest.fixture(scope="module")
+    def small(tmp_path_factory):
+        """(protocol, its path, a work directory) of the small schema-3 protocol."""
+        from scripts import collection
+        from scripts.tests import boundary_sessions as bs
+        root = tmp_path_factory.mktemp("selftest")
+&gt;       path = bs.write_protocol(root / "protocol.json", small_doc(bs.profile_dir(root / "profile")))
+
+scripts/tests/test_audit_selftest.py:57: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+scripts/tests/test_audit_selftest.py:44: in small_doc
+    doc = bs.protocol_doc(profile, schema="hyptcn3/collection-protocol/3", cycles=96, pilot_cycles=80,
+scripts/tests/boundary_sessions.py:393: in protocol_doc
+    **audit_sections(doc["interval_s"]))
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+interval_s = 1, min_spacing_rows = 2
+
+    def audit_sections(interval_s, min_spacing_rows=2):
+        """The audit and exceptions sections of a schema-3 test protocol (features/audit_policy.py).
+    
+        The bounds of proposal 6.2 for an interval of 5 s scaled to `interval_s`: the cycle starts at most a tenth of
+        the interval late, a delta cycle takes at most 30 % of it and a full one 70 %. Periodicity: 3 equal spacings in
+        a row between the starts of bursts, each of at least `min_spacing_rows` rows (the author's judgment in G0). No
+        collector warning is allowed and the cap of rule-closed rows is not set, as until G2 and G3b; nor is the bound of
+        the collector's major faults per cycle, whose null and note are those of config/collection-v5.json (the lead's
+        answer to Q29, collector_majflt_bounds: null until G2). The bounds of the
+        traffic's realism (package B5b) are those of config/collection-v5.json (traffic_bounds), and so is the rule of the
+        early stop (package B9b, early_stop_bounds: a rate per event type of the file, null until G3b). Every TOLERATED
+        id is registered (REGISTER), with no expected count.
+        """
+&gt;       from features import audit_policy  # A module of package B3: imported here, so this file collects before it.
+E       ImportError: cannot import name 'audit_policy' from 'features' (/tmp/claude-1000/-home-eh-projects-hyptcn3/9a8a89c1-0c71-4e83-9fec-bd4ea2021d22/scratchpad/b10/c_praca/m/pp/pred_c39accb/features/__init__.py)
+
+scripts/tests/boundary_sessions.py:271: ImportError</error></testcase></testsuite><testsuite name="pred c39accb scripts/tests/test_audit_selftest.py::test_the_self_test_builds_the_case_of_the_cap_once_the_cap_is_a_number[three]" errors="1" failures="0" skipped="0" tests="1" time="0.357" timestamp="2026-11-24T11:25:48.970257-06:00" hostname="debian"><testcase classname="scripts.tests.test_audit_selftest" name="test_the_self_test_builds_the_case_of_the_cap_once_the_cap_is_a_number[three]" time="0.002"><error message="failed on setup with &quot;ImportError: cannot import name 'audit_policy' from 'features' (/tmp/claude-1000/-home-eh-projects-hyptcn3/9a8a89c1-0c71-4e83-9fec-bd4ea2021d22/scratchpad/b10/c_praca/m/pp/pred_c39accb/features/__init__.py)&quot;">tmp_path_factory = TempPathFactory(_given_basetemp=PosixPath('/tmp/claude-1000/-home-eh-projects-hyptcn3/9a8a89c1-0c71-4e83-9fec-bd4ea202...cn3/9a8a89c1-0c71-4e83-9fec-bd4ea2021d22/scratchpad/b10/c_praca/m/pp/pt'), _retention_count=3, _retention_policy='all')
+
+    @pytest.fixture(scope="module")
+    def small(tmp_path_factory):
+        """(protocol, its path, a work directory) of the small schema-3 protocol."""
+        from scripts import collection
+        from scripts.tests import boundary_sessions as bs
+        root = tmp_path_factory.mktemp("selftest")
+&gt;       path = bs.write_protocol(root / "protocol.json", small_doc(bs.profile_dir(root / "profile")))
+
+scripts/tests/test_audit_selftest.py:57: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+scripts/tests/test_audit_selftest.py:44: in small_doc
+    doc = bs.protocol_doc(profile, schema="hyptcn3/collection-protocol/3", cycles=96, pilot_cycles=80,
+scripts/tests/boundary_sessions.py:393: in protocol_doc
+    **audit_sections(doc["interval_s"]))
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+interval_s = 1, min_spacing_rows = 2
+
+    def audit_sections(interval_s, min_spacing_rows=2):
+        """The audit and exceptions sections of a schema-3 test protocol (features/audit_policy.py).
+    
+        The bounds of proposal 6.2 for an interval of 5 s scaled to `interval_s`: the cycle starts at most a tenth of
+        the interval late, a delta cycle takes at most 30 % of it and a full one 70 %. Periodicity: 3 equal spacings in
+        a row between the starts of bursts, each of at least `min_spacing_rows` rows (the author's judgment in G0). No
+        collector warning is allowed and the cap of rule-closed rows is not set, as until G2 and G3b; nor is the bound of
+        the collector's major faults per cycle, whose null and note are those of config/collection-v5.json (the lead's
+        answer to Q29, collector_majflt_bounds: null until G2). The bounds of the
+        traffic's realism (package B5b) are those of config/collection-v5.json (traffic_bounds), and so is the rule of the
+        early stop (package B9b, early_stop_bounds: a rate per event type of the file, null until G3b). Every TOLERATED
+        id is registered (REGISTER), with no expected count.
+        """
+&gt;       from features import audit_policy  # A module of package B3: imported here, so this file collects before it.
+E       ImportError: cannot import name 'audit_policy' from 'features' (/tmp/claude-1000/-home-eh-projects-hyptcn3/9a8a89c1-0c71-4e83-9fec-bd4ea2021d22/scratchpad/b10/c_praca/m/pp/pred_c39accb/features/__init__.py)
+
+scripts/tests/boundary_sessions.py:271: ImportError</error></testcase></testsuite><testsuite name="pred c39accb scripts/tests/test_audit_selftest.py::test_the_self_test_builds_the_case_of_the_cap_once_the_cap_is_a_number[four]" errors="1" failures="0" skipped="0" tests="1" time="0.329" timestamp="2026-11-24T11:25:49.482523-06:00" hostname="debian"><testcase classname="scripts.tests.test_audit_selftest" name="test_the_self_test_builds_the_case_of_the_cap_once_the_cap_is_a_number[four]" time="0.002"><error message="failed on setup with &quot;ImportError: cannot import name 'audit_policy' from 'features' (/tmp/claude-1000/-home-eh-projects-hyptcn3/9a8a89c1-0c71-4e83-9fec-bd4ea2021d22/scratchpad/b10/c_praca/m/pp/pred_c39accb/features/__init__.py)&quot;">tmp_path_factory = TempPathFactory(_given_basetemp=PosixPath('/tmp/claude-1000/-home-eh-projects-hyptcn3/9a8a89c1-0c71-4e83-9fec-bd4ea202...cn3/9a8a89c1-0c71-4e83-9fec-bd4ea2021d22/scratchpad/b10/c_praca/m/pp/pt'), _retention_count=3, _retention_policy='all')
+
+    @pytest.fixture(scope="module")
+    def small(tmp_path_factory):
+        """(protocol, its path, a work directory) of the small schema-3 protocol."""
+        from scripts import collection
+        from scripts.tests import boundary_sessions as bs
+        root = tmp_path_factory.mktemp("selftest")
+&gt;       path = bs.write_protocol(root / "protocol.json", small_doc(bs.profile_dir(root / "profile")))
+
+scripts/tests/test_audit_selftest.py:57: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+scripts/tests/test_audit_selftest.py:44: in small_doc
+    doc = bs.protocol_doc(profile, schema="hyptcn3/collection-protocol/3", cycles=96, pilot_cycles=80,
+scripts/tests/boundary_sessions.py:393: in protocol_doc
+    **audit_sections(doc["interval_s"]))
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+interval_s = 1, min_spacing_rows = 2
+
+    def audit_sections(interval_s, min_spacing_rows=2):
+        """The audit and exceptions sections of a schema-3 test protocol (features/audit_policy.py).
+    
+        The bounds of proposal 6.2 for an interval of 5 s scaled to `interval_s`: the cycle starts at most a tenth of
+        the interval late, a delta cycle takes at most 30 % of it and a full one 70 %. Periodicity: 3 equal spacings in
+        a row between the starts of bursts, each of at least `min_spacing_rows` rows (the author's judgment in G0). No
+        collector warning is allowed and the cap of rule-closed rows is not set, as until G2 and G3b; nor is the bound of
+        the collector's major faults per cycle, whose null and note are those of config/collection-v5.json (the lead's
+        answer to Q29, collector_majflt_bounds: null until G2). The bounds of the
+        traffic's realism (package B5b) are those of config/collection-v5.json (traffic_bounds), and so is the rule of the
+        early stop (package B9b, early_stop_bounds: a rate per event type of the file, null until G3b). Every TOLERATED
+        id is registered (REGISTER), with no expected count.
+        """
+&gt;       from features import audit_policy  # A module of package B3: imported here, so this file collects before it.
+E       ImportError: cannot import name 'audit_policy' from 'features' (/tmp/claude-1000/-home-eh-projects-hyptcn3/9a8a89c1-0c71-4e83-9fec-bd4ea2021d22/scratchpad/b10/c_praca/m/pp/pred_c39accb/features/__init__.py)
+
+scripts/tests/boundary_sessions.py:271: ImportError</error></testcase></testsuite><testsuite name="pred c39accb scripts/tests/test_audit_selftest.py::test_the_self_test_builds_the_case_of_the_cap_once_the_cap_is_a_number[every_row]" errors="1" failures="0" skipped="0" tests="1" time="0.327" timestamp="2026-11-24T11:25:49.954810-06:00" hostname="debian"><testcase classname="scripts.tests.test_audit_selftest" name="test_the_self_test_builds_the_case_of_the_cap_once_the_cap_is_a_number[every_row]" time="0.002"><error message="failed on setup with &quot;ImportError: cannot import name 'audit_policy' from 'features' (/tmp/claude-1000/-home-eh-projects-hyptcn3/9a8a89c1-0c71-4e83-9fec-bd4ea2021d22/scratchpad/b10/c_praca/m/pp/pred_c39accb/features/__init__.py)&quot;">tmp_path_factory = TempPathFactory(_given_basetemp=PosixPath('/tmp/claude-1000/-home-eh-projects-hyptcn3/9a8a89c1-0c71-4e83-9fec-bd4ea202...cn3/9a8a89c1-0c71-4e83-9fec-bd4ea2021d22/scratchpad/b10/c_praca/m/pp/pt'), _retention_count=3, _retention_policy='all')
+
+    @pytest.fixture(scope="module")
+    def small(tmp_path_factory):
+        """(protocol, its path, a work directory) of the small schema-3 protocol."""
+        from scripts import collection
+        from scripts.tests import boundary_sessions as bs
+        root = tmp_path_factory.mktemp("selftest")
+&gt;       path = bs.write_protocol(root / "protocol.json", small_doc(bs.profile_dir(root / "profile")))
+
+scripts/tests/test_audit_selftest.py:57: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+scripts/tests/test_audit_selftest.py:44: in small_doc
+    doc = bs.protocol_doc(profile, schema="hyptcn3/collection-protocol/3", cycles=96, pilot_cycles=80,
+scripts/tests/boundary_sessions.py:393: in protocol_doc
+    **audit_sections(doc["interval_s"]))
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+interval_s = 1, min_spacing_rows = 2
+
+    def audit_sections(interval_s, min_spacing_rows=2):
+        """The audit and exceptions sections of a schema-3 test protocol (features/audit_policy.py).
+    
+        The bounds of proposal 6.2 for an interval of 5 s scaled to `interval_s`: the cycle starts at most a tenth of
+        the interval late, a delta cycle takes at most 30 % of it and a full one 70 %. Periodicity: 3 equal spacings in
+        a row between the starts of bursts, each of at least `min_spacing_rows` rows (the author's judgment in G0). No
+        collector warning is allowed and the cap of rule-closed rows is not set, as until G2 and G3b; nor is the bound of
+        the collector's major faults per cycle, whose null and note are those of config/collection-v5.json (the lead's
+        answer to Q29, collector_majflt_bounds: null until G2). The bounds of the
+        traffic's realism (package B5b) are those of config/collection-v5.json (traffic_bounds), and so is the rule of the
+        early stop (package B9b, early_stop_bounds: a rate per event type of the file, null until G3b). Every TOLERATED
+        id is registered (REGISTER), with no expected count.
+        """
+&gt;       from features import audit_policy  # A module of package B3: imported here, so this file collects before it.
+E       ImportError: cannot import name 'audit_policy' from 'features' (/tmp/claude-1000/-home-eh-projects-hyptcn3/9a8a89c1-0c71-4e83-9fec-bd4ea2021d22/scratchpad/b10/c_praca/m/pp/pred_c39accb/features/__init__.py)
+
+scripts/tests/boundary_sessions.py:271: ImportError</error></testcase></testsuite><testsuite name="pred c39accb scripts/tests/test_audit_selftest.py::test_bad_session_is_refused_with_exactly_its_reasons[logs:qemu_swap]" errors="0" failures="0" skipped="0" tests="0" time="0.287" timestamp="2026-11-24T11:25:50.425771-06:00" hostname="debian" /><testsuite name="pred c39accb scripts/tests/test_audit_selftest.py::test_bad_session_is_refused_with_exactly_its_reasons[logs:qemu_swap:absent]" errors="0" failures="0" skipped="0" tests="0" time="0.289" timestamp="2026-11-24T11:25:51.656135-06:00" hostname="debian" /><testsuite name="pred c39accb scripts/tests/test_audit_selftest.py::test_bad_session_is_refused_with_exactly_its_reasons[qemu_swap]" errors="0" failures="0" skipped="0" tests="0" time="0.287" timestamp="2026-11-24T11:25:52.889834-06:00" hostname="debian" /><testsuite name="pred c39accb scripts/tests/test_audit_selftest.py::test_bad_session_is_refused_with_exactly_its_reasons[qemu_swapped]" errors="0" failures="0" skipped="0" tests="0" time="0.316" timestamp="2026-11-24T11:25:54.122994-06:00" hostname="debian" /><testsuite name="pred c39accb scripts/tests/test_audit_selftest.py::test_run_session_refuses_qemu_swap_that_is_not_forbidden[max]" errors="1" failures="0" skipped="0" tests="1" time="0.328" timestamp="2026-11-24T11:25:55.383431-06:00" hostname="debian"><testcase classname="scripts.tests.test_audit_selftest" name="test_run_session_refuses_qemu_swap_that_is_not_forbidden[max]" time="0.002"><error message="failed on setup with &quot;ImportError: cannot import name 'audit_policy' from 'features' (/tmp/claude-1000/-home-eh-projects-hyptcn3/9a8a89c1-0c71-4e83-9fec-bd4ea2021d22/scratchpad/b10/c_praca/m/pp/pred_c39accb/features/__init__.py)&quot;">tmp_path_factory = TempPathFactory(_given_basetemp=PosixPath('/tmp/claude-1000/-home-eh-projects-hyptcn3/9a8a89c1-0c71-4e83-9fec-bd4ea202...cn3/9a8a89c1-0c71-4e83-9fec-bd4ea2021d22/scratchpad/b10/c_praca/m/pp/pt'), _retention_count=3, _retention_policy='all')
+
+    @pytest.fixture(scope="module")
+    def small(tmp_path_factory):
+        """(protocol, its path, a work directory) of the small schema-3 protocol."""
+        from scripts import collection
+        from scripts.tests import boundary_sessions as bs
+        root = tmp_path_factory.mktemp("selftest")
+&gt;       path = bs.write_protocol(root / "protocol.json", small_doc(bs.profile_dir(root / "profile")))
+
+scripts/tests/test_audit_selftest.py:57: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+scripts/tests/test_audit_selftest.py:44: in small_doc
+    doc = bs.protocol_doc(profile, schema="hyptcn3/collection-protocol/3", cycles=96, pilot_cycles=80,
+scripts/tests/boundary_sessions.py:393: in protocol_doc
+    **audit_sections(doc["interval_s"]))
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+interval_s = 1, min_spacing_rows = 2
+
+    def audit_sections(interval_s, min_spacing_rows=2):
+        """The audit and exceptions sections of a schema-3 test protocol (features/audit_policy.py).
+    
+        The bounds of proposal 6.2 for an interval of 5 s scaled to `interval_s`: the cycle starts at most a tenth of
+        the interval late, a delta cycle takes at most 30 % of it and a full one 70 %. Periodicity: 3 equal spacings in
+        a row between the starts of bursts, each of at least `min_spacing_rows` rows (the author's judgment in G0). No
+        collector warning is allowed and the cap of rule-closed rows is not set, as until G2 and G3b; nor is the bound of
+        the collector's major faults per cycle, whose null and note are those of config/collection-v5.json (the lead's
+        answer to Q29, collector_majflt_bounds: null until G2). The bounds of the
+        traffic's realism (package B5b) are those of config/collection-v5.json (traffic_bounds), and so is the rule of the
+        early stop (package B9b, early_stop_bounds: a rate per event type of the file, null until G3b). Every TOLERATED
+        id is registered (REGISTER), with no expected count.
+        """
+&gt;       from features import audit_policy  # A module of package B3: imported here, so this file collects before it.
+E       ImportError: cannot import name 'audit_policy' from 'features' (/tmp/claude-1000/-home-eh-projects-hyptcn3/9a8a89c1-0c71-4e83-9fec-bd4ea2021d22/scratchpad/b10/c_praca/m/pp/pred_c39accb/features/__init__.py)
+
+scripts/tests/boundary_sessions.py:271: ImportError</error></testcase></testsuite><testsuite name="pred c39accb scripts/tests/test_audit_selftest.py::test_run_session_refuses_qemu_memory_that_was_swapped_before_start[8592]" errors="1" failures="0" skipped="0" tests="1" time="0.326" timestamp="2026-11-24T11:25:55.852912-06:00" hostname="debian"><testcase classname="scripts.tests.test_audit_selftest" name="test_run_session_refuses_qemu_memory_that_was_swapped_before_start[8592]" time="0.002"><error message="failed on setup with &quot;ImportError: cannot import name 'audit_policy' from 'features' (/tmp/claude-1000/-home-eh-projects-hyptcn3/9a8a89c1-0c71-4e83-9fec-bd4ea2021d22/scratchpad/b10/c_praca/m/pp/pred_c39accb/features/__init__.py)&quot;">tmp_path_factory = TempPathFactory(_given_basetemp=PosixPath('/tmp/claude-1000/-home-eh-projects-hyptcn3/9a8a89c1-0c71-4e83-9fec-bd4ea202...cn3/9a8a89c1-0c71-4e83-9fec-bd4ea2021d22/scratchpad/b10/c_praca/m/pp/pt'), _retention_count=3, _retention_policy='all')
+
+    @pytest.fixture(scope="module")
+    def small(tmp_path_factory):
+        """(protocol, its path, a work directory) of the small schema-3 protocol."""
+        from scripts import collection
+        from scripts.tests import boundary_sessions as bs
+        root = tmp_path_factory.mktemp("selftest")
+&gt;       path = bs.write_protocol(root / "protocol.json", small_doc(bs.profile_dir(root / "profile")))
+
+scripts/tests/test_audit_selftest.py:57: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+scripts/tests/test_audit_selftest.py:44: in small_doc
+    doc = bs.protocol_doc(profile, schema="hyptcn3/collection-protocol/3", cycles=96, pilot_cycles=80,
+scripts/tests/boundary_sessions.py:393: in protocol_doc
+    **audit_sections(doc["interval_s"]))
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+interval_s = 1, min_spacing_rows = 2
+
+    def audit_sections(interval_s, min_spacing_rows=2):
+        """The audit and exceptions sections of a schema-3 test protocol (features/audit_policy.py).
+    
+        The bounds of proposal 6.2 for an interval of 5 s scaled to `interval_s`: the cycle starts at most a tenth of
+        the interval late, a delta cycle takes at most 30 % of it and a full one 70 %. Periodicity: 3 equal spacings in
+        a row between the starts of bursts, each of at least `min_spacing_rows` rows (the author's judgment in G0). No
+        collector warning is allowed and the cap of rule-closed rows is not set, as until G2 and G3b; nor is the bound of
+        the collector's major faults per cycle, whose null and note are those of config/collection-v5.json (the lead's
+        answer to Q29, collector_majflt_bounds: null until G2). The bounds of the
+        traffic's realism (package B5b) are those of config/collection-v5.json (traffic_bounds), and so is the rule of the
+        early stop (package B9b, early_stop_bounds: a rate per event type of the file, null until G3b). Every TOLERATED
+        id is registered (REGISTER), with no expected count.
+        """
+&gt;       from features import audit_policy  # A module of package B3: imported here, so this file collects before it.
+E       ImportError: cannot import name 'audit_policy' from 'features' (/tmp/claude-1000/-home-eh-projects-hyptcn3/9a8a89c1-0c71-4e83-9fec-bd4ea2021d22/scratchpad/b10/c_praca/m/pp/pred_c39accb/features/__init__.py)
+
+scripts/tests/boundary_sessions.py:271: ImportError</error></testcase></testsuite><testsuite name="pred c39accb scripts/tests/test_collector_majflt.py::test_a_bound_refuses_one_cycle_above_it_and_accepts_a_cycle_at_it[zero]" errors="1" failures="0" skipped="0" tests="1" time="0.332" timestamp="2026-11-24T11:25:56.322199-06:00" hostname="debian"><testcase classname="scripts.tests.test_collector_majflt" name="test_a_bound_refuses_one_cycle_above_it_and_accepts_a_cycle_at_it[zero]" time="0.252"><error message="failed on setup with &quot;ImportError: cannot import name 'audit_policy' from 'features' (/tmp/claude-1000/-home-eh-projects-hyptcn3/9a8a89c1-0c71-4e83-9fec-bd4ea2021d22/scratchpad/b10/c_praca/m/pp/pred_c39accb/features/__init__.py)&quot;">tmp_path_factory = TempPathFactory(_given_basetemp=PosixPath('/tmp/claude-1000/-home-eh-projects-hyptcn3/9a8a89c1-0c71-4e83-9fec-bd4ea202...cn3/9a8a89c1-0c71-4e83-9fec-bd4ea2021d22/scratchpad/b10/c_praca/m/pp/pt'), _retention_count=3, _retention_policy='all')
+
+    @pytest.fixture(scope="module")
+    def small(tmp_path_factory):
+        """(protocol, its path) of the small schema-3 protocol of the audit self-test (interval 1 s, 96 cycles, windows of
+        8, a full snapshot every 64; scripts/tests/test_audit_selftest.py small_doc) with the bound of the G0 file."""
+        from scripts import collection
+        from scripts.tests import boundary_sessions as bs
+        from scripts.tests.test_audit_selftest import small_doc
+        root = tmp_path_factory.mktemp("majflt")
+&gt;       path = bs.write_protocol(root / "protocol.json", small_doc(bs.profile_dir(root / "profile")))
+
+scripts/tests/test_collector_majflt.py:39: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+scripts/tests/test_audit_selftest.py:44: in small_doc
+    doc = bs.protocol_doc(profile, schema="hyptcn3/collection-protocol/3", cycles=96, pilot_cycles=80,
+scripts/tests/boundary_sessions.py:393: in protocol_doc
+    **audit_sections(doc["interval_s"]))
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+interval_s = 1, min_spacing_rows = 2
+
+    def audit_sections(interval_s, min_spacing_rows=2):
+        """The audit and exceptions sections of a schema-3 test protocol (features/audit_policy.py).
+    
+        The bounds of proposal 6.2 for an interval of 5 s scaled to `interval_s`: the cycle starts at most a tenth of
+        the interval late, a delta cycle takes at most 30 % of it and a full one 70 %. Periodicity: 3 equal spacings in
+        a row between the starts of bursts, each of at least `min_spacing_rows` rows (the author's judgment in G0). No
+        collector warning is allowed and the cap of rule-closed rows is not set, as until G2 and G3b; nor is the bound of
+        the collector's major faults per cycle, whose null and note are those of config/collection-v5.json (the lead's
+        answer to Q29, collector_majflt_bounds: null until G2). The bounds of the
+        traffic's realism (package B5b) are those of config/collection-v5.json (traffic_bounds), and so is the rule of the
+        early stop (package B9b, early_stop_bounds: a rate per event type of the file, null until G3b). Every TOLERATED
+        id is registered (REGISTER), with no expected count.
+        """
+&gt;       from features import audit_policy  # A module of package B3: imported here, so this file collects before it.
+E       ImportError: cannot import name 'audit_policy' from 'features' (/tmp/claude-1000/-home-eh-projects-hyptcn3/9a8a89c1-0c71-4e83-9fec-bd4ea2021d22/scratchpad/b10/c_praca/m/pp/pred_c39accb/features/__init__.py)
+
+scripts/tests/boundary_sessions.py:271: ImportError</error></testcase></testsuite><testsuite name="pred c39accb scripts/tests/test_audit_selftest.py::test_every_reason_of_the_audit_and_the_verdict_has_a_case" errors="0" failures="1" skipped="0" tests="1" time="0.348" timestamp="2026-11-24T11:25:56.799628-06:00" hostname="debian"><testcase classname="scripts.tests.test_audit_selftest" name="test_every_reason_of_the_audit_and_the_verdict_has_a_case" time="0.014"><failure message="ModuleNotFoundError: No module named 'scripts.protocol_v5'">def test_every_reason_of_the_audit_and_the_verdict_has_a_case():
+        """Each reason audit_session and the verdict write (its literal text up to the first formatted part) is the
+        start of a reason some case expects, or of a reason UNREACHABLE names with its why."""
+&gt;       from scripts.tests import audit_cases
+
+scripts/tests/test_audit_selftest.py:116: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+scripts/tests/audit_cases.py:26: in &lt;module&gt;
+    from scripts.tests.audit_cases_logs import LOG_CASES, under_v5
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+    """Cases of the log audit for the audit self-test (protocol v5, package B3): one bad session per problem key.
+    
+    Every case starts from the clean session of the self-test: one planned session of a schema-3 protocol, built by
+    scripts/tests/boundary_sessions.build_session with the event of scripts/tests/test_collection_logs.build (restart of
+    orders inside the measurement, every field clean). mutate(d, p, result) breaks one thing of the sealed session
+    directory d and reseals the logs manifest where the case changes a file it lists; it keeps the extraction result.
+    Expected reasons are those collection.audit_session gives (code 2): "logs: " + the problem of
+    scripts/collection_logs.py, and a RAM reason where the RAM audit reads the same field. A detail never depends on
+    the session's time base or directory, so one list holds for every clean session of this shape.
+    
+    LOG_CASES covers every problem key of the log audit (also "&lt;section&gt;:unreadable"); a key that comes only with
+    another reason says why in its case. A case whose id ends in ":missing" removes a key the check reads: before B3
+    the check passed without it (mandatory keys, proposal 6.2). UNREACHABLE names the keys no buildable session
+    reaches.
+    
+    Protocol v5 (package B5b): under a schema-3 protocol with the profiles section the clean session carries the
+    traffic of its scenario's open-loop profile (logs of schema /2, test_collection_logs.v5_traffic). V5_CASES break
+    one realism requirement, the offered load, an intended client error, a field of the generator's header, its exit
+    code or the correlation of a new route at a time; a case that needs one profile moves the session to a scenario
+    of it. They apply once the schema-3 layout has the profiles section (agent T of B5b, scripts/protocol_v5.py
+    TOP_LEVEL): from then on every schema-3 protocol has it. Until then UNREACHABLE names their keys with that reason.
+    A case of the base list whose reasons differ under v5 takes them from the protocol (expected is a callable).
+    
+    Package B8 (design B8 1.4, skeleton B8 section 5 item 4): CONTROL_CASES start from the clean session of role
+    test_controls (controls_session: a control of class A and a negative of class B that ran faultlessly, the guest's
+    health polls without request id inside their start and stop calls) and break one predicate or record at a time:
+    a control not executed, without the return predicate, without its effect, not cleaned, a negative with its
+    property, a record that differs from the plan or is missing, controls.json missing (the four cases of finding S2
+    of B3, whose pilot protocol v5 does not have).
+    """
+    import copy
+    import gzip
+    import json
+    from pathlib import Path
+    
+    from scripts import collection
+&gt;   from scripts.protocol_v5 import CONTROL_RECORD_CLASS, CONTROL_ROLE, CONTROLS_SCHEMA
+E   ModuleNotFoundError: No module named 'scripts.protocol_v5'
+
+scripts/tests/audit_cases_logs.py:37: ModuleNotFoundError</failure></testcase></testsuite><testsuite name="pred c39accb scripts/tests/test_audit_cases_logs.py::test_cases_cover_every_problem_key_of_the_log_audit" errors="1" failures="0" skipped="0" tests="1" time="0.264" timestamp="2026-11-24T11:25:57.291087-06:00" hostname="debian"><testcase classname="" name="scripts.tests.test_audit_cases_logs" time="0.000"><error message="collection failure">ImportError while importing test module '/tmp/claude-1000/-home-eh-projects-hyptcn3/9a8a89c1-0c71-4e83-9fec-bd4ea2021d22/scratchpad/b10/c_praca/m/pp/pred_c39accb/scripts/tests/test_audit_cases_logs.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/usr/lib/python3.13/importlib/__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+scripts/tests/test_audit_cases_logs.py:13: in &lt;module&gt;
+    from scripts.tests.audit_cases_logs import LOG_CASES
+scripts/tests/audit_cases_logs.py:37: in &lt;module&gt;
+    from scripts.protocol_v5 import CONTROL_RECORD_CLASS, CONTROL_ROLE, CONTROLS_SCHEMA
+E   ModuleNotFoundError: No module named 'scripts.protocol_v5'</error></testcase></testsuite><testsuite name="pred c39accb scripts/tests/test_audit_selftest.py::test_require_selftest_refuses_without_a_valid_record[absent]" errors="1" failures="0" skipped="0" tests="1" time="0.324" timestamp="2026-11-24T11:25:58.354511-06:00" hostname="debian"><testcase classname="scripts.tests.test_audit_selftest" name="test_require_selftest_refuses_without_a_valid_record[absent]" time="0.002"><error message="failed on setup with &quot;ImportError: cannot import name 'audit_policy' from 'features' (/tmp/claude-1000/-home-eh-projects-hyptcn3/9a8a89c1-0c71-4e83-9fec-bd4ea2021d22/scratchpad/b10/c_praca/m/pp/pred_c39accb/features/__init__.py)&quot;">tmp_path_factory = TempPathFactory(_given_basetemp=PosixPath('/tmp/claude-1000/-home-eh-projects-hyptcn3/9a8a89c1-0c71-4e83-9fec-bd4ea202...cn3/9a8a89c1-0c71-4e83-9fec-bd4ea2021d22/scratchpad/b10/c_praca/m/pp/pt'), _retention_count=3, _retention_policy='all')
+
+    @pytest.fixture(scope="module")
+    def small(tmp_path_factory):
+        """(protocol, its path, a work directory) of the small schema-3 protocol."""
+        from scripts import collection
+        from scripts.tests import boundary_sessions as bs
+        root = tmp_path_factory.mktemp("selftest")
+&gt;       path = bs.write_protocol(root / "protocol.json", small_doc(bs.profile_dir(root / "profile")))
+
+scripts/tests/test_audit_selftest.py:57: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+scripts/tests/test_audit_selftest.py:44: in small_doc
+    doc = bs.protocol_doc(profile, schema="hyptcn3/collection-protocol/3", cycles=96, pilot_cycles=80,
+scripts/tests/boundary_sessions.py:393: in protocol_doc
+    **audit_sections(doc["interval_s"]))
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+interval_s = 1, min_spacing_rows = 2
+
+    def audit_sections(interval_s, min_spacing_rows=2):
+        """The audit and exceptions sections of a schema-3 test protocol (features/audit_policy.py).
+    
+        The bounds of proposal 6.2 for an interval of 5 s scaled to `interval_s`: the cycle starts at most a tenth of
+        the interval late, a delta cycle takes at most 30 % of it and a full one 70 %. Periodicity: 3 equal spacings in
+        a row between the starts of bursts, each of at least `min_spacing_rows` rows (the author's judgment in G0). No
+        collector warning is allowed and the cap of rule-closed rows is not set, as until G2 and G3b; nor is the bound of
+        the collector's major faults per cycle, whose null and note are those of config/collection-v5.json (the lead's
+        answer to Q29, collector_majflt_bounds: null until G2). The bounds of the
+        traffic's realism (package B5b) are those of config/collection-v5.json (traffic_bounds), and so is the rule of the
+        early stop (package B9b, early_stop_bounds: a rate per event type of the file, null until G3b). Every TOLERATED
+        id is registered (REGISTER), with no expected count.
+        """
+&gt;       from features import audit_policy  # A module of package B3: imported here, so this file collects before it.
+E       ImportError: cannot import name 'audit_policy' from 'features' (/tmp/claude-1000/-home-eh-projects-hyptcn3/9a8a89c1-0c71-4e83-9fec-bd4ea2021d22/scratchpad/b10/c_praca/m/pp/pred_c39accb/features/__init__.py)
+
+scripts/tests/boundary_sessions.py:271: ImportError</error></testcase></testsuite><testsuite name="pred c39accb scripts/tests/test_audit_selftest.py::test_bad_session_is_refused_with_exactly_its_reasons[timestamp_gap]" errors="0" failures="0" skipped="0" tests="0" time="0.287" timestamp="2026-11-24T11:25:58.821812-06:00" hostname="debian" /><testsuite name="pred c39accb scripts/tests/test_audit_selftest.py::test_bad_session_is_refused_with_exactly_its_reasons[missing_key:frame3.json:capture.queue_wait_ms]" errors="0" failures="0" skipped="0" tests="0" time="0.287" timestamp="2026-11-24T11:26:00.055527-06:00" hostname="debian" /><testsuite name="pred 8ae9f39 scripts/tests/test_protocol_v5.py::test_selfcheck_passes_the_file_and_fails_each_deliberate_error[locked_to_grid]" errors="0" failures="1" skipped="0" tests="1" time="0.175" timestamp="2026-11-24T11:26:01.758152-06:00" hostname="debian"><testcase classname="scripts.tests.test_protocol_v5" name="test_selfcheck_passes_the_file_and_fails_each_deliberate_error[locked_to_grid]" time="0.001"><failure message="ImportError: cannot import name 'protocol_v5' from 'scripts' (unknown location)">case = 'locked_to_grid'
+tmp_path = PosixPath('/tmp/claude-1000/-home-eh-projects-hyptcn3/9a8a89c1-0c71-4e83-9fec-bd4ea2021d22/scratchpad/b10/c_praca/m/pp/pt/test_selfcheck_passes_the_file0')
+monkeypatch = &lt;_pytest.monkeypatch.MonkeyPatch object at 0x7fe1084e2d70&gt;
+
+    @pytest.mark.parametrize("case", CASES)
+    def test_selfcheck_passes_the_file_and_fails_each_deliberate_error(case, tmp_path, monkeypatch):
+&gt;       from scripts import protocol_v5
+E       ImportError: cannot import name 'protocol_v5' from 'scripts' (unknown location)
+
+scripts/tests/test_protocol_v5.py:1427: ImportError</failure></testcase></testsuite><testsuite name="pred 8ae9f39 scripts/tests/test_protocol_v5.py::test_selfcheck_passes_the_file_and_fails_each_deliberate_error[phases_at_tenth_edges]" errors="0" failures="1" skipped="0" tests="1" time="0.174" timestamp="2026-11-24T11:26:02.063806-06:00" hostname="debian"><testcase classname="scripts.tests.test_protocol_v5" name="test_selfcheck_passes_the_file_and_fails_each_deliberate_error[phases_at_tenth_edges]" time="0.001"><failure message="ImportError: cannot import name 'protocol_v5' from 'scripts' (unknown location)">case = 'phases_at_tenth_edges'
+tmp_path = PosixPath('/tmp/claude-1000/-home-eh-projects-hyptcn3/9a8a89c1-0c71-4e83-9fec-bd4ea2021d22/scratchpad/b10/c_praca/m/pp/pt/test_selfcheck_passes_the_file0')
+monkeypatch = &lt;_pytest.monkeypatch.MonkeyPatch object at 0x7f8d307dad70&gt;
+
+    @pytest.mark.parametrize("case", CASES)
+    def test_selfcheck_passes_the_file_and_fails_each_deliberate_error(case, tmp_path, monkeypatch):
+&gt;       from scripts import protocol_v5
+E       ImportError: cannot import name 'protocol_v5' from 'scripts' (unknown location)
+
+scripts/tests/test_protocol_v5.py:1427: ImportError</failure></testcase></testsuite><testsuite name="pred 8ae9f39 scripts/tests/test_protocol_v5.py::test_selfcheck_passes_the_file_and_fails_each_deliberate_error[common_seed]" errors="0" failures="1" skipped="0" tests="1" time="0.178" timestamp="2026-11-24T11:26:02.370176-06:00" hostname="debian"><testcase classname="scripts.tests.test_protocol_v5" name="test_selfcheck_passes_the_file_and_fails_each_deliberate_error[common_seed]" time="0.001"><failure message="ImportError: cannot import name 'protocol_v5' from 'scripts' (unknown location)">case = 'common_seed'
+tmp_path = PosixPath('/tmp/claude-1000/-home-eh-projects-hyptcn3/9a8a89c1-0c71-4e83-9fec-bd4ea2021d22/scratchpad/b10/c_praca/m/pp/pt/test_selfcheck_passes_the_file0')
+monkeypatch = &lt;_pytest.monkeypatch.MonkeyPatch object at 0x7fd6a662ad70&gt;
+
+    @pytest.mark.parametrize("case", CASES)
+    def test_selfcheck_passes_the_file_and_fails_each_deliberate_error(case, tmp_path, monkeypatch):
+&gt;       from scripts import protocol_v5
+E       ImportError: cannot import name 'protocol_v5' from 'scripts' (unknown location)
+
+scripts/tests/test_protocol_v5.py:1427: ImportError</failure></testcase></testsuite><testsuite name="pred 11319ee scripts/tests/test_traffic_realism.py::test_a_log_that_breaks_one_requirement_is_refused_with_its_name[offered_load_differs_from_plan]" errors="0" failures="1" skipped="0" tests="1" time="0.356" timestamp="2026-11-24T11:26:03.151742-06:00" hostname="debian"><testcase classname="scripts.tests.test_traffic_realism" name="test_a_log_that_breaks_one_requirement_is_refused_with_its_name[offered_load_differs_from_plan]" time="0.012"><failure message="ImportError: cannot import name 'CONTROL_RECORD_CLASS' from 'scripts.protocol_v5' (/tmp/claude-1000/-home-eh-projects-hyptcn3/9a8a89c1-0c71-4e83-9fec-bd4ea2021d22/scratchpad/b10/c_praca/m/pp/pred_11319ee/scripts/protocol_v5.py)">tmp_path = PosixPath('/tmp/claude-1000/-home-eh-projects-hyptcn3/9a8a89c1-0c71-4e83-9fec-bd4ea2021d22/scratchpad/b10/c_praca/m/pp/pt/test_a_log_that_breaks_one_req0')
+p = {'analysis': {'alarm_rule': {'k': 3, 'n': 5}, 'architecture': {'batch_size': 32, 'blocks': 4, 'channels': 16, 'classif...{'proc_memfd': {'direction': 'up', 'shift': 0.5}, 'proc_wx': {'direction': 'up', 'shift': 0.5}}, ...}, ...}, ...}, ...}
+name = 'offered_load_differs_from_plan'
+
+    @pytest.mark.parametrize("name", BROKEN)
+    def test_a_log_that_breaks_one_requirement_is_refused_with_its_name(tmp_path, p, name):
+        """One log per requirement that breaks it, and nothing else: its named reason (skeleton B5 section 5 item 5)."""
+&gt;       scenario, variant = broken(name)
+
+scripts/tests/test_traffic_realism.py:197: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+scripts/tests/test_traffic_realism.py:175: in broken
+    from scripts.tests.audit_cases_logs import _distinct
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+    """Cases of the log audit for the audit self-test (protocol v5, package B3): one bad session per problem key.
+    
+    Every case starts from the clean session of the self-test: one planned session of a schema-3 protocol, built by
+    scripts/tests/boundary_sessions.build_session with the event of scripts/tests/test_collection_logs.build (restart of
+    orders inside the measurement, every field clean). mutate(d, p, result) breaks one thing of the sealed session
+    directory d and reseals the logs manifest where the case changes a file it lists; it keeps the extraction result.
+    Expected reasons are those collection.audit_session gives (code 2): "logs: " + the problem of
+    scripts/collection_logs.py, and a RAM reason where the RAM audit reads the same field. A detail never depends on
+    the session's time base or directory, so one list holds for every clean session of this shape.
+    
+    LOG_CASES covers every problem key of the log audit (also "&lt;section&gt;:unreadable"); a key that comes only with
+    another reason says why in its case. A case whose id ends in ":missing" removes a key the check reads: before B3
+    the check passed without it (mandatory keys, proposal 6.2). UNREACHABLE names the keys no buildable session
+    reaches.
+    
+    Protocol v5 (package B5b): under a schema-3 protocol with the profiles section the clean session carries the
+    traffic of its scenario's open-loop profile (logs of schema /2, test_collection_logs.v5_traffic). V5_CASES break
+    one realism requirement, the offered load, an intended client error, a field of the generator's header, its exit
+    code or the correlation of a new route at a time; a case that needs one profile moves the session to a scenario
+    of it. They apply once the schema-3 layout has the profiles section (agent T of B5b, scripts/protocol_v5.py
+    TOP_LEVEL): from then on every schema-3 protocol has it. Until then UNREACHABLE names their keys with that reason.
+    A case of the base list whose reasons differ under v5 takes them from the protocol (expected is a callable).
+    
+    Package B8 (design B8 1.4, skeleton B8 section 5 item 4): CONTROL_CASES start from the clean session of role
+    test_controls (controls_session: a control of class A and a negative of class B that ran faultlessly, the guest's
+    health polls without request id inside their start and stop calls) and break one predicate or record at a time:
+    a control not executed, without the return predicate, without its effect, not cleaned, a negative with its
+    property, a record that differs from the plan or is missing, controls.json missing (the four cases of finding S2
+    of B3, whose pilot protocol v5 does not have).
+    """
+    import copy
+    import gzip
+    import json
+    from pathlib import Path
+    
+    from scripts import collection
+&gt;   from scripts.protocol_v5 import CONTROL_RECORD_CLASS, CONTROL_ROLE, CONTROLS_SCHEMA
+E   ImportError: cannot import name 'CONTROL_RECORD_CLASS' from 'scripts.protocol_v5' (/tmp/claude-1000/-home-eh-projects-hyptcn3/9a8a89c1-0c71-4e83-9fec-bd4ea2021d22/scratchpad/b10/c_praca/m/pp/pred_11319ee/scripts/protocol_v5.py)
+
+scripts/tests/audit_cases_logs.py:37: ImportError</failure></testcase></testsuite><testsuite name="pred 11319ee scripts/tests/test_audit_selftest.py::test_bad_session_is_refused_with_exactly_its_reasons[logs:offered_load_differs_from_plan]" errors="0" failures="0" skipped="0" tests="0" time="0.308" timestamp="2026-11-24T11:26:03.652135-06:00" hostname="debian" /><testsuite name="pred 8bdc2ae lab/tests/test_periods.py::test_entries_are_complete_and_process_creating_ones_are_bounded_or_random" errors="0" failures="1" skipped="0" tests="1" time="0.085" timestamp="2026-11-24T11:26:05.207935-06:00" hostname="debian"><testcase classname="lab.tests.test_periods" name="test_entries_are_complete_and_process_creating_ones_are_bounded_or_random" time="0.000"><failure message="FileNotFoundError: [Errno 2] No such file or directory: '/tmp/claude-1000/-home-eh-projects-hyptcn3/9a8a89c1-0c71-4e83-9fec-bd4ea2021d22/scratchpad/b10/c_praca/m/pp/pred_8bdc2ae/lab/periods.json'">def test_entries_are_complete_and_process_creating_ones_are_bounded_or_random():
+&gt;       doc = register()
+
+lab/tests/test_periods.py:173: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+lab/tests/test_periods.py:158: in register
+    return json.loads((LAB / "periods.json").read_text())
+/usr/lib/python3.13/pathlib/_local.py:548: in read_text
+    return PathBase.read_text(self, encoding, errors, newline)
+/usr/lib/python3.13/pathlib/_abc.py:632: in read_text
+    with self.open(mode='r', encoding=encoding, errors=errors, newline=newline) as f:
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = PosixPath('/tmp/claude-1000/-home-eh-projects-hyptcn3/9a8a89c1-0c71-4e83-9fec-bd4ea2021d22/scratchpad/b10/c_praca/m/pp/pred_8bdc2ae/lab/periods.json')
+mode = 'r', buffering = -1, encoding = 'locale', errors = None, newline = None
+
+    def open(self, mode='r', buffering=-1, encoding=None,
+             errors=None, newline=None):
+        """
+        Open the file pointed to by this path and return a file object, as
+        the built-in open() function does.
+        """
+        if "b" not in mode:
+            encoding = io.text_encoding(encoding)
+&gt;       return io.open(self, mode, buffering, encoding, errors, newline)
+E       FileNotFoundError: [Errno 2] No such file or directory: '/tmp/claude-1000/-home-eh-projects-hyptcn3/9a8a89c1-0c71-4e83-9fec-bd4ea2021d22/scratchpad/b10/c_praca/m/pp/pred_8bdc2ae/lab/periods.json'
+
+/usr/lib/python3.13/pathlib/_local.py:539: FileNotFoundError</failure></testcase></testsuite><testsuite name="pred 8bdc2ae lab/tests/test_periods.py::test_bounds_and_random_delays_of_the_register_are_those_of_the_source" errors="0" failures="1" skipped="0" tests="1" time="0.067" timestamp="2026-11-24T11:26:05.421562-06:00" hostname="debian"><testcase classname="lab.tests.test_periods" name="test_bounds_and_random_delays_of_the_register_are_those_of_the_source" time="0.001"><failure message="TypeError: 'NoneType' object is not subscriptable">def test_bounds_and_random_delays_of_the_register_are_those_of_the_source():
+        unit = (LAB / "hyptcn-lab@.service").read_text()
+        head = unit.split("[Service]", 1)[0]  # StartLimit* belong to [Unit].
+&gt;       burst, interval = (int(re.search(rf"^{key}=(\d+)$", head, re.M)[1]) for key in ("StartLimitBurst",
+                                                                                           "StartLimitIntervalSec"))
+
+lab/tests/test_periods.py:204: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+.0 = &lt;tuple_iterator object at 0x7fd164a09090&gt;
+
+&gt;   burst, interval = (int(re.search(rf"^{key}=(\d+)$", head, re.M)[1]) for key in ("StartLimitBurst",
+                                                                                       "StartLimitIntervalSec"))
+E   TypeError: 'NoneType' object is not subscriptable
+
+lab/tests/test_periods.py:204: TypeError</failure></testcase></testsuite><testsuite name="pred 062178d tcn/tests/test_pecat.py::test_a_second_final_run_is_refused[copy_of_the_index]" errors="1" failures="0" skipped="0" tests="1" time="0.390" timestamp="2026-11-24T11:26:05.903133-06:00" hostname="debian"><testcase classname="tcn.tests.test_pecat" name="test_a_second_final_run_is_refused[copy_of_the_index]" time="0.001"><error message="failed on setup with &quot;ImportError: cannot import name 'pecat' from 'tcn' (/tmp/claude-1000/-home-eh-projects-hyptcn3/9a8a89c1-0c71-4e83-9fec-bd4ea2021d22/scratchpad/b10/c_praca/m/pp/pred_062178d/tcn/__init__.py)&quot;">tmp_path = PosixPath('/tmp/claude-1000/-home-eh-projects-hyptcn3/9a8a89c1-0c71-4e83-9fec-bd4ea2021d22/scratchpad/b10/c_praca/m/pp/pt/test_a_second_final_run_is_ref0')
+monkeypatch = &lt;_pytest.monkeypatch.MonkeyPatch object at 0x7f424d12d220&gt;
+
+    @pytest.fixture
+    def ledger(tmp_path, monkeypatch):
+        """The ledger of the test, tcn.pecat.KNIHA for the guards; no final run stays open after a test."""
+&gt;       from tcn import pecat
+E       ImportError: cannot import name 'pecat' from 'tcn' (/tmp/claude-1000/-home-eh-projects-hyptcn3/9a8a89c1-0c71-4e83-9fec-bd4ea2021d22/scratchpad/b10/c_praca/m/pp/pred_062178d/tcn/__init__.py)
+
+tcn/tests/test_pecat.py:86: ImportError</error></testcase></testsuite><testsuite name="pred 062178d tcn/tests/test_finalne.py::test_a_second_run_is_refused[copy_elsewhere]" errors="1" failures="0" skipped="0" tests="1" time="0.499" timestamp="2026-11-24T11:26:06.437304-06:00" hostname="debian"><testcase classname="tcn.tests.test_finalne" name="test_a_second_run_is_refused[copy_elsewhere]" time="0.004"><error message="failed on setup with &quot;ValueError: missing protocol key: status&quot;">tmp_path_factory = TempPathFactory(_given_basetemp=PosixPath('/tmp/claude-1000/-home-eh-projects-hyptcn3/9a8a89c1-0c71-4e83-9fec-bd4ea202...cn3/9a8a89c1-0c71-4e83-9fec-bd4ea2021d22/scratchpad/b10/c_praca/m/pp/pt'), _retention_count=3, _retention_policy='all')
+
+    @pytest.fixture(scope="module")
+    def campaign_corpus(tmp_path_factory):
+&gt;       return _corpus(tmp_path_factory.mktemp("finalne-campaign") / "corpus", "campaign")
+
+tcn/tests/test_finalne.py:209: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+tcn/tests/test_finalne.py:144: in _corpus
+    p = collection.protocol(path)
+scripts/collection.py:141: in protocol
+    protocol_v5.check_layout(p)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+p = {'analysis': {'alarm_rule': {'k': 3, 'n': 5}, 'architecture': {'batch_size': 64, 'blocks': 4, 'channels': 16, 'classif...{'proc_memfd': {'direction': 'up', 'shift': 0.5}, 'proc_wx': {'direction': 'up', 'shift': 0.5}}, ...}, ...}, ...}, ...}
+
+    def check_layout(p):
+        """The loader's v5 checks: the first unknown or missing key, then the first malformed v5 section.
+    
+        ValueError `unknown protocol key: &lt;path&gt;`, `missing protocol key: &lt;path&gt;` or `invalid &lt;section&gt;`; a determined_at
+        that scripts/gates.py could not bind gives `invalid determined_at: &lt;the reason of gates.later_paths&gt;`.
+        """
+        problems = layout_problems(p)
+        if problems:
+&gt;           raise ValueError(problems[0])
+E           ValueError: missing protocol key: status
+
+scripts/protocol_v5.py:905: ValueError</error></testcase></testsuite><testsuite name="pred 062178d tcn/tests/test_finalne.py::test_a_refusal_before_the_seal_consumes_nothing[dirty_tree]" errors="1" failures="0" skipped="0" tests="1" time="0.497" timestamp="2026-11-24T11:26:07.080251-06:00" hostname="debian"><testcase classname="tcn.tests.test_finalne" name="test_a_refusal_before_the_seal_consumes_nothing[dirty_tree]" time="0.004"><error message="failed on setup with &quot;ValueError: missing protocol key: status&quot;">tmp_path_factory = TempPathFactory(_given_basetemp=PosixPath('/tmp/claude-1000/-home-eh-projects-hyptcn3/9a8a89c1-0c71-4e83-9fec-bd4ea202...cn3/9a8a89c1-0c71-4e83-9fec-bd4ea2021d22/scratchpad/b10/c_praca/m/pp/pt'), _retention_count=3, _retention_policy='all')
+
+    @pytest.fixture(scope="module")
+    def corpus(tmp_path_factory):
+&gt;       return _corpus(tmp_path_factory.mktemp("finalne") / "corpus", "rehearsal")
+
+tcn/tests/test_finalne.py:204: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+tcn/tests/test_finalne.py:144: in _corpus
+    p = collection.protocol(path)
+scripts/collection.py:141: in protocol
+    protocol_v5.check_layout(p)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+p = {'analysis': {'alarm_rule': {'k': 3, 'n': 5}, 'architecture': {'batch_size': 64, 'blocks': 4, 'channels': 16, 'classif...{'proc_memfd': {'direction': 'up', 'shift': 0.5}, 'proc_wx': {'direction': 'up', 'shift': 0.5}}, ...}, ...}, ...}, ...}
+
+    def check_layout(p):
+        """The loader's v5 checks: the first unknown or missing key, then the first malformed v5 section.
+    
+        ValueError `unknown protocol key: &lt;path&gt;`, `missing protocol key: &lt;path&gt;` or `invalid &lt;section&gt;`; a determined_at
+        that scripts/gates.py could not bind gives `invalid determined_at: &lt;the reason of gates.later_paths&gt;`.
+        """
+        problems = layout_problems(p)
+        if problems:
+&gt;           raise ValueError(problems[0])
+E           ValueError: missing protocol key: status
+
+scripts/protocol_v5.py:905: ValueError</error></testcase></testsuite><testsuite name="pred 062178d tcn/tests/test_eval_v5.py::test_a_sealed_role_is_evaluated_by_the_final_command_or_in_a_rehearsal[campaign-False-False-sealed role test_benign]" errors="0" failures="1" skipped="0" tests="1" time="0.807" timestamp="2026-11-24T11:26:07.722699-06:00" hostname="debian"><testcase classname="tcn.tests.test_eval_v5" name="test_a_sealed_role_is_evaluated_by_the_final_command_or_in_a_rehearsal[campaign-False-False-sealed role test_benign]" time="0.632"><failure message="ImportError: cannot import name 'REHEARSAL_MARK' from 'tcn.eval' (/tmp/claude-1000/-home-eh-projects-hyptcn3/9a8a89c1-0c71-4e83-9fec-bd4ea2021d22/scratchpad/b10/c_praca/m/pp/pred_062178d/tcn/eval.py)">mode = 'campaign', final_evaluation = False, final = False
+reason = 'sealed role test_benign'
+tmp_path = PosixPath('/tmp/claude-1000/-home-eh-projects-hyptcn3/9a8a89c1-0c71-4e83-9fec-bd4ea2021d22/scratchpad/b10/c_praca/m/pp/pt/test_a_sealed_role_is_evaluate0')
+
+    @pytest.mark.parametrize("mode, final_evaluation, final, reason", [
+        ("campaign", False, False, "sealed role test_benign"),
+        ("campaign", True, True, "--final and its mark next to the index serve protocol schemas 1 and 2"),
+        ("campaign", True, False, None), ("rehearsal", False, False, None)])
+    def test_a_sealed_role_is_evaluated_by_the_final_command_or_in_a_rehearsal(mode, final_evaluation, final, reason,
+                                                                               tmp_path):
+        """Design B7c 1.1: test_benign of a campaign index only with final_evaluation=True (the final command); --final
+        and its mark serve schemas 1 and 2; an index of plan mode rehearsal is evaluated freely and marked."""
+&gt;       from tcn.eval import REHEARSAL_MARK, vyhodnot_far
+E       ImportError: cannot import name 'REHEARSAL_MARK' from 'tcn.eval' (/tmp/claude-1000/-home-eh-projects-hyptcn3/9a8a89c1-0c71-4e83-9fec-bd4ea2021d22/scratchpad/b10/c_praca/m/pp/pred_062178d/tcn/eval.py)
+
+tcn/tests/test_eval_v5.py:398: ImportError</failure></testcase></testsuite><testsuite name="pred 062178d tcn/tests/test_pecat.py::test_replay_of_a_sealed_archive_is_refused[safeguard.runtime.replay_archive]" errors="1" failures="0" skipped="0" tests="1" time="0.388" timestamp="2026-11-24T11:26:08.729190-06:00" hostname="debian"><testcase classname="tcn.tests.test_pecat" name="test_replay_of_a_sealed_archive_is_refused[safeguard.runtime.replay_archive]" time="0.001"><error message="failed on setup with &quot;ImportError: cannot import name 'pecat' from 'tcn' (/tmp/claude-1000/-home-eh-projects-hyptcn3/9a8a89c1-0c71-4e83-9fec-bd4ea2021d22/scratchpad/b10/c_praca/m/pp/pred_062178d/tcn/__init__.py)&quot;">tmp_path = PosixPath('/tmp/claude-1000/-home-eh-projects-hyptcn3/9a8a89c1-0c71-4e83-9fec-bd4ea2021d22/scratchpad/b10/c_praca/m/pp/pt/test_replay_of_a_sealed_archiv0')
+monkeypatch = &lt;_pytest.monkeypatch.MonkeyPatch object at 0x7f8cbdd4d220&gt;
+
+    @pytest.fixture
+    def ledger(tmp_path, monkeypatch):
+        """The ledger of the test, tcn.pecat.KNIHA for the guards; no final run stays open after a test."""
+&gt;       from tcn import pecat
+E       ImportError: cannot import name 'pecat' from 'tcn' (/tmp/claude-1000/-home-eh-projects-hyptcn3/9a8a89c1-0c71-4e83-9fec-bd4ea2021d22/scratchpad/b10/c_praca/m/pp/pred_062178d/tcn/__init__.py)
+
+tcn/tests/test_pecat.py:86: ImportError</error></testcase></testsuite><testsuite name="pred 062178d tcn/tests/test_eval_v5.py::test_an_occurrence_is_evaluable_at_half_of_its_first_60_s_scored[7-False]" errors="0" failures="1" skipped="0" tests="1" time="0.808" timestamp="2026-11-24T11:26:09.259830-06:00" hostname="debian"><testcase classname="tcn.tests.test_eval_v5" name="test_an_occurrence_is_evaluable_at_half_of_its_first_60_s_scored[7-False]" time="0.632"><failure message="ImportError: cannot import name 'metriky_v5' from 'tcn.eval' (/tmp/claude-1000/-home-eh-projects-hyptcn3/9a8a89c1-0c71-4e83-9fec-bd4ea2021d22/scratchpad/b10/c_praca/m/pp/pred_062178d/tcn/eval.py)">unscored = 7, evaluable = False
+
+    @pytest.mark.parametrize("unscored, evaluable", [(6, True), (7, False)])
+    def test_an_occurrence_is_evaluable_at_half_of_its_first_60_s_scored(unscored, evaluable):
+        """Proposal 6.4 (analysis.evaluable: first_s 60, scored_share 0.5): of the 12 rows of the first 60 s after the
+        start, 6 unscored leave exactly half scored (evaluable), 7 too few."""
+&gt;       from tcn.eval import metriky_v5
+E       ImportError: cannot import name 'metriky_v5' from 'tcn.eval' (/tmp/claude-1000/-home-eh-projects-hyptcn3/9a8a89c1-0c71-4e83-9fec-bd4ea2021d22/scratchpad/b10/c_praca/m/pp/pred_062178d/tcn/eval.py)
+
+tcn/tests/test_eval_v5.py:526: ImportError</failure></testcase></testsuite><testsuite name="pred 062178d tcn/tests/test_eval_v5.py::test_an_unscored_stretch_is_nevyhodnotene_in_the_output" errors="0" failures="1" skipped="0" tests="1" time="0.803" timestamp="2026-11-24T11:26:10.265527-06:00" hostname="debian"><testcase classname="tcn.tests.test_eval_v5" name="test_an_unscored_stretch_is_nevyhodnotene_in_the_output" time="0.628"><failure message="ImportError: cannot import name 'metriky_v5' from 'tcn.eval' (/tmp/claude-1000/-home-eh-projects-hyptcn3/9a8a89c1-0c71-4e83-9fec-bd4ea2021d22/scratchpad/b10/c_praca/m/pp/pred_062178d/tcn/eval.py)">def test_an_unscored_stretch_is_nevyhodnotene_in_the_output():
+        """G1 (proposal 10.2): an inserted unscored stretch is reported as nevyhodnotené, never as time without alarms."""
+&gt;       from tcn.eval import metriky_v5
+E       ImportError: cannot import name 'metriky_v5' from 'tcn.eval' (/tmp/claude-1000/-home-eh-projects-hyptcn3/9a8a89c1-0c71-4e83-9fec-bd4ea2021d22/scratchpad/b10/c_praca/m/pp/pred_062178d/tcn/eval.py)
+
+tcn/tests/test_eval_v5.py:561: ImportError</failure></testcase></testsuite><testsuite name="pred f99b924 safeguard/tests/test_training.py::test_analysis_parameters_are_refused_by_name[fpr_outside_diagnostic]" errors="0" failures="1" skipped="0" tests="1" time="1.081" timestamp="2026-11-24T11:26:11.766253-06:00" hostname="debian"><testcase classname="safeguard.tests.test_training" name="test_analysis_parameters_are_refused_by_name[fpr_outside_diagnostic]" time="0.001"><failure message="ImportError: cannot import name 'training_parameters' from 'safeguard.training' (/tmp/claude-1000/-home-eh-projects-hyptcn3/9a8a89c1-0c71-4e83-9fec-bd4ea2021d22/scratchpad/b10/c_praca/m/pp/pred_f99b924/safeguard/training.py)">schema = 3, changes = {}, given = {'fpr': 0.05}
+reason = 'analysis parameter fpr is given (0.05) under protocol schema 3, whose analysis plan fixes analysis.fpr = 0.01; a given analysis parameter is applied only to a diagnostic bundle (--diagnostic)'
+
+    @pytest.mark.parametrize("schema, changes, given, reason", [
+        (3, {}, {"fpr": 0.05}, "analysis parameter fpr is given (0.05) under protocol schema 3, whose analysis plan fixes "
+         "analysis.fpr = 0.01; a given analysis parameter is applied only to a diagnostic bundle (--diagnostic)"),
+        (3, {}, {"seed": 7}, "analysis parameter seed is given (7) under protocol schema 3, whose analysis plan fixes "
+         "analysis.seeds = [0, 1, 2, 3, 4]; a given analysis parameter is applied only to a diagnostic bundle "
+         "(--diagnostic)"),
+        (3, {"architecture.weight_norm": True}, {}, "analysis.architecture.weight_norm is true: the TCN of the thesis "
+         "has no weight normalization (SULAD_S_TEXTOM_PRACE table 1) and safeguard/model.py builds none"),
+        (3, {"stopping.rule": "last epoch"}, {}, "analysis.stopping.rule is 'last epoch'; this training implements "
+         "'best dev loss, patience'"),
+        (4, {}, {}, "protocol schema 'hyptcn3/collection-protocol/4' states no training parameters: schema 3 gives them "
+         "in its analysis section, schemas 1 and 2 keep legacy_schema_2"),
+    ], ids=["fpr_outside_diagnostic", "seed_outside_plan", "weight_norm", "stopping_rule", "schema_4"])
+    def test_analysis_parameters_are_refused_by_name(schema, changes, given, reason):
+        """Design B6b 1.4 and 1.6: under schema 3 a given analysis parameter outside --diagnostic, a seed outside
+        analysis.seeds, weight normalization and a stopping rule this training does not implement are refused by name;
+        a schema without training parameters too."""
+&gt;       from safeguard.training import training_parameters
+E       ImportError: cannot import name 'training_parameters' from 'safeguard.training' (/tmp/claude-1000/-home-eh-projects-hyptcn3/9a8a89c1-0c71-4e83-9fec-bd4ea2021d22/scratchpad/b10/c_praca/m/pp/pred_f99b924/safeguard/training.py)
+
+safeguard/tests/test_training.py:376: ImportError</failure></testcase></testsuite><testsuite name="pred f99b924 tcn/tests/test_odovzdanie_korpusu.py::test_parameter_analyzy_z_prikazoveho_riadka_iba_s_diagnostikou" errors="1" failures="0" skipped="0" tests="1" time="2.053" timestamp="2026-11-24T11:26:13.187442-06:00" hostname="debian"><testcase classname="tcn.tests.test_odovzdanie_korpusu" name="test_parameter_analyzy_z_prikazoveho_riadka_iba_s_diagnostikou" time="0.080"><error message="failed on setup with &quot;ValueError: missing protocol key: status&quot;">tmp_path_factory = TempPathFactory(_given_basetemp=PosixPath('/tmp/claude-1000/-home-eh-projects-hyptcn3/9a8a89c1-0c71-4e83-9fec-bd4ea202...cn3/9a8a89c1-0c71-4e83-9fec-bd4ea2021d22/scratchpad/b10/c_praca/m/pp/pt'), _retention_count=3, _retention_policy='all')
+
+    @pytest.fixture(scope="module")
+    def kampan(tmp_path_factory):
+&gt;       return _kampan(tmp_path_factory.mktemp("odovzdanie") / "kampan")
+
+tcn/tests/test_odovzdanie_korpusu.py:353: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+tcn/tests/test_odovzdanie_korpusu.py:162: in _kampan
+    p = collection.protocol(protokol_cesta)
+scripts/collection.py:141: in protocol
+    protocol_v5.check_layout(p)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+p = {'analysis': {'alarm_rule': {'k': 3, 'n': 5}, 'architecture': {'batch_size': 64, 'blocks': 4, 'channels': 16, 'classif...{'proc_memfd': {'direction': 'up', 'shift': 0.5}, 'proc_wx': {'direction': 'up', 'shift': 0.5}}, ...}, ...}, ...}, ...}
+
+    def check_layout(p):
+        """The loader's v5 checks: the first unknown or missing key, then the first malformed v5 section.
+    
+        ValueError `unknown protocol key: &lt;path&gt;`, `missing protocol key: &lt;path&gt;` or `invalid &lt;section&gt;`; a determined_at
+        that scripts/gates.py could not bind gives `invalid determined_at: &lt;the reason of gates.later_paths&gt;`.
+        """
+        problems = layout_problems(p)
+        if problems:
+&gt;           raise ValueError(problems[0])
+E           ValueError: missing protocol key: status
+
+scripts/protocol_v5.py:662: ValueError</error></testcase></testsuite><testsuite name="pred f99b924 tcn/tests/test_porovnanie.py::test_fit_pod_schemou_3_odmietne_parameter_analyzy[fpr]" errors="0" failures="1" skipped="0" tests="1" time="1.786" timestamp="2026-11-24T11:26:15.665137-06:00" hostname="debian"><testcase classname="tcn.tests.test_porovnanie" name="test_fit_pod_schemou_3_odmietne_parameter_analyzy[fpr]" time="0.004"><failure message="AssertionError: Regex pattern did not match.&#10; Regex: '^analysis\\ parameter\\ fpr\\ is\\ given\\ \\(0\\.05\\)\\ under\\ protocol\\ schema\\ 3,\\ whose\\ analysis\\ plan\\ fixes\\ analysis\\.fpr\\ =\\ 0\\.01;\\ a\\ given\\ analysis\\ parameter\\ is\\ applied\\ only\\ to\\ a\\ diagnostic\\ bundle\\ \\(\\-\\-diagnostic\\)$'&#10; Input: 'production training requires a complete non-diagnostic corpus'">volba = '--fpr', hodnota = 0.05, meno = 'fpr', cesta = 'analysis.fpr'
+plan = 0.01
+tmp_path = PosixPath('/tmp/claude-1000/-home-eh-projects-hyptcn3/9a8a89c1-0c71-4e83-9fec-bd4ea2021d22/scratchpad/b10/c_praca/m/pp/pt/test_fit_pod_schemou_3_odmietn0')
+
+    @pytest.mark.parametrize("volba, hodnota, meno, cesta, plan", [
+        ("--epochs", 1, "epochs", "analysis.stopping.max_epochs", 100),
+        ("--batch-size", 64, "batch_size", "analysis.architecture.batch_size", 32),
+        ("--seed", 7, "seed", "analysis.seeds", [0, 1, 2, 3, 4]),
+        ("--fpr", 0.05, "fpr", "analysis.fpr", 0.01),
+        ("--k", 2, "k", "analysis.alarm_rule.k", 3),
+        ("--n", 7, "n", "analysis.alarm_rule.n", 5),
+    ], ids=["epochs", "batch_size", "seed", "fpr", "k", "n"])
+    def test_fit_pod_schemou_3_odmietne_parameter_analyzy(volba, hodnota, meno, cesta, plan, tmp_path):
+        """Balik B7c (navrh NAVRH_B7c 1.4): pod protokolom schemy 3 fit odmietne zadany parameter analyzy mimo
+        --diagnostic menom, tak ako safeguard train (balik B6b), skor nez otvori korpus; bez neho berie plan analyzy
+        (test_odovzdanie_korpusu.py test_porovnanie_berie_parametre_z_planu_analyzy)."""
+        index = tmp_path / "corpus.json"
+        index.write_text(json.dumps({"schema": "hyptcn3/corpus-index/1", "protocol_config": json.loads(V5.read_text())}))
+        sprava = (f"analysis parameter {meno} is given ({hodnota!r}) under protocol schema 3, whose analysis plan fixes "
+                  f"{cesta} = {plan!r}; a given analysis parameter is applied only to a diagnostic bundle (--diagnostic)")
+        with pytest.raises(ValueError, match="^" + re.escape(sprava) + "$"):
+&gt;           po._hlavny(["--threads", "2", "fit", "--corpus", str(index), "--model", "zscore", "--out",
+                        str(tmp_path / "model"), volba, str(hodnota)])
+
+tcn/tests/test_porovnanie.py:187: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+tcn/porovnanie.py:633: in _hlavny
+    vysledok = fit(a.corpus, a.model, a.out, seed=a.seed, epochy=a.epochs, davka=a.batch_size,
+tcn/porovnanie.py:452: in fit
+    d = nacitaj_role(korpus, diagnostic=diagnostic)
+tcn/porovnanie.py:123: in nacitaj_role
+    index, protokol, zaznamy = validate_index(korpus, diagnostic)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+path = PosixPath('/tmp/claude-1000/-home-eh-projects-hyptcn3/9a8a89c1-0c71-4e83-9fec-bd4ea2021d22/scratchpad/b10/c_praca/m/pp/pt/test_fit_pod_schemou_3_odmietn0/corpus.json')
+diagnostic = False
+
+    def validate_index(path, diagnostic=False):
+        """Recheck frozen artifacts; inspecting test metadata/hashes is not fitting."""
+        path = Path(path).resolve()
+        doc = _json(path)
+        if doc.get("schema") != "hyptcn3/corpus-index/1":
+            raise ValueError("unsupported corpus index")
+        if not diagnostic and (doc.get("complete") is not True or doc.get("diagnostic", False)):
+&gt;           raise ValueError("production training requires a complete non-diagnostic corpus")
+E           ValueError: production training requires a complete non-diagnostic corpus
+
+safeguard/training.py:69: ValueError
+
+During handling of the above exception, another exception occurred:
+
+volba = '--fpr', hodnota = 0.05, meno = 'fpr', cesta = 'analysis.fpr'
+plan = 0.01
+tmp_path = PosixPath('/tmp/claude-1000/-home-eh-projects-hyptcn3/9a8a89c1-0c71-4e83-9fec-bd4ea2021d22/scratchpad/b10/c_praca/m/pp/pt/test_fit_pod_schemou_3_odmietn0')
+
+    @pytest.mark.parametrize("volba, hodnota, meno, cesta, plan", [
+        ("--epochs", 1, "epochs", "analysis.stopping.max_epochs", 100),
+        ("--batch-size", 64, "batch_size", "analysis.architecture.batch_size", 32),
+        ("--seed", 7, "seed", "analysis.seeds", [0, 1, 2, 3, 4]),
+        ("--fpr", 0.05, "fpr", "analysis.fpr", 0.01),
+        ("--k", 2, "k", "analysis.alarm_rule.k", 3),
+        ("--n", 7, "n", "analysis.alarm_rule.n", 5),
+    ], ids=["epochs", "batch_size", "seed", "fpr", "k", "n"])
+    def test_fit_pod_schemou_3_odmietne_parameter_analyzy(volba, hodnota, meno, cesta, plan, tmp_path):
+        """Balik B7c (navrh NAVRH_B7c 1.4): pod protokolom schemy 3 fit odmietne zadany parameter analyzy mimo
+        --diagnostic menom, tak ako safeguard train (balik B6b), skor nez otvori korpus; bez neho berie plan analyzy
+        (test_odovzdanie_korpusu.py test_porovnanie_berie_parametre_z_planu_analyzy)."""
+        index = tmp_path / "corpus.json"
+        index.write_text(json.dumps({"schema": "hyptcn3/corpus-index/1", "protocol_config": json.loads(V5.read_text())}))
+        sprava = (f"analysis parameter {meno} is given ({hodnota!r}) under protocol schema 3, whose analysis plan fixes "
+                  f"{cesta} = {plan!r}; a given analysis parameter is applied only to a diagnostic bundle (--diagnostic)")
+&gt;       with pytest.raises(ValueError, match="^" + re.escape(sprava) + "$"):
+E       AssertionError: Regex pattern did not match.
+E        Regex: '^analysis\\ parameter\\ fpr\\ is\\ given\\ \\(0\\.05\\)\\ under\\ protocol\\ schema\\ 3,\\ whose\\ analysis\\ plan\\ fixes\\ analysis\\.fpr\\ =\\ 0\\.01;\\ a\\ given\\ analysis\\ parameter\\ is\\ applied\\ only\\ to\\ a\\ diagnostic\\ bundle\\ \\(\\-\\-diagnostic\\)$'
+E        Input: 'production training requires a complete non-diagnostic corpus'
+
+tcn/tests/test_porovnanie.py:186: AssertionError</failure></testcase></testsuite><testsuite name="pred 48e198c tcn/tests/test_odovzdanie_korpusu.py::test_ostra_kontrola_indexu_prijme_predponu_skupin" errors="1" failures="0" skipped="0" tests="1" time="1.091" timestamp="2026-11-24T11:26:18.338791-06:00" hostname="debian"><testcase classname="" name="tcn.tests.test_odovzdanie_korpusu" time="0.000"><error message="collection failure">ImportError while importing test module '/tmp/claude-1000/-home-eh-projects-hyptcn3/9a8a89c1-0c71-4e83-9fec-bd4ea2021d22/scratchpad/b10/c_praca/m/pp/pred_48e198c/tcn/tests/test_odovzdanie_korpusu.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/usr/lib/python3.13/importlib/__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+tcn/tests/test_odovzdanie_korpusu.py:53: in &lt;module&gt;
+    from safeguard.training import FIT_ROLES, train_bundle, validate_index
+E   ImportError: cannot import name 'FIT_ROLES' from 'safeguard.training' (/tmp/claude-1000/-home-eh-projects-hyptcn3/9a8a89c1-0c71-4e83-9fec-bd4ea2021d22/scratchpad/b10/c_praca/m/pp/pred_48e198c/safeguard/training.py)</error></testcase></testsuite><testsuite name="pred 48e198c tcn/tests/test_odovzdanie_korpusu.py::test_ostra_kontrola_indexu_odmietne_skupinu_bez_predpony" errors="1" failures="0" skipped="0" tests="1" time="1.098" timestamp="2026-11-24T11:26:22.432532-06:00" hostname="debian"><testcase classname="" name="tcn.tests.test_odovzdanie_korpusu" time="0.000"><error message="collection failure">ImportError while importing test module '/tmp/claude-1000/-home-eh-projects-hyptcn3/9a8a89c1-0c71-4e83-9fec-bd4ea2021d22/scratchpad/b10/c_praca/m/pp/pred_48e198c/tcn/tests/test_odovzdanie_korpusu.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/usr/lib/python3.13/importlib/__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+tcn/tests/test_odovzdanie_korpusu.py:53: in &lt;module&gt;
+    from safeguard.training import FIT_ROLES, train_bundle, validate_index
+E   ImportError: cannot import name 'FIT_ROLES' from 'safeguard.training' (/tmp/claude-1000/-home-eh-projects-hyptcn3/9a8a89c1-0c71-4e83-9fec-bd4ea2021d22/scratchpad/b10/c_praca/m/pp/pred_48e198c/safeguard/training.py)</error></testcase></testsuite><testsuite name="pred 48e198c tcn/tests/test_odovzdanie_korpusu.py::test_trening_prijme_tolerovany_riadok" errors="1" failures="0" skipped="0" tests="1" time="1.099" timestamp="2026-11-24T11:26:26.523759-06:00" hostname="debian"><testcase classname="" name="tcn.tests.test_odovzdanie_korpusu" time="0.000"><error message="collection failure">ImportError while importing test module '/tmp/claude-1000/-home-eh-projects-hyptcn3/9a8a89c1-0c71-4e83-9fec-bd4ea2021d22/scratchpad/b10/c_praca/m/pp/pred_48e198c/tcn/tests/test_odovzdanie_korpusu.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/usr/lib/python3.13/importlib/__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+tcn/tests/test_odovzdanie_korpusu.py:53: in &lt;module&gt;
+    from safeguard.training import FIT_ROLES, train_bundle, validate_index
+E   ImportError: cannot import name 'FIT_ROLES' from 'safeguard.training' (/tmp/claude-1000/-home-eh-projects-hyptcn3/9a8a89c1-0c71-4e83-9fec-bd4ea2021d22/scratchpad/b10/c_praca/m/pp/pred_48e198c/safeguard/training.py)</error></testcase></testsuite><testsuite name="pred 48e198c tcn/tests/test_odovzdanie_korpusu.py::test_kazda_metoda_prijme_tolerovany_riadok" errors="1" failures="0" skipped="0" tests="1" time="1.095" timestamp="2026-11-24T11:26:30.622733-06:00" hostname="debian"><testcase classname="" name="tcn.tests.test_odovzdanie_korpusu" time="0.000"><error message="collection failure">ImportError while importing test module '/tmp/claude-1000/-home-eh-projects-hyptcn3/9a8a89c1-0c71-4e83-9fec-bd4ea2021d22/scratchpad/b10/c_praca/m/pp/pred_48e198c/tcn/tests/test_odovzdanie_korpusu.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/usr/lib/python3.13/importlib/__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+tcn/tests/test_odovzdanie_korpusu.py:53: in &lt;module&gt;
+    from safeguard.training import FIT_ROLES, train_bundle, validate_index
+E   ImportError: cannot import name 'FIT_ROLES' from 'safeguard.training' (/tmp/claude-1000/-home-eh-projects-hyptcn3/9a8a89c1-0c71-4e83-9fec-bd4ea2021d22/scratchpad/b10/c_praca/m/pp/pred_48e198c/safeguard/training.py)</error></testcase></testsuite><testsuite name="pred 48e198c tcn/tests/test_odovzdanie_korpusu.py::test_prehratie_s_tolerovanym_riadkom_konci_nulou" errors="1" failures="0" skipped="0" tests="1" time="1.093" timestamp="2026-11-24T11:26:34.718615-06:00" hostname="debian"><testcase classname="" name="tcn.tests.test_odovzdanie_korpusu" time="0.000"><error message="collection failure">ImportError while importing test module '/tmp/claude-1000/-home-eh-projects-hyptcn3/9a8a89c1-0c71-4e83-9fec-bd4ea2021d22/scratchpad/b10/c_praca/m/pp/pred_48e198c/tcn/tests/test_odovzdanie_korpusu.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/usr/lib/python3.13/importlib/__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+tcn/tests/test_odovzdanie_korpusu.py:53: in &lt;module&gt;
+    from safeguard.training import FIT_ROLES, train_bundle, validate_index
+E   ImportError: cannot import name 'FIT_ROLES' from 'safeguard.training' (/tmp/claude-1000/-home-eh-projects-hyptcn3/9a8a89c1-0c71-4e83-9fec-bd4ea2021d22/scratchpad/b10/c_praca/m/pp/pred_48e198c/safeguard/training.py)</error></testcase></testsuite><testsuite name="pred 48e198c tcn/tests/test_odovzdanie_korpusu.py::test_trening_a_metody_odmietnu_riadok_mimo_pravidla[nad_pocet-prva-train]" errors="1" failures="0" skipped="0" tests="1" time="1.096" timestamp="2026-11-24T11:26:38.812646-06:00" hostname="debian"><testcase classname="" name="tcn.tests.test_odovzdanie_korpusu" time="0.000"><error message="collection failure">ImportError while importing test module '/tmp/claude-1000/-home-eh-projects-hyptcn3/9a8a89c1-0c71-4e83-9fec-bd4ea2021d22/scratchpad/b10/c_praca/m/pp/pred_48e198c/tcn/tests/test_odovzdanie_korpusu.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/usr/lib/python3.13/importlib/__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+tcn/tests/test_odovzdanie_korpusu.py:53: in &lt;module&gt;
+    from safeguard.training import FIT_ROLES, train_bundle, validate_index
+E   ImportError: cannot import name 'FIT_ROLES' from 'safeguard.training' (/tmp/claude-1000/-home-eh-projects-hyptcn3/9a8a89c1-0c71-4e83-9fec-bd4ea2021d22/scratchpad/b10/c_praca/m/pp/pred_48e198c/safeguard/training.py)</error></testcase></testsuite><testsuite name="pred 432dd2e scripts/tests/test_pilot_gate.py::test_pilot_cell_audit_decision[V4-one_row]" errors="0" failures="1" skipped="0" tests="1" time="0.873" timestamp="2026-11-24T11:26:43.354982-06:00" hostname="debian"><testcase classname="scripts.tests.test_pilot_gate" name="test_pilot_cell_audit_decision[V4-one_row]" time="0.560"><failure message="AssertionError: assert (0, True, []) == (2, False, ['...l-inputs-v1'])&#10;  &#10;  At index 0 diff: 0 != 2&#10;  Use -v to get more diff">tmp_path = PosixPath('/tmp/claude-1000/-home-eh-projects-hyptcn3/9a8a89c1-0c71-4e83-9fec-bd4ea2021d22/scratchpad/b10/c_praca/m/pp/pt/test_pilot_cell_audit_decision0')
+name = 'V4', cell = 'one_row'
+
+    @pytest.mark.parametrize("name,cell", list(PILOT_CELLS), ids=[f"{n}-{c}" for n, c in PILOT_CELLS])
+    def test_pilot_cell_audit_decision(tmp_path, name, cell):
+        w = world(tmp_path, name)
+        s, a, quality = pilot_cell(w, name, cell)
+        rows = w.p["pilot_cycles"]
+        windows = PILOT_CELLS[name, cell]
+        invalid = [seq for seq, q in quality.items() if not q["behavior_valid"]]
+        assert bs.window_count(rows, w.p["window_rows"], w.p["full_every"], invalid) == windows
+        assert windows / rows &gt;= w.p["min_score_coverage"]  # Coverage passes in every pilot cell.
+        v = a.values
+        assert (v["role"], v["snapshots"], v["windows"], v["score_coverage"]) == ("pilot", rows, windows, windows / rows)
+        expected = {"clean": [], "one_row": [INCOMPLETE], "findings": [INTEGRITY]}[cell]
+&gt;       assert (a.code, v["accepted"], v["reasons"]) == (2 if expected else 0, not expected, expected)
+E       AssertionError: assert (0, True, []) == (2, False, ['...l-inputs-v1'])
+E         
+E         At index 0 diff: 0 != 2
+E         Use -v to get more diff
+
+scripts/tests/test_pilot_gate.py:148: AssertionError</failure></testcase></testsuite><testsuite name="pred 432dd2e scripts/tests/test_pilot_gate.py::test_pilot_gate_follows_the_audit[V4-one_row-honest]" errors="0" failures="1" skipped="0" tests="1" time="0.801" timestamp="2026-11-24T11:26:44.381651-06:00" hostname="debian"><testcase classname="scripts.tests.test_pilot_gate" name="test_pilot_gate_follows_the_audit[V4-one_row-honest]" time="0.457"><failure message="AssertionError: Regex pattern did not match.&#10; Regex: '^pilot\\ is\\ not\\ accepted\\ for\\ this\\ protocol:\\ unaccepted\\ audit:\\ the\\ record\\ does\\ not\\ state\\ a\\ clean\\ acceptance$'&#10; Input: 'accepted pilot with current extractor and frozen protocol required'">tmp_path = PosixPath('/tmp/claude-1000/-home-eh-projects-hyptcn3/9a8a89c1-0c71-4e83-9fec-bd4ea2021d22/scratchpad/b10/c_praca/m/pp/pt/test_pilot_gate_follows_the_au0')
+gate = &lt;function gate.&lt;locals&gt;.offer at 0x7f77910eb420&gt;, name = 'V4'
+cell = 'one_row', record = 'honest'
+
+    @pytest.mark.parametrize("name,cell,record", GATE_CASES, ids=["-".join(case) for case in GATE_CASES])
+    def test_pilot_gate_follows_the_audit(tmp_path, gate, name, cell, record):
+        w = world(tmp_path, name)
+        s, a, quality = pilot_cell(w, name, cell)
+        invalid = [seq for seq, q in quality.items() if not q["behavior_valid"]]
+        change = {"identity": None, "honest": None, "F1": f1, "F1b": f1b, "F1c": f1c(invalid)}[record]
+        report = a.path if change is None else record_file(a, tmp_path / f"{record}.json", change)
+        refusal = GATE_REFUSALS.get((cell, record))
+        if refusal is not None:
+            with exactly(PREFIX + refusal):
+&gt;               gate(report, w.path, w.p, s)
+
+scripts/tests/test_pilot_gate.py:172: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+scripts/tests/test_pilot_gate.py:110: in offer
+    return campaign.pilot_gate(report, protocol_path, p)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+path = PosixPath('/tmp/claude-1000/-home-eh-projects-hyptcn3/9a8a89c1-0c71-4e83-9fec-bd4ea2021d22/scratchpad/b10/c_praca/m/pp/pt/test_pilot_gate_follows_the_au0/sessions/pilot-one_row/audit.json')
+protocol_path = PosixPath('/tmp/claude-1000/-home-eh-projects-hyptcn3/9a8a89c1-0c71-4e83-9fec-bd4ea2021d22/scratchpad/b10/c_praca/m/pp/pt/test_pilot_gate_follows_the_au0/V4.json')
+p = {'bin_bytes': 16777216, 'cycles': 720, 'domain': 'hyptcn-test', 'full_every': 360, ...}
+
+    def pilot_gate(path, protocol_path, p):
+        report = read_json(path)
+        v = report["values"]
+        if (report.get("schema") != "hyptcn3/collection-audit/1" or v.get("accepted") is not True
+                or v.get("role") != "pilot" or v["protocol_sha256"] != digest(protocol_path)
+                or v["snapshots"] != p["pilot_cycles"]
+                or v["score_coverage"] &lt; p["min_score_coverage"]
+                or v["quality"]["policy"] != p["quality_policy"]
+                or v["quality"]["behavior_valid_rows"] != p["pilot_cycles"]
+                or v["quality"]["integrity_findings"] != 0
+                or v["extractor_sha256"] != extractor_hashes()):
+&gt;           raise ValueError("accepted pilot with current extractor and frozen protocol required")
+E           ValueError: accepted pilot with current extractor and frozen protocol required
+
+scripts/campaign.py:197: ValueError
+
+During handling of the above exception, another exception occurred:
+
+tmp_path = PosixPath('/tmp/claude-1000/-home-eh-projects-hyptcn3/9a8a89c1-0c71-4e83-9fec-bd4ea2021d22/scratchpad/b10/c_praca/m/pp/pt/test_pilot_gate_follows_the_au0')
+gate = &lt;function gate.&lt;locals&gt;.offer at 0x7f77910eb420&gt;, name = 'V4'
+cell = 'one_row', record = 'honest'
+
+    @pytest.mark.parametrize("name,cell,record", GATE_CASES, ids=["-".join(case) for case in GATE_CASES])
+    def test_pilot_gate_follows_the_audit(tmp_path, gate, name, cell, record):
+        w = world(tmp_path, name)
+        s, a, quality = pilot_cell(w, name, cell)
+        invalid = [seq for seq, q in quality.items() if not q["behavior_valid"]]
+        change = {"identity": None, "honest": None, "F1": f1, "F1b": f1b, "F1c": f1c(invalid)}[record]
+        report = a.path if change is None else record_file(a, tmp_path / f"{record}.json", change)
+        refusal = GATE_REFUSALS.get((cell, record))
+        if refusal is not None:
+&gt;           with exactly(PREFIX + refusal):
+E           AssertionError: Regex pattern did not match.
+E            Regex: '^pilot\\ is\\ not\\ accepted\\ for\\ this\\ protocol:\\ unaccepted\\ audit:\\ the\\ record\\ does\\ not\\ state\\ a\\ clean\\ acceptance$'
+E            Input: 'accepted pilot with current extractor and frozen protocol required'
+
+scripts/tests/test_pilot_gate.py:171: AssertionError</failure></testcase></testsuite><testsuite name="pred 432dd2e scripts/tests/test_protocol_v5.py::test_selfcheck_passes_the_file_and_fails_each_deliberate_error[gate_085]" errors="0" failures="1" skipped="0" tests="1" time="0.174" timestamp="2026-11-24T11:26:45.335339-06:00" hostname="debian"><testcase classname="scripts.tests.test_protocol_v5" name="test_selfcheck_passes_the_file_and_fails_each_deliberate_error[gate_085]" time="0.001"><failure message="ImportError: cannot import name 'protocol_v5' from 'scripts' (unknown location)">case = 'gate_085'
+tmp_path = PosixPath('/tmp/claude-1000/-home-eh-projects-hyptcn3/9a8a89c1-0c71-4e83-9fec-bd4ea2021d22/scratchpad/b10/c_praca/m/pp/pt/test_selfcheck_passes_the_file0')
+monkeypatch = &lt;_pytest.monkeypatch.MonkeyPatch object at 0x7fe61a97ad70&gt;
+
+    @pytest.mark.parametrize("case", CASES)
+    def test_selfcheck_passes_the_file_and_fails_each_deliberate_error(case, tmp_path, monkeypatch):
+&gt;       from scripts import protocol_v5
+E       ImportError: cannot import name 'protocol_v5' from 'scripts' (unknown location)
+
+scripts/tests/test_protocol_v5.py:1427: ImportError</failure></testcase></testsuite><testsuite name="pred bae0ee8 scripts/tests/test_campaign_v5.py::test_finish_corpus_without_the_record_of_the_complete_ending_fails" errors="1" failures="0" skipped="0" tests="1" time="0.743" timestamp="2026-11-24T11:26:45.931916-06:00" hostname="debian"><testcase classname="scripts.tests.test_campaign_v5" name="test_finish_corpus_without_the_record_of_the_complete_ending_fails" time="0.019"><error message="failed on setup with &quot;ValueError: missing protocol key: status&quot;">tmp_path_factory = TempPathFactory(_given_basetemp=PosixPath('/tmp/claude-1000/-home-eh-projects-hyptcn3/9a8a89c1-0c71-4e83-9fec-bd4ea202...cn3/9a8a89c1-0c71-4e83-9fec-bd4ea2021d22/scratchpad/b10/c_praca/m/pp/pt'), _retention_count=3, _retention_policy='all')
+
+    @pytest.fixture(scope="module")
+    def scenario(tmp_path_factory):
+        """The scenario of the module docstring; the patches of the harness are undone before the tests read it."""
+        with pytest.MonkeyPatch.context() as mp:
+            h = Harness(tmp_path_factory.mktemp("kampan"), mp)
+&gt;           protocol_r = h.protocol("protocol-generalka", limit=None)
+
+scripts/tests/test_campaign_v5.py:96: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+scripts/tests/kampan_v5.py:546: in protocol
+    collection.protocol(path)  # The loader's checks, before any campaign reads it.
+scripts/collection.py:141: in protocol
+    protocol_v5.check_layout(p)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+p = {'analysis': {'alarm_rule': {'k': 3, 'n': 5}, 'architecture': {'batch_size': 64, 'blocks': 4, 'channels': 16, 'classif...{'proc_memfd': {'direction': 'up', 'shift': 0.5}, 'proc_wx': {'direction': 'up', 'shift': 0.5}}, ...}, ...}, ...}, ...}
+
+    def check_layout(p):
+        """The loader's v5 checks: the first unknown or missing key, then the first malformed v5 section.
+    
+        ValueError `unknown protocol key: &lt;path&gt;`, `missing protocol key: &lt;path&gt;` or `invalid &lt;section&gt;`; a determined_at
+        that scripts/gates.py could not bind gives `invalid determined_at: &lt;the reason of gates.later_paths&gt;`.
+        """
+        problems = layout_problems(p)
+        if problems:
+&gt;           raise ValueError(problems[0])
+E           ValueError: missing protocol key: status
+
+scripts/protocol_v5.py:1014: ValueError</error></testcase></testsuite><testsuite name="pred bae0ee8 scripts/tests/test_campaign_endings.py::test_the_record_of_a_closing_ending_carries_the_entry_of_the_measurement_log" errors="0" failures="1" skipped="0" tests="1" time="0.698" timestamp="2026-11-24T11:26:46.821309-06:00" hostname="debian"><testcase classname="scripts.tests.test_campaign_endings" name="test_the_record_of_a_closing_ending_carries_the_entry_of_the_measurement_log" time="0.020"><failure message="ValueError: missing protocol key: status">tmp_path = PosixPath('/tmp/claude-1000/-home-eh-projects-hyptcn3/9a8a89c1-0c71-4e83-9fec-bd4ea2021d22/scratchpad/b10/c_praca/m/pp/pt/test_the_record_of_a_closing_e0')
+monkeypatch = &lt;_pytest.monkeypatch.MonkeyPatch object at 0x7febca5bd810&gt;
+
+    def test_the_record_of_a_closing_ending_carries_the_entry_of_the_measurement_log(tmp_path, monkeypatch):
+        """ENDING_RULE (F11 of the verification of B9b, proposal 11.6): a campaign with one rejection and its replacement
+        and an operator's stop runs to its complete ending. The stopped record carries no entry; the complete record, of
+        an ending that closes the campaign, carries in values.merania_entry the entry of docs/MERANIA.md: the campaign and
+        the ending, the record's name with its sha256 left to endings/ and the printout, the planned, accepted, rejected
+        and replaced sessions, the unscored time and every deviation. Every number in it is the record's, with its marker
+        of check C of scripts/check_claims.sh, which passes on the printed entry against the test's records; the run that
+        wrote the record printed the entry with the record's sha256."""
+        h = harness(tmp_path, monkeypatch)
+&gt;       directory = campaign_of(h, limit=1)
+
+scripts/tests/test_campaign_endings.py:978: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+scripts/tests/test_campaign_endings.py:111: in campaign_of
+    protocol = h.protocol(name + "-protocol", limit=limit)
+scripts/tests/kampan_v5.py:546: in protocol
+    collection.protocol(path)  # The loader's checks, before any campaign reads it.
+scripts/collection.py:141: in protocol
+    protocol_v5.check_layout(p)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+p = {'analysis': {'alarm_rule': {'k': 3, 'n': 5}, 'architecture': {'batch_size': 64, 'blocks': 4, 'channels': 16, 'classif...{'proc_memfd': {'direction': 'up', 'shift': 0.5}, 'proc_wx': {'direction': 'up', 'shift': 0.5}}, ...}, ...}, ...}, ...}
+
+    def check_layout(p):
+        """The loader's v5 checks: the first unknown or missing key, then the first malformed v5 section.
+    
+        ValueError `unknown protocol key: &lt;path&gt;`, `missing protocol key: &lt;path&gt;` or `invalid &lt;section&gt;`; a determined_at
+        that scripts/gates.py could not bind gives `invalid determined_at: &lt;the reason of gates.later_paths&gt;`.
+        """
+        problems = layout_problems(p)
+        if problems:
+&gt;           raise ValueError(problems[0])
+E           ValueError: missing protocol key: status
+
+scripts/protocol_v5.py:1014: ValueError</failure></testcase></testsuite><testsuite name="pred bae0ee8 scripts/tests/test_campaign_endings.py::test_a_hash_that_changes_during_a_run_makes_the_campaign_invalid[measurement]" errors="0" failures="1" skipped="0" tests="1" time="0.706" timestamp="2026-11-24T11:26:47.663267-06:00" hostname="debian"><testcase classname="scripts.tests.test_campaign_endings" name="test_a_hash_that_changes_during_a_run_makes_the_campaign_invalid[measurement]" time="0.020"><failure message="ValueError: missing protocol key: status">tmp_path = PosixPath('/tmp/claude-1000/-home-eh-projects-hyptcn3/9a8a89c1-0c71-4e83-9fec-bd4ea2021d22/scratchpad/b10/c_praca/m/pp/pt/test_a_hash_that_changes_durin0')
+monkeypatch = &lt;_pytest.monkeypatch.MonkeyPatch object at 0x7f15412cd810&gt;
+change = 'measurement'
+
+    @pytest.mark.parametrize("change", ["measurement", "lab"])
+    def test_a_hash_that_changes_during_a_run_makes_the_campaign_invalid(tmp_path, monkeypatch, change):
+        """INVALID_RULE (design 1.2): the run that finds the measurement code or the lab changed since init ends the
+        campaign as invalid, with its record; an invalid campaign never runs again, has no corpus (finish_corpus refuses
+        it by name) and is never continued. The real verify_frozen on the harness's git (a clean tree at the commit)."""
+        h = harness(tmp_path, monkeypatch)
+&gt;       directory = campaign_of(h, limit=1)
+
+scripts/tests/test_campaign_endings.py:316: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+scripts/tests/test_campaign_endings.py:111: in campaign_of
+    protocol = h.protocol(name + "-protocol", limit=limit)
+scripts/tests/kampan_v5.py:546: in protocol
+    collection.protocol(path)  # The loader's checks, before any campaign reads it.
+scripts/collection.py:141: in protocol
+    protocol_v5.check_layout(p)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+p = {'analysis': {'alarm_rule': {'k': 3, 'n': 5}, 'architecture': {'batch_size': 64, 'blocks': 4, 'channels': 16, 'classif...{'proc_memfd': {'direction': 'up', 'shift': 0.5}, 'proc_wx': {'direction': 'up', 'shift': 0.5}}, ...}, ...}, ...}, ...}
+
+    def check_layout(p):
+        """The loader's v5 checks: the first unknown or missing key, then the first malformed v5 section.
+    
+        ValueError `unknown protocol key: &lt;path&gt;`, `missing protocol key: &lt;path&gt;` or `invalid &lt;section&gt;`; a determined_at
+        that scripts/gates.py could not bind gives `invalid determined_at: &lt;the reason of gates.later_paths&gt;`.
+        """
+        problems = layout_problems(p)
+        if problems:
+&gt;           raise ValueError(problems[0])
+E           ValueError: missing protocol key: status
+
+scripts/protocol_v5.py:1014: ValueError</failure></testcase></testsuite><testsuite name="pred ac95f01 scripts/tests/test_campaign.py::test_finish_corpus_keeps_the_error_text_of_the_production_check" errors="0" failures="1" skipped="0" tests="1" time="0.571" timestamp="2026-11-24T11:26:49.029137-06:00" hostname="debian"><testcase classname="scripts.tests.test_campaign" name="test_finish_corpus_keeps_the_error_text_of_the_production_check" time="0.104"><failure message="ValueError: missing protocol key: status">tmp_path = PosixPath('/tmp/claude-1000/-home-eh-projects-hyptcn3/9a8a89c1-0c71-4e83-9fec-bd4ea2021d22/scratchpad/b10/c_praca/m/pp/pt/test_finish_corpus_keeps_the_e0')
+monkeypatch = &lt;_pytest.monkeypatch.MonkeyPatch object at 0x7f2c412715b0&gt;
+
+    def test_finish_corpus_keeps_the_error_text_of_the_production_check(tmp_path, monkeypatch):
+        """B2 panel (deferred to B9): the refusal of validate_index, run as the owner, keeps the child's own error text
+        in the error that becomes the runner's status message. Finding F12 of the verification of B9b (harness row B9:
+        the final index is never faked in the tests): the index is a real one, features/dataset.py build over the real
+        archives and audits of a corpus of the v5 shape (features/tests/test_dataset_plan.py make_corpus, its record of
+        the complete ending first, finish_setup), and the real production check of training refuses it, run as the owner
+        (collection.user_command, here the command as it is): one feature archive changed after the build, when the
+        owner's command of the check is made. The error ends in the child's own text; the index stays in the campaign's
+        directory and goes to no archive."""
+        from features.tests.test_dataset_plan import finish_setup, make_corpus
+&gt;       corpus = make_corpus(tmp_path / "corpus", "campaign")
+
+scripts/tests/test_campaign.py:1178: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+features/tests/test_dataset_plan.py:143: in make_corpus
+    c = SimpleNamespace(root=root, path=path, p=collection.protocol(path), sha=collection.digest(path), mode=mode,
+scripts/collection.py:141: in protocol
+    protocol_v5.check_layout(p)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+p = {'analysis': {'alarm_rule': {'k': 3, 'n': 5}, 'architecture': {'batch_size': 64, 'blocks': 4, 'channels': 16, 'classif...{'proc_memfd': {'direction': 'up', 'shift': 0.5}, 'proc_wx': {'direction': 'up', 'shift': 0.5}}, ...}, ...}, ...}, ...}
+
+    def check_layout(p):
+        """The loader's v5 checks: the first unknown or missing key, then the first malformed v5 section.
+    
+        ValueError `unknown protocol key: &lt;path&gt;`, `missing protocol key: &lt;path&gt;` or `invalid &lt;section&gt;`; a determined_at
+        that scripts/gates.py could not bind gives `invalid determined_at: &lt;the reason of gates.later_paths&gt;`.
+        """
+        problems = layout_problems(p)
+        if problems:
+&gt;           raise ValueError(problems[0])
+E           ValueError: missing protocol key: status
+
+scripts/protocol_v5.py:984: ValueError</failure></testcase></testsuite><testsuite name="pred ac95f01 scripts/tests/test_campaign_v5.py::test_a_small_campaign_runs_from_initialize_to_finish_corpus" errors="1" failures="0" skipped="0" tests="1" time="0.734" timestamp="2026-11-24T11:26:49.745732-06:00" hostname="debian"><testcase classname="scripts.tests.test_campaign_v5" name="test_a_small_campaign_runs_from_initialize_to_finish_corpus" time="0.019"><error message="failed on setup with &quot;ValueError: missing protocol key: status&quot;">tmp_path_factory = TempPathFactory(_given_basetemp=PosixPath('/tmp/claude-1000/-home-eh-projects-hyptcn3/9a8a89c1-0c71-4e83-9fec-bd4ea202...cn3/9a8a89c1-0c71-4e83-9fec-bd4ea2021d22/scratchpad/b10/c_praca/m/pp/pt'), _retention_count=3, _retention_policy='all')
+
+    @pytest.fixture(scope="module")
+    def scenario(tmp_path_factory):
+        """The scenario of the module docstring; the patches of the harness are undone before the tests read it."""
+        with pytest.MonkeyPatch.context() as mp:
+            h = Harness(tmp_path_factory.mktemp("kampan"), mp)
+&gt;           protocol_r = h.protocol("protocol-generalka", limit=None)
+
+scripts/tests/test_campaign_v5.py:96: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+scripts/tests/kampan_v5.py:546: in protocol
+    collection.protocol(path)  # The loader's checks, before any campaign reads it.
+scripts/collection.py:141: in protocol
+    protocol_v5.check_layout(p)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+p = {'analysis': {'alarm_rule': {'k': 3, 'n': 5}, 'architecture': {'batch_size': 64, 'blocks': 4, 'channels': 16, 'classif...{'proc_memfd': {'direction': 'up', 'shift': 0.5}, 'proc_wx': {'direction': 'up', 'shift': 0.5}}, ...}, ...}, ...}, ...}
+
+    def check_layout(p):
+        """The loader's v5 checks: the first unknown or missing key, then the first malformed v5 section.
+    
+        ValueError `unknown protocol key: &lt;path&gt;`, `missing protocol key: &lt;path&gt;` or `invalid &lt;section&gt;`; a determined_at
+        that scripts/gates.py could not bind gives `invalid determined_at: &lt;the reason of gates.later_paths&gt;`.
+        """
+        problems = layout_problems(p)
+        if problems:
+&gt;           raise ValueError(problems[0])
+E           ValueError: missing protocol key: status
+
+scripts/protocol_v5.py:984: ValueError</error></testcase></testsuite><testsuite name="later 7eb6ac2 scripts/tests/test_collector_majflt.py::test_a_bound_refuses_one_cycle_above_it_and_accepts_a_cycle_at_it[zero]" errors="1" failures="0" skipped="0" tests="1" time="0.415" timestamp="2026-11-24T11:26:51.032099-06:00" hostname="debian"><testcase classname="scripts.tests.test_collector_majflt" name="test_a_bound_refuses_one_cycle_above_it_and_accepts_a_cycle_at_it[zero]" time="0.320"><error message="failed on setup with &quot;ValueError: invalid audit bounds&quot;">tmp_path_factory = TempPathFactory(_given_basetemp=PosixPath('/tmp/claude-1000/-home-eh-projects-hyptcn3/9a8a89c1-0c71-4e83-9fec-bd4ea202...cn3/9a8a89c1-0c71-4e83-9fec-bd4ea2021d22/scratchpad/b10/c_praca/m/pp/pt'), _retention_count=3, _retention_policy='all')
+
+    @pytest.fixture(scope="module")
+    def small(tmp_path_factory):
+        """(protocol, its path) of the small schema-3 protocol of the audit self-test (interval 1 s, 96 cycles, windows of
+        8, a full snapshot every 64; scripts/tests/test_audit_selftest.py small_doc) with the bound of the G0 file."""
+        from scripts import collection
+        from scripts.tests import boundary_sessions as bs
+        from scripts.tests.test_audit_selftest import small_doc
+        root = tmp_path_factory.mktemp("majflt")
+        path = bs.write_protocol(root / "protocol.json", small_doc(bs.profile_dir(root / "profile")))
+&gt;       return collection.protocol(path), path
+
+scripts/tests/test_collector_majflt.py:40: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+scripts/collection.py:155: in protocol
+    audit_bounds(p)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+protocol = {'analysis': {'alarm_rule': {'k': 3, 'n': 5}, 'architecture': {'batch_size': 32, 'blocks': 4, 'channels': 16, 'classif...{'proc_memfd': {'direction': 'up', 'shift': 0.5}, 'proc_wx': {'direction': 'up', 'shift': 0.5}}, ...}, ...}, ...}, ...}
+
+    def audit_bounds(protocol):
+        """The protocol's audit bounds (schema 3), None for older schemas; ValueError when the section is malformed."""
+        a = _section(protocol, "audit")
+        if a is None:
+            return None
+        interval = protocol.get("interval_s")
+        if type(a) is not dict or set(a) != set(AUDIT_KEYS) or not _number(interval) or interval &lt;= 0:
+&gt;           raise ValueError("invalid audit bounds")
+E           ValueError: invalid audit bounds
+
+features/audit_policy.py:150: ValueError</error></testcase></testsuite></testsuites>
