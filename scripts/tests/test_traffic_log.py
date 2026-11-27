@@ -258,6 +258,10 @@ def mutate(name, req_log, ivl_log):
         req_log[0]["config"]["initial_phase"] = "measure"
     elif name == "not_to_end":
         ivl_log[-1]["end_mono"] = 3.6
+    elif name == "not_to_end_null":  # Package B16 (should_fix 3 of the fifth G0 verification): no TypeError.
+        ivl_log[-1]["end_mono"] = None
+    elif name == "not_from_origin_string":
+        ivl_log[1]["mono_start"] = "0"
     elif name == "no_measure":
         for r in req_log:
             if r.get("phase") == "measure":
@@ -292,6 +296,8 @@ EXPECTED = {
     "interval_missing": ["interval_index:2!=3", "interval_gap:1->3", "interval_missing:2", "phase_count_mismatch:measure:3!=5"],
     "initial_phase": ["phase_order:measure->measure", "initial_phase_mismatch:warmup"],
     "not_to_end": ["intervals_not_to_end:3.5!=3.6"],
+    "not_to_end_null": ["intervals_not_to_end:end_mono:None"],
+    "not_from_origin_string": ["interval_malformed:0", "intervals_not_from_origin:0"],
     "no_measure": ["no_measure_requests"],
 }
 

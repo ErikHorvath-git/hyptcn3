@@ -56,6 +56,21 @@ V5_END_KEYS = ("arrivals", "admitted", "dropped", "user_sessions_completed", "us
 # t_mono and the interval bounds are rounded to 6 decimals: an arrival within this of a bound may belong to either
 # interval.
 TIME_EPS = 1e-6
+# Package B16 (should_fix 1 of the fifth G0 verification, Q82: the executor's decision, for the lead's review): the
+# most by which a wall time of a /2 log pair may differ from the start_unix of the request log's header plus the
+# record's own monotonic time; summarize refuses a pair with a record beyond it (wall_clock). The rule: 1 s is the
+# bound of the log audit's traffic_measure_bounds (scripts/collection_logs.py: the phase markers against end.json).
+# Honest logs differ by less than 2 ms (the arrivals of the 74 log pairs of the H2 runs of G2: -0.0019 to +1.5068 ms),
+# and CLOCK_MONOTONIC follows NTP's slew, so only a step of the wall clock moves the difference. realism places the
+# event windows by the records' wall times and the intervals of the offered load by start_unix plus their monotonic
+# time (features/qualification.py offered_load as well); bound to each other, either may place them.
+WALL_CLOCK_TOLERANCE_S = 1.0
+# Package B16: the (wall time, monotonic time) fields of each kind of record that summarize binds by
+# WALL_CLOCK_TOLERANCE_S, in both logs of a /2 pair (the phase markers and the end record are in both).
+WALL_CLOCK_FIELDS = {"arrival": (("t_utc", "t_mono"),), "phase": (("t_utc", "t_mono"),),
+                     "request": (("t_start_utc", "t_start_mono"), ("t_end_utc", "t_end_mono")),
+                     "interval": (("t_start_utc", "mono_start"), ("t_end_utc", "mono_end")),
+                     "end": (("end_utc", "end_mono"),)}
 # The executor's judgment (package B10, finding F6 of B5b): the think time realism() judges is the realized one,
 # from the end of a request to the start of the next request of its user session; the generator's scheduler and its
 # pool add their own delay to a drawn think time, so the realized maximum may lie this much above the profile's
@@ -226,6 +241,40 @@ def _routes(records):
 
 def _finite(value):
     return type(value) in (int, float) and math.isfinite(value)
+
+
+def _record_id(kind, log, record):
+    """The id of a record in the detail of wall_clock: the user session of an arrival, the request id, the interval
+    index, and for a phase marker and an end record, which both logs hold, the log (with the phase)."""
+    if kind == "arrival":
+        return record.get("user_session")
+    if kind == "request":
+        return record.get("rid")
+    if kind == "interval":
+        return record.get("interval")
+    return f"{log}:{record.get('phase')}" if kind == "phase" else log
+
+
+def wall_clock(origin, log, records):
+    """Package B16: "<kind>:<id>" of the first of `records` (the records of one log of a /2 pair, `log` its name)
+    whose wall time differs from `origin`, the start_unix of the request log's header, plus its own monotonic time by
+    more than WALL_CLOCK_TOLERANCE_S, by the fields of WALL_CLOCK_FIELDS; None when none does. A wall time that is
+    missing, or no ISO-8601 time with a timezone, differs; an interval's wall times count where it carries them (the
+    generator derives them from start_unix). A field pair whose monotonic time is no finite number is left out: the
+    check that reads that time names it (arrival_malformed, request_malformed, interval_v5_malformed,
+    requests:end_mono_mismatch, intervals_not_to_end, and for the post marker the session audit's traffic_stop)."""
+    for record in records:
+        kind = record.get("type")
+        for wall, mono in WALL_CLOCK_FIELDS.get(kind, ()):
+            if not _finite(record.get(mono)) or kind == "interval" and wall not in record:
+                continue
+            try:
+                agrees = abs(_unix(record[wall]) - (origin + record[mono])) <= WALL_CLOCK_TOLERANCE_S
+            except (KeyError, TypeError, ValueError, OverflowError):
+                agrees = False
+            if not agrees:
+                return f"{kind}:{_record_id(kind, log, record)}"
+    return None
 
 
 def envelope_problem(envelope):
@@ -488,7 +537,12 @@ def summarize(requests_path, intervals_path, *, session_id=None, schema=None):
     request log schema the pair must have (REQUEST_SCHEMA or REQUEST_SCHEMA_2,
     the interval log the matching one); None takes the one the request log names
     when it is one of these, else REQUEST_SCHEMA. A /2 pair is cross-checked
-    further (_v5_problems) and its summary counts the arrivals.
+    further (_v5_problems) and its summary counts the arrivals; since package B16
+    its headers name a finite start_unix and its records' wall times agree with
+    the request log's start_unix plus their monotonic time (wall_clock,
+    WALL_CLOCK_TOLERANCE_S). The generator's stop is bound from above by the
+    session audit (scripts/collection_logs.py traffic_stop), not here:
+    scripts/lab_trial.py drains longer than a session's runner.
     """
     if schema is not None and schema not in SCHEMA_PAIRS:
         raise ValueError("unknown traffic log schema: " + str(schema))
@@ -612,10 +666,19 @@ def summarize(requests_path, intervals_path, *, session_id=None, schema=None):
     for index in by_interval:
         if index not in seen:
             problems.add("interval_missing", index)
-    if ivs and not abs(ivs[0].get("mono_start", math.nan)) <= 1e-9:  # NaN (a missing key) fails too
+    # Package B16 (should_fix 3 of the fifth G0 verification): both bounds are numbers first, so a value that is none
+    # (null, a string, a bool, NaN, missing) is refused by name and raises no TypeError; the detail of the end then
+    # names the value that is no number.
+    if ivs and not (_finite(ivs[0].get("mono_start")) and abs(ivs[0]["mono_start"]) <= 1e-9):
         problems.add("intervals_not_from_origin", ivs[0].get("mono_start"))
-    if ivs and end_i and not abs(ivs[-1].get("mono_end", math.nan) - end_i.get("end_mono", math.nan)) <= 1e-9:
-        problems.add("intervals_not_to_end", f"{ivs[-1].get('mono_end')}!={end_i.get('end_mono')}")
+    if ivs and end_i:
+        last, stop = ivs[-1].get("mono_end"), end_i.get("end_mono")
+        if not (_finite(last) and _finite(stop)):
+            problems.add("intervals_not_to_end", ",".join(f"{name}:{value!r}" for name, value in
+                                                          (("mono_end", last), ("end_mono", stop))
+                                                          if not _finite(value)))
+        elif not abs(last - stop) <= 1e-9:
+            problems.add("intervals_not_to_end", f"{last}!={stop}")
 
     phases = {}
     for phase in PHASES:
@@ -675,6 +738,20 @@ def summarize(requests_path, intervals_path, *, session_id=None, schema=None):
             _finite(end_r.get("end_mono")) and _finite(end_i.get("end_mono"))
             and abs(end_r["end_mono"] - end_i["end_mono"]) <= 1e-9):
         problems.add("requests:end_mono_mismatch")
+    # Package B16 (should_fix 1 of the fifth G0 verification, Q82): realism places the intervals of the offered load at
+    # start_unix of the request log's header plus their monotonic time, and features/qualification.py offered_load at
+    # the interval log's (the log audit refuses two headers with different ones: traffic_headers_disagree). Every
+    # header names a finite start_unix, and every record's wall time lies within WALL_CLOCK_TOLERANCE_S of the
+    # request log's start_unix plus its monotonic time; the first that does not names the refusal.
+    if v5:
+        for name, header in (("requests", header_r), ("intervals", header_i)):
+            if header is not None and not _finite(header.get("start_unix")):
+                problems.add(f"{name}:start_unix_invalid")
+        origin = (header_r or {}).get("start_unix")
+        found = _finite(origin) and (wall_clock(origin, "requests", requests)
+                                     or wall_clock(origin, "intervals", intervals))
+        if found:
+            problems.add("wall_clock", found)
     clean = all(end is not None and end.get("clean") and not end.get("write_errors") for end in (end_r, end_i))
     return {"schema": SUMMARY_SCHEMA, "log_schema": schema, "requests_path": str(requests_path),
             "intervals_path": str(intervals_path),
@@ -755,7 +832,10 @@ def realism(requests_path, intervals_path, protocol, scenario, *, windows=()):
                             before its order; it is left out as one that starts less than D_max before a window is.
                             The stop and the starts are compared in the generator's monotonic time, the end record's
                             end_mono against each arrival's t_mono (package B15, should_fix 1 of the fourth G0
-                            verification), and summarize refuses a pair whose two copies of end_mono differ. A
+                            verification), and summarize refuses a pair whose two copies of end_mono differ; the
+                            session audit refuses an end_mono before the post marker's t_mono or more than
+                            TRAFFIC_STOP_GRACE_S of scripts/collection.py after it (package B16, should_fix 2 of the
+                            fifth G0 verification: scripts/collection_logs.py traffic_stop). A
                             request log that does not end with an end record with a finite end_mono gives no share
                             (value None, ok False). The numbers behind the rule, on the 16 eshop sessions of the C4
                             pass (scripts/tests/test_order_share_c4.py; the executor's in OTAZKY_VEDUCEMU.md, "K Q77
@@ -777,7 +857,11 @@ def realism(requests_path, intervals_path, protocol, scenario, *, windows=()):
                             2xx POST /api/reports, and the largest 2xx download of a document (GET /api/docs/<id>)
                             at least document_max_to_median times their median (nearest rank)
       offered_load          the offered user sessions over the planned ones, both summed over the measure-phase
-                            intervals that overlap no window: within offered_load_tolerance of 1
+                            intervals that overlap no window: within offered_load_tolerance of 1. The windows are
+                            unix times, and an interval is placed at start_unix of the request log's header plus its
+                            mono_start and mono_end, which summarize binds since package B16 (should_fix 1 of the
+                            fifth G0 verification): every record's wall time lies within WALL_CLOCK_TOLERANCE_S of
+                            start_unix plus its monotonic time (wall_clock)
     """
     from features.audit_policy import audit_bounds  # The only reader of the audit section.
     bounds = audit_bounds(protocol)

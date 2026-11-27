@@ -78,6 +78,14 @@ COLLECTOR_MLOCK = True
 # drift was below 0.04 s/h (2026-10-20), so a session synchronized to 0.25 s
 # keeps that margin for its whole hour.
 CLOCK_SYNC_S = .25
+# Package B16 (should_fix 2 of the fifth G0 verification, Q82: the executor's decision, for the lead's review): the
+# grace of the traffic generator's stop. After the capture, capture_session sends SIGUSR2 (the generator's post
+# marker) and at once stops the generator with stop_child: SIGTERM, and SIGKILL when it has not exited this long
+# after; a generator that runs longer is killed and writes no end record. So the session audit refuses a request log
+# whose end record's end_mono lies before the post marker's t_mono or more than this after it
+# (scripts/collection_logs.py traffic_stop). scripts/lab_trial.py drains longer (its DRAIN_S and STOP_GRACE_S), so
+# scripts/traffic_log.py summarize has no such bound.
+TRAFFIC_STOP_GRACE_S = 30
 VM_NAME = r"[a-z0-9]{1,16}"
 # Session base of a multi-VM capture outside a campaign (pilot); not a valid campaign name.
 STANDALONE = "_bez-kampane"
@@ -1532,7 +1540,7 @@ def capture_session(p, out, metadata, cycles):
             raise ValueError("collector failed; see capture.log")
         os.kill(children["traffic"].pid, signal.SIGUSR2)
         status["measure_end_unix"] = time.time()
-        status["traffic"] = stop_child(children["traffic"], 30)
+        status["traffic"] = stop_child(children["traffic"], TRAFFIC_STOP_GRACE_S)
         children.pop("traffic")
         # Request errors or a logging failure (rc 1/3) are audit reasons, not a broken capture.
         status["traffic_rc"] = status["traffic"]["rc"]
@@ -1566,7 +1574,7 @@ def capture_session(p, out, metadata, cycles):
         except InterruptedError:
             pass  # The first signal landed exactly here; the handler disarmed itself.
         # Collector first, so no snapshot is taken without its generator.
-        for name, grace in (("collector", 60), ("traffic", 30), ("monitor", 15)):
+        for name, grace in (("collector", 60), ("traffic", TRAFFIC_STOP_GRACE_S), ("monitor", 15)):
             if name in children:
                 status[name] = stop_child(children.pop(name), grace)
         status["signals"] = interrupts.received

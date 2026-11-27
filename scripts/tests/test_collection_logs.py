@@ -332,6 +332,12 @@ def v5_traffic(d, p, *, scenario=None, sessions=None, spacings=SPACINGS, thinks=
     level 1 then lies at D with a knot at the end of the measure phase instead of the logs' end, so the plan of every
     interval of the warmup and measure phases is still the one without the rate, and only the post phase before D,
     where nothing arrives and no plan is compared with offered user sessions, plans more.
+    Package B16 (Q82): the session audit refuses an end record more than scripts/collection.py TRAFFIC_STOP_GRACE_S
+    after the post marker (traffic_stop), as the runner kills a generator that runs longer. The test grids of
+    scripts/tests/boundary_sessions.py audit_sections scale D_max to their interval (traffic_bounds), so the moved end
+    of their sessions lies within that grace; under the file's D_max a short measure phase ends far later, as a run of
+    scripts/lab_trial.py, which drains longer and has no such bound, may. Both end records carry the wall time of their
+    end_mono, which summarize binds (wall_clock).
     scenario: another scenario of p for the session (session.json follows).
     cut: every user session of the measure phase arrives less than D_max before the end records, which stay where
     build() puts them: the generator's stop cuts them all (package B14). Where the measure phase reaches back that far,
@@ -497,9 +503,11 @@ def v5_traffic(d, p, *, scenario=None, sessions=None, spacings=SPACINGS, thinks=
                     key=lambda r: r.get("t_mono", r.get("t_start_mono")))
     log_r = [dict(log_r[0], **v5), *body_r, log_r[-1]]
     log_i = [dict(log_i[0], **v5), *log_i[1:]]
+    # Package B16: the end records' wall time is that of their end_mono, as the generator writes it (Recorder close);
+    # build()'s stamp of the session's start lay end_mono before it, which summarize refuses under /2 (wall_clock).
     for records in (log_r, log_i):
         records[-1] = {**records[-1], **sample.end(requests, len(records) - 1, end_mono=end_mono), **counts,
-                       "end_utc": records[-1]["end_utc"], "phase": records[-1]["phase"]}
+                       "end_utc": utc(end_mono, base), "phase": records[-1]["phase"]}
     sample.write(d / names[0], tl.REQUEST_SCHEMA_2, log_r)
     sample.write(d / names[1], tl.INTERVAL_SCHEMA_2, log_i)
 

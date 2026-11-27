@@ -41,7 +41,10 @@ STAND_IN = {name: {"arrivals": {"ramp_s": 120, "wave_period_s": [1200, 2400], "p
 def p(tmp_path_factory):
     """A schema-3 protocol of the S3 shape with the four v5 scenarios and the profiles section, taken over from the
     protocol file as the G0 record holds it (scripts/tests/protokol_g0.py): the known answers here are those of the
-    null rate, while G2 writes the rates into config/collection-v5.json from its Zápis 1 on."""
+    null rate, while G2 writes the rates into config/collection-v5.json from its Zápis 1 on. Its audit sections are
+    those of the grid of 1 s (boundary_sessions.audit_sections): since package B16 D_max of the order share is the
+    file's 242 s scaled to it, 48.4 s, so that the generator's stop of a session of 60 s of measure phase lies within
+    scripts/collection.py TRAFFIC_STOP_GRACE_S of its post marker and its order share still has user sessions."""
     with pytest.MonkeyPatch.context() as patch:
         patch.setattr(bs, "V5", protokol_g0.g0_file())
         bs._v5_file.cache_clear()
@@ -446,11 +449,18 @@ def test_the_synthetic_logs_end_at_least_d_max_after_their_last_user_session_sta
     """Package B14: v5_traffic moves the end records to D_max and one second after the arrival of the last user session
     of the measure phase, on the grid of build()'s intervals (the post phase in intervals of 1 s from its marker, the
     last one closed half a second in), so the stop leaves out none of them and the clean session keeps its order share
-    of 1 in 10. build()'s end stays where it lies late enough (600 s of measure phase). A session of 10 cycles, whose
-    planned run of 130 s ends before its moved logs, under a protocol rate: the envelope's level 1 lies at D with a
-    knot at the end of the measure phase, every warmup and measure interval plans what the null rate plans, and the
-    log audit finds nothing, as under the null rate."""
+    of 1 in 10. build()'s end stays where it lies late enough (600 s of measure phase). Package B16 (Q82): under p,
+    whose D_max is the file's scaled to its grid of 1 s (boundary_sessions.traffic_bounds: 48.4 s), the moved end lies
+    within scripts/collection.py TRAFFIC_STOP_GRACE_S of the post marker, as the runner stops the generator, and the
+    log audit finds nothing. Under the file's 242 s the end of the same session lies 214.5 s after the post marker, as
+    a run of scripts/lab_trial.py, which drains longer, may end: summarize and every realism requirement accept it,
+    and the session audit refuses it by the stop alone (traffic_stop). That session of 10 cycles, whose planned run of
+    130 s ends before its moved logs, under a protocol rate: the envelope's level 1 lies at D with a knot at the end of
+    the measure phase, every warmup and measure interval plans what the null rate plans, and the log audit finds what
+    it finds under the null rate."""
+    from scripts.collection import TRAFFIC_STOP_GRACE_S
     d_max = p["audit"]["traffic"]["order_share_session_max_s"]
+    assert (d_max, json.loads(bs.V5.read_text())["audit"]["traffic"]["order_share_session_max_s"]) == (48.4, 242)
 
     def timeline(d):
         rows, ivs = records(d), records(d, "traffic_intervals.jsonl")
@@ -463,26 +473,39 @@ def test_the_synthetic_logs_end_at_least_d_max_after_their_last_user_session_sta
     last, stop, end, end_i, post = timeline(short)
     assert d_max + 1 <= end - last < d_max + 2 and end == end_i and end - stop == len(post) - .5
     assert post == [(stop + k, min(stop + k + 1, end)) for k in range(len(post))]
+    assert (end - stop, end - stop <= TRAFFIC_STOP_GRACE_S) == (20.5, True)
     share = requirement(realism(short, p), "order_share")
     assert (share["value"], share["ok"]) == (round(1 / 10, 6), True) and "and 0 more" in share["note"]
+    assert audit(short)["problems"] == []
     long_last, long_stop, long_end, _, long_post = timeline(session(tmp_path / "long", p, "steady", measure_s=600,
                                                                     snapshots=600))
     assert (long_end - long_stop, long_post, long_end - long_last > d_max + 1) == (evidence.POST_S,
                                                                                    [(long_stop, long_end)], True)
-    rated = copy.deepcopy(p)
+    far = copy.deepcopy(p)  # The file's D_max on the same grid.
+    far["audit"]["traffic"]["order_share_session_max_s"] = 242
+    drained = session(tmp_path / "drained", far, "steady")
+    last, stop, end, end_i, post = timeline(drained)
+    assert 243 <= end - last < 244 and end == end_i and end - stop == len(post) - .5 == 214.5
+    found = realism(drained, far)
+    assert all(r["ok"] for r in found["requirements"]) and found["offered_load"]["ok"]
+    assert requirement(found, "order_share")["value"] == round(1 / 10, 6)
+    assert tl.summarize(drained / "traffic_requests.jsonl", drained / "traffic_intervals.jsonl",
+                        schema=tl.REQUEST_SCHEMA_2)["problems"] == []
+    assert audit(drained)["problems"] == ["traffic_stop"]
+    rated = copy.deepcopy(far)
     for scenario in rated["scenarios"].values():
         scenario["rate"] = 3.7
     at = session(tmp_path / "rated", rated, "steady")
-    a, b = records(short), records(at)
+    a, b = records(drained), records(at)
     t_s, level = a[0]["envelope"]["t_s"], a[0]["envelope"]["level"]
     assert b[1:] == a[1:] and end > t_s[-1] == 130  # The moved logs run past D.
     scale = a[0]["rate"] / 3.7
     assert b[0]["envelope"] == {"t_s": [*t_s[:-1], round(stop, 6), t_s[-1]],
                                 "level": [*(scale * x for x in level), 1]}
-    ivs = [[r for r in records(x, "traffic_intervals.jsonl") if r.get("type") == "interval"] for x in (short, at)]
+    ivs = [[r for r in records(x, "traffic_intervals.jsonl") if r.get("type") == "interval"] for x in (drained, at)]
     planned = [[iv["planned_sessions"] for iv in x if iv["phase"] != "post"] for x in ivs]
     assert planned[1] == pytest.approx(planned[0], abs=1e-6) and len(planned[0]) == int(stop)
-    assert audit(at)["problems"] == audit(short)["problems"] == []
+    assert audit(at)["problems"] == audit(drained)["problems"] == ["traffic_stop"]
 
 
 def test_the_cv_is_computed_on_spacings_rescaled_by_the_envelope(tmp_path, p):
@@ -648,7 +671,8 @@ def m_order(r, i, p):
     fifth, fourth = _arrivals(r)[5], _arrivals(r)[4]
     index = _interval_of(i, fifth["t_mono"])["interval"]
     fifth["t_mono"] = fourth["t_mono"] - 1e-3  # Still in u4's interval, before it: u4 lands in u5's interval.
-    return [f"arrival_order:{_user(5)}", f"interval_arrivals:{index}"]
+    # Package B16: its t_utc stays where it was, seconds after start_unix plus the new t_mono (wall_clock).
+    return [f"arrival_order:{_user(5)}", f"interval_arrivals:{index}", f"wall_clock:arrival:{_user(5)}"]
 
 
 def m_cap(r, i, p):
@@ -805,7 +829,7 @@ def m_end_user_sessions(r, i, p):
 
 def m_end_mono(r, i, p):
     r[-1]["end_mono"] += 1000  # Package B15: the request log's copy of the stop, which the order share reads.
-    return ["requests:end_mono_mismatch"]
+    return ["requests:end_mono_mismatch", "wall_clock:end:requests"]  # B16: its end_utc stays 1000 s earlier.
 
 
 MUTATIONS = {name[2:]: function for name, function in sorted(globals().items()) if name.startswith("m_")}
@@ -856,6 +880,269 @@ def test_an_arrival_on_an_interval_bound_may_belong_to_either_interval(tmp_path,
     sample.write(d / "traffic_requests.jsonl", tl.REQUEST_SCHEMA_2, rows)
     found = tl.summarize(d / "traffic_requests.jsonl", d / "traffic_intervals.jsonl", schema=tl.REQUEST_SCHEMA_2)
     assert f"interval_arrivals:{iv['interval']}" in found["problems"]
+
+
+# Package B16 (Q82: the executor's decision, for the lead's review): should_fix 1 to 3 of the fifth G0 verification
+# (data/results/overenie_G0_20261127T055151Z.json). summarize binds the wall times of a /2 pair to the request log
+# header's start_unix plus their monotonic time (WALL_CLOCK_TOLERANCE_S), the session audit bounds the generator's
+# stop from above (traffic_stop), and a bound of the intervals that is no number is refused by name.
+
+def _pair(d):
+    """Both logs of session d, their records without schema and n (sample.write numbers them again)."""
+    return tuple([{k: v for k, v in x.items() if k not in ("schema", "n")} for x in records(d, name)]
+                 for name in ("traffic_requests.jsonl", "traffic_intervals.jsonl"))
+
+
+def _write_pair(d, r, i, seal=True):
+    sample.write(d / "traffic_requests.jsonl", tl.REQUEST_SCHEMA_2, r)
+    sample.write(d / "traffic_intervals.jsonl", tl.INTERVAL_SCHEMA_2, i)
+    if seal:
+        evidence.seal(d)
+
+
+def _summarize(d):
+    return tl.summarize(d / "traffic_requests.jsonl", d / "traffic_intervals.jsonl",
+                        schema=tl.REQUEST_SCHEMA_2)["problems"]
+
+
+def _later(stamp, seconds):
+    return evidence.datetime.fromtimestamp(logs.unix(stamp) + seconds, evidence.timezone.utc).isoformat()
+
+
+def _record(r, i, kind, log):
+    """The record of each kind the tests below move: the first arrival of the measure phase (u4), the post marker of
+    the log `log`, the second request of u4, the interval holding u4, the end record of the log `log`."""
+    rows = r if log == "requests" else i
+    if kind == "arrival":
+        return _arrivals(r)[4], _user(4)
+    if kind == "phase":
+        return next(x for x in rows if x.get("type") == "phase" and x["phase"] == "post"), f"{log}:post"
+    if kind == "request":
+        return _rid_of(r, EXTRA), EXTRA
+    if kind == "interval":
+        iv = _interval_of(i, _arrivals(r)[4]["t_mono"])
+        return iv, iv["interval"]
+    return rows[-1], log
+
+
+WALL_FIELDS = [("arrival", "t_utc", "requests"), ("phase", "t_utc", "requests"), ("phase", "t_utc", "intervals"),
+               ("request", "t_start_utc", "requests"), ("request", "t_end_utc", "requests"),
+               ("interval", "t_start_utc", "intervals"), ("interval", "t_end_utc", "intervals"),
+               ("end", "end_utc", "requests"), ("end", "end_utc", "intervals")]
+
+
+@pytest.mark.parametrize("seconds", [-1.001, -.999, .999, 1.001])
+@pytest.mark.parametrize("kind, field, log", WALL_FIELDS, ids=["-".join(x) for x in WALL_FIELDS])
+def test_summarize_binds_each_wall_time_of_a_v5_pair_to_start_unix(tmp_path, p, kind, field, log, seconds):
+    """Package B16 (should_fix 1): every wall time the decision names, of every kind of record and in both logs where a
+    kind is in both, moved alone by just less than WALL_CLOCK_TOLERANCE_S keeps the pair clean, and by just more is
+    refused by that record's kind and id (wall_clock)."""
+    assert tl.WALL_CLOCK_TOLERANCE_S == 1.0
+    d = session(tmp_path, p, "steady")
+    r, i = _pair(d)
+    record, ident = _record(r, i, kind, log)
+    record[field] = _later(record[field], seconds)
+    _write_pair(d, r, i, seal=False)
+    assert _summarize(d) == ([] if abs(seconds) < 1 else [f"wall_clock:{kind}:{ident}"])
+
+
+@pytest.mark.parametrize("shift", [-5000, -30, -10, -5, -1.001, 1.001, 5, 10, 30, 5000])
+def test_a_start_unix_moved_in_both_headers_is_refused_by_the_first_record_it_misplaces(tmp_path, p, shift):
+    """Package B16 (should_fix 1, the verifier's probe test_sonda_b15.py, test_probe_start_unix_still_places_the_
+    offered_load): the F7 session with windows on its two measure intervals that hold two arrivals each, placed from
+    the honest start_unix, offers 6 of about 8.93 planned user sessions and fails the offered load. start_unix moved
+    in both headers, and nothing else, places the intervals elsewhere: from 5 s on the windows miss those intervals and
+    the offered load passes. summarize refuses every such pair by the first record after the request log's header,
+    the arrival of build()'s first user session (u0), and the log audit with it; 0.999 s either way stays clean."""
+    d = session(tmp_path, p, "steady")
+    start = records(d)[0]["start_unix"]
+    ivs = [x for x in records(d, "traffic_intervals.jsonl") if x.get("type") == "interval" and x["phase"] == "measure"]
+    windows = [(start + iv["mono_start"] + .1, start + iv["mono_end"] - .1) for iv in ivs
+               if iv["offered_sessions"] == 2]
+    assert len(windows) == 2 and realism(d, p, windows)["offered_load"]["ok"] is False
+    r, i = _pair(d)
+    for header in (r[0], i[0]):
+        header["start_unix"] = start + .999
+    _write_pair(d, r, i)
+    assert _summarize(d) == [] and audit(d)["problems"] == []
+    for header in (r[0], i[0]):
+        header["start_unix"] = start + shift
+    _write_pair(d, r, i)
+    if abs(shift) >= 5:  # The probe's shifts: the windows miss the two intervals, and B15's audit accepted it.
+        assert realism(d, p, windows)["offered_load"]["ok"] is True
+    assert _summarize(d) == [f"wall_clock:arrival:{_user(0)}"]
+    assert audit(d)["problems"] == [f"traffic:wall_clock:arrival:{_user(0)}"]
+
+
+@pytest.mark.parametrize("value", [None, "1767225600.0", True, math.nan, math.inf, "missing"],
+                         ids=["null", "string", "bool", "nan", "inf", "missing"])
+@pytest.mark.parametrize("log", ["requests", "intervals"])
+def test_a_header_without_a_finite_start_unix_is_refused_by_name(tmp_path, p, log, value):
+    """Package B16: a /2 header whose start_unix is no finite number is refused by name. Without the request log's no
+    wall time can be compared; the interval log's records are compared with the request log's start_unix (the one
+    realism places them with), and the log audit compares the two headers (traffic_headers_disagree)."""
+    d = session(tmp_path, p, "steady")
+    r, i = _pair(d)
+    header = (r if log == "requests" else i)[0]
+    if value == "missing":
+        del header["start_unix"]
+    else:
+        header["start_unix"] = value
+    _write_pair(d, r, i, seal=False)
+    assert _summarize(d) == [f"{log}:start_unix_invalid"]
+
+
+@pytest.mark.parametrize("value", ["missing", None, "garbage", "2026-01-01T00:00:01.100000", 1767225601.1],
+                         ids=["missing", "null", "garbage", "no_timezone", "number"])
+@pytest.mark.parametrize("kind, field, log", [("request", "t_start_utc", "requests"), ("phase", "t_utc", "intervals"),
+                                              ("end", "end_utc", "requests"), ("interval", "t_end_utc", "intervals")],
+                         ids=["request", "phase", "end", "interval"])
+def test_a_wall_time_that_cannot_be_read_differs(tmp_path, p, kind, field, log, value):
+    """Package B16: a wall time that is missing or no ISO-8601 time with a timezone cannot agree with start_unix plus
+    its monotonic time, and refuses the pair by the record's kind and id; but an interval's, which the generator derives
+    from start_unix and which nothing reads, is compared only where the interval carries it."""
+    d = session(tmp_path, p, "steady")
+    r, i = _pair(d)
+    record, ident = _record(r, i, kind, log)
+    if value == "missing":
+        del record[field]
+    else:
+        record[field] = value
+    _write_pair(d, r, i, seal=False)
+    gone = kind == "interval" and value == "missing"
+    assert _summarize(d) == ([] if gone else [f"wall_clock:{kind}:{ident}"])
+
+
+def test_the_wall_times_of_logs_of_schema_1_stay_unbound(tmp_path):
+    """Package B16: /1 is unchanged. build()'s /1 logs stamp every interval and both end records with the start of the
+    session, seconds before start_unix plus their monotonic time; summarize and the log audit accept them as before."""
+    d = evidence.build(tmp_path)
+    ivs = [x for x in records(d, "traffic_intervals.jsonl") if x.get("type") == "interval"]
+    assert len({x["t_end_utc"] for x in ivs}) == 1
+    assert logs.unix(ivs[-1]["t_end_utc"]) + 3 < records(d)[0]["start_unix"] + ivs[-1]["mono_end"]
+    assert tl.summarize(d / "traffic_requests.jsonl", d / "traffic_intervals.jsonl")["problems"] == []
+    assert logs.audit_logs(d)["problems"] == []
+
+
+BAD_NUMBERS = {"null": None, "string": "275.5", "true": True, "false": False, "nan": math.nan, "inf": math.inf,
+               "missing": "<missing>"}
+
+
+@pytest.mark.parametrize("bad", list(BAD_NUMBERS))
+def test_an_end_mono_of_the_interval_log_that_is_no_number_is_refused_by_name(tmp_path, p, bad):
+    """Package B16 (should_fix 3, the verifier's probe test_sonda_unreadable.py): intervals_not_to_end reads the last
+    interval's mono_end and the interval log's end_mono as numbers first. One that is none raises no TypeError, which
+    the log audit turned into traffic:unreadable and scripts/lab_trial.py traffic_summary did not catch: the pair is
+    refused by name, with the value that is no number, and by B15's requests:end_mono_mismatch. The wall time of an
+    end record whose end_mono is no number is not compared (wall_clock). NaN and an infinity, no numbers of JSON, also
+    make the log audit's section traffic unreadable, whose summary holds the end records (as before B16)."""
+    from scripts import lab_trial
+    d = session(tmp_path, p, "steady")
+    r, i = _pair(d)
+    if BAD_NUMBERS[bad] == "<missing>":
+        del i[-1]["end_mono"]
+    else:
+        i[-1]["end_mono"] = BAD_NUMBERS[bad]
+    _write_pair(d, r, i)
+    shown = repr(None if bad == "missing" else BAD_NUMBERS[bad])
+    expected = [f"intervals_not_to_end:end_mono:{shown}", "requests:end_mono_mismatch"]
+    assert _summarize(d) == expected
+    unreadable = [f"traffic:unreadable:ValueError: Out of range float values are not JSON compliant: {shown}"]
+    assert audit(d)["problems"] == ["traffic:" + x for x in expected] + (unreadable if bad in ("nan", "inf") else [])
+    assert lab_trial.traffic_summary(d)["problems"][-2:] == expected
+
+
+@pytest.mark.parametrize("bad", ["null", "string", "true", "false"])
+def test_a_first_interval_that_starts_at_no_number_is_refused_by_name(tmp_path, bad):
+    """Package B16 (should_fix 3): the same for the origin of the intervals (intervals_not_from_origin), here on logs
+    of schema /1, which share the line with /2: B3's line raised TypeError for null and a string, and let false pass
+    as 0."""
+    req, ivl = sample.build()
+    ivl[1]["mono_start"] = BAD_NUMBERS[bad]
+    pair = sample.write_pair(tmp_path, req, ivl)
+    problems = tl.summarize(*pair)["problems"]
+    assert ("intervals_not_from_origin" if BAD_NUMBERS[bad] is None else
+            f"intervals_not_from_origin:{BAD_NUMBERS[bad]}") in problems
+
+
+def _stop_at(d, t):
+    """The generator's stop at monotonic time t, consistently: both end records (end_mono and end_utc) and the last
+    interval (mono_end, duration_s and t_end_utc); the logs resealed."""
+    r, i = _pair(d)
+    last = [x for x in i if x.get("type") == "interval"][-1]
+    seconds = round(t - last["mono_end"], 6)
+    last.update(mono_end=round(t, 6), t_end_utc=_later(last["t_end_utc"], seconds))
+    last["duration_s"] = round(last["mono_end"] - last["mono_start"], 6)
+    for end in (r[-1], i[-1]):
+        end.update(end_mono=round(t, 6), end_utc=_later(end["end_utc"], seconds))
+    _write_pair(d, r, i)
+
+
+def _post(d):
+    return next(x["t_mono"] for x in records(d) if x.get("type") == "phase" and x["phase"] == "post")
+
+
+@pytest.mark.parametrize("after, problems", [(.5, []), (30, []), (30.001, ["traffic_stop"]), (1000, ["traffic_stop"])])
+def test_the_session_audit_bounds_the_generators_stop_by_the_post_marker(tmp_path, p, after, problems):
+    """Package B16 (should_fix 2, the verifier's probes test_sonda_stop3.py and test_sonda_stop3b.py): the stop moved
+    consistently in both end records and the last interval, which summarize cannot tell from an honest one, to `after`
+    seconds after the post marker. The session audit admits it up to scripts/collection.py TRAFFIC_STOP_GRACE_S (30 s),
+    the grace capture_session gives the generator after SIGUSR2, and refuses it beyond (traffic_stop alone); before B16
+    a stop 1000 s later passed, and the order share cut no buyer at it. summarize keeps no such bound
+    (scripts/lab_trial.py drains longer). The session of 600 s of measure phase holds one interval of the post phase,
+    the generator's stop half a second in, as build() places it."""
+    from scripts import collection
+    assert collection.TRAFFIC_STOP_GRACE_S == 30
+    d = session(tmp_path, p, "steady", event=True, measure_s=600, snapshots=600)
+    assert records(d)[-1]["end_mono"] - _post(d) == evidence.POST_S
+    _stop_at(d, _post(d) + after)
+    assert _summarize(d) == [] and audit(d)["problems"] == problems
+
+
+@pytest.mark.parametrize("later, problems", [(0, []), (.1, ["traffic_stop"])])
+def test_a_stop_before_the_post_marker_or_beside_a_post_marker_out_of_time_is_refused(tmp_path, p, later, problems):
+    """Package B16: the post marker moved to the end record or `later` after it, in both logs and its wall time with
+    it (within the 1 s of traffic_measure_bounds): a stop at the marker is admitted, one before it is refused by
+    traffic_stop alone. A post marker whose t_mono is no number in both logs, which no other check reads, places no
+    stop either: traffic_stop alone."""
+    d = session(tmp_path / "long", p, "steady", measure_s=600, snapshots=600)  # End records half a second in post.
+    end = records(d)[-1]["end_mono"]
+    r, i = _pair(d)
+    for rows in (r, i):
+        marker = next(x for x in rows if x.get("type") == "phase" and x["phase"] == "post")
+        moved = round(end + later, 6)
+        marker.update(t_mono=moved, t_utc=_later(marker["t_utc"], round(moved - marker["t_mono"], 6)))
+    _write_pair(d, r, i)
+    assert _summarize(d) == [] and audit(d)["problems"] == problems
+    d = session(tmp_path / "null", p, "steady")
+    r, i = _pair(d)
+    for rows in (r, i):
+        next(x for x in rows if x.get("type") == "phase" and x["phase"] == "post")["t_mono"] = None
+    _write_pair(d, r, i)
+    assert _summarize(d) == [] and audit(d)["problems"] == ["traffic_stop"]
+
+
+def test_the_stop_bound_is_the_grace_the_runner_gives_the_generator(tmp_path, p, monkeypatch):
+    """Package B16: TRAFFIC_STOP_GRACE_S of scripts/collection.py is the grace of each stop_child of the generator in
+    capture_session (after SIGUSR2, and in its finally block), and the session audit reads that constant: the clean
+    session, whose end records lie 20.5 s after the post marker, is refused once the grace is 20 s and accepted at
+    21 s."""
+    from scripts import collection
+    tree = ast.parse((ROOT / "scripts/collection.py").read_text())
+    stops = [node for node in ast.walk(tree) if isinstance(node, ast.Call) and getattr(node.func, "id", None) ==
+             "stop_child" and isinstance(node.args[0], ast.Subscript)
+             and getattr(node.args[0].slice, "value", None) == "traffic"]
+    pairs = [node for node in ast.walk(tree) if isinstance(node, ast.Tuple) and len(node.elts) == 2
+             and isinstance(node.elts[0], ast.Constant) and node.elts[0].value == "traffic"
+             and not (isinstance(node.elts[1], ast.Constant) and type(node.elts[1].value) is str)]  # Its grace.
+    assert len(stops) == len(pairs) == 1
+    assert [getattr(x, "id", None) for x in (stops[0].args[1], pairs[0].elts[1])] == ["TRAFFIC_STOP_GRACE_S"] * 2
+    d = session(tmp_path, p, "steady")
+    assert records(d)[-1]["end_mono"] - _post(d) == 20.5
+    monkeypatch.setattr(collection, "TRAFFIC_STOP_GRACE_S", 20)
+    assert audit(d)["problems"] == ["traffic_stop"]
+    monkeypatch.setattr(collection, "TRAFFIC_STOP_GRACE_S", 21)
+    assert audit(d)["problems"] == []
 
 
 # The log audit under a protocol with the profiles section.
@@ -1024,7 +1311,8 @@ def test_under_a_rate_of_the_protocol_the_helper_keeps_the_plan_of_the_null_rate
     none, peak_to_mean alone for the flat envelope, the offered load alone for the plan of twice the offered user
     sessions. A protocol rate 1 % below the null rate (the scale above 1) raises. Package B14: the sessions plan 200
     cycles, a planned run of 320 s, which holds their logs, whose end v5_traffic moves to D_max and a second after the
-    last user session of the measure phase (276 to 283 s); the logs of fewer cycles that run past D are
+    last user session of the measure phase (81.5 to 84.5 s under p's D_max of 48.4 s since package B16, 276 to 283 s
+    under the file's 242 s before); the logs of fewer cycles that run past D are
     test_the_synthetic_logs_end_at_least_d_max_after_their_last_user_session_starts."""
     def rated(rate):
         doc = copy.deepcopy(p)

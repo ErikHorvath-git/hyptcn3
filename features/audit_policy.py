@@ -29,7 +29,10 @@ holds the bounds of the realism requirements of proposal 5.7 and of the offered-
 (scripts/traffic_log.py realism; package B5b), all determined in G0 (proposal 10.9); order_share_session_max_s is
 D_max of the order share (package B13, the lead's answer to Q73 point 1): a user session that starts in [window start
 - D_max, window end] of an event window is left out of it, by its start alone, and so is one that starts in [stop -
-D_max, stop] of the generator's stop (package B14, Q77, approved by the lead on 2026-11-26).
+D_max, stop] of the generator's stop (package B14, Q77, approved by the lead on 2026-11-26). Since package B16 (Q82,
+the executor's decision for the lead's review) the session audit binds that stop, the request log's end record, to
+the generator's post marker: at it or at most scripts/collection.py TRAFFIC_STOP_GRACE_S after it
+(scripts/collection_logs.py traffic_stop); D_max and both rules are unchanged.
 
 "early_stop" (package B9b, agent Z, and its fix: F5 of the verification, question Q24; the lead's skeleton B9 row
 skoré zastavenie) holds the rule of the early stop of a campaign (proposal 7.5): one rate of marked rows per occurrence

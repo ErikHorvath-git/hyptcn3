@@ -8,9 +8,10 @@ name package B2 adds, so the same module runs on the code before and after B2. S
 reads is written with a clean value: the VM identity, lateness, cycle and publication fields of each sidecar,
 and in session.json the host context, the collector settings and the lab/ files with the guest's manifest. Since
 B4 a schema-3 protocol is a v5 document: it takes the v5 sections from config/collection-v5.json (v5_sections).
-Since B5b its audit section holds the traffic bounds of that file (traffic_bounds), and under a protocol with the
-profiles section a built session carries the traffic of its scenario's v5 profile with logs of schema /2
-(test_collection_logs.v5_traffic, the one helper of every such session).
+Since B5b its audit section holds the traffic bounds of that file (traffic_bounds; since B16 D_max of the order
+share scaled to a shorter interval), and under a protocol with the profiles section a built session carries the
+traffic of its scenario's v5 profile with logs of schema /2 (test_collection_logs.v5_traffic, the one helper of every
+such session).
 """
 from collections import namedtuple
 import contextlib
@@ -263,10 +264,10 @@ def audit_sections(interval_s, min_spacing_rows=2):
     a row between the starts of bursts, each of at least `min_spacing_rows` rows (the author's judgment in G0). No
     collector warning is allowed and the cap of rule-closed rows is not set, as until G2 and G3b; nor is the bound of
     the collector's major faults per cycle, whose null and note are those of config/collection-v5.json (the lead's
-    answer to Q29, collector_majflt_bounds: null until G2). The bounds of the
-    traffic's realism (package B5b) are those of config/collection-v5.json (traffic_bounds), and so is the rule of the
-    early stop (package B9b, early_stop_bounds: a rate per event type of the file, null until G3b). Every TOLERATED
-    id is registered (REGISTER), with no expected count.
+    answer to Q29, collector_majflt_bounds: null until G2). The rule of the early stop is that of
+    config/collection-v5.json (package B9b, early_stop_bounds: a rate per event type of the file, null until G3b), and
+    so are the bounds of the traffic's realism (package B5b, traffic_bounds) but D_max of the order share, which a grid
+    of a shorter interval scales (package B16). Every TOLERATED id is registered (REGISTER), with no expected count.
     """
     from features import audit_policy  # A module of package B3: imported here, so this file collects before it.
     return {"audit": {"lateness_max_s": interval_s / 10,
@@ -274,15 +275,32 @@ def audit_sections(interval_s, min_spacing_rows=2):
                       "periodicity": {"equal_spacings": 3, "min_spacing_rows": min_spacing_rows,
                                       "note": "author's judgment in G0 (proposal 10.9), not a mechanism"},
                       "warnings_allowed": None, "rule_closed_rows_max": None, **collector_majflt_bounds(),
-                      "traffic": traffic_bounds(), "early_stop": early_stop_bounds()},
+                      "traffic": traffic_bounds(interval_s), "early_stop": early_stop_bounds()},
             "exceptions": {name: {"cause": REGISTER[name][0], "decision": REGISTER[name][1], "expected": None}
                            for name in audit_policy.TOLERATED}}
 
 
-def traffic_bounds():
+def traffic_bounds(interval_s=None):
     """audit.traffic of config/collection-v5.json (package B5b), a copy: the bounds of the realism requirements of
-    proposal 5.7 and of the offered-load check of proposal 5.3; they do not depend on the grid."""
-    return copy.deepcopy(_v5_file()["audit"]["traffic"])
+    proposal 5.7 and of the offered-load check of proposal 5.3; they do not depend on the grid, but D_max.
+
+    Package B16 (Q82): on a grid of interval_s below the file's interval_s, D_max of the order share
+    (order_share_session_max_s) is the file's times interval_s over the file's interval_s, as audit_sections scales
+    the cycle bounds: 48.4 s on the grid of 1 s of the families S3 and S3+ (the file's 242 s). Since B16 the session
+    audit refuses a generator's stop more than scripts/collection.py TRAFFIC_STOP_GRACE_S after its post marker
+    (traffic_stop), and the order share leaves out every user session that starts less than D_max before that stop
+    (package B14). A measure phase shorter than D_max less that grace, as on those grids (97 s of S3, 60 s of
+    test_traffic_realism and of tcn/tests/test_odovzdanie_korpusu.py), would keep none of them under 242 s, and its
+    clean session of profile eshop would miss its order share; test_collection_logs.v5_traffic placed their end records
+    D_max and a second after the last arrival instead, 196 to 218 s after the post marker. 48.4 s still exceeds every
+    user session of v5_traffic's ESHOP and CORP (at most 23 s), and the end records of the clean sessions then lie
+    2.5 s (S3) and 20.5 to 26.5 s (test_traffic_realism) after the post marker. Without interval_s, and on the file's
+    grid, the file's value."""
+    out = copy.deepcopy(_v5_file()["audit"]["traffic"])
+    grid = _v5_file()["interval_s"]
+    if interval_s is not None and interval_s < grid:
+        out["order_share_session_max_s"] = round(out["order_share_session_max_s"] * interval_s / grid, 6)
+    return out
 
 
 def collector_majflt_bounds():

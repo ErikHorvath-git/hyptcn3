@@ -16,9 +16,10 @@ reaches.
 Protocol v5 (package B5b): under a schema-3 protocol with the profiles section the clean session carries the
 traffic of its scenario's open-loop profile (logs of schema /2, test_collection_logs.v5_traffic). V5_CASES break
 one realism requirement, the offered load, an intended client error, a field of the generator's header, its exit
-code or the correlation of a new route at a time; a case that needs one profile moves the session to a scenario
-of it. They apply once the schema-3 layout has the profiles section (agent T of B5b, scripts/protocol_v5.py
-TOP_LEVEL): from then on every schema-3 protocol has it. Until then UNREACHABLE names their keys with that reason.
+code, the correlation of a new route, or since package B16 the wall times or the generator's stop at a time; a case
+that needs one profile moves the session to a scenario of it. They apply once the schema-3 layout has the profiles
+section (agent T of B5b, scripts/protocol_v5.py TOP_LEVEL): from then on every schema-3 protocol has it. Until then
+UNREACHABLE names their keys with that reason.
 A case of the base list whose reasons differ under v5 takes them from the protocol (expected is a callable).
 
 Package B8 (design B8 1.4, skeleton B8 section 5 item 4): CONTROL_CASES start from the clean session of role
@@ -430,12 +431,17 @@ _CASES = [
      logs("traffic:requests:worker_errors")),
     ("traffic_headers_disagree", edit_lines("traffic_intervals.jsonl", lambda rows: rows[0].update(
         start_unix=rows[0]["start_unix"] + 1)), logs("traffic_headers_disagree")),
-    # Under v5 the realism section needs the generator's start to place the intervals.
+    # Under v5 the realism section needs the generator's start to place the intervals, and since package B16
+    # summarize names each header without a finite start_unix.
     ("traffic_headers_disagree:missing", steps(*(edit_lines(name, lambda rows: rows[0].pop("start_unix"))
                                                  for name in ("traffic_requests.jsonl", "traffic_intervals.jsonl"))),
-     under_v5(logs("traffic_headers_disagree"), logs("realism:unreadable:KeyError: 'start_unix'"))),
+     under_v5(logs("traffic_headers_disagree"), logs("realism:unreadable:KeyError: 'start_unix'",
+                                                    "traffic:intervals:start_unix_invalid",
+                                                    "traffic:requests:start_unix_invalid"))),
+    # Under v5 since package B16 the marker's wall time, 1 s after the start, no longer lies at start_unix + t_mono.
     ("traffic_phase_times_disagree", edit_lines("traffic_intervals.jsonl", lambda rows: next(
-        r for r in rows if r.get("type") == "phase").update(t_mono=-1.0)), logs("traffic_phase_times_disagree")),
+        r for r in rows if r.get("type") == "phase").update(t_mono=-1.0)),
+     under_v5(logs("traffic_phase_times_disagree"), logs("traffic:wall_clock:phase:intervals:measure"))),
     # The target: both kinds of traffic compare it with session.json (package B5b: v5 has no workers).
     ("traffic_config", steps(*(edit_lines(name, lambda rows: rows[0]["config"].update(target="http://another-lab"))
                                for name in ("traffic_requests.jsonl", "traffic_intervals.jsonl"))),
@@ -660,6 +666,23 @@ def _duplicate_last(r, i):
     r[-1]["records"] += 1  # Written by the generator: the end record counts it.
 
 
+def _later(stamp, seconds):
+    """The ISO-8601 time `stamp` (with its timezone) `seconds` later."""
+    return evidence.datetime.fromtimestamp(evidence.logs.unix(stamp) + seconds, evidence.timezone.utc).isoformat()
+
+
+def _stop_later(seconds):
+    """change of traffic_rows (package B16): the generator's stop `seconds` later, consistently, in both end records
+    (end_mono and end_utc) and in the last interval of the interval log (mono_end, duration_s and t_end_utc)."""
+    def change(r, i):
+        last = [x for x in i if x.get("type") == "interval"][-1]
+        last.update(mono_end=round(last["mono_end"] + seconds, 6), t_end_utc=_later(last["t_end_utc"], seconds))
+        last["duration_s"] = round(last["mono_end"] - last["mono_start"], 6)
+        for end in (r[-1], i[-1]):
+            end.update(end_mono=round(end["end_mono"] + seconds, 6), end_utc=_later(end["end_utc"], seconds))
+    return change
+
+
 def windows_after_user_sessions(d, p, result):
     """mutate (package B13, the lead's answer to Q73 point 1: the order share by the start of a user session): an empty
     event (naprazdno) of its own after each run of user sessions of the measure phase, planned in session.json and
@@ -711,6 +734,7 @@ RID_LAST = f"{sample.RUN}-01-{len(E.ESHOP[0]) - 1:08d}"  # The last request of e
 ARRIVALS = len(E.LEGACY) + len(E.ESHOP)  # Admitted user sessions of the clean session (as many in corp).
 U4, U_LAST = f"{sample.RUN}-u{len(E.LEGACY)}", f"{sample.RUN}-u{ARRIVALS - 1}"  # The first and last of the measure
 FIRST, EXTRA = f"{sample.RUN}-01-00000000", f"{sample.RUN}-01-00000001"  # phase; the first two requests of u4.
+U0 = f"{sample.RUN}-u0"  # The user session of build()'s first request: the first record after the request log's header.
 _V5_CASES = [
     # One realism requirement of proposal 5.7 broken at a time (scripts/traffic_log.py realism).
     ("traffic_realism:arrival_cv", traffic("eshop", spacings=(1.,) * (len(E.ESHOP) - 1)),
@@ -843,9 +867,27 @@ _V5_CASES = [
         user_sessions_completed=r[-1]["user_sessions_completed"] - 1)),
      logs("traffic:requests:end_user_sessions_mismatch")),
     # Package B15 (should_fix 1 of the fourth G0 verification): the order share reads the generator's stop from the
-    # request log's end record, so its end_mono must be the interval log's. Moved later, it would cut no buyer.
+    # request log's end record, so its end_mono must be the interval log's. Moved later, it would cut no buyer. Since
+    # package B16 its wall time no longer agrees with it (wall_clock) and the stop lies more than
+    # TRAFFIC_STOP_GRACE_S after the post marker (traffic_stop).
     ("traffic:end_mono_mismatch", traffic_rows(lambda r, i: r[-1].update(end_mono=r[-1]["end_mono"] + 1000)),
-     logs("traffic:requests:end_mono_mismatch")),
+     logs("traffic:requests:end_mono_mismatch", "traffic:wall_clock:end:requests", "traffic_stop")),
+    # Package B16 (should_fix 1 of the fifth G0 verification, Q82): start_unix 30 s later in both headers, which places
+    # the intervals of the offered load (realism) and nothing else. summarize binds every record's wall time to it
+    # plus the record's monotonic time (scripts/traffic_log.py WALL_CLOCK_TOLERANCE_S); the first record it misplaces,
+    # the arrival of build()'s first user session, names the refusal. Before B16 the log audit accepted it.
+    ("traffic:wall_clock", both_headers(lambda h: h.update(start_unix=h["start_unix"] + 30)),
+     logs(f"traffic:wall_clock:arrival:{U0}")),
+    # Package B16 (should_fix 2 of the fifth G0 verification): the stop 1000 s later in both end records (end_mono and
+    # end_utc) and in the last interval (mono_end, duration_s and t_end_utc), consistently, so that summarize finds
+    # nothing; the session audit refuses an end record more than TRAFFIC_STOP_GRACE_S of scripts/collection.py after
+    # the post marker. Before B16 the log audit accepted it, and the order share cut no buyer at that stop.
+    ("traffic_stop", traffic_rows(_stop_later(1000)), logs("traffic_stop")),
+    # Package B16 (should_fix 3 of the fifth G0 verification): the interval log's end_mono null; intervals_not_to_end
+    # reads it as a number first and names it (before B16 summarize raised TypeError: traffic:unreadable), and the two
+    # copies of end_mono differ (package B15).
+    ("traffic:intervals_not_to_end", traffic_rows(lambda r, i: i[-1].update(end_mono=None)),
+     logs("traffic:intervals_not_to_end:end_mono:None", "traffic:requests:end_mono_mismatch")),
     ("traffic:interval_sessions", traffic_rows(lambda r, i: _first_iv(i).update(admitted_sessions=0,
                                                                                  dropped_sessions=1)),
      logs("traffic:interval_sessions:2:admitted_sessions:0!=1", "traffic:interval_sessions:2:dropped_sessions:1!=0")),

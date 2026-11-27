@@ -612,7 +612,9 @@ def offered_load(intervals_path, times, interval_s):
     """The offered user sessions in the interval (t - interval_s, t] of every row time t (RULES load), as a list,
     or the reason why there is none (str). The summary intervals of traffic_intervals.jsonl (schema /2) lie at
     header start_unix + mono_start and + mono_end; each adds its offered_sessions times the share of its length
-    inside the row's interval, and the intervals must cover the row's interval."""
+    inside the row's interval, and the intervals must cover the row's interval. The log audit binds that start_unix:
+    it equals the request log's (scripts/collection_logs.py traffic_headers_disagree), to which since package B16
+    scripts/traffic_log.py summarize binds the wall time of every record (WALL_CLOCK_TOLERANCE_S)."""
     from scripts import traffic_log  # Here: features/ imports scripts/ only inside functions (features/dataset.py).
     path = Path(intervals_path)
     if not path.is_file():

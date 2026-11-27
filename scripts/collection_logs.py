@@ -16,7 +16,10 @@ session.json, a request with an intended client error passes outside the event w
 status (every other request still must be 2xx), the generator's exit code must be the one its request log implies,
 nginx and the services are correlated for every route of lab/nginx.conf with the internal calls of
 lab/services.py, and the section "realism" refuses a session that misses a realism requirement of proposal 5.7
-(traffic_realism:<name>) or whose offered load differs from the plan (proposal 5.3).
+(traffic_realism:<name>) or whose offered load differs from the plan (proposal 5.3). Since package B16 the request
+log's end record, the generator's stop, lies at the post marker or at most scripts/collection.py TRAFFIC_STOP_GRACE_S
+after it in the generator's monotonic time (traffic_stop), and summarize binds the records' wall times to the
+header's start_unix (scripts/traffic_log.py WALL_CLOCK_TOLERANCE_S).
 
 A session of role test_controls (package B8, design B8 section 1.4) keeps its controls in controls.json. The
 section "controls" reads only the three predicates the guest computed for each occurrence (baseline, effect,
@@ -468,6 +471,22 @@ def audit_logs(directory, *, snapshot_times=(), archived_raw=False):
         bounds = {m["phase"]: unix(m["t_utc"]) for m in summary["phase_markers"]}
         check(abs(bounds["measure"] - finite(end["measure_start_unix"])) <= 1 and
               abs(bounds["post"] - finite(end["measure_end_unix"])) <= 1, "traffic_measure_bounds")
+        if v5:
+            # Package B16 (should_fix 2 of the fifth G0 verification, Q82: the executor's decision, for the lead's
+            # review): the generator's stop from above. The order share leaves out the user sessions that start less
+            # than D_max before the request log's end record (scripts/traffic_log.py realism), so a stop moved later
+            # in both end records and the last interval would keep the buyers it cut. scripts/collection.py stops the
+            # generator right after the post marker within TRAFFIC_STOP_GRACE_S, and one that runs longer is killed
+            # without an end record: end_mono lies at the post marker's t_mono or at most that much after it, both
+            # in the generator's monotonic time. A request log without an end record or with an end_mono that is no
+            # number is refused by summarize already (requests:end_missing, requests:end_mono_mismatch).
+            from scripts.collection import TRAFFIC_STOP_GRACE_S  # Inside: scripts/collection.py imports this module.
+            post = next((m for m in summary["phase_markers"] if m["phase"] == "post"), None)
+            stop = (summary["end"]["requests"] or {}).get("end_mono")
+            if post is not None and type(stop) in (int, float) and math.isfinite(stop):
+                start = post["t_mono"]
+                check(type(start) in (int, float) and math.isfinite(start)
+                      and start <= stop <= start + TRAFFIC_STOP_GRACE_S, "traffic_stop")
         check(all(bounds["measure"] <= t <= bounds["post"] for t in snapshot_times), "traffic_snapshot_coverage")
         reqs = requests
         for row in reqs:
