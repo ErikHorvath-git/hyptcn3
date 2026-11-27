@@ -712,7 +712,9 @@ def pocet_testov():
     # Od balika B7c trva cela sada pod nice -n 19 dlhsie ako 900 s (2026-11-23 900 s nestacilo).
     # 3600 s je usudok s rezervou: po B13 trva sada okolo 2100 s a balik C4b ju predlzi (2400 s z balikov B9 a B10
     # 2026-11-26 nestacilo pri zatazi hostitela); zaseknutu sadu stale zastavi.
-    text = spusti([sys.executable, "-m", "pytest", "-q"], timeout=3600)
+    # 7200 s od Zapisu 1 po B15 (3cdba19, otazka Q86, 2026-11-27): test C4 (scripts/tests/test_order_share_c4.py) cita
+    # rate suboru protokolu, pri trojnasobnych rate trva sam 1959 s a cela sada s nim vyse 3600 s.
+    text = spusti([sys.executable, "-m", "pytest", "-q"], timeout=7200)
     zaver = [r for r in text.splitlines() if " passed" in r or " failed" in r]
     if not zaver:
         raise Chyba("z vystupu 'pytest -q' sa necita zaverecny riadok")
