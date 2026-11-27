@@ -1,0 +1,191 @@
+{
+ "schema": "hyptcn3/g2-load/1",
+ "stage": "skuska",
+ "commit": "6fe6ac97cdbddf985209f0eb4633fe64b2455c18",
+ "commit_dirty": true,
+ "date": "2026-11-27T10:01:14+00:00",
+ "host": "debian",
+ "guest": null,
+ "command": "python3 -I /home/eh/hyptcn3-logs/v5/dokazy/G2/zataz_suhrn.py /home/eh/hyptcn3-logs/v5/dokazy/G2/behy/zataz.jsonl data/results/zataz_H2_20261127T100111Z.json /home/eh/hyptcn3-logs/v5/dokazy/G2/behy/21-deploy-a /home/eh/hyptcn3-logs/v5/dokazy/G2/behy/21-deploy-b /home/eh/hyptcn3-logs/v5/dokazy/G2/behy/23-saturation-a-eshop /home/eh/hyptcn3-logs/v5/dokazy/G2/behy/24-saturation-b-eshop /home/eh/hyptcn3-logs/v5/dokazy/G2/behy/25-saturation-a-corp /home/eh/hyptcn3-logs/v5/dokazy/G2/behy/26-saturation-b-corp",
+ "n": 6,
+ "values": {
+  "rule": "the lead's answer to Q70: heavy is a process of his list: the whole suite (pytest without a named test file; check_claims.sh or check_prirucka.sh without --json-hlavicky, and gen_prirucka.py, run it), the whole self-test (scripts/audit_selftest.py), test_prijatie_session.py, C4 and training (tcn.suchy_beh outside a test's basetemp, safeguard ... train, tcn.train), a run on the other VM (lab_trial.py or collection.py run with another --vm); light is pytest of named test files and check E alone (check_claims.sh --json-hlavicky); own is the run's own lab_trial.py; shell is the shell of a tool call whose text names a listed process, which is listed apart; unknown is a pytest line the sampler cut before its files",
+  "sampler": {
+   "script": "/home/eh/hyptcn3-logs/v5/dokazy/G2/zataz.sh",
+   "script_sha256": "57dfc5f7988ebeee385fca09ee8e056baaf0b304a76a6ff3663dce14c97ed5ac",
+   "file": "/home/eh/hyptcn3-logs/v5/dokazy/G2/behy/zataz.jsonl",
+   "file_sha256": "3a32a44c1e1502e479906fb4b14ccec0e95b32e90fbf7b405aba1d52da0ceb75",
+   "samples": 42037,
+   "first": "2026-11-24T23:11:25Z",
+   "last": "2026-11-27T10:01:08Z",
+   "interval_s": 5,
+   "cut": 300
+  },
+  "summarizer_sha256": "e18214249d27d8674ada2baac216b6dcbfabe2b237541b67b7eac03cc8564a31",
+  "runs": [
+   {
+    "run": "21-deploy-a",
+    "step": "deploy",
+    "vm": "a",
+    "profile": null,
+    "window": [
+     "2026-11-27T06:09:09Z",
+     "2026-11-27T06:09:23Z"
+    ],
+    "samples": 3,
+    "largest_gap_s": 5.0,
+    "loadavg_1m": {
+     "max": 0.47,
+     "mean": 0.42
+    },
+    "verdict": "quiet",
+    "unknown": 0,
+    "processes": [
+     {
+      "command": "/home/eh/projects/hyptcn3/.venv/bin/python -B scripts/lab_trial.py deploy --protocol /home/eh/hyptcn3-logs/v5/dokazy/G2/behy/21-protokol-rate-null.json --vm a --out /home/eh/hyptcn3-logs/v5/dokazy/G2/behy/21-deploy-a",
+      "class": "own",
+      "samples": 3,
+      "first": "2026-11-27T06:09:10Z",
+      "last": "2026-11-27T06:09:20Z"
+     }
+    ]
+   },
+   {
+    "run": "21-deploy-b",
+    "step": "deploy",
+    "vm": "b",
+    "profile": null,
+    "window": [
+     "2026-11-27T06:09:23Z",
+     "2026-11-27T06:09:40Z"
+    ],
+    "samples": 4,
+    "largest_gap_s": 5.0,
+    "loadavg_1m": {
+     "max": 0.99,
+     "mean": 0.758
+    },
+    "verdict": "quiet",
+    "unknown": 0,
+    "processes": [
+     {
+      "command": "/home/eh/projects/hyptcn3/.venv/bin/python -B scripts/lab_trial.py deploy --protocol /home/eh/hyptcn3-logs/v5/dokazy/G2/behy/21-protokol-rate-null.json --vm b --out /home/eh/hyptcn3-logs/v5/dokazy/G2/behy/21-deploy-b",
+      "class": "own",
+      "samples": 3,
+      "first": "2026-11-27T06:09:25Z",
+      "last": "2026-11-27T06:09:35Z"
+     }
+    ]
+   },
+   {
+    "run": "23-saturation-a-eshop",
+    "step": "saturation",
+    "vm": "a",
+    "profile": "eshop",
+    "window": [
+     "2026-11-27T07:05:39Z",
+     "2026-11-27T07:57:27Z"
+    ],
+    "samples": 615,
+    "largest_gap_s": 6.0,
+    "loadavg_1m": {
+     "max": 5.08,
+     "mean": 2.473
+    },
+    "verdict": "quiet",
+    "unknown": 0,
+    "processes": [
+     {
+      "command": "/home/eh/projects/hyptcn3/.venv/bin/python -B scripts/lab_trial.py saturation --protocol /home/eh/hyptcn3-logs/v5/dokazy/G2/behy/21-protokol-rate-null.json --vm a --profile eshop --scenario eshop_high --rates 32,64,128,256 --out /home/eh/hyptcn3-logs/v5/dokazy/G2/behy/23-saturation-a-eshop",
+      "class": "own",
+      "samples": 615,
+      "first": "2026-11-27T07:05:42Z",
+      "last": "2026-11-27T07:57:24Z"
+     }
+    ]
+   },
+   {
+    "run": "24-saturation-b-eshop",
+    "step": "saturation",
+    "vm": "b",
+    "profile": "eshop",
+    "window": [
+     "2026-11-27T07:58:14Z",
+     "2026-11-27T08:32:55Z"
+    ],
+    "samples": 412,
+    "largest_gap_s": 6.0,
+    "loadavg_1m": {
+     "max": 6.26,
+     "mean": 2.867
+    },
+    "verdict": "quiet",
+    "unknown": 0,
+    "processes": [
+     {
+      "command": "/home/eh/projects/hyptcn3/.venv/bin/python -B scripts/lab_trial.py saturation --protocol /home/eh/hyptcn3-logs/v5/dokazy/G2/behy/21-protokol-rate-null.json --vm b --profile eshop --scenario eshop_high --rates 32,64,128,256 --out /home/eh/hyptcn3-logs/v5/dokazy/G2/behy/24-saturation-b-eshop",
+      "class": "own",
+      "samples": 412,
+      "first": "2026-11-27T07:58:19Z",
+      "last": "2026-11-27T08:32:54Z"
+     }
+    ]
+   },
+   {
+    "run": "25-saturation-a-corp",
+    "step": "saturation",
+    "vm": "a",
+    "profile": "corp",
+    "window": [
+     "2026-11-27T08:34:37Z",
+     "2026-11-27T09:17:16Z"
+    ],
+    "samples": 508,
+    "largest_gap_s": 6.0,
+    "loadavg_1m": {
+     "max": 3.08,
+     "mean": 1.478
+    },
+    "verdict": "quiet",
+    "unknown": 0,
+    "processes": [
+     {
+      "command": "/home/eh/projects/hyptcn3/.venv/bin/python -B scripts/lab_trial.py saturation --protocol /home/eh/hyptcn3-logs/v5/dokazy/G2/behy/21-protokol-rate-null.json --vm a --profile corp --scenario corp_high --rates 16,32,64,128,256 --out /home/eh/hyptcn3-logs/v5/dokazy/G2/behy/25-saturation-a-corp",
+      "class": "own",
+      "samples": 508,
+      "first": "2026-11-27T08:34:40Z",
+      "last": "2026-11-27T09:17:14Z"
+     }
+    ]
+   },
+   {
+    "run": "26-saturation-b-corp",
+    "step": "saturation",
+    "vm": "b",
+    "profile": "corp",
+    "window": [
+     "2026-11-27T09:17:44Z",
+     "2026-11-27T10:00:26Z"
+    ],
+    "samples": 509,
+    "largest_gap_s": 6.0,
+    "loadavg_1m": {
+     "max": 3.49,
+     "mean": 1.7
+    },
+    "verdict": "quiet",
+    "unknown": 0,
+    "processes": [
+     {
+      "command": "/home/eh/projects/hyptcn3/.venv/bin/python -B scripts/lab_trial.py saturation --protocol /home/eh/hyptcn3-logs/v5/dokazy/G2/behy/21-protokol-rate-null.json --vm b --profile corp --scenario corp_high --rates 16,32,64,128,256 --out /home/eh/hyptcn3-logs/v5/dokazy/G2/behy/26-saturation-b-corp",
+      "class": "own",
+      "samples": 509,
+      "first": "2026-11-27T09:17:45Z",
+      "last": "2026-11-27T10:00:23Z"
+     }
+    ]
+   }
+  ]
+ },
+ "note": "The host's load beside the runs of H2, for the lead's check of Q70; not a measurement of a guest."
+}

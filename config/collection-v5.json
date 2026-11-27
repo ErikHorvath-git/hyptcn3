@@ -67,22 +67,22 @@
     "eshop_low": {
       "profile": "eshop",
       "intensity": "low",
-      "rate": 11.4165
+      "rate": 35.2131
     },
     "eshop_high": {
       "profile": "eshop",
       "intensity": "high",
-      "rate": 30.444
+      "rate": 93.9016
     },
     "corp_low": {
       "profile": "corp",
       "intensity": "low",
-      "rate": 6.2247
+      "rate": 7.4025
     },
     "corp_high": {
       "profile": "corp",
       "intensity": "high",
-      "rate": 16.5992
+      "rate": 19.74
     }
   },
   "scenario_rule": {
@@ -119,7 +119,7 @@
         "step_s": 30,
         "note": "The envelope of the open loop (proposal 5.3, skeleton B5 section 2; scripts/host_traffic.py draw_envelope), drawn from the session's traffic seed over [0, dur]: a linear ramp from level 0 over [0, ramp_s], inside the warmup; one slow wave mean * (1 - amplitude * cos(2 pi (t - start) / period)) with the period in wave_period_s (20 to 40 minutes, skeleton section 2), the mean in wave_mean, the amplitude in wave_amplitude and the start of a cycle in [warmup, warmup + period); one short peak of level 1 lasting peak_s (2 to 4 minutes, skeleton section 2), a trapezoid whose two flanks take peak_edge_share of it each, inside [warmup, dur]. An envelope whose peak-to-mean over [warmup, dur] is below scenario_rule.min_peak_to_mean is drawn again. The envelope is piecewise linear with knots every step_s. ramp_s 120 is warmup_s; wave_mean, wave_amplitude, peak_edge_share and step_s are the author's judgment. peak_at uniform: the peak lies anywhere in [warmup, dur] (a sale)."
       },
-      "max_concurrent": 7307,
+      "max_concurrent": 22537,
       "client_errors": {
         "share": 0.02,
         "statuses": [
@@ -183,7 +183,7 @@
         "step_s": 30,
         "note": "The envelope of the open loop (proposal 5.3, skeleton B5 section 2; scripts/host_traffic.py draw_envelope), drawn from the session's traffic seed over [0, dur]: a linear ramp from level 0 over [0, ramp_s], inside the warmup; one slow wave mean * (1 - amplitude * cos(2 pi (t - start) / period)) with the period in wave_period_s (20 to 40 minutes, skeleton section 2), the mean in wave_mean, the amplitude in wave_amplitude and the start of a cycle in [warmup, warmup + period); one short peak of level 1 lasting peak_s (2 to 4 minutes, skeleton section 2), a trapezoid whose two flanks take peak_edge_share of it each, inside [warmup, dur]. An envelope whose peak-to-mean over [warmup, dur] is below scenario_rule.min_peak_to_mean is drawn again. The envelope is piecewise linear with knots every step_s. ramp_s 120 is warmup_s; wave_mean, wave_amplitude, peak_edge_share and step_s are the author's judgment. peak_at wave_start: the peak begins where a cycle of the slow wave begins (its lowest level), the login wave at the beginning of the slow wave (skeleton section 2): every corp user session begins with a login."
       },
-      "max_concurrent": 3984,
+      "max_concurrent": 4738,
       "client_errors": {
         "share": 0.02,
         "statuses": [
