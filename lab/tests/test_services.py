@@ -642,6 +642,16 @@ def test_every_http_service_listens_with_the_backlog_of_package_b15(monkeypatch)
     assert s.LISTEN_BACKLOG == 2048
 
 
+def test_journald_keeps_every_request_line_of_the_lab_units_of_package_b17():
+    """Package B17 (Q85): the lab's units raise journald's rate limit far above their lines, one per handled request
+    (log_request). journald's default of 10000 lines per 30 s dropped 8348 lines of the catalog at the arrival peak of
+    long run 27 of G2 (eshop_high), and the log audit refuses a session whose journal lost lines."""
+    service = (LAB / "hyptcn-lab@.service").read_text().split("[Service]", 1)[1].split("[Install]", 1)[0]
+    settings = dict(re.findall(r"^(LogRateLimit\w+)=(\S+)$", service, re.M))
+    assert settings == {"LogRateLimitIntervalSec": "30s", "LogRateLimitBurst": "1000000"}
+    assert int(settings["LogRateLimitBurst"]) / 30 > 10 * 650  # The catalog at the eshop saturation boundary: ~650/s.
+
+
 class Holding:
     """The next n product statements of `connections` wait inside their transactions, each holding its connection,
     until release() lets one go on; release_all() lets every one go on, also the later ones."""

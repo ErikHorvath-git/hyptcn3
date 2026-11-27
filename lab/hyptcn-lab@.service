@@ -22,6 +22,14 @@ ProtectSystem=strict
 ProtectHome=true
 # Documents, reports and the report spool (lab/services.py DATA); lab/install.sh creates the directory.
 ReadWritePaths=/var/lib/hyptcn-lab
+# Package B17 (Q85, the executor without the lead, for the lead's review): journald keeps every line of these units.
+# lab/services.py writes one journald line per handled request, and the log audit refuses a session whose journal
+# lost lines (scripts/collection_logs.py, journal_error_or_loss). journald's default limit of 10000 lines per 30 s
+# and unit (journald.conf RateLimitBurst, RateLimitIntervalSec) dropped 8348 lines of the catalog at the arrival peak
+# of long run 27 of G2 (eshop_high, ~410 lines/s). 1000000 per 30 s is far above the ~650 lines/s of the catalog at
+# the eshop saturation boundary. Not 0: systemd may take 0 for unset and leave journald's default limit.
+LogRateLimitIntervalSec=30s
+LogRateLimitBurst=1000000
 
 [Install]
 WantedBy=multi-user.target
