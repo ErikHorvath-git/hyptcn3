@@ -1,20 +1,29 @@
 """Package B18 (Q87, decision 2 of B18): the readers that read the traffic logs and the guest segments as streams give
 exactly the results of the code before B18 (scripts/tests/traffic_log_pred_b18.py, frozen at df3cee5).
 
-Each test runs the new function and the frozen one on the same logs and compares their results as JSON text (the same
-keys in the same order, the same problems with their details, the same numbers of the same types) or, where the frozen
-one raises, the type and the text of the exception: on the fixtures of scripts/tests/test_traffic_log.py,
-test_traffic_realism.py and test_collection_logs.py, on the session of every case of the audit self-test
-(scripts/tests/audit_cases.py, under the small protocol of test_audit_selftest.py), and on random breaks of the logs of
-synthetic sessions (types, missing keys, repeated, moved and removed records, lines that are no JSON, a cut end,
-segment lines that are no UTF-8 or carry other line ends). And the request log is read as a stream: no reader reads it
-whole, and the compact index of the session audit holds no record. Synthetic sessions only; no measurement.
+Each test runs the new function and the frozen one on the same logs and compares their results with their types (the
+same keys of the same types in the same order, a tuple apart from a list, the same problems with their details, the
+same numbers of the same types and reprs) or, where the frozen one raises, the type and the text of the exception: on
+the fixtures of scripts/tests/test_traffic_log.py, test_traffic_realism.py and test_collection_logs.py, on the session
+of every case of the audit self-test (scripts/tests/audit_cases.py, under the small protocol of test_audit_selftest.py),
+and on random breaks of the logs of synthetic sessions (types, missing keys, repeated, moved and removed records, lines
+that are no JSON, a cut end, segment lines that are no UTF-8 or carry other line ends). And the request log is read as
+a stream: no reader reads it through read_jsonl, Path.read_bytes or Path.read_text, or through read() without a size or
+readlines() of a file of it that open, io.open or Path.open opened; and the compact index of the session audit holds
+no record. Synthetic sessions only; no measurement.
+
+Q88 (should_fix 2 of the sixth G0 verification; the executor's decision, for the lead's review): the comparison was the
+JSON text of the results, which cannot tell a tuple from a list or an int key from its string, and the refusal covered
+read_jsonl, Path.read_bytes and Path.read_text only.
 """
+import builtins
 import copy
 import gzip
 import hashlib
+import io
 import json
 import math
+import os
 from pathlib import Path
 import random
 import shutil
@@ -31,10 +40,27 @@ from scripts.tests import traffic_log_pred_b18 as before
 TIMES = [evidence.BASE + 1.1, evidence.BASE + 2.5]
 
 
+def typed(value):
+    """value as nested tuples that keep what JSON text loses (Q88): the type of every value and key, the order of the
+    keys, a tuple apart from a list, an int key apart from its string, and the repr of each float (-0.0 apart from 0.0,
+    NaN equal to NaN). Any other object is its type and repr."""
+    if isinstance(value, dict):
+        return type(value).__name__, tuple((typed(key), typed(item)) for key, item in value.items())
+    if isinstance(value, (list, tuple)):
+        return type(value).__name__, tuple(typed(item) for item in value)
+    if isinstance(value, (set, frozenset)):
+        return type(value).__name__, tuple(sorted(repr(typed(item)) for item in value))
+    if isinstance(value, float):
+        return "float", repr(value)
+    if value is None or isinstance(value, (bool, int, str, bytes)):
+        return type(value).__name__, value
+    return type(value).__name__, repr(value)
+
+
 def outcome(function, *args, **kwargs):
-    """("ok", the result as JSON text) or ("raise", "<type>: <text>") of a call."""
+    """("ok", the result in its typed form) or ("raise", "<type>: <text>") of a call."""
     try:
-        return "ok", json.dumps(function(*args, **kwargs), allow_nan=True, default=repr)
+        return "ok", typed(function(*args, **kwargs))
     except Exception as error:  # noqa: BLE001 - an exception is a result to compare
         return "raise", f"{type(error).__name__}: {error}"
 
@@ -300,7 +326,7 @@ def test_the_session_audit_of_the_clean_session_of_the_self_test(tmp_path, small
         audit = bs.audit(session, p, output=tmp_path / f"audit{len(found)}.json")
         values = {k: v for k, v in audit.values.items()
                   if k not in ("auditor_sha256", "features", "features_sha256", "extractor_sha256")}
-        found.append((audit.code, json.dumps(values)))
+        found.append((audit.code, typed(values)))
     assert found[0] == found[1] and found[0][0] == 0
 
 
@@ -444,9 +470,11 @@ def test_the_manifest_counts_lines_as_before(tmp_path, monkeypatch):
 # The request log is read as a stream.
 
 def test_no_reader_reads_the_request_log_whole(tmp_path, p, monkeypatch):
-    """read_jsonl, Path.read_bytes and Path.read_text of the request log refused: summarize, realism, the log audit,
-    the readers of scripts/lab_trial.py and scripts/campaign_report.py still give their results; and the compact index
-    of the log audit holds no record."""
+    """read_jsonl, Path.read_bytes and Path.read_text of the request log refused, and so are read() without a size and
+    readlines() of a file of it that open, io.open or Path.open opened (Q88; reading it by lines or in pieces is
+    allowed): summarize, realism, the log audit, the readers of scripts/lab_trial.py and scripts/campaign_report.py
+    still give their results, and each of them opened the request log through the guard; and the compact index of the
+    log audit holds no record."""
     d = ttr.session(tmp_path, p, "steady", event=True)
     found = windows(d)
     expected = {"summarize": tl.summarize(d / "traffic_requests.jsonl", d / "traffic_intervals.jsonl"),
@@ -466,13 +494,56 @@ def test_no_reader_reads_the_request_log_whole(tmp_path, p, monkeypatch):
     monkeypatch.setattr(Path, "read_text", refuse(Path.read_text))
     monkeypatch.setattr(tl, "read_jsonl", lambda path, schema=None: (
         pytest.fail("read_jsonl of the request log") if Path(path).resolve() == request_log else real(path, schema)))
-    assert tl.summarize(d / "traffic_requests.jsonl", d / "traffic_intervals.jsonl") == expected["summarize"]
-    assert tl.realism(d / "traffic_requests.jsonl", d / "traffic_intervals.jsonl", p, "steady",
-                      windows=found) == expected["realism"]
-    assert logs.audit_logs(d, snapshot_times=TIMES) == expected["audit"]
-    assert lab_trial.analysis(d, p, "steady", found) == expected["analysis"]
-    assert lab_trial.peak_of(d) == expected["peak"]
-    assert campaign_report.load_traffic(d, d.name, found, []) == expected["load"]
+
+    class Stream:
+        """A file of the request log that may be read by lines or in pieces only."""
+
+        def __init__(self, stream):
+            self._stream = stream
+
+        def read(self, size=-1, /):
+            if size is None or size < 0:
+                pytest.fail("the request log read whole (read)")
+            return self._stream.read(size)
+
+        def readlines(self, hint=-1, /):
+            pytest.fail("the request log read whole (readlines)")
+
+        def __iter__(self):
+            return iter(self._stream)
+
+        def __next__(self):
+            return next(self._stream)
+
+        def __enter__(self):
+            self._stream.__enter__()
+            return self
+
+        def __exit__(self, *exc):
+            return self._stream.__exit__(*exc)
+
+        def __getattr__(self, name):
+            return getattr(self._stream, name)
+    real_open, opened = io.open, []
+
+    def guarded_open(file, *args, **kwargs):
+        stream = real_open(file, *args, **kwargs)
+        if isinstance(file, (str, bytes, os.PathLike)) and Path(os.fsdecode(file)).resolve() == request_log:
+            opened.append(file)
+            return Stream(stream)
+        return stream
+    monkeypatch.setattr(builtins, "open", guarded_open)
+    monkeypatch.setattr(io, "open", guarded_open)
+    readers = {"summarize": lambda: tl.summarize(d / "traffic_requests.jsonl", d / "traffic_intervals.jsonl"),
+               "realism": lambda: tl.realism(d / "traffic_requests.jsonl", d / "traffic_intervals.jsonl", p, "steady",
+                                             windows=found),
+               "audit": lambda: logs.audit_logs(d, snapshot_times=TIMES),
+               "analysis": lambda: lab_trial.analysis(d, p, "steady", found), "peak": lambda: lab_trial.peak_of(d),
+               "load": lambda: campaign_report.load_traffic(d, d.name, found, [])}
+    for name, read in readers.items():
+        count = len(opened)
+        assert read() == expected[name], name
+        assert len(opened) > count, f"{name} did not open the request log through the guard"
     index = logs.RequestIndex(d / "traffic_requests.jsonl")
     assert len(index) == expected["summarize"]["records"]["request_records"]
     assert set(index.columns) == set(logs.RequestIndex.OBJECT_FIELDS + logs.RequestIndex.NUMBER_FIELDS
