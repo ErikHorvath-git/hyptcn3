@@ -72,10 +72,10 @@ TIME_EPS = 1e-6
 # most by which a wall time of a /2 log pair may differ from the start_unix of the request log's header plus the
 # record's own monotonic time; summarize refuses a pair with a record beyond it (wall_clock). The rule: 1 s is the
 # bound of the log audit's traffic_measure_bounds (scripts/collection_logs.py: the phase markers against end.json).
-# Honest logs differ by less than 2 ms (the arrivals of the 74 log pairs of the H2 runs of G2: -0.0019 to +1.5068 ms),
-# and CLOCK_MONOTONIC follows NTP's slew, so only a step of the wall clock moves the difference. realism places the
-# event windows by the records' wall times and the intervals of the offered load by start_unix plus their monotonic
-# time (features/qualification.py offered_load as well); bound to each other, either may place them.
+# Honest logs differ by at most 5.064 ms (every bound field of the 103 log pairs of the H2 runs of G2, deviation row
+# 18): scripts/host_traffic.py reads the two clocks in two calls, so a thread switch under load moves the difference,
+# as a step of the wall clock does. realism places the event windows by the records' wall times and the offered load's
+# intervals by start_unix plus their monotonic time (features/qualification.py as well); bound, either may place them.
 WALL_CLOCK_TOLERANCE_S = 1.0
 # Package B16: the (wall time, monotonic time) fields of each kind of record that summarize binds by
 # WALL_CLOCK_TOLERANCE_S, in both logs of a /2 pair (the phase markers and the end record are in both).
