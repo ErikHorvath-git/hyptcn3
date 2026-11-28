@@ -635,11 +635,69 @@ def served(monkeypatch, service, scenario):
 
 def test_every_http_service_listens_with_the_backlog_of_package_b15(monkeypatch):
     """Package B15 (Q80): the server of every HTTP service listens with LISTEN_BACKLOG queued connections, not the 5 of
-    Python's socketserver, which overflowed in long run 17 of G2 at eshop_high (the catalog's port 8081)."""
+    Python's socketserver, which overflowed in long run 17 of G2 at eshop_high (the catalog's port 8081). Package B19
+    (Q91) raised it from 2048 to 16384: 987.6 requests a second at the measured throughput x the client's 10 s."""
     for service, port in (("catalog", 8081), ("auth", 8082), ("orders", 8083), ("docs", 8084)):
         s, _ = served(monkeypatch, service, lambda s, connections: None)
         assert s.listened == (("127.0.0.1", port), s.LISTEN_BACKLOG)
-    assert s.LISTEN_BACKLOG == 2048
+    assert s.LISTEN_BACKLOG == 16384
+
+
+def test_nginx_listens_with_the_backlog_of_the_services_of_package_b19(monkeypatch):
+    """Package B19 (Q91): nginx, which every request passes, listens with the services' LISTEN_BACKLOG, not nginx's
+    default of 511, which overflowed with the services' 2048 at a pause of the guest of about 1 s (long run 35 of G2:
+    TcpExtListenOverflows 1974 on VM a, the generator's connections reset by passt after 10 s)."""
+    s = load_services(monkeypatch)
+    listens = re.findall(r"^\s*listen\s+([^;]+);", (LAB / "nginx.conf").read_text(), re.M)
+    assert listens == [f"8080 backlog={s.LISTEN_BACKLOG}"]
+
+
+def test_the_guest_kernel_queues_follow_the_backlog_of_package_b19(monkeypatch):
+    """Package B19: lab/hyptcn-lab-sysctl.conf raises net.core.somaxconn, which caps every listen backlog, and the
+    queue of half-open connections to LISTEN_BACKLOG, and sets nothing else."""
+    s = load_services(monkeypatch)
+    lines = [line.split("#", 1)[0].strip() for line in (LAB / "hyptcn-lab-sysctl.conf").read_text().splitlines()]
+    settings = dict((key.strip(), value.strip()) for key, value in (line.split("=", 1) for line in lines if line))
+    backlog = str(s.LISTEN_BACKLOG)
+    assert settings == {"net.core.somaxconn": backlog, "net.ipv4.tcp_max_syn_backlog": backlog}
+
+
+@pytest.mark.parametrize("somaxconn, synbacklog, code", [
+    ("16384", "16384", 0), ("4096", "16384", 1), ("16384", "4096", 1),
+], ids=["applied", "somaxconn_not_applied", "syn_backlog_not_applied"])
+def test_the_deployment_applies_the_kernel_queues_before_the_units_listen_and_ends_unless_sysctl_shows_them(
+        tmp_path, monkeypatch, somaxconn, synbacklog, code):
+    """lab/install.sh (package B19): the deployed file linked into /etc/sysctl.d/ (the guest manifest covers it),
+    applied before the lab's units restart and nginx reloads, and checked against LISTEN_BACKLOG; the block runs here
+    in bash with ln and sysctl as shell functions that only record, so nothing on this host is touched."""
+    s = load_services(monkeypatch)
+    script = (LAB / "install.sh").read_text().splitlines()
+    link = "ln -sfn /opt/hyptcn-lab/hyptcn-lab-sysctl.conf /etc/sysctl.d/90-hyptcn-lab.conf"
+    first = script.index(link)
+    last = next(i for i in range(first, len(script)) if script[i] == "fi")
+    units = "systemctl restart hyptcn-lab@auth hyptcn-lab@catalog hyptcn-lab@orders hyptcn-lab@docs hyptcn-lab@worker"
+    assert first < script.index(units) < script.index("systemctl reload nginx")
+    # The block runs no command but the faked ones and shell builtins (a new command there must be faked first).
+    assert {line.split()[0] for line in script[first:last + 1]} == {
+        "ln", "sysctl", "somaxconn=$(sysctl", "synbacklog=$(sysctl", "if", "echo", '"(lab/hyptcn-lab-sysctl.conf)"',
+        "exit", "fi"}
+    check = next(line for line in script[first:last + 1] if line.startswith("if "))
+    assert check.count(f" != {s.LISTEN_BACKLOG} ]") == 2
+    fakes = ('ln() { echo "ln $*" >> "$CALLS"; }\n'
+             'sysctl() { echo "sysctl $*" >> "$CALLS"; case "$*" in *somaxconn*) echo "$SOMAXCONN";; '
+             '*tcp_max_syn_backlog*) echo "$SYNBACKLOG";; esac; }\n')
+    calls = tmp_path / "calls"
+    block = "set -euo pipefail\n" + fakes + "\n".join(script[first:last + 1]) + "\necho done >> \"$CALLS\"\n"
+    reply = subprocess.run(["bash", "-c", block], capture_output=True, text=True, timeout=30,
+                           env={"PATH": "/usr/bin:/bin", "CALLS": str(calls), "SOMAXCONN": somaxconn,
+                                "SYNBACKLOG": synbacklog})
+    error = "" if code == 0 else (f"the guest runs with net.core.somaxconn {somaxconn} and "
+                                  f"net.ipv4.tcp_max_syn_backlog {synbacklog}, not {s.LISTEN_BACKLOG} "
+                                  "(lab/hyptcn-lab-sysctl.conf)\n")
+    assert (reply.returncode, reply.stderr) == (code, error)
+    assert calls.read_text().splitlines() == [
+        link, "sysctl -q -p /etc/sysctl.d/90-hyptcn-lab.conf", "sysctl -n net.core.somaxconn",
+        "sysctl -n net.ipv4.tcp_max_syn_backlog", *(["done"] if code == 0 else [])]
 
 
 def test_journald_keeps_every_request_line_of_the_lab_units_of_package_b17():

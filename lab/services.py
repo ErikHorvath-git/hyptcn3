@@ -40,12 +40,12 @@ POOL = None  # The Pool of the service's process (main).
 DATABASE_TIMEOUT_S = 3
 STATEMENT_TIMEOUT = f"SET LOCAL statement_timeout = '{DATABASE_TIMEOUT_S}s'"
 POOL_SIZE, WORKER_POOL_SIZE = 12, 1  # The connections of a service's process, and of the worker's.
-# The listen backlog of every service's server (package B15, Q80, the executor's decision without the lead): what the
-# busiest service gets in the generator's client timeout at its peak, 189 requests in a second (the catalog, long run 17
-# of G2) x 10 s (scripts/host_traffic.py TIMEOUT_S), rounded up to a power of two; the guests' somaxconn is 4096.
-# Python's socketserver default of 5 overflowed in runs 17 and 18: nginx connected only after 1 s, then timed out or
-# got a reset.
-LISTEN_BACKLOG = 2048
+# The listen backlog of every service's server and of nginx (packages B15 and B19, Q80 and Q91, the executor's decisions
+# without the lead): what the lab gets in the generator's client timeout at its peak, 987.6 requests a second at the
+# measured throughput of 128 sessions/s (series 39 of G2) x 10 s (scripts/host_traffic.py TIMEOUT_S), rounded up to a
+# power of two; lab/hyptcn-lab-sysctl.conf raises the guests' somaxconn to it. B15's 2048 (189 x 10 s, run 17) and
+# nginx's 511 overflowed at a pause of the guest of about 1 s (long run 35: TcpExtListenOverflows 1974 on VM a).
+LISTEN_BACKLOG = 16384
 # Journal line of a worker round that failed on a statement timeout; scripts/collection_logs.py
 # admits it only inside an event window, like a traceback. A failed report stage prints the same prefix.
 WORKER_ERROR = "worker dependency error: "

@@ -33,7 +33,7 @@
     {"name": "log segment reopen wait", "source": "lab/guest_state.py:155", "kind": "loop",
      "period_s": 0.1, "random_s": 0, "bounded": "15 s deadline", "creates_processes": false, "active": true,
      "note": "Only between sessions (segment), until nginx has reopened its logs."},
-    {"name": "deployment health wait", "source": "lab/install.sh:77", "kind": "loop",
+    {"name": "deployment health wait", "source": "lab/install.sh:89", "kind": "loop",
      "period_s": 1.0, "random_s": 0, "bounded": "30 tries", "creates_processes": true, "active": true,
      "note": "Only at deployment: two curl processes per try."},
     {"name": "PostgreSQL autovacuum launcher", "source": "lab/hyptcn-lab-postgresql.conf:13", "kind": "system",

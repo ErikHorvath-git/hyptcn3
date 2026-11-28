@@ -23,6 +23,18 @@ if [ "$naptime" != 67s ] || [ "$autovacuum" != on ]; then
          "(lab/hyptcn-lab-postgresql.conf)" >&2
     exit 1
 fi
+# The connection queues of package B19 (Q91): the kernel caps every listen backlog at net.core.somaxconn, so the
+# deployed file raises it, and the queue of half-open connections, before the lab's units and nginx listen again; a
+# guest without both values ends the deployment.
+ln -sfn /opt/hyptcn-lab/hyptcn-lab-sysctl.conf /etc/sysctl.d/90-hyptcn-lab.conf
+sysctl -q -p /etc/sysctl.d/90-hyptcn-lab.conf
+somaxconn=$(sysctl -n net.core.somaxconn)
+synbacklog=$(sysctl -n net.ipv4.tcp_max_syn_backlog)
+if [ "$somaxconn" != 16384 ] || [ "$synbacklog" != 16384 ]; then
+    echo "the guest runs with net.core.somaxconn $somaxconn and net.ipv4.tcp_max_syn_backlog $synbacklog, not 16384" \
+         "(lab/hyptcn-lab-sysctl.conf)" >&2
+    exit 1
+fi
 if ! runuser -u postgres -- psql -tAc "SELECT 1 FROM pg_roles WHERE rolname='hyptcnlab'" | grep -qx 1; then
     runuser -u postgres -- createuser hyptcnlab
 fi
