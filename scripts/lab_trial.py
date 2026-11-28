@@ -885,7 +885,9 @@ def saturation_problems(r):
     if judged and sat["failure"] is None and not r["error"]:
         out.append(f"every step served its peak: the throughput lies above the highest rate {judged[-1]['rate']:g}; "
                    "the proposed rates are lower bounds")
-    if sat["ratio"] is not None and sat["ratio"] >= STEP_RATIO_MAX:
+    # The exact ratio, the bisection's own test: the record's ratio, rounded to 6 decimals, reaches 1.15 for a bracket
+    # just below it (the H2 control series 32 of G2, 2026-11-28: 117.377 / 102.067 = 1.1499995).
+    if sat["ratio"] is not None and sat["bracket"][1] / sat["bracket"][0] >= STEP_RATIO_MAX:
         out.append(f"the bracket [{sat['bracket'][0]:g}, {sat['bracket'][1]:g}] is still {sat['ratio']:g} wide, not "
                    f"below {STEP_RATIO_MAX:g}" + (f" ({r['bisection_stop']})" if r.get("bisection_stop") else ""))
     for s in r["steps"]:

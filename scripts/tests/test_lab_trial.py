@@ -437,7 +437,10 @@ def test_saturation_runs_its_rates_in_order_then_bisects_the_bracket_on_a_copy_w
         "the bracket [0.001, 0.002] is still 2 wide, not below 1.15 (no rate of 3 decimals lies between 0.001 and "
         "0.002)"]),
     (["served", "failed", "served"], "2,2.3", 0, []),  # 2.3 / 2 = 1.15 is not below it: one midpoint, 2.145.
-], ids=["fail_first", "all_served", "dropped", "no_peak", "bracket_wide", "no_midpoint", "ratio_at_bound"])
+    # 117.377 / 102.067 = 1.1499995 is below it, though the record's ratio rounds to 1.15: no midpoint, no problem.
+    (["served", "failed"], "102.067,117.377", 0, []),
+], ids=["fail_first", "all_served", "dropped", "no_peak", "bracket_wide", "no_midpoint", "ratio_at_bound",
+        "ratio_rounds_to_bound"])
 def test_a_series_that_cannot_bracket_or_bisect_names_why(env, outcomes, rates, code, problems):
     """The lowest rate failing leaves nothing to bisect, every step served is a lower bound, an invalid step (a drop,
     no peak) ends the series with its error, and a bracket still 1.15 wide or more at the end is a problem."""
