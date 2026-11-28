@@ -1,0 +1,63 @@
+{
+ "schema": "hyptcn3/gate-record/1",
+ "date": "2026-11-28T01:43:14+00:00",
+ "commit": "a26f5d1b06dc2e8180e213b3cf8867e8a160d80d",
+ "host": "debian",
+ "guest": "pozri dokazy jednotlivych kriterii",
+ "command": "bash data/results/g0_20261127T203037Z/g0_dokazy.sh (on a26f5d1); criteria and verification from dokazy/G0/kriteria6.py and dokazy/G0/overenie.py",
+ "n": 7,
+ "values": {
+  "stage": "G0",
+  "protocol": "config/collection-v5.json",
+  "protocol_sha256": "fc50f3899e9c7f5c2d396ca782a5c2538de3dedb355753cb8b154a864dcb3f17",
+  "protocol_hash_rule": "sha256 of the UTF-8 of json.dumps(sort_keys=True, separators=(',', ':'), ensure_ascii=False) of the protocol without the paths that determined_at assigns to stages after G0",
+  "measurement_sha256": "02f560abbf2060329227c65750093261844b13b39c7729defbc2f0f02223cfa4",
+  "harness_sha256": "569d6d329f72bed83f41fdabfc0934be76a9029dd6411c091cc229f21ea57bcb",
+  "criteria": {
+   "tests": {
+    "passed": true,
+    "evidence": "data/results/g0_20261127T203037Z/pytest.log; data/results/g0_20261127T203037Z/check_claims.log"
+   },
+   "protocol_selfcheck": {
+    "passed": true,
+    "evidence": "data/results/g0_20261127T203037Z/selfcheck_campaign.log; data/results/g0_20261127T203037Z/selfcheck_rehearsal.log; data/results/g0_20261127T203037Z/selfcheck_errors.log"
+   },
+   "audit_selftest": {
+    "passed": true,
+    "evidence": "data/results/g0_20261127T203037Z/audit_selftest_require.log; data/results/audit_selftest_20261127T190556Z.json"
+   },
+   "corpus_to_training": {
+    "passed": true,
+    "evidence": "data/results/g0_20261127T203037Z/corpus_to_training_row.log; data/results/g0_20261127T203037Z/corpus_to_training_file.log; data/results/g0_20261127T203037Z/corpus_to_training_row.txt"
+   },
+   "analysis_plan_bound": {
+    "passed": true,
+    "evidence": "data/results/g0_20261127T203037Z/analysis_plan_bound_row.log; data/results/g0_20261127T203037Z/analysis_plan_bound_all.log; data/results/g0_20261127T203037Z/selfcheck_campaign.log; data/results/g0_20261127T203037Z/selfcheck_rehearsal.log; data/results/g0_20261127T203037Z/analysis_plan_bound_row.txt"
+   },
+   "test_sealed": {
+    "passed": true,
+    "evidence": "data/results/g0_20261127T203037Z/test_sealed_row.log; data/results/g0_20261127T203037Z/test_sealed_pecat.log; data/results/g0_20261127T203037Z/test_sealed_finalne.log; data/results/g0_20261127T203037Z/test_sealed_row.txt"
+   },
+   "audit_probes_reproduced": {
+    "passed": true,
+    "evidence": "data/results/g0_20261127T203037Z/audit_probes.log; data/results/g0_20261127T203037Z/b10_pred_po/MANIFEST.log; data/results/g0_20261127T203037Z/b10_pred_po/SUHRN.md; data/results/g0_20261127T203037Z/b10_pred_po/pred.xml; data/results/g0_20261127T203037Z/b10_pred_po/po.xml; data/results/g0_20261127T203037Z/b10_pred_po/pred.log; data/results/g0_20261127T203037Z/b10_pred_po/po.log; data/results/g0_20261127T203037Z/b10_pred_po/ids.json; data/results/g0_20261127T203037Z/b10_pred_po/pred_runs.json; data/results/g0_20261127T203037Z/b10_pred_po/pred_later.json; data/results/g0_20261127T203037Z/b10_pred_po/sondy"
+   }
+  },
+  "verification": {
+   "independent": true,
+   "by": "claude-opus-5-5, a new agent without the executor's context (docs/HARNESS_V5.sk.md, chapter 1); its answer is in data/results/overenie_G0_20261128T014310Z.json (values; the answer's sha256 bd6d03e1fb1a751247db98cf92572e91e7c3634f6e984be033406cf600426d06)",
+   "verdicts": {
+    "tests": "confirmed",
+    "protocol_selfcheck": "confirmed",
+    "audit_selftest": "confirmed",
+    "corpus_to_training": "confirmed",
+    "analysis_plan_bound": "confirmed",
+    "test_sealed": "confirmed",
+    "audit_probes_reproduced": "confirmed"
+   }
+  },
+  "passed": true,
+  "problems": []
+ },
+ "note": "Zaznam stupna pripravenosti protokolu v5; nie je to meranie. Platnost pocita scripts/gates.py status."
+}

@@ -1,0 +1,22 @@
+# commit a26f5d1b06dc2e8180e213b3cf8867e8a160d80d
+# date 2026-11-27T22:57:34Z
+# host debian
+# git status --porcelain (only this evidence directory, when clean):
+#   ?? data/results/g0_20261127T203037Z/
+# command nice -n 19 .venv/bin/python -B -m pytest -v -p no:cacheprovider safeguard/tests/test_training.py::test_analysis_parameters_are_refused_by_name safeguard/tests/test_training.py::test_analysis_parameters_come_from_the_plan_and_overrides_are_recorded tcn/tests/test_odovzdanie_korpusu.py::test_trening_berie_parametre_z_planu_analyzy tcn/tests/test_odovzdanie_korpusu.py::test_porovnanie_berie_parametre_z_planu_analyzy
+============================= test session starts ==============================
+platform linux -- Python 3.13.5, pytest-8.3.5, pluggy-1.7.0 -- /home/eh/projects/hyptcn3/.venv/bin/python
+rootdir: /home/eh/projects/hyptcn3
+collecting ... collected 8 items
+
+safeguard/tests/test_training.py::test_analysis_parameters_are_refused_by_name[fpr_outside_diagnostic] PASSED [ 12%]
+safeguard/tests/test_training.py::test_analysis_parameters_are_refused_by_name[seed_outside_plan] PASSED [ 25%]
+safeguard/tests/test_training.py::test_analysis_parameters_are_refused_by_name[weight_norm] PASSED [ 37%]
+safeguard/tests/test_training.py::test_analysis_parameters_are_refused_by_name[stopping_rule] PASSED [ 50%]
+safeguard/tests/test_training.py::test_analysis_parameters_are_refused_by_name[schema_4] PASSED [ 62%]
+safeguard/tests/test_training.py::test_analysis_parameters_come_from_the_plan_and_overrides_are_recorded PASSED [ 75%]
+tcn/tests/test_odovzdanie_korpusu.py::test_trening_berie_parametre_z_planu_analyzy PASSED [ 87%]
+tcn/tests/test_odovzdanie_korpusu.py::test_porovnanie_berie_parametre_z_planu_analyzy PASSED [100%]
+
+============================== 8 passed in 9.24s ===============================
+exit 0
